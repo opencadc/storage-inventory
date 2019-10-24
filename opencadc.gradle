@@ -1,5 +1,7 @@
 configurations {
     checkstyleDep
+    intTestCompile.extendsFrom testCompile
+    intTestRuntime.extendsFrom testRuntime
 }
 
 dependencies {
@@ -12,6 +14,17 @@ checkstyle {
     config = resources.text.fromArchiveEntry(configurations.checkstyleDep, 'cadc_checkstyle.xml')
     toolVersion = '8.2'
     sourceSets = []
+}
+
+sourceSets {
+    intTest {
+        java {
+            compileClasspath += main.output + test.output
+            runtimeClasspath += main.output + test.output
+        }
+        resources.srcDir file('src/intTest/resources')
+        resources.srcDirs += new File(System.getenv('A') + '/test-certificates/')
+    }
 }
 
 // Temporary work around for issue https://github.com/gradle/gradle/issues/881 - 
@@ -28,6 +41,25 @@ tasks.withType(Checkstyle).each { checkstyleTask ->
     }
 }
 
+tasks.withType(Test) {
+    // reset the report destinations so that intTests go to their own page
+    //reports.html.destination = file("${reporting.baseDir}/${name}")
+    reports.html.destination = file(reporting.baseDir.getAbsolutePath() + '/' + name)
+    
+    // Assign all Java system properties from
+    // the command line to the tests
+    systemProperties System.properties
+}
+
+task intTest(type: Test) {
+    // set the configuration context
+    testClassesDirs = sourceSets.intTest.output.classesDirs
+    classpath = sourceSets.intTest.runtimeClasspath
+    
+    // run the tests always
+    outputs.upToDateWhen { false }
+}
+
 test {
     testLogging {
         events "PASSED", "FAILED", "SKIPPED"
@@ -35,4 +67,9 @@ test {
     }
 }
 
-
+intTest {
+    testLogging {
+        events "PASSED", "FAILED", "SKIPPED"
+        // "STARTED",
+    }
+}

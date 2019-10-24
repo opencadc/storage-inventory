@@ -19,6 +19,7 @@ version = '0.1'
 
 dependencies {
     compile 'log4j:log4j:[1.2,)'
+    compile 'org.opencadc:cadc-inventory:[0.1,)'
 
     testCompile 'junit:junit:[4.0,)'
 }
