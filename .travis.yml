@@ -1,0 +1,16 @@
+language: java
+
+dist: trusty
+sudo: required
+
+jdk:
+  - oraclejdk8
+
+before_script: openssl s_client -CApath /etc/ssl/certs/ -connect plugins.gradle.org:443 </dev/null | sed -ne '/-BEGIN CERTIFICATE-/,/-END CERTIFICATE-/p' > /tmp/gradle.crt; sudo keytool -importcert -noprompt -file /tmp/gradle.crt -trustcacerts -keystore $JAVA_HOME/jre/lib/security/cacerts -alias root -storepass changeit
+
+script: 
+  - cd cadc-inventory; gradle --info build javadoc checkstyleMain install || exit -1; cd ..
+  - cd cadc-inventory-db; gradle --info build javadoc checkstyleMain install || exit -1; cd ..
+  - cd cadc-storage-permissions; gradle --info build javadoc checkstyleMain install || exit -1; cd ..
+  - cd cadc-storage-adapter; gradle --info build javadoc checkstyleMain install || exit -1; cd ..
+
