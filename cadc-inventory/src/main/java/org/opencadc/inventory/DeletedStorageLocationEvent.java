@@ -67,12 +67,24 @@
 
 package org.opencadc.inventory;
 
+import java.util.UUID;
+
 
 /**
- *
+ * Event signifying that a copy of an artifact was removed/lost at a storage site. 
+ * The ID of this event if the Artifact ID.
+ * 
  * @author pdowler
  */
 public class DeletedStorageLocationEvent extends Entity {
-    public DeletedStorageLocationEvent() { 
+    
+    public DeletedStorageLocationEvent(UUID id) {
+        InventoryUtil.assertNotNull(DeletedStorageLocationEvent.class, "id", id);
+        InventoryUtil.assignID(this, id);
+    }
+    
+    @Override
+    public String toString() {
+        return DeletedStorageLocationEvent.class.getSimpleName() + "[" + getID() + "]";
     }
 }

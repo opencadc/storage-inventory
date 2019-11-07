@@ -100,7 +100,7 @@ public class Entity {
     protected Entity() { 
     }
 
-    public UUID getId() {
+    public UUID getID() {
         return id;
     }
 
