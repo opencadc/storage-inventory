@@ -68,6 +68,7 @@
 package org.opencadc.inventory;
 
 import java.net.URI;
+import java.util.UUID;
 import org.apache.log4j.Logger;
 
 /**
@@ -85,12 +86,24 @@ public class StorageSite extends Entity {
     private final String name;
     
     /**
-     * Constructor.
+     * Create a new StorageSite.
      * 
      * @param resourceID IVOA resourceID
      * @param name display name
      */
     public StorageSite(URI resourceID, String name) {
+        this(null, resourceID, name);
+    }
+    
+    /**
+     * Reconstruct a storage site from seriaslised state.
+     * 
+     * @param id entity ID
+     * @param resourceID IVOA resourceID
+     * @param name display name
+     */
+    StorageSite(UUID id, URI resourceID, String name) {
+        super(id);
         InventoryUtil.assertNotNull(StorageSite.class, "resourceID", resourceID);
         InventoryUtil.assertNotNull(StorageSite.class, "name", name);
         this.resourceID = resourceID;

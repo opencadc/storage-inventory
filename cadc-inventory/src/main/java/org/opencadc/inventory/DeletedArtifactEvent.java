@@ -77,9 +77,9 @@ import java.util.UUID;
  */
 public class DeletedArtifactEvent extends Entity {
     
-    public DeletedArtifactEvent(UUID id) { 
+    public DeletedArtifactEvent(UUID id) {
+        super(id);
         InventoryUtil.assertNotNull(DeletedArtifactEvent.class, "id", id);
-        InventoryUtil.assignID(this, id);
     }
 
     @Override

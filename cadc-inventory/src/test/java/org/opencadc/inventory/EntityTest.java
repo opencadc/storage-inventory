@@ -67,9 +67,6 @@
 
 package org.opencadc.inventory;
 
-import org.opencadc.inventory.Artifact;
-import org.opencadc.inventory.StorageSite;
-import org.opencadc.inventory.DeletedArtifactEvent;
 import ca.nrc.cadc.util.Log4jInit;
 import java.net.URI;
 import java.util.Date;
@@ -112,9 +109,17 @@ public class EntityTest {
             Assert.assertEquals(contentChecksum, ok.getContentChecksum());
             Assert.assertEquals(contentLastModified, ok.getContentLastModified());
             Assert.assertEquals(contentLength, ok.getContentLength());
-            String bucket = ok.getBucket();
-            log.info("bucket: " + bucket);
-            Assert.assertNotNull(bucket);
+            Assert.assertNotNull(ok.getBucket());
+            
+            UUID id = UUID.randomUUID();
+            Artifact recon = new Artifact(id, uri, contentChecksum, contentLastModified, contentLength);
+            log.info("created: " + recon);
+            Assert.assertEquals(id, recon.getID());
+            Assert.assertEquals(uri, recon.getURI());
+            Assert.assertEquals(contentChecksum, recon.getContentChecksum());
+            Assert.assertEquals(contentLastModified, recon.getContentLastModified());
+            Assert.assertEquals(contentLength, recon.getContentLength());
+            Assert.assertNotNull(recon.getBucket());
             
             try {
                 Artifact invalid = new Artifact(null, contentChecksum, contentLastModified, contentLength);
@@ -201,6 +206,15 @@ public class EntityTest {
         try {
             StorageSite ok = new StorageSite(resourceID, name);
             log.info("created: " + ok);
+            Assert.assertEquals(resourceID, ok.getResourceID());
+            Assert.assertEquals(name, ok.getName());
+            
+            UUID id = UUID.randomUUID();
+            StorageSite recon = new StorageSite(id, resourceID, name);
+            log.info("created: " + recon);
+            Assert.assertEquals(id, recon.getID());
+            Assert.assertEquals(resourceID, recon.getResourceID());
+            Assert.assertEquals(name, recon.getName());
             
             try {
                 StorageSite invalid = new StorageSite(null, name);

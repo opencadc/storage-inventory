@@ -84,29 +84,10 @@ public abstract class InventoryUtil {
 
     private InventoryUtil() { 
     }
-    
-    /**
-     * Assign UUID to an entity. This method is to support reconstructing
-     * an entity from persistent storage or after deserialisation.
-     * 
-     * @param ce the entity
-     * @param id the uuid
-     */
-    public static void assignID(Entity ce, UUID id) {
-        try {
-            Field f = Entity.class.getDeclaredField("id");
-            f.setAccessible(true);
-            f.set(ce, id);
-        } catch (NoSuchFieldException fex) {
-            throw new RuntimeException("BUG", fex);
-        } catch (IllegalAccessException bug) {
-            throw new RuntimeException("BUG", bug);
-        }
-    }
 
     /**
-     * Assign last modified timestamp to an entity. This method is to support reconstructing
-     * an entity from persistent storage or after deserialisation.
+     * Assign last modified timestamp to an entity. This method is to support
+     * persisting/serialising and reconstructing/deserialising an entity.
      * 
      * @param ce the entity
      * @param d the timestamp
@@ -124,8 +105,8 @@ public abstract class InventoryUtil {
     }
 
     /**
-     * Assign metaChecksum URI to an entity. This method is to support reconstructing
-     * an entity from persistent storage or after deserialisation.
+     * Assign metaChecksum URI to an entity. This method is to support
+     * persisting/serialising and reconstructing/deserialising an entity.
      * 
      * @param ce the entity
      * @param u the URI

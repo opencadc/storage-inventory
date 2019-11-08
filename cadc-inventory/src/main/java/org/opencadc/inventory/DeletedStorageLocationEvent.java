@@ -79,8 +79,8 @@ import java.util.UUID;
 public class DeletedStorageLocationEvent extends Entity {
     
     public DeletedStorageLocationEvent(UUID id) {
+        super(id);
         InventoryUtil.assertNotNull(DeletedStorageLocationEvent.class, "id", id);
-        InventoryUtil.assignID(this, id);
     }
     
     @Override

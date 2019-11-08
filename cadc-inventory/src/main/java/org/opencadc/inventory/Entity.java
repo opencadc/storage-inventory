@@ -98,7 +98,15 @@ public class Entity {
     private URI metaChecksum;
     
     protected Entity() {
-        this.id = UUID.randomUUID();
+        this(null);
+    }
+    
+    protected Entity(UUID id) {
+        if (id == null) {
+            this.id = UUID.randomUUID();
+        } else {
+            this.id = id;
+        }
     }
 
     public UUID getID() {

@@ -72,6 +72,7 @@ import java.net.URI;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Date;
+import java.util.UUID;
 import org.apache.log4j.Logger;
 
 /**
@@ -91,7 +92,7 @@ public class Artifact extends Entity {
     public String contentEncoding;
     
     /**
-     * Constructor.
+     * Create a new artifact.
      * 
      * @param uri logical identifier
      * @param contentChecksum checksum of the content, form: {algorithm}:{hexadecimal value}
@@ -99,6 +100,20 @@ public class Artifact extends Entity {
      * @param contentLength number of bytes in the content
      */
     public Artifact(URI uri, URI contentChecksum, Date contentLastModified, Long contentLength) {
+        this(null, uri, contentChecksum, contentLastModified, contentLength);
+    }
+    
+    /**
+     * Reconstruct an artifact from serialised state.
+     * 
+     * @param id entity ID
+     * @param uri logical identifier
+     * @param contentChecksum checksum of the content, form: {algorithm}:{hexadecimal value}
+     * @param contentLastModified last-modified timestamp of the content
+     * @param contentLength number of bytes in the content
+     */
+    public Artifact(UUID id, URI uri, URI contentChecksum, Date contentLastModified, Long contentLength) {
+        super(id);
         InventoryUtil.assertNotNull(Artifact.class, "uri", uri);
         InventoryUtil.assertNotNull(Artifact.class, "contentChecksum", contentChecksum);
         InventoryUtil.assertNotNull(Artifact.class, "contentLastModified", contentLastModified);
