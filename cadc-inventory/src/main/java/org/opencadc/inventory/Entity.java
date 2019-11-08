@@ -97,7 +97,8 @@ public class Entity {
     private Date lastModified;
     private URI metaChecksum;
     
-    protected Entity() { 
+    protected Entity() {
+        this.id = UUID.randomUUID();
     }
 
     public UUID getID() {
