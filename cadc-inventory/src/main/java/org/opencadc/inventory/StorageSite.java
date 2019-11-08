@@ -102,7 +102,7 @@ public class StorageSite extends Entity {
      * @param resourceID IVOA resourceID
      * @param name display name
      */
-    StorageSite(UUID id, URI resourceID, String name) {
+    public StorageSite(UUID id, URI resourceID, String name) {
         super(id);
         InventoryUtil.assertNotNull(StorageSite.class, "resourceID", resourceID);
         InventoryUtil.assertNotNull(StorageSite.class, "name", name);
