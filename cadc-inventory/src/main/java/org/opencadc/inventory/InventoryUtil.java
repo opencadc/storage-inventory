@@ -71,6 +71,7 @@ import ca.nrc.cadc.util.HexUtil;
 import java.lang.reflect.Field;
 import java.net.URI;
 import java.util.Date;
+import java.util.List;
 import java.util.UUID;
 import org.apache.log4j.Logger;
 
@@ -85,6 +86,38 @@ public abstract class InventoryUtil {
     private InventoryUtil() { 
     }
 
+    /**
+     * Find storage site by unique id.
+     * 
+     * @param id entity ID
+     * @param sites list of known sites
+     * @return matching site or null if not found
+     */
+    public static StorageSite findSite(UUID id, List<StorageSite> sites) {
+        for (StorageSite s : sites) {
+            if (s.getID().equals(id)) {
+                return s;
+            }
+        }
+        return null;
+    }
+    
+    /**
+     * Find storage site by resourceID.
+     * 
+     * @param resourceID service identifier
+     * @param sites list of known sites
+     * @return matching site or null if not found
+     */
+    public static StorageSite findSite(URI resourceID, List<StorageSite> sites) {
+        for (StorageSite s : sites) {
+            if (s.getResourceID().equals(resourceID)) {
+                return s;
+            }
+        }
+        return null;
+    }
+    
     /**
      * Assign last modified timestamp to an entity. This method is to support
      * persisting/serialising and reconstructing/deserialising an entity.
