@@ -71,7 +71,11 @@ import java.net.URI;
 import org.apache.log4j.Logger;
 
 /**
- *
+ * Entity describing a storage site. Each storage site will have one instance of this
+ * and global inventory will harvest those and thus have a small set of sites it knows
+ * about. While global will bootstrap using a registry (search), it will track info 
+ * gathered from the sites themselves via this class.
+ * 
  * @author pdowler
  */
 public class StorageSite extends Entity {

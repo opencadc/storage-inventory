@@ -71,7 +71,7 @@ import java.util.UUID;
 
 /**
  * Event signifying that an artifact was deleted at a storage site and the deletion
- * should propagate. The ID of this event if the Artifact ID.
+ * should propagate. The ID of this event is the Artifact ID.
  * 
  * @author pdowler
  */

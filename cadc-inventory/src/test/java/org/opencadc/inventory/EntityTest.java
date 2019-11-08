@@ -73,6 +73,7 @@ import org.opencadc.inventory.DeletedArtifactEvent;
 import ca.nrc.cadc.util.Log4jInit;
 import java.net.URI;
 import java.util.Date;
+import java.util.UUID;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
@@ -159,8 +160,15 @@ public class EntityTest {
     @Test
     public void testDeletedArtifactEvent() {
         try {
-            DeletedArtifactEvent ok = new DeletedArtifactEvent();
+            DeletedArtifactEvent ok = new DeletedArtifactEvent(UUID.randomUUID());
             log.info("created: " + ok);
+            
+            try {
+                DeletedArtifactEvent invalid = new DeletedArtifactEvent(null);
+                Assert.fail("created: " + invalid);
+            } catch (IllegalArgumentException expected) {
+                log.info("expected: " + expected);
+            }
         } catch (Exception ex) {
             log.error("unexpected exception", ex);
             Assert.fail("unexpected exception: " + ex);
@@ -170,8 +178,15 @@ public class EntityTest {
     @Test
     public void testDeletedStorageLocationEvent() {
         try {
-            DeletedStorageLocationEvent ok = new DeletedStorageLocationEvent();
+            DeletedStorageLocationEvent ok = new DeletedStorageLocationEvent(UUID.randomUUID());
             log.info("created: " + ok);
+            
+            try {
+                DeletedStorageLocationEvent invalid = new DeletedStorageLocationEvent(null);
+                Assert.fail("created: " + invalid);
+            } catch (IllegalArgumentException expected) {
+                log.info("expected: " + expected);
+            }
         } catch (Exception ex) {
             log.error("unexpected exception", ex);
             Assert.fail("unexpected exception: " + ex);
