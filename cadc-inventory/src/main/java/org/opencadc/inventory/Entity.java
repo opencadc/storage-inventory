@@ -91,7 +91,7 @@ import org.apache.log4j.Logger;
 public class Entity {
     private static final Logger log = Logger.getLogger(Entity.class);
 
-    private static final boolean MCS_DEBUG = true;
+    private static final boolean MCS_DEBUG = false;
     
     private UUID id;
     private Date lastModified;
