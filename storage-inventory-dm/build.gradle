@@ -1,0 +1,53 @@
+plugins {
+    id 'java'
+    id "com.github.eerohele.saxon-gradle" version "0.2.1"
+}
+
+repositories {
+    jcenter()
+    mavenLocal()
+}
+
+sourceCompatibility = 1.8
+
+group = 'org.opencadc'
+
+version = '0.2'
+
+jar {
+    enabled = true
+}
+defaultTasks 'build', 'xslt'
+
+task initHTML(type: Copy, dependsOn: test) {
+    
+    project.mkdir('build/html')
+        
+    from 'src/main/resources'
+    into 'build/html'
+    include '**/*.png'
+}
+
+xslt {
+    dependsOn test, initHTML
+    
+    stylesheet file('src/main/xsl/vo-dml2html.xsl')
+    input file('src/main/resources/storage-inventory-' + project.version + '-vodml.xml')
+    output file('build/html/index.html')
+    
+    parameters(
+        project_name: 'Storage Inventory Data Model',
+        preamble: '../resources/preamble.html', // relative to stylesheet apparently
+        abstract: '../resources/abstract.html',
+        status: '../resources/status.html',
+        acknowledgment: '../resources/acknowledgment.html',
+        graphviz_png: 'storage-inventory-' + project.version + '.png'
+    )
+    
+}
+
+dependencies {
+    testCompile 'org.opencadc:cadc-vodml:[1.0.4,)'
+
+    testCompile 'junit:junit:[4.0,)' 
+}
