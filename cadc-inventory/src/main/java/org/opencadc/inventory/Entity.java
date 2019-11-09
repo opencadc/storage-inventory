@@ -84,11 +84,11 @@ import java.util.UUID;
 import org.apache.log4j.Logger;
 
 /**
- * Base entity for storage inventory.
+ * Base class for storage inventory entities.
  * 
  * @author pdowler
  */
-public class Entity {
+public abstract class Entity {
     private static final Logger log = Logger.getLogger(Entity.class);
 
     private static final boolean MCS_DEBUG = false;
@@ -98,15 +98,12 @@ public class Entity {
     private URI metaChecksum;
     
     protected Entity() {
-        this(null);
+        this.id = UUID.randomUUID();
     }
     
     protected Entity(UUID id) {
-        if (id == null) {
-            this.id = UUID.randomUUID();
-        } else {
-            this.id = id;
-        }
+        InventoryUtil.assertNotNull(Entity.class, "id", id);
+        this.id = id;
     }
 
     public UUID getID() {

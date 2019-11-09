@@ -69,6 +69,7 @@ package org.opencadc.inventory;
 
 import ca.nrc.cadc.util.Log4jInit;
 import java.net.URI;
+import java.security.MessageDigest;
 import java.util.Date;
 import java.util.UUID;
 import org.apache.log4j.Level;
@@ -156,6 +157,41 @@ public class EntityTest {
                 log.info("expected: " + expected);
             }
             
+        } catch (Exception ex) {
+            log.error("unexpected exception", ex);
+            Assert.fail("unexpected exception: " + ex);
+        }
+    }
+    
+    @Test
+    public void testArtifactTransientState() {
+        URI uri = URI.create("cadc:FOO/bar");
+        URI contentChecksum = URI.create("md5:d41d8cd98f00b204e9800998ecf8427e");
+        Date contentLastModified = new Date();
+        Long contentLength = 1024L;
+        
+        try {
+            Artifact ok = new Artifact(uri, contentChecksum, contentLastModified, contentLength);
+            log.info("created: " + ok);
+            
+            URI mcs1 = ok.computeMetaChecksum(MessageDigest.getInstance("MD5"));
+            
+            //ok.storageLocation = new StorageLocation(ok.getID(), URI.create("ceph:" + UUID.randomUUID()));
+            ok.storageLocation = new StorageLocation(URI.create("ceph:" + UUID.randomUUID()));
+            URI mcs2 = ok.computeMetaChecksum(MessageDigest.getInstance("MD5"));
+            Assert.assertEquals(mcs1, mcs2);
+            
+            //ok.siteLocations.add(new SiteLocation(ok.getID(), UUID.randomUUID()));
+            ok.siteLocations.add(new SiteLocation(UUID.randomUUID()));
+            URI mcs3 = ok.computeMetaChecksum(MessageDigest.getInstance("MD5"));
+            Assert.assertEquals(mcs1, mcs3);
+            
+            try {
+                DeletedArtifactEvent invalid = new DeletedArtifactEvent(null);
+                Assert.fail("created: " + invalid);
+            } catch (IllegalArgumentException expected) {
+                log.info("expected: " + expected);
+            }
         } catch (Exception ex) {
             log.error("unexpected exception", ex);
             Assert.fail("unexpected exception: " + ex);

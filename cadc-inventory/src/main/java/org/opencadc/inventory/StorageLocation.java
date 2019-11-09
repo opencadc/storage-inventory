@@ -68,34 +68,24 @@
 package org.opencadc.inventory;
 
 import java.net.URI;
-import java.util.UUID;
 
 /**
- *
+ * Reference to an object in a backend storage system. This class holds the internal
+ * identifier for interacting with the back end storage system.
+ * 
  * @author pdowler
  */
 public class StorageLocation {
-    private final UUID artifactID;
     private final URI storageID;
     
     /**
      * Constructor.
      * 
-     * @param artifactID artifact primary key
      * @param storageID internal storage identifier
      */
-    public StorageLocation(UUID artifactID, URI storageID) {
-        InventoryUtil.assertNotNull(SiteLocation.class, "artifactID", artifactID);
+    public StorageLocation(URI storageID) {
         InventoryUtil.assertNotNull(SiteLocation.class, "storageID", storageID);
-        this.artifactID = artifactID;
         this.storageID = storageID;
-    }
-
-    /**
-     * @return artifact primary key
-     */
-    public UUID getArtifactID() {
-        return artifactID;
     }
 
     /**
@@ -110,7 +100,7 @@ public class StorageLocation {
         StringBuilder sb = new StringBuilder();
         sb.append(this.getClass().getSimpleName());
         sb.append("[");
-        sb.append(artifactID).append(",").append(storageID);
+        sb.append(storageID);
         sb.append("]");
         return sb.toString();
     }
@@ -125,7 +115,7 @@ public class StorageLocation {
             return false;
         }
         StorageLocation s = (StorageLocation) o;
-        return artifactID.equals(s.artifactID) && storageID.equals(s.storageID);
+        return storageID.equals(s.storageID);
     }
     
 }

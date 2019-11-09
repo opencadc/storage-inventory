@@ -82,8 +82,8 @@ import org.apache.log4j.Logger;
 public class StorageSite extends Entity {
     private static final Logger log = Logger.getLogger(StorageSite.class);
 
-    private final URI resourceID;
-    private final String name;
+    private URI resourceID;
+    private String name;
     
     /**
      * Create a new StorageSite.
@@ -92,11 +92,12 @@ public class StorageSite extends Entity {
      * @param name display name
      */
     public StorageSite(URI resourceID, String name) {
-        this(null, resourceID, name);
+        super();
+        init(resourceID, name);
     }
     
     /**
-     * Reconstruct a storage site from seriaslised state.
+     * Reconstruct a storage site from serialized state.
      * 
      * @param id entity ID
      * @param resourceID IVOA resourceID
@@ -104,6 +105,10 @@ public class StorageSite extends Entity {
      */
     public StorageSite(UUID id, URI resourceID, String name) {
         super(id);
+        init(resourceID, name);
+    }
+    
+    private void init(URI resourceID, String name) {
         InventoryUtil.assertNotNull(StorageSite.class, "resourceID", resourceID);
         InventoryUtil.assertNotNull(StorageSite.class, "name", name);
         this.resourceID = resourceID;

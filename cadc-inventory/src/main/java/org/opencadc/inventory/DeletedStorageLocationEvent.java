@@ -69,7 +69,6 @@ package org.opencadc.inventory;
 
 import java.util.UUID;
 
-
 /**
  * Event signifying that a copy of an artifact was removed/lost at a storage site. 
  * The ID of this event is the Artifact ID.

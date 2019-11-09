@@ -70,22 +70,17 @@ package org.opencadc.inventory;
 import java.util.UUID;
 
 /**
- *
+ * Reference to a StorageSite. This is currently just a wrapper around the globally unique
+ * storage site identifier; it may evolve.
+ * 
  * @author pdowler
  */
 public class SiteLocation {
-    private UUID fileID;
-    private UUID siteID;
+    private final UUID siteID;
     
-    public SiteLocation(UUID fileID, UUID siteID) {
-        InventoryUtil.assertNotNull(SiteLocation.class, "fileID", fileID);
+    public SiteLocation(UUID siteID) {
         InventoryUtil.assertNotNull(SiteLocation.class, "siteID", siteID);
-        this.fileID = fileID;
         this.siteID = siteID;
-    }
-
-    public UUID getFileID() {
-        return fileID;
     }
 
     public UUID getSiteID() {
@@ -97,7 +92,7 @@ public class SiteLocation {
         StringBuilder sb = new StringBuilder();
         sb.append(this.getClass().getSimpleName());
         sb.append("[");
-        sb.append(fileID).append(",").append(siteID);
+        sb.append(siteID);
         sb.append("]");
         return sb.toString();
     }
@@ -108,6 +103,6 @@ public class SiteLocation {
             return false;
         }
         SiteLocation s = (SiteLocation) o;
-        return fileID.equals(s.fileID) && siteID.equals(s.siteID);
+        return siteID.equals(s.siteID);
     }
 }

@@ -71,12 +71,15 @@ import ca.nrc.cadc.util.HexUtil;
 import java.net.URI;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
 import java.util.Date;
+import java.util.List;
 import java.util.UUID;
 import org.apache.log4j.Logger;
 
 /**
- *
+ * Artifact is the metadata record for an item (usually a file) in the storage system.
+ * 
  * @author pdowler
  */
 public class Artifact extends Entity {
@@ -92,6 +95,20 @@ public class Artifact extends Entity {
     public String contentEncoding;
     
     /**
+     * For use by storage site applications. This indicates the local storage identifier.
+     * This value is not part of the artifact entity state and setting/modifying it does
+     * not change the metaChecksum of the artifact.
+     */
+    public transient StorageLocation storageLocation;
+    
+    /**
+     * For use by global inventory applications only. This indicates all sites that are known
+     * to have a copy of the artifact. This value is not part of the artifact entity state 
+     * and adding/removing values does not change the metaChecksum of the artifact.
+     */
+    public final transient List<SiteLocation> siteLocations = new ArrayList<SiteLocation>();
+    
+    /**
      * Create a new artifact.
      * 
      * @param uri logical identifier
@@ -100,11 +117,12 @@ public class Artifact extends Entity {
      * @param contentLength number of bytes in the content
      */
     public Artifact(URI uri, URI contentChecksum, Date contentLastModified, Long contentLength) {
-        this(null, uri, contentChecksum, contentLastModified, contentLength);
+        super();
+        init(uri, contentChecksum, contentLastModified, contentLength);
     }
     
     /**
-     * Reconstruct an artifact from serialised state.
+     * Reconstruct an artifact from serialized state.
      * 
      * @param id entity ID
      * @param uri logical identifier
@@ -114,6 +132,10 @@ public class Artifact extends Entity {
      */
     public Artifact(UUID id, URI uri, URI contentChecksum, Date contentLastModified, Long contentLength) {
         super(id);
+        init(uri, contentChecksum, contentLastModified, contentLength);
+    }
+    
+    private void init(URI uri, URI contentChecksum, Date contentLastModified, Long contentLength) {
         InventoryUtil.assertNotNull(Artifact.class, "uri", uri);
         InventoryUtil.assertNotNull(Artifact.class, "contentChecksum", contentChecksum);
         InventoryUtil.assertNotNull(Artifact.class, "contentLastModified", contentLastModified);
