@@ -168,6 +168,44 @@ public class StorageSiteDAOTest {
     }
     
     @Test
+    public void testCopyConstructor() {
+        try {
+            StorageSite expected = new StorageSite(URI.create("ivo://cadc.nrc.ca/site1"), "Site-1");
+            log.info("expected: " + expected);
+            
+            StorageSite notFound = dao.get(expected.getID());
+            Assert.assertNull(notFound);
+            
+            dao.put(expected);
+            
+            // persistence assigns entity state before put
+            Assert.assertNotNull(expected.getLastModified());
+            Assert.assertNotNull(expected.getMetaChecksum());
+            
+            URI mcs0 = expected.computeMetaChecksum(MessageDigest.getInstance("MD5"));
+            Assert.assertEquals("put metachecksum", mcs0, expected.getMetaChecksum());
+            
+            // get by ID
+            StorageSite fid = dao.get(expected.getID());
+            Assert.assertNotNull(fid);
+            Assert.assertEquals(expected.getResourceID(), fid.getResourceID());
+            Assert.assertEquals(expected.getName(), fid.getName());
+            URI mcs1 = fid.computeMetaChecksum(MessageDigest.getInstance("MD5"));
+            Assert.assertEquals("round trip metachecksum", expected.getMetaChecksum(), mcs1);
+            
+            StorageSiteDAO cp = new StorageSiteDAO(dao);
+            cp.delete(expected.getID());
+            
+            StorageSite deleted = dao.get(expected.getID());
+            Assert.assertNull(deleted);
+            
+        } catch (Exception unexpected) {
+            log.error("unexpected exception", unexpected);
+            Assert.fail("unexpected exception: " + unexpected);
+        }
+    }
+    
+    @Test
     public void testList() {
         try {
             StorageSite s1 = new StorageSite(URI.create("ivo://cadc.nrc.ca/site1"), "Site-1");

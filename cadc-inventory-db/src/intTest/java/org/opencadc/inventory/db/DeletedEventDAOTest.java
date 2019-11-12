@@ -190,4 +190,34 @@ public class DeletedEventDAOTest {
             Assert.fail("unexpected exception: " + unexpected);
         }
     }
+    
+    @Test
+    public void testCopyConstructor() {
+        try {
+            DeletedArtifactEvent expected = new DeletedArtifactEvent(UUID.randomUUID());
+            log.info("expected: " + expected);
+            
+            DeletedArtifactEvent notFound = (DeletedArtifactEvent) dao.get(DeletedArtifactEvent.class, expected.getID());
+            Assert.assertNull(notFound);
+            
+            dao.put(expected);
+            
+            // persistence assigns entity state before put
+            Assert.assertNotNull(expected.getLastModified());
+            Assert.assertNotNull(expected.getMetaChecksum());
+            
+            URI mcs0 = expected.computeMetaChecksum(MessageDigest.getInstance("MD5"));
+            Assert.assertEquals("put metachecksum", mcs0, expected.getMetaChecksum());
+            
+            // get by ID
+            DeletedEventDAO cp = new DeletedEventDAO(dao);
+            DeletedArtifactEvent fid = (DeletedArtifactEvent) cp.get(DeletedArtifactEvent.class, expected.getID());
+            Assert.assertNotNull(fid);
+            
+            // no delete
+        } catch (Exception unexpected) {
+            log.error("unexpected exception", unexpected);
+            Assert.fail("unexpected exception: " + unexpected);
+        }
+    }
 }

@@ -67,18 +67,17 @@
 
 package org.opencadc.inventory.db;
 
-import java.util.UUID;
-import org.apache.log4j.Logger;
-import org.opencadc.inventory.Entity;
-
 /**
  * Fire/persist a deleted entity event.
  * 
  * @author pdowler
  */
 public class DeletedEventDAO extends AbstractDAO {
-    private static final Logger log = Logger.getLogger(DeletedEventDAO.class);
-
     public DeletedEventDAO() { 
+        super();
+    }
+
+    public DeletedEventDAO(AbstractDAO dao) {
+        super(dao);
     }
 }

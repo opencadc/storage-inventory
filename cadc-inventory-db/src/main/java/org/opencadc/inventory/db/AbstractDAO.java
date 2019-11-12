@@ -111,6 +111,19 @@ class AbstractDAO<T extends Entity> {
             throw new RuntimeException("FATAL: no MD5 digest algorithm available", ex);
         }
     }
+    
+    /**
+     * Copy configuration from argument DAO. This uses the same DataSource and TransactionManager
+     * so calls to this and another DAO participate in the same transaction.
+     * 
+     * @param dao another DAO to copy config from
+     */
+    protected AbstractDAO(AbstractDAO dao) {
+        this();
+        this.gen = dao.getSQLGenerator();
+        this.dataSource = dao.getDataSource();
+        this.txnManager = dao.getTransactionManager();
+    }
 
     /**
      * Get the DataSource in use by the DAO. This is intended so that

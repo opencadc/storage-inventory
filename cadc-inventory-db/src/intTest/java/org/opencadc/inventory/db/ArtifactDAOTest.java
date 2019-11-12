@@ -187,6 +187,61 @@ public class ArtifactDAOTest {
     }
     
     @Test
+    public void testCopyConstructor() {
+        try {
+            Artifact expected = new Artifact(
+                    URI.create("cadc:ARCHIVE/filename"),
+                    URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"),
+                    new Date(),
+                    new Long(666L));
+            expected.contentType = "application/octet-stream";
+            expected.contentEncoding = "gzip";
+            log.info("expected: " + expected);
+            
+            
+            Artifact notFound = dao.get(expected.getURI());
+            Assert.assertNull(notFound);
+            
+            dao.put(expected);
+            
+            // persistence assigns entity state before put
+            Assert.assertNotNull(expected.getLastModified());
+            Assert.assertNotNull(expected.getMetaChecksum());
+            
+            URI mcs0 = expected.computeMetaChecksum(MessageDigest.getInstance("MD5"));
+            Assert.assertEquals("put metachecksum", mcs0, expected.getMetaChecksum());
+            
+            // get by ID
+            Artifact fid = dao.get(expected.getID());
+            Assert.assertNotNull(fid);
+            Assert.assertEquals(expected.getURI(), fid.getURI());
+            Assert.assertEquals(expected.getLastModified(), fid.getLastModified());
+            Assert.assertEquals(expected.getMetaChecksum(), fid.getMetaChecksum());
+            URI mcs1 = fid.computeMetaChecksum(MessageDigest.getInstance("MD5"));
+            Assert.assertEquals("round trip metachecksum", expected.getMetaChecksum(), mcs1);
+            
+            // get by URI
+            Artifact furi = dao.get(expected.getURI());
+            Assert.assertNotNull(furi);
+            Assert.assertEquals(expected.getID(), furi.getID());
+            Assert.assertEquals(expected.getLastModified(), furi.getLastModified());
+            Assert.assertEquals(expected.getMetaChecksum(), furi.getMetaChecksum());
+            URI mcs2 = furi.computeMetaChecksum(MessageDigest.getInstance("MD5"));
+            Assert.assertEquals("round trip metachecksum", expected.getMetaChecksum(), mcs2);
+            
+            ArtifactDAO cp = new ArtifactDAO(dao);
+            cp.delete(expected.getID());
+            
+            Artifact deleted = dao.get(expected.getID());
+            Assert.assertNull(deleted);
+            
+        } catch (Exception unexpected) {
+            log.error("unexpected exception", unexpected);
+            Assert.fail("unexpected exception: " + unexpected);
+        }
+    }
+    
+    @Test
     public void testGetPutDeleteStorageLocation() {
         try {
             Artifact expected = new Artifact(

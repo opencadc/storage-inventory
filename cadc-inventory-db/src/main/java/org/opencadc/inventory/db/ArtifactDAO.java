@@ -81,7 +81,12 @@ import org.springframework.jdbc.core.JdbcTemplate;
 public class ArtifactDAO extends AbstractDAO<Artifact> {
     private static final Logger log = Logger.getLogger(ArtifactDAO.class);
 
-    public ArtifactDAO() { 
+    public ArtifactDAO() {
+        super();
+    }
+
+    public ArtifactDAO(AbstractDAO dao) {
+        super(dao);
     }
     
     public Artifact get(UUID id) {
