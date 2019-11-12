@@ -1,0 +1,349 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+************************************************************************
+*******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
+**************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
+*
+*  (c) 2019.                            (c) 2019.
+*  Government of Canada                 Gouvernement du Canada
+*  National Research Council            Conseil national de recherches
+*  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
+*  All rights reserved                  Tous droits réservés
+*
+*  NRC disclaims any warranties,        Le CNRC dénie toute garantie
+*  expressed, implied, or               énoncée, implicite ou légale,
+*  statutory, of any kind with          de quelque nature que ce
+*  respect to the software,             soit, concernant le logiciel,
+*  including without limitation         y compris sans restriction
+*  any warranty of merchantability      toute garantie de valeur
+*  or fitness for a particular          marchande ou de pertinence
+*  purpose. NRC shall not be            pour un usage particulier.
+*  liable in any event for any          Le CNRC ne pourra en aucun cas
+*  damages, whether direct or           être tenu responsable de tout
+*  indirect, special or general,        dommage, direct ou indirect,
+*  consequential or incidental,         particulier ou général,
+*  arising from the use of the          accessoire ou fortuit, résultant
+*  software.  Neither the name          de l'utilisation du logiciel. Ni
+*  of the National Research             le nom du Conseil National de
+*  Council of Canada nor the            Recherches du Canada ni les noms
+*  names of its contributors may        de ses  participants ne peuvent
+*  be used to endorse or promote        être utilisés pour approuver ou
+*  products derived from this           promouvoir les produits dérivés
+*  software without specific prior      de ce logiciel sans autorisation
+*  written permission.                  préalable et particulière
+*                                       par écrit.
+*
+*  This file is part of the             Ce fichier fait partie du projet
+*  OpenCADC project.                    OpenCADC.
+*
+*  You are free to use this material    Vous êtes libre d'utiliser ce 
+*  under the terms of the CC-BY-SA-4.0  matériel selon les termes du CC-BY-SA-4.0
+*  International License.               Licence internationale.
+*
+*               http://creativecommons.org/licenses/by-sa/4.0/
+* 
+*  OpenCADC is distributed in the       OpenCADC est distribué
+*  hope that it will be useful,         dans l’espoir qu’il vous
+*  but WITHOUT ANY WARRANTY;            sera utile, mais SANS AUCUNE
+*  without even the implied             GARANTIE : sans même la garantie
+*  warranty of MERCHANTABILITY          implicite de COMMERCIALISABILITÉ
+*  or FITNESS FOR A PARTICULAR          ni d’ADÉQUATION À UN OBJECTIF
+*  PURPOSE.                             PARTICULIER. 
+-->
+<vo-dml:model xmlns:vo-dml="http://www.ivoa.net/xml/VODML/v1" xmlns:xsi="http://www.w3.org/2001/XMLSchema" version="1.0">
+    <name>si</name>
+    <description>a general purpose data model for managing storage inventory</description>
+    <identifier/>
+    <uri/>
+    <title>Storage Inventory Data Model</title>
+    <author>Patrick Dowler, Canadian Astronomy Data Centre</author>
+    <version>0.2</version>
+    <lastModified>2019-07-22T15:00:00</lastModified>
+    
+    <import>
+        <name>ivoa</name>
+        <url>http://www.ivoa.net/xml/VODML/IVOA-v1.vo-dml.xml</url>
+        <documentationURL>https://volute.g-vo.org/svn/trunk/projects/dm/vo-dml/models/ivoa/vo-dml/IVOA-v1.0.html</documentationURL>
+    </import>
+    
+    <!-- externally specified primtiveType -->
+    <primitiveType>
+        <vodml-id>uuid</vodml-id>
+        <name>uuid</name>
+        <description>represents a 128-bit binary ID in the canonical ascii UUID format</description>
+        <extends>
+            <vodml-ref>ivoa:string</vodml-ref>
+        </extends>
+        <!-- TODO: restrict format like we do in the xsd -->
+    </primitiveType>
+        
+    <package>
+        <vodml-id>si</vodml-id>
+        <name>si</name>
+        <description>this package contains the SI object types and enumerations</description>
+        
+        <!-- enums -->
+
+        <!--        
+        <enumeration>
+            <vodml-id>Status</vodml-id>
+            <name>Status</name>
+            <description>a status flag indicating degree of success;
+                work-around: using the name of the literal to convey the serialised value</description>
+            <literal>
+                <vodml-id>Status.FAIL</vodml-id>
+                <name>fail</name>
+            </literal>
+        </enumeration>
+        -->
+        
+        <objectType abstract="true">
+            <vodml-id>Entity</vodml-id>
+            <name>Entity</name>
+            <description>base entity class to support persistence;
+                entity attributes are generally set or updated by persistence implementations</description>
+
+            <attribute>
+                <vodml-id>Entity.id</vodml-id>
+                <name>id</name>
+                <description>globally unique identifier (primary key)</description>
+                <datatype>
+                    <vodml-ref>si:uuid</vodml-ref>
+                </datatype>
+                <multiplicity>
+                    <minOccurs>1</minOccurs>
+                    <maxOccurs>1</maxOccurs>
+                </multiplicity>
+            </attribute>
+
+            <attribute>
+                <vodml-id>Entity.lastModified</vodml-id>
+                <name>lastModified</name>
+                <description>timestamp of last modification of this entity; the timestamp is intended to be assigned
+                    and/or updated when the entity is stored (e.g. in a database)</description>
+                <datatype>
+                    <vodml-ref>ivoa:datetime</vodml-ref>
+                </datatype>
+                <multiplicity>
+                    <minOccurs>0</minOccurs>
+                    <maxOccurs>1</maxOccurs>
+                </multiplicity>
+            </attribute>
+            <attribute>
+                <vodml-id>Entity.metaChecksum</vodml-id>
+                <name>metaChecksum</name>
+                <description>metadata checksum of this entity; 
+                    the URI must conform to the pattern {algorithm}:{value}, for example: md5:4be91751541fd804e7207663a0822f56;
+                    the algorithm for computing the metadata checksum is the same as for CAOM and will be refactored into a 
+                    re-usable component (model and code)</description>
+                <datatype>
+                    <!-- TODO: should be ChecksumURI -->
+                    <vodml-ref>ivoa:anyURI</vodml-ref>
+                </datatype>
+                <multiplicity>
+                    <minOccurs>0</minOccurs>
+                    <maxOccurs>1</maxOccurs>
+                </multiplicity>
+            </attribute>
+        </objectType>
+
+        <objectType>
+            <vodml-id>File</vodml-id>
+            <name>File</name>
+            <description>a file in the storage system</description>
+            <extends>
+                <vodml-ref>si:Entity</vodml-ref>
+            </extends>
+            <attribute>
+                <vodml-id>File.uri</vodml-id>
+                <name>uri</name>
+                <description>an globally uniquer external identifier for the file</description>
+                <datatype>
+                    <vodml-ref>ivoa:anyURI</vodml-ref>
+                </datatype>
+                <multiplicity>
+                    <minOccurs>1</minOccurs>
+                    <maxOccurs>1</maxOccurs>
+                </multiplicity>
+            </attribute>
+            <attribute>
+                <vodml-id>File.uriBucket</vodml-id>
+                <name>uriBucket</name>
+                <description>a short 5-8 letter code generated from the uri so that validation code can 
+                    work in batches; the code could be generated by taking the first N characters from the MD5
+                    checksum of the uri (details TBD)</description>
+                <datatype>
+                    <vodml-ref>ivoa:string</vodml-ref>
+                </datatype>
+                <multiplicity>
+                    <minOccurs>1</minOccurs>
+                    <maxOccurs>1</maxOccurs>
+                </multiplicity>
+            </attribute>
+            <attribute>
+                <vodml-id>File.contentChecksum</vodml-id>
+                <name>contentChecksum</name>
+                <description>the checksum of the artifact data; 
+                    the URI must conform to the pattern {algorithm}:{value}, for example: md5:4be91751541fd804e7207663a0822f56</description>
+                <datatype>
+                    <!-- should be ChecksumURI -->
+                    <vodml-ref>ivoa:anyURI</vodml-ref>
+                </datatype>
+                <multiplicity>
+                    <minOccurs>1</minOccurs>
+                    <maxOccurs>1</maxOccurs>
+                </multiplicity>
+            </attribute>
+            <attribute>
+                <vodml-id>File.contentLastModified</vodml-id>
+                <name>contentType</name>
+                <description>timestamp of the last modification of the stored bytes</description>
+                <datatype>
+                    <vodml-ref>ivoa:string</vodml-ref>
+                </datatype>
+                <multiplicity>
+                    <minOccurs>1</minOccurs>
+                    <maxOccurs>1</maxOccurs>
+                </multiplicity>
+            </attribute>
+            <attribute>
+                <vodml-id>File.contentLength</vodml-id>
+                <name>contentLength</name>
+                <description>the size of the resolved artifact; file size in bytes</description>
+                <datatype>
+                    <vodml-ref>ivoa:integer</vodml-ref>
+                </datatype>
+                <multiplicity>
+                    <minOccurs>1</minOccurs>
+                    <maxOccurs>1</maxOccurs>
+                </multiplicity>
+            </attribute>
+            
+            <attribute>
+                <vodml-id>File.contentType</vodml-id>
+                <name>contentType</name>
+                <description>label specifying the format of the resolved artifact; typically a MIME-type</description>
+                <datatype>
+                    <vodml-ref>ivoa:string</vodml-ref>
+                </datatype>
+                <multiplicity>
+                    <minOccurs>1</minOccurs>
+                    <maxOccurs>1</maxOccurs>
+                </multiplicity>
+            </attribute>
+            <attribute>
+                <vodml-id>File.contentEncoding</vodml-id>
+                <name>contentEncoding</name>
+                <description>label specifying the encoding of the file; typically a compression type</description>
+                <datatype>
+                    <vodml-ref>ivoa:string</vodml-ref>
+                </datatype>
+                <multiplicity>
+                    <minOccurs>0</minOccurs>
+                    <maxOccurs>1</maxOccurs>
+                </multiplicity>
+            </attribute>
+        </objectType>
+
+        <objectType>
+            <vodml-id>SiteLocation</vodml-id>
+            <name>SiteLocation</name>
+            <description>location of a file at a site; instances are created and maintained in a global inventory</description>
+            
+            <attribute>
+                <vodml-id>SiteLocation.file</vodml-id>
+                <name>site</name>
+                <description>reference to the file</description>
+                <datatype>
+                    <vodml-ref>si:uuid</vodml-ref>
+                </datatype>
+                <multiplicity>
+                    <minOccurs>1</minOccurs>
+                    <maxOccurs>1</maxOccurs>
+                </multiplicity>
+            </attribute>
+            
+            <attribute>
+                <vodml-id>SiteLocation.site</vodml-id>
+                <name>site</name>
+                <description>reference to the site</description>
+                <datatype>
+                    <vodml-ref>si:uuid</vodml-ref>
+                </datatype>
+                <multiplicity>
+                    <minOccurs>1</minOccurs>
+                    <maxOccurs>1</maxOccurs>
+                </multiplicity>
+            </attribute>
+        </objectType>
+        
+        <objectType>
+            <vodml-id>StorageLocation</vodml-id>
+            <name>StorageLocation</name>
+            <description>storage location of a file; instances are created and maintained in a storage site</description>
+            <attribute>
+                <vodml-id>StorageLocation.storageID</vodml-id>
+                <name>storageID</name>
+                <description>storage site/system internal identifier</description>
+                <datatype>
+                    <vodml-ref>ivoa:anyURI</vodml-ref>
+                </datatype>
+                <multiplicity>
+                    <minOccurs>1</minOccurs>
+                    <maxOccurs>1</maxOccurs>
+                </multiplicity>
+            </attribute>
+            <attribute>
+                <vodml-id>StorageLocation.file</vodml-id>
+                <name>site</name>
+                <description>reference to the file</description>
+                <datatype>
+                    <vodml-ref>si:uuid</vodml-ref>
+                </datatype>
+                <multiplicity>
+                    <minOccurs>1</minOccurs>
+                    <maxOccurs>1</maxOccurs>
+                </multiplicity>
+            </attribute>
+        </objectType>
+
+        <objectType>
+            <vodml-id>DeletedFile</vodml-id>
+            <name>DeletedFile</name>
+            <description>an entity used as a deletion event for a file</description>
+            <extends>
+                <vodml-ref>si:Entity</vodml-ref>
+            </extends>
+        </objectType>
+        
+        <objectType>
+            <vodml-id>Site</vodml-id>
+            <name>Site</name>
+            <description>description of a storage site</description>
+            <attribute>
+                <vodml-id>Site.resourceID</vodml-id>
+                <name>resourceID</name>
+                <description>resource identifier for the web service API of a site</description>
+                <datatype>
+                    <vodml-ref>ivoa:anyURI</vodml-ref>
+                </datatype>
+                <multiplicity>
+                    <minOccurs>1</minOccurs>
+                    <maxOccurs>1</maxOccurs>
+                </multiplicity>
+            </attribute>
+            <attribute>
+                <vodml-id>Site.name</vodml-id>
+                <name>name</name>
+                <description>common (display) name of a site</description>
+                <datatype>
+                    <vodml-ref>ivoa:string</vodml-ref>
+                </datatype>
+                <multiplicity>
+                    <minOccurs>1</minOccurs>
+                    <maxOccurs>1</maxOccurs>
+                </multiplicity>
+            </attribute>
+        </objectType>
+    </package>
+</vo-dml:model>
