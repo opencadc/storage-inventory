@@ -109,7 +109,7 @@ forward and support (configure) the "ad" scheme for backwards compatibility.
 Services that make up the storage site or global inventory depend on other CADC services. The registry lookup API permits caching; this is already implemented and effective. The permissions API could be designed to support caching or mirrors. The user and group APIs could be modified to support caching or mirroring. Caching: solve a problem by adding another problem.
 
 <img alt="storage site deployment" style="border-width:0" 
-src="https://github.com/pdowler/storage/raw/master/storage-dm/docs/storage-external-services.png" />
+src="https://github.com/opencadc/storage-inventory/raw/master/storage-dm/docs/storage-external-services.png" />
 
 # storage site
 A storage site tracks all files written to local storage. These files can be harvested by anyone: central inventory, 
@@ -127,7 +127,7 @@ from global; new Artifact(s) from other sites would have no matching StorageLoca
 the file. Local put creates the StorageLocation directly.
 
 <img alt="storage site deployment" style="border-width:0" 
-src="https://github.com/pdowler/storage/raw/master/storage-dm/docs/storage-site-deploy.png" />
+src="https://github.com/opencadc/storage-inventory/raw/master/storage-dm/docs/storage-site-deploy.png" />
 
 # global inventory
 A global inventory service is built by harvesting sites, files, and deletions from all known sites.
@@ -147,7 +147,7 @@ This might be useful so vault could maintain it's own global view and not rely o
 for transfer negotiation.
 
 <img alt="global storage inventory deployment" style="border-width:0" 
-src="https://github.com/pdowler/storage/raw/master/storage-dm/docs/global-inventory-deploy.png" />
+src="https://github.com/opencadc/storage-inventory/raw/master/storage-dm/docs/global-inventory-deploy.png" />
 
 # patterns, ideas, and incomplete thoughts...
 
