@@ -70,10 +70,17 @@
 package org.opencadc.inventory.storage;
 
 import java.io.InputStream;
-import java.io.OutputStream;
 import java.io.StreamCorruptedException;
 import java.net.URI;
 import java.util.Iterator;
+
+import org.opencadc.inventory.Artifact;
+import org.opencadc.inventory.StorageLocation;
+
+import ca.nrc.cadc.net.InputStreamWrapper;
+import ca.nrc.cadc.net.OutputStreamWrapper;
+import ca.nrc.cadc.net.ResourceNotFoundException;
+import ca.nrc.cadc.net.TransientException;
 
 /**
  * The interface to storage implementations.
@@ -84,67 +91,69 @@ import java.util.Iterator;
 public interface StorageAdapter {
 
     /**
-     * Get from storage the file identified by storageID.
+     * Get from storage the artifact identified by storageID.
      * 
-     * @param storageID The file identifier.
-     * @return An output stream to the file content.
+     * @param storageID The artifact location identifier.
+     * @param handler An input stream wrapper to receive the bytes.
+     * @return The artifact (metadata).
      * 
-     * @throws ResourceNotFoundException If the file could not be found.
+     * @throws ResourceNotFoundException If the artifact could not be found.
      * @throws TransientException If an unexpected, temporary exception occurred. 
      */
-    public OutputStream get(URI storageID) throws ResourceNotFoundException, TransientException;
+    public Artifact get(URI storageID, InputStreamWrapper handler) throws ResourceNotFoundException, TransientException;
     
     /**
-     * Get the metadata for the file identified by storageID.
+     * Get the metadata for the artifact identified by storageID.
      * 
-     * @param storageID The file identifier.
-     * @return The file metadata.
+     * @param storageID The artifact identifier.
+     * @return The artifact (metadata).
      * 
-     * @throws ResourceNotFoundException If the file could not be found.
+     * @throws ResourceNotFoundException If the artifact could not be found.
      * @throws TransientException If an unexpected, temporary exception occurred. 
      */
-    public File head(URI storageID) throws ResourceNotFoundException, TransientException;
+    public Artifact meta(URI storageID) throws ResourceNotFoundException, TransientException;
     
     /**
-     * Write a file to storage.
+     * Write an artifact to storage.
      * 
-     * @param in The input stream of data for the file.
-     * @param contentChecksum The checksum of the complete file
-     * @return The new storageID.
+     * @param Artifact The artifact metadata.
+     * @param wrapper The wrapper for data of the artifact.
+     * @return The new storageLocation with storageID.
      * 
      * @throws StreamCorruptedException If the calculated checksum does not the expected checksum.
      * @throws TransientException If an unexpected, temporary exception occurred.
      */
-    public URI put(InputStream in, URI contentChecksum) throws StreamCorruptedException, TransientException;
+    public StorageLocation put(Artifact artifact, OutputStreamWrapper wrapper) throws StreamCorruptedException, TransientException;
     
     /**
-     * Write a file to storage, replacing an existing one.
+     * Write an artifact to storage, replacing an existing one.
      * 
-     * @param in The input stream of data for the file.
-     * @param contentChecksum The checksum of the complete file.
-     * @param replaceID The storageID of the file to be replaced.
-     * @return The (possibly) new storageID.
+     * @param artifact The artifact metadata.
+     * @param wrapper The wrapper for datq of the artifact.
+     * @param replaceID The storage location of the artifact to be replaced.
+     * @return The (possibly) new StorageLocation.
      * 
+     * @throws ResourceNotFoundException If the artifact to be replaced could not be found.
      * @throws StreamCorruptedException If the calculated checksum does not the expected checksum.
      * @throws TransientException If an unexpected, temporary exception occurred.
      */
-    public URI replace(InputStream in, URI contentChecksum, URI replaceID) throws StreamCorruptedException, TransientException;
+    public StorageLocation replace(Artifact artifact, OutputStreamWrapper wrapper, StorageLocation replaceID) throws ResourceNotFoundException, StreamCorruptedException, TransientException;
     
     /**
-     * Delete from storage the file identified by storageID.
-     * @param storageID Identifies the file to delete.
+     * Delete from storage the artifact identified by storageID.
+     * @param storageID Identifies the artifact to delete.
      * 
-     * @throws ResourceNotFoundException If the file could not be found.
+     * @throws ResourceNotFoundException If the artifact could not be found.
      * @throws TransientException If an unexpected, temporary exception occurred. 
      */
     public void delete(URI storageID) throws ResourceNotFoundException, TransientException;
     
     /**
      * Get an iterator of all storageIDs.
-     * @return An iterator over the complete list of files in storage.
+     * @return An iterator over the complete list of artifacts in storage.
      * 
      * @throws TransientException If an unexpected, temporary exception occurred. 
      */
-    public Iterator<URI> iterator() throws TransientException;
+    public Iterator<StorageLocation> iterator() throws TransientException;
     
 }

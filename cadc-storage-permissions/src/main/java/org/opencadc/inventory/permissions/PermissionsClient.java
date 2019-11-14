@@ -71,6 +71,11 @@ package org.opencadc.inventory.permissions;
 
 import java.net.URI;
 
+import org.opencadc.inventory.Artifact;
+
+import ca.nrc.cadc.net.ResourceNotFoundException;
+import ca.nrc.cadc.net.TransientException;
+
 /**
  * Client for retrieving and setting permission information about files.
  * 
@@ -85,13 +90,13 @@ public class PermissionsClient {
     /**
      * Get the permissions information about the file identified by fileURI.
      * 
-     * @param fileURI Identifies the file.
+     * @param artifact The artifact for which to retrieve grant information.
      * @return The grant information.
      * 
      * @throws ResourceNotFoundException If the file could not be found.
      * @throws TransientException If an unexpected, temporary exception occurred. 
      */
-    public GrantInfo getGrantInfo(URI fileURI) throws ResourceNotFoundException, TransientException {
+    public GrantInfo getGrantInfo(Artifact artifact) throws ResourceNotFoundException, TransientException {
         // TODO
         return new GrantInfo(null);
     }
@@ -99,13 +104,13 @@ public class PermissionsClient {
     /**
      * Set the permissions information for the file identified by fileURI;
      * 
-     * @param fileURI Identifies the file.
-     * @param grant The grant information to set.
+     * @param artifact The artifact on which to set grant information.
+     * @param grantInfo The grant information to set.
      * 
      * @throws ResourceNotFoundException If the file could not be found.
      * @throws TransientException If an unexpected, temporary exception occurred. 
      */
-    public void setGrantInfo(URI fileURI, GrantInfo grant) throws ResourceNotFoundException, TransientException { {
+    public void setGrantInfo(Artifact artifact, GrantInfo grantInfo) throws ResourceNotFoundException, TransientException {
         // TODO
     }
 }

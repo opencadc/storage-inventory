@@ -84,7 +84,7 @@ public class StorageLocation {
      * @param storageID internal storage identifier
      */
     public StorageLocation(URI storageID) {
-        InventoryUtil.assertNotNull(SiteLocation.class, "storageID", storageID);
+        InventoryUtil.assertNotNull(StorageLocation.class, "storageID", storageID);
         this.storageID = storageID;
     }
 

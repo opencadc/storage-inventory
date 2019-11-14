@@ -69,18 +69,22 @@
 
 package org.opencadc.inventory.storage;
 
-import java.io.File;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.StreamCorruptedException;
 import java.lang.reflect.Constructor;
 import java.net.URI;
+import java.util.Iterator;
 
 import org.apache.log4j.Logger;
-import org.opencadc.gms.GroupClient;
-import org.opencadc.gms.NoOpGroupClient;
+import org.opencadc.inventory.Artifact;
+import org.opencadc.inventory.StorageLocation;
 
-import ca.nrc.cadc.auth.Authenticator;
+import ca.nrc.cadc.net.InputStreamWrapper;
+import ca.nrc.cadc.net.OutputStreamWrapper;
+import ca.nrc.cadc.net.ResourceNotFoundException;
+import ca.nrc.cadc.net.TransientException;
 
 /**
  * Provides access to storage.  
@@ -98,57 +102,48 @@ public class StorageClient {
         adapter = getStorageAdapter();
     }
     
-    /**
-     * Get from storage the file identified by storageID.
-     * 
-     * @param storageID The file identifier.
-     * @return An output stream to the file content.
-     * 
-     * @throws ResourceNotFoundException If the file could not be found.
-     * @throws TransientException If an unexpected, temporary exception occurred. 
-     */
-    public OutputStream get(URI storageID) throws ResourceNotFoundException, TransientException {
-        return adapter.get(storageID);
+    public Artifact get(URI storageID, OutputStream out) throws ResourceNotFoundException, TransientException {
+        InputStreamWrapper handler = new InputStreamWrapper() {
+            public void read(InputStream in) throws IOException {
+                ioLoop(out, in);
+            }
+        };
+        return adapter.get(storageID, handler);
     }
-    
-    /**
-     * Write a file to storage.
-     * 
-     * @param in The input stream of data for the file.
-     * @param contentChecksum The checksum of the complete file
-     * @return The new storageID.
-     * 
-     * @throws StreamCorruptedException If the calculated checksum does not the expected checksum.
-     * @throws TransientException If an unexpected, temporary exception occurred.
-     */
-    public URI put(InputStream in, URI contentChecksum) throws StreamCorruptedException, TransientException {
-        return adapter.put(in, contentChecksum);
+
+    public Artifact meta(URI storageID) throws ResourceNotFoundException, TransientException {
+        return adapter.meta(storageID);
     }
-    
-    /**
-     * Write a file to storage, replacing an existing one.
-     * 
-     * @param in The input stream of data for the file.
-     * @param contentChecksum The checksum of the complete file.
-     * @param replaceID The storageID of the file to be replaced.
-     * @return The (possibly) new storageID.
-     * 
-     * @throws StreamCorruptedException If the calculated checksum does not the expected checksum.
-     * @throws TransientException If an unexpected, temporary exception occurred.
-     */
-    public URI replace(InputStream in, URI contentChecksum, URI replaceID) throws StreamCorruptedException, TransientException {
-        return adapter.replace(in, contentChecksum, replaceID);
+
+    public StorageLocation put(Artifact artifact, InputStream in) throws StreamCorruptedException, TransientException {
+        OutputStreamWrapper wrapper = new OutputStreamWrapper() {
+            public void write(OutputStream out) throws IOException {
+                ioLoop(out, in);
+            }
+        };
+        return adapter.put(artifact, wrapper);
     }
-    
-    /**
-     * Delete from storage the file identified by storageID.
-     * @param storageID Identifies the file to delete.
-     * 
-     * @throws ResourceNotFoundException If the file could not be found.
-     * @throws TransientException If an unexpected, temporary exception occurred. 
-     */
+
+    public StorageLocation replace(Artifact artifact, InputStream in, StorageLocation replaceID) throws ResourceNotFoundException, StreamCorruptedException, TransientException {
+        OutputStreamWrapper wrapper = new OutputStreamWrapper() {
+            public void write(OutputStream out) throws IOException {
+                ioLoop(out, in);
+            }
+        };
+        return adapter.replace(artifact, wrapper, replaceID);
+    }
+
     public void delete(URI storageID) throws ResourceNotFoundException, TransientException {
-        return adapter.delete(storageID);
+        adapter.delete(storageID);
+    }
+
+    public Iterator<StorageLocation> iterator() throws TransientException {
+        return adapter.iterator();
+    }
+    
+    private void ioLoop(OutputStream out, InputStream in) {
+        // TODO: Write 2 threaded io loop--one thread reading
+        // and one thread writing.
     }
     
     /**
@@ -191,9 +186,10 @@ public class StorageClient {
             log.debug(msg, t);
         }
         
-        StorageAdapter ret = new DefaultStorageAdapter();
+        StorageAdapter ret = new FileSystemStorageAdapter();
         log.debug("Loaded default storage adapter: " + ret);
         return ret;
         
     }
+
 }

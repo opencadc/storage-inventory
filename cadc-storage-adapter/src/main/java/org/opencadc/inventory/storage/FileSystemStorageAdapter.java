@@ -75,36 +75,46 @@ import java.io.StreamCorruptedException;
 import java.net.URI;
 import java.util.Iterator;
 
+import org.opencadc.inventory.Artifact;
+import org.opencadc.inventory.StorageLocation;
+
+import ca.nrc.cadc.net.InputStreamWrapper;
+import ca.nrc.cadc.net.OutputStreamWrapper;
+import ca.nrc.cadc.net.ResourceNotFoundException;
+import ca.nrc.cadc.net.TransientException;
+
 /**
  * The default storage adaptor implementation.  This is a simple implementation
- * that uses the underlying POSIX file system for storage.
+ * that uses the underlying POSIX file system (at some base path) for storage.
  * 
  * @author majorb
  *
  */
-public class DefaultStorageAdapter implements StorageAdapter {
+public class FileSystemStorageAdapter implements StorageAdapter {
 
     @Override
-    public OutputStream get(URI storageID) throws ResourceNotFoundException, TransientException {
-        // TODO Auto-generated method stub
-        return null;
-    }
-    
-    @Override
-    public File head(URI storageID) throws ResourceNotFoundException, TransientException {
+    public Artifact get(URI storageID, InputStreamWrapper handler)
+            throws ResourceNotFoundException, TransientException {
         // TODO Auto-generated method stub
         return null;
     }
 
     @Override
-    public URI put(InputStream in, URI contentChecksum) throws StreamCorruptedException, TransientException {
+    public Artifact meta(URI storageID) throws ResourceNotFoundException, TransientException {
         // TODO Auto-generated method stub
         return null;
     }
 
     @Override
-    public URI replace(InputStream in, URI contentChecksum, URI replaceID)
+    public StorageLocation put(Artifact artifact, OutputStreamWrapper wrapper)
             throws StreamCorruptedException, TransientException {
+        // TODO Auto-generated method stub
+        return null;
+    }
+
+    @Override
+    public StorageLocation replace(Artifact artifact, OutputStreamWrapper wrapper, StorageLocation replaceID)
+            throws ResourceNotFoundException, StreamCorruptedException, TransientException {
         // TODO Auto-generated method stub
         return null;
     }
@@ -116,7 +126,7 @@ public class DefaultStorageAdapter implements StorageAdapter {
     }
 
     @Override
-    public Iterator<URI> iterator() throws TransientException {
+    public Iterator<StorageLocation> iterator() throws TransientException {
         // TODO Auto-generated method stub
         return null;
     }
