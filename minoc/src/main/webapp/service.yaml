@@ -1,0 +1,446 @@
+swagger: '2.0'
+info:
+  version: '0.1'
+  title: Artifact storage and management service (minoc)
+  description: 'A programmatic interface for storing, retrieving and managing artifacts at a storage site.<br/><br/>Clients may authenticate to this service in one of three ways:<br/>1.  By supplying an authentication token and using it as the auth-token parameter in the path.  URLs containing auth-tokens can be retrieved from the global locate service.<br/>2.  By providing a cookie in the Cookie header<br/>3.  By using a client certificate over SSL.'
+basePath: '/minoc'
+
+paths:
+  '/artifacts/{uri}':
+    parameters:
+    - name: uri
+      in: path
+      type: string
+      description: The artifact URI
+      required: true
+    get:
+      description: |
+        Download the artifact identified by parameter uri.
+      tags:
+        - Artifact transfer
+      summary: Download an artifact
+      schemes:
+        - http
+        - https
+      produces:
+        - application/octet-stream
+      responses:
+        '200':
+          description: Successful response.
+          headers:
+            Content-Type:
+              description: The content type of the artifact
+              type: string
+            Content-MD5:
+              description: The content MD5 of the artifact
+              type: string
+            Content-Length:
+              description: The content length of the artifact
+              type: string
+        '401':
+          description: If the client does not provide credentials and anonymous access is disallowed.
+        '403':
+          description: If the client does not have permission.
+        '404':
+          description: If the artifact could not be found.
+        '500':
+          description: Internal error
+        '503':
+          description: Service busy
+    put:
+      description: |
+        Upload an artifact identified by parameter uri.
+      tags:
+        - Artifact transfer
+      summary: Upload an artifact
+      schemes:
+        - http
+        - https
+      consumes:
+        - application/octet-stream
+      responses:
+        '201':
+          description: Successful response
+        '401':
+          description: If the client does not provide credentials and anonymous access is disallowed.
+        '403':
+          description: If the client does not have permission.
+        '500':
+          description: Internal error
+        '503':
+          description: Service busy
+      parameters:
+        - name: Content-Type
+          in: header
+          type: string
+          description: The content type of the artifact
+          required: false
+        - name: Content-MD5
+          in: header
+          type: string
+          description: The content MD5 of the artifact
+          required: false
+        - name: Content-Length
+          in: header
+          type: string
+          description: The content length of the artifact
+          required: false
+    head:
+      description: |
+        Get the metadata for the artifact identified by parameter uri.
+      tags:
+        - Artifact management
+      summary: View artifact metadata
+      schemes:
+        - http
+        - https
+      responses:
+        '200':
+          description: Successful response
+          headers:
+            Content-Type:
+              description: The content type of the artifact
+              type: string
+            Content-MD5:
+              description: The content MD5 of the artifact
+              type: string
+            Content-Length:
+              description: The content length of the artifact
+              type: string
+        '401':
+          description: If the client does not provide credentials and anonymous access is disallowed.
+        '403':
+          description: If the client does not have permission.
+        '404':
+          description: If the artifact could not be found.
+        '500':
+          description: Internal error
+        '503':
+          description: Service busy
+    delete:
+      description: |
+        Delete the artifact identified by parameter uri.
+      tags:
+        - Artifact management
+      summary: Delete an artifact
+      schemes:
+        - http
+        - https
+      responses:
+        '200':
+          description: Successful response 
+        '401':
+          description: If the client does not provide credentials and anonymous access is disallowed.
+        '403':
+          description: If the client does not have permission.
+        '404':
+          description: If the artifact could not be found.
+        '500':
+          description: Internal error
+        '503':
+          description: Service busy
+    post:
+      description: |
+        Set the metadata values for an artifact
+      tags:
+        - Artifact management
+      summary: Update the metadata the artifact identified by parameter uri.
+      schemes:
+        - http
+        - https
+      parameters:
+        - name: Content-Type
+          in: header
+          type: string
+          description: The content type of the artifact
+          required: false
+        - name: Content-MD5
+          in: header
+          type: string
+          description: The content MD5 of the artifact
+          required: false
+        - name: Content-Length
+          in: header
+          type: string
+          description: The content length of the artifact
+          required: false
+      responses:
+        '200':
+          description: Successful response
+        '401':
+          description: If the client does not provide credentials and anonymous access is disallowed.
+        '403':
+          description: If the client does not have permission.
+        '404':
+          description: If the artifact could not be found.
+        '500':
+          description: Internal error
+        '503':
+          description: Service busy
+  '/artifacts/{auth-token}/{uri}':
+    parameters:
+    - name: auth-token
+      in: path
+      type: string
+      description: An authorization token
+      required: true
+    - name: uri
+      in: path
+      type: string
+      description: The artifact URI
+      required: true
+    get:
+      description: |
+        Download the artifact identified by parameter uri.
+      tags:
+        - Artifact transfer
+      summary: Download an artifact
+      schemes:
+        - http
+        - https
+      produces:
+        - application/octet-stream
+      responses:
+        '200':
+          description: Successful response.
+          headers:
+            Content-Type:
+              description: The content type of the artifact
+              type: string
+            Content-MD5:
+              description: The content MD5 of the artifact
+              type: string
+            Content-Length:
+              description: The content length of the artifact
+              type: string
+        '401':
+          description: If the client does not provide credentials and anonymous access is disallowed.
+        '403':
+          description: If the client does not have permission.
+        '404':
+          description: If the artifact could not be found.
+        '500':
+          description: Internal error
+        '503':
+          description: Service busy
+    put:
+      description: |
+        Upload an artifact identified by parameter uri.
+      tags:
+        - Artifact transfer
+      summary: Upload an artifact
+      schemes:
+        - http
+        - https
+      consumes:
+        - application/octet-stream
+      responses:
+        '201':
+          description: Successful response
+        '401':
+          description: If the client does not provide credentials and anonymous access is disallowed.
+        '403':
+          description: If the client does not have permission.
+        '500':
+          description: Internal error
+        '503':
+          description: Service busy
+      parameters:
+        - name: Content-Type
+          in: header
+          type: string
+          description: The content type of the artifact
+          required: false
+        - name: Content-MD5
+          in: header
+          type: string
+          description: The content MD5 of the artifact
+          required: false
+        - name: Content-Length
+          in: header
+          type: string
+          description: The content length of the artifact
+          required: false
+    head:
+      description: |
+        Get the metadata for the artifact identified by parameter uri.
+      tags:
+        - Artifact management
+      summary: View artifact metadata
+      schemes:
+        - http
+        - https
+      responses:
+        '200':
+          description: Successful response
+          headers:
+            Content-Type:
+              description: The content type of the artifact
+              type: string
+            Content-MD5:
+              description: The content MD5 of the artifact
+              type: string
+            Content-Length:
+              description: The content length of the artifact
+              type: string
+        '401':
+          description: If the client does not provide credentials and anonymous access is disallowed.
+        '403':
+          description: If the client does not have permission.
+        '404':
+          description: If the artifact could not be found.
+        '500':
+          description: Internal error
+        '503':
+          description: Service busy
+    delete:
+      description: |
+        Delete the artifact identified by parameter uri.
+      tags:
+        - Artifact management
+      summary: Delete an artifact
+      schemes:
+        - http
+        - https
+      responses:
+        '200':
+          description: Successful response 
+        '401':
+          description: If the client does not provide credentials and anonymous access is disallowed.
+        '403':
+          description: If the client does not have permission.
+        '404':
+          description: If the artifact could not be found.
+        '500':
+          description: Internal error
+        '503':
+          description: Service busy
+    post:
+      description: |
+        Set the metadata values for an artifact
+      tags:
+        - Artifact management
+      summary: Update the metadata the artifact identified by parameter uri.
+      schemes:
+        - http
+        - https
+      parameters:
+        - name: Content-Type
+          in: header
+          type: string
+          description: The content type of the artifact
+          required: false
+        - name: Content-MD5
+          in: header
+          type: string
+          description: The content MD5 of the artifact
+          required: false
+        - name: Content-Length
+          in: header
+          type: string
+          description: The content length of the artifact
+          required: false
+      responses:
+        '200':
+          description: Successful response
+        '401':
+          description: If the client does not provide credentials and anonymous access is disallowed.
+        '403':
+          description: If the client does not have permission.
+        '404':
+          description: If the artifact could not be found.
+        '500':
+          description: Internal error
+        '503':
+          description: Service busy
+  /availability:
+    get:
+      tags:
+        - Support Interfaces
+      summary: VOSI Availability
+      description: 'Indicates whether the service is operable and shows the reliability of the service for extended and scheduled requests. If the query parameter ''detail=min'' is used, a light weight heart beat test will be performed. The heart beat test returns status 200 if the service is available.'
+      parameters:
+        - name: detail
+          in: query
+          description: 'Specifies heart beat to be used to check for availability of this service, the value ''min'' must be used, otherwise the full availability test will be performed'
+          required: false
+          type: string
+      responses:
+        '200':
+          description: A VOSI availability document in XML.
+          schema:
+            $ref: '#/definitions/availability'
+  /capabilities:
+    get:
+      summary: VOSI Capabilities
+      tags:
+        - Support Interfaces
+      description: |
+        Provides the service metadata in the form of a list of Capability descriptions.  Each of these descriptions is an 
+        XML element that:
+        <ul>
+        <li>states that the service provides a particular, IVOA-standard function;</li>
+        <li>lists the interfaces for invoking that function;</li>
+        <li>records any details of the implementation of the function that are not defined as default or constant in the standard for that function.</li>
+        </ul>
+      responses:
+        '200':
+          description: A VOSI Capabilities document in XML.
+          schema:
+            $ref: '#/definitions/capabilities'
+        '500':
+          description: Internal server error
+        '503':
+          description: Service too busy
+definitions:
+  availability:
+    type: object
+    xml:
+      name: availability
+      namespace: 'http://www.ivoa.net/xml/VOSIAvailability/v1.0'
+      prefix: vosi
+    properties:
+      available:
+        type: boolean
+        xml:
+          attribute: true
+          prefix: vosi
+      note:
+        type: string
+        xml:
+          attribute: true
+          prefix: vosi
+  capabilities:
+    type: array
+    items:
+      $ref: '#/definitions/capability'
+    xml:
+      namespace: 'http://www.ivoa.net/xml/VOSICapabilities/v1.0'
+      prefix: vosi
+      wrapped: true
+  capability:
+    type: object
+    properties:
+      standardID:
+        type: string
+        format: uri
+        xml:
+          attribute: true
+      interface:
+        type: object
+        properties:
+          accessURL:
+            type: string
+            properties:
+              use:
+                type: string
+                xml:
+                  attribute: true
+          securityMethod:
+            type: string
+            properties:
+              standardID:
+                type: string
+                format: uri
+                xml:
+                  attribute: true
