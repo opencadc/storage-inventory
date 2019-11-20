@@ -95,7 +95,7 @@ import ca.nrc.cadc.net.TransientException;
 public class StorageClient {
     
     private static Logger log = Logger.getLogger(StorageClient.class);
-    private static String STORAGE_ADPATER_CLASS_PROPERTY = "storage.adapter.class";
+    private static String STORAGE_ADPATER_CLASS_PROPERTY = StorageAdapter.class.getName();
     
     private StorageAdapter adapter;
 

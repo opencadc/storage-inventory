@@ -85,19 +85,11 @@
     <servlet-name>FilesServlet</servlet-name>
     <url-pattern>/files/*</url-pattern>
   </servlet-mapping>
-  <servlet-mapping>
-    <servlet-name>FilesServlet</servlet-name>
-    <url-pattern>/auth/files/*</url-pattern>
-  </servlet-mapping>
-
+  
   <!-- Availability servlet endpoint -->
   <servlet-mapping>
     <servlet-name>AvailabilityServlet</servlet-name>
     <url-pattern>/availability</url-pattern>
-  </servlet-mapping>
-  <servlet-mapping>
-    <servlet-name>AvailabilityServlet</servlet-name>
-    <url-pattern>/auth/availability</url-pattern>
   </servlet-mapping>
 
   <!-- Capability servlet endpoint -->
@@ -116,30 +108,5 @@
     <welcome-file>index.html</welcome-file>
   </welcome-file-list>
 
-  <!-- Define a security constraint for auth servlet -->
-  <security-constraint>
-    <web-resource-collection>
-      <web-resource-name>auth</web-resource-name>
-      <description/>
-      <url-pattern>/auth/*</url-pattern>
-      <url-pattern>/logControl/*</url-pattern>
-      <http-method>GET</http-method>
-      <http-method>POST</http-method>
-      <http-method>HEAD</http-method>
-      <http-method>PUT</http-method>
-      <http-method>OPTIONS</http-method>
-      <http-method>TRACE</http-method>
-      <http-method>DELETE</http-method>
-    </web-resource-collection>
-    <auth-constraint>
-      <description>force authentication for all requests</description>
-      <role-name>public</role-name>
-    </auth-constraint>
-  </security-constraint>
-
-  <login-config>
-    <auth-method>BASIC</auth-method>
-    <realm-name>Canadian Astronomy Data Centre</realm-name>
-  </login-config>
 
 </web-app>

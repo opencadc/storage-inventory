@@ -69,6 +69,7 @@ package org.opencadc.minoc;
 
 import ca.nrc.cadc.auth.AuthMethod;
 import ca.nrc.cadc.reg.Standards;
+import ca.nrc.cadc.reg.client.LocalAuthority;
 import ca.nrc.cadc.reg.client.RegistryClient;
 import ca.nrc.cadc.vosi.AvailabilityPlugin;
 import ca.nrc.cadc.vosi.AvailabilityStatus;
@@ -85,9 +86,6 @@ import org.apache.log4j.Logger;
 public class ServiceAvailability implements AvailabilityPlugin {
 
     private static final Logger log = Logger.getLogger(ServiceAvailability.class);
-
-    private static String CRED_AVAIL = "ivo://cadc.nrc.ca/cred";
-    private static String AC_AVAIL = "ivo://canfar.net/aa";
 
     public ServiceAvailability() {
     }
@@ -112,12 +110,21 @@ public class ServiceAvailability implements AvailabilityPlugin {
             RegistryClient reg = new RegistryClient();
             String url;
             CheckResource checkResource;
+            
+            LocalAuthority localAuthority = new LocalAuthority();
+            URI credURI = localAuthority.getServiceURI(Standards.CRED_PROXY_10.toString());
+            URI usersURI = localAuthority.getServiceURI(Standards.UMS_USERS_01.toString());
+            URI groupsURI = localAuthority.getServiceURI(Standards.GMS_SEARCH_01.toString());
 
-            url = reg.getServiceURL(URI.create(CRED_AVAIL), Standards.VOSI_AVAILABILITY, AuthMethod.ANON).toExternalForm();
+            url = reg.getServiceURL(credURI, Standards.VOSI_AVAILABILITY, AuthMethod.ANON).toExternalForm();
             checkResource = new CheckWebService(url);
             checkResource.check();
 
-            url = reg.getServiceURL(URI.create(AC_AVAIL), Standards.VOSI_AVAILABILITY, AuthMethod.ANON).toExternalForm();
+            url = reg.getServiceURL(usersURI, Standards.VOSI_AVAILABILITY, AuthMethod.ANON).toExternalForm();
+            checkResource = new CheckWebService(url);
+            checkResource.check();
+            
+            url = reg.getServiceURL(groupsURI, Standards.VOSI_AVAILABILITY, AuthMethod.ANON).toExternalForm();
             checkResource = new CheckWebService(url);
             checkResource.check();
         } catch (CheckException ce) {

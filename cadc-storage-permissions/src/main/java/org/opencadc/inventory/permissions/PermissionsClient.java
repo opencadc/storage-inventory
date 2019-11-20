@@ -98,7 +98,7 @@ public class PermissionsClient {
      */
     public Grant getGrant(URI artifactURI) throws ResourceNotFoundException, TransientException {
         // TODO
-        return new Grant(artifactURI, null);
+        return new Grant(artifactURI);
     }
     
 }

@@ -81,46 +81,31 @@ import org.opencadc.inventory.InventoryUtil;
  */
 public class StorageMetadata {
 
-    private URI storageID;
-    private URI contentChecksum;
-    private Long contentLength;
-    
-    private URI artifactURI;
-    private String bucket;
+    final private URI storageID;
+    final private URI contentChecksum;
+    final private Long contentLength;
+    public URI artifactURI;
+    public String bucket;
     
     public StorageMetadata(URI storageID, URI contentChecksum, Long contentLength) {
-        this(storageID, contentChecksum, contentLength, null, null);
-    }
-    
-    public StorageMetadata(URI storageID, URI contentChecksum, Long contentLength, URI artifactURI, String bucket) {
         InventoryUtil.assertNotNull(StorageMetadata.class, "storageID", storageID);
         InventoryUtil.assertNotNull(StorageMetadata.class, "contentChecksum", contentChecksum);
         InventoryUtil.assertNotNull(StorageMetadata.class, "contentLength", contentLength);
         this.storageID = storageID;
         this.contentChecksum = contentChecksum;
         this.contentLength = contentLength;
-        this.artifactURI = artifactURI;
-        this.bucket = bucket;
     }
 
-    protected URI getStorageID() {
+    public URI getStorageID() {
         return storageID;
     }
 
-    protected URI getContentChecksum() {
+    public URI getContentChecksum() {
         return contentChecksum;
     }
 
-    protected Long getContentLength() {
+    public Long getContentLength() {
         return contentLength;
     }
 
-    protected URI getArtifactURI() {
-        return artifactURI;
-    }
-
-    protected String getBucket() {
-        return bucket;
-    }
-    
 }

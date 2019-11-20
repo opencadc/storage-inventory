@@ -6,19 +6,19 @@
 
   <capability standardID="ivo://ivoa.net/std/VOSI#capabilities">
     <interface xsi:type="vs:ParamHTTP" role="std">
-      <accessURL use="full">http://replace.com/cavern/capabilities</accessURL>
+      <accessURL use="full">http://replace.com/minoc/capabilities</accessURL>
     </interface>
   </capability>
 
   <capability standardID="ivo://ivoa.net/std/VOSI#availability">
     <interface xsi:type="vs:ParamHTTP" role="std">
-      <accessURL use="full">http://replace.com/cavern/availability</accessURL>
+      <accessURL use="full">http://replace.com/minoc/availability</accessURL>
     </interface>
   </capability>
   
   <capability standardID="vos://cadc.nrc.ca~vospace/CADC/std/LOGGING#logControl-1.0">
     <interface xsi:type="vs:ParamHTTP" role="std" version="1.0">
-      <accessURL use="full">http://replace.com/cavern/logControl</accessURL>
+      <accessURL use="full">http://replace.com/minoc/logControl</accessURL>
     </interface>
   </capability>
   

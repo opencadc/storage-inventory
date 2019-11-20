@@ -6,9 +6,9 @@ info:
 basePath: '/minoc'
 
 paths:
-  '/artifacts/{uri}':
+  '/artifacts/{artifact-uri}':
     parameters:
-    - name: uri
+    - name: artifact-uri
       in: path
       type: string
       description: The artifact URI
@@ -28,6 +28,9 @@ paths:
         '200':
           description: Successful response.
           headers:
+            Content-Disposition:
+              description: 'The content-disposition of the artifact in the form<br/><br/>Content-Disposition\: attachment; filename=\"\<name\>\"<br/><br/>where \<name\> is the last path segment of the URI of the artifact.'
+              type: string
             Content-Type:
               description: The content type of the artifact
               type: string
@@ -153,25 +156,25 @@ paths:
         Set the metadata values for an artifact
       tags:
         - Artifact management
-      summary: Update the metadata the artifact identified by parameter uri.
+      summary: Update the metadata of artifact identified by parameter uri.
       schemes:
         - http
         - https
       parameters:
-        - name: Content-Type
-          in: header
+        - name: uri
+          in: query
           type: string
-          description: The content type of the artifact
+          description: The new URI for the artifact
           required: false
-        - name: Content-MD5
-          in: header
+        - name: contentType
+          in: query
           type: string
-          description: The content MD5 of the artifact
+          description: The new content type of the artifact
           required: false
-        - name: Content-Length
-          in: header
+        - name: contentEncoding
+          in: query
           type: string
-          description: The content length of the artifact
+          description: The new content encoding of the artifact
           required: false
       responses:
         '200':
@@ -186,14 +189,14 @@ paths:
           description: Internal error
         '503':
           description: Service busy
-  '/artifacts/{auth-token}/{uri}':
+  '/artifacts/{auth-token}/{artifact-uri}':
     parameters:
     - name: auth-token
       in: path
       type: string
       description: An authorization token
       required: true
-    - name: uri
+    - name: artifact-uri
       in: path
       type: string
       description: The artifact URI
@@ -213,6 +216,9 @@ paths:
         '200':
           description: Successful response.
           headers:
+            Content-Disposition:
+              description: 'The content-disposition of the artifact in the form<br/><br/>Content-Disposition\: attachment; filename=\"\<name\>\"<br/><br/>where \<name\> is the last path segment of the URI of the artifact.'
+              type: string
             Content-Type:
               description: The content type of the artifact
               type: string
@@ -338,25 +344,25 @@ paths:
         Set the metadata values for an artifact
       tags:
         - Artifact management
-      summary: Update the metadata the artifact identified by parameter uri.
+      summary: Update the metadata of artifact identified by parameter uri.
       schemes:
         - http
         - https
       parameters:
-        - name: Content-Type
-          in: header
+        - name: uri
+          in: query
           type: string
-          description: The content type of the artifact
+          description: The new URI for the artifact
           required: false
-        - name: Content-MD5
-          in: header
+        - name: contentType
+          in: query
           type: string
-          description: The content MD5 of the artifact
+          description: The new content type of the artifact
           required: false
-        - name: Content-Length
-          in: header
+        - name: contentEncoding
+          in: query
           type: string
-          description: The content length of the artifact
+          description: The new content encoding of the artifact
           required: false
       responses:
         '200':

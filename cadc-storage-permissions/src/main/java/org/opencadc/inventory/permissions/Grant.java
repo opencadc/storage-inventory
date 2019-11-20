@@ -70,6 +70,7 @@
 package org.opencadc.inventory.permissions;
 
 import java.net.URI;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 
@@ -77,61 +78,27 @@ import org.opencadc.gms.GroupURI;
 import org.opencadc.inventory.InventoryUtil;
 
 /**
- * Holds grant information about an object.
+ * Holds grant information about an artifact.
  * 
  * @author majorb
  *
  */
 public class Grant {
 
-    private URI artifactURI;
-    private Date releaseDate;
-    private List<GroupURI> readGroups;
-    private List<GroupURI> readWriteGroups;
+    final private URI artifactURI;
+    public Date releaseDate;
+    final public List<GroupURI> readGroups = new ArrayList<GroupURI>();;
+    final public List<GroupURI> readWriteGroups = new ArrayList<GroupURI>();;
+    public boolean isPublic = false;
+    final public Date evaluationDate = new Date();
     
-    private boolean isPublic;
-    private Date evaluationDate;
-    
-    public Grant(URI artifactURI, Date releaseDate) {
-        this(artifactURI, releaseDate, null, null);
-    }
-    
-    public Grant(URI artifactURI, Date releaseDate, List<GroupURI> readGroups, List<GroupURI> readWriteGroups) {
+    public Grant(URI artifactURI) {
         InventoryUtil.assertNotNull(Grant.class, "artifactURI", artifactURI);
         this.artifactURI = artifactURI;
-        if (releaseDate == null) {
-            isPublic = false;
-        } else {
-            isPublic = releaseDate.before(new Date());
-        }
-        this.releaseDate = releaseDate;
-        this.readGroups = readGroups;
-        this.readWriteGroups = readWriteGroups;
-        this.evaluationDate = new Date();
     }
     
     public URI getArtifactURI() {
         return artifactURI;
-    }
-    
-    public Date getReleaseDate() {
-        return releaseDate;
-    }
-
-    public List<GroupURI> getReadGroups() {
-        return readGroups;
-    }
-
-    public List<GroupURI> getReadWriteGroups() {
-        return readWriteGroups;
-    }
-    
-    public boolean isPublic() {
-        return isPublic;
-    }
-    
-    public Date getEvaluationDate() {
-        return evaluationDate;
     }
     
 }
