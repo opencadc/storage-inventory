@@ -36,26 +36,26 @@
     
   <servlet>
     <servlet-name>FilesServlet</servlet-name>
+    <!-- 
         <servlet-class>ca.nrc.cadc.rest.RestServlet</servlet-class>
         <init-param>
             <param-name>get</param-name>
-            <param-value>org.opencadc.cavern.files.GetAction</param-value>
+            <param-value>org.opencadc.minoc.GetAction</param-value>
         </init-param>
         <init-param>
             <param-name>put</param-name>
-            <param-value>org.opencadc.cavern.files.PutAction</param-value>
+            <param-value>org.opencadc.minoc.PutAction</param-value>
         </init-param>
-        <!--
         <init-param>
             <param-name>post</param-name>
-            <param-value>org.opencadc.cavern.files.PostAction</param-value>
+            <param-value>org.opencadc.minoc.PostAction</param-value>
         </init-param>
-        -->
         <init-param>
             <param-name>delete</param-name>
-            <param-value>org.opencadc.cavern.files.DeleteAction</param-value>
+            <param-value>org.opencadc.minoc.DeleteAction</param-value>
         </init-param>
         <load-on-startup>2</load-on-startup>
+      -->
     </servlet>
 
   <!-- VOSI availability -->
