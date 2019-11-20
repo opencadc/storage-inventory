@@ -1,4 +1,4 @@
-<a rel="license" href="http://creativecommons.org/licenses/by-sa/4.0/">
+update <a rel="license" href="http://creativecommons.org/licenses/by-sa/4.0/">
 <img alt="Creative Commons License" style="border-width:0" src="https://i.creativecommons.org/l/by-sa/4.0/88x31.png" /></a>
 <br />The Common Archive Observation Model is licensed under the
 <a rel="license" href="http://creativecommons.org/licenses/by-sa/4.0/">
@@ -155,10 +155,10 @@ files (basic put/get/delete):
 - PUT /srv/files/{uri}
 - GET /srv/files/{uri}
 - DELETE /srv/files/{uri}
+- POST /srv/files/{uri}
 - mirroring policy at sites will (mostly) be based on information in the Artifact.uri (chose wisely)
-- no API to modify Artifact.uri without delete+put with new uri (chose wisely); it is technically feasible to modify (like--)
-- no API to modify other Artifact metadata (supply correct metadata in PUT); it is feasible to use POST for metadata update
 - cannot directly access vault files at a site - must use transfer negotiation (no real change)
+- POST can modify the Artifact.uri (rename), the Artifact.contentType, and the Artifact.contentEncoding
 
 locate (transfer negotiation):
 - negotiate with global to get: locate available copies and return URL(s), order by proximity
