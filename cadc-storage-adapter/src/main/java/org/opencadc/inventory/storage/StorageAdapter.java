@@ -69,7 +69,6 @@
 
 package org.opencadc.inventory.storage;
 
-import java.io.InputStream;
 import java.io.StreamCorruptedException;
 import java.net.URI;
 import java.util.Iterator;
@@ -94,51 +93,26 @@ public interface StorageAdapter {
      * Get from storage the artifact identified by storageID.
      * 
      * @param storageID The artifact location identifier.
-     * @param handler An input stream wrapper to receive the bytes.
-     * @return The artifact (metadata).
+     * @param wrapper An input stream wrapper to receive the bytes.
      * 
      * @throws ResourceNotFoundException If the artifact could not be found.
      * @throws TransientException If an unexpected, temporary exception occurred. 
      */
-    public Artifact get(URI storageID, InputStreamWrapper handler) throws ResourceNotFoundException, TransientException;
-    
-    /**
-     * Get the metadata for the artifact identified by storageID.
-     * 
-     * @param storageID The artifact identifier.
-     * @return The artifact (metadata).
-     * 
-     * @throws ResourceNotFoundException If the artifact could not be found.
-     * @throws TransientException If an unexpected, temporary exception occurred. 
-     */
-    public Artifact meta(URI storageID) throws ResourceNotFoundException, TransientException;
+    public void get(URI storageID, InputStreamWrapper wrapper) throws ResourceNotFoundException, TransientException;
     
     /**
      * Write an artifact to storage.
      * 
      * @param Artifact The artifact metadata.
      * @param wrapper The wrapper for data of the artifact.
-     * @return The new storageLocation with storageID.
+     * @param bucket An organizational code for storage
+     * @return The storageLocation with storageID.
      * 
      * @throws StreamCorruptedException If the calculated checksum does not the expected checksum.
      * @throws TransientException If an unexpected, temporary exception occurred.
      */
-    public StorageLocation put(Artifact artifact, OutputStreamWrapper wrapper) throws StreamCorruptedException, TransientException;
-    
-    /**
-     * Write an artifact to storage, replacing an existing one.
-     * 
-     * @param artifact The artifact metadata.
-     * @param wrapper The wrapper for datq of the artifact.
-     * @param replaceID The storage location of the artifact to be replaced.
-     * @return The (possibly) new StorageLocation.
-     * 
-     * @throws ResourceNotFoundException If the artifact to be replaced could not be found.
-     * @throws StreamCorruptedException If the calculated checksum does not the expected checksum.
-     * @throws TransientException If an unexpected, temporary exception occurred.
-     */
-    public StorageLocation replace(Artifact artifact, OutputStreamWrapper wrapper, StorageLocation replaceID) throws ResourceNotFoundException, StreamCorruptedException, TransientException;
-    
+    public StorageLocation put(Artifact artifact, OutputStreamWrapper wrapper, String bucket) throws StreamCorruptedException, TransientException;
+        
     /**
      * Delete from storage the artifact identified by storageID.
      * @param storageID Identifies the artifact to delete.
@@ -149,11 +123,20 @@ public interface StorageAdapter {
     public void delete(URI storageID) throws ResourceNotFoundException, TransientException;
     
     /**
-     * Get an iterator of all storageIDs.
-     * @return An iterator over the complete list of artifacts in storage.
+     * Iterator of items ordered by their storageIDs.
+     * @return An iterator over an ordered list of items in storage.
      * 
      * @throws TransientException If an unexpected, temporary exception occurred. 
      */
-    public Iterator<StorageLocation> iterator() throws TransientException;
+    public Iterator<StorageMetadata> iterator() throws TransientException;
+    
+    /**
+     * Iterator of itmes ordered by their storageIDs.
+     * @param bucket Only iterate over items in this bucket.
+     * @return An iterator over an ordered list of items in this storage bucket.
+     * 
+     * @throws TransientException If an unexpected, temporary exception occurred. 
+     */
+    public Iterator<StorageMetadata> iterator(String bucket) throws TransientException;
     
 }

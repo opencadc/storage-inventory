@@ -77,7 +77,7 @@ import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
 
 /**
- * Client for retrieving and setting permission information about files.
+ * Client for retrieving grant information about artifacts.
  * 
  * @author majorb
  *
@@ -96,21 +96,9 @@ public class PermissionsClient {
      * @throws ResourceNotFoundException If the file could not be found.
      * @throws TransientException If an unexpected, temporary exception occurred. 
      */
-    public GrantInfo getGrantInfo(Artifact artifact) throws ResourceNotFoundException, TransientException {
+    public Grant getGrant(URI artifactURI) throws ResourceNotFoundException, TransientException {
         // TODO
-        return new GrantInfo(null);
+        return new Grant(null);
     }
     
-    /**
-     * Set the permissions information for the file identified by fileURI;
-     * 
-     * @param artifact The artifact on which to set grant information.
-     * @param grantInfo The grant information to set.
-     * 
-     * @throws ResourceNotFoundException If the file could not be found.
-     * @throws TransientException If an unexpected, temporary exception occurred. 
-     */
-    public void setGrantInfo(Artifact artifact, GrantInfo grantInfo) throws ResourceNotFoundException, TransientException {
-        // TODO
-    }
 }

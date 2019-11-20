@@ -67,68 +67,56 @@
  ************************************************************************
  */
 
-package org.opencadc.inventory.storage;
+package org.opencadc.inventory.permissions;
 
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.io.StreamCorruptedException;
-import java.net.URI;
-import java.util.Iterator;
+import java.util.Date;
+import java.util.List;
 
-import org.opencadc.inventory.Artifact;
-import org.opencadc.inventory.StorageLocation;
-
-import ca.nrc.cadc.net.InputStreamWrapper;
-import ca.nrc.cadc.net.OutputStreamWrapper;
-import ca.nrc.cadc.net.ResourceNotFoundException;
-import ca.nrc.cadc.net.TransientException;
+import org.opencadc.gms.GroupURI;
 
 /**
- * The default storage adaptor implementation.  This is a simple implementation
- * that uses the underlying POSIX file system (at some base path) for storage.
+ * Holds grant information about an object.
  * 
  * @author majorb
  *
  */
-public class FileSystemStorageAdapter implements StorageAdapter {
+public class Grant {
 
-    @Override
-    public Artifact get(URI storageID, InputStreamWrapper handler)
-            throws ResourceNotFoundException, TransientException {
-        // TODO Auto-generated method stub
-        return null;
+    private Date releaseDate;
+    private List<GroupURI> readGroups;
+    private List<GroupURI> readWriteGroups;
+    
+    private boolean isPublic;
+    
+    public Grant(Date releaseDate) {
+        this(releaseDate, null, null);
+    }
+    
+    public Grant(Date releaseDate, List<GroupURI> readGroups, List<GroupURI> readWriteGroups) {
+        if (releaseDate == null) {
+            isPublic = false;
+        } else {
+            isPublic = releaseDate.before(new Date());
+        }
+        this.releaseDate = releaseDate;
+        this.readGroups = readGroups;
+        this.readWriteGroups = readWriteGroups;
+    }
+    
+    protected Date getReleaseDate() {
+        return releaseDate;
     }
 
-    @Override
-    public Artifact meta(URI storageID) throws ResourceNotFoundException, TransientException {
-        // TODO Auto-generated method stub
-        return null;
+    protected List<GroupURI> getReadGroups() {
+        return readGroups;
     }
 
-    @Override
-    public StorageLocation put(Artifact artifact, OutputStreamWrapper wrapper)
-            throws StreamCorruptedException, TransientException {
-        // TODO Auto-generated method stub
-        return null;
+    protected List<GroupURI> getReadWriteGroups() {
+        return readWriteGroups;
     }
-
-    @Override
-    public StorageLocation replace(Artifact artifact, OutputStreamWrapper wrapper, StorageLocation replaceID)
-            throws ResourceNotFoundException, StreamCorruptedException, TransientException {
-        // TODO Auto-generated method stub
-        return null;
+    
+    protected boolean isPublic() {
+        return isPublic;
     }
-
-    @Override
-    public void delete(URI storageID) throws ResourceNotFoundException, TransientException {
-        // TODO Auto-generated method stub
-        
-    }
-
-    @Override
-    public Iterator<StorageLocation> iterator() throws TransientException {
-        // TODO Auto-generated method stub
-        return null;
-    }
-
+    
 }

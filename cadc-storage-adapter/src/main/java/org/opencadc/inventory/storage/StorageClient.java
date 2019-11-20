@@ -95,6 +95,7 @@ import ca.nrc.cadc.net.TransientException;
 public class StorageClient {
     
     private static Logger log = Logger.getLogger(StorageClient.class);
+    private static String STORAGE_ADPATER_CLASS_PROPERTY = "storage.adapter.class";
     
     private StorageAdapter adapter;
 
@@ -102,43 +103,34 @@ public class StorageClient {
         adapter = getStorageAdapter();
     }
     
-    public Artifact get(URI storageID, OutputStream out) throws ResourceNotFoundException, TransientException {
+    public void get(URI storageID, OutputStream out) throws ResourceNotFoundException, TransientException {
         InputStreamWrapper handler = new InputStreamWrapper() {
             public void read(InputStream in) throws IOException {
                 ioLoop(out, in);
             }
         };
-        return adapter.get(storageID, handler);
+        adapter.get(storageID, handler);
     }
 
-    public Artifact meta(URI storageID) throws ResourceNotFoundException, TransientException {
-        return adapter.meta(storageID);
-    }
-
-    public StorageLocation put(Artifact artifact, InputStream in) throws StreamCorruptedException, TransientException {
+    public StorageLocation put(Artifact artifact, InputStream in, String bucket) throws StreamCorruptedException, TransientException {
         OutputStreamWrapper wrapper = new OutputStreamWrapper() {
             public void write(OutputStream out) throws IOException {
                 ioLoop(out, in);
             }
         };
-        return adapter.put(artifact, wrapper);
-    }
-
-    public StorageLocation replace(Artifact artifact, InputStream in, StorageLocation replaceID) throws ResourceNotFoundException, StreamCorruptedException, TransientException {
-        OutputStreamWrapper wrapper = new OutputStreamWrapper() {
-            public void write(OutputStream out) throws IOException {
-                ioLoop(out, in);
-            }
-        };
-        return adapter.replace(artifact, wrapper, replaceID);
+        return adapter.put(artifact, wrapper, bucket);
     }
 
     public void delete(URI storageID) throws ResourceNotFoundException, TransientException {
         adapter.delete(storageID);
     }
 
-    public Iterator<StorageLocation> iterator() throws TransientException {
+    public Iterator<StorageMetadata> iterator() throws TransientException {
         return adapter.iterator();
+    }
+    
+    public Iterator<StorageMetadata> iterator(String bucket) throws TransientException {
+        return adapter.iterator(bucket);
     }
     
     private void ioLoop(OutputStream out, InputStream in) {
@@ -153,42 +145,23 @@ public class StorageClient {
      * @return The storage adapter to be used by this client.
      */
     private StorageAdapter getStorageAdapter() {
-        Class c = null;
-        
-        // Try to load the adapter based on a classname in a system property
-        String cname = System.getProperty(StorageAdapter.class.getName());
-        if (cname != null) {
-            try {
-                c = Class.forName(cname);
-            } catch (Throwable t) {
-                String msg = "Failed to find storage adapter " + cname;
-                log.error(msg, t);
-                throw new IllegalStateException(msg, t);
-            }
+        // Load the adapter based on a classname in a system property
+        String cname = System.getProperty(STORAGE_ADPATER_CLASS_PROPERTY);
+        if (cname == null) {
+            throw new IllegalStateException(
+                "No storage adapter defined by system property: " + STORAGE_ADPATER_CLASS_PROPERTY);
         }
-        
-        // Try to load the adapter based on the default name
-        cname = StorageAdapter.class.getName() + "Impl";
+      
         try {
-            c = Class.forName(cname);
-            try {
-                Constructor con = c.getConstructor();
-                Object o = con.newInstance();
-                StorageAdapter ret = (StorageAdapter) o;
-                log.debug("Loaded Storage adapter: " + cname);
-                return ret;
-            } catch (Throwable t) {
-                log.error("Failed to load storage adapter: " + cname, t);
-            }
+            Class c = Class.forName(cname);
+            Constructor con = c.getConstructor();
+            Object o = con.newInstance();
+            StorageAdapter ret = (StorageAdapter) o;
+            log.debug("Loaded Storage adapter: " + cname);
+            return ret;
         } catch (Throwable t) {
-            String msg = "Failed to find storage adapter " + cname +
-                "  Using default implementation.";
-            log.debug(msg, t);
+            throw new IllegalStateException("Failed to load storage adapter " + cname, t);
         }
-        
-        StorageAdapter ret = new FileSystemStorageAdapter();
-        log.debug("Loaded default storage adapter: " + ret);
-        return ret;
         
     }
 

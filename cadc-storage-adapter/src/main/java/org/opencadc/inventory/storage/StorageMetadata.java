@@ -67,57 +67,60 @@
  ************************************************************************
  */
 
-package org.opencadc.inventory.permissions;
+package org.opencadc.inventory.storage;
 
 import java.net.URI;
-import java.util.List;
 
-import javax.security.auth.Subject;
-
-import org.opencadc.gms.GroupURI;
+import org.opencadc.inventory.InventoryUtil;
 
 /**
- * Holds grant information about an object.
+ * Class to hold artifact metadata from a storage implementation.
  * 
  * @author majorb
  *
  */
-public class GrantInfo {
+public class StorageMetadata {
 
-    private Subject owner;
-    private boolean isPublic = false;
-    private List<GroupURI> readGroups;
-    private List<GroupURI> readWriteGroups;
+    private URI storageID;
+    private URI contentChecksum;
+    private Long contentLength;
     
-    public GrantInfo(Subject owner) {
-        this(owner, false);
-    }
+    private URI artifactURI;
+    private String bucket;
     
-    public GrantInfo(Subject owner, boolean isPublic) {
-        this(owner, isPublic, null, null);
+    public StorageMetadata(URI storageID, URI contentChecksum, Long contentLength) {
+        this(storageID, contentChecksum, contentLength, null, null);
     }
     
-    public GrantInfo(Subject owner, boolean isPublic, List<GroupURI> readGroups, List<GroupURI> readWriteGroups) {
-        this.owner = owner;
-        this.isPublic = isPublic;
-        this.readGroups = readGroups;
-        this.readWriteGroups = readWriteGroups;
+    public StorageMetadata(URI storageID, URI contentChecksum, Long contentLength, URI artifactURI, String bucket) {
+        InventoryUtil.assertNotNull(StorageMetadata.class, "storageID", storageID);
+        InventoryUtil.assertNotNull(StorageMetadata.class, "contentChecksum", contentChecksum);
+        InventoryUtil.assertNotNull(StorageMetadata.class, "contentLength", contentLength);
+        this.storageID = storageID;
+        this.contentChecksum = contentChecksum;
+        this.contentLength = contentLength;
+        this.artifactURI = artifactURI;
+        this.bucket = bucket;
     }
 
-    protected Subject getOwner() {
-        return owner;
+    protected URI getStorageID() {
+        return storageID;
     }
 
-    protected boolean isPublic() {
-        return isPublic;
+    protected URI getContentChecksum() {
+        return contentChecksum;
     }
 
-    protected List<GroupURI> getReadGroups() {
-        return readGroups;
+    protected Long getContentLength() {
+        return contentLength;
     }
 
-    protected List<GroupURI> getReadWriteGroups() {
-        return readWriteGroups;
+    protected URI getArtifactURI() {
+        return artifactURI;
+    }
+
+    protected String getBucket() {
+        return bucket;
     }
     
 }
