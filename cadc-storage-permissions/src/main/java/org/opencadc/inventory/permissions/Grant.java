@@ -69,10 +69,12 @@
 
 package org.opencadc.inventory.permissions;
 
+import java.net.URI;
 import java.util.Date;
 import java.util.List;
 
 import org.opencadc.gms.GroupURI;
+import org.opencadc.inventory.InventoryUtil;
 
 /**
  * Holds grant information about an object.
@@ -82,17 +84,21 @@ import org.opencadc.gms.GroupURI;
  */
 public class Grant {
 
+    private URI artifactURI;
     private Date releaseDate;
     private List<GroupURI> readGroups;
     private List<GroupURI> readWriteGroups;
     
     private boolean isPublic;
+    private Date evaluationDate;
     
-    public Grant(Date releaseDate) {
-        this(releaseDate, null, null);
+    public Grant(URI artifactURI, Date releaseDate) {
+        this(artifactURI, releaseDate, null, null);
     }
     
-    public Grant(Date releaseDate, List<GroupURI> readGroups, List<GroupURI> readWriteGroups) {
+    public Grant(URI artifactURI, Date releaseDate, List<GroupURI> readGroups, List<GroupURI> readWriteGroups) {
+        InventoryUtil.assertNotNull(Grant.class, "artifactURI", artifactURI);
+        this.artifactURI = artifactURI;
         if (releaseDate == null) {
             isPublic = false;
         } else {
@@ -101,22 +107,31 @@ public class Grant {
         this.releaseDate = releaseDate;
         this.readGroups = readGroups;
         this.readWriteGroups = readWriteGroups;
+        this.evaluationDate = new Date();
     }
     
-    protected Date getReleaseDate() {
+    public URI getArtifactURI() {
+        return artifactURI;
+    }
+    
+    public Date getReleaseDate() {
         return releaseDate;
     }
 
-    protected List<GroupURI> getReadGroups() {
+    public List<GroupURI> getReadGroups() {
         return readGroups;
     }
 
-    protected List<GroupURI> getReadWriteGroups() {
+    public List<GroupURI> getReadWriteGroups() {
         return readWriteGroups;
     }
     
-    protected boolean isPublic() {
+    public boolean isPublic() {
         return isPublic;
+    }
+    
+    public Date getEvaluationDate() {
+        return evaluationDate;
     }
     
 }

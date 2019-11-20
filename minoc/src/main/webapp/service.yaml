@@ -47,6 +47,15 @@ paths:
           description: Internal error
         '503':
           description: Service busy
+      parameters:
+       - name: cutout
+         in: query
+         description: cutouts to be applied on fits files
+         required: false
+         type: array
+         items:
+           type: string
+         collectionFormat: multi
     put:
       description: |
         Upload an artifact identified by parameter uri.
@@ -223,6 +232,15 @@ paths:
           description: Internal error
         '503':
           description: Service busy
+      parameters:
+       - name: cutout
+         in: query
+         description: cutouts to be applied on fits files
+         required: false
+         type: array
+         items:
+           type: string
+         collectionFormat: multi
     put:
       description: |
         Upload an artifact identified by parameter uri.
