@@ -16,4 +16,8 @@ jobs:
       with:
         java-version: 1.8
     - name: Build with Gradle
-      run: gradle --info clean build javadoc checkstyleMain
+      run: cd storage-inventory-dm && gradle --info clean build && cd ..
+      run: cd cadc-inventory && gradle --info clean build javadoc checkstyleMain && cd ..
+      run: cd cadc-inventory-db && gradle --info clean build javadoc checkstyleMain && cd ..
+      run: cd cadc-storage-adapter && gradle --info clean build javadoc checkstyleMain && cd ..
+      run: cd cadc-storage-permissions && gradle --info clean build javadoc checkstyleMain && cd ..
