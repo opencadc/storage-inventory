@@ -29,7 +29,7 @@ paths:
           description: Successful response.
           headers:
             Content-Disposition:
-              description: 'The content-disposition of the artifact in the form<br/><br/>Content-Disposition\: attachment; filename=\"\<name\>\"<br/><br/>where \<name\> is the last path segment of the URI of the artifact.'
+              description: 'The content-disposition of the artifact in the form<br/><br/>Content-Disposition\: inline; filename=\"\<name\>\"<br/><br/>where \<name\> is the last path segment of the URI of the artifact.'
               type: string
             Content-Type:
               description: The content type of the artifact
@@ -217,7 +217,7 @@ paths:
           description: Successful response.
           headers:
             Content-Disposition:
-              description: 'The content-disposition of the artifact in the form<br/><br/>Content-Disposition\: attachment; filename=\"\<name\>\"<br/><br/>where \<name\> is the last path segment of the URI of the artifact.'
+              description: 'The content-disposition of the artifact in the form<br/><br/>Content-Disposition\: inline; filename=\"\<name\>\"<br/><br/>where \<name\> is the last path segment of the URI of the artifact.'
               type: string
             Content-Type:
               description: The content type of the artifact

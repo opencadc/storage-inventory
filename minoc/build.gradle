@@ -19,6 +19,19 @@ version = '0.1'
 
 war {
     archiveName = project.name + '##' + project.version + '.war'
+    
+        // Include the private key token signing
+    from(System.getenv('A') + '/etc/') {
+        into 'WEB-INF/classes/'
+        include 'MinocPub.key'
+        include 'MinocPriv.key'
+    }
+}
+
+sourceSets {
+    test {
+        resources.srcDirs += 'src/test/resources'
+    }
 }
 
 dependencies {
