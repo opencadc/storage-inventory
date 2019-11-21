@@ -202,7 +202,7 @@ public abstract class InventoryUtil {
     
     /**
      * A valid path component cannot have: space ( ), slash (/), escape (\), percent (%),
-     * semi-colon (;), ampersand (&), or dollar ($) characters.
+     * semi-colon (;), ampersand (&amp;), or dollar ($) characters.
      * 
      * @param caller class doing test
      * @param name field name being checked
