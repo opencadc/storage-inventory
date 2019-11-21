@@ -87,6 +87,35 @@ public abstract class InventoryUtil {
     }
 
     /**
+     * Validates that a URI conforms to the {scheme}:{scheme-specific-part}
+     * pattern and that {scheme-specific-part} is a relative path with each
+     * forward-slash (/) separated component being a valid path component.
+     * 
+     * @param caller class performing the test
+     * @param uri artifact URI to check
+     * @throws IllegalArgumentException if the uri does not conform
+     */
+    public static void validateArtifactURI(Class caller, URI uri) {
+        if (uri.getAuthority() != null || uri.getQuery() != null
+            || uri.getFragment() != null || uri.getUserInfo() != null
+            || uri.getHost() != null || uri.getPort() != -1) {
+            throw new IllegalArgumentException(caller.getSimpleName() 
+                + ": invalid Artifact.uri: " + uri + " -- authority|query|fragment|host|port not permitted");
+        }
+        
+        String scheme = uri.getScheme();
+        String ssp = uri.getSchemeSpecificPart();
+        if (scheme == null || ssp == null || ssp.isEmpty()) {
+            throw new IllegalArgumentException(caller.getSimpleName() 
+                + ": invalid Artifact.uri: " + uri + " -- expected {scheme}:{scheme-specific-part}");
+        }
+        String[] comps = ssp.split("/");
+        for (String c : comps) {
+            assertValidPathComponent(null, "scheme-specific-part", c);
+        }
+    }
+    
+    /**
      * Find storage site by unique id.
      * 
      * @param id entity ID
@@ -172,8 +201,8 @@ public abstract class InventoryUtil {
     }
     
     /**
-     * A valid path component has no space ( ), slash (/), escape (\), or
-     * percent (%) characters.
+     * A valid path component cannot have: space ( ), slash (/), escape (\), percent (%),
+     * semi-colon (;), ampersand (&), or dollar ($) characters.
      * 
      * @param caller class doing test
      * @param name field name being checked
@@ -182,14 +211,23 @@ public abstract class InventoryUtil {
      */
     public static void assertValidPathComponent(Class caller, String name, String test) {
         assertNotNull(caller, name, test);
+        log.warn("assertValidPathComponent: " + test);
         boolean space = (test.indexOf(' ') >= 0);
         boolean slash = (test.indexOf('/') >= 0);
         boolean escape = (test.indexOf('\\') >= 0);
         boolean percent = (test.indexOf('%') >= 0);
+        boolean semic = (test.indexOf(';') >= 0);
+        boolean amp = (test.indexOf('&') >= 0);
+        boolean dollar = (test.indexOf('$') >= 0);
 
-        if (space || slash || escape || percent) {
-            throw new IllegalArgumentException("invalid " + caller.getSimpleName() + "." + name + ": " 
-                    + test + "reason: value may not contain space ( ), slash (/), escape (\\), or percent (%)");
+        if (space || slash || escape || percent || semic || amp || dollar) {
+            String s = "invalid ";
+            if (caller != null) {
+                s += caller.getSimpleName() + ".";
+            }
+            throw new IllegalArgumentException(s + name + ": " + test
+                    + " reason: path component may not contain space ( ), slash (/), escape (\\), percent (%),"
+                    + " semi-colon (;), ampersand (&), or dollar ($)");
         }
     }
     
