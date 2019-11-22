@@ -149,23 +149,24 @@ public class ArtifactActionTest {
     public void testParsePath() {
         try {
             
-            assertCorrectPath("artifacts/cadc:TEST/myartifact", "cadc:TEST/myartifact", null);
-            assertCorrectPath("artifacts/token/cadc:TEST/myartifact", "cadc:TEST/myartifact", "token");
-            assertCorrectPath("altservlet/cadc:TEST/myartifact", "cadc:TEST/myartifact", null);
-            assertCorrectPath("altservlet/token/cadc:TEST/myartifact", "cadc:TEST/myartifact", "token");
-            assertCorrectPath("artifacts/mast:long/uri/with/segments/fits.fits", "mast:long/uri/with/segments/fits.fits", null);
-            assertCorrectPath("artifacts/token/mast:long/uri/with/segments/fits.fits", "mast:long/uri/with/segments/fits.fits", "token");
-            assertCorrectPath("artifacts/token-with-dashes/cadc:TEST/myartifact", "cadc:TEST/myartifact", "token-with-dashes");
+            assertCorrectPath("cadc:TEST/myartifact", "cadc:TEST/myartifact", null);
+            assertCorrectPath("token/cadc:TEST/myartifact", "cadc:TEST/myartifact", "token");
+            assertCorrectPath("cadc:TEST/myartifact", "cadc:TEST/myartifact", null);
+            assertCorrectPath("token/cadc:TEST/myartifact", "cadc:TEST/myartifact", "token");
+            assertCorrectPath("mast:long/uri/with/segments/fits.fits", "mast:long/uri/with/segments/fits.fits", null);
+            assertCorrectPath("token/mast:long/uri/with/segments/fits.fits", "mast:long/uri/with/segments/fits.fits", "token");
+            assertCorrectPath("token-with-dashes/cadc:TEST/myartifact", "cadc:TEST/myartifact", "token-with-dashes");
             
-            assertIllegalPath("artifacts");
-            assertIllegalPath("artifacts/");
-            assertIllegalPath("artifacts/noschemeinuri");
-            assertIllegalPath("artifacts/token/noschemeinuri");
-            assertIllegalPath("artifacts/cadc:path#fragment");
-            assertIllegalPath("artifacts/cadc:path?query");
-            assertIllegalPath("artifacts/cadc:path#fragment?query");
-            assertIllegalPath("artifacts/cadc://host/path");
-            assertIllegalPath("artifacts/cadc://:port/path");
+            assertIllegalPath("");
+            assertIllegalPath("noschemeinuri");
+            assertIllegalPath("token/noschemeinuri");
+            assertIllegalPath("cadc:path#fragment");
+            assertIllegalPath("cadc:path?query");
+            assertIllegalPath("cadc:path#fragment?query");
+            assertIllegalPath("cadc://host/path");
+            assertIllegalPath("cadc://:port/path");
+            
+            assertIllegalPath(null);
             
         } catch (Exception unexpected) {
             log.error("unexpected exception", unexpected);

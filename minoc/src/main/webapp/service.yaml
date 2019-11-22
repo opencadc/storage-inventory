@@ -6,7 +6,7 @@ info:
 basePath: '/minoc'
 
 paths:
-  '/artifacts/{artifact-uri}':
+  '/files/{artifact-uri}':
     parameters:
     - name: artifact-uri
       in: path
@@ -15,10 +15,10 @@ paths:
       required: true
     get:
       description: |
-        Download the artifact identified by parameter uri.
+        Download the file identified by parameter artifact-uri.
       tags:
         - Artifact transfer
-      summary: Download an artifact
+      summary: Download a file
       schemes:
         - http
         - https
@@ -29,16 +29,16 @@ paths:
           description: Successful response.
           headers:
             Content-Disposition:
-              description: 'The content-disposition of the artifact in the form<br/><br/>Content-Disposition\: inline; filename=\"\<name\>\"<br/><br/>where \<name\> is the last path segment of the URI of the artifact.'
+              description: 'The content-disposition of the file in the form<br/><br/>Content-Disposition\: inline; filename=\"\<name\>\"<br/><br/>where \<name\> is the last path segment of the URI of the artifact.'
               type: string
             Content-Type:
-              description: The content type of the artifact
+              description: The content type of the file
               type: string
             Content-MD5:
-              description: The content MD5 of the artifact
+              description: The content MD5 of the file
               type: string
             Content-Length:
-              description: The content length of the artifact
+              description: The content length of the file
               type: string
         '401':
           description: If the client does not provide credentials and anonymous access is disallowed.
@@ -61,10 +61,10 @@ paths:
          collectionFormat: multi
     put:
       description: |
-        Upload an artifact identified by parameter uri.
+        Upload a file identified by parameter artifact-uri.
       tags:
         - Artifact transfer
-      summary: Upload an artifact
+      summary: Upload a file
       schemes:
         - http
         - https
@@ -85,24 +85,24 @@ paths:
         - name: Content-Type
           in: header
           type: string
-          description: The content type of the artifact
+          description: The content type of the file
           required: false
         - name: Content-MD5
           in: header
           type: string
-          description: The content MD5 of the artifact
+          description: The content MD5 of the file
           required: false
         - name: Content-Length
           in: header
           type: string
-          description: The content length of the artifact
+          description: The content length of the file
           required: false
     head:
       description: |
-        Get the metadata for the artifact identified by parameter uri.
+        Get the metadata for the file identified by parameter artifact-uri.
       tags:
         - Artifact management
-      summary: View artifact metadata
+      summary: View file metadata
       schemes:
         - http
         - https
@@ -111,13 +111,13 @@ paths:
           description: Successful response
           headers:
             Content-Type:
-              description: The content type of the artifact
+              description: The content type of the file
               type: string
             Content-MD5:
-              description: The content MD5 of the artifact
+              description: The content MD5 of the file
               type: string
             Content-Length:
-              description: The content length of the artifact
+              description: The content length of the file
               type: string
         '401':
           description: If the client does not provide credentials and anonymous access is disallowed.
@@ -131,10 +131,10 @@ paths:
           description: Service busy
     delete:
       description: |
-        Delete the artifact identified by parameter uri.
+        Delete the file identified by parameter artifact-uri.
       tags:
         - Artifact management
-      summary: Delete an artifact
+      summary: Delete a file
       schemes:
         - http
         - https
@@ -153,10 +153,10 @@ paths:
           description: Service busy
     post:
       description: |
-        Set the metadata values for an artifact
+        Set the metadata values for an file
       tags:
         - Artifact management
-      summary: Update the metadata of artifact identified by parameter uri.
+      summary: Update the metadata of the file identified by parameter artifct-uri.
       schemes:
         - http
         - https
@@ -164,17 +164,17 @@ paths:
         - name: uri
           in: query
           type: string
-          description: The new URI for the artifact
+          description: The new URI for the file
           required: false
         - name: contentType
           in: query
           type: string
-          description: The new content type of the artifact
+          description: The new content type of the file
           required: false
         - name: contentEncoding
           in: query
           type: string
-          description: The new content encoding of the artifact
+          description: The new content encoding of the file
           required: false
       responses:
         '200':
@@ -189,7 +189,7 @@ paths:
           description: Internal error
         '503':
           description: Service busy
-  '/artifacts/{auth-token}/{artifact-uri}':
+  '/files/{auth-token}/{artifact-uri}':
     parameters:
     - name: auth-token
       in: path
@@ -203,10 +203,10 @@ paths:
       required: true
     get:
       description: |
-        Download the artifact identified by parameter uri.
+        Download the file identified by parameter artifact-uri.
       tags:
         - Artifact transfer
-      summary: Download an artifact
+      summary: Download a file
       schemes:
         - http
         - https
@@ -217,16 +217,16 @@ paths:
           description: Successful response.
           headers:
             Content-Disposition:
-              description: 'The content-disposition of the artifact in the form<br/><br/>Content-Disposition\: inline; filename=\"\<name\>\"<br/><br/>where \<name\> is the last path segment of the URI of the artifact.'
+              description: 'The content-disposition of the file in the form<br/><br/>Content-Disposition\: inline; filename=\"\<name\>\"<br/><br/>where \<name\> is the last path segment of the URI of the artifact.'
               type: string
             Content-Type:
-              description: The content type of the artifact
+              description: The content type of the file
               type: string
             Content-MD5:
-              description: The content MD5 of the artifact
+              description: The content MD5 of the file
               type: string
             Content-Length:
-              description: The content length of the artifact
+              description: The content length of the file
               type: string
         '401':
           description: If the client does not provide credentials and anonymous access is disallowed.
@@ -249,10 +249,10 @@ paths:
          collectionFormat: multi
     put:
       description: |
-        Upload an artifact identified by parameter uri.
+        Upload a file identified by parameter artifact-uri.
       tags:
         - Artifact transfer
-      summary: Upload an artifact
+      summary: Upload a file
       schemes:
         - http
         - https
@@ -273,24 +273,24 @@ paths:
         - name: Content-Type
           in: header
           type: string
-          description: The content type of the artifact
+          description: The content type of the file
           required: false
         - name: Content-MD5
           in: header
           type: string
-          description: The content MD5 of the artifact
+          description: The content MD5 of the file
           required: false
         - name: Content-Length
           in: header
           type: string
-          description: The content length of the artifact
+          description: The content length of the file
           required: false
     head:
       description: |
-        Get the metadata for the artifact identified by parameter uri.
+        Get the metadata for the file identified by parameter artifact-uri.
       tags:
         - Artifact management
-      summary: View artifact metadata
+      summary: View file metadata
       schemes:
         - http
         - https
@@ -319,10 +319,10 @@ paths:
           description: Service busy
     delete:
       description: |
-        Delete the artifact identified by parameter uri.
+        Delete the file identified by parameter artifact-uri.
       tags:
         - Artifact management
-      summary: Delete an artifact
+      summary: Delete a file
       schemes:
         - http
         - https
@@ -341,10 +341,10 @@ paths:
           description: Service busy
     post:
       description: |
-        Set the metadata values for an artifact
+        Set the metadata values for a file
       tags:
         - Artifact management
-      summary: Update the metadata of artifact identified by parameter uri.
+      summary: Update the metadata of the file identified by parameter artifact-uri.
       schemes:
         - http
         - https
@@ -352,17 +352,17 @@ paths:
         - name: uri
           in: query
           type: string
-          description: The new URI for the artifact
+          description: The new URI for the file
           required: false
         - name: contentType
           in: query
           type: string
-          description: The new content type of the artifact
+          description: The new content type of the file
           required: false
         - name: contentEncoding
           in: query
           type: string
-          description: The new content encoding of the artifact
+          description: The new content encoding of the file
           required: false
       responses:
         '200':

@@ -6,19 +6,11 @@
 
   <capability standardID="vos://cadc.nrc.ca~vospace/CADC/std/inventory#artifacts-1.0">
     <interface xsi:type="vs:ParamHTTP" role="std">
-      <accessURL use="base">http://replace.com/minoc/artifacts</accessURL>
-    </interface>
-    <interface xsi:type="vs:ParamHTTP" role="std">
-      <accessURL use="base">http://replace.com/minoc/artifacts</accessURL>
-      <securityMethod standardID="vos://cadc.nrc.ca~vospace/CADC/std/Auth#token-1.0"/> 
-    </interface>
-    <interface xsi:type="vs:ParamHTTP" role="std">
-      <accessURL use="base">http://replace.com/minoc/artifacts</accessURL>
-      <securityMethod standardID="ivo://ivoa.net/sso#cookie"/>
-    </interface>
-    <interface xsi:type="vs:ParamHTTP" role="std">
-      <accessURL use="base">https://replace.com/minoc/artifacts</accessURL>
+      <accessURL use="base">http://replace.com/minoc/files</accessURL>
+      <securityMethod />
+      <securityMethod standardID="ivo://ivoa.net/sso#cookie" />
       <securityMethod standardID="ivo://ivoa.net/sso#tls-with-certificate" />
+      <securityMethod standardID="vos://cadc.nrc.ca~vospace/CADC/std/Auth#token-1.0"/>    
     </interface>
   </capability>
 
@@ -37,6 +29,7 @@
   <capability standardID="vos://cadc.nrc.ca~vospace/CADC/std/LOGGING#logControl-1.0">
     <interface xsi:type="vs:ParamHTTP" role="std" version="1.0">
       <accessURL use="full">https://replace.com/minoc/logControl</accessURL>
+      <securityMethod standardID="ivo://ivoa.net/sso#tls-with-certificate" />
     </interface>
   </capability>
   

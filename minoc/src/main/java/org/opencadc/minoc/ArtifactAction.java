@@ -166,27 +166,30 @@ public abstract class ArtifactAction extends RestAction {
      */
     void parsePath() {
         String path = syncInput.getPath();
+        log.debug("path: " + path);
+        if (path == null) {
+            throw new IllegalArgumentException("Mising artifact URI");
+        }
         int colonIndex = path.indexOf(":");
         int firstSlashIndex = path.indexOf("/");
         
         if (colonIndex < 0) {
             if (firstSlashIndex > 0 && path.length() > firstSlashIndex + 1) {
-                throw new IllegalArgumentException("Missing scheme in artifactURI: " + path.substring(firstSlashIndex + 1));
+                throw new IllegalArgumentException("Missing scheme in artifact URI: " + path.substring(firstSlashIndex + 1));
             } else {
-                throw new IllegalArgumentException("Missing artifactURI in path: " + path);
+                throw new IllegalArgumentException("Missing artifact URI in path: " + path);
             }
         }
         
-        int secondSlashIndex = path.indexOf("/", firstSlashIndex + 1);
-        if (secondSlashIndex < 0 || secondSlashIndex > colonIndex) {
-            // no auth token--artifact URI is all after first slash
-            artifactURI = createArtifactURI(path.substring(firstSlashIndex + 1));
+        if (firstSlashIndex < 0 || firstSlashIndex > colonIndex) {
+            // no auth token--artifact URI is complete path
+            artifactURI = createArtifactURI(path);
             return;
         }
         
-        // authToken between slashes, uri after second slash
-        artifactURI = createArtifactURI(path.substring(secondSlashIndex + 1));
-        authToken = path.substring(firstSlashIndex + 1, secondSlashIndex);
+        artifactURI = createArtifactURI(path.substring(firstSlashIndex + 1));
+        
+        authToken = path.substring(0, firstSlashIndex);
         log.debug("authToken: " + authToken);
     }
     
