@@ -63,59 +63,107 @@
 *                                       <http://www.gnu.org/licenses/>.
 *
 ************************************************************************
-*/
+ */
 
-package org.opencadc.inventory;
+package org.opencadc.minoc;
 
+import ca.nrc.cadc.auth.AuthMethod;
+import ca.nrc.cadc.reg.Standards;
+import ca.nrc.cadc.reg.client.LocalAuthority;
+import ca.nrc.cadc.reg.client.RegistryClient;
+import ca.nrc.cadc.vosi.AvailabilityPlugin;
+import ca.nrc.cadc.vosi.AvailabilityStatus;
+import ca.nrc.cadc.vosi.avail.CheckException;
+import ca.nrc.cadc.vosi.avail.CheckResource;
+import ca.nrc.cadc.vosi.avail.CheckWebService;
 import java.net.URI;
+import org.apache.log4j.Logger;
 
 /**
- * Reference to an object in a backend storage system. This class holds the internal
- * identifier for interacting with the back end storage system.
+ * This class performs the work of determining if the executing artifact
+ * service is operating as expected.
  * 
- * @author pdowler
+ * @author majorb
  */
-public class StorageLocation {
-    private final URI storageID;
-    
+public class ServiceAvailability implements AvailabilityPlugin {
+
+    private static final Logger log = Logger.getLogger(ServiceAvailability.class);
+
     /**
-     * Constructor.
-     * 
-     * @param storageID internal storage identifier
+     * Default, no-arg constructor.
      */
-    public StorageLocation(URI storageID) {
-        InventoryUtil.assertNotNull(StorageLocation.class, "storageID", storageID);
-        this.storageID = storageID;
+    public ServiceAvailability() {
     }
 
     /**
-     * @return internal storage identifier
+     * Sets the name of the application.
      */
-    public URI getStorageID() {
-        return storageID;
-    }
-    
     @Override
-    public String toString() {
-        StringBuilder sb = new StringBuilder();
-        sb.append(this.getClass().getSimpleName());
-        sb.append("[");
-        sb.append(storageID);
-        sb.append("]");
-        return sb.toString();
+    public void setAppName(String string) {
+        //no-op
     }
 
     /**
-     * @param o object to compare
-     * @return true if artifactID and storageID are equal, otherwise false
+     * Performs a simple check for the availability of the object.
+     * @return true always
      */
     @Override
-    public boolean equals(Object o) {
-        if (o == null) {
-            return false;
+    public boolean heartbeat() {
+        return true;
+    }
+
+    /**
+     * Do a comprehensive check of the service and it's dependencies.
+     * @return Information of the availability check.
+     */
+    @Override
+    public AvailabilityStatus getStatus() {
+        boolean isGood = true;
+        String note = "service is accepting requests";
+        try {
+
+            // check other services we depend on
+            RegistryClient reg = new RegistryClient();
+            String url;
+            CheckResource checkResource;
+            
+            LocalAuthority localAuthority = new LocalAuthority();
+
+            URI credURI = localAuthority.getServiceURI(Standards.CRED_PROXY_10.toString());
+            url = reg.getServiceURL(credURI, Standards.VOSI_AVAILABILITY, AuthMethod.ANON).toExternalForm();
+            checkResource = new CheckWebService(url);
+            checkResource.check();
+
+            URI usersURI = localAuthority.getServiceURI(Standards.UMS_USERS_01.toString());
+            url = reg.getServiceURL(usersURI, Standards.VOSI_AVAILABILITY, AuthMethod.ANON).toExternalForm();
+            checkResource = new CheckWebService(url);
+            checkResource.check();
+            
+            URI groupsURI = localAuthority.getServiceURI(Standards.GMS_SEARCH_01.toString());
+            url = reg.getServiceURL(groupsURI, Standards.VOSI_AVAILABILITY, AuthMethod.ANON).toExternalForm();
+            checkResource = new CheckWebService(url);
+            checkResource.check();
+            
+        } catch (CheckException ce) {
+            // tests determined that the resource is not working
+            isGood = false;
+            note = ce.getMessage();
+        } catch (Throwable t) {
+            // the test itself failed
+            log.debug("failure", t);
+            isGood = false;
+            note = "test failed, reason: " + t;
         }
-        StorageLocation s = (StorageLocation) o;
-        return storageID.equals(s.storageID);
+
+        return new AvailabilityStatus(isGood, null, null, null, note);
     }
-    
+
+    /**
+     * Sets the state of the service.
+     */
+    @Override
+    public void setState(String state) {
+        // ignore
+    }
+
 }

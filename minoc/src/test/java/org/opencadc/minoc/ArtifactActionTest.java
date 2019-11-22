@@ -65,57 +65,113 @@
 ************************************************************************
 */
 
-package org.opencadc.inventory;
+package org.opencadc.minoc;
 
+import java.io.IOException;
 import java.net.URI;
 
-/**
- * Reference to an object in a backend storage system. This class holds the internal
- * identifier for interacting with the back end storage system.
- * 
- * @author pdowler
- */
-public class StorageLocation {
-    private final URI storageID;
-    
-    /**
-     * Constructor.
-     * 
-     * @param storageID internal storage identifier
-     */
-    public StorageLocation(URI storageID) {
-        InventoryUtil.assertNotNull(StorageLocation.class, "storageID", storageID);
-        this.storageID = storageID;
-    }
+import javax.servlet.http.HttpServletRequest;
 
-    /**
-     * @return internal storage identifier
-     */
-    public URI getStorageID() {
-        return storageID;
+import org.apache.log4j.Level;
+import org.apache.log4j.Logger;
+import org.junit.Assert;
+import org.junit.Test;
+import org.opencadc.minoc.ArtifactUtil.HttpMethod;
+
+import ca.nrc.cadc.rest.InlineContentHandler;
+import ca.nrc.cadc.rest.SyncInput;
+import ca.nrc.cadc.util.Log4jInit;
+
+public class ArtifactActionTest {
+
+    private static final Logger log = Logger.getLogger(ArtifactActionTest.class);
+
+    static {
+        Log4jInit.setLevel("org.opencadc.minoc", Level.DEBUG);
     }
     
-    @Override
-    public String toString() {
-        StringBuilder sb = new StringBuilder();
-        sb.append(this.getClass().getSimpleName());
-        sb.append("[");
-        sb.append(storageID);
-        sb.append("]");
-        return sb.toString();
-    }
+    class TestSyncInput extends SyncInput {
 
-    /**
-     * @param o object to compare
-     * @return true if artifactID and storageID are equal, otherwise false
-     */
-    @Override
-    public boolean equals(Object o) {
-        if (o == null) {
-            return false;
+        private String path;
+        
+        public TestSyncInput(String path) throws IOException {
+            super(null, null);
+            this.path = path;
         }
-        StorageLocation s = (StorageLocation) o;
-        return storageID.equals(s.storageID);
+        
+        public String getPath() {
+            return path;
+        }
+    }
+    
+    class TestArtifactAction extends ArtifactAction {
+        
+        public TestArtifactAction(String path) {
+            super(HttpMethod.GET);
+            try {
+                super.syncInput = new TestSyncInput(path);
+            } catch (Throwable t) {
+                throw new RuntimeException(t);
+            }
+        }
+        
+        public void execute(URI artifactURI) throws Exception {
+        }
+
+    }
+    
+    private void assertCorrectPath(String path, String expURI, String expToken) {
+        ArtifactAction a = new TestArtifactAction(path);
+        try {
+            a.parsePath();
+            Assert.assertEquals("artifactURI", URI.create(expURI), a.artifactURI);
+            Assert.assertEquals("authToken", expToken, a.authToken);
+        } catch (IllegalArgumentException e) {
+            log.error(e);
+            Assert.fail("Failed to parse legal path: " + path);
+        }
+    }
+    
+    private void assertIllegalPath(String path) {
+        ArtifactAction a = new TestArtifactAction(path);
+        try {
+            a.parsePath();
+            Assert.fail("Should have failed to parse path: " + path);
+        } catch (IllegalArgumentException e) {
+            // expected
+            log.info(e);
+        }
+    }
+    
+    @Test
+    public void testParsePath() {
+        try {
+            
+            assertCorrectPath("cadc:TEST/myartifact", "cadc:TEST/myartifact", null);
+            assertCorrectPath("token/cadc:TEST/myartifact", "cadc:TEST/myartifact", "token");
+            assertCorrectPath("cadc:TEST/myartifact", "cadc:TEST/myartifact", null);
+            assertCorrectPath("token/cadc:TEST/myartifact", "cadc:TEST/myartifact", "token");
+            assertCorrectPath("mast:long/uri/with/segments/fits.fits", "mast:long/uri/with/segments/fits.fits", null);
+            assertCorrectPath("token/mast:long/uri/with/segments/fits.fits", "mast:long/uri/with/segments/fits.fits", "token");
+            assertCorrectPath("token-with-dashes/cadc:TEST/myartifact", "cadc:TEST/myartifact", "token-with-dashes");
+            
+            assertIllegalPath("");
+            assertIllegalPath("noschemeinuri");
+            assertIllegalPath("token/noschemeinuri");
+            assertIllegalPath("cadc:path#fragment");
+            assertIllegalPath("cadc:path?query");
+            assertIllegalPath("cadc:path#fragment?query");
+            assertIllegalPath("cadc://host/path");
+            assertIllegalPath("cadc://:port/path");
+            assertIllegalPath("artifacts/token1/token2/cadc:FOO/bar");
+            assertIllegalPath("artifacts/token/cadc:ccda:FOO/bar");
+            
+            assertIllegalPath(null);
+            
+        } catch (Exception unexpected) {
+            log.error("unexpected exception", unexpected);
+            Assert.fail("unexpected exception: " + unexpected);
+        }
     }
     
 }

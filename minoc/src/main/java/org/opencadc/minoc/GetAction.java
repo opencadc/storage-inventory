@@ -65,57 +65,36 @@
 ************************************************************************
 */
 
-package org.opencadc.inventory;
+package org.opencadc.minoc;
 
 import java.net.URI;
 
+import org.apache.log4j.Logger;
+import org.opencadc.minoc.ArtifactUtil.HttpMethod;
+
 /**
- * Reference to an object in a backend storage system. This class holds the internal
- * identifier for interacting with the back end storage system.
- * 
- * @author pdowler
+ * Interface with storage to get an artifact.
+ *
+ * @author majorb
  */
-public class StorageLocation {
-    private final URI storageID;
+public class GetAction extends ArtifactAction {
     
+    private static final Logger log = Logger.getLogger(GetAction.class);
+
     /**
-     * Constructor.
-     * 
-     * @param storageID internal storage identifier
+     * Default, no-arg constructor.
      */
-    public StorageLocation(URI storageID) {
-        InventoryUtil.assertNotNull(StorageLocation.class, "storageID", storageID);
-        this.storageID = storageID;
+    public GetAction() {
+        super(HttpMethod.GET);
     }
 
     /**
-     * @return internal storage identifier
+     * Download the artifact or cutouts of the artifact.
+     * @param artifactURI The identifier for the artifact. 
      */
-    public URI getStorageID() {
-        return storageID;
-    }
-    
     @Override
-    public String toString() {
-        StringBuilder sb = new StringBuilder();
-        sb.append(this.getClass().getSimpleName());
-        sb.append("[");
-        sb.append(storageID);
-        sb.append("]");
-        return sb.toString();
+    public void execute(URI artifactURI) throws Exception {
+        // TODO
     }
 
-    /**
-     * @param o object to compare
-     * @return true if artifactID and storageID are equal, otherwise false
-     */
-    @Override
-    public boolean equals(Object o) {
-        if (o == null) {
-            return false;
-        }
-        StorageLocation s = (StorageLocation) o;
-        return storageID.equals(s.storageID);
-    }
-    
 }

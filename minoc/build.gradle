@@ -1,0 +1,35 @@
+plugins {
+    id 'war'
+    id 'maven'
+    id 'maven-publish'
+    id 'com.jfrog.bintray' version '1.8.4'
+    id 'checkstyle'
+}
+
+repositories {
+    jcenter()
+    mavenLocal()
+}
+
+sourceCompatibility = 1.8
+
+group = 'org.opencadc'
+
+dependencies {
+    compile 'log4j:log4j:[1.2,)'
+    compile 'org.opencadc:cadc-util:[1.2,)'
+    compile 'org.opencadc:cadc-log:[1.0,)'
+    compile 'org.opencadc:cadc-registry:[1.2.1,)'
+    compile 'org.opencadc:cadc-vosi:[1.0,)'
+    compile 'org.opencadc:cadc-rest:[1.0,)'
+    compile 'org.opencadc:cadc-cdp:[1.0,)'
+    compile 'org.opencadc:cadc-gms:[1.0.0,)'
+    compile 'org.opencadc:cadc-inventory:[0.1,)'
+    compile 'org.opencadc:cadc-access-control:[1.1.1,2.0)'
+    compile 'org.opencadc:cadc-access-control-identity:[1.0.3,2.0)'
+
+    testCompile 'junit:junit:[4.0,)'
+}
+
+apply from: '../opencadc.gradle'
+
