@@ -69,12 +69,10 @@
 
 package org.opencadc.inventory.permissions;
 
-import java.net.URI;
-
-import org.opencadc.inventory.Artifact;
-
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
+
+import java.net.URI;
 
 /**
  * Client for retrieving grant information about artifacts.
@@ -84,13 +82,16 @@ import ca.nrc.cadc.net.TransientException;
  */
 public class PermissionsClient {
 
+    /**
+     * Public, no-arg constructor.
+     */
     public PermissionsClient() {
     }
     
     /**
      * Get the permissions information about the file identified by fileURI.
      * 
-     * @param artifact The artifact for which to retrieve grant information.
+     * @param artifactURI Identifies the artifact for which to retrieve grant information.
      * @return The grant information.
      * 
      * @throws ResourceNotFoundException If the file could not be found.

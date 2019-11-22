@@ -85,18 +85,28 @@ import org.opencadc.inventory.InventoryUtil;
  */
 public class Grant {
 
-    final private URI artifactURI;
-    public Date releaseDate;
-    final public List<GroupURI> readGroups = new ArrayList<GroupURI>();;
-    final public List<GroupURI> readWriteGroups = new ArrayList<GroupURI>();;
-    public boolean isPublic = false;
-    final public Date evaluationDate = new Date();
+    private final URI artifactURI;
     
+    public Date releaseDate;
+    public boolean isPublic = false;
+    
+    public final List<GroupURI> readGroups = new ArrayList<GroupURI>();
+    public final List<GroupURI> readWriteGroups = new ArrayList<GroupURI>();
+    public final Date evaluationDate = new Date();
+    
+    /**
+     * Contruct a grant for the given artifactURI
+     * @param artifactURI The applicable targetURI
+     */
     public Grant(URI artifactURI) {
         InventoryUtil.assertNotNull(Grant.class, "artifactURI", artifactURI);
         this.artifactURI = artifactURI;
     }
     
+    /**
+     * Get the artifactURI to which this grant applies.
+     * @return The artifactURI
+     */
     public URI getArtifactURI() {
         return artifactURI;
     }
