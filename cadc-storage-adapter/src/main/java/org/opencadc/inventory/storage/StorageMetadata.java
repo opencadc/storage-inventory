@@ -81,9 +81,9 @@ import org.opencadc.inventory.InventoryUtil;
  */
 public class StorageMetadata {
 
-    final private URI storageID;
-    final private URI contentChecksum;
-    final private Long contentLength;
+    private final URI storageID;
+    private final URI contentChecksum;
+    private final Long contentLength;
     public URI artifactURI;
     public String bucket;
     

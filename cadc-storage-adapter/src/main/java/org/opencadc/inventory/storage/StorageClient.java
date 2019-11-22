@@ -69,6 +69,11 @@
 
 package org.opencadc.inventory.storage;
 
+import ca.nrc.cadc.net.InputStreamWrapper;
+import ca.nrc.cadc.net.OutputStreamWrapper;
+import ca.nrc.cadc.net.ResourceNotFoundException;
+import ca.nrc.cadc.net.TransientException;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -80,11 +85,6 @@ import java.util.Iterator;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.StorageLocation;
-
-import ca.nrc.cadc.net.InputStreamWrapper;
-import ca.nrc.cadc.net.OutputStreamWrapper;
-import ca.nrc.cadc.net.ResourceNotFoundException;
-import ca.nrc.cadc.net.TransientException;
 
 /**
  * Provides access to storage.  
