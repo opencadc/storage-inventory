@@ -79,9 +79,15 @@ import org.bouncycastle.util.encoders.Base64;
 import ca.nrc.cadc.util.RsaSignatureGenerator;
 import ca.nrc.cadc.util.RsaSignatureVerifier;
 
-public class TokenUtil {
+/**
+ * Utilities for artifact handling.
+ * 
+ * @author majorb
+ *
+ */
+public class ArtifactUtil {
 
-    private static final Logger log = Logger.getLogger(TokenUtil.class);
+    private static final Logger log = Logger.getLogger(ArtifactUtil.class);
 
     private static final String KEY_META_URI = "uri";
     private static final String KEY_META_METHOD = "met";
@@ -92,10 +98,20 @@ public class TokenUtil {
     
     private static final String TOKEN_DELIM = "~";
     
+    /**
+     * Valid methods that apply to authorization.
+     */
     public static enum HttpMethod {
         GET, PUT, POST, DELETE
     };
 
+    /**
+     * Generate an artifact token given the input parameters.
+     * @param uri The artifact URI
+     * @param method The method applied to the artifact.
+     * @param user The user initiating the action on the artifact.
+     * @return A pre-authorized signed token.
+     */
     public static String generateToken(URI uri, HttpMethod method, String user) {
 
         // create the metadata and signature segments
@@ -136,6 +152,16 @@ public class TokenUtil {
         return token.toString();
     }
     
+    /**
+     * Validate the given token with the expectations expressed in the parameters.
+     * 
+     * @param token The token to validate.
+     * @param expectedURI The expected artifact URI.
+     * @param expectedMethod The expected method to be applied to the artifact.
+     * @return The user contained in the token.
+     * @throws AccessControlException If any of the expectations are not met or if the token is invalid.
+     * @throws IOException If a processing error occurs.
+     */
     public static String validateToken(String token, URI expectedURI, HttpMethod expectedMethod) throws AccessControlException, IOException {
 
         log.debug("validating token: " + token);
@@ -202,6 +228,11 @@ public class TokenUtil {
 
     }
 
+    /**
+     * Make a base 64 string safe for URLs.
+     * @param s The string to encode.
+     * @return The encoded string.
+     */
     static String base64URLEncode(String s) {
         if (s == null) {
             return null;
@@ -209,6 +240,11 @@ public class TokenUtil {
         return s.replace("/", "-").replace("+", "_");
     }
 
+    /**
+     * Decode a URL encoded base 64 string.
+     * @param s The string to decode.
+     * @return The decoded string.
+     */
     static String base64URLDecode(String s) {
         if (s == null) {
             return null;

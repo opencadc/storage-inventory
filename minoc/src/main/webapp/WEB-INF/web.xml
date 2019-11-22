@@ -36,12 +36,12 @@
     
   <servlet>
     <servlet-name>FilesServlet</servlet-name>
-    <!-- 
         <servlet-class>ca.nrc.cadc.rest.RestServlet</servlet-class>
         <init-param>
             <param-name>get</param-name>
             <param-value>org.opencadc.minoc.GetAction</param-value>
         </init-param>
+      <!-- 
         <init-param>
             <param-name>put</param-name>
             <param-value>org.opencadc.minoc.PutAction</param-value>

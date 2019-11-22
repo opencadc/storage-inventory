@@ -4,21 +4,39 @@
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
     xmlns:vs="http://www.ivoa.net/xml/VODataService/v1.1">
 
+  <capability standardID="vos://cadc.nrc.ca~vospace/CADC/std/inventory#artifacts-1.0">
+    <interface xsi:type="vs:ParamHTTP" role="std">
+      <accessURL use="base">http://replace.com/minoc/artifacts</accessURL>
+    </interface>
+    <interface xsi:type="vs:ParamHTTP" role="std">
+      <accessURL use="base">http://replace.com/minoc/artifacts</accessURL>
+      <securityMethod standardID="vos://cadc.nrc.ca~vospace/CADC/std/Auth#token-1.0"/> 
+    </interface>
+    <interface xsi:type="vs:ParamHTTP" role="std">
+      <accessURL use="base">http://replace.com/minoc/artifacts</accessURL>
+      <securityMethod standardID="ivo://ivoa.net/sso#cookie"/>
+    </interface>
+    <interface xsi:type="vs:ParamHTTP" role="std">
+      <accessURL use="base">https://replace.com/minoc/artifacts</accessURL>
+      <securityMethod standardID="ivo://ivoa.net/sso#tls-with-certificate" />
+    </interface>
+  </capability>
+
   <capability standardID="ivo://ivoa.net/std/VOSI#capabilities">
     <interface xsi:type="vs:ParamHTTP" role="std">
-      <accessURL use="full">http://replace.com/minoc/capabilities</accessURL>
+      <accessURL use="full">https://replace.com/minoc/capabilities</accessURL>
     </interface>
   </capability>
 
   <capability standardID="ivo://ivoa.net/std/VOSI#availability">
     <interface xsi:type="vs:ParamHTTP" role="std">
-      <accessURL use="full">http://replace.com/minoc/availability</accessURL>
+      <accessURL use="full">https://replace.com/minoc/availability</accessURL>
     </interface>
   </capability>
   
   <capability standardID="vos://cadc.nrc.ca~vospace/CADC/std/LOGGING#logControl-1.0">
     <interface xsi:type="vs:ParamHTTP" role="std" version="1.0">
-      <accessURL use="full">http://replace.com/minoc/logControl</accessURL>
+      <accessURL use="full">https://replace.com/minoc/logControl</accessURL>
     </interface>
   </capability>
   

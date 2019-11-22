@@ -67,86 +67,43 @@
 
 package org.opencadc.minoc;
 
-
-import java.io.FileNotFoundException;
-import java.io.OutputStream;
 import java.net.URI;
-import java.nio.file.AccessDeniedException;
-import java.nio.file.FileSystem;
-import java.nio.file.FileSystems;
-import java.nio.file.Files;
-import java.nio.file.NoSuchFileException;
-import java.nio.file.Path;
-import java.security.AccessControlException;
 
 import org.apache.log4j.Logger;
+import org.opencadc.minoc.ArtifactUtil.HttpMethod;
 
 /**
+ * Interface with storage to get an artifact.
  *
  * @author majorb
  */
 public class GetAction extends ArtifactAction {
+    
     private static final Logger log = Logger.getLogger(GetAction.class);
 
+    /**
+     * Default, no-arg constructor.
+     */
     public GetAction() {
         super();
     }
-
+    
+    /**
+     * Return the HTTP method on which this class is acting.
+     * @return The HTTP method
+     */
     @Override
-    public void doAction() throws Exception {
-        /*
-        try {
-            URI artifactURI = getArtifactURI();
-            FileSystem fs = FileSystems.getDefault();
-            Path source = fs.getPath(getRoot(), nodeURI.getPath());
-            if (!Files.exists(source)) {
-                // not found
-                syncOutput.setCode(404);
-                return;
-            }
-            if (!Files.isReadable(source)) {
-                // permission denied
-                syncOutput.setCode(403);
-                return;
-            }
-            
-            // set HTTP headers.  To get node, resolve links but no authorization (null authorizer) 
-            NodePersistence nodePersistence = new FileSystemNodePersistence();
-            PathResolver pathResolver = new PathResolver(nodePersistence, true);
-            Node node = pathResolver.resolveWithReadPermissionCheck(nodeURI, null, true);
-            String contentEncoding = node.getPropertyValue(VOS.PROPERTY_URI_CONTENTENCODING);
-            String contentLength = node.getPropertyValue(VOS.PROPERTY_URI_CONTENTLENGTH);
-            String contentMD5 = node.getPropertyValue(VOS.PROPERTY_URI_CONTENTMD5);
-            syncOutput.setHeader("Content-Disposition", "inline; filename=" + nodeURI.getName());
-            syncOutput.setHeader("Content-Type", node.getPropertyValue(VOS.PROPERTY_URI_TYPE));
-            syncOutput.setHeader("Content-Encoding", contentEncoding);
-            syncOutput.setHeader("Content-Length", contentLength);
-            syncOutput.setHeader("Content-MD5", contentMD5);
-            
-            OutputStream out = syncOutput.getOutputStream();
-            log.debug("Starting copy of file " + source);
-            Files.copy(source, out);
-            log.debug("Completed copy of file " + source);
-            out.flush();
-        } catch (FileNotFoundException | NoSuchFileException e) {
-            log.debug(e);
-            syncOutput.setCode(404);
-        } catch (AccessControlException | AccessDeniedException e) {
-            log.debug(e);
-            syncOutput.setCode(403);
-        }
-        */
+    public HttpMethod getHttpMethod() {
+        return ArtifactUtil.HttpMethod.GET;
     }
 
+    /**
+     * Download the artifact or cutouts of the artifact.
+     * @param artifactURI The identifier for the artifact. 
+     */
     @Override
     public void execute(URI artifactURI) throws Exception {
-        // TODO Auto-generated method stub
-        
+        // TODO
     }
 
-    @Override
-    public AuthorizationType getAuthorizationType() {
-        // TODO Auto-generated method stub
-        return null;
-    }
 }

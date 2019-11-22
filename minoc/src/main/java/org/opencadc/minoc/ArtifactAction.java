@@ -67,6 +67,8 @@
 
 package org.opencadc.minoc;
 
+import ca.nrc.cadc.auth.AuthenticationUtil;
+import ca.nrc.cadc.auth.HttpPrincipal;
 import ca.nrc.cadc.rest.InlineContentHandler;
 import ca.nrc.cadc.rest.RestAction;
 import ca.nrc.cadc.util.PropertiesReader;
@@ -79,50 +81,96 @@ import java.nio.file.Paths;
 import java.nio.file.attribute.GroupPrincipal;
 import java.nio.file.attribute.UserPrincipalLookupService;
 import java.security.AccessControlException;
+import java.security.Principal;
+import java.util.Set;
+
+import javax.security.auth.Subject;
+import javax.security.auth.x500.X500Principal;
 
 import org.apache.log4j.Logger;
+import org.opencadc.inventory.InventoryUtil;
+import org.opencadc.minoc.ArtifactUtil.HttpMethod;
 
 /**
+ * Abstract class for performing tasks all action classes have in common,
+ * including request parsing, authentication, and authentication.
  *
  * @author majorb
  */
 public abstract class ArtifactAction extends RestAction {
     private static final Logger log = Logger.getLogger(ArtifactAction.class);
     
-    protected enum AuthorizationType {
-        READ, WRITE
-    };
-
+    // The target artifact
     URI artifactURI;
+    
+    // The (possibly null) authentication token.
     String authToken;
 
+    /**
+     * Default, no-arg constructor.
+     */
     protected ArtifactAction() {
     }
 
+    /**
+     * Default implementation.
+     * @return No InlineContentHander
+     */
     @Override
     protected InlineContentHandler getInlineContentHandler() {
         return null;
     }
     
+    /**
+     * Do the work of the subclass.
+     * 
+     * @param artifactURI The target artifact
+     * @throws Exception If an something goes wrong.
+     */
     public abstract void execute(URI artifactURI) throws Exception;
-    public abstract AuthorizationType getAuthorizationType();
     
+    /**
+     * Return the HTTP method on which the subclass class is acting.
+     * @return The HTTP method
+     */
+    public abstract HttpMethod getHttpMethod();
+    
+    /**
+     * Do authorization and perform the action.
+     */
     @Override
     public void doAction() throws Exception {
         
         parsePath();
         
         // do authorization (with token or subject)
+        if (authToken != null) {
+            String tokenUser = ArtifactUtil.validateToken(authToken, artifactURI, getHttpMethod());
+            Subject subject = AuthenticationUtil.getCurrentSubject();
+            if (subject == null) {
+                subject = new Subject();
+            }
+            subject.getPrincipals().clear();
+            subject.getPrincipals().add(new HttpPrincipal(tokenUser));
+            logInfo.setSubject(subject);
+        } else {
+            // TODO get permissions and perform authorization
+        }
+        
+        execute(artifactURI);
         
     }
     
+    /**
+     * Parse the request path.
+     */
     void parsePath() {
         String path = syncInput.getPath();
         int colonIndex = path.indexOf(":");
         int firstSlashIndex = path.indexOf("/");
         
         if (colonIndex < 0) {
-            if (firstSlashIndex > 0 && path.length() - 1 > firstSlashIndex) {
+            if (firstSlashIndex > 0 && path.length() > firstSlashIndex + 1) {
                 throw new IllegalArgumentException("Missing scheme in artifactURI: " + path.substring(firstSlashIndex + 1));
             } else {
                 throw new IllegalArgumentException("Missing artifactURI in path: " + path);
@@ -131,39 +179,27 @@ public abstract class ArtifactAction extends RestAction {
         
         int secondSlashIndex = path.indexOf("/", firstSlashIndex + 1);
         if (secondSlashIndex < 0 || secondSlashIndex > colonIndex) {
-            // artifact URI is all after first slash
-            createArtifactURI(path.substring(firstSlashIndex + 1));
+            // no auth token--artifact URI is all after first slash
+            artifactURI = createArtifactURI(path.substring(firstSlashIndex + 1));
             return;
         }
         
         // authToken between slashes, uri after second slash
-        createArtifactURI(path.substring(secondSlashIndex + 1));
+        artifactURI = createArtifactURI(path.substring(secondSlashIndex + 1));
         authToken = path.substring(firstSlashIndex + 1, secondSlashIndex);
         log.debug("authToken: " + authToken);
     }
     
-    private void createArtifactURI(String uri) {
+    /**
+     * Create a valid artifact uri.
+     * @param uri The input string.
+     * @return The artifact uri objecdt.
+     */
+    private URI createArtifactURI(String uri) {
         try {
             artifactURI = new URI(uri);
-            
-            // TODO: do this checking with InventoryUtil when available
-            
-            log.debug("artifactURI: " + artifactURI);
-            if (artifactURI.getFragment() != null) {
-                throw new IllegalArgumentException("fragments not allowed in artifactURIs: " + uri);
-            }
-            if (artifactURI.getQuery() != null) {
-                throw new IllegalArgumentException("query params not allowed in artifactURIs: " + uri);
-            }
-            if (artifactURI.getHost() != null) {
-                throw new IllegalArgumentException("host not allowed in artifactURIs: " + uri);
-            }
-            if (artifactURI.getPort() != -1) {
-                throw new IllegalArgumentException("port not allowed in artifactURIs: " + uri);
-            }
-            if (artifactURI.getAuthority() != null) {
-                throw new IllegalArgumentException("authority not allowed in artifactURIs: " + uri);
-            }
+            InventoryUtil.validateArtifactURI(ArtifactAction.class, artifactURI);
+            return artifactURI;
         } catch (URISyntaxException e) {
             String message = "Illegal artifact URI: " + uri;
             log.debug(message, e);

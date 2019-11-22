@@ -13,7 +13,7 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
-import org.opencadc.minoc.TokenUtil.HttpMethod;
+import org.opencadc.minoc.ArtifactUtil.HttpMethod;
 
 import ca.nrc.cadc.util.Log4jInit;
 import ca.nrc.cadc.util.RsaSignatureGenerator;
@@ -101,8 +101,8 @@ public class TokenUtilTest {
                 String uri = uris[i];
                 HttpMethod method = methods[i];
                 String user = users[i];
-                String token = TokenUtil.generateToken(URI.create(uri), method, user);
-                String actUser = TokenUtil.validateToken(token, URI.create(uri), method);
+                String token = ArtifactUtil.generateToken(URI.create(uri), method, user);
+                String actUser = ArtifactUtil.validateToken(token, URI.create(uri), method);
                 Assert.assertEquals("user", user, actUser);
             }
             
@@ -119,9 +119,9 @@ public class TokenUtilTest {
             String uri = "cadc:TEST/file.fits";
             HttpMethod method = HttpMethod.GET;
             String user = "user";
-            String token = TokenUtil.generateToken(URI.create(uri), method, user);
+            String token = ArtifactUtil.generateToken(URI.create(uri), method, user);
             try {
-                TokenUtil.validateToken(token, URI.create("cadc:TEST/file2.fits"), HttpMethod.GET);
+                ArtifactUtil.validateToken(token, URI.create("cadc:TEST/file2.fits"), HttpMethod.GET);
                 Assert.fail("Should have failed with wrong uri");
             } catch (AccessControlException e) {
                 // expected
@@ -140,9 +140,9 @@ public class TokenUtilTest {
             String uri = "cadc:TEST/file.fits";
             HttpMethod method = HttpMethod.GET;
             String user = "user";
-            String token = TokenUtil.generateToken(URI.create(uri), method, user);
+            String token = ArtifactUtil.generateToken(URI.create(uri), method, user);
             try {
-                TokenUtil.validateToken(token, URI.create(uri), HttpMethod.PUT);
+                ArtifactUtil.validateToken(token, URI.create(uri), HttpMethod.PUT);
                 Assert.fail("Should have failed with wrong method");
             } catch (AccessControlException e) {
                 // expected
@@ -161,11 +161,11 @@ public class TokenUtilTest {
             String uri = "cadc:TEST/file.fits";
             HttpMethod method = HttpMethod.GET;
             String user = "user";
-            String token = TokenUtil.generateToken(URI.create(uri), method, user);
+            String token = ArtifactUtil.generateToken(URI.create(uri), method, user);
             String[] parts = token.split("~");
-            String newToken = TokenUtil.base64URLEncode(Base64.encode("junk".getBytes())) + "~" + parts[1];
+            String newToken = ArtifactUtil.base64URLEncode(Base64.encode("junk".getBytes())) + "~" + parts[1];
             try {
-                TokenUtil.validateToken(newToken, URI.create(uri), HttpMethod.PUT);
+                ArtifactUtil.validateToken(newToken, URI.create(uri), HttpMethod.PUT);
                 Assert.fail("Should have failed with invalid metadata");
             } catch (AccessControlException e) {
                 // expected
@@ -184,11 +184,11 @@ public class TokenUtilTest {
             String uri = "cadc:TEST/file.fits";
             HttpMethod method = HttpMethod.GET;
             String user = "user";
-            String token = TokenUtil.generateToken(URI.create(uri), method, user);
+            String token = ArtifactUtil.generateToken(URI.create(uri), method, user);
             String[] parts = token.split("~");
-            String newToken = parts[0] + "~" + TokenUtil.base64URLEncode(Base64.encode("junk".getBytes()));
+            String newToken = parts[0] + "~" + ArtifactUtil.base64URLEncode(Base64.encode("junk".getBytes()));
             try {
-                TokenUtil.validateToken(newToken, URI.create(uri), HttpMethod.PUT);
+                ArtifactUtil.validateToken(newToken, URI.create(uri), HttpMethod.PUT);
                 Assert.fail("Should have failed with invalid signature");
             } catch (AccessControlException e) {
                 // expected

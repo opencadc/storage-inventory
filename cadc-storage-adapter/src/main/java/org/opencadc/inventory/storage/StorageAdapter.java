@@ -72,6 +72,7 @@ package org.opencadc.inventory.storage;
 import java.io.StreamCorruptedException;
 import java.net.URI;
 import java.util.Iterator;
+import java.util.Set;
 
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.StorageLocation;
@@ -99,6 +100,18 @@ public interface StorageAdapter {
      * @throws TransientException If an unexpected, temporary exception occurred. 
      */
     public void get(URI storageID, InputStreamWrapper wrapper) throws ResourceNotFoundException, TransientException;
+    
+    /**
+     * Get from storage the artifact identified by storageID.
+     * 
+     * @param storageID The artifact location identifier.
+     * @param wrapper An input stream wrapper to receive the bytes.
+     * @param cutouts Cutouts to be applied to the artifact
+     * 
+     * @throws ResourceNotFoundException If the artifact could not be found.
+     * @throws TransientException If an unexpected, temporary exception occurred. 
+     */
+    public void get(URI storageID, InputStreamWrapper wrapper, Set<String> cutouts) throws ResourceNotFoundException, TransientException;
     
     /**
      * Write an artifact to storage.

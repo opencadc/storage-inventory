@@ -80,26 +80,42 @@ import java.net.URI;
 import org.apache.log4j.Logger;
 
 /**
- *
+ * This class performs the work of determining if the executing artifact
+ * service is operating as expected.
+ * 
  * @author majorb
  */
 public class ServiceAvailability implements AvailabilityPlugin {
 
     private static final Logger log = Logger.getLogger(ServiceAvailability.class);
 
+    /**
+     * Default, no-arg constructor.
+     */
     public ServiceAvailability() {
     }
 
+    /**
+     * Sets the name of the application.
+     */
     @Override
     public void setAppName(String string) {
         //no-op
     }
 
+    /**
+     * Performs a simple check for the availability of the object.
+     * @return true always
+     */
     @Override
     public boolean heartbeat() {
         return true;
     }
 
+    /**
+     * Do a comprehensive check of the service and it's dependencies.
+     * @return Information of the availability check.
+     */
     @Override
     public AvailabilityStatus getStatus() {
         boolean isGood = true;
@@ -141,6 +157,9 @@ public class ServiceAvailability implements AvailabilityPlugin {
         return new AvailabilityStatus(isGood, null, null, null, note);
     }
 
+    /**
+     * Sets the state of the service.
+     */
     @Override
     public void setState(String state) {
         // ignore
