@@ -101,6 +101,24 @@ public class InventoryUtilTest {
             InventoryUtil.validateArtifactURI(InventoryUtilTest.class, URI.create("cadc:FOO/bar+baz.fits"));
             
             try {
+                URI u = URI.create("cadc:foo?bar");
+                log.info("check query: " + u.getQuery());
+                InventoryUtil.validateArtifactURI(InventoryUtilTest.class, u);
+                Assert.fail("expected invalid: " + u);
+            } catch (IllegalArgumentException expected) {
+                log.info("caught expected: " + expected);
+            }
+            
+            try {
+                URI u = URI.create("cadc:foo#bar");
+                log.info("check fragment: " + u.getFragment());
+                InventoryUtil.validateArtifactURI(InventoryUtilTest.class, u);
+                Assert.fail("expected invalid: " + u);
+            } catch (IllegalArgumentException expected) {
+                log.info("caught expected: " + expected);
+            }
+            
+            try {
                 URI u = URI.create("cadc:foo bar");
                 InventoryUtil.validateArtifactURI(InventoryUtilTest.class, u);
                 Assert.fail("expected invalid: " + u);

@@ -96,9 +96,9 @@ public abstract class InventoryUtil {
      * @throws IllegalArgumentException if the uri does not conform
      */
     public static void validateArtifactURI(Class caller, URI uri) {
-        if (uri.getAuthority() != null || uri.getQuery() != null
-            || uri.getFragment() != null || uri.getUserInfo() != null
-            || uri.getHost() != null || uri.getPort() != -1) {
+        if (uri.getFragment() != null || uri.getQuery() != null
+            || uri.getUserInfo() != null
+            || uri.getAuthority() != null || uri.getHost() != null || uri.getPort() != -1) {
             throw new IllegalArgumentException(caller.getSimpleName() 
                 + ": invalid Artifact.uri: " + uri + " -- authority|query|fragment|host|port not permitted");
         }
@@ -219,8 +219,9 @@ public abstract class InventoryUtil {
         boolean semic = (test.indexOf(';') >= 0);
         boolean amp = (test.indexOf('&') >= 0);
         boolean dollar = (test.indexOf('$') >= 0);
+        boolean question = (test.indexOf('?') >= 0);
 
-        if (space || slash || escape || percent || semic || amp || dollar) {
+        if (space || slash || escape || percent || semic || amp || dollar || question) {
             String s = "invalid ";
             if (caller != null) {
                 s += caller.getSimpleName() + ".";
