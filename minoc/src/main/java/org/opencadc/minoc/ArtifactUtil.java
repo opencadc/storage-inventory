@@ -67,6 +67,9 @@
 
 package org.opencadc.minoc;
 
+import ca.nrc.cadc.util.RsaSignatureGenerator;
+import ca.nrc.cadc.util.RsaSignatureVerifier;
+
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.net.URI;
@@ -75,9 +78,6 @@ import java.security.InvalidKeyException;
 
 import org.apache.log4j.Logger;
 import org.bouncycastle.util.encoders.Base64;
-
-import ca.nrc.cadc.util.RsaSignatureGenerator;
-import ca.nrc.cadc.util.RsaSignatureVerifier;
 
 /**
  * Utilities for artifact handling.
@@ -103,7 +103,7 @@ public class ArtifactUtil {
      */
     public static enum HttpMethod {
         GET, PUT, POST, DELETE
-    };
+    }
 
     /**
      * Generate an artifact token given the input parameters.

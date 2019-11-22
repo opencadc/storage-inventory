@@ -128,21 +128,22 @@ public class ServiceAvailability implements AvailabilityPlugin {
             CheckResource checkResource;
             
             LocalAuthority localAuthority = new LocalAuthority();
-            URI credURI = localAuthority.getServiceURI(Standards.CRED_PROXY_10.toString());
-            URI usersURI = localAuthority.getServiceURI(Standards.UMS_USERS_01.toString());
-            URI groupsURI = localAuthority.getServiceURI(Standards.GMS_SEARCH_01.toString());
 
+            URI credURI = localAuthority.getServiceURI(Standards.CRED_PROXY_10.toString());
             url = reg.getServiceURL(credURI, Standards.VOSI_AVAILABILITY, AuthMethod.ANON).toExternalForm();
             checkResource = new CheckWebService(url);
             checkResource.check();
 
+            URI usersURI = localAuthority.getServiceURI(Standards.UMS_USERS_01.toString());
             url = reg.getServiceURL(usersURI, Standards.VOSI_AVAILABILITY, AuthMethod.ANON).toExternalForm();
             checkResource = new CheckWebService(url);
             checkResource.check();
             
+            URI groupsURI = localAuthority.getServiceURI(Standards.GMS_SEARCH_01.toString());
             url = reg.getServiceURL(groupsURI, Standards.VOSI_AVAILABILITY, AuthMethod.ANON).toExternalForm();
             checkResource = new CheckWebService(url);
             checkResource.check();
+            
         } catch (CheckException ce) {
             // tests determined that the resource is not working
             isGood = false;

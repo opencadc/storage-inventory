@@ -35,7 +35,7 @@
   </servlet>
     
   <servlet>
-    <servlet-name>FilesServlet</servlet-name>
+    <servlet-name>ArtifactsServlet</servlet-name>
         <servlet-class>ca.nrc.cadc.rest.RestServlet</servlet-class>
         <init-param>
             <param-name>get</param-name>
@@ -82,8 +82,8 @@
   <!-- Endpoints -->
 
   <servlet-mapping>
-    <servlet-name>FilesServlet</servlet-name>
-    <url-pattern>/files/*</url-pattern>
+    <servlet-name>ArtifactsServlet</servlet-name>
+    <url-pattern>/artifacts/*</url-pattern>
   </servlet-mapping>
   
   <!-- Availability servlet endpoint -->
