@@ -116,7 +116,7 @@ public interface StorageAdapter {
     /**
      * Write an artifact to storage.
      * 
-     * @param Artifact The artifact metadata.
+     * @param artifact The artifact metadata.
      * @param wrapper The wrapper for data of the artifact.
      * @param bucket An organizational code for storage
      * @return The storageLocation with storageID.
