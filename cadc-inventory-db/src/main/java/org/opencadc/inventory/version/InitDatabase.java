@@ -97,7 +97,7 @@ public class InitDatabase extends ca.nrc.cadc.db.version.InitDatabase {
     };
     
     public InitDatabase(DataSource ds, String database, String schema) { 
-        super(ds, database, schema, schema, MODEL_NAME, MODEL_VERSION);
+        super(ds, database, schema, MODEL_NAME, MODEL_VERSION, PREV_MODEL_VERSION);
         for (String s : CREATE_SQL) {
             createSQL.add(s);
         }

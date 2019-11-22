@@ -97,22 +97,27 @@ public class ArtifactDAOTest {
 
     static {
         Log4jInit.setLevel("org.opencadc.inventory", Level.DEBUG);
-        Log4jInit.setLevel("ca.nrc.cadc.db.version", Level.DEBUG);
+        Log4jInit.setLevel("ca.nrc.cadc.db", Level.DEBUG);
     }
     
     ArtifactDAO dao = new ArtifactDAO();
     
     public ArtifactDAOTest() throws Exception {
-        DBConfig dbrc = new DBConfig();
-        ConnectionConfig cc = dbrc.getConnectionConfig(TestUtil.SERVER, TestUtil.DATABASE);
-        DBUtil.createJNDIDataSource("jdbc/ArtifactDAOTest", cc);
-        
-        Map<String,Object> config = new TreeMap<String,Object>();
-        config.put(SQLGenerator.class.getName(), SQLGenerator.class);
-        config.put("jndiDataSourceName", "jdbc/ArtifactDAOTest");
-        config.put("database", TestUtil.DATABASE);
-        config.put("schema", TestUtil.SCHEMA);
-        dao.setConfig(config);
+        try {
+            DBConfig dbrc = new DBConfig();
+            ConnectionConfig cc = dbrc.getConnectionConfig(TestUtil.SERVER, TestUtil.DATABASE);
+            DBUtil.createJNDIDataSource("jdbc/ArtifactDAOTest", cc);
+
+            Map<String,Object> config = new TreeMap<String,Object>();
+            config.put(SQLGenerator.class.getName(), SQLGenerator.class);
+            config.put("jndiDataSourceName", "jdbc/ArtifactDAOTest");
+            config.put("database", TestUtil.DATABASE);
+            config.put("schema", TestUtil.SCHEMA);
+            dao.setConfig(config);
+        } catch (Exception ex) {
+            log.error("setup failed", ex);
+            throw ex;
+        }
     }
     
     @Before
