@@ -92,19 +92,19 @@ public class TestUtil {
                 props.load(new FileReader(opt));
                 String s = props.getProperty("server");
                 if (s != null) {
-                    SERVER = s;
+                    SERVER = s.trim();
                 }
                 s = props.getProperty("database");
                 if (s != null) {
-                    DATABASE = s;
+                    DATABASE = s.trim();
                 }
                 s = props.getProperty("schema");
                 if (s != null) {
-                    SCHEMA = s;
+                    SCHEMA = s.trim();
                 }
                 s = props.getProperty("tablePrefix");
                 if (s != null) {
-                    TABLE_PREFIX = s;
+                    TABLE_PREFIX = s.trim();
                 }
             }
             log.info("intTest database config: " + SERVER + " " + DATABASE + " " + SCHEMA + " " + TABLE_PREFIX);
