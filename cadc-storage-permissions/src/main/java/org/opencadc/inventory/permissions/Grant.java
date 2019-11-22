@@ -89,11 +89,11 @@ public class Grant {
     
     public Date releaseDate;
     public boolean isPublic = false;
-    
-    public final List<GroupURI> readGroups = new ArrayList<GroupURI>();
-    public final List<GroupURI> readWriteGroups = new ArrayList<GroupURI>();
     public final Date evaluationDate = new Date();
     
+    private final List<GroupURI> readGroups = new ArrayList<GroupURI>();
+    private final List<GroupURI> readWriteGroups = new ArrayList<GroupURI>();
+
     /**
      * Contruct a grant for the given artifactURI
      * @param artifactURI The applicable targetURI
@@ -109,6 +109,22 @@ public class Grant {
      */
     public URI getArtifactURI() {
         return artifactURI;
+    }
+    
+    /**
+     * Get the read group list.
+     * @return The read groups
+     */
+    public List<GroupURI> getReadGroups() {
+        return readGroups;
+    }
+
+    /**
+     * Get the read-write group list.
+     * @return The read-write groups
+     */
+    public List<GroupURI> getReadWriteGroups() {
+        return readWriteGroups;
     }
     
 }

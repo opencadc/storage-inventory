@@ -85,16 +85,7 @@ public class GetAction extends ArtifactAction {
      * Default, no-arg constructor.
      */
     public GetAction() {
-        super();
-    }
-    
-    /**
-     * Return the HTTP method on which this class is acting.
-     * @return The HTTP method
-     */
-    @Override
-    public HttpMethod getHttpMethod() {
-        return ArtifactUtil.HttpMethod.GET;
+        super(HttpMethod.GET);
     }
 
     /**

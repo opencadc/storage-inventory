@@ -97,7 +97,7 @@ public class PermissionsClient {
      * @throws ResourceNotFoundException If the file could not be found.
      * @throws TransientException If an unexpected, temporary exception occurred. 
      */
-    public Grant getGrant(URI artifactURI) throws ResourceNotFoundException, TransientException {
+    public Grant get(URI artifactURI) throws ResourceNotFoundException, TransientException {
         // TODO
         return new Grant(artifactURI);
     }

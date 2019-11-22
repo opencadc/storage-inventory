@@ -15,25 +15,6 @@ sourceCompatibility = 1.8
 
 group = 'org.opencadc'
 
-version = '0.1'
-
-war {
-    archiveName = project.name + '##' + project.version + '.war'
-    
-        // Include the private key token signing
-    from(System.getenv('A') + '/etc/') {
-        into 'WEB-INF/classes/'
-        include 'MinocPub.key'
-        include 'MinocPriv.key'
-    }
-}
-
-sourceSets {
-    test {
-        resources.srcDirs += 'src/test/resources'
-    }
-}
-
 dependencies {
     compile 'log4j:log4j:[1.2,)'
     compile 'org.opencadc:cadc-util:[1.2,)'

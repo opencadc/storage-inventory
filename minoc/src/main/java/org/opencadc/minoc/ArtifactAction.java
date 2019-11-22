@@ -105,11 +105,15 @@ public abstract class ArtifactAction extends RestAction {
     
     // The (possibly null) authentication token.
     String authToken;
+    
+    // The current http method
+    private HttpMethod httpMethod;
 
     /**
      * Default, no-arg constructor.
      */
-    protected ArtifactAction() {
+    protected ArtifactAction(HttpMethod httpMethod) {
+        this.httpMethod = httpMethod;
     }
 
     /**
@@ -130,12 +134,6 @@ public abstract class ArtifactAction extends RestAction {
     public abstract void execute(URI artifactURI) throws Exception;
     
     /**
-     * Return the HTTP method on which the subclass class is acting.
-     * @return The HTTP method
-     */
-    public abstract HttpMethod getHttpMethod();
-    
-    /**
      * Do authorization and perform the action.
      */
     @Override
@@ -145,7 +143,7 @@ public abstract class ArtifactAction extends RestAction {
         
         // do authorization (with token or subject)
         if (authToken != null) {
-            String tokenUser = ArtifactUtil.validateToken(authToken, artifactURI, getHttpMethod());
+            String tokenUser = ArtifactUtil.validateToken(authToken, artifactURI, httpMethod);
             Subject subject = AuthenticationUtil.getCurrentSubject();
             if (subject == null) {
                 subject = new Subject();

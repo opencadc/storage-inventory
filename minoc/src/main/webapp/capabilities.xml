@@ -23,6 +23,8 @@
   <capability standardID="ivo://ivoa.net/std/VOSI#availability">
     <interface xsi:type="vs:ParamHTTP" role="std">
       <accessURL use="full">https://replace.com/minoc/availability</accessURL>
+      <securityMethod />
+      <securityMethod standardID="ivo://ivoa.net/sso#tls-with-certificate" />
     </interface>
   </capability>
   

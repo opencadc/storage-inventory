@@ -107,6 +107,7 @@ public class ArtifactActionTest {
     class TestArtifactAction extends ArtifactAction {
         
         public TestArtifactAction(String path) {
+            super(HttpMethod.GET);
             try {
                 super.syncInput = new TestSyncInput(path);
             } catch (Throwable t) {
@@ -116,10 +117,7 @@ public class ArtifactActionTest {
         
         public void execute(URI artifactURI) throws Exception {
         }
-        
-        public HttpMethod getHttpMethod() {
-            return null;
-        }
+
     }
     
     private void assertCorrectPath(String path, String expURI, String expToken) {
@@ -165,6 +163,8 @@ public class ArtifactActionTest {
             assertIllegalPath("cadc:path#fragment?query");
             assertIllegalPath("cadc://host/path");
             assertIllegalPath("cadc://:port/path");
+            assertIllegalPath("artifacts/token1/token2/cadc:FOO/bar");
+            assertIllegalPath("artifacts/token/cadc:ccda:FOO/bar");
             
             assertIllegalPath(null);
             

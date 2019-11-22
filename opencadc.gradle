@@ -17,6 +17,9 @@ checkstyle {
 }
 
 sourceSets {
+    test {
+        resources.srcDirs += 'src/test/resources'
+    }
     intTest {
         java {
             compileClasspath += main.output + test.output
