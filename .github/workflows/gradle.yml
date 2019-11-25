@@ -15,25 +15,31 @@ jobs:
       uses: actions/setup-java@v1
       with:
         java-version: 1.8
+        
     - name: build and test storage-inventory-dm
       run: cd storage-inventory-dm && gradle --info clean build xslt
+      
     - name: build and test cadc-inventory
       run: cd cadc-inventory && gradle --info clean build javadoc checkstyleMain install
+      
     - name: build and test cadc-inventory-db
       run: cd cadc-inventory-db && gradle --info clean build javadoc checkstyleMain  install
+      
     - name: build and test cadc-storage-adapter
       run: cd cadc-storage-adapter && gradle --info clean build javadoc checkstyleMain install
+      
     - name: build and test cadc-storage-permissions
       run: cd cadc-storage-permissions && gradle --info clean build javadoc checkstyleMain install
 
-    - name: java build: minoc 
+    - name: java build -- minoc 
       run: cd minoc && gradle --info clean build javadoc checkstyleMain
-    - name: java build: luskan
+      
+    - name: java build -- luskan
       run: test -d luskan && (cd luskan && gradle --info clean build javadoc checkstyleMain) || echo "not found"
 
 ## TODO: docker build depends on cadc-tomcat base image from docker-base.git
-#    - name: docker build: minoc
+#    - name: docker build -- minoc
 #      run: cd minoc && docker build . --file Dockerfile --tag minoc:$(date +%s)
-#    - name: docker build: luskan
+#    - name: docker build -- luskan
 #      run: test -d luskan && (cd luskan && docker build . --file Dockerfile --tag luskan:$(date +%s)) || echo "not found"
 
