@@ -70,8 +70,6 @@ paths:
           description: Service busy
         default:
           description: Unexpeced error
-          schema:
-            $ref: '#/definitions/Error'
   /sync:
     get:
       summary: TAP-1.1 synchronous query execution end point
@@ -129,8 +127,6 @@ paths:
           description: Service busy
         default:
           description: Unexpeced error
-          schema:
-            $ref: '#/definitions/Error'
     post:
       summary: TAP-1.1 synchronous query execution
       tags:
@@ -188,8 +184,6 @@ paths:
           description: Service busy
         default:
           description: Unexpeced error
-          schema:
-            $ref: '#/definitions/Error'
   /availability:
     get:
       tags:
@@ -214,12 +208,8 @@ paths:
       responses:
         '200':
           description: A VOSI availability document in XML.
-          schema:
-            $ref: '#/definitions/availability'
         default:
           description: Unexpected error
-          schema:
-            $ref: '#/definitions/Error'
   /capabilities:
     get:
       summary: VOSI Capabilities 1.0
@@ -248,16 +238,13 @@ paths:
       responses:
         '200':
           description: A VOSI Capabilities document in XML.
-          schema:
-            $ref: '#/definitions/capabilities'
         '500':
           description: Internal server error
         '503':
           description: Service too busy
         default:
           description: Unexpected error
-          schema:
-            $ref: '#/definitions/Error'
+
   /tables:
     get:
       summary: VOSI Tables 1.1
@@ -265,100 +252,23 @@ paths:
         - Support Interfaces
       description: |
         Provides the table metadata in the form of a TableSet descriptions.
+      parameters:
+        - name: detail
+          in: query
+          description: min - just table metadata, max - include column metadata too.
+          default: max
+          required: false
+          type: string
       produces:
         - text/xml
       responses:
         '200':
           description: A VOSI Tables document in XML.
-          schema:
-            $ref: '#/definitions/tables'
         '500':
           description: Internal server error
         '503':
           description: Service too busy
         default:
           description: Unexpected error
-          schema:
-            $ref: '#/definitions/Error'
-definitions:
-  Job:
-    type: string
-  availability:
-    type: object
-    xml:
-      name: availability
-      namespace: 'http://www.ivoa.net/xml/VOSIAvailability/v1.0'
-      prefix: vosi
-    properties:
-      available:
-        type: boolean
-        xml:
-          attribute: true
-          prefix: vosi
-      note:
-        type: string
-        xml:
-          attribute: true
-          prefix: vosi
-  tables:
-    type: object
-    xml:
-      namespace: 'http://www.ivoa.net/xml/VOSITables/v1.1'
-      prefix: vosi
-    properties:
-      available:
-        type: boolean
-        xml:
-          attribute: true
-          prefix: vosi
-      note:
-        type: string
-        xml:
-          attribute: true
-          prefix: vosi
-  capabilities:
-    type: array
-    items:
-      $ref: '#/definitions/capability'
-    xml:
-      name: capability
-      namespace: 'http://www.ivoa.net/xml/VOSICapabilities/v1.0'
-      prefix: vosi
-      wrapped: true
-  capability:
-    type: object
-    properties:
-      standardID:
-        type: string
-        format: uri
-        xml:
-          attribute: true
-      interface:
-        type: object
-        properties:
-          accessURL:
-            type: string
-            properties:
-              use:
-                type: string
-                xml:
-                  attribute: true
-          securityMethod:
-            type: string
-            properties:
-              standardID:
-                type: string
-                format: uri
-                xml:
-                  attribute: true
-  Error:
-    required:
-      - code
-      - message
-    properties:
-      code:
-        type: integer
-        format: int32
-      message:
-        type: string
+
 
