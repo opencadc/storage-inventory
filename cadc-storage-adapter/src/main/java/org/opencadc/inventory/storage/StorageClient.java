@@ -81,10 +81,11 @@ import java.io.StreamCorruptedException;
 import java.lang.reflect.Constructor;
 import java.net.URI;
 import java.util.Iterator;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
 
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
-import org.opencadc.inventory.StorageLocation;
 
 /**
  * Provides access to storage.  
@@ -96,6 +97,8 @@ public class StorageClient {
     
     private static Logger log = Logger.getLogger(StorageClient.class);
     private static String STORAGE_ADPATER_CLASS_PROPERTY = StorageAdapter.class.getName();
+    private static int BUFFER_SIZE_BYTES = 2^14;
+    private static int QUEUE_SIZE_BUFFERS = 10;
     
     private StorageAdapter adapter;
 
@@ -103,7 +106,7 @@ public class StorageClient {
         adapter = getStorageAdapter();
     }
     
-    public void get(URI storageID, OutputStream out) throws ResourceNotFoundException, TransientException {
+    public void get(URI storageID, OutputStream out) throws ResourceNotFoundException, IOException, TransientException {
         InputStreamWrapper handler = new InputStreamWrapper() {
             public void read(InputStream in) throws IOException {
                 ioLoop(out, in);
@@ -112,7 +115,7 @@ public class StorageClient {
         adapter.get(storageID, handler);
     }
 
-    public StorageLocation put(Artifact artifact, InputStream in, String bucket) throws StreamCorruptedException, TransientException {
+    public StorageMetadata put(Artifact artifact, InputStream in, String bucket) throws StreamCorruptedException, IOException, TransientException {
         OutputStreamWrapper wrapper = new OutputStreamWrapper() {
             public void write(OutputStream out) throws IOException {
                 ioLoop(out, in);
@@ -121,7 +124,7 @@ public class StorageClient {
         return adapter.put(artifact, wrapper, bucket);
     }
 
-    public void delete(URI storageID) throws ResourceNotFoundException, TransientException {
+    public void delete(URI storageID) throws ResourceNotFoundException, IOException, TransientException {
         adapter.delete(storageID);
     }
 
@@ -134,8 +137,47 @@ public class StorageClient {
     }
     
     private void ioLoop(OutputStream out, InputStream in) {
-        // TODO: Write 2 threaded io loop--one thread reading
-        // and one thread writing.
+
+        BlockingQueue<byte[]> queue = new ArrayBlockingQueue<byte[]>(QUEUE_SIZE_BUFFERS);
+        
+        byte[] buffer = new byte[BUFFER_SIZE_BYTES];
+        int bytesRead;
+        ByteArrayIterator iterator = null;
+        Thread thread = null;
+        OutputStreamThread outputStreamThread = null;
+        try {
+            bytesRead = in.read(buffer);
+            if (bytesRead > 0) {
+                queue.put(buffer);
+                iterator = new ByteArrayIterator(queue);
+                outputStreamThread = new OutputStreamThread(iterator, out);
+                thread = new Thread(outputStreamThread);
+                thread.start();
+                while (bytesRead > 0) {
+                    bytesRead = in.read(buffer);
+                    queue.put(buffer);
+                }
+            }
+        } catch (Throwable t) {
+            String message = "failed reading from input stream";
+            log.error(message, t);
+            throw new IllegalStateException(message, t);
+        } finally {
+            if (iterator != null) {
+                iterator.setDone();
+            }
+            if (thread != null) {
+                try {
+                    thread.join();
+                } catch (InterruptedException e) {
+                    log.debug("Interrupted waiting to join ouput thread.", e);
+                }
+            }
+            if (outputStreamThread != null && outputStreamThread.getThrowable() != null) {
+                throw new IllegalStateException("failed writing to output stream", outputStreamThread.getThrowable());
+            }
+        }
+        
     }
     
     /**
@@ -163,6 +205,72 @@ public class StorageClient {
             throw new IllegalStateException("Failed to load storage adapter " + cname, t);
         }
         
+    }
+    
+    class OutputStreamThread implements Runnable {
+        
+        Iterator<byte[]> iterator;
+        OutputStream out;
+        Throwable throwable = null;
+        
+        OutputStreamThread(Iterator<byte[]> iterator, OutputStream out) {
+            this.iterator = iterator;
+            this.out = out;
+        }
+
+        @Override
+        public void run() {
+            byte[] next;
+            try {
+                while (iterator.hasNext() && !Thread.currentThread().isInterrupted()) {
+                    next = iterator.next();
+                    out.write(next);
+                }
+            } catch (Throwable t) {
+                String message = "failed writing to output stream";
+                log.error(message, t);
+                throwable = t;
+            }
+        }
+        
+        public Throwable getThrowable() {
+            return throwable;
+        }
+    }
+    
+    class ByteArrayIterator implements Iterator<byte[]> {
+
+        BlockingQueue<byte[]> queue;
+        private boolean done = false;
+        
+        ByteArrayIterator(BlockingQueue<byte[]> queue) {
+            this.queue = queue;
+        }
+        
+        void setDone() {
+            done = true;
+        }
+        
+        @Override
+        public void remove() {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public boolean hasNext() {
+            return !(queue.isEmpty() || done);
+        }
+
+        @Override
+        public byte[] next() {
+            try {
+                return queue.take();
+            } catch (InterruptedException e) {
+                String message = "queue reading interrupted";
+                log.error(message, e);
+                throw new RuntimeException(message, e);
+            }            
+        }
     }
 
 }

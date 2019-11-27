@@ -74,6 +74,7 @@ import ca.nrc.cadc.net.OutputStreamWrapper;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
 
+import java.io.IOException;
 import java.io.StreamCorruptedException;
 import java.net.URI;
 import java.util.Iterator;
@@ -97,9 +98,10 @@ public interface StorageAdapter {
      * @param wrapper An input stream wrapper to receive the bytes.
      * 
      * @throws ResourceNotFoundException If the artifact could not be found.
+     * @throws IOException If an unrecoverable error occurred.
      * @throws TransientException If an unexpected, temporary exception occurred. 
      */
-    public void get(URI storageID, InputStreamWrapper wrapper) throws ResourceNotFoundException, TransientException;
+    public void get(URI storageID, InputStreamWrapper wrapper) throws ResourceNotFoundException, IOException, TransientException;
     
     /**
      * Get from storage the artifact identified by storageID.
@@ -109,9 +111,10 @@ public interface StorageAdapter {
      * @param cutouts Cutouts to be applied to the artifact
      * 
      * @throws ResourceNotFoundException If the artifact could not be found.
+     * @throws IOException If an unrecoverable error occurred.
      * @throws TransientException If an unexpected, temporary exception occurred. 
      */
-    public void get(URI storageID, InputStreamWrapper wrapper, Set<String> cutouts) throws ResourceNotFoundException, TransientException;
+    public void get(URI storageID, InputStreamWrapper wrapper, Set<String> cutouts) throws ResourceNotFoundException, IOException, TransientException;
     
     /**
      * Write an artifact to storage.
@@ -119,21 +122,23 @@ public interface StorageAdapter {
      * @param artifact The artifact metadata.
      * @param wrapper The wrapper for data of the artifact.
      * @param bucket An organizational code for storage
-     * @return The storageLocation with storageID.
+     * @return The storage metadata.
      * 
      * @throws StreamCorruptedException If the calculated checksum does not the expected checksum.
+     * @throws IOException If an unrecoverable error occurred.
      * @throws TransientException If an unexpected, temporary exception occurred.
      */
-    public StorageLocation put(Artifact artifact, OutputStreamWrapper wrapper, String bucket) throws StreamCorruptedException, TransientException;
+    public StorageMetadata put(Artifact artifact, OutputStreamWrapper wrapper, String bucket) throws StreamCorruptedException, IOException, TransientException;
         
     /**
      * Delete from storage the artifact identified by storageID.
      * @param storageID Identifies the artifact to delete.
      * 
      * @throws ResourceNotFoundException If the artifact could not be found.
+     * @throws IOException If an unrecoverable error occurred.
      * @throws TransientException If an unexpected, temporary exception occurred. 
      */
-    public void delete(URI storageID) throws ResourceNotFoundException, TransientException;
+    public void delete(URI storageID) throws ResourceNotFoundException, IOException, TransientException;
     
     /**
      * Iterator of items ordered by their storageIDs.

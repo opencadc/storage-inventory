@@ -62,51 +62,111 @@
  *  <http://www.gnu.org/licenses/>.      pas le cas, consultez :
  *                                       <http://www.gnu.org/licenses/>.
  *
- *  $Revision: 4 $
- *
  ************************************************************************
  */
 
-package org.opencadc.inventory.storage;
+package org.opencadc.inventory.storage.fs;
 
+import ca.nrc.cadc.net.InputStreamWrapper;
+import ca.nrc.cadc.net.OutputStreamWrapper;
+import ca.nrc.cadc.util.HexUtil;
+import ca.nrc.cadc.util.Log4jInit;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.URI;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.nio.file.attribute.FileAttribute;
+import java.nio.file.attribute.PosixFilePermission;
+import java.nio.file.attribute.PosixFilePermissions;
+import java.security.MessageDigest;
+import java.util.Date;
+import java.util.Set;
 
-import org.opencadc.inventory.InventoryUtil;
-import org.opencadc.inventory.StorageLocation;
+import org.apache.log4j.Level;
+import org.apache.log4j.Logger;
+import org.junit.Assert;
+import org.junit.BeforeClass;
+import org.junit.Test;
+import org.opencadc.inventory.Artifact;
+import org.opencadc.inventory.storage.StorageMetadata;
 
 /**
- * Class to hold artifact metadata from a storage implementation.
- * 
  * @author majorb
  *
  */
-public class StorageMetadata {
-
-    private final StorageLocation storageLocation;
-    private final URI contentChecksum;
-    private final Long contentLength;
-    public URI artifactURI;
-    public String bucket;
+public class FileSystemStorageAdapterTest {
     
-    public StorageMetadata(StorageLocation storageLocation, URI contentChecksum, Long contentLength) {
-        InventoryUtil.assertNotNull(StorageMetadata.class, "storageLocation", storageLocation);
-        InventoryUtil.assertNotNull(StorageMetadata.class, "contentChecksum", contentChecksum);
-        InventoryUtil.assertNotNull(StorageMetadata.class, "contentLength", contentLength);
-        this.storageLocation = storageLocation;
-        this.contentChecksum = contentChecksum;
-        this.contentLength = contentLength;
-    }
+    private static final Logger log = Logger.getLogger(FileSystemStorageAdapterTest.class);
+    
+    private static final String TEST_ROOT = "build/tmp/fsroot";
+    
+    private static final String dataString = "abcdefghijklmnopqrstuvwxyz";
+    private static final byte[] data = dataString.getBytes();
 
-    public StorageLocation getStorageLocation() {
-        return storageLocation;
+    static {
+        Log4jInit.setLevel("org.opencadc.inventory", Level.DEBUG);
     }
-
-    public URI getContentChecksum() {
-        return contentChecksum;
+    
+    @BeforeClass
+    public static void setup() {
+        try {
+            Set<PosixFilePermission> perms = PosixFilePermissions.fromString("rwxrwx---");
+            FileAttribute<Set<PosixFilePermission>> attr = PosixFilePermissions.asFileAttribute(perms);
+            Files.createDirectories(Paths.get(TEST_ROOT), attr);
+        } catch (Throwable t) {
+            log.error("setup error", t);
+        }
     }
+    
+    @Test
+    public void testPutGetDelete() {
+        try {
+            
+            URI uri = URI.create("test:path/file");
+            MessageDigest md = MessageDigest.getInstance("MD5");
+            String md5Val = HexUtil.toHex(md.digest(data));
+            URI checksum = URI.create("md5:" + md5Val);
+            log.info("expected md5sum: " + checksum);
+            Date lastModified = new Date();
+            long length = data.length;
+            Artifact artifact = new Artifact(uri, checksum, lastModified, length);
+            
+            OutputStreamWrapper outWrapper = new OutputStreamWrapper() {
+                public void write(OutputStream out) throws IOException {
+                    out.write(data);
+                }
+            };
+            
+            FileSystemStorageAdapter fs = new FileSystemStorageAdapter(TEST_ROOT);
+            StorageMetadata storageMetadata = fs.put(artifact, outWrapper, null);
+            
+            TestInputWrapper inWrapper = new TestInputWrapper();
+            fs.get(storageMetadata.getStorageLocation().getStorageID(), inWrapper);
+            
+            String resultData = new String(inWrapper.data);
+            log.info("result data: " + resultData);
+            Assert.assertEquals("data", dataString, resultData);
+            
+        } catch (Exception unexpected) {
+            log.error("unexpected exception", unexpected);
+            Assert.fail("unexpected exception: " + unexpected);
+        }
+    }
+    
+    private class TestInputWrapper implements InputStreamWrapper {
 
-    public Long getContentLength() {
-        return contentLength;
+        byte[] data;
+        
+        public void read(InputStream inputStream) throws IOException {
+            byte[] buff = new byte[100];
+            int bytesRead = inputStream.read(buff);
+            data = new byte[bytesRead];
+            System.arraycopy(buff, 0, data, 0, bytesRead);
+        }
+        
     }
 
 }
