@@ -1,4 +1,5 @@
-FROM tomcat:8.0
-MAINTAINER your_name
-# COPY path-to-your-application-war path-to-webapps-in-docker-tomcat
-COPY build/libs/luskan.war /usr/local/tomcat/webapps/
+FROM cadc-tomcat:latest
+
+RUN mkdir /root/config
+COPY src/main/resources/LocalAuthority.properties /root/config/
+COPY build/libs/*.war /usr/share/tomcat/webapps

@@ -69,6 +69,7 @@
 
 package ca.nrc.cadc.luskan.impl;
 
+import ca.nrc.cadc.luskan.ws.DataSourceProviderImpl;
 import ca.nrc.cadc.luskan.ws.StorageTapService;
 import ca.nrc.cadc.tap.QueryRunner;
 import ca.nrc.cadc.db.DBUtil;
@@ -98,7 +99,8 @@ public class CvodbQueryRunner extends QueryRunner {
 
     @Override
     protected DataSource getQueryDataSource() throws Exception {
-        log.debug("Data Source name: " + StorageTapService.TAPUSER_POOL_NAME);
-        return DBUtil.findJNDIDataSource(StorageTapService.TAPUSER_POOL_NAME);
+        String tapDsName = DataSourceProviderImpl.getDataSourceName(null, "tapadm");
+        log.debug("Data Source name: " + tapDsName);
+        return DBUtil.findJNDIDataSource(tapDsName);
     }
 }

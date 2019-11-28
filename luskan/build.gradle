@@ -20,7 +20,7 @@ sourceCompatibility = 1.7
 group = 'ca.nrc.cadc'
 
 war {
-    archiveName = project.name + '.war'
+    archiveFileName = project.name + '.war'
 
     // Include the swagger-ui so that /ad provides the AD API documentation
     from(System.getenv('RPS') + '/resources/') {
@@ -36,7 +36,7 @@ dependencies {
     compile 'org.opencadc:cadc-adql:[1.1,)'
     compile 'org.opencadc:cadc-access-control:[1.1.1)'
     compile 'org.opencadc:cadc-uws:[1.0.2,)'
-    compile 'org.opencadc:cadc-uws-server:[1.2.0,)'
+    compile 'org.opencadc:cadc-uws-server:[1.2.5,)'
     compile 'org.opencadc:cadc-dali:[1.1,)'
     compile 'org.opencadc:cadc-tap-server:[1.1.9,)'
     compile 'org.opencadc:cadc-tap-schema:[1.1.9,)'
