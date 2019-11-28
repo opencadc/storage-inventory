@@ -141,11 +141,11 @@ public class StorageClient {
         adapter.delete(storageID);
     }
 
-    public Iterator<StorageMetadata> iterator() throws TransientException {
+    public Iterator<StorageMetadata> iterator() throws IOException, TransientException {
         return adapter.iterator();
     }
     
-    public Iterator<StorageMetadata> iterator(String bucket) throws TransientException {
+    public Iterator<StorageMetadata> iterator(String bucket) throws IOException, TransientException {
         return adapter.iterator(bucket);
     }
     

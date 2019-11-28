@@ -85,9 +85,10 @@ import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
+import java.security.DigestInputStream;
 import java.security.DigestOutputStream;
 import java.security.MessageDigest;
-import java.util.Base64;
+import java.security.NoSuchAlgorithmException;
 import java.util.Iterator;
 import java.util.Set;
 import java.util.UUID;
@@ -102,8 +103,8 @@ import org.opencadc.inventory.storage.StorageMetadata;
 public class FileSystemStorageAdapter implements StorageAdapter {
     
     private static final Logger log = Logger.getLogger(FileSystemStorageAdapter.class);
-    private static final String STORAGE_URI_SCHEME = "fs";
-    private static final String MD5_CHECKSUM_SCHEME = "md5";
+    static final String STORAGE_URI_SCHEME = "fs";
+    static final String MD5_CHECKSUM_SCHEME = "md5";
     
     private FileSystem fs;
     private Path root;
@@ -285,13 +286,17 @@ public class FileSystemStorageAdapter implements StorageAdapter {
     }
     
     /**
-     * Iterator of items ordered by their storageIDs.
+     * Iterator of items.  This implementation does not order the files
+     * by storageID as per the requirement of the interface.
+     * 
      * @return An iterator over an ordered list of items in storage.
      * 
+     * @throws IOException If an unrecoverable error occurred.
      * @throws TransientException If an unexpected, temporary exception occurred. 
      */
-    public Iterator<StorageMetadata> iterator() throws TransientException {
-        return null;
+    public Iterator<StorageMetadata> iterator() throws IOException, TransientException {
+        FileSystemIterator iterator = new FileSystemIterator(root);
+        return iterator;
     }
     
     /**
@@ -302,7 +307,7 @@ public class FileSystemStorageAdapter implements StorageAdapter {
      * @throws TransientException If an unexpected, temporary exception occurred. 
      */
     public Iterator<StorageMetadata> iterator(String bucket) throws TransientException {
-        return null;
+        throw new UnsupportedOperationException("Buckets not supported");
     }
     
     private Path createArtifactPath(Artifact a) {
@@ -329,5 +334,19 @@ public class FileSystemStorageAdapter implements StorageAdapter {
         return URI.create(STORAGE_URI_SCHEME + ":" + a.getURI().getSchemeSpecificPart());
     }
     
-
+    public static URI createMD5Checksum(Path path) throws NoSuchAlgorithmException, IOException {
+        MessageDigest md = MessageDigest.getInstance("MD5");
+        InputStream in = Files.newInputStream(path);
+        DigestInputStream dis = new DigestInputStream(in, md);
+        
+        int bytesRead = dis.read();
+        byte[] buf = new byte[2^10];
+        while (bytesRead > 0) {
+            bytesRead = dis.read(buf);
+        }
+        byte[] digest = md.digest();
+        String md5String = HexUtil.toHex(digest);
+        return URI.create(FileSystemStorageAdapter.MD5_CHECKSUM_SCHEME + ":" + md5String);
+    }
+    
 }

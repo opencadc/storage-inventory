@@ -83,7 +83,10 @@ import java.nio.file.attribute.FileAttribute;
 import java.nio.file.attribute.PosixFilePermission;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.security.MessageDigest;
+import java.util.ArrayList;
 import java.util.Date;
+import java.util.Iterator;
+import java.util.List;
 import java.util.Set;
 
 import org.apache.log4j.Level;
@@ -114,7 +117,7 @@ public class FileSystemStorageAdapterTest {
     @BeforeClass
     public static void setup() {
         try {
-            Set<PosixFilePermission> perms = PosixFilePermissions.fromString("rwxrwx---");
+            Set<PosixFilePermission> perms = PosixFilePermissions.fromString("rwxrwxrw-");
             FileAttribute<Set<PosixFilePermission>> attr = PosixFilePermissions.asFileAttribute(perms);
             Files.createDirectories(Paths.get(TEST_ROOT), attr);
         } catch (Throwable t) {
@@ -160,6 +163,71 @@ public class FileSystemStorageAdapterTest {
                 // expected
             }
             
+        } catch (Exception unexpected) {
+            log.error("unexpected exception", unexpected);
+            Assert.fail("unexpected exception: " + unexpected);
+        }
+    }
+    
+    @Test
+    public void testIterator() {
+        try {
+            
+            FileSystemStorageAdapter fs = new FileSystemStorageAdapter(TEST_ROOT);
+            
+            MessageDigest md = MessageDigest.getInstance("MD5");
+            String md5Val = HexUtil.toHex(md.digest(data));
+            URI checksum = URI.create("md5:" + md5Val);
+            log.info("expected md5sum: " + checksum);
+            Date lastModified = new Date();
+            long length = data.length;
+            
+            String[] files = new String[] {
+                "test:dir1/file1",
+                "test:dir1/file2",
+                "test:dir1/dir2/file3",
+                "test:dir1/dir2/file4",
+                "test:dir1/file5",
+                "test:dir1/dir3/dir4/file6",
+                "test:dir1/dir3/dir4/file7",
+                "test:dir1/dir3/file8",
+                "test:dir1/file9",
+                "test:dir1/dir4/file10",
+                "test:dir5/file11",
+                "test:dir5/dir6/dir7/dir8/file12",
+            };
+            
+            List<URI> storageIDs = new ArrayList<URI>();
+            
+            for (String file : files) {
+                URI uri = URI.create(file);
+                Artifact artifact = new Artifact(uri, checksum, lastModified, length);
+                OutputStreamWrapper outWrapper = new OutputStreamWrapper() {
+                    public void write(OutputStream out) throws IOException {
+                        out.write(data);
+                    }
+                };
+
+                StorageMetadata meta = fs.put(artifact, outWrapper, null);
+                storageIDs.add(meta.getStorageLocation().getStorageID());
+                log.debug("added " + meta.getStorageLocation().getStorageID());
+            }
+            
+            Iterator<StorageMetadata> iterator = fs.iterator();
+            StorageMetadata next = null;
+            int count = 0;
+            while (iterator.hasNext()) {
+                next = iterator.next();
+                if (!storageIDs.contains(next.getStorageLocation().getStorageID())) {
+                    Assert.fail("encounted unknown file: " + next.getStorageLocation().getStorageID());
+                }
+                Assert.assertEquals("checksum", checksum, next.getContentChecksum());
+                Assert.assertEquals("length", new Long(length), next.getContentLength());
+                count++;
+            }
+            
+            Assert.assertEquals("file count", storageIDs.size(), count);
+
         } catch (Exception unexpected) {
             log.error("unexpected exception", unexpected);
             Assert.fail("unexpected exception: " + unexpected);

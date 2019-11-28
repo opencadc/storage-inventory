@@ -62,101 +62,117 @@
  *  <http://www.gnu.org/licenses/>.      pas le cas, consultez :
  *                                       <http://www.gnu.org/licenses/>.
  *
- *  $Revision: 4 $
- *
  ************************************************************************
  */
-
-package org.opencadc.inventory.storage;
-
-import ca.nrc.cadc.net.InputStreamWrapper;
-import ca.nrc.cadc.net.OutputStreamWrapper;
-import ca.nrc.cadc.net.ResourceNotFoundException;
-import ca.nrc.cadc.net.TransientException;
+package org.opencadc.inventory.storage.fs;
 
 import java.io.IOException;
-import java.io.StreamCorruptedException;
 import java.net.URI;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.EmptyStackException;
 import java.util.Iterator;
-import java.util.Set;
+import java.util.Stack;
+import java.util.stream.Stream;
 
-import org.opencadc.inventory.Artifact;
+import org.apache.log4j.Logger;
+import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.StorageLocation;
+import org.opencadc.inventory.storage.StorageMetadata;
 
 /**
- * The interface to storage implementations.
- * 
  * @author majorb
  *
  */
-public interface StorageAdapter {
+public class FileSystemIterator implements Iterator<StorageMetadata> {
+    
+    private static final Logger log = Logger.getLogger(FileSystemIterator.class);
+    
+    private PathItem next = null;
+    Stack<StackItem> stack;
 
-    /**
-     * Get from storage the artifact identified by storageID.
-     * 
-     * @param storageID The artifact location identifier.
-     * @param wrapper An input stream wrapper to receive the bytes.
-     * 
-     * @throws ResourceNotFoundException If the artifact could not be found.
-     * @throws IOException If an unrecoverable error occurred.
-     * @throws TransientException If an unexpected, temporary exception occurred. 
-     */
-    public void get(URI storageID, InputStreamWrapper wrapper) throws ResourceNotFoundException, IOException, TransientException;
-    
-    /**
-     * Get from storage the artifact identified by storageID.
-     * 
-     * @param storageID The artifact location identifier.
-     * @param wrapper An input stream wrapper to receive the bytes.
-     * @param cutouts Cutouts to be applied to the artifact
-     * 
-     * @throws ResourceNotFoundException If the artifact could not be found.
-     * @throws IOException If an unrecoverable error occurred.
-     * @throws TransientException If an unexpected, temporary exception occurred. 
-     */
-    public void get(URI storageID, InputStreamWrapper wrapper, Set<String> cutouts) throws ResourceNotFoundException, IOException, TransientException;
-    
-    /**
-     * Write an artifact to storage.
-     * 
-     * @param artifact The artifact metadata.
-     * @param wrapper The wrapper for data of the artifact.
-     * @param bucket An organizational code for storage
-     * @return The storage metadata.
-     * 
-     * @throws StreamCorruptedException If the calculated checksum does not the expected checksum.
-     * @throws IOException If an unrecoverable error occurred.
-     * @throws TransientException If an unexpected, temporary exception occurred.
-     */
-    public StorageMetadata put(Artifact artifact, OutputStreamWrapper wrapper, String bucket) throws StreamCorruptedException, IOException, TransientException;
+    public FileSystemIterator(Path dir) throws IOException {
+        InventoryUtil.assertNotNull(FileSystemIterator.class, "dir", dir);
+        if (!Files.isDirectory(dir)) {
+            throw new IllegalArgumentException("not a directory: " + dir);
+        }
+        stack = new Stack<StackItem>();
         
-    /**
-     * Delete from storage the artifact identified by storageID.
-     * @param storageID Identifies the artifact to delete.
-     * 
-     * @throws ResourceNotFoundException If the artifact could not be found.
-     * @throws IOException If an unrecoverable error occurred.
-     * @throws TransientException If an unexpected, temporary exception occurred. 
-     */
-    public void delete(URI storageID) throws ResourceNotFoundException, IOException, TransientException;
+        Stream<Path> stream = Files.list(dir);
+        Iterator<Path> i = stream.iterator();
+        
+        StackItem item = new StackItem();
+        item.stream = stream;
+        item.iterator = i;
+        item.parentDir = "";
+        log.debug("entering directory /");
+        
+        stack.push(item);
+    }
     
-    /**
-     * Iterator of items ordered by their storageIDs.
-     * @return An iterator over an ordered list of items in storage.
-     * 
-     * @throws IOException If an unrecoverable error occurred.
-     * @throws TransientException If an unexpected, temporary exception occurred. 
-     */
-    public Iterator<StorageMetadata> iterator() throws IOException, TransientException;
+    @Override
+    public boolean hasNext() {
+        try {
+            StackItem currentStackItem = stack.peek();
+            Iterator<Path> currentIterator = currentStackItem.iterator;
+            if (currentIterator.hasNext()) {
+                Path nextPath = currentIterator.next();
+                if (Files.isDirectory(nextPath)) {
+                    Stream<Path> stream = Files.list(nextPath);
+                    Iterator<Path> iterator = stream.iterator();
+                    String parentDir = currentStackItem.parentDir + nextPath.getFileName() + "/";
+                    log.debug("entering directory " + parentDir);
+                    StackItem item = new StackItem();
+                    item.stream = stream;
+                    item.iterator = iterator;
+                    item.parentDir = parentDir;
+                    stack.push(item);
+                    return this.hasNext();
+                } else {
+                    next = new PathItem();
+                    next.pathAndFileName = currentStackItem.parentDir + nextPath.getFileName();
+                    next.path = nextPath;
+                    return true;
+                }
+            } else {
+                log.debug("completed directory listing");
+                StackItem item = stack.pop();
+                item.stream.close();
+                return this.hasNext();
+            }
+        } catch (EmptyStackException e) {
+            log.debug("no more iterators, done");
+            return false;
+        } catch (IOException e) {
+            throw new IllegalStateException("io exception: " + e.getMessage(), e);
+        }
+    }
+
+    @Override
+    public StorageMetadata next() {
+        if (next == null) {
+            throw new IllegalStateException("No more elements");
+        }
+        URI storageID = URI.create(FileSystemStorageAdapter.STORAGE_URI_SCHEME + ":" + next.pathAndFileName);
+        StorageLocation storageLocation = new StorageLocation(storageID);
+        try {
+            URI checksum = FileSystemStorageAdapter.createMD5Checksum(next.path);
+            long length = Files.size(next.path);
+            return new StorageMetadata(storageLocation, checksum, length);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to compute file metadata: " + e.getMessage(), e);
+        }
+    }
     
-    /**
-     * Iterator of itmes ordered by their storageIDs.
-     * @param bucket Only iterate over items in this bucket.
-     * @return An iterator over an ordered list of items in this storage bucket.
-     * 
-     * @throws IOException If an unrecoverable error occurred.
-     * @throws TransientException If an unexpected, temporary exception occurred. 
-     */
-    public Iterator<StorageMetadata> iterator(String bucket) throws IOException, TransientException;
+    private class StackItem {
+        Stream<Path> stream;
+        Iterator<Path> iterator;
+        String parentDir;
+    }
     
+    private class PathItem {
+        Path path;
+        String pathAndFileName;
+    }
+
 }
