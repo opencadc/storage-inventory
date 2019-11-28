@@ -83,6 +83,11 @@ import java.net.URI;
 import java.util.Iterator;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.Callable;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
+import java.util.concurrent.FutureTask;
+import java.util.concurrent.LinkedBlockingQueue;
 
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
@@ -96,14 +101,22 @@ import org.opencadc.inventory.Artifact;
 public class StorageClient {
     
     private static Logger log = Logger.getLogger(StorageClient.class);
-    private static String STORAGE_ADPATER_CLASS_PROPERTY = StorageAdapter.class.getName();
-    private static int BUFFER_SIZE_BYTES = 2^14;
-    private static int QUEUE_SIZE_BUFFERS = 10;
+    public static String STORAGE_ADPATER_CLASS_PROPERTY = StorageAdapter.class.getName();
+    private static int DEFAULT_BUFFER_SIZE_BYTES = 2^14;
+    private static int DEFAULT_MAX_QUEUE_SIZE_BUFFERS = 10;
     
     private StorageAdapter adapter;
+    private int bufferSize = DEFAULT_BUFFER_SIZE_BYTES;
+    private int maxQueueSize = DEFAULT_MAX_QUEUE_SIZE_BUFFERS;
 
     public StorageClient() {
         adapter = getStorageAdapter();
+    }
+    
+    public StorageClient(int bufferSize, int maxQueueSize) {
+        adapter = getStorageAdapter();
+        this.bufferSize = bufferSize;
+        this.maxQueueSize = maxQueueSize;
     }
     
     public void get(URI storageID, OutputStream out) throws ResourceNotFoundException, IOException, TransientException {
@@ -136,50 +149,6 @@ public class StorageClient {
         return adapter.iterator(bucket);
     }
     
-    private void ioLoop(OutputStream out, InputStream in) {
-
-        BlockingQueue<byte[]> queue = new ArrayBlockingQueue<byte[]>(QUEUE_SIZE_BUFFERS);
-        
-        byte[] buffer = new byte[BUFFER_SIZE_BYTES];
-        int bytesRead;
-        ByteArrayIterator iterator = null;
-        Thread thread = null;
-        OutputStreamThread outputStreamThread = null;
-        try {
-            bytesRead = in.read(buffer);
-            if (bytesRead > 0) {
-                queue.put(buffer);
-                iterator = new ByteArrayIterator(queue);
-                outputStreamThread = new OutputStreamThread(iterator, out);
-                thread = new Thread(outputStreamThread);
-                thread.start();
-                while (bytesRead > 0) {
-                    bytesRead = in.read(buffer);
-                    queue.put(buffer);
-                }
-            }
-        } catch (Throwable t) {
-            String message = "failed reading from input stream";
-            log.error(message, t);
-            throw new IllegalStateException(message, t);
-        } finally {
-            if (iterator != null) {
-                iterator.setDone();
-            }
-            if (thread != null) {
-                try {
-                    thread.join();
-                } catch (InterruptedException e) {
-                    log.debug("Interrupted waiting to join ouput thread.", e);
-                }
-            }
-            if (outputStreamThread != null && outputStreamThread.getThrowable() != null) {
-                throw new IllegalStateException("failed writing to output stream", outputStreamThread.getThrowable());
-            }
-        }
-        
-    }
-    
     /**
      * Load the configured storage adapter or the default one if none
      * are found.
@@ -207,70 +176,104 @@ public class StorageClient {
         
     }
     
-    class OutputStreamThread implements Runnable {
+    private void ioLoop(OutputStream out, InputStream in) {
+
+        LinkedBlockingQueue<QueueItem> queue = new LinkedBlockingQueue<QueueItem>(maxQueueSize);
         
-        Iterator<byte[]> iterator;
+        byte[] buffer = new byte[bufferSize];
+        int bytesRead;
+
+        BufferConsumer consumer = null;
+        QueueItem next = null;
+        Throwable consumerThrowable = null;
+        
+        try {
+            bytesRead = in.read(buffer);
+            log.debug("read " + bytesRead + " bytes: " + new String(buffer));
+            if (bytesRead > 0) {
+                
+                consumer = new BufferConsumer(queue, out);
+                FutureTask<Throwable> consumerTask = new FutureTask<Throwable>(consumer);
+                Thread consumerThread = new Thread(consumerTask);
+                consumerThread.start();
+                
+                while (bytesRead > 0 && consumerThread.isAlive()) {        
+                    next = new QueueItem(buffer, bytesRead);
+                    queue.put(next);
+                    buffer = new byte[bufferSize];
+                    bytesRead = in.read(buffer);
+                    log.debug("read " + bytesRead + " bytes: " + new String(buffer));
+                }
+                
+                if (!consumerTask.isDone()) {
+                    log.debug("sending stop control to consumer");
+                    next = new QueueItem(null, 0);
+                    next.stop = true;
+                    queue.put(next);
+                }
+                
+                consumerThrowable = consumerTask.get();
+                
+            } else {
+                log.debug("No data");
+            }
+        } catch (Throwable t) {
+            String message = "failed reading from input stream";
+            log.error(message, t);
+            throw new IllegalStateException(message, t);
+        }
+        
+        if (consumerThrowable != null) {
+            String message = "failed writing to output stream";
+            log.error(message, consumerThrowable);
+            throw new IllegalStateException(message, consumerThrowable);
+        }
+        
+    }
+    
+    private class BufferConsumer implements Callable<Throwable> {
+        
+        LinkedBlockingQueue<QueueItem> queue;
         OutputStream out;
-        Throwable throwable = null;
         
-        OutputStreamThread(Iterator<byte[]> iterator, OutputStream out) {
-            this.iterator = iterator;
+        BufferConsumer(LinkedBlockingQueue<QueueItem> queue, OutputStream out) {
+            this.queue = queue;
             this.out = out;
         }
 
         @Override
-        public void run() {
-            byte[] next;
+        public Throwable call() throws Exception {
+            QueueItem next;
             try {
-                while (iterator.hasNext() && !Thread.currentThread().isInterrupted()) {
-                    next = iterator.next();
-                    out.write(next);
+                next = queue.take();
+                while (!next.stop) {
+                    out.write(next.data, 0, next.length);
+                    log.debug("wrote " + next.length + " bytes: " + new String(next.data));
+                    next = queue.take();
+                    if (log.isDebugEnabled() && next.stop) {
+                        log.debug("received stop control from producer");
+                    }
                 }
+                out.flush();
+                return null;
             } catch (Throwable t) {
                 String message = "failed writing to output stream";
                 log.error(message, t);
-                throwable = t;
+                return t;
             }
-        }
-        
-        public Throwable getThrowable() {
-            return throwable;
         }
     }
     
-    class ByteArrayIterator implements Iterator<byte[]> {
-
-        BlockingQueue<byte[]> queue;
-        private boolean done = false;
+    private class QueueItem {
+        byte[] data;
+        int length;
+        boolean stop = false;
         
-        ByteArrayIterator(BlockingQueue<byte[]> queue) {
-            this.queue = queue;
-        }
-        
-        void setDone() {
-            done = true;
-        }
-        
-        @Override
-        public void remove() {
-            throw new UnsupportedOperationException();
+        QueueItem(byte[] data, int length) {
+            this.data = data;
+            this.length = length;
         }
 
-        @Override
-        public boolean hasNext() {
-            return !(queue.isEmpty() || done);
-        }
-
-        @Override
-        public byte[] next() {
-            try {
-                return queue.take();
-            } catch (InterruptedException e) {
-                String message = "queue reading interrupted";
-                log.error(message, e);
-                throw new RuntimeException(message, e);
-            }            
-        }
     }
 
 }

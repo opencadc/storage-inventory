@@ -64,117 +64,144 @@
  *
  ************************************************************************
  */
-
-package org.opencadc.inventory.storage.fs;
+package org.opencadc.inventory.storage;
 
 import ca.nrc.cadc.net.InputStreamWrapper;
 import ca.nrc.cadc.net.OutputStreamWrapper;
 import ca.nrc.cadc.net.ResourceNotFoundException;
+import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.util.HexUtil;
-import ca.nrc.cadc.util.Log4jInit;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
+import java.io.StreamCorruptedException;
 import java.net.URI;
-import java.nio.file.Files;
-import java.nio.file.Paths;
-import java.nio.file.attribute.FileAttribute;
-import java.nio.file.attribute.PosixFilePermission;
-import java.nio.file.attribute.PosixFilePermissions;
 import java.security.MessageDigest;
-import java.util.Date;
+import java.util.Iterator;
 import java.util.Set;
 
-import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
-import org.junit.Assert;
-import org.junit.BeforeClass;
-import org.junit.Test;
 import org.opencadc.inventory.Artifact;
-import org.opencadc.inventory.storage.StorageMetadata;
+import org.opencadc.inventory.StorageLocation;
 
 /**
  * @author majorb
  *
  */
-public class FileSystemStorageAdapterTest {
+public class TestStorageAdapter implements StorageAdapter {
     
-    private static final Logger log = Logger.getLogger(FileSystemStorageAdapterTest.class);
+    private static final Logger log = Logger.getLogger(TestStorageAdapter.class);
     
-    private static final String TEST_ROOT = "build/tmp/fsroot";
-    
-    private static final String dataString = "abcdefghijklmnopqrstuvwxyz";
-    private static final byte[] data = dataString.getBytes();
-
+    static final String dataString = "abcdefghijklmnopqrstuvwxyz";
+    static final byte[] data = dataString.getBytes();
+    static final URI storageID = URI.create("test:path/file");
+    static final Long contentLength = new Long(data.length);
+    static URI contentChecksum;
     static {
-        Log4jInit.setLevel("org.opencadc.inventory", Level.DEBUG);
-    }
-    
-    @BeforeClass
-    public static void setup() {
         try {
-            Set<PosixFilePermission> perms = PosixFilePermissions.fromString("rwxrwx---");
-            FileAttribute<Set<PosixFilePermission>> attr = PosixFilePermissions.asFileAttribute(perms);
-            Files.createDirectories(Paths.get(TEST_ROOT), attr);
-        } catch (Throwable t) {
-            log.error("setup error", t);
-        }
-    }
-    
-    @Test
-    public void testPutGetDelete() {
-        try {
-            
-            URI uri = URI.create("test:path/file");
             MessageDigest md = MessageDigest.getInstance("MD5");
-            String md5Val = HexUtil.toHex(md.digest(data));
-            URI checksum = URI.create("md5:" + md5Val);
-            log.info("expected md5sum: " + checksum);
-            Date lastModified = new Date();
-            long length = data.length;
-            Artifact artifact = new Artifact(uri, checksum, lastModified, length);
-            
-            OutputStreamWrapper outWrapper = new OutputStreamWrapper() {
-                public void write(OutputStream out) throws IOException {
-                    out.write(data);
-                }
-            };
-            
-            FileSystemStorageAdapter fs = new FileSystemStorageAdapter(TEST_ROOT);
-            StorageMetadata storageMetadata = fs.put(artifact, outWrapper, null);
-            
-            TestInputWrapper inWrapper = new TestInputWrapper();
-            fs.get(storageMetadata.getStorageLocation().getStorageID(), inWrapper);
-            
-            String resultData = new String(inWrapper.data);
-            log.info("result data: " + resultData);
-            Assert.assertEquals("data", dataString, resultData);
-            
-            fs.delete(storageMetadata.getStorageLocation().getStorageID());
-            
-            try {
-                fs.get(storageMetadata.getStorageLocation().getStorageID(), inWrapper);
-                Assert.fail("Should have received resource not found exception");
-            } catch (ResourceNotFoundException e) {
-                // expected
-            }
-            
-        } catch (Exception unexpected) {
-            log.error("unexpected exception", unexpected);
-            Assert.fail("unexpected exception: " + unexpected);
+            byte[] md5 = md.digest(data);
+            String md5hex = HexUtil.toHex(md5);
+            contentChecksum = URI.create("md5:" + md5hex);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
         }
     }
+    static Mode mode = Mode.NORMAL;
     
-    private class TestInputWrapper implements InputStreamWrapper {
+    public enum Mode { NORMAL, ERROR_ON_GET_0, ERROR_ON_GET_1, ERROR_ON_GET_2 };
+    static int BUF_SIZE = 6;
+    
+    public TestStorageAdapter() {
+    }
 
-        byte[] data;
+    @Override
+    public void get(URI storageID, InputStreamWrapper wrapper)
+            throws ResourceNotFoundException, IOException, TransientException {
+        InputStream in = null;
+        if (mode.equals(Mode.ERROR_ON_GET_0)) {
+            in = new ErrorInputStream(data, 0);
+        } else if (mode.equals(Mode.ERROR_ON_GET_1)) {
+            in = new ErrorInputStream(data, 1);
+        } else if (mode.equals(Mode.ERROR_ON_GET_2)) {
+            in = new ErrorInputStream(data, 2);
+        } else {
+            in = new ByteArrayInputStream(data);
+        }
+        wrapper.read(in);
+    }
+
+    @Override
+    public void get(URI storageID, InputStreamWrapper wrapper, Set<String> cutouts)
+            throws ResourceNotFoundException, IOException, TransientException {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public StorageMetadata put(Artifact artifact, OutputStreamWrapper wrapper, String bucket)
+            throws StreamCorruptedException, IOException, TransientException {
         
-        public void read(InputStream inputStream) throws IOException {
-            byte[] buff = new byte[100];
-            int bytesRead = inputStream.read(buff);
-            data = new byte[bytesRead];
-            System.arraycopy(buff, 0, data, 0, bytesRead);
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        wrapper.write(out);
+        byte[] newData = out.toByteArray();
+        log.info("received data: " + new String(newData));
+        
+        URI newContentChecksum = null;
+        try {
+            MessageDigest md = MessageDigest.getInstance("MD5");
+            byte[] md5 = md.digest(newData);
+            String md5hex = HexUtil.toHex(md5);
+            newContentChecksum = URI.create("md5:" + md5hex);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+        long newContentLength = newData.length;
+        if (!newContentChecksum.equals(contentChecksum)) {
+            throw new StreamCorruptedException("checksum: " +
+                newContentChecksum + " does not equal " + contentChecksum);
+        }
+        if (newContentLength != contentLength) {
+            throw new StreamCorruptedException("length: " +
+                newContentLength + " does not equal " + contentLength);
+        }
+        
+        StorageLocation storageLocation = new StorageLocation(storageID);
+        StorageMetadata storageMetadata = new StorageMetadata(storageLocation, contentChecksum, contentLength);
+        storageMetadata.artifactURI = artifact.getURI();
+        return storageMetadata;
+    }
+
+    @Override
+    public void delete(URI storageID) throws ResourceNotFoundException, IOException, TransientException {
+    }
+
+    @Override
+    public Iterator<StorageMetadata> iterator() throws TransientException {
+        return null;
+    }
+
+    @Override
+    public Iterator<StorageMetadata> iterator(String bucket) throws TransientException {
+        return null;
+    }
+    
+    private class ErrorInputStream extends ByteArrayInputStream {
+        int failPoint;
+        int count = 0;
+        ErrorInputStream(byte[] data, int failPoint) {
+            super(data);
+            this.failPoint = failPoint;
+        }
+        
+        @Override
+        public int read(byte[] buf) throws IOException {
+            if (failPoint == count) {
+                throw new IOException("test exception");
+            }
+            count++;
+            return super.read(buf);
         }
         
     }
