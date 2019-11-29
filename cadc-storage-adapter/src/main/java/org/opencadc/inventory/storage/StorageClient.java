@@ -178,55 +178,38 @@ public class StorageClient {
     
     private void ioLoop(OutputStream out, InputStream in) {
 
-        LinkedBlockingQueue<QueueItem> queue = new LinkedBlockingQueue<QueueItem>(maxQueueSize);
-        
-        byte[] buffer = new byte[bufferSize];
-        int bytesRead;
-
-        Thread consumerThread = null;
-        QueueItem next = null;
+        Throwable producerThrowable = null;
         Throwable consumerThrowable = null;
         
         try {
-            bytesRead = in.read(buffer);
-            log.debug("read " + bytesRead + " bytes: " + new String(buffer));
-            if (bytesRead > 0) {
+            LinkedBlockingQueue<QueueItem> queue = new LinkedBlockingQueue<QueueItem>(maxQueueSize);
                 
-                BufferConsumer consumer = new BufferConsumer(queue, out);
-                FutureTask<Throwable> consumerTask = new FutureTask<Throwable>(consumer);
-                consumerThread = new Thread(consumerTask);
-                consumerThread.start();
+            QueueProducer producer = new QueueProducer(queue, in);
+            QueueConsumer consumer = new QueueConsumer(queue, out);
+            FutureTask<Throwable> producerTask = new FutureTask<Throwable>(producer);
+            FutureTask<Throwable> consumerTask = new FutureTask<Throwable>(consumer);
+            Thread producerThread = new Thread(producerTask);
+            Thread consumerThread = new Thread(consumerTask);
+            producer.consumer = consumerThread;
+            consumer.producer = producerThread;
+            
+            consumerThread.start();
+            producerThread.start();
+            
+            producerThrowable = producerTask.get();
+            consumerThrowable = consumerTask.get();
                 
-                while (bytesRead > 0 && consumerThread.isAlive()) {        
-                    next = new QueueItem(buffer, bytesRead);
-                    queue.put(next);
-                    buffer = new byte[bufferSize];
-                    bytesRead = in.read(buffer);
-                    log.debug("read " + bytesRead + " bytes: " + new String(buffer));
-                }
-                
-                if (!consumerTask.isDone()) {
-                    log.debug("sending stop control to consumer");
-                    next = new QueueItem(null, 0);
-                    next.stop = true;
-                    queue.put(next);
-                }
-                
-                consumerThrowable = consumerTask.get();
-                
-            } else {
-                log.debug("No data");
-            }
         } catch (Throwable t) {
-            String message = "failed reading from input stream";
+            String message = "i/o loop failed";
             log.error(message, t);
-            if (consumerThread != null && consumerThread.isAlive()) {
-                consumerThread.interrupt();
-                log.debug("interrupted consumer thread");
-            }
             throw new IllegalStateException(message, t);
         }
         
+        if (producerThrowable != null) {
+            String message = "failed reading from input stream";
+            log.error(message, producerThrowable);
+            throw new IllegalStateException(message, producerThrowable);
+        }
         if (consumerThrowable != null) {
             String message = "failed writing to output stream";
             log.error(message, consumerThrowable);
@@ -235,12 +218,53 @@ public class StorageClient {
         
     }
     
-    private class BufferConsumer implements Callable<Throwable> {
+    private class QueueProducer implements Callable<Throwable> {
+        
+        LinkedBlockingQueue<QueueItem> queue;
+        InputStream in;
+        Thread consumer;
+        
+        QueueProducer(LinkedBlockingQueue<QueueItem> queue, InputStream in) {
+            this.queue = queue;
+            this.in = in;
+        }
+
+        @Override
+        public Throwable call() throws Exception {
+            try {
+                QueueItem next;
+                byte[] buffer = new byte[bufferSize];
+                int bytesRead = in.read(buffer);
+                while (bytesRead > 0) {        
+                    next = new QueueItem(buffer, bytesRead);
+                    queue.put(next);
+                    buffer = new byte[bufferSize];
+                    bytesRead = in.read(buffer);
+                    log.debug("read " + bytesRead + " bytes: " + new String(buffer));
+                }
+                log.debug("sending stop control to consumer");
+                next = new QueueItem(null, 0);
+                next.stop = true;
+                queue.put(next);
+                return null;
+            } catch (InterruptedException e) {
+                log.debug("Producer interrupted", e);
+                return null;
+            } catch (Throwable t) {
+                log.error(t);
+                consumer.interrupt();
+                return t;
+            }
+        }
+    }
+    
+    private class QueueConsumer implements Callable<Throwable> {
         
         LinkedBlockingQueue<QueueItem> queue;
         OutputStream out;
+        Thread producer;
         
-        BufferConsumer(LinkedBlockingQueue<QueueItem> queue, OutputStream out) {
+        QueueConsumer(LinkedBlockingQueue<QueueItem> queue, OutputStream out) {
             this.queue = queue;
             this.out = out;
         }
@@ -260,13 +284,16 @@ public class StorageClient {
                 }
                 out.flush();
                 return null;
+            } catch (InterruptedException e) {
+                log.debug("consumer interrupted", e);
+                return null;
             } catch (Throwable t) {
-                String message = "failed writing to output stream";
-                log.error(message, t);
+                log.error(t);
+                producer.interrupt();
                 return t;
             }
         }
-    }
+    } 
     
     private class QueueItem {
         byte[] data;
