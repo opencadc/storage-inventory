@@ -118,7 +118,7 @@ public class TestStorageAdapter implements StorageAdapter {
     }
 
     @Override
-    public void get(URI storageID, InputStreamWrapper wrapper)
+    public void get(StorageLocation storageLocation, InputStreamWrapper wrapper)
             throws ResourceNotFoundException, IOException, TransientException {
         InputStream in = null;
         if (mode.equals(Mode.ERROR_ON_GET_0)) {
@@ -134,7 +134,7 @@ public class TestStorageAdapter implements StorageAdapter {
     }
 
     @Override
-    public void get(URI storageID, InputStreamWrapper wrapper, Set<String> cutouts)
+    public void get(StorageLocation storageLocation, InputStreamWrapper wrapper, Set<String> cutouts)
             throws ResourceNotFoundException, IOException, TransientException {
         throw new UnsupportedOperationException();
     }
@@ -174,7 +174,7 @@ public class TestStorageAdapter implements StorageAdapter {
     }
 
     @Override
-    public void delete(URI storageID) throws ResourceNotFoundException, IOException, TransientException {
+    public void delete(StorageLocation storageLocation) throws ResourceNotFoundException, IOException, TransientException {
     }
 
     @Override
@@ -183,12 +183,12 @@ public class TestStorageAdapter implements StorageAdapter {
     }
 
     @Override
-    public Iterator<StorageMetadata> iterator(String bucket) throws TransientException {
+    public Iterator<StorageMetadata> iterator(String storageBucket) throws TransientException {
         return null;
     }
     
     @Override
-    public Iterator<StorageMetadata> unsortedIterator(String bucket) throws TransientException {
+    public Iterator<StorageMetadata> unsortedIterator(String storageBucket) throws TransientException {
         return null;
     }
     

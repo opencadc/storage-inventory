@@ -86,7 +86,6 @@ public class StorageMetadata {
     private final URI contentChecksum;
     private final Long contentLength;
     public URI artifactURI;
-    public String bucket;
     
     public StorageMetadata(StorageLocation storageLocation, URI contentChecksum, Long contentLength) {
         InventoryUtil.assertNotNull(StorageMetadata.class, "storageLocation", storageLocation);

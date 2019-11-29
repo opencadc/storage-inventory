@@ -79,6 +79,7 @@ import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.Test;
+import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.Artifact;
 
 /**
@@ -110,10 +111,10 @@ public class StorageClientTest {
             Assert.assertEquals("artifactURI", artifactURI, putMetadata.artifactURI);
             Assert.assertEquals("contentChecksum", TestStorageAdapter.contentChecksum, putMetadata.getContentChecksum());
             Assert.assertEquals("contentLength", TestStorageAdapter.contentLength, putMetadata.getContentLength());
-            URI storageID = putMetadata.getStorageLocation().getStorageID();
+            StorageLocation storageLocation = putMetadata.getStorageLocation();
             
             ByteArrayOutputStream out = new ByteArrayOutputStream();
-            client.get(storageID, out);
+            client.get(storageLocation, out);
             Assert.assertEquals("data", new String(TestStorageAdapter.data), new String(out.toByteArray()));
             
         } catch (Exception unexpected) {
@@ -145,7 +146,8 @@ public class StorageClientTest {
                 
                 ByteArrayOutputStream out = new ByteArrayOutputStream();
                 try {
-                    client.get(TestStorageAdapter.storageID, out);
+                    StorageLocation storageLocation = new StorageLocation(TestStorageAdapter.storageID);
+                    client.get(storageLocation, out);
                     Assert.fail("Should have received exception on get");
                 } catch (Exception e) {
                     // expected
@@ -178,7 +180,8 @@ public class StorageClientTest {
                 
                 ByteArrayOutputStream out = new ErrorOutputStream(failPoint);
                 try {
-                    client.get(TestStorageAdapter.storageID, out);
+                    StorageLocation storageLocation = new StorageLocation(TestStorageAdapter.storageID);
+                    client.get(storageLocation, out);
                     Assert.fail("Should have received exception on get");
                 } catch (Exception e) {
                     // expected
