@@ -80,6 +80,7 @@ import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.Test;
 import org.opencadc.inventory.Artifact;
+import org.opencadc.inventory.StorageLocation;
 
 /**
  * @author majorb
@@ -113,7 +114,8 @@ public class StorageClientTest {
             URI storageID = putMetadata.getStorageLocation().getStorageID();
             
             ByteArrayOutputStream out = new ByteArrayOutputStream();
-            client.get(storageID, out);
+            StorageLocation storageLocation = new StorageLocation(storageID);
+            client.get(storageLocation, out);
             Assert.assertEquals("data", new String(TestStorageAdapter.data), new String(out.toByteArray()));
             
         } catch (Exception unexpected) {
@@ -145,8 +147,9 @@ public class StorageClientTest {
                 
                 ByteArrayOutputStream out = new ByteArrayOutputStream();
                 try {
-                    client.get(TestStorageAdapter.storageID, out);
-                    Assert.fail("Should have received exception on get");
+                    StorageLocation storageLocation = new StorageLocation(TestStorageAdapter.storageID);
+                    client.get(storageLocation, out);
+                    Assert.fail("Should have received exception on get in mode: " + mode);
                 } catch (Exception e) {
                     // expected
                     Assert.assertTrue("error msg", e.getMessage().contains("failed reading from input stream"));
@@ -166,7 +169,11 @@ public class StorageClientTest {
         
         try {
             
-            int[] failPoints = new int[] {0, 1, 2};
+            int[] failPoints = new int[] {
+                0,
+                1,
+                2
+            };
             
             for (int failPoint : failPoints) {
             
@@ -178,7 +185,8 @@ public class StorageClientTest {
                 
                 ByteArrayOutputStream out = new ErrorOutputStream(failPoint);
                 try {
-                    client.get(TestStorageAdapter.storageID, out);
+                    StorageLocation storageLocation = new StorageLocation(TestStorageAdapter.storageID);
+                    client.get(storageLocation, out);
                     Assert.fail("Should have received exception on get");
                 } catch (Exception e) {
                     // expected

@@ -92,21 +92,22 @@ import org.opencadc.inventory.StorageLocation;
 public interface StorageAdapter {
 
     /**
-     * Get from storage the artifact identified by storageID.
+     * Get from storage the artifact identified by storageLocation.
      * 
-     * @param storageID The artifact location identifier.
+     * @param storageLocation The storage location containing storageID and storageBucket.
      * @param wrapper An input stream wrapper to receive the bytes.
      * 
      * @throws ResourceNotFoundException If the artifact could not be found.
      * @throws IOException If an unrecoverable error occurred.
      * @throws TransientException If an unexpected, temporary exception occurred. 
      */
-    public void get(URI storageID, InputStreamWrapper wrapper) throws ResourceNotFoundException, IOException, TransientException;
+    public void get(StorageLocation storageLocation, InputStreamWrapper wrapper)
+        throws ResourceNotFoundException, IOException, TransientException;
     
     /**
-     * Get from storage the artifact identified by storageID.
+     * Get from storage the artifact identified by storageLocation.
      * 
-     * @param storageID The artifact location identifier.
+     * @param storageLocation The storage location containing storageID and storageBucket.
      * @param wrapper An input stream wrapper to receive the bytes.
      * @param cutouts Cutouts to be applied to the artifact
      * 
@@ -114,10 +115,13 @@ public interface StorageAdapter {
      * @throws IOException If an unrecoverable error occurred.
      * @throws TransientException If an unexpected, temporary exception occurred. 
      */
-    public void get(URI storageID, InputStreamWrapper wrapper, Set<String> cutouts) throws ResourceNotFoundException, IOException, TransientException;
+    public void get(StorageLocation storageLocation, InputStreamWrapper wrapper, Set<String> cutouts)
+        throws ResourceNotFoundException, IOException, TransientException;
     
     /**
      * Write an artifact to storage.
+     * The value of storageBucket in the returned StorageMetadata and StorageLocation can be used to
+     * retrieve batches of artifacts in some of the iterator signatures defined in this interface.
      * 
      * The bucket value in the supplied artifact may be used by the storage implementation
      * to organize files.  Batches of artifacts can be listed by bucket in two of the
@@ -134,14 +138,14 @@ public interface StorageAdapter {
     public StorageMetadata put(Artifact artifact, OutputStreamWrapper wrapper) throws StreamCorruptedException, IOException, TransientException;
         
     /**
-     * Delete from storage the artifact identified by storageID.
-     * @param storageID Identifies the artifact to delete.
+     * Delete from storage the artifact identified by storageLocation.
+     * @param storageLocation Identifies the artifact to delete.
      * 
      * @throws ResourceNotFoundException If the artifact could not be found.
      * @throws IOException If an unrecoverable error occurred.
      * @throws TransientException If an unexpected, temporary exception occurred. 
      */
-    public void delete(URI storageID) throws ResourceNotFoundException, IOException, TransientException;
+    public void delete(StorageLocation storageLocation) throws ResourceNotFoundException, IOException, TransientException;
     
     /**
      * Iterator of items ordered by their storageIDs.
@@ -154,22 +158,22 @@ public interface StorageAdapter {
     
     /**
      * Iterator of items ordered by their storageIDs in the given bucket.
-     * @param bucket Only iterate over items in this bucket.
+     * @param storageBucket Only iterate over items in this bucket.
      * @return An iterator over an ordered list of items in this storage bucket.
      * 
      * @throws IOException If an unrecoverable error occurred.
      * @throws TransientException If an unexpected, temporary exception occurred. 
      */
-    public Iterator<StorageMetadata> iterator(String bucket) throws IOException, TransientException;
+    public Iterator<StorageMetadata> iterator(String storageBucket) throws IOException, TransientException;
     
     /**
      * An unordered iterator of items in the given bucket.
-     * @param bucket Only iterate over items in this bucket.
+     * @param storageBucket Only iterate over items in this bucket.
      * @return An iterator over an ordered list of items in this storage bucket.
      * 
      * @throws IOException If an unrecoverable error occurred.
      * @throws TransientException If an unexpected, temporary exception occurred. 
      */
-    public Iterator<StorageMetadata> unsortedIterator(String bucket) throws IOException, TransientException;
+    public Iterator<StorageMetadata> unsortedIterator(String storageBucket) throws IOException, TransientException;
     
 }
