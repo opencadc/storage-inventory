@@ -79,14 +79,18 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.StreamCorruptedException;
 import java.lang.reflect.Constructor;
+import java.net.URI;
 import java.util.Iterator;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.Callable;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
 import java.util.concurrent.FutureTask;
 import java.util.concurrent.LinkedBlockingQueue;
 
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
-import org.opencadc.inventory.StorageLocation;
 
 /**
  * Provides access to storage.  
@@ -98,7 +102,7 @@ public class StorageClient {
     
     private static Logger log = Logger.getLogger(StorageClient.class);
     public static String STORAGE_ADPATER_CLASS_PROPERTY = StorageAdapter.class.getName();
-    private static int DEFAULT_BUFFER_SIZE_BYTES = 2 ^ 13; // = 8192
+    private static int DEFAULT_BUFFER_SIZE_BYTES = 2^13; // = 8192
     private static int DEFAULT_MAX_QUEUE_SIZE_BUFFERS = 8; // = 65 536
     
     private StorageAdapter adapter;
@@ -115,13 +119,13 @@ public class StorageClient {
         this.maxQueueSize = maxQueueSize;
     }
     
-    public void get(StorageLocation storageLocation, OutputStream out) throws ResourceNotFoundException, IOException, TransientException {
+    public void get(URI storageID, OutputStream out) throws ResourceNotFoundException, IOException, TransientException {
         InputStreamWrapper handler = new InputStreamWrapper() {
             public void read(InputStream in) throws IOException {
                 ioLoop(out, in);
             }
         };
-        adapter.get(storageLocation, handler);
+        adapter.get(storageID, handler);
     }
 
     public StorageMetadata put(Artifact artifact, InputStream in) throws StreamCorruptedException, IOException, TransientException {
@@ -133,20 +137,20 @@ public class StorageClient {
         return adapter.put(artifact, wrapper);
     }
 
-    public void delete(StorageLocation storageLocation) throws ResourceNotFoundException, IOException, TransientException {
-        adapter.delete(storageLocation);
+    public void delete(URI storageID) throws ResourceNotFoundException, IOException, TransientException {
+        adapter.delete(storageID);
     }
 
     public Iterator<StorageMetadata> iterator() throws IOException, TransientException {
         return adapter.iterator();
     }
     
-    public Iterator<StorageMetadata> iterator(String storageBucket) throws IOException, TransientException {
-        return adapter.iterator(storageBucket);
+    public Iterator<StorageMetadata> iterator(String bucket) throws IOException, TransientException {
+        return adapter.iterator(bucket);
     }
     
-    public Iterator<StorageMetadata> unsortedIterator(String storageBucket) throws IOException, TransientException {
-        return adapter.unsortedIterator(storageBucket);
+    public Iterator<StorageMetadata> unsortedIterator(String bucket) throws IOException, TransientException {
+        return adapter.unsortedIterator(bucket);
     }
     
     /**
