@@ -72,6 +72,7 @@ package org.opencadc.inventory.storage;
 import java.net.URI;
 
 import org.opencadc.inventory.InventoryUtil;
+import org.opencadc.inventory.StorageLocation;
 
 /**
  * Class to hold artifact metadata from a storage implementation.
@@ -81,23 +82,23 @@ import org.opencadc.inventory.InventoryUtil;
  */
 public class StorageMetadata {
 
-    private final URI storageID;
+    private final StorageLocation storageLocation;
     private final URI contentChecksum;
     private final Long contentLength;
     public URI artifactURI;
     public String bucket;
     
-    public StorageMetadata(URI storageID, URI contentChecksum, Long contentLength) {
-        InventoryUtil.assertNotNull(StorageMetadata.class, "storageID", storageID);
+    public StorageMetadata(StorageLocation storageLocation, URI contentChecksum, Long contentLength) {
+        InventoryUtil.assertNotNull(StorageMetadata.class, "storageLocation", storageLocation);
         InventoryUtil.assertNotNull(StorageMetadata.class, "contentChecksum", contentChecksum);
         InventoryUtil.assertNotNull(StorageMetadata.class, "contentLength", contentLength);
-        this.storageID = storageID;
+        this.storageLocation = storageLocation;
         this.contentChecksum = contentChecksum;
         this.contentLength = contentLength;
     }
 
-    public URI getStorageID() {
-        return storageID;
+    public StorageLocation getStorageLocation() {
+        return storageLocation;
     }
 
     public URI getContentChecksum() {
