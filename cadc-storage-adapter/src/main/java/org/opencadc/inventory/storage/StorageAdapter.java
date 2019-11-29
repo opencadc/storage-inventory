@@ -119,16 +119,19 @@ public interface StorageAdapter {
     /**
      * Write an artifact to storage.
      * 
+     * The bucket value in the supplied artifact may be used by the storage implementation
+     * to organize files.  Batches of artifacts can be listed by bucket in two of the
+     * iterator signatures in this interface.
+     * 
      * @param artifact The artifact metadata.
      * @param wrapper The wrapper for data of the artifact.
-     * @param bucket An organizational code for storage
      * @return The storage metadata.
      * 
      * @throws StreamCorruptedException If the calculated checksum does not the expected checksum.
      * @throws IOException If an unrecoverable error occurred.
      * @throws TransientException If an unexpected, temporary exception occurred.
      */
-    public StorageMetadata put(Artifact artifact, OutputStreamWrapper wrapper, String bucket) throws StreamCorruptedException, IOException, TransientException;
+    public StorageMetadata put(Artifact artifact, OutputStreamWrapper wrapper) throws StreamCorruptedException, IOException, TransientException;
         
     /**
      * Delete from storage the artifact identified by storageID.
@@ -150,7 +153,7 @@ public interface StorageAdapter {
     public Iterator<StorageMetadata> iterator() throws IOException, TransientException;
     
     /**
-     * Iterator of itmes ordered by their storageIDs.
+     * Iterator of items ordered by their storageIDs in the given bucket.
      * @param bucket Only iterate over items in this bucket.
      * @return An iterator over an ordered list of items in this storage bucket.
      * 
@@ -158,5 +161,15 @@ public interface StorageAdapter {
      * @throws TransientException If an unexpected, temporary exception occurred. 
      */
     public Iterator<StorageMetadata> iterator(String bucket) throws IOException, TransientException;
+    
+    /**
+     * An unordered iterator of items in the given bucket.
+     * @param bucket Only iterate over items in this bucket.
+     * @return An iterator over an ordered list of items in this storage bucket.
+     * 
+     * @throws IOException If an unrecoverable error occurred.
+     * @throws TransientException If an unexpected, temporary exception occurred. 
+     */
+    public Iterator<StorageMetadata> unsortedIterator(String bucket) throws IOException, TransientException;
     
 }

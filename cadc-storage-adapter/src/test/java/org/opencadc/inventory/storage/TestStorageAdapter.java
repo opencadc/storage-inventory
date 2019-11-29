@@ -140,7 +140,7 @@ public class TestStorageAdapter implements StorageAdapter {
     }
 
     @Override
-    public StorageMetadata put(Artifact artifact, OutputStreamWrapper wrapper, String bucket)
+    public StorageMetadata put(Artifact artifact, OutputStreamWrapper wrapper)
             throws StreamCorruptedException, IOException, TransientException {
         
         ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -184,6 +184,11 @@ public class TestStorageAdapter implements StorageAdapter {
 
     @Override
     public Iterator<StorageMetadata> iterator(String bucket) throws TransientException {
+        return null;
+    }
+    
+    @Override
+    public Iterator<StorageMetadata> unsortedIterator(String bucket) throws TransientException {
         return null;
     }
     

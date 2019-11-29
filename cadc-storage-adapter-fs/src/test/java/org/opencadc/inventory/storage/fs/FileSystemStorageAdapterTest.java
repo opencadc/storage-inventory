@@ -145,7 +145,7 @@ public class FileSystemStorageAdapterTest {
             };
             
             FileSystemStorageAdapter fs = new FileSystemStorageAdapter(TEST_ROOT);
-            StorageMetadata storageMetadata = fs.put(artifact, outWrapper, null);
+            StorageMetadata storageMetadata = fs.put(artifact, outWrapper);
             
             TestInputWrapper inWrapper = new TestInputWrapper();
             fs.get(storageMetadata.getStorageLocation().getStorageID(), inWrapper);
@@ -208,7 +208,7 @@ public class FileSystemStorageAdapterTest {
                     }
                 };
 
-                StorageMetadata meta = fs.put(artifact, outWrapper, null);
+                StorageMetadata meta = fs.put(artifact, outWrapper);
                 storageIDs.add(meta.getStorageLocation().getStorageID());
                 log.debug("added " + meta.getStorageLocation().getStorageID());
             }

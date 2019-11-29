@@ -106,7 +106,7 @@ public class StorageClientTest {
                 TestStorageAdapter.contentChecksum, new Date(), TestStorageAdapter.contentLength);
             ByteArrayInputStream in = new ByteArrayInputStream(TestStorageAdapter.data);
             log.info("sending data: " + TestStorageAdapter.dataString);
-            StorageMetadata putMetadata = client.put(artifact, in, null);
+            StorageMetadata putMetadata = client.put(artifact, in);
             Assert.assertEquals("artifactURI", artifactURI, putMetadata.artifactURI);
             Assert.assertEquals("contentChecksum", TestStorageAdapter.contentChecksum, putMetadata.getContentChecksum());
             Assert.assertEquals("contentLength", TestStorageAdapter.contentLength, putMetadata.getContentLength());

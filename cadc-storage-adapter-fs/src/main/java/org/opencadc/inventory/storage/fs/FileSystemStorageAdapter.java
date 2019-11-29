@@ -174,7 +174,7 @@ public class FileSystemStorageAdapter implements StorageAdapter {
      * @throws IOException If an unrecoverable error occurred.
      * @throws TransientException If an unexpected, temporary exception occurred.
      */
-    public StorageMetadata put(Artifact artifact, OutputStreamWrapper wrapper, String bucket) throws StreamCorruptedException, IOException, TransientException {
+    public StorageMetadata put(Artifact artifact, OutputStreamWrapper wrapper) throws StreamCorruptedException, IOException, TransientException {
         InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "artifact", artifact);
         InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "wrapper", wrapper);
         
@@ -307,6 +307,17 @@ public class FileSystemStorageAdapter implements StorageAdapter {
      * @throws TransientException If an unexpected, temporary exception occurred. 
      */
     public Iterator<StorageMetadata> iterator(String bucket) throws TransientException {
+        throw new UnsupportedOperationException("Buckets not supported");
+    }
+    
+    /**
+     * Iterator of itmes ordered by their storageIDs.
+     * @param bucket Only iterate over items in this bucket.
+     * @return An iterator over an ordered list of items in this storage bucket.
+     * 
+     * @throws TransientException If an unexpected, temporary exception occurred. 
+     */
+    public Iterator<StorageMetadata> unsortedIterator(String bucket) throws TransientException {
         throw new UnsupportedOperationException("Buckets not supported");
     }
     

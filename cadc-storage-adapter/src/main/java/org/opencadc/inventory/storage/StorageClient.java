@@ -102,8 +102,8 @@ public class StorageClient {
     
     private static Logger log = Logger.getLogger(StorageClient.class);
     public static String STORAGE_ADPATER_CLASS_PROPERTY = StorageAdapter.class.getName();
-    private static int DEFAULT_BUFFER_SIZE_BYTES = 2^14;
-    private static int DEFAULT_MAX_QUEUE_SIZE_BUFFERS = 10;
+    private static int DEFAULT_BUFFER_SIZE_BYTES = 2^13; // = 8192
+    private static int DEFAULT_MAX_QUEUE_SIZE_BUFFERS = 8; // = 65 536
     
     private StorageAdapter adapter;
     private int bufferSize = DEFAULT_BUFFER_SIZE_BYTES;
@@ -128,13 +128,13 @@ public class StorageClient {
         adapter.get(storageID, handler);
     }
 
-    public StorageMetadata put(Artifact artifact, InputStream in, String bucket) throws StreamCorruptedException, IOException, TransientException {
+    public StorageMetadata put(Artifact artifact, InputStream in) throws StreamCorruptedException, IOException, TransientException {
         OutputStreamWrapper wrapper = new OutputStreamWrapper() {
             public void write(OutputStream out) throws IOException {
                 ioLoop(out, in);
             }
         };
-        return adapter.put(artifact, wrapper, bucket);
+        return adapter.put(artifact, wrapper);
     }
 
     public void delete(URI storageID) throws ResourceNotFoundException, IOException, TransientException {
@@ -147,6 +147,10 @@ public class StorageClient {
     
     public Iterator<StorageMetadata> iterator(String bucket) throws IOException, TransientException {
         return adapter.iterator(bucket);
+    }
+    
+    public Iterator<StorageMetadata> unsortedIterator(String bucket) throws IOException, TransientException {
+        return adapter.unsortedIterator(bucket);
     }
     
     /**
@@ -183,7 +187,7 @@ public class StorageClient {
         byte[] buffer = new byte[bufferSize];
         int bytesRead;
 
-        BufferConsumer consumer = null;
+        Thread consumerThread = null;
         QueueItem next = null;
         Throwable consumerThrowable = null;
         
@@ -192,9 +196,9 @@ public class StorageClient {
             log.debug("read " + bytesRead + " bytes: " + new String(buffer));
             if (bytesRead > 0) {
                 
-                consumer = new BufferConsumer(queue, out);
+                BufferConsumer consumer = new BufferConsumer(queue, out);
                 FutureTask<Throwable> consumerTask = new FutureTask<Throwable>(consumer);
-                Thread consumerThread = new Thread(consumerTask);
+                consumerThread = new Thread(consumerTask);
                 consumerThread.start();
                 
                 while (bytesRead > 0 && consumerThread.isAlive()) {        
@@ -220,6 +224,10 @@ public class StorageClient {
         } catch (Throwable t) {
             String message = "failed reading from input stream";
             log.error(message, t);
+            if (consumerThread != null && consumerThread.isAlive()) {
+                consumerThread.interrupt();
+                log.debug("interrupted consumer thread");
+            }
             throw new IllegalStateException(message, t);
         }
         
