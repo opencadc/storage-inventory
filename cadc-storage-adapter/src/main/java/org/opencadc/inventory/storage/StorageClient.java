@@ -79,14 +79,18 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.StreamCorruptedException;
 import java.lang.reflect.Constructor;
+import java.net.URI;
 import java.util.Iterator;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.Callable;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
 import java.util.concurrent.FutureTask;
 import java.util.concurrent.LinkedBlockingQueue;
 
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
-import org.opencadc.inventory.StorageLocation;
 
 /**
  * Provides access to storage.  
@@ -98,7 +102,7 @@ public class StorageClient {
     
     private static Logger log = Logger.getLogger(StorageClient.class);
     public static String STORAGE_ADPATER_CLASS_PROPERTY = StorageAdapter.class.getName();
-    private static int DEFAULT_BUFFER_SIZE_BYTES = 2 ^ 13; // = 8192
+    private static int DEFAULT_BUFFER_SIZE_BYTES = 2^13; // = 8192
     private static int DEFAULT_MAX_QUEUE_SIZE_BUFFERS = 8; // = 65 536
     
     private StorageAdapter adapter;
@@ -115,13 +119,13 @@ public class StorageClient {
         this.maxQueueSize = maxQueueSize;
     }
     
-    public void get(StorageLocation storageLocation, OutputStream out) throws ResourceNotFoundException, IOException, TransientException {
+    public void get(URI storageID, OutputStream out) throws ResourceNotFoundException, IOException, TransientException {
         InputStreamWrapper handler = new InputStreamWrapper() {
             public void read(InputStream in) throws IOException {
                 ioLoop(out, in);
             }
         };
-        adapter.get(storageLocation, handler);
+        adapter.get(storageID, handler);
     }
 
     public StorageMetadata put(Artifact artifact, InputStream in) throws StreamCorruptedException, IOException, TransientException {
@@ -133,20 +137,20 @@ public class StorageClient {
         return adapter.put(artifact, wrapper);
     }
 
-    public void delete(StorageLocation storageLocation) throws ResourceNotFoundException, IOException, TransientException {
-        adapter.delete(storageLocation);
+    public void delete(URI storageID) throws ResourceNotFoundException, IOException, TransientException {
+        adapter.delete(storageID);
     }
 
     public Iterator<StorageMetadata> iterator() throws IOException, TransientException {
         return adapter.iterator();
     }
     
-    public Iterator<StorageMetadata> iterator(String storageBucket) throws IOException, TransientException {
-        return adapter.iterator(storageBucket);
+    public Iterator<StorageMetadata> iterator(String bucket) throws IOException, TransientException {
+        return adapter.iterator(bucket);
     }
     
-    public Iterator<StorageMetadata> unsortedIterator(String storageBucket) throws IOException, TransientException {
-        return adapter.unsortedIterator(storageBucket);
+    public Iterator<StorageMetadata> unsortedIterator(String bucket) throws IOException, TransientException {
+        return adapter.unsortedIterator(bucket);
     }
     
     /**
@@ -178,55 +182,38 @@ public class StorageClient {
     
     private void ioLoop(OutputStream out, InputStream in) {
 
-        LinkedBlockingQueue<QueueItem> queue = new LinkedBlockingQueue<QueueItem>(maxQueueSize);
-        
-        byte[] buffer = new byte[bufferSize];
-        int bytesRead;
-
-        Thread consumerThread = null;
-        QueueItem next = null;
+        Throwable producerThrowable = null;
         Throwable consumerThrowable = null;
         
         try {
-            bytesRead = in.read(buffer);
-            log.debug("read " + bytesRead + " bytes: " + new String(buffer));
-            if (bytesRead > 0) {
+            LinkedBlockingQueue<QueueItem> queue = new LinkedBlockingQueue<QueueItem>(maxQueueSize);
                 
-                BufferConsumer consumer = new BufferConsumer(queue, out);
-                FutureTask<Throwable> consumerTask = new FutureTask<Throwable>(consumer);
-                consumerThread = new Thread(consumerTask);
-                consumerThread.start();
+            QueueProducer producer = new QueueProducer(queue, in);
+            QueueConsumer consumer = new QueueConsumer(queue, out);
+            FutureTask<Throwable> producerTask = new FutureTask<Throwable>(producer);
+            FutureTask<Throwable> consumerTask = new FutureTask<Throwable>(consumer);
+            Thread producerThread = new Thread(producerTask);
+            Thread consumerThread = new Thread(consumerTask);
+            producer.consumer = consumerThread;
+            consumer.producer = producerThread;
+            
+            consumerThread.start();
+            producerThread.start();
+            
+            producerThrowable = producerTask.get();
+            consumerThrowable = consumerTask.get();
                 
-                while (bytesRead > 0 && consumerThread.isAlive()) {        
-                    next = new QueueItem(buffer, bytesRead);
-                    queue.put(next);
-                    buffer = new byte[bufferSize];
-                    bytesRead = in.read(buffer);
-                    log.debug("read " + bytesRead + " bytes: " + new String(buffer));
-                }
-                
-                if (!consumerTask.isDone()) {
-                    log.debug("sending stop control to consumer");
-                    next = new QueueItem(null, 0);
-                    next.stop = true;
-                    queue.put(next);
-                }
-                
-                consumerThrowable = consumerTask.get();
-                
-            } else {
-                log.debug("No data");
-            }
         } catch (Throwable t) {
-            String message = "failed reading from input stream";
+            String message = "i/o loop failed";
             log.error(message, t);
-            if (consumerThread != null && consumerThread.isAlive()) {
-                consumerThread.interrupt();
-                log.debug("interrupted consumer thread");
-            }
             throw new IllegalStateException(message, t);
         }
         
+        if (producerThrowable != null) {
+            String message = "failed reading from input stream";
+            log.error(message, producerThrowable);
+            throw new IllegalStateException(message, producerThrowable);
+        }
         if (consumerThrowable != null) {
             String message = "failed writing to output stream";
             log.error(message, consumerThrowable);
@@ -235,12 +222,53 @@ public class StorageClient {
         
     }
     
-    private class BufferConsumer implements Callable<Throwable> {
+    private class QueueProducer implements Callable<Throwable> {
+        
+        LinkedBlockingQueue<QueueItem> queue;
+        InputStream in;
+        Thread consumer;
+        
+        QueueProducer(LinkedBlockingQueue<QueueItem> queue, InputStream in) {
+            this.queue = queue;
+            this.in = in;
+        }
+
+        @Override
+        public Throwable call() throws Exception {
+            try {
+                QueueItem next;
+                byte[] buffer = new byte[bufferSize];
+                int bytesRead = in.read(buffer);
+                while (bytesRead > 0) {        
+                    next = new QueueItem(buffer, bytesRead);
+                    queue.put(next);
+                    buffer = new byte[bufferSize];
+                    bytesRead = in.read(buffer);
+                    log.debug("read " + bytesRead + " bytes: " + new String(buffer));
+                }
+                log.debug("sending stop control to consumer");
+                next = new QueueItem(null, 0);
+                next.stop = true;
+                queue.put(next);
+                return null;
+            } catch (InterruptedException e) {
+                log.debug("Producer interrupted", e);
+                return null;
+            } catch (Throwable t) {
+                log.error(t);
+                consumer.interrupt();
+                return t;
+            }
+        }
+    }
+    
+    private class QueueConsumer implements Callable<Throwable> {
         
         LinkedBlockingQueue<QueueItem> queue;
         OutputStream out;
+        Thread producer;
         
-        BufferConsumer(LinkedBlockingQueue<QueueItem> queue, OutputStream out) {
+        QueueConsumer(LinkedBlockingQueue<QueueItem> queue, OutputStream out) {
             this.queue = queue;
             this.out = out;
         }
@@ -260,9 +288,12 @@ public class StorageClient {
                 }
                 out.flush();
                 return null;
+            } catch (InterruptedException e) {
+                log.debug("consumer interrupted", e);
+                return null;
             } catch (Throwable t) {
-                String message = "failed writing to output stream";
-                log.error(message, t);
+                log.error(t);
+                producer.interrupt();
                 return t;
             }
         }
