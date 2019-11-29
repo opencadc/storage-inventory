@@ -118,7 +118,6 @@ public interface StorageAdapter {
     
     /**
      * Write an artifact to storage.
-     * 
      * The bucket value in the supplied artifact may be used by the storage implementation
      * to organize files.  Batches of artifacts can be listed by bucket in two of the
      * iterator signatures in this interface.

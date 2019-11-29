@@ -102,7 +102,7 @@ public class StorageClient {
     
     private static Logger log = Logger.getLogger(StorageClient.class);
     public static String STORAGE_ADPATER_CLASS_PROPERTY = StorageAdapter.class.getName();
-    private static int DEFAULT_BUFFER_SIZE_BYTES = 2^13; // = 8192
+    private static int DEFAULT_BUFFER_SIZE_BYTES = 2 ^ 13; // = 8192
     private static int DEFAULT_MAX_QUEUE_SIZE_BUFFERS = 8; // = 65 536
     
     private StorageAdapter adapter;
