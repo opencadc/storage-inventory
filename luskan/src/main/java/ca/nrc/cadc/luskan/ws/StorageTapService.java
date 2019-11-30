@@ -71,6 +71,7 @@ import ca.nrc.cadc.auth.AuthMethod;
 import ca.nrc.cadc.auth.AuthenticationUtil;
 import ca.nrc.cadc.auth.AuthenticatorImpl;
 import ca.nrc.cadc.db.DBUtil;
+import ca.nrc.cadc.luskan.impl.InitLuskanSchemaContent;
 import ca.nrc.cadc.reg.Standards;
 import ca.nrc.cadc.reg.client.LocalAuthority;
 import ca.nrc.cadc.reg.client.RegistryClient;
@@ -140,6 +141,10 @@ public class StorageTapService implements AvailabilityPlugin {
             DataSource uws = DBUtil.findJNDIDataSource(uwsDsName);
             InitDatabaseUWS uwsi = new InitDatabaseUWS(uws, null, "uws");
             uwsi.doInit();
+
+            // create the TAP schema
+            InitLuskanSchemaContent lsc = new InitLuskanSchemaContent(tapadm, null, "tap_schema");
+            lsc.doInit();
 
             // run a couple of queries
             CheckResource cr = new CheckDataSource(tapDsName, TAP_TEST);
