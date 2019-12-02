@@ -87,8 +87,10 @@ import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.StorageLocation;
 
 /**
+ * This storage adapter implementation is fixed on a set of existing data
+ * and metadata defined in the static attributes of this class.
+ * 
  * @author majorb
- *
  */
 public class TestStorageAdapter implements StorageAdapter {
     
@@ -109,9 +111,6 @@ public class TestStorageAdapter implements StorageAdapter {
             throw new RuntimeException(e);
         }
     }
-    static Mode mode = Mode.NORMAL;
-    
-    public enum Mode { NORMAL, ERROR_ON_GET_0, ERROR_ON_GET_1, ERROR_ON_GET_2 };
     static int BUF_SIZE = 6;
     
     public TestStorageAdapter() {
@@ -120,16 +119,7 @@ public class TestStorageAdapter implements StorageAdapter {
     @Override
     public void get(StorageLocation storageLocation, InputStreamWrapper wrapper)
             throws ResourceNotFoundException, IOException, TransientException {
-        InputStream in = null;
-        if (mode.equals(Mode.ERROR_ON_GET_0)) {
-            in = new ErrorInputStream(data, 0);
-        } else if (mode.equals(Mode.ERROR_ON_GET_1)) {
-            in = new ErrorInputStream(data, 1);
-        } else if (mode.equals(Mode.ERROR_ON_GET_2)) {
-            in = new ErrorInputStream(data, 2);
-        } else {
-            in = new ByteArrayInputStream(data);
-        }
+        InputStream in = new ByteArrayInputStream(data);
         wrapper.read(in);
     }
 
@@ -175,40 +165,22 @@ public class TestStorageAdapter implements StorageAdapter {
 
     @Override
     public void delete(StorageLocation storageLocation) throws ResourceNotFoundException, IOException, TransientException {
+        throw new UnsupportedOperationException();
     }
 
     @Override
     public Iterator<StorageMetadata> iterator() throws TransientException {
-        return null;
+        throw new UnsupportedOperationException();
     }
 
     @Override
     public Iterator<StorageMetadata> iterator(String storageBucket) throws TransientException {
-        return null;
+        throw new UnsupportedOperationException();
     }
     
     @Override
     public Iterator<StorageMetadata> unsortedIterator(String storageBucket) throws TransientException {
-        return null;
-    }
-    
-    private class ErrorInputStream extends ByteArrayInputStream {
-        int failPoint;
-        int count = 0;
-        ErrorInputStream(byte[] data, int failPoint) {
-            super(data);
-            this.failPoint = failPoint;
-        }
-        
-        @Override
-        public int read(byte[] buf) throws IOException {
-            if (failPoint == count) {
-                throw new IOException("test exception");
-            }
-            count++;
-            return super.read(buf);
-        }
-        
+        throw new UnsupportedOperationException();
     }
 
 }

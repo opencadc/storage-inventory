@@ -157,6 +157,15 @@ public class EntityTest {
                 log.info("expected: " + expected);
             }
             
+            // invalid URI
+            try {
+                URI u2 = URI.create("cadc:/foo/bar"); // absolute path
+                Artifact invalid = new Artifact(u2, contentChecksum, contentLastModified, -1L);
+                Assert.fail("created: " + invalid);
+            } catch (IllegalArgumentException expected) {
+                log.info("expected: " + expected);
+            }
+            
         } catch (Exception ex) {
             log.error("unexpected exception", ex);
             Assert.fail("unexpected exception: " + ex);

@@ -83,8 +83,9 @@ import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.StorageLocation;
 
 /**
+ * Class to test the i/o functionality of the StorageClient.
+ * 
  * @author majorb
- *
  */
 public class StorageClientTest {
     
@@ -98,7 +99,6 @@ public class StorageClientTest {
     public void testPutGet() {
         try {
             System.setProperty(StorageClient.STORAGE_ADPATER_CLASS_PROPERTY, TestStorageAdapter.class.getName());
-            TestStorageAdapter.mode = TestStorageAdapter.Mode.NORMAL;
             // small buffer so iterator has a few loops
             StorageClient client = new StorageClient(TestStorageAdapter.BUF_SIZE, 3);
             
@@ -131,29 +131,31 @@ public class StorageClientTest {
         
         try {
             
-            TestStorageAdapter.Mode[] modes = new TestStorageAdapter.Mode[] {
-                TestStorageAdapter.Mode.ERROR_ON_GET_0,
-                TestStorageAdapter.Mode.ERROR_ON_GET_1,
-                TestStorageAdapter.Mode.ERROR_ON_GET_2,
+            int[] failPoints = new int[] {
+                0,
+                1,
+                2
             };
             
-            for (TestStorageAdapter.Mode mode : modes) {
-                
-                log.info("Testing input stream error mode: " + mode);
+            for (int failPoint : failPoints) {
             
+                log.info("Testing input stream error with fail on write number " + failPoint);
+                
                 System.setProperty(StorageClient.STORAGE_ADPATER_CLASS_PROPERTY, TestStorageAdapter.class.getName());
-                TestStorageAdapter.mode = mode;
                 StorageClient client = new StorageClient(TestStorageAdapter.BUF_SIZE, 3);
                 
-                ByteArrayOutputStream out = new ByteArrayOutputStream();
+                ErrorInputStream in = new ErrorInputStream(TestStorageAdapter.data, failPoint);
+                Artifact artifact = new Artifact(
+                    TestStorageAdapter.storageID, TestStorageAdapter.contentChecksum,
+                    new Date(), TestStorageAdapter.contentLength);
                 try {
-                    StorageLocation storageLocation = new StorageLocation(TestStorageAdapter.storageID);
-                    client.get(storageLocation, out);
-                    Assert.fail("Should have received exception on get in mode: " + mode);
+                    client.put(artifact, in);
+                    Assert.fail("Should have received exception on get");
                 } catch (Exception e) {
                     // expected
                     Assert.assertTrue("error msg", e.getMessage().contains("failed reading from input stream"));
                 }
+                
             }
             
         } catch (Exception unexpected) {
@@ -180,7 +182,6 @@ public class StorageClientTest {
                 log.info("Testing output stream error with fail on read number " + failPoint);
                 
                 System.setProperty(StorageClient.STORAGE_ADPATER_CLASS_PROPERTY, TestStorageAdapter.class.getName());
-                TestStorageAdapter.mode = TestStorageAdapter.Mode.NORMAL;
                 StorageClient client = new StorageClient(TestStorageAdapter.BUF_SIZE, 3);
                 
                 ByteArrayOutputStream out = new ErrorOutputStream(failPoint);
@@ -201,6 +202,25 @@ public class StorageClientTest {
         } finally {
             System.clearProperty(StorageClient.STORAGE_ADPATER_CLASS_PROPERTY);
         }
+    }
+    
+    private class ErrorInputStream extends ByteArrayInputStream {
+        int failPoint;
+        int count = 0;
+        ErrorInputStream(byte[] data, int failPoint) {
+            super(data);
+            this.failPoint = failPoint;
+        }
+        
+        @Override
+        public int read(byte[] buf) throws IOException {
+            if (failPoint == count) {
+                throw new IOException("test exception");
+            }
+            count++;
+            return super.read(buf);
+        }
+        
     }
     
     private class ErrorOutputStream extends ByteArrayOutputStream {
