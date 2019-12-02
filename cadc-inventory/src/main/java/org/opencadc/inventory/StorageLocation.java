@@ -77,6 +77,7 @@ import java.net.URI;
  */
 public class StorageLocation {
     private final URI storageID;
+    public String storageBucket;
     
     /**
      * Constructor.
@@ -100,7 +101,7 @@ public class StorageLocation {
         StringBuilder sb = new StringBuilder();
         sb.append(this.getClass().getSimpleName());
         sb.append("[");
-        sb.append(storageID);
+        sb.append(storageID).append(",").append(storageBucket);
         sb.append("]");
         return sb.toString();
     }
