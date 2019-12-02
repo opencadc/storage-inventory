@@ -137,6 +137,7 @@ public class Artifact extends Entity {
     
     private void init(URI uri, URI contentChecksum, Date contentLastModified, Long contentLength) {
         InventoryUtil.assertNotNull(Artifact.class, "uri", uri);
+        InventoryUtil.validateArtifactURI(Artifact.class, uri);
         InventoryUtil.assertNotNull(Artifact.class, "contentChecksum", contentChecksum);
         InventoryUtil.assertNotNull(Artifact.class, "contentLastModified", contentLastModified);
         InventoryUtil.assertNotNull(Artifact.class, "contentLength", contentLength);
