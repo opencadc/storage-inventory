@@ -73,6 +73,7 @@ import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.util.HexUtil;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -105,6 +106,7 @@ public class FileSystemStorageAdapter implements StorageAdapter {
     private static final Logger log = Logger.getLogger(FileSystemStorageAdapter.class);
     static final String STORAGE_URI_SCHEME = "fs";
     static final String MD5_CHECKSUM_SCHEME = "md5";
+    static final int BUCKET_LENGTH = 5;
     
     private FileSystem fs;
     private Path root;
@@ -131,26 +133,26 @@ public class FileSystemStorageAdapter implements StorageAdapter {
     }
 
     /**
-     * Get from storage the artifact identified by storageID.
+     * Get from storage the artifact identified by storageLocation.
      * 
-     * @param storageID The artifact location identifier.
+     * @param storageLocation The artifact location identifier.
      * @param wrapper An input stream wrapper to receive the bytes.
      * 
      * @throws ResourceNotFoundException If the artifact could not be found.
      * @throws IOException If an unrecoverable error occurred.
      * @throws TransientException If an unexpected, temporary exception occurred. 
      */
-    public void get(URI storageID, InputStreamWrapper wrapper) throws ResourceNotFoundException, IOException, TransientException {
-        log.debug("get storageID: " + storageID);
-        Path path = createStorageIDPath(storageID);
+    public void get(StorageLocation storageLocation, InputStreamWrapper wrapper) throws ResourceNotFoundException, IOException, TransientException {
+        log.debug("get storageID: " + storageLocation.getStorageID());
+        Path path = createStorageLocationPath(storageLocation);
         InputStream in = Files.newInputStream(path, StandardOpenOption.READ);
         wrapper.read(in);
     }
     
     /**
-     * Get from storage the artifact identified by storageID.
+     * Get from storage the artifact identified by storageLocation.
      * 
-     * @param storageID The artifact location identifier.
+     * @param storageLocation The artifact location identifier.
      * @param wrapper An input stream wrapper to receive the bytes.
      * @param cutouts Cutouts to be applied to the artifact
      * 
@@ -158,7 +160,7 @@ public class FileSystemStorageAdapter implements StorageAdapter {
      * @throws IOException If an unrecoverable error occurred.
      * @throws TransientException If an unexpected, temporary exception occurred. 
      */
-    public void get(URI storageID, InputStreamWrapper wrapper, Set<String> cutouts) throws ResourceNotFoundException, IOException, TransientException {
+    public void get(StorageLocation storageLocation, InputStreamWrapper wrapper, Set<String> cutouts) throws ResourceNotFoundException, IOException, TransientException {
         throw new UnsupportedOperationException("cutouts not supported");
     }
     
@@ -267,6 +269,8 @@ public class FileSystemStorageAdapter implements StorageAdapter {
         
         URI storageID = createStorageID(artifact);
         StorageLocation loc = new StorageLocation(storageID);
+        // TODO: uncomment when code is available
+        //loc.storageBucket = artifact.getBucket();
         StorageMetadata metadata = new StorageMetadata(loc, checksum, length);
         return metadata;
     }
@@ -279,9 +283,9 @@ public class FileSystemStorageAdapter implements StorageAdapter {
      * @throws IOException If an unrecoverable error occurred.
      * @throws TransientException If an unexpected, temporary exception occurred. 
      */
-    public void delete(URI storageID) throws ResourceNotFoundException, IOException, TransientException {
-        InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "storageID", storageID);
-        Path path = createStorageIDPath(storageID);
+    public void delete(StorageLocation storageLocation) throws ResourceNotFoundException, IOException, TransientException {
+        InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "storageLocation", storageLocation);
+        Path path = createStorageLocationPath(storageLocation);
         Files.delete(path);
     }
     
@@ -295,50 +299,79 @@ public class FileSystemStorageAdapter implements StorageAdapter {
      * @throws TransientException If an unexpected, temporary exception occurred. 
      */
     public Iterator<StorageMetadata> iterator() throws IOException, TransientException {
-        FileSystemIterator iterator = new FileSystemIterator(root);
+        throw new UnsupportedOperationException("sorted listing not supported");
+    }
+    
+    /**
+     * Iterator of itmes ordered by their storageIDs.
+     * @param bucket Only iterate over items in this bucket.
+     * @return An iterator over an ordered list of items in this storage bucket.
+     * 
+     * @throws TransientException If an unexpected, temporary exception occurred. 
+     */
+    public Iterator<StorageMetadata> iterator(String bucket) throws IOException, TransientException {
+        throw new UnsupportedOperationException("sorted listing not supported");
+    }
+    
+    /**
+     * Iterator of itmes ordered by their storageIDs.
+     * @param bucket Only iterate over items in this bucket.
+     * @return An iterator over an ordered list of items in this storage bucket.
+     * 
+     * @throws TransientException If an unexpected, temporary exception occurred. 
+     * @throws IOException 
+     */
+    public Iterator<StorageMetadata> unsortedIterator(String bucket) throws IOException, TransientException {
+        InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "bucket", bucket);
+        if (bucket.length() > BUCKET_LENGTH) {
+            throw new IllegalArgumentException("bucket must a maximum of " + BUCKET_LENGTH + " characters");
+        }
+        StringBuilder path = new StringBuilder();
+        for (char c : bucket.toCharArray()) {
+            path.append(c).append(File.separator);
+        }
+        Path bucketRoot = root.resolve(path.toString());
+        FileSystemIterator iterator = new FileSystemIterator(bucketRoot, BUCKET_LENGTH - bucket.length());
         return iterator;
     }
     
-    /**
-     * Iterator of itmes ordered by their storageIDs.
-     * @param bucket Only iterate over items in this bucket.
-     * @return An iterator over an ordered list of items in this storage bucket.
-     * 
-     * @throws TransientException If an unexpected, temporary exception occurred. 
-     */
-    public Iterator<StorageMetadata> iterator(String bucket) throws TransientException {
-        throw new UnsupportedOperationException("Buckets not supported");
-    }
-    
-    /**
-     * Iterator of itmes ordered by their storageIDs.
-     * @param bucket Only iterate over items in this bucket.
-     * @return An iterator over an ordered list of items in this storage bucket.
-     * 
-     * @throws TransientException If an unexpected, temporary exception occurred. 
-     */
-    public Iterator<StorageMetadata> unsortedIterator(String bucket) throws TransientException {
-        throw new UnsupportedOperationException("Buckets not supported");
-    }
-    
     private Path createArtifactPath(Artifact a) {
-        String pathString = a.getURI().getSchemeSpecificPart();
-        return root.resolve(pathString);
+        if (a.getBucket().length() != BUCKET_LENGTH) {
+            throw new IllegalArgumentException("bucket must be " + BUCKET_LENGTH + " characters");
+        }
+        StringBuilder path = new StringBuilder();
+        for (char c : a.getBucket().toCharArray()) {
+            path.append(c).append(File.separator);
+        }
+        path.append(a.getURI().getSchemeSpecificPart());
+        return root.resolve(path.toString());
     }
     
-    private Path createStorageIDPath(URI storageID) throws ResourceNotFoundException {
+    private Path createStorageLocationPath(StorageLocation storageLocation) throws ResourceNotFoundException {
+        URI storageID = storageLocation.getStorageID();
         if (!storageID.getScheme().equals(STORAGE_URI_SCHEME)) {
             throw new IllegalArgumentException("Unkown storage id scheme: " + storageID.getScheme());
         }
-        String pathString = storageID.getSchemeSpecificPart();
-        Path path = root.resolve(pathString);
-        if (!Files.exists(path)) {
+        // TODO: get the bucket from storageLocation when available
+        String bucket = "abcde";
+        if (bucket.length() != BUCKET_LENGTH) {
+            throw new IllegalArgumentException("bucket must be " + BUCKET_LENGTH + " characters");
+        }
+        StringBuilder path = new StringBuilder();
+        for (char c : bucket.toCharArray()) {
+            path.append(c).append(File.separator);
+        }
+        path.append(storageID.getSchemeSpecificPart());
+        
+        log.debug("Resolving path: " + path.toString());
+        Path ret = root.resolve(path.toString());
+        if (!Files.exists(ret)) {
             throw new ResourceNotFoundException("not found: " + storageID);
         }
-        if (!Files.isRegularFile(path)) {
-            throw new IllegalArgumentException("Not a file: " + storageID);
+        if (!Files.isRegularFile(ret)) {
+            throw new IllegalArgumentException("not found: " + storageID);
         }
-        return path;
+        return ret;
     }
     
     private URI createStorageID(Artifact a) {

@@ -148,16 +148,16 @@ public class FileSystemStorageAdapterTest {
             StorageMetadata storageMetadata = fs.put(artifact, outWrapper);
             
             TestInputWrapper inWrapper = new TestInputWrapper();
-            fs.get(storageMetadata.getStorageLocation().getStorageID(), inWrapper);
+            fs.get(storageMetadata.getStorageLocation(), inWrapper);
             
             String resultData = new String(inWrapper.data);
             log.info("result data: " + resultData);
             Assert.assertEquals("data", dataString, resultData);
             
-            fs.delete(storageMetadata.getStorageLocation().getStorageID());
+            fs.delete(storageMetadata.getStorageLocation());
             
             try {
-                fs.get(storageMetadata.getStorageLocation().getStorageID(), inWrapper);
+                fs.get(storageMetadata.getStorageLocation(), inWrapper);
                 Assert.fail("Should have received resource not found exception");
             } catch (ResourceNotFoundException e) {
                 // expected
@@ -170,7 +170,7 @@ public class FileSystemStorageAdapterTest {
     }
     
     @Test
-    public void testIterator() {
+    public void testUnsortedIterator() {
         try {
             
             FileSystemStorageAdapter fs = new FileSystemStorageAdapter(TEST_ROOT);
@@ -213,7 +213,7 @@ public class FileSystemStorageAdapterTest {
                 log.debug("added " + meta.getStorageLocation().getStorageID());
             }
             
-            Iterator<StorageMetadata> iterator = fs.iterator();
+            Iterator<StorageMetadata> iterator = fs.unsortedIterator("");
             StorageMetadata next = null;
             int count = 0;
             while (iterator.hasNext()) {

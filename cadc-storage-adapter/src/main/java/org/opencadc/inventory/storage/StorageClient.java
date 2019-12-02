@@ -86,6 +86,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
+import org.opencadc.inventory.StorageLocation;
 
 /**
  * Provides access to storage.  

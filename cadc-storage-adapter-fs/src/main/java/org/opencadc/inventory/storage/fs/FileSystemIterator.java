@@ -91,7 +91,7 @@ public class FileSystemIterator implements Iterator<StorageMetadata> {
     private PathItem next = null;
     Stack<StackItem> stack;
 
-    public FileSystemIterator(Path dir) throws IOException {
+    public FileSystemIterator(Path dir, int bucketDepth) throws IOException {
         InventoryUtil.assertNotNull(FileSystemIterator.class, "dir", dir);
         if (!Files.isDirectory(dir)) {
             throw new IllegalArgumentException("not a directory: " + dir);
@@ -105,7 +105,10 @@ public class FileSystemIterator implements Iterator<StorageMetadata> {
         item.stream = stream;
         item.iterator = i;
         item.parentDir = "";
-        log.debug("entering directory /");
+        item.bucketDepth = bucketDepth;
+        log.debug("bucket depth: " + item.bucketDepth);
+        log.debug("parentDir: " + item.parentDir);
+        log.debug("entering directory [physical][logical]: [" + dir + "][]");
         
         stack.push(item);
     }
@@ -120,12 +123,20 @@ public class FileSystemIterator implements Iterator<StorageMetadata> {
                 if (Files.isDirectory(nextPath)) {
                     Stream<Path> stream = Files.list(nextPath);
                     Iterator<Path> iterator = stream.iterator();
-                    String parentDir = currentStackItem.parentDir + nextPath.getFileName() + "/";
-                    log.debug("entering directory " + parentDir);
                     StackItem item = new StackItem();
+                    log.debug("bucket depth: " + currentStackItem.bucketDepth);
+                    log.debug("parentDir: " + currentStackItem.parentDir);
+                    if (currentStackItem.bucketDepth > 0) {
+                        item.bucketDepth = currentStackItem.bucketDepth - 1;
+                        item.parentDir = currentStackItem.parentDir;
+                    } else {
+                        String parentDir = currentStackItem.parentDir + nextPath.getFileName() + "/";
+                        item.parentDir = parentDir;
+                    }
+                    log.debug("entering directory [physical][logical]: [" + nextPath + "]["+ item.parentDir + "]");
                     item.stream = stream;
                     item.iterator = iterator;
-                    item.parentDir = parentDir;
+                    
                     stack.push(item);
                     return this.hasNext();
                 } else {
@@ -168,6 +179,7 @@ public class FileSystemIterator implements Iterator<StorageMetadata> {
         Stream<Path> stream;
         Iterator<Path> iterator;
         String parentDir;
+        int bucketDepth;
     }
     
     private class PathItem {
