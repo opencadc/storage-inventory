@@ -62,114 +62,125 @@
  *  <http://www.gnu.org/licenses/>.      pas le cas, consultez :
  *                                       <http://www.gnu.org/licenses/>.
  *
- *  $Revision: 4 $
- *
  ************************************************************************
  */
-
 package org.opencadc.inventory.storage;
 
 import ca.nrc.cadc.net.InputStreamWrapper;
 import ca.nrc.cadc.net.OutputStreamWrapper;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
+import ca.nrc.cadc.util.HexUtil;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.StreamCorruptedException;
 import java.net.URI;
+import java.security.MessageDigest;
 import java.util.Iterator;
 import java.util.Set;
 
+import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.StorageLocation;
 
 /**
- * The interface to storage implementations.
+ * This storage adapter implementation is fixed on a set of existing data
+ * and metadata defined in the static attributes of this class.
  * 
  * @author majorb
- *
  */
-public interface StorageAdapter {
+public class TestStorageAdapter implements StorageAdapter {
+    
+    private static final Logger log = Logger.getLogger(TestStorageAdapter.class);
+    
+    static final String dataString = "abcdefghijklmnopqrstuvwxyz";
+    static final byte[] data = dataString.getBytes();
+    static final URI storageID = URI.create("test:path/file");
+    static final Long contentLength = new Long(data.length);
+    static URI contentChecksum;
+    static {
+        try {
+            MessageDigest md = MessageDigest.getInstance("MD5");
+            byte[] md5 = md.digest(data);
+            String md5hex = HexUtil.toHex(md5);
+            contentChecksum = URI.create("md5:" + md5hex);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+    static int BUF_SIZE = 6;
+    
+    public TestStorageAdapter() {
+    }
 
-    /**
-     * Get from storage the artifact identified by storageLocation.
-     * 
-     * @param storageLocation The storage location containing storageID and storageBucket.
-     * @param wrapper An input stream wrapper to receive the bytes.
-     * 
-     * @throws ResourceNotFoundException If the artifact could not be found.
-     * @throws IOException If an unrecoverable error occurred.
-     * @throws TransientException If an unexpected, temporary exception occurred. 
-     */
+    @Override
     public void get(StorageLocation storageLocation, InputStreamWrapper wrapper)
-        throws ResourceNotFoundException, IOException, TransientException;
-    
-    /**
-     * Get from storage the artifact identified by storageLocation.
-     * 
-     * @param storageLocation The storage location containing storageID and storageBucket.
-     * @param wrapper An input stream wrapper to receive the bytes.
-     * @param cutouts Cutouts to be applied to the artifact
-     * 
-     * @throws ResourceNotFoundException If the artifact could not be found.
-     * @throws IOException If an unrecoverable error occurred.
-     * @throws TransientException If an unexpected, temporary exception occurred. 
-     */
+            throws ResourceNotFoundException, IOException, TransientException {
+        InputStream in = new ByteArrayInputStream(data);
+        wrapper.read(in);
+    }
+
+    @Override
     public void get(StorageLocation storageLocation, InputStreamWrapper wrapper, Set<String> cutouts)
-        throws ResourceNotFoundException, IOException, TransientException;
-    
-    /**
-     * Write an artifact to storage.
-     * The value of storageBucket in the returned StorageMetadata and StorageLocation can be used to
-     * retrieve batches of artifacts in some of the iterator signatures defined in this interface.
-     * 
-     * @param artifact The artifact metadata.
-     * @param wrapper The wrapper for data of the artifact.
-     * @return The storage metadata.
-     * 
-     * @throws StreamCorruptedException If the calculated checksum does not the expected checksum.
-     * @throws IOException If an unrecoverable error occurred.
-     * @throws TransientException If an unexpected, temporary exception occurred.
-     */
-    public StorageMetadata put(Artifact artifact, OutputStreamWrapper wrapper) throws StreamCorruptedException, IOException, TransientException;
+            throws ResourceNotFoundException, IOException, TransientException {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public StorageMetadata put(Artifact artifact, OutputStreamWrapper wrapper)
+            throws StreamCorruptedException, IOException, TransientException {
         
-    /**
-     * Delete from storage the artifact identified by storageLocation.
-     * @param storageLocation Identifies the artifact to delete.
-     * 
-     * @throws ResourceNotFoundException If the artifact could not be found.
-     * @throws IOException If an unrecoverable error occurred.
-     * @throws TransientException If an unexpected, temporary exception occurred. 
-     */
-    public void delete(StorageLocation storageLocation) throws ResourceNotFoundException, IOException, TransientException;
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        wrapper.write(out);
+        byte[] newData = out.toByteArray();
+        log.info("received data: " + new String(newData));
+        
+        URI newContentChecksum = null;
+        try {
+            MessageDigest md = MessageDigest.getInstance("MD5");
+            byte[] md5 = md.digest(newData);
+            String md5hex = HexUtil.toHex(md5);
+            newContentChecksum = URI.create("md5:" + md5hex);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+        long newContentLength = newData.length;
+        if (!newContentChecksum.equals(contentChecksum)) {
+            throw new StreamCorruptedException("checksum: " +
+                newContentChecksum + " does not equal " + contentChecksum);
+        }
+        if (newContentLength != contentLength) {
+            throw new StreamCorruptedException("length: " +
+                newContentLength + " does not equal " + contentLength);
+        }
+        
+        StorageLocation storageLocation = new StorageLocation(storageID);
+        StorageMetadata storageMetadata = new StorageMetadata(storageLocation, contentChecksum, contentLength);
+        storageMetadata.artifactURI = artifact.getURI();
+        return storageMetadata;
+    }
+
+    @Override
+    public void delete(StorageLocation storageLocation) throws ResourceNotFoundException, IOException, TransientException {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public Iterator<StorageMetadata> iterator() throws TransientException {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public Iterator<StorageMetadata> iterator(String storageBucket) throws TransientException {
+        throw new UnsupportedOperationException();
+    }
     
-    /**
-     * Iterator of items ordered by their storageIDs.
-     * @return An iterator over an ordered list of items in storage.
-     * 
-     * @throws IOException If an unrecoverable error occurred.
-     * @throws TransientException If an unexpected, temporary exception occurred. 
-     */
-    public Iterator<StorageMetadata> iterator() throws IOException, TransientException;
-    
-    /**
-     * Iterator of items ordered by their storageIDs in the given bucket.
-     * @param storageBucket Only iterate over items in this bucket.
-     * @return An iterator over an ordered list of items in this storage bucket.
-     * 
-     * @throws IOException If an unrecoverable error occurred.
-     * @throws TransientException If an unexpected, temporary exception occurred. 
-     */
-    public Iterator<StorageMetadata> iterator(String storageBucket) throws IOException, TransientException;
-    
-    /**
-     * An unordered iterator of items in the given bucket.
-     * @param storageBucket Only iterate over items in this bucket.
-     * @return An iterator over an ordered list of items in this storage bucket.
-     * 
-     * @throws IOException If an unrecoverable error occurred.
-     * @throws TransientException If an unexpected, temporary exception occurred. 
-     */
-    public Iterator<StorageMetadata> unsortedIterator(String storageBucket) throws IOException, TransientException;
-    
+    @Override
+    public Iterator<StorageMetadata> unsortedIterator(String storageBucket) throws TransientException {
+        throw new UnsupportedOperationException();
+    }
+
 }
