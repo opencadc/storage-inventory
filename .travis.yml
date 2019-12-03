@@ -14,4 +14,5 @@ script:
   - cd cadc-inventory-db; gradle --info build javadoc checkstyleMain install || exit -1; cd ..
   - cd cadc-storage-permissions; gradle --info build javadoc checkstyleMain install || exit -1; cd ..
   - cd cadc-storage-adapter; gradle --info build javadoc checkstyleMain install || exit -1; cd ..
+  - cd cadc-storage-adapter-fs; gradle --info build javadoc checkstyleMain install || exit -1; cd ..
 

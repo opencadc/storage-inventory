@@ -98,6 +98,7 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.storage.StorageMetadata;
+import org.opencadc.inventory.storage.fs.FileSystemStorageAdapter.BucketMode;
 
 /**
  * @author majorb
@@ -134,21 +135,21 @@ public class FileSystemStorageAdapterTest {
     }
     
     @Test
-    public void testPutGetDeleteWithArtifactBuckets() {
-        this.testPutGetDelete(true);
+    public void testPutGetDeleteURIBucketMode() {
+        this.testPutGetDelete(BucketMode.URI_BUCKET_BASED);
     }
     
     @Test
-    public void testPutGetDeleteWitoutArtifactBuckets() {
-        this.testPutGetDelete(false);
+    public void testPutGetDeleteURIMode() {
+        this.testPutGetDelete(BucketMode.URI_BASED);
     }
     
-    private void testPutGetDelete(boolean useArtifactBuckets) {
+    private void testPutGetDelete(BucketMode bucketMode) {
         try {
             
-            log.info("testPutGetDelete(" + useArtifactBuckets + ") - start");
+            log.info("testPutGetDelete(" + bucketMode + ") - start");
             
-            String testDir = TEST_ROOT + File.separator + "testPutGetDelete-" + useArtifactBuckets;
+            String testDir = TEST_ROOT + File.separator + "testPutGetDelete-" + bucketMode;
             this.createInstanceTestRoot(testDir);
             
             URI uri = URI.create("test:path/file");
@@ -167,7 +168,7 @@ public class FileSystemStorageAdapterTest {
             };
             
             FileSystemStorageAdapter fs = new FileSystemStorageAdapter(
-                testDir, useArtifactBuckets);
+                testDir, bucketMode);
             StorageMetadata storageMetadata = fs.put(artifact, outWrapper);
             
             TestInputWrapper inWrapper = new TestInputWrapper();
@@ -190,29 +191,29 @@ public class FileSystemStorageAdapterTest {
             log.error("unexpected exception", unexpected);
             Assert.fail("unexpected exception: " + unexpected);
         } finally {
-            log.info("testPutGetDelete(" + useArtifactBuckets + ") - end");
+            log.info("testPutGetDelete(" + bucketMode + ") - end");
         }
     }
     
     @Test
-    public void testUnsortedIteratorWithArtifactBuckets() {
-        this.testUnsortedIterator(true);
+    public void testUnsortedIteratorURIBucketMode() {
+        this.testUnsortedIterator(BucketMode.URI_BUCKET_BASED);
     }
     
     @Test
-    public void testUnsortedIteratorWithoutArtifactBuckets() {
-        this.testUnsortedIterator(false);
+    public void testUnsortedIteratorURIMode() {
+        this.testUnsortedIterator(BucketMode.URI_BASED);
     }
     
-    private void testUnsortedIterator(boolean useArtifactBuckets) {
+    private void testUnsortedIterator(BucketMode bucketMode) {
         try {
             
-            log.info("testUnsortedIterator(" + useArtifactBuckets + ") - start");
+            log.info("testUnsortedIterator(" + bucketMode + ") - start");
             
-            String testDir = TEST_ROOT + File.separator + "testUnsortedIterator-" + useArtifactBuckets;
+            String testDir = TEST_ROOT + File.separator + "testUnsortedIterator-" + bucketMode;
             this.createInstanceTestRoot(testDir);
             
-            FileSystemStorageAdapter fs = new FileSystemStorageAdapter(testDir, useArtifactBuckets);
+            FileSystemStorageAdapter fs = new FileSystemStorageAdapter(testDir, bucketMode);
             
             MessageDigest md = MessageDigest.getInstance("MD5");
             String md5Val = HexUtil.toHex(md.digest(data));
@@ -278,20 +279,20 @@ public class FileSystemStorageAdapterTest {
             log.error("unexpected exception", unexpected);
             Assert.fail("unexpected exception: " + unexpected);
         } finally {
-            log.info("testUnsortedIterator(" + useArtifactBuckets + ") - end");
+            log.info("testUnsortedIterator(" + bucketMode + ") - end");
         }
     }
     
     @Test
-    public void testIterateURIBuckets() {
+    public void testIterateSubsetURIMode() {
         try {
             
-            log.info("testIterateURIBuckets - start");
+            log.info("testIterateSubsetURIMode - start");
             
-            String testDir = TEST_ROOT + File.separator + "testIterateURIBuckets";
+            String testDir = TEST_ROOT + File.separator + "testIterateSubsetURIMode";
             this.createInstanceTestRoot(testDir);
             
-            FileSystemStorageAdapter fs = new FileSystemStorageAdapter(testDir, false);
+            FileSystemStorageAdapter fs = new FileSystemStorageAdapter(testDir, BucketMode.URI_BASED);
             
             MessageDigest md = MessageDigest.getInstance("MD5");
             String md5Val = HexUtil.toHex(md.digest(data));
@@ -359,7 +360,7 @@ public class FileSystemStorageAdapterTest {
             log.error("unexpected exception", unexpected);
             Assert.fail("unexpected exception: " + unexpected);
         } finally {
-            log.info("testIterateURIBuckets - end");
+            log.info("testIterateSubsetURIMode - end");
         }
     }
     
