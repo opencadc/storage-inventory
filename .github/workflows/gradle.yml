@@ -28,6 +28,9 @@ jobs:
     - name: build and test cadc-storage-adapter
       run: cd cadc-storage-adapter && gradle --info clean build javadoc checkstyleMain install
       
+    - name: build and test cadc-storage-adapter-fs
+      run: cd cadc-storage-adapter-fs && gradle --info clean build javadoc checkstyleMain install
+      
     - name: build and test cadc-storage-permissions
       run: cd cadc-storage-permissions && gradle --info clean build javadoc checkstyleMain install
 
