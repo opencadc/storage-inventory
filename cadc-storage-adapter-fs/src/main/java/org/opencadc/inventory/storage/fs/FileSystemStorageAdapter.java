@@ -113,6 +113,8 @@ import org.opencadc.inventory.storage.StorageMetadata;
  * URI (path and filename).  The file system resembles the path and file
  * hierarchy of the artifact URIs it holds.  In this mode, the storage location
  * bucket is the path of the scheme-specific-part of the artifact URI.
+ * In both modes a subset of the bucket can be used when calling unsortedIterator.
+ * For buckets based on artifact URIs, 
  * 
  * @author majorb
  *
@@ -178,7 +180,8 @@ public class FileSystemStorageAdapter implements StorageAdapter {
      * @throws IOException If an unrecoverable error occurred.
      * @throws TransientException If an unexpected, temporary exception occurred. 
      */
-    public void get(StorageLocation storageLocation, InputStreamWrapper wrapper, Set<String> cutouts) throws ResourceNotFoundException, IOException, TransientException {
+    public void get(StorageLocation storageLocation, InputStreamWrapper wrapper, Set<String> cutouts)
+        throws ResourceNotFoundException, IOException, TransientException {
         throw new UnsupportedOperationException("cutouts not supported");
     }
     
@@ -273,8 +276,8 @@ public class FileSystemStorageAdapter implements StorageAdapter {
             String actualMD5 = checksum.getSchemeSpecificPart();
             if (!expectedMD5.equals(actualMD5)) {
                 throw new StreamCorruptedException(
-                    "expected md5 checksum [" + expectedMD5 + "] " +
-                    "but calculated [" + actualMD5 + "]");
+                    "expected md5 checksum [" + expectedMD5 + "] "
+                    + "but calculated [" + actualMD5 + "]");
             }
         } else {
             if (artifact.getContentChecksum() == null) {
@@ -342,30 +345,34 @@ public class FileSystemStorageAdapter implements StorageAdapter {
     
     /**
      * Iterator of itmes ordered by their storageIDs.
-     * @param bucket Only iterate over items in this bucket.
+     * @param bucket Only iterate over items in this bucket.  A null or empty bucket means
+     *     iterator over everything.
      * @return An iterator over an ordered list of items in this storage bucket.
      * 
      * @throws TransientException If an unexpected, temporary exception occurred. 
      * @throws IOException 
      */
-    public Iterator<StorageMetadata> unsortedIterator(String bucket) throws IOException, TransientException {
-        InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "bucket", bucket);
+    public Iterator<StorageMetadata> unsortedIterator(final String bucket) throws IOException, TransientException {
+        String bucketVal = bucket;
+        if (bucketVal == null) {
+            bucketVal = "";
+        }
         StringBuilder path = new StringBuilder();
         int bucketDepth = 0;
         String fixedParentDir = null;
         if (this.useArtifactBuckets) {
-            if (bucket.length() > BUCKET_LENGTH) {
+            if (bucketVal.length() > BUCKET_LENGTH) {
                 throw new IllegalArgumentException("bucket must be a maximum of " + BUCKET_LENGTH + " characters");
             }
-            for (char c : bucket.toCharArray()) {
+            for (char c : bucketVal.toCharArray()) {
                 path.append(c).append(File.separator);
             }
-            bucketDepth = BUCKET_LENGTH - bucket.length();
+            bucketDepth = BUCKET_LENGTH - bucketVal.length();
         } else {
-            if (bucket.length() > 0) {
-                fixedParentDir = bucket;
+            if (bucketVal.length() > 0) {
+                fixedParentDir = bucketVal;
             }
-            path.append(bucket);
+            path.append(bucketVal);
         }
         try {
             Path bucketPath = root.resolve(path.toString());
@@ -440,7 +447,7 @@ public class FileSystemStorageAdapter implements StorageAdapter {
         DigestInputStream dis = new DigestInputStream(in, md);
         
         int bytesRead = dis.read();
-        byte[] buf = new byte[2^10];
+        byte[] buf = new byte[512];
         while (bytesRead > 0) {
             bytesRead = dis.read(buf);
         }

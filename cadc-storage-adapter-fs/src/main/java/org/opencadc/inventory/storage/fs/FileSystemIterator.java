@@ -64,6 +64,7 @@
  *
  ************************************************************************
  */
+
 package org.opencadc.inventory.storage.fs;
 
 import java.io.File;
@@ -99,7 +100,7 @@ public class FileSystemIterator implements Iterator<StorageMetadata> {
      * 
      * @param dir The directory to iterate
      * @param ignoreDepth The depth of directories to navigate until non-bucket
-     * directories are seen.
+     *     directories are seen.
      * @throws IOException If there is a problem with file-system interaction.
      */
     public FileSystemIterator(Path dir, int ignoreDepth, String fixedParentDir) throws IOException {
@@ -110,12 +111,9 @@ public class FileSystemIterator implements Iterator<StorageMetadata> {
         stack = new Stack<StackItem>();
         this.fixedParentDir = fixedParentDir;
         
-        Stream<Path> stream = Files.list(dir);
-        Iterator<Path> i = stream.iterator();
-        
         StackItem item = new StackItem();
-        item.stream = stream;
-        item.iterator = i;
+        item.stream = Files.list(dir);;
+        item.iterator = item.stream.iterator();
         item.parentDir = "";
         item.ignoreDepth = ignoreDepth;
         
@@ -138,8 +136,6 @@ public class FileSystemIterator implements Iterator<StorageMetadata> {
             if (currentIterator.hasNext()) {
                 Path nextPath = currentIterator.next();
                 if (Files.isDirectory(nextPath)) {
-                    Stream<Path> stream = Files.list(nextPath);
-                    Iterator<Path> iterator = stream.iterator();
                     StackItem item = new StackItem();
                     log.debug("bucket depth: " + currentStackItem.ignoreDepth);
                     log.debug("parentDir: " + currentStackItem.parentDir);
@@ -150,10 +146,9 @@ public class FileSystemIterator implements Iterator<StorageMetadata> {
                         String parentDir = currentStackItem.parentDir + nextPath.getFileName() + "/";
                         item.parentDir = parentDir;
                     }
-                    log.debug("entering directory [physical][logical]: [" + nextPath + "]["+ item.parentDir + "]");
-                    item.stream = stream;
-                    item.iterator = iterator;
-                    
+                    log.debug("entering directory [physical][logical]: [" + nextPath + "][" + item.parentDir + "]");
+                    item.stream = Files.list(nextPath);;
+                    item.iterator = item.stream.iterator();
                     stack.push(item);
                     return this.hasNext();
                 } else {
