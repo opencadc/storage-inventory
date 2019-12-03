@@ -122,9 +122,11 @@ public interface StorageAdapter {
      * Write an artifact to storage.
      * The value of storageBucket in the returned StorageMetadata and StorageLocation can be used to
      * retrieve batches of artifacts in some of the iterator signatures defined in this interface.
-     * The bucket value in the supplied artifact may be used by the storage implementation
-     * to organize files.  Batches of artifacts can be listed by bucket in two of the
-     * iterator signatures in this interface.
+     * Batches of artifacts can be listed by bucket in two of the iterator methods in this interface.
+     * If storageBucket is null then the caller will not be able perform bucket-based batch
+     * validation through the iterator methods.
+     * The value of uriBucket in the supplied artifact may be used by the storage implementation
+     * to organize files.
      * 
      * @param artifact The artifact metadata.
      * @param wrapper The wrapper for data of the artifact.

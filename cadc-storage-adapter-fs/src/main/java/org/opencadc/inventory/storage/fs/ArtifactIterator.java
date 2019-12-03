@@ -69,6 +69,7 @@ package org.opencadc.inventory.storage.fs;
 
 import java.io.IOException;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.nio.file.Path;
 
 import org.apache.log4j.Logger;
@@ -114,7 +115,11 @@ public class ArtifactIterator extends FileSystemIterator {
             StringBuilder sb = new StringBuilder();
             sb.append(ssp.substring(0, firstSlash));
             sb.append(ssp.substring(firstSlash + 1));
-            meta.artifactURI = URI.create(sb.toString());
+            try {
+                meta.artifactURI = new URI(sb.toString());
+            } catch (URISyntaxException e) {
+                throw new RuntimeException("BUG: failed to reconstruct Artifact.uri for " + meta, e);
+            }
             log.debug("set artifactURI to: " + meta.artifactURI);
         }
         return meta;
