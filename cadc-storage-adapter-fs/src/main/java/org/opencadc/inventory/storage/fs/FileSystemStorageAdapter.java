@@ -79,6 +79,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.StreamCorruptedException;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.nio.file.FileSystem;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
@@ -109,12 +110,18 @@ import org.opencadc.inventory.storage.StorageMetadata;
  * filenames and paths have no relation to the artifact URI.  The contents
  * of the file system will not be recognizable without the inventory database
  * to provide the mapping.  Subsets of the bucket can be used to change the
- * scope of the tree seen in unsortedIterator.
+ * scope of the tree seen in unsortedIterator.  The items in the iterator in
+ * this mode will not contain corresponding artifactURIs.  Artifacts are
+ * decoupled from the files in this mode so external artifact URIs may change
+ * without consequence.
  * In URI_BASED mode, files are organized by their artifact URI (path and filename).
  * The file system resembles the path and file hierarchy of the artifact URIs it holds.
  * In this mode, the storage location bucket is the path of the scheme-specific-part
  * of the artifact URI.  Subsets (that match a directory) of the storage buckets can
- * be used when calling unsortedIterator.
+ * be used when calling unsortedIterator.  The items in the iterator in
+ * this mode will contain the corresponding artifactURI.  It is not expected
+ * that external artifact URIs are changed when this adapter is used.  If they do
+ * they will become inconsistent with the items reported by this iterator.
  * In both modes, a null bucket parameter to unsortedIterator will result in the
  * iteration of all files in the file system root.
  * 
@@ -135,7 +142,7 @@ public class FileSystemStorageAdapter implements StorageAdapter {
     public static enum BucketMode {
         URI_BASED,        // use the URI of the artifact for bucketing
         URI_BUCKET_BASED  // use uriBucket of the artifact for bucketing
-    };
+    }
     
     /**
      * Construct a FileSystemStorageAdapter.
@@ -296,20 +303,28 @@ public class FileSystemStorageAdapter implements StorageAdapter {
         String storageBucket = null;
         switch (bucketMode) {
             case URI_BASED:
-                storageID = createStorageID(artifact);
+                StringBuilder storageIDString = new StringBuilder(STORAGE_URI_SCHEME);
+                storageIDString.append(":");
+                storageIDString.append(artifact.getURI().getScheme());
+                storageIDString.append(":").append(File.separator);
+                storageIDString.append(artifact.getURI().getSchemeSpecificPart());
+                storageID = URI.create(storageIDString.toString());
                 String ssp = artifact.getURI().getSchemeSpecificPart();
                 String sspPath = ssp.substring(0, ssp.lastIndexOf("/"));
-                storageBucket = sspPath;
+                storageBucket = artifact.getURI().getScheme() + ":" + sspPath;
                 break;
             case URI_BUCKET_BASED:
-                storageID = createStorageID(path.getFileName().toString());
+                storageID = URI.create(STORAGE_URI_SCHEME + ":" + path.getFileName().toString());
                 storageBucket = artifact.getBucket();
                 break;
+            default:
+                throw new IllegalStateException("unsupported bucket mode");
         }
-        
+        log.debug("new storage location " + storageID + " with bucket: " + storageBucket);
         StorageLocation loc = new StorageLocation(storageID);
         loc.storageBucket = storageBucket;
         StorageMetadata metadata = new StorageMetadata(loc, checksum, length);
+        metadata.artifactURI = artifact.getURI();
         return metadata;
     }
         
@@ -337,7 +352,7 @@ public class FileSystemStorageAdapter implements StorageAdapter {
      * @throws TransientException If an unexpected, temporary exception occurred. 
      */
     public Iterator<StorageMetadata> iterator() throws IOException, TransientException {
-        throw new UnsupportedOperationException("sorted listing not supported");
+        throw new UnsupportedOperationException("sorted iteration not supported");
     }
     
     /**
@@ -348,7 +363,7 @@ public class FileSystemStorageAdapter implements StorageAdapter {
      * @throws TransientException If an unexpected, temporary exception occurred. 
      */
     public Iterator<StorageMetadata> iterator(String bucket) throws IOException, TransientException {
-        throw new UnsupportedOperationException("sorted listing not supported");
+        throw new UnsupportedOperationException("sorted iteration not supported");
     }
     
     /**
@@ -361,36 +376,60 @@ public class FileSystemStorageAdapter implements StorageAdapter {
      * @throws IOException 
      */
     public Iterator<StorageMetadata> unsortedIterator(final String bucket) throws IOException, TransientException {
-        String bucketVal = bucket;
-        if (bucketVal == null) {
-            bucketVal = "";
-        }
         StringBuilder path = new StringBuilder();
         int bucketDepth = 0;
         String fixedParentDir = null;
         switch (bucketMode) {
             case URI_BASED:
-                if (bucketVal.length() > 0) {
-                    fixedParentDir = bucketVal;
+                if (bucket != null && bucket.length() > 0) {
+                    try {
+                        URI test = new URI(bucket + "/file");
+                        InventoryUtil.validateArtifactURI(FileSystemStorageAdapter.class, test);
+                    } catch (URISyntaxException | IllegalArgumentException e) {
+                        throw new IllegalArgumentException("bucket must be in the form 'scheme:path'");
+                    }
+                    int colonIndex = bucket.indexOf(":");
+                    path.append(bucket.substring(0, colonIndex + 1));
+                    path.append(File.separator);
+                    path.append(bucket.substring(colonIndex + 1));
                 }
-                path.append(bucketVal);
+                if (path.length() > 0) {
+                    fixedParentDir = path.toString();
+                }
                 break;
             case URI_BUCKET_BASED:
-                if (bucketVal.length() > BUCKET_LENGTH) {
-                    throw new IllegalArgumentException("bucket must be a maximum of " + BUCKET_LENGTH + " characters");
+                if (bucket != null) {
+                    if (bucket.length() > BUCKET_LENGTH) {
+                        throw new IllegalArgumentException("bucket must be a maximum of " + BUCKET_LENGTH + " characters");
+                    }
+                    for (char c : bucket.toCharArray()) {
+                        path.append(c).append(File.separator);
+                    }
+                    bucketDepth = BUCKET_LENGTH - bucket.length();
+                } else {
+                    bucketDepth = BUCKET_LENGTH;
                 }
-                for (char c : bucketVal.toCharArray()) {
-                    path.append(c).append(File.separator);
-                }
-                bucketDepth = BUCKET_LENGTH - bucketVal.length();
                 break;
+            default:
+                throw new IllegalStateException("unsupported bucket mode");
         }
         try {
+            log.debug("resolving path: " + path.toString());
             Path bucketPath = root.resolve(path.toString());
             if (!Files.exists(bucketPath) || !Files.isDirectory(bucketPath)) {
                 throw new IllegalArgumentException("Invalid bucket: " + bucket);
             }
-            FileSystemIterator iterator = new FileSystemIterator(bucketPath, bucketDepth, fixedParentDir);
+            Iterator<StorageMetadata> iterator = null;
+            switch (bucketMode) {
+                case URI_BASED:
+                    iterator = new ArtifactIterator(bucketPath, bucketDepth, fixedParentDir);
+                    break;
+                case URI_BUCKET_BASED:
+                    iterator = new FileSystemIterator(bucketPath, bucketDepth, fixedParentDir);
+                    break;
+                default:
+                    throw new IllegalStateException("unsupported bucket mode");
+            }
             return iterator;
         } catch (InvalidPathException e) {
             throw new IllegalArgumentException("Invalid bucket: " + bucket);
@@ -399,9 +438,10 @@ public class FileSystemStorageAdapter implements StorageAdapter {
     
     private Path createArtifactPath(Artifact a) {
         StringBuilder path = new StringBuilder();
-        
         switch (bucketMode) {
             case URI_BASED:
+                path.append(a.getURI().getScheme());
+                path.append(":").append(File.separator);
                 path.append(a.getURI().getSchemeSpecificPart());
                 break;
             case URI_BUCKET_BASED:
@@ -414,6 +454,8 @@ public class FileSystemStorageAdapter implements StorageAdapter {
                 UUID filename = UUID.randomUUID();
                 path.append(filename);
                 break;
+            default:
+                throw new IllegalStateException("unsupported bucket mode");
         }
         return root.resolve(path.toString());
     }
@@ -438,6 +480,8 @@ public class FileSystemStorageAdapter implements StorageAdapter {
                 }
                 path.append(storageLocation.getStorageID().getSchemeSpecificPart());
                 break;
+            default:
+                throw new IllegalStateException("unsupported bucket mode");
         }
         
         log.debug("Resolving path: " + path.toString());
@@ -449,14 +493,6 @@ public class FileSystemStorageAdapter implements StorageAdapter {
             throw new IllegalArgumentException("not found: " + storageID);
         }
         return ret;
-    }
-    
-    private URI createStorageID(Artifact a) {
-        return URI.create(STORAGE_URI_SCHEME + ":" + a.getURI().getSchemeSpecificPart());
-    }
-    
-    private URI createStorageID(String filename) {
-        return URI.create(STORAGE_URI_SCHEME + ":" + filename);
     }
     
     public static URI createMD5Checksum(Path path) throws NoSuchAlgorithmException, IOException {

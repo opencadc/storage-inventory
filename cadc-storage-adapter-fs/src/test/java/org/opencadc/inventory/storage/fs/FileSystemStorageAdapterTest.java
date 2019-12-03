@@ -135,13 +135,13 @@ public class FileSystemStorageAdapterTest {
     }
     
     @Test
-    public void testPutGetDeleteURIBucketMode() {
-        this.testPutGetDelete(BucketMode.URI_BUCKET_BASED);
+    public void testPutGetDeleteURIMode() {
+        this.testPutGetDelete(BucketMode.URI_BASED);
     }
     
     @Test
-    public void testPutGetDeleteURIMode() {
-        this.testPutGetDelete(BucketMode.URI_BASED);
+    public void testPutGetDeleteURIBucketMode() {
+        this.testPutGetDelete(BucketMode.URI_BUCKET_BASED);
     }
     
     private void testPutGetDelete(BucketMode bucketMode) {
@@ -196,13 +196,13 @@ public class FileSystemStorageAdapterTest {
     }
     
     @Test
-    public void testUnsortedIteratorURIBucketMode() {
-        this.testUnsortedIterator(BucketMode.URI_BUCKET_BASED);
+    public void testUnsortedIteratorURIMode() {
+        this.testUnsortedIterator(BucketMode.URI_BASED);
     }
     
     @Test
-    public void testUnsortedIteratorURIMode() {
-        this.testUnsortedIterator(BucketMode.URI_BASED);
+    public void testUnsortedIteratorURIBucketMode() {
+        this.testUnsortedIterator(BucketMode.URI_BUCKET_BASED);
     }
     
     private void testUnsortedIterator(BucketMode bucketMode) {
@@ -237,7 +237,7 @@ public class FileSystemStorageAdapterTest {
                 "test:dir5/dir6/dir7/dir8/file12",
             };
             
-            List<URI> storageIDs = new ArrayList<URI>();
+            List<StorageMetadata> storageMetadataList = new ArrayList<StorageMetadata>();
             
             for (String file : files) {
                 URI uri = URI.create(file);
@@ -249,7 +249,7 @@ public class FileSystemStorageAdapterTest {
                 };
 
                 StorageMetadata meta = fs.put(artifact, outWrapper);
-                storageIDs.add(meta.getStorageLocation().getStorageID());
+                storageMetadataList.add(meta);
                 log.debug("added " + meta.getStorageLocation().getStorageID());
             }
             
@@ -257,23 +257,31 @@ public class FileSystemStorageAdapterTest {
             List<URI> visitedStorageIDs = new ArrayList<URI>();
             StorageMetadata next = null;
             URI nextStorageID = null;
+            StorageMetadata orig = null;
             int count = 0;
             while (iterator.hasNext()) {
                 next = iterator.next();
                 nextStorageID = next.getStorageLocation().getStorageID();
-                if (!storageIDs.contains(nextStorageID)) {
+                int index = storageMetadataList.indexOf(next);
+                if (index < 0) {
                     Assert.fail("encounted unknown file: " + nextStorageID);
+                } else {
+                    orig = storageMetadataList.get(index);
                 }
                 if (visitedStorageIDs.contains(nextStorageID)) {
                     Assert.fail("already visited file: " + nextStorageID);
                 }
                 Assert.assertEquals("checksum", checksum, next.getContentChecksum());
                 Assert.assertEquals("length", new Long(length), next.getContentLength());
+                if (bucketMode.equals(BucketMode.URI_BASED)) {
+                    // check the artifact URI
+                    Assert.assertEquals("artifactURI", orig.artifactURI, next.artifactURI);
+                }
                 visitedStorageIDs.add(nextStorageID);
                 count++;
             }
             
-            Assert.assertEquals("file count", storageIDs.size(), count);
+            Assert.assertEquals("file count", storageMetadataList.size(), count);
 
         } catch (Exception unexpected) {
             log.error("unexpected exception", unexpected);
@@ -332,7 +340,7 @@ public class FileSystemStorageAdapterTest {
                 log.debug("added " + meta.getStorageLocation().getStorageID());
             }
             
-            Iterator<StorageMetadata> iterator = fs.unsortedIterator("dir1");
+            Iterator<StorageMetadata> iterator = fs.unsortedIterator("test:dir1");
             List<URI> visitedStorageIDs = new ArrayList<URI>();
             StorageMetadata next = null;
             URI nextStorageID = null;

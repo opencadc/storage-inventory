@@ -62,58 +62,61 @@
  *  <http://www.gnu.org/licenses/>.      pas le cas, consultez :
  *                                       <http://www.gnu.org/licenses/>.
  *
- *  $Revision: 4 $
- *
  ************************************************************************
  */
 
-package org.opencadc.inventory.storage;
+package org.opencadc.inventory.storage.fs;
 
+import java.io.IOException;
 import java.net.URI;
+import java.nio.file.Path;
 
-import org.opencadc.inventory.InventoryUtil;
-import org.opencadc.inventory.StorageLocation;
+import org.apache.log4j.Logger;
+import org.opencadc.inventory.storage.StorageMetadata;
 
 /**
- * Class to hold artifact metadata from a storage implementation.
+ * Class that will set the artifactURIs for items returned by a file
+ * system iterator.
  * 
  * @author majorb
- *
  */
-public class StorageMetadata {
-
-    private final StorageLocation storageLocation;
-    private final URI contentChecksum;
-    private final Long contentLength;
-    public URI artifactURI;
+public class ArtifactIterator extends FileSystemIterator {
     
-    public StorageMetadata(StorageLocation storageLocation, URI contentChecksum, Long contentLength) {
-        InventoryUtil.assertNotNull(StorageMetadata.class, "storageLocation", storageLocation);
-        InventoryUtil.assertNotNull(StorageMetadata.class, "contentChecksum", contentChecksum);
-        InventoryUtil.assertNotNull(StorageMetadata.class, "contentLength", contentLength);
-        this.storageLocation = storageLocation;
-        this.contentChecksum = contentChecksum;
-        this.contentLength = contentLength;
-    }
+    private static final Logger log = Logger.getLogger(ArtifactIterator.class);
 
-    public StorageLocation getStorageLocation() {
-        return storageLocation;
-    }
-
-    public URI getContentChecksum() {
-        return contentChecksum;
-    }
-
-    public Long getContentLength() {
-        return contentLength;
+    /**
+     * ArtifactIterator constructor.
+     * 
+     * @param dir The directory to iterate
+     * @param ignoreDepth The depth of directories to navigate until non-bucket
+     *     directories are seen.
+     * @throws IOException If there is a problem with file-system interaction.
+     */
+    public ArtifactIterator(Path dir, int ignoreDepth, String fixedParentDir) throws IOException {
+        super(dir, ignoreDepth, fixedParentDir);
+        // TODO Auto-generated constructor stub
     }
     
-    public boolean equals(Object o) {
-        if (o == null || !(o instanceof StorageMetadata)) {
-            return false;
+    /**
+     * Get the next file element and add the artifact URI.
+     * @return The next file in the iterator, identified by StorageMetadata.
+     */
+    @Override
+    public StorageMetadata next() {
+        StorageMetadata meta = super.next();
+        URI storageID = meta.getStorageLocation().getStorageID();
+        String ssp = storageID.getSchemeSpecificPart();
+        int firstSlash = ssp.indexOf("/");
+        if (firstSlash < 1) {
+            log.debug("unrecognized storageID format");
+        } else {
+            StringBuilder sb = new StringBuilder();
+            sb.append(ssp.substring(0, firstSlash));
+            sb.append(ssp.substring(firstSlash + 1));
+            meta.artifactURI = URI.create(sb.toString());
+            log.debug("set artifactURI to: " + meta.artifactURI);
         }
-        StorageMetadata other = (StorageMetadata) o;
-        return this.storageLocation.equals(other.storageLocation);
+        return meta;
     }
 
 }
