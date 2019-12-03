@@ -148,6 +148,7 @@ public class FileSystemStorageAdapter implements StorageAdapter {
      * Construct a FileSystemStorageAdapter.
      * 
      * @param rootDirectory The root directory of the local file system.
+     * @param bucketMode The mode in which to organize files
      */
     public FileSystemStorageAdapter(String rootDirectory, BucketMode bucketMode) {
         InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "rootDirectory", rootDirectory);
@@ -205,7 +206,6 @@ public class FileSystemStorageAdapter implements StorageAdapter {
      * 
      * @param artifact The artifact metadata.
      * @param wrapper The wrapper for data of the artifact.
-     * @param bucket An organizational code for storage
      * @return The storage metadata.
      * 
      * @throws StreamCorruptedException If the calculated checksum does not the expected checksum.
@@ -330,7 +330,7 @@ public class FileSystemStorageAdapter implements StorageAdapter {
         
     /**
      * Delete from storage the artifact identified by storageID.
-     * @param storageID Identifies the artifact to delete.
+     * @param storageLocation Identifies the artifact to delete.
      * 
      * @throws ResourceNotFoundException If the artifact could not be found.
      * @throws IOException If an unrecoverable error occurred.
@@ -372,8 +372,8 @@ public class FileSystemStorageAdapter implements StorageAdapter {
      *     iterator over everything.
      * @return An iterator over an ordered list of items in this storage bucket.
      * 
+     * @throws IOException If an unrecoverable error occurred.
      * @throws TransientException If an unexpected, temporary exception occurred. 
-     * @throws IOException 
      */
     public Iterator<StorageMetadata> unsortedIterator(final String bucket) throws IOException, TransientException {
         StringBuilder path = new StringBuilder();

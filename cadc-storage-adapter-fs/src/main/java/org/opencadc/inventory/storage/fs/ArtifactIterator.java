@@ -90,6 +90,7 @@ public class ArtifactIterator extends FileSystemIterator {
      * @param dir The directory to iterate
      * @param ignoreDepth The depth of directories to navigate until non-bucket
      *     directories are seen.
+     * @param fixedParentDir A path to add to the start of all returned files.
      * @throws IOException If there is a problem with file-system interaction.
      */
     public ArtifactIterator(Path dir, int ignoreDepth, String fixedParentDir) throws IOException {
