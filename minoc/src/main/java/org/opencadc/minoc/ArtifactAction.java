@@ -166,16 +166,16 @@ public abstract class ArtifactAction extends RestAction {
         String path = syncInput.getPath();
         log.debug("path: " + path);
         if (path == null) {
-            throw new IllegalArgumentException("Mising artifact URI");
+            throw new IllegalArgumentException("mising artifact URI");
         }
         int colonIndex = path.indexOf(":");
         int firstSlashIndex = path.indexOf("/");
         
         if (colonIndex < 0) {
             if (firstSlashIndex > 0 && path.length() > firstSlashIndex + 1) {
-                throw new IllegalArgumentException("Missing scheme in artifact URI: " + path.substring(firstSlashIndex + 1));
+                throw new IllegalArgumentException("missing scheme in artifact URI: " + path.substring(firstSlashIndex + 1));
             } else {
-                throw new IllegalArgumentException("Missing artifact URI in path: " + path);
+                throw new IllegalArgumentException("missing artifact URI in path: " + path);
             }
         }
         
@@ -202,7 +202,7 @@ public abstract class ArtifactAction extends RestAction {
             InventoryUtil.validateArtifactURI(ArtifactAction.class, artifactURI);
             return artifactURI;
         } catch (URISyntaxException e) {
-            String message = "Illegal artifact URI: " + uri;
+            String message = "illegal artifact URI: " + uri;
             log.debug(message, e);
             throw new IllegalArgumentException(message);
         }
