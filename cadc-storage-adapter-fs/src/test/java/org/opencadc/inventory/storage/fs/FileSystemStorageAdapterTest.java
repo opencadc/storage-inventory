@@ -73,6 +73,7 @@ import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.util.HexUtil;
 import ca.nrc.cadc.util.Log4jInit;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -92,6 +93,7 @@ import java.util.Set;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
+import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import org.opencadc.inventory.Artifact;
@@ -125,9 +127,29 @@ public class FileSystemStorageAdapterTest {
         }
     }
     
+    private void createInstanceTestRoot(String path) throws IOException {
+        Set<PosixFilePermission> perms = PosixFilePermissions.fromString("rwxrwxrw-");
+        FileAttribute<Set<PosixFilePermission>> attr = PosixFilePermissions.asFileAttribute(perms);
+        Files.createDirectories(Paths.get(path), attr);
+    }
+    
     @Test
-    public void testPutGetDelete() {
+    public void testPutGetDeleteWithArtifactBuckets() {
+        this.testPutGetDelete(true);
+    }
+    
+    @Test
+    public void testPutGetDeleteWitoutArtifactBuckets() {
+        this.testPutGetDelete(false);
+    }
+    
+    private void testPutGetDelete(boolean useArtifactBuckets) {
         try {
+            
+            log.info("testPutGetDelete(" + useArtifactBuckets + ") - start");
+            
+            String testDir = TEST_ROOT + File.separator + "testPutGetDelete-" + useArtifactBuckets;
+            this.createInstanceTestRoot(testDir);
             
             URI uri = URI.create("test:path/file");
             MessageDigest md = MessageDigest.getInstance("MD5");
@@ -144,7 +166,8 @@ public class FileSystemStorageAdapterTest {
                 }
             };
             
-            FileSystemStorageAdapter fs = new FileSystemStorageAdapter(TEST_ROOT);
+            FileSystemStorageAdapter fs = new FileSystemStorageAdapter(
+                testDir, useArtifactBuckets);
             StorageMetadata storageMetadata = fs.put(artifact, outWrapper);
             
             TestInputWrapper inWrapper = new TestInputWrapper();
@@ -166,14 +189,30 @@ public class FileSystemStorageAdapterTest {
         } catch (Exception unexpected) {
             log.error("unexpected exception", unexpected);
             Assert.fail("unexpected exception: " + unexpected);
+        } finally {
+            log.info("testPutGetDelete(" + useArtifactBuckets + ") - end");
         }
     }
     
     @Test
-    public void testUnsortedIterator() {
+    public void testUnsortedIteratorWithArtifactBuckets() {
+        this.testUnsortedIterator(true);
+    }
+    
+    @Test
+    public void testUnsortedIteratorWithoutArtifactBuckets() {
+        this.testUnsortedIterator(false);
+    }
+    
+    private void testUnsortedIterator(boolean useArtifactBuckets) {
         try {
             
-            FileSystemStorageAdapter fs = new FileSystemStorageAdapter(TEST_ROOT);
+            log.info("testUnsortedIterator(" + useArtifactBuckets + ") - start");
+            
+            String testDir = TEST_ROOT + File.separator + "testUnsortedIterator-" + useArtifactBuckets;
+            this.createInstanceTestRoot(testDir);
+            
+            FileSystemStorageAdapter fs = new FileSystemStorageAdapter(testDir, useArtifactBuckets);
             
             MessageDigest md = MessageDigest.getInstance("MD5");
             String md5Val = HexUtil.toHex(md.digest(data));
@@ -214,15 +253,22 @@ public class FileSystemStorageAdapterTest {
             }
             
             Iterator<StorageMetadata> iterator = fs.unsortedIterator("");
+            List<URI> visitedStorageIDs = new ArrayList<URI>();
             StorageMetadata next = null;
+            URI nextStorageID = null;
             int count = 0;
             while (iterator.hasNext()) {
                 next = iterator.next();
-                if (!storageIDs.contains(next.getStorageLocation().getStorageID())) {
-                    Assert.fail("encounted unknown file: " + next.getStorageLocation().getStorageID());
+                nextStorageID = next.getStorageLocation().getStorageID();
+                if (!storageIDs.contains(nextStorageID)) {
+                    Assert.fail("encounted unknown file: " + nextStorageID);
+                }
+                if (visitedStorageIDs.contains(nextStorageID)) {
+                    Assert.fail("already visited file: " + nextStorageID);
                 }
                 Assert.assertEquals("checksum", checksum, next.getContentChecksum());
                 Assert.assertEquals("length", new Long(length), next.getContentLength());
+                visitedStorageIDs.add(nextStorageID);
                 count++;
             }
             
@@ -231,6 +277,89 @@ public class FileSystemStorageAdapterTest {
         } catch (Exception unexpected) {
             log.error("unexpected exception", unexpected);
             Assert.fail("unexpected exception: " + unexpected);
+        } finally {
+            log.info("testUnsortedIterator(" + useArtifactBuckets + ") - end");
+        }
+    }
+    
+    @Test
+    public void testIterateURIBuckets() {
+        try {
+            
+            log.info("testIterateURIBuckets - start");
+            
+            String testDir = TEST_ROOT + File.separator + "testIterateURIBuckets";
+            this.createInstanceTestRoot(testDir);
+            
+            FileSystemStorageAdapter fs = new FileSystemStorageAdapter(testDir, false);
+            
+            MessageDigest md = MessageDigest.getInstance("MD5");
+            String md5Val = HexUtil.toHex(md.digest(data));
+            URI checksum = URI.create("md5:" + md5Val);
+            log.info("expected md5sum: " + checksum);
+            Date lastModified = new Date();
+            long length = data.length;
+            
+            String[] files = new String[] {
+                "test:dir1/file1",
+                "test:dir1/file2",
+                "test:dir1/dir2/file3",
+                "test:dir1/dir2/file4",
+                "test:dir1/file5",
+                "test:dir1/dir3/dir4/file6",
+                "test:dir1/dir3/dir4/file7",
+                "test:dir1/dir3/file8",
+                "test:dir1/file9",
+                "test:dir1/dir4/file10",
+                "test:dir5/file11",
+                "test:dir5/dir6/dir7/dir8/file12",
+            };
+            
+            List<URI> storageIDs = new ArrayList<URI>();
+            
+            for (String file : files) {
+                URI uri = URI.create(file);
+                Artifact artifact = new Artifact(uri, checksum, lastModified, length);
+                OutputStreamWrapper outWrapper = new OutputStreamWrapper() {
+                    public void write(OutputStream out) throws IOException {
+                        out.write(data);
+                    }
+                };
+
+                StorageMetadata meta = fs.put(artifact, outWrapper);
+                storageIDs.add(meta.getStorageLocation().getStorageID());
+                log.debug("added " + meta.getStorageLocation().getStorageID());
+            }
+            
+            Iterator<StorageMetadata> iterator = fs.unsortedIterator("dir1");
+            List<URI> visitedStorageIDs = new ArrayList<URI>();
+            StorageMetadata next = null;
+            URI nextStorageID = null;
+            int count = 0;
+            while (iterator.hasNext()) {
+                next = iterator.next();
+                nextStorageID = next.getStorageLocation().getStorageID();
+                log.debug("Next in iterator: " + nextStorageID);
+                if (!storageIDs.contains(nextStorageID)) {
+                    Assert.fail("encounted unknown file: " + nextStorageID);
+                }
+                if (visitedStorageIDs.contains(nextStorageID)) {
+                    Assert.fail("already visited file: " + nextStorageID);
+                }
+                Assert.assertEquals("checksum", checksum, next.getContentChecksum());
+                Assert.assertEquals("length", new Long(length), next.getContentLength());
+                visitedStorageIDs.add(nextStorageID);
+                count++;
+            }
+            
+            // take the two non 'dir1' buckets out of the expected list
+            Assert.assertEquals("file count", storageIDs.size() - 2, count);
+
+        } catch (Exception unexpected) {
+            log.error("unexpected exception", unexpected);
+            Assert.fail("unexpected exception: " + unexpected);
+        } finally {
+            log.info("testIterateURIBuckets - end");
         }
     }
     

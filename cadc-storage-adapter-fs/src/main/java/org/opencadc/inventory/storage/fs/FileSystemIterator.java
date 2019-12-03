@@ -66,6 +66,7 @@
  */
 package org.opencadc.inventory.storage.fs;
 
+import java.io.File;
 import java.io.IOException;
 import java.net.URI;
 import java.nio.file.Files;
@@ -81,8 +82,9 @@ import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.storage.StorageMetadata;
 
 /**
+ * An iterator of files within a file system.
+ * 
  * @author majorb
- *
  */
 public class FileSystemIterator implements Iterator<StorageMetadata> {
     
@@ -90,13 +92,23 @@ public class FileSystemIterator implements Iterator<StorageMetadata> {
     
     private PathItem next = null;
     Stack<StackItem> stack;
+    private String fixedParentDir;
 
-    public FileSystemIterator(Path dir, int bucketDepth) throws IOException {
+    /**
+     * FileSystemIterator constructor.
+     * 
+     * @param dir The directory to iterate
+     * @param ignoreDepth The depth of directories to navigate until non-bucket
+     * directories are seen.
+     * @throws IOException If there is a problem with file-system interaction.
+     */
+    public FileSystemIterator(Path dir, int ignoreDepth, String fixedParentDir) throws IOException {
         InventoryUtil.assertNotNull(FileSystemIterator.class, "dir", dir);
         if (!Files.isDirectory(dir)) {
             throw new IllegalArgumentException("not a directory: " + dir);
         }
         stack = new Stack<StackItem>();
+        this.fixedParentDir = fixedParentDir;
         
         Stream<Path> stream = Files.list(dir);
         Iterator<Path> i = stream.iterator();
@@ -105,14 +117,19 @@ public class FileSystemIterator implements Iterator<StorageMetadata> {
         item.stream = stream;
         item.iterator = i;
         item.parentDir = "";
-        item.bucketDepth = bucketDepth;
-        log.debug("bucket depth: " + item.bucketDepth);
+        item.ignoreDepth = ignoreDepth;
+        
+        log.debug("bucket depth: " + item.ignoreDepth);
         log.debug("parentDir: " + item.parentDir);
         log.debug("entering directory [physical][logical]: [" + dir + "][]");
         
         stack.push(item);
     }
     
+    /**
+     * Used to see if there are more elements in the iterator.
+     * @return true if there are more files over which to iterate.
+     */
     @Override
     public boolean hasNext() {
         try {
@@ -124,10 +141,10 @@ public class FileSystemIterator implements Iterator<StorageMetadata> {
                     Stream<Path> stream = Files.list(nextPath);
                     Iterator<Path> iterator = stream.iterator();
                     StackItem item = new StackItem();
-                    log.debug("bucket depth: " + currentStackItem.bucketDepth);
+                    log.debug("bucket depth: " + currentStackItem.ignoreDepth);
                     log.debug("parentDir: " + currentStackItem.parentDir);
-                    if (currentStackItem.bucketDepth > 0) {
-                        item.bucketDepth = currentStackItem.bucketDepth - 1;
+                    if (currentStackItem.ignoreDepth > 0) {
+                        item.ignoreDepth = currentStackItem.ignoreDepth - 1;
                         item.parentDir = currentStackItem.parentDir;
                     } else {
                         String parentDir = currentStackItem.parentDir + nextPath.getFileName() + "/";
@@ -142,6 +159,9 @@ public class FileSystemIterator implements Iterator<StorageMetadata> {
                 } else {
                     next = new PathItem();
                     next.pathAndFileName = currentStackItem.parentDir + nextPath.getFileName();
+                    if (fixedParentDir != null) {
+                        next.pathAndFileName = fixedParentDir + File.separator + next.pathAndFileName;
+                    }
                     next.path = nextPath;
                     return true;
                 }
@@ -159,6 +179,10 @@ public class FileSystemIterator implements Iterator<StorageMetadata> {
         }
     }
 
+    /**
+     * Get the next file element.
+     * @return The next file in the iterator, identified by StorageMetadata.
+     */
     @Override
     public StorageMetadata next() {
         if (next == null) {
@@ -179,7 +203,7 @@ public class FileSystemIterator implements Iterator<StorageMetadata> {
         Stream<Path> stream;
         Iterator<Path> iterator;
         String parentDir;
-        int bucketDepth;
+        int ignoreDepth;
     }
     
     private class PathItem {
