@@ -97,6 +97,7 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import org.opencadc.inventory.Artifact;
+import org.opencadc.inventory.storage.NewArtifact;
 import org.opencadc.inventory.storage.StorageMetadata;
 import org.opencadc.inventory.storage.fs.FileSystemStorageAdapter.BucketMode;
 
@@ -159,7 +160,9 @@ public class FileSystemStorageAdapterTest {
             log.info("expected md5sum: " + checksum);
             Date lastModified = new Date();
             long length = data.length;
-            Artifact artifact = new Artifact(uri, checksum, lastModified, length);
+            NewArtifact newArtifact = new NewArtifact(uri);
+            newArtifact.contentChecksum = checksum;
+            newArtifact.contentLength = length;
             
             OutputStreamWrapper outWrapper = new OutputStreamWrapper() {
                 public void write(OutputStream out) throws IOException {
@@ -169,7 +172,7 @@ public class FileSystemStorageAdapterTest {
             
             FileSystemStorageAdapter fs = new FileSystemStorageAdapter(
                 testDir, bucketMode);
-            StorageMetadata storageMetadata = fs.put(artifact, outWrapper);
+            StorageMetadata storageMetadata = fs.put(newArtifact, outWrapper);
             
             TestInputWrapper inWrapper = new TestInputWrapper();
             fs.get(storageMetadata.getStorageLocation(), inWrapper);
@@ -241,14 +244,16 @@ public class FileSystemStorageAdapterTest {
             
             for (String file : files) {
                 URI uri = URI.create(file);
-                Artifact artifact = new Artifact(uri, checksum, lastModified, length);
+                NewArtifact newArtifact = new NewArtifact(uri);
+                newArtifact.contentChecksum = checksum;
+                newArtifact.contentLength = length;
                 OutputStreamWrapper outWrapper = new OutputStreamWrapper() {
                     public void write(OutputStream out) throws IOException {
                         out.write(data);
                     }
                 };
 
-                StorageMetadata meta = fs.put(artifact, outWrapper);
+                StorageMetadata meta = fs.put(newArtifact, outWrapper);
                 storageMetadataList.add(meta);
                 log.debug("added " + meta.getStorageLocation().getStorageID());
             }
@@ -328,14 +333,16 @@ public class FileSystemStorageAdapterTest {
             
             for (String file : files) {
                 URI uri = URI.create(file);
-                Artifact artifact = new Artifact(uri, checksum, lastModified, length);
+                NewArtifact newArtifact = new NewArtifact(uri);
+                newArtifact.contentChecksum = checksum;
+                newArtifact.contentLength = length;
                 OutputStreamWrapper outWrapper = new OutputStreamWrapper() {
                     public void write(OutputStream out) throws IOException {
                         out.write(data);
                     }
                 };
 
-                StorageMetadata meta = fs.put(artifact, outWrapper);
+                StorageMetadata meta = fs.put(newArtifact, outWrapper);
                 storageIDs.add(meta.getStorageLocation().getStorageID());
                 log.debug("added " + meta.getStorageLocation().getStorageID());
             }
