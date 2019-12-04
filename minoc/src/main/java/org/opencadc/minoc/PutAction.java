@@ -67,24 +67,56 @@
 
 package org.opencadc.minoc;
 
-import java.net.URI;
+import ca.nrc.cadc.net.ResourceNotFoundException;
+import ca.nrc.cadc.rest.InlineContentException;
+import ca.nrc.cadc.rest.InlineContentHandler;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.util.Date;
+
+import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.db.ArtifactDAO;
+import org.opencadc.inventory.storage.NewArtifact;
+import org.opencadc.inventory.storage.StorageClient;
+import org.opencadc.inventory.storage.StorageMetadata;
 import org.opencadc.minoc.ArtifactUtil.HttpMethod;
 
 /**
- * Interface with storage to PUT an artifact.
+ * Interface with storage and inventory to PUT an artifact.
  * 
  * @author majorb
  */
 public class PutAction extends ArtifactAction {
+    private static final Logger log = Logger.getLogger(PutAction.class);
+    
+    private static final String INLINE_CONTENT_TAG = "inputstream";
 
     /**
      * Default, no-arg constructor.
      */
     protected PutAction() {
         super(HttpMethod.PUT);
+    }
+    
+    /**
+     * Return the input stream.
+     * @return The Object representing the input stream.
+     */
+    @Override
+    protected InlineContentHandler getInlineContentHandler() {
+        return new InlineContentHandler() {
+            public Content accept(String name, String contentType, InputStream inputStream)
+                    throws InlineContentException, IOException, ResourceNotFoundException {
+                Content content = new Content();
+                content.name = INLINE_CONTENT_TAG;
+                content.value = inputStream;
+                return content;
+            }
+        };
     }
 
     /**
@@ -93,10 +125,76 @@ public class PutAction extends ArtifactAction {
      * @param The URI of the artifact.
      */
     @Override
-    public void execute(URI artifactURI) throws Exception {
+    public Artifact execute(URI artifactURI) throws Exception {
+                
+        StorageClient storage = new StorageClient();
+        
+        String md5Header = syncInput.getHeader("Content-MD5");
+        String lengthHeader = syncInput.getHeader("Content-Length");
+        String encodingHeader = syncInput.getHeader("Content-Encoding");
+        log.debug("Content-MD5: " + md5Header);
+        log.debug("Content-Length: " + lengthHeader);
+        log.debug("Content-Encoding: " + encodingHeader);
+        
+        URI contentMD5 = null;
+        Long contentLength = null;
+        if (md5Header != null) {
+            try {
+                contentMD5 = new URI("md5:" + md5Header);
+            } catch (URISyntaxException e) {
+                throw new IllegalArgumentException("Illegal Content-MD5 header: " + md5Header);
+            }
+        }
+        if (lengthHeader != null) {
+            try {
+                contentLength = new Long(lengthHeader);
+            } catch (NumberFormatException e) {
+                throw new IllegalArgumentException("Illegal Content-Length header: " + lengthHeader);
+            }
+        }
+        log.debug("Content-MD5: " + contentMD5);
+        log.debug("Content-Length: " + contentLength);
+                
+        NewArtifact newArtifact = new NewArtifact(artifactURI);
+        newArtifact.contentChecksum = contentMD5;
+        newArtifact.contentLength = contentLength;
+        
+        InputStream in = (InputStream) syncInput.getContent(INLINE_CONTENT_TAG);
+        
+        log.debug("writing new artifact to storage...");
+        StorageMetadata artifactMetadata = storage.put(newArtifact, in);
+        log.debug("wrote new artifact to storage");
+        Artifact artifact = new Artifact(
+            artifactURI, artifactMetadata.getContentChecksum(),
+            new Date(), artifactMetadata.getContentLength());
+        artifact.contentEncoding = encodingHeader;
+        artifact.storageLocation = artifactMetadata.getStorageLocation();
         
         ArtifactDAO dao = new ArtifactDAO();
         Artifact existing = dao.get(artifactURI);
+        if (existing == null) {
+            dao.put(artifact);
+            log.debug("put artifact in database: " + artifactURI);
+        } else {
+            try {
+                dao.getTransactionManager().startTransaction();
+                dao.delete(existing.getID());
+                dao.put(artifact);
+                dao.getTransactionManager().commitTransaction();
+                log.debug("replaced artifact in database: " + artifactURI);
+            } catch (Throwable t) {
+                log.error("failure replacing artifact, attempting rollback");
+                try {
+                    dao.getTransactionManager().rollbackTransaction();
+                    log.error("rollback successful");
+                } catch (Exception e) {
+                    log.error("failed to rollback transaction", e);
+                }
+                throw t;
+            }   
+        }
+        
+        return artifact;
         
     }
 

@@ -73,6 +73,7 @@ import ca.nrc.cadc.rest.InlineContentHandler;
 import ca.nrc.cadc.rest.RestAction;
 import ca.nrc.cadc.util.PropertiesReader;
 
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -88,7 +89,9 @@ import javax.security.auth.Subject;
 import javax.security.auth.x500.X500Principal;
 
 import org.apache.log4j.Logger;
+import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.InventoryUtil;
+import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.minoc.ArtifactUtil.HttpMethod;
 
 /**
@@ -131,7 +134,7 @@ public abstract class ArtifactAction extends RestAction {
      * @param artifactURI The target artifact
      * @throws Exception If an something goes wrong.
      */
-    public abstract void execute(URI artifactURI) throws Exception;
+    public abstract Artifact execute(URI artifactURI) throws Exception;
     
     /**
      * Do authorization and perform the action.
@@ -191,6 +194,17 @@ public abstract class ArtifactAction extends RestAction {
         log.debug("authToken: " + authToken);
     }
     
+    Artifact getArtifact(URI artifactURI, ArtifactDAO dao) throws FileNotFoundException {
+        Artifact artifact = dao.get(artifactURI);
+        if (artifact == null) {
+            throw new FileNotFoundException("not found: " + artifactURI);
+        }
+        if (artifact.storageLocation == null) {
+            throw new FileNotFoundException("not available: " + artifactURI);
+        }
+        return artifact;
+    }
+    
     /**
      * Create a valid artifact uri.
      * @param uri The input string.
@@ -198,6 +212,7 @@ public abstract class ArtifactAction extends RestAction {
      */
     private URI createArtifactURI(String uri) {
         try {
+            log.debug("artifactURI: " + uri);
             artifactURI = new URI(uri);
             InventoryUtil.validateArtifactURI(ArtifactAction.class, artifactURI);
             return artifactURI;

@@ -79,19 +79,27 @@ import org.opencadc.inventory.storage.StorageClient;
 import org.opencadc.minoc.ArtifactUtil.HttpMethod;
 
 /**
- * Interface with storage and inventory to get an artifact.
+ * Interface with storage and inventory to delete an artifact.
  *
  * @author majorb
  */
-public class GetAction extends HeadAction {
+public class DeleteAction extends ArtifactAction {
     
-    private static final Logger log = Logger.getLogger(GetAction.class);
+    private static final Logger log = Logger.getLogger(DeleteAction.class);
 
     /**
      * Default, no-arg constructor.
      */
-    public GetAction() {
-        super(HttpMethod.GET);
+    public DeleteAction() {
+        super(HttpMethod.DELETE);
+    }
+    
+    /**
+     * Constructor for subclass, GetAction
+     * @param method
+     */
+    public DeleteAction(HttpMethod method) {
+        super(method);
     }
 
     /**
@@ -100,13 +108,25 @@ public class GetAction extends HeadAction {
      */
     @Override
     public Artifact execute(URI artifactURI) throws Exception {
-        Artifact artifact = super.execute(artifactURI);
-        StorageClient storage = new StorageClient();
-        StorageLocation storageLocation = new StorageLocation(artifact.storageLocation.getStorageID());
-        log.debug("retrieving artifact from storage...");
-        storage.get(storageLocation, syncOutput.getOutputStream());
-        log.debug("retrieved artifact from storage");
-        return artifact;
+        ArtifactDAO dao = new ArtifactDAO();
+        Artifact artifact = getArtifact(artifactURI, dao);
+
+        String filename = InventoryUtil.computeArtifactFilename(artifactURI);
+        URI contentChecksum = artifact.getContentChecksum();
+        Long contentLength = artifact.getContentLength();
+        String contentEncoding = artifact.contentEncoding;
+        String contentType = artifact.contentType;
+        log.debug("Content-MD5: " + contentChecksum.getSchemeSpecificPart());
+        log.debug("Content-Length: " + contentLength);
+        log.debug("Content-Encoding: " + contentEncoding);
+        log.debug("Content-Type: " + contentType);
+
+        syncOutput.setHeader("Content-Disposition", "attachment; filename=" + filename);
+        syncOutput.setHeader("Content-MD5", contentChecksum.getSchemeSpecificPart());
+        syncOutput.setHeader("Content-Length", contentLength);
+        syncOutput.setHeader("Content-Encoding", contentEncoding);
+        syncOutput.setHeader("Content-Type", contentType);
+        return artifact;    
     }
 
 }

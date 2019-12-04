@@ -72,26 +72,32 @@ import java.net.URI;
 
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
-import org.opencadc.inventory.InventoryUtil;
-import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.storage.StorageClient;
 import org.opencadc.minoc.ArtifactUtil.HttpMethod;
 
 /**
- * Interface with storage and inventory to get an artifact.
+ * Interface with storage and inventory to update the metadata of an artifact.
  *
  * @author majorb
  */
-public class GetAction extends HeadAction {
+public class PostAction extends ArtifactAction {
     
-    private static final Logger log = Logger.getLogger(GetAction.class);
+    private static final Logger log = Logger.getLogger(PostAction.class);
 
     /**
      * Default, no-arg constructor.
      */
-    public GetAction() {
-        super(HttpMethod.GET);
+    public PostAction() {
+        super(HttpMethod.POST);
+    }
+    
+    /**
+     * Constructor for subclass, GetAction
+     * @param method
+     */
+    public PostAction(HttpMethod method) {
+        super(method);
     }
 
     /**
@@ -100,13 +106,16 @@ public class GetAction extends HeadAction {
      */
     @Override
     public Artifact execute(URI artifactURI) throws Exception {
-        Artifact artifact = super.execute(artifactURI);
+        ArtifactDAO dao = new ArtifactDAO();
+        Artifact artifact = getArtifact(artifactURI, dao);
+        
+        dao.delete(artifact.getID());
         StorageClient storage = new StorageClient();
-        StorageLocation storageLocation = new StorageLocation(artifact.storageLocation.getStorageID());
-        log.debug("retrieving artifact from storage...");
-        storage.get(storageLocation, syncOutput.getOutputStream());
-        log.debug("retrieved artifact from storage");
-        return artifact;
+        log.debug("deleting from storage...");
+        storage.delete(artifact.storageLocation);
+        log.debug("deletedfrom storage");
+        
+        return null;    
     }
 
 }

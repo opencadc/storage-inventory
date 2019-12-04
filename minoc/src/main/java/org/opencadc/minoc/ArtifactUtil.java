@@ -102,7 +102,7 @@ public class ArtifactUtil {
      * Valid methods that apply to authorization.
      */
     public static enum HttpMethod {
-        GET, PUT, POST, DELETE
+        GET, PUT, POST, DELETE, HEAD
     }
 
     /**
