@@ -221,8 +221,7 @@ public abstract class Entity {
         return ret;
     }
 
-    // used by File
-    protected byte[] primitiveValueToBytes(Object o, String name, String digestAlg) {
+    public static byte[] primitiveValueToBytes(Object o, String name, String digestAlg) {
         byte[] ret = null;
         if (o instanceof Byte) {
             ret = HexUtil.toBytes((Byte) o); // auto-unbox
