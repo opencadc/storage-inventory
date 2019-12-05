@@ -122,8 +122,12 @@ public interface StorageAdapter {
      * Write an artifact to storage.
      * The value of storageBucket in the returned StorageMetadata and StorageLocation can be used to
      * retrieve batches of artifacts in some of the iterator signatures defined in this interface.
+     * Batches of artifacts can be listed by bucket in two of the iterator methods in this interface.
+     * If storageBucket is null then the caller will not be able perform bucket-based batch
+     * validation through the iterator methods.
      * 
-     * @param artifact The artifact metadata.
+     * @param newArtifact The holds information about the incoming artifact.  If the contentChecksum
+     *     and contentLength are set, they will be used to validate the bytes received.
      * @param wrapper The wrapper for data of the artifact.
      * @return The storage metadata.
      * 
@@ -131,7 +135,8 @@ public interface StorageAdapter {
      * @throws IOException If an unrecoverable error occurred.
      * @throws TransientException If an unexpected, temporary exception occurred.
      */
-    public StorageMetadata put(Artifact artifact, OutputStreamWrapper wrapper) throws StreamCorruptedException, IOException, TransientException;
+    public StorageMetadata put(NewArtifact newArtifact, OutputStreamWrapper wrapper)
+        throws StreamCorruptedException, IOException, TransientException;
         
     /**
      * Delete from storage the artifact identified by storageLocation.

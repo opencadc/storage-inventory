@@ -124,13 +124,13 @@ public class StorageClient {
         adapter.get(storageLocation, handler);
     }
 
-    public StorageMetadata put(Artifact artifact, InputStream in) throws StreamCorruptedException, IOException, TransientException {
+    public StorageMetadata put(NewArtifact newArtifact, InputStream in) throws StreamCorruptedException, IOException, TransientException {
         OutputStreamWrapper wrapper = new OutputStreamWrapper() {
             public void write(OutputStream out) throws IOException {
                 ioLoop(out, in);
             }
         };
-        return adapter.put(artifact, wrapper);
+        return adapter.put(newArtifact, wrapper);
     }
 
     public void delete(StorageLocation storageLocation) throws ResourceNotFoundException, IOException, TransientException {

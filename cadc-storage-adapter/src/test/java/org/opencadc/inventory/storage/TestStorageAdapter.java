@@ -130,7 +130,7 @@ public class TestStorageAdapter implements StorageAdapter {
     }
 
     @Override
-    public StorageMetadata put(Artifact artifact, OutputStreamWrapper wrapper)
+    public StorageMetadata put(NewArtifact newArtifact, OutputStreamWrapper wrapper)
             throws StreamCorruptedException, IOException, TransientException {
         
         ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -159,7 +159,7 @@ public class TestStorageAdapter implements StorageAdapter {
         
         StorageLocation storageLocation = new StorageLocation(storageID);
         StorageMetadata storageMetadata = new StorageMetadata(storageLocation, contentChecksum, contentLength);
-        storageMetadata.artifactURI = artifact.getURI();
+        storageMetadata.artifactURI = newArtifact.getArtifactURI();
         return storageMetadata;
     }
 

@@ -103,11 +103,12 @@ public class StorageClientTest {
             StorageClient client = new StorageClient(TestStorageAdapter.BUF_SIZE, 3);
             
             URI artifactURI = URI.create("cadc:test/path");
-            Artifact artifact = new Artifact(artifactURI,
-                TestStorageAdapter.contentChecksum, new Date(), TestStorageAdapter.contentLength);
+            NewArtifact newArtifact = new NewArtifact(artifactURI);
+            newArtifact.contentChecksum = TestStorageAdapter.contentChecksum;
+            newArtifact.contentLength = TestStorageAdapter.contentLength;
             ByteArrayInputStream in = new ByteArrayInputStream(TestStorageAdapter.data);
             log.info("sending data: " + TestStorageAdapter.dataString);
-            StorageMetadata putMetadata = client.put(artifact, in);
+            StorageMetadata putMetadata = client.put(newArtifact, in);
             Assert.assertEquals("artifactURI", artifactURI, putMetadata.artifactURI);
             Assert.assertEquals("contentChecksum", TestStorageAdapter.contentChecksum, putMetadata.getContentChecksum());
             Assert.assertEquals("contentLength", TestStorageAdapter.contentLength, putMetadata.getContentLength());
@@ -145,11 +146,13 @@ public class StorageClientTest {
                 StorageClient client = new StorageClient(TestStorageAdapter.BUF_SIZE, 3);
                 
                 ErrorInputStream in = new ErrorInputStream(TestStorageAdapter.data, failPoint);
-                Artifact artifact = new Artifact(
-                    TestStorageAdapter.storageID, TestStorageAdapter.contentChecksum,
-                    new Date(), TestStorageAdapter.contentLength);
+                URI artifactURI = URI.create("cadc:test/path");
+                NewArtifact newArtifact = new NewArtifact(artifactURI);
+                newArtifact.contentChecksum = TestStorageAdapter.contentChecksum;
+                newArtifact.contentLength = TestStorageAdapter.contentLength;
+
                 try {
-                    client.put(artifact, in);
+                    client.put(newArtifact, in);
                     Assert.fail("Should have received exception on get");
                 } catch (Exception e) {
                     // expected

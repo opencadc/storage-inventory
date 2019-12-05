@@ -62,8 +62,6 @@
  *  <http://www.gnu.org/licenses/>.      pas le cas, consultez :
  *                                       <http://www.gnu.org/licenses/>.
  *
- *  $Revision: 4 $
- *
  ************************************************************************
  */
 
@@ -72,48 +70,35 @@ package org.opencadc.inventory.storage;
 import java.net.URI;
 
 import org.opencadc.inventory.InventoryUtil;
-import org.opencadc.inventory.StorageLocation;
 
 /**
- * Class to hold artifact metadata from a storage implementation.
+ * Class to convey information about a new, incoming artifact.
  * 
  * @author majorb
- *
  */
-public class StorageMetadata {
-
-    private final StorageLocation storageLocation;
-    private final URI contentChecksum;
-    private final Long contentLength;
-    public URI artifactURI;
+public class NewArtifact {
     
-    public StorageMetadata(StorageLocation storageLocation, URI contentChecksum, Long contentLength) {
-        InventoryUtil.assertNotNull(StorageMetadata.class, "storageLocation", storageLocation);
-        InventoryUtil.assertNotNull(StorageMetadata.class, "contentChecksum", contentChecksum);
-        InventoryUtil.assertNotNull(StorageMetadata.class, "contentLength", contentLength);
-        this.storageLocation = storageLocation;
-        this.contentChecksum = contentChecksum;
-        this.contentLength = contentLength;
-    }
-
-    public StorageLocation getStorageLocation() {
-        return storageLocation;
-    }
-
-    public URI getContentChecksum() {
-        return contentChecksum;
-    }
-
-    public Long getContentLength() {
-        return contentLength;
+    private URI artifactURI;
+    public URI contentChecksum;
+    public Long contentLength;
+    
+    /**
+     * NewArtifact constructor.
+     * 
+     * @param artifactURI The URI of the new artifact.
+     */
+    public NewArtifact(URI artifactURI) {
+        InventoryUtil.assertNotNull(NewArtifact.class, "artifactURI", artifactURI);
+        this.artifactURI = artifactURI;
     }
     
-    public boolean equals(Object o) {
-        if (o == null || !(o instanceof StorageMetadata)) {
-            return false;
-        }
-        StorageMetadata other = (StorageMetadata) o;
-        return this.storageLocation.equals(other.storageLocation);
+    /**
+     * Get the artifactURI.
+     * 
+     * @return artifactURI
+     */
+    public URI getArtifactURI() {
+        return artifactURI;
     }
 
 }
