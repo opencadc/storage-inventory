@@ -100,7 +100,7 @@ public class StorageClientTest {
         try {
             System.setProperty(StorageClient.STORAGE_ADPATER_CLASS_PROPERTY, TestStorageAdapter.class.getName());
             // small buffer so iterator has a few loops
-            StorageClient client = new StorageClient(TestStorageAdapter.BUF_SIZE, 3);
+            StorageClient client = new StorageClient();
             
             URI artifactURI = URI.create("cadc:test/path");
             NewArtifact newArtifact = new NewArtifact(artifactURI);
@@ -143,7 +143,7 @@ public class StorageClientTest {
                 log.info("Testing input stream error with fail on write number " + failPoint);
                 
                 System.setProperty(StorageClient.STORAGE_ADPATER_CLASS_PROPERTY, TestStorageAdapter.class.getName());
-                StorageClient client = new StorageClient(TestStorageAdapter.BUF_SIZE, 3);
+                StorageClient client = new StorageClient();
                 
                 ErrorInputStream in = new ErrorInputStream(TestStorageAdapter.data, failPoint);
                 URI artifactURI = URI.create("cadc:test/path");
@@ -185,7 +185,7 @@ public class StorageClientTest {
                 log.info("Testing output stream error with fail on read number " + failPoint);
                 
                 System.setProperty(StorageClient.STORAGE_ADPATER_CLASS_PROPERTY, TestStorageAdapter.class.getName());
-                StorageClient client = new StorageClient(TestStorageAdapter.BUF_SIZE, 3);
+                StorageClient client = new StorageClient();
                 
                 ByteArrayOutputStream out = new ErrorOutputStream(failPoint);
                 try {

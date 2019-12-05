@@ -67,11 +67,10 @@
 
 package org.opencadc.inventory.storage.fs;
 
-import ca.nrc.cadc.net.InputStreamWrapper;
-import ca.nrc.cadc.net.OutputStreamWrapper;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.util.HexUtil;
+import ca.nrc.cadc.util.PropertiesReader;
 
 import java.io.File;
 import java.io.IOException;
@@ -87,21 +86,22 @@ import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
-import java.security.DigestInputStream;
 import java.security.DigestOutputStream;
 import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.Iterator;
 import java.util.Set;
 import java.util.UUID;
 
 import org.apache.log4j.Logger;
-import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.storage.NewArtifact;
+import org.opencadc.inventory.storage.ReadException;
 import org.opencadc.inventory.storage.StorageAdapter;
+import org.opencadc.inventory.storage.StorageEngageException;
 import org.opencadc.inventory.storage.StorageMetadata;
+import org.opencadc.inventory.storage.ThreadedIO;
+import org.opencadc.inventory.storage.WriteException;
 
 /**
  * An implementation of the storage adapter interface on a file system.
@@ -132,6 +132,11 @@ import org.opencadc.inventory.storage.StorageMetadata;
 public class FileSystemStorageAdapter implements StorageAdapter {
     
     private static final Logger log = Logger.getLogger(FileSystemStorageAdapter.class);
+    
+    public static final String CONFIG_FILE = "cadc-storage-adapter-fs.properties";
+    public static final String CONFIG_PROPERTY_ROOT = "root";
+    public static final String CONFIG_PROPERTY_BUCKETMODE = "bucketMode";
+    
     static final String STORAGE_URI_SCHEME = "fs";
     static final String MD5_CHECKSUM_SCHEME = "md5";
     static final int BUCKET_LENGTH = 5;
@@ -141,17 +146,43 @@ public class FileSystemStorageAdapter implements StorageAdapter {
     private BucketMode bucketMode;
     
     public static enum BucketMode {
-        URI_BASED,        // use the URI of the artifact for bucketing
-        URI_BUCKET_BASED  // use calculated 5 character uriBucket of the artifact URI for bucketing
+        URI_BASED("uri"),              // use the URI of the artifact for bucketing
+        URI_BUCKET_BASED("uriBucket"); // use calculated 5 character uriBucket of the artifact URI for bucketing
+        private String val;
+        
+        BucketMode(String val) {
+            this.val = val;
+        }
+        
+        public String getVal() {
+            return val;
+        }
     }
     
     /**
-     * Construct a FileSystemStorageAdapter.
+     * Construct a FileSystemStorageAdapter with the config stored in the
+     * well-known properties file with well-known properties.
+     */
+    public FileSystemStorageAdapter() {
+        PropertiesReader pr = new PropertiesReader(CONFIG_FILE);
+        String root = pr.getFirstPropertyValue(CONFIG_PROPERTY_ROOT);
+        String mode = pr.getFirstPropertyValue(CONFIG_PROPERTY_BUCKETMODE);
+        BucketMode bucketMode = BucketMode.valueOf(mode);
+        init(root, bucketMode);
+    }
+    
+    /**
+     * Construct a FileSystemStorageAdapter with the config specified
+     * in the arguments.
      * 
      * @param rootDirectory The root directory of the local file system.
      * @param bucketMode The mode in which to organize files
      */
     public FileSystemStorageAdapter(String rootDirectory, BucketMode bucketMode) {
+        init(rootDirectory, bucketMode);
+    }
+    
+    private void init(String rootDirectory, BucketMode bucketMode) {
         InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "rootDirectory", rootDirectory);
         InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "bucketMode", bucketMode);
         this.fs = FileSystems.getDefault();
@@ -168,20 +199,23 @@ public class FileSystemStorageAdapter implements StorageAdapter {
         }
         this.bucketMode = bucketMode;
     }
-
+    
     /**
      * Get from storage the artifact identified by storageLocation.
      * 
-     * @param storageLocation The artifact location identifier.
-     * @param wrapper An input stream wrapper to receive the bytes.
+     * @param storageLocation The storage location containing storageID and storageBucket.
+     * @param dest The destination stream.
      * 
      * @throws ResourceNotFoundException If the artifact could not be found.
-     * @throws IOException If an unrecoverable error occurred.
+     * @throws ReadException If the storage system failed to stream.
+     * @throws WriteException If the client failed to stream.
+     * @throws StorageEngageException If the adapter failed to interact with storage.
      * @throws TransientException If an unexpected, temporary exception occurred. 
      */
-    public void get(StorageLocation storageLocation, InputStreamWrapper wrapper) throws ResourceNotFoundException, IOException, TransientException {
+    public void get(StorageLocation storageLocation, OutputStream dest)
+        throws ResourceNotFoundException, ReadException, WriteException, StorageEngageException, TransientException {
         InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "storageLocation", storageLocation);
-        InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "wrapper", wrapper);
+        InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "dest", dest);
         log.debug("get storageID: " + storageLocation.getStorageID());
         Path path = createStorageLocationPath(storageLocation);
         if (!Files.exists(path)) {
@@ -190,40 +224,59 @@ public class FileSystemStorageAdapter implements StorageAdapter {
         if (!Files.isRegularFile(path)) {
             throw new IllegalArgumentException("not found: " + storageLocation.getStorageID());
         }
-        InputStream in = Files.newInputStream(path, StandardOpenOption.READ);
-        wrapper.read(in);
+        InputStream source = null;
+        try {
+            source = Files.newInputStream(path, StandardOpenOption.READ);
+        } catch (IOException e) {
+            throw new StorageEngageException("failed to create input stream to file system", e);
+        }
+        ThreadedIO io = new ThreadedIO();
+        io.ioLoop(dest, source);
     }
     
     /**
      * Get from storage the artifact identified by storageLocation.
      * 
-     * @param storageLocation The artifact location identifier.
-     * @param wrapper An input stream wrapper to receive the bytes.
+     * @param storageLocation The storage location containing storageID and storageBucket.
+     * @param dest The destination stream.
      * @param cutouts Cutouts to be applied to the artifact
      * 
      * @throws ResourceNotFoundException If the artifact could not be found.
-     * @throws IOException If an unrecoverable error occurred.
+     * @throws ReadException If the storage system failed to stream.
+     * @throws WriteException If the client failed to stream.
+     * @throws StorageEngageException If the adapter failed to interact with storage.
      * @throws TransientException If an unexpected, temporary exception occurred. 
      */
-    public void get(StorageLocation storageLocation, InputStreamWrapper wrapper, Set<String> cutouts)
-        throws ResourceNotFoundException, IOException, TransientException {
+    public void get(StorageLocation storageLocation, OutputStream dest, Set<String> cutouts)
+        throws ResourceNotFoundException, ReadException, WriteException, StorageEngageException, TransientException {
         throw new UnsupportedOperationException("cutouts not supported");
     }
     
     /**
      * Write an artifact to storage.
+     * The value of storageBucket in the returned StorageMetadata and StorageLocation can be used to
+     * retrieve batches of artifacts in some of the iterator signatures defined in this interface.
+     * Batches of artifacts can be listed by bucket in two of the iterator methods in this interface.
+     * If storageBucket is null then the caller will not be able perform bucket-based batch
+     * validation through the iterator methods.
      * 
-     * @param newArtifact The artifact URI and metadata.
-     * @param wrapper The wrapper for data of the artifact.
+     * @param newArtifact The holds information about the incoming artifact.  If the contentChecksum
+     *     and contentLength are set, they will be used to validate the bytes received.
+     * @param source The stream from which to read.
      * @return The storage metadata.
      * 
+     * @throws ResourceNotFoundException If the artifact could not be found.
      * @throws StreamCorruptedException If the calculated checksum does not the expected checksum.
-     * @throws IOException If an unrecoverable error occurred.
+     * @throws ReadException If the client failed to stream.
+     * @throws WriteException If the storage system failed to stream.
+     * @throws StorageEngageException If the adapter failed to interact with storage.
      * @throws TransientException If an unexpected, temporary exception occurred.
      */
-    public StorageMetadata put(NewArtifact newArtifact, OutputStreamWrapper wrapper) throws StreamCorruptedException, IOException, TransientException {
+    public StorageMetadata put(NewArtifact newArtifact, InputStream source)
+        throws ResourceNotFoundException, StreamCorruptedException, ReadException, WriteException,
+            StorageEngageException, TransientException {
         InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "artifact", newArtifact);
-        InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "wrapper", wrapper);
+        InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "source", source);
         
         Path path = null;
         Path existing = null;
@@ -261,7 +314,8 @@ public class FileSystemStorageAdapter implements StorageAdapter {
             OutputStream out = Files.newOutputStream(path, StandardOpenOption.WRITE, StandardOpenOption.CREATE_NEW);
             MessageDigest digest = MessageDigest.getInstance("MD5");
             DigestOutputStream digestOut = new DigestOutputStream(out, digest);
-            wrapper.write(digestOut);
+            ThreadedIO threadedIO = new ThreadedIO();
+            threadedIO.ioLoop(digestOut, source);
             digestOut.flush();
             byte[] md5sum = digest.digest();
             String md5Val = HexUtil.toHex(md5sum);
@@ -301,9 +355,9 @@ public class FileSystemStorageAdapter implements StorageAdapter {
             
         } catch (Throwable t) {
             throwable = t;
-            log.error("error writing file", t);
+            log.error("put error", t);
             if (throwable instanceof IOException) {
-                throw (IOException) throwable;
+                throw new StorageEngageException("put error", throwable);
             }
             // TODO: identify throwables that are transient
             throw new IllegalStateException("Unexpected error", throwable);
@@ -329,83 +383,92 @@ public class FileSystemStorageAdapter implements StorageAdapter {
     }
         
     /**
-     * Delete from storage the artifact identified by storageID.
+     * Delete from storage the artifact identified by storageLocation.
      * @param storageLocation Identifies the artifact to delete.
      * 
      * @throws ResourceNotFoundException If the artifact could not be found.
      * @throws IOException If an unrecoverable error occurred.
+     * @throws StorageEngageException If the adapter failed to interact with storage.
      * @throws TransientException If an unexpected, temporary exception occurred. 
      */
-    public void delete(StorageLocation storageLocation) throws ResourceNotFoundException, IOException, TransientException {
+    public void delete(StorageLocation storageLocation)
+        throws ResourceNotFoundException, IOException, StorageEngageException, TransientException {
         InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "storageLocation", storageLocation);
         Path path = createStorageLocationPath(storageLocation);
         Files.delete(path);
     }
     
     /**
-     * Iterator of items.  This implementation does not order the files
-     * by storageID as per the requirement of the interface.
-     * 
+     * Iterator of items ordered by their storageIDs.
      * @return An iterator over an ordered list of items in storage.
      * 
-     * @throws IOException If an unrecoverable error occurred.
+     * @throws ReadException If the storage system failed to stream.
+     * @throws WriteException If the client failed to stream.
+     * @throws StorageEngageException If the adapter failed to interact with storage.
      * @throws TransientException If an unexpected, temporary exception occurred. 
      */
-    public Iterator<StorageMetadata> iterator() throws IOException, TransientException {
+    public Iterator<StorageMetadata> iterator()
+        throws ReadException, WriteException, StorageEngageException, TransientException {
         throw new UnsupportedOperationException("sorted iteration not supported");
     }
     
     /**
-     * Iterator of itmes ordered by their storageIDs.
-     * @param bucket Only iterate over items in this bucket.
+     * Iterator of items ordered by their storageIDs in the given bucket.
+     * @param storageBucket Only iterate over items in this bucket.
      * @return An iterator over an ordered list of items in this storage bucket.
      * 
+     * @throws ReadException If the storage system failed to stream.
+     * @throws WriteException If the client failed to stream.
+     * @throws StorageEngageException If the adapter failed to interact with storage.
      * @throws TransientException If an unexpected, temporary exception occurred. 
      */
-    public Iterator<StorageMetadata> iterator(String bucket) throws IOException, TransientException {
+    public Iterator<StorageMetadata> iterator(String storageBucket)
+        throws ReadException, WriteException, StorageEngageException, TransientException {
         throw new UnsupportedOperationException("sorted iteration not supported");
     }
     
     /**
-     * Iterator of itmes ordered by their storageIDs.
-     * @param bucket Only iterate over items in this bucket.  A null or empty bucket means
-     *     iterator over everything.
+     * An unordered iterator of items in the given bucket.
+     * @param storageBucket Only iterate over items in this bucket.
      * @return An iterator over an ordered list of items in this storage bucket.
      * 
-     * @throws IOException If an unrecoverable error occurred.
+     * @throws ReadException If the storage system failed to stream.
+     * @throws WriteException If the client failed to stream.
+     * @throws StorageEngageException If the adapter failed to interact with storage.
      * @throws TransientException If an unexpected, temporary exception occurred. 
      */
-    public Iterator<StorageMetadata> unsortedIterator(final String bucket) throws IOException, TransientException {
+    public Iterator<StorageMetadata> unsortedIterator(String storageBucket)
+        throws ReadException, WriteException, StorageEngageException, TransientException {
         StringBuilder path = new StringBuilder();
         int bucketDepth = 0;
         String fixedParentDir = null;
         switch (bucketMode) {
             case URI_BASED:
-                if (bucket != null && bucket.length() > 0) {
+                if (storageBucket != null && storageBucket.length() > 0) {
                     try {
-                        URI test = new URI(bucket + "/file");
+                        URI test = new URI(storageBucket + "/file");
                         InventoryUtil.validateArtifactURI(FileSystemStorageAdapter.class, test);
                     } catch (URISyntaxException | IllegalArgumentException e) {
                         throw new IllegalArgumentException("bucket must be in the form 'scheme:path'");
                     }
-                    int colonIndex = bucket.indexOf(":");
-                    path.append(bucket.substring(0, colonIndex + 1));
+                    int colonIndex = storageBucket.indexOf(":");
+                    path.append(storageBucket.substring(0, colonIndex + 1));
                     path.append(File.separator);
-                    path.append(bucket.substring(colonIndex + 1));
+                    path.append(storageBucket.substring(colonIndex + 1));
                 }
                 if (path.length() > 0) {
                     fixedParentDir = path.toString();
                 }
                 break;
             case URI_BUCKET_BASED:
-                if (bucket != null) {
-                    if (bucket.length() > BUCKET_LENGTH) {
+                if (storageBucket != null) {
+                    if (storageBucket.length() > BUCKET_LENGTH) {
                         throw new IllegalArgumentException("bucket must be a maximum of " + BUCKET_LENGTH + " characters");
                     }
-                    for (char c : bucket.toCharArray()) {
+                    for (char c : storageBucket.toCharArray()) {
                         path.append(c).append(File.separator);
                     }
-                    bucketDepth = BUCKET_LENGTH - bucket.length();
+                    bucketDepth = BUCKET_LENGTH - storageBucket.length();
                 } else {
                     bucketDepth = BUCKET_LENGTH;
                 }
@@ -417,24 +480,32 @@ public class FileSystemStorageAdapter implements StorageAdapter {
             log.debug("resolving path: " + path.toString());
             Path bucketPath = root.resolve(path.toString());
             if (!Files.exists(bucketPath) || !Files.isDirectory(bucketPath)) {
-                throw new IllegalArgumentException("Invalid bucket: " + bucket);
+                throw new IllegalArgumentException("Invalid bucket: " + storageBucket);
             }
             Iterator<StorageMetadata> iterator = null;
-            switch (bucketMode) {
-                case URI_BASED:
-                    iterator = new ArtifactIterator(bucketPath, bucketDepth, fixedParentDir);
-                    break;
-                case URI_BUCKET_BASED:
-                    iterator = new FileSystemIterator(bucketPath, bucketDepth, fixedParentDir);
-                    break;
-                default:
-                    throw new IllegalStateException("unsupported bucket mode");
+            try {
+                switch (bucketMode) {
+                    case URI_BASED:
+                        iterator = new ArtifactIterator(bucketPath, bucketDepth, fixedParentDir);
+                        break;
+                    case URI_BUCKET_BASED:
+                        iterator = new FileSystemIterator(bucketPath, bucketDepth, fixedParentDir);
+                        break;
+                    default:
+                        throw new IllegalStateException("unsupported bucket mode");
+                }
+            } catch (IOException e) {
+                throw new StorageEngageException("failed to obtain iterator", e);
             }
             return iterator;
         } catch (InvalidPathException e) {
-            throw new IllegalArgumentException("Invalid bucket: " + bucket);
-        }
+            throw new IllegalArgumentException("Invalid bucket: " + storageBucket);
+        }   
     }
+    
+    
+    
+    
     
     private StorageLocation createStorageLocation(URI artifactURI) {
         URI storageID = null;

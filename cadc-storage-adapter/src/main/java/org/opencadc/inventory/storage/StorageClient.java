@@ -69,10 +69,9 @@
 
 package org.opencadc.inventory.storage;
 
-import ca.nrc.cadc.net.InputStreamWrapper;
-import ca.nrc.cadc.net.OutputStreamWrapper;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
+import ca.nrc.cadc.util.PropertiesReader;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -80,12 +79,9 @@ import java.io.OutputStream;
 import java.io.StreamCorruptedException;
 import java.lang.reflect.Constructor;
 import java.util.Iterator;
-import java.util.concurrent.Callable;
-import java.util.concurrent.FutureTask;
-import java.util.concurrent.LinkedBlockingQueue;
+import java.util.Set;
 
 import org.apache.log4j.Logger;
-import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.StorageLocation;
 
 /**
@@ -94,59 +90,38 @@ import org.opencadc.inventory.StorageLocation;
  * @author majorb
  *
  */
-public class StorageClient {
+public class StorageClient implements StorageAdapter {
     
     private static Logger log = Logger.getLogger(StorageClient.class);
     public static String STORAGE_ADPATER_CLASS_PROPERTY = StorageAdapter.class.getName();
-    private static int DEFAULT_BUFFER_SIZE_BYTES = 2 ^ 13; // = 8192
-    private static int DEFAULT_MAX_QUEUE_SIZE_BUFFERS = 8; // = 65 536
     
     private StorageAdapter adapter;
-    private int bufferSize = DEFAULT_BUFFER_SIZE_BYTES;
-    private int maxQueueSize = DEFAULT_MAX_QUEUE_SIZE_BUFFERS;
 
+    /**
+     * Constructor that loads the StorageAdapter from a system property.
+     * system property.
+     */
     public StorageClient() {
-        adapter = getStorageAdapter();
+        String adpaterClassname = System.getProperty(STORAGE_ADPATER_CLASS_PROPERTY);
+        this.adapter = load(adpaterClassname);
     }
     
-    public StorageClient(int bufferSize, int maxQueueSize) {
-        adapter = getStorageAdapter();
-        this.bufferSize = bufferSize;
-        this.maxQueueSize = maxQueueSize;
+    /**
+     * Constructor that takes a pre-loaded storage adapter.
+     * @param adapter The adapter to use.
+     */
+    public StorageClient(StorageAdapter adapter) {
+        this.adapter = adapter;
     }
     
-    public void get(StorageLocation storageLocation, OutputStream out) throws ResourceNotFoundException, IOException, TransientException {
-        InputStreamWrapper handler = new InputStreamWrapper() {
-            public void read(InputStream in) throws IOException {
-                ioLoop(out, in);
-            }
-        };
-        adapter.get(storageLocation, handler);
-    }
-
-    public StorageMetadata put(NewArtifact newArtifact, InputStream in) throws StreamCorruptedException, IOException, TransientException {
-        OutputStreamWrapper wrapper = new OutputStreamWrapper() {
-            public void write(OutputStream out) throws IOException {
-                ioLoop(out, in);
-            }
-        };
-        return adapter.put(newArtifact, wrapper);
-    }
-
-    public void delete(StorageLocation storageLocation) throws ResourceNotFoundException, IOException, TransientException {
-        adapter.delete(storageLocation);
-    }
-
-    public Iterator<StorageMetadata> iterator() throws IOException, TransientException {
-        return adapter.iterator();
-    }
-    
-    public Iterator<StorageMetadata> iterator(String bucket) throws IOException, TransientException {
-        return adapter.iterator(bucket);
-    }
-    
-    public Iterator<StorageMetadata> unsortedIterator(String bucket) throws IOException, TransientException {
-        return adapter.unsortedIterator(bucket);
+    /**
+     * Constructor that loads the StorageAdapter from a configuration file.
+     * @param configFilename The configuration file.
+     */
+    public StorageClient(String configFilename) {
+        PropertiesReader pr = new PropertiesReader(configFilename);
+        String adpaterClassname = pr.getFirstPropertyValue(STORAGE_ADPATER_CLASS_PROPERTY);
+        this.adapter = load(adpaterClassname);
     }
     
     /**
@@ -155,14 +130,11 @@ public class StorageClient {
      * 
      * @return The storage adapter to be used by this client.
      */
-    private StorageAdapter getStorageAdapter() {
-        // Load the adapter based on a classname in a system property
-        String cname = System.getProperty(STORAGE_ADPATER_CLASS_PROPERTY);
+    private StorageAdapter load(String cname) {
         if (cname == null) {
             throw new IllegalStateException(
                 "No storage adapter defined by system property: " + STORAGE_ADPATER_CLASS_PROPERTY);
         }
-      
         try {
             Class c = Class.forName(cname);
             Constructor con = c.getConstructor();
@@ -173,138 +145,125 @@ public class StorageClient {
         } catch (Throwable t) {
             throw new IllegalStateException("Failed to load storage adapter " + cname, t);
         }
-        
     }
     
-    private void ioLoop(OutputStream out, InputStream in) {
-
-        Throwable producerThrowable = null;
-        Throwable consumerThrowable = null;
-        
-        try {
-            LinkedBlockingQueue<QueueItem> queue = new LinkedBlockingQueue<QueueItem>(maxQueueSize);
-                
-            QueueProducer producer = new QueueProducer(queue, in);
-            QueueConsumer consumer = new QueueConsumer(queue, out);
-            FutureTask<Throwable> producerTask = new FutureTask<Throwable>(producer);
-            FutureTask<Throwable> consumerTask = new FutureTask<Throwable>(consumer);
-            Thread producerThread = new Thread(producerTask);
-            Thread consumerThread = new Thread(consumerTask);
-            producer.consumer = consumerThread;
-            consumer.producer = producerThread;
-            
-            consumerThread.start();
-            producerThread.start();
-            
-            producerThrowable = producerTask.get();
-            consumerThrowable = consumerTask.get();
-                
-        } catch (Throwable t) {
-            String message = "i/o loop failed";
-            log.error(message, t);
-            throw new IllegalStateException(message, t);
-        }
-        
-        if (producerThrowable != null) {
-            String message = "failed reading from input stream";
-            log.error(message, producerThrowable);
-            throw new IllegalStateException(message, producerThrowable);
-        }
-        if (consumerThrowable != null) {
-            String message = "failed writing to output stream";
-            log.error(message, consumerThrowable);
-            throw new IllegalStateException(message, consumerThrowable);
-        }
-        
+    /**
+     * Get from storage the artifact identified by storageLocation.
+     * 
+     * @param storageLocation The storage location containing storageID and storageBucket.
+     * @param dest The destination stream.
+     * 
+     * @throws ResourceNotFoundException If the artifact could not be found.
+     * @throws ReadException If the storage system failed to stream.
+     * @throws WriteException If the client failed to stream.
+     * @throws StorageEngageException If the adapter failed to interact with storage.
+     * @throws TransientException If an unexpected, temporary exception occurred. 
+     */
+    public void get(StorageLocation storageLocation, OutputStream dest)
+        throws ResourceNotFoundException, ReadException, WriteException, StorageEngageException, TransientException {
+        adapter.get(storageLocation, dest);
     }
     
-    private class QueueProducer implements Callable<Throwable> {
-        
-        LinkedBlockingQueue<QueueItem> queue;
-        InputStream in;
-        Thread consumer;
-        
-        QueueProducer(LinkedBlockingQueue<QueueItem> queue, InputStream in) {
-            this.queue = queue;
-            this.in = in;
-        }
-
-        @Override
-        public Throwable call() throws Exception {
-            try {
-                QueueItem next;
-                byte[] buffer = new byte[bufferSize];
-                int bytesRead = in.read(buffer);
-                while (bytesRead > 0) {        
-                    next = new QueueItem(buffer, bytesRead);
-                    queue.put(next);
-                    buffer = new byte[bufferSize];
-                    bytesRead = in.read(buffer);
-                    log.debug("read " + bytesRead + " bytes: " + new String(buffer));
-                }
-                log.debug("sending stop control to consumer");
-                next = new QueueItem(null, 0);
-                next.stop = true;
-                queue.put(next);
-                return null;
-            } catch (InterruptedException e) {
-                log.debug("Producer interrupted", e);
-                return null;
-            } catch (Throwable t) {
-                log.error(t);
-                consumer.interrupt();
-                return t;
-            }
-        }
+    /**
+     * Get from storage the artifact identified by storageLocation.
+     * 
+     * @param storageLocation The storage location containing storageID and storageBucket.
+     * @param dest The destination stream.
+     * @param cutouts Cutouts to be applied to the artifact
+     * 
+     * @throws ResourceNotFoundException If the artifact could not be found.
+     * @throws ReadException If the storage system failed to stream.
+     * @throws WriteException If the client failed to stream.
+     * @throws StorageEngageException If the adapter failed to interact with storage.
+     * @throws TransientException If an unexpected, temporary exception occurred. 
+     */
+    public void get(StorageLocation storageLocation, OutputStream dest, Set<String> cutouts)
+        throws ResourceNotFoundException, ReadException, WriteException, StorageEngageException, TransientException {
+        adapter.get(storageLocation, dest, cutouts);
     }
     
-    private class QueueConsumer implements Callable<Throwable> {
+    /**
+     * Write an artifact to storage.
+     * The value of storageBucket in the returned StorageMetadata and StorageLocation can be used to
+     * retrieve batches of artifacts in some of the iterator signatures defined in this interface.
+     * Batches of artifacts can be listed by bucket in two of the iterator methods in this interface.
+     * If storageBucket is null then the caller will not be able perform bucket-based batch
+     * validation through the iterator methods.
+     * 
+     * @param newArtifact The holds information about the incoming artifact.  If the contentChecksum
+     *     and contentLength are set, they will be used to validate the bytes received.
+     * @param source The stream from which to read.
+     * @return The storage metadata.
+     * 
+     * @throws ResourceNotFoundException If the artifact could not be found.
+     * @throws StreamCorruptedException If the calculated checksum does not the expected checksum.
+     * @throws ReadException If the client failed to stream.
+     * @throws WriteException If the storage system failed to stream.
+     * @throws StorageEngageException If the adapter failed to interact with storage.
+     * @throws TransientException If an unexpected, temporary exception occurred.
+     */
+    public StorageMetadata put(NewArtifact newArtifact, InputStream source)
+        throws ResourceNotFoundException, StreamCorruptedException, ReadException, WriteException,
+            StorageEngageException, TransientException {
+        return adapter.put(newArtifact, source);
+    }
         
-        LinkedBlockingQueue<QueueItem> queue;
-        OutputStream out;
-        Thread producer;
-        
-        QueueConsumer(LinkedBlockingQueue<QueueItem> queue, OutputStream out) {
-            this.queue = queue;
-            this.out = out;
-        }
-
-        @Override
-        public Throwable call() throws Exception {
-            QueueItem next;
-            try {
-                next = queue.take();
-                while (!next.stop) {
-                    out.write(next.data, 0, next.length);
-                    log.debug("wrote " + next.length + " bytes: " + new String(next.data));
-                    next = queue.take();
-                    if (log.isDebugEnabled() && next.stop) {
-                        log.debug("received stop control from producer");
-                    }
-                }
-                out.flush();
-                return null;
-            } catch (InterruptedException e) {
-                log.debug("consumer interrupted", e);
-                return null;
-            } catch (Throwable t) {
-                log.error(t);
-                producer.interrupt();
-                return t;
-            }
-        }
-    } 
+    /**
+     * Delete from storage the artifact identified by storageLocation.
+     * @param storageLocation Identifies the artifact to delete.
+     * 
+     * @throws ResourceNotFoundException If the artifact could not be found.
+     * @throws IOException If an unrecoverable error occurred.
+     * @throws StorageEngageException If the adapter failed to interact with storage.
+     * @throws TransientException If an unexpected, temporary exception occurred. 
+     */
+    public void delete(StorageLocation storageLocation)
+        throws ResourceNotFoundException, IOException, StorageEngageException, TransientException {
+        adapter.delete(storageLocation);
+    }
     
-    private class QueueItem {
-        byte[] data;
-        int length;
-        boolean stop = false;
-        
-        QueueItem(byte[] data, int length) {
-            this.data = data;
-            this.length = length;
-        }
-
+    /**
+     * Iterator of items ordered by their storageIDs.
+     * @return An iterator over an ordered list of items in storage.
+     * 
+     * @throws ReadException If the storage system failed to stream.
+     * @throws WriteException If the client failed to stream.
+     * @throws StorageEngageException If the adapter failed to interact with storage.
+     * @throws TransientException If an unexpected, temporary exception occurred. 
+     */
+    public Iterator<StorageMetadata> iterator()
+        throws ReadException, WriteException, StorageEngageException, TransientException {
+        return adapter.iterator();
+    }
+    
+    /**
+     * Iterator of items ordered by their storageIDs in the given bucket.
+     * @param storageBucket Only iterate over items in this bucket.
+     * @return An iterator over an ordered list of items in this storage bucket.
+     * 
+     * @throws ReadException If the storage system failed to stream.
+     * @throws WriteException If the client failed to stream.
+     * @throws StorageEngageException If the adapter failed to interact with storage.
+     * @throws TransientException If an unexpected, temporary exception occurred. 
+     */
+    public Iterator<StorageMetadata> iterator(String storageBucket)
+        throws ReadException, WriteException, StorageEngageException, TransientException {
+        return adapter.iterator(storageBucket);
+    }
+    
+    /**
+     * An unordered iterator of items in the given bucket.
+     * @param storageBucket Only iterate over items in this bucket.
+     * @return An iterator over an ordered list of items in this storage bucket.
+     * 
+     * @throws ReadException If the storage system failed to stream.
+     * @throws WriteException If the client failed to stream.
+     * @throws StorageEngageException If the adapter failed to interact with storage.
+     * @throws TransientException If an unexpected, temporary exception occurred. 
+     */
+    public Iterator<StorageMetadata> unsortedIterator(String storageBucket)
+        throws ReadException, WriteException, StorageEngageException, TransientException {
+        return adapter.unsortedIterator(storageBucket);
     }
 
 }
