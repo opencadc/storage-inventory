@@ -40,6 +40,7 @@ dependencies {
     compile 'org.opencadc:cadc-dali:[1.1,)'
     compile 'org.opencadc:cadc-tap-server:[1.1.9,)'
     compile 'org.opencadc:cadc-tap-schema:[1.1.9,)'
+    compile 'org.opencadc:cadc-tap-server-pg:[1.0.5,)'
     compile 'ca.nrc.cadc:tap-util:[1.1.5,)'
 
     runtime 'org.opencadc:cadc-registry:[1.4.6,)'
@@ -50,7 +51,7 @@ dependencies {
     testCompile 'junit:junit:[4.0,)'
 
     intTestCompile 'org.opencadc:cadc-tap:[1.0,)'
-    intTestCompile 'org.opencadc:cadc-test-vosi:[1.0.2,)'
+    intTestCompile 'org.opencadc:cadc-test-vosi:[1.0.8,)'
     intTestCompile 'org.opencadc:cadc-test-uws:[1.1.1,)'
     intTestCompile 'org.opencadc:cadc-test-tap:[1.1,)'
 }

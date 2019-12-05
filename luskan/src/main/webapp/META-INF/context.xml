@@ -1,0 +1,40 @@
+<?xml version='1.0' encoding='utf-8'?>
+<Context>
+
+    <WatchedResource>WEB-INF/web.xml</WatchedResource>
+
+    <Resource name="jdbc/tapadm"
+              auth="Container"
+              type="javax.sql.DataSource"
+              factory="org.apache.tomcat.jdbc.pool.DataSourceFactory" closeMethod="close"
+              minEvictableIdleTimeMillis="60000" timeBetweenEvictionRunsMillis="30000"
+              maxWait="20000"
+              initialSize="0"  minIdle="0" maxIdle="${luskan.tapadm.maxActive}" maxActive="${luskan.tapadm.maxActive}"
+              username="${luskan.tapadm.username}" password="${luskan.tapadm.password}"
+              driverClassName="org.postgresql.Driver" url="${luskan.tapadm.url}"
+              removeAbandoned="false"
+              testWhileIdle="true" testOnBorrow="true" validationQuery="select 123" />
+    <Resource name="jdbc/uws"
+              auth="Container"
+              type="javax.sql.DataSource"
+              factory="org.apache.tomcat.jdbc.pool.DataSourceFactory" closeMethod="close"
+              minEvictableIdleTimeMillis="60000" timeBetweenEvictionRunsMillis="30000"
+              maxWait="20000"
+              initialSize="0" minIdle="0" maxIdle="${luskan.uws.maxActive}" maxActive="${luskan.uws.maxActive}"
+              username="${luskan.uws.username}" password="${luskan.uws.password}"
+              driverClassName="org.postgresql.Driver" url="${luskan.uws.url}"
+              removeAbandoned="false"
+              testOnBorrow="true" validationQuery="select 123" />
+    <Resource name="jdbc/tapuser"
+              auth="Container"
+              type="javax.sql.DataSource"
+              factory="org.apache.tomcat.jdbc.pool.DataSourceFactory" closeMethod="close"
+              minEvictableIdleTimeMillis="60000" timeBetweenEvictionRunsMillis="30000"
+              maxWait="20000"
+              initialSize="0" minIdle="0" maxIdle="${luskan.tapuser.maxActive}" maxActive="${luskan.tapuser.maxActive}"
+              username="${luskan.tapuser.username}" password="${luskan.tapuser.password}"
+              driverClassName="org.postgresql.Driver" url="${luskan.tapuser.url}"
+              removeAbandoned="false"
+              testOnBorrow="true" validationQuery="select 123" />
+
+</Context>
