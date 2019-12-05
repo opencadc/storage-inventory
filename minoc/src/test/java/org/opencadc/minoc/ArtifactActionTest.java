@@ -76,6 +76,7 @@ import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.Test;
+import org.opencadc.inventory.Artifact;
 import org.opencadc.minoc.ArtifactUtil.HttpMethod;
 
 import ca.nrc.cadc.rest.InlineContentHandler;
@@ -115,7 +116,8 @@ public class ArtifactActionTest {
             }
         }
         
-        public void execute(URI artifactURI) throws Exception {
+        public Artifact execute(URI artifactURI) throws Exception {
+            return null;
         }
 
     }

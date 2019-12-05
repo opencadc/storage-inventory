@@ -41,7 +41,6 @@
             <param-name>get</param-name>
             <param-value>org.opencadc.minoc.GetAction</param-value>
         </init-param>
-      <!-- 
         <init-param>
             <param-name>put</param-name>
             <param-value>org.opencadc.minoc.PutAction</param-value>
@@ -54,8 +53,11 @@
             <param-name>delete</param-name>
             <param-value>org.opencadc.minoc.DeleteAction</param-value>
         </init-param>
+        init-param>
+            <param-name>head</param-name>
+            <param-value>org.opencadc.minoc.HeadAction</param-value>
+        </init-param>
         <load-on-startup>2</load-on-startup>
-      -->
     </servlet>
 
   <!-- VOSI availability -->
