@@ -79,7 +79,6 @@ public class StorageEngageException extends Exception {
     /**
      * Construct an exception.
      * @param message Exception message.
-     * @param cause Exception cause.
      */
     public StorageEngageException(String message) {
         super(message);

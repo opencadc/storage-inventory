@@ -83,7 +83,6 @@ public class ReadException extends IOException {
     /**
      * Construct an exception.
      * @param message Exception message.
-     * @param cause Exception cause.
      */
     public ReadException(String message) {
         super(message);

@@ -83,7 +83,6 @@ public class WriteException extends IOException {
     /**
      * Construct an exception.
      * @param message Exception message.
-     * @param cause Exception cause.
      */
     public WriteException(String message) {
         super(message);

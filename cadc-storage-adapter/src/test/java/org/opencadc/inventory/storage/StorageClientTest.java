@@ -156,7 +156,7 @@ public class StorageClientTest {
                     Assert.fail("Should have received exception on get");
                 } catch (Exception e) {
                     // expected
-                    Assert.assertTrue("error msg", e.getMessage().contains("failed reading from input stream"));
+                    Assert.assertTrue("error type", e instanceof ReadException); 
                 }
                 
             }
@@ -194,7 +194,7 @@ public class StorageClientTest {
                     Assert.fail("Should have received exception on get");
                 } catch (Exception e) {
                     // expected
-                    Assert.assertTrue("error msg", e.getMessage().contains("failed writing to output stream"));
+                    Assert.assertTrue("error type", e instanceof WriteException);
                 }
                 
             }
