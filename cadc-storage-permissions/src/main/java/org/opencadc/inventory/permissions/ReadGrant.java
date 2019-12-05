@@ -70,51 +70,51 @@
 package org.opencadc.inventory.permissions;
 
 import java.net.URI;
-import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import org.opencadc.gms.GroupURI;
-import org.opencadc.inventory.InventoryUtil;
 
 /**
- * Holds grant information about an artifact.
+ * Holds read grant information about an artifact.
  * 
  * @author majorb
  *
  */
-public abstract class Grant {
+public class ReadGrant extends Grant {
 
-    private final URI artifactURI;
-    protected final List<GroupURI> groups = new ArrayList<GroupURI>();
-    protected final Date expiryDate = new Date();
+    // Is artifact read access available to anonymous (all) users.
+    private boolean anonymousAccess = false;
 
     /**
      * Construct a grant for the given artifactURI.
      * @param artifactURI The applicable targetURI.
      */
-    public Grant(URI artifactURI) {
-        InventoryUtil.assertNotNull(Grant.class, "artifactURI", artifactURI);
-        this.artifactURI = artifactURI;
+    public ReadGrant(URI artifactURI) {
+        super(artifactURI);
     }
     
     /**
-     * Get the artifactURI to which this grant applies.
-     * @return The artifactURI.
+     * Get the read group list.
+     * @return The read groups.
      */
-    public URI getArtifactURI() {
-        return artifactURI;
+    public List<GroupURI> getGroups() {
+        return groups;
     }
 
     /**
      * Get date after which the Grant is considered expired and should be renewed.
      * @return The grant expiry date.
      */
-    public abstract Date getExpiryDate();
-    
+    public Date getExpiryDate() {
+        return expiryDate;
+    }
+
     /**
-     * Get the group list.
-     * @return The list of groups.
+     * Check if artifact access is available to anonymous (all) users.
+     * @return true if the artifact has anonymous access, false otherwise.
      */
-    public abstract List<GroupURI> getGroups();
-    
+    public boolean isAnonymousAccess() {
+        return anonymousAccess;
+    }
+
 }

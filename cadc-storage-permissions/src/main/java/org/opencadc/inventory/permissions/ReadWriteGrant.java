@@ -70,11 +70,9 @@
 package org.opencadc.inventory.permissions;
 
 import java.net.URI;
-import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import org.opencadc.gms.GroupURI;
-import org.opencadc.inventory.InventoryUtil;
 
 /**
  * Holds grant information about an artifact.
@@ -82,39 +80,30 @@ import org.opencadc.inventory.InventoryUtil;
  * @author majorb
  *
  */
-public abstract class Grant {
-
-    private final URI artifactURI;
-    protected final List<GroupURI> groups = new ArrayList<GroupURI>();
-    protected final Date expiryDate = new Date();
+public class ReadWriteGrant extends Grant {
 
     /**
      * Construct a grant for the given artifactURI.
      * @param artifactURI The applicable targetURI.
      */
-    public Grant(URI artifactURI) {
-        InventoryUtil.assertNotNull(Grant.class, "artifactURI", artifactURI);
-        this.artifactURI = artifactURI;
+    public ReadWriteGrant(URI artifactURI) {
+        super(artifactURI);
     }
-    
+
     /**
-     * Get the artifactURI to which this grant applies.
-     * @return The artifactURI.
+     * Get the read-write group list.
+     * @return The read-write groups.
      */
-    public URI getArtifactURI() {
-        return artifactURI;
+    public List<GroupURI> getGroups() {
+        return groups;
     }
 
     /**
      * Get date after which the Grant is considered expired and should be renewed.
      * @return The grant expiry date.
      */
-    public abstract Date getExpiryDate();
-    
-    /**
-     * Get the group list.
-     * @return The list of groups.
-     */
-    public abstract List<GroupURI> getGroups();
+    public Date getExpiryDate() {
+        return expiryDate;
+    }
     
 }

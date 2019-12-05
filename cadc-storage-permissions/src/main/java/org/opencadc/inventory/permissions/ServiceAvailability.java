@@ -62,59 +62,44 @@
  *  <http://www.gnu.org/licenses/>.      pas le cas, consultez :
  *                                       <http://www.gnu.org/licenses/>.
  *
- *  $Revision: 4 $
+ *  $Revision: 5 $
  *
  ************************************************************************
  */
 
 package org.opencadc.inventory.permissions;
 
-import java.net.URI;
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.List;
-import org.opencadc.gms.GroupURI;
-import org.opencadc.inventory.InventoryUtil;
+import ca.nrc.cadc.vosi.AvailabilityPlugin;
+import ca.nrc.cadc.vosi.AvailabilityStatus;
+import org.apache.log4j.Logger;
 
-/**
- * Holds grant information about an artifact.
- * 
- * @author majorb
- *
- */
-public abstract class Grant {
+public class ServiceAvailability implements AvailabilityPlugin {
 
-    private final URI artifactURI;
-    protected final List<GroupURI> groups = new ArrayList<GroupURI>();
-    protected final Date expiryDate = new Date();
+    private static final Logger log = Logger.getLogger(ServiceAvailability.class);
 
-    /**
-     * Construct a grant for the given artifactURI.
-     * @param artifactURI The applicable targetURI.
-     */
-    public Grant(URI artifactURI) {
-        InventoryUtil.assertNotNull(Grant.class, "artifactURI", artifactURI);
-        this.artifactURI = artifactURI;
-    }
-    
-    /**
-     * Get the artifactURI to which this grant applies.
-     * @return The artifactURI.
-     */
-    public URI getArtifactURI() {
-        return artifactURI;
+    private String appName;
+
+    public ServiceAvailability() {
     }
 
-    /**
-     * Get date after which the Grant is considered expired and should be renewed.
-     * @return The grant expiry date.
-     */
-    public abstract Date getExpiryDate();
-    
-    /**
-     * Get the group list.
-     * @return The list of groups.
-     */
-    public abstract List<GroupURI> getGroups();
-    
+    @Override
+    public void setAppName(String appName) {
+        this.appName = appName;
+    }
+
+    @Override
+    public boolean heartbeat() {
+        return true;
+    }
+
+    public AvailabilityStatus getStatus() {
+        boolean isGood = true;
+        String note = "service is accepting queries";
+        return new AvailabilityStatus(isGood, null, null, null, note);
+    }
+
+    @Override
+    public void setState(String state) {
+
+    }
 }

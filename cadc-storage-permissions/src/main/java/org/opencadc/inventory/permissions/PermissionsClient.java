@@ -71,7 +71,6 @@ package org.opencadc.inventory.permissions;
 
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
-
 import java.net.URI;
 
 /**
@@ -89,17 +88,33 @@ public class PermissionsClient {
     }
     
     /**
-     * Get the permissions information about the file identified by fileURI.
+     * Get the read permissions information about the file identified by fileURI.
      * 
      * @param artifactURI Identifies the artifact for which to retrieve grant information.
-     * @return The grant information.
+     * @return The read grant information.
      * 
      * @throws ResourceNotFoundException If the file could not be found.
      * @throws TransientException If an unexpected, temporary exception occurred. 
      */
-    public Grant get(URI artifactURI) throws ResourceNotFoundException, TransientException {
+    public ReadGrant getReadGrant(URI artifactURI)
+        throws ResourceNotFoundException, TransientException {
         // TODO
-        return new Grant(artifactURI);
+        return new ReadGrant(artifactURI);
     }
-    
+
+    /**
+     * Get the read-write permissions information about the file identified by fileURI.
+     *
+     * @param artifactURI Identifies the artifact for which to retrieve grant information.
+     * @return The read-write grant information.
+     *
+     * @throws ResourceNotFoundException If the file could not be found.
+     * @throws TransientException If an unexpected, temporary exception occurred.
+     */
+    public ReadWriteGrant getReadWriteGrant(URI artifactURI)
+        throws ResourceNotFoundException, TransientException {
+        // TODO
+        return new ReadWriteGrant(artifactURI);
+    }
+
 }
