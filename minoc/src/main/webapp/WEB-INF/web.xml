@@ -8,12 +8,12 @@
 
   <display-name>minoc</display-name>
 
-<servlet>
+  <servlet>
     <servlet-name>logControl</servlet-name>
     <servlet-class>ca.nrc.cadc.log.LogControlServlet</servlet-class>
     <init-param>
       <param-name>logLevel</param-name>
-      <param-value>info</param-value>
+      <param-value>debug</param-value>
     </init-param>
     <init-param>
       <param-name>logLevelPackages</param-name>
@@ -21,6 +21,7 @@
             org.opencadc.minoc
             ca.nrc.cadc.rest
             ca.nrc.cadc.util
+            ca.nrc.cadc.vosi
       </param-value>
     </init-param>
     <init-param>
@@ -53,7 +54,7 @@
             <param-name>delete</param-name>
             <param-value>org.opencadc.minoc.DeleteAction</param-value>
         </init-param>
-        init-param>
+        <init-param>
             <param-name>head</param-name>
             <param-value>org.opencadc.minoc.HeadAction</param-value>
         </init-param>

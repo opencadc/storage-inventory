@@ -67,14 +67,11 @@
 
 package org.opencadc.minoc;
 
-import java.io.FileNotFoundException;
 import java.net.URI;
 
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
-import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.StorageLocation;
-import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.storage.StorageClient;
 import org.opencadc.minoc.ArtifactUtil.HttpMethod;
 

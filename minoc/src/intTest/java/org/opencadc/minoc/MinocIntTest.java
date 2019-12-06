@@ -93,6 +93,7 @@ import java.util.Map;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
+import org.junit.Test;
 
 /**
  * @author majorb
@@ -114,8 +115,10 @@ public class MinocIntTest {
     public MinocIntTest() {
         RegistryClient regClient = new RegistryClient();
         anonURL = regClient.getServiceURL(MINOC_SERVICE_ID, MINOC_STANDARD_ID, AuthMethod.ANON);
+        log.info("anonURL: " + anonURL);
     }
     
+    @Test
     public void testAllMethodsSimple() {
         try {
             

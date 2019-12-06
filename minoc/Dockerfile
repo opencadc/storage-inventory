@@ -4,3 +4,5 @@
 FROM cadc-tomcat:latest
 
 COPY build/libs/*.war /usr/share/tomcat/webapps
+
+EXPOSE 8080

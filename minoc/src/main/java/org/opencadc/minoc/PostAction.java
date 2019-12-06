@@ -67,7 +67,6 @@
 
 package org.opencadc.minoc;
 
-import java.io.FileNotFoundException;
 import java.net.URI;
 
 import org.apache.log4j.Logger;

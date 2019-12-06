@@ -98,7 +98,7 @@ public class PutAction extends ArtifactAction {
     /**
      * Default, no-arg constructor.
      */
-    protected PutAction() {
+    public PutAction() {
         super(HttpMethod.PUT);
     }
     
