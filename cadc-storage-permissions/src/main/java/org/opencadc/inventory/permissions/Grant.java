@@ -118,7 +118,7 @@ public abstract class Grant {
      */
     public Date getExpiryDate() {
         return expiryDate;
-    };
+    }
     
     /**
      * Get the group list.
@@ -126,6 +126,6 @@ public abstract class Grant {
      */
     public List<GroupURI> getGroups() {
         return groups;
-    };
+    }
     
 }
