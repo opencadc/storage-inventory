@@ -87,9 +87,9 @@ import org.opencadc.inventory.StorageLocation;
  * 
  * @author majorb
  */
-public class StorageClientTest {
+public class StorageAdapterTest {
     
-    private static final Logger log = Logger.getLogger(StorageClientTest.class);
+    private static final Logger log = Logger.getLogger(StorageAdapterTest.class);
 
     static {
         Log4jInit.setLevel("org.opencadc.inventory", Level.DEBUG);
@@ -98,9 +98,7 @@ public class StorageClientTest {
     @Test
     public void testPutGet() {
         try {
-            System.setProperty(StorageClient.STORAGE_ADPATER_CLASS_PROPERTY, TestStorageAdapter.class.getName());
-            // small buffer so iterator has a few loops
-            StorageClient client = new StorageClient(TestStorageAdapter.BUF_SIZE, 3);
+            StorageAdapter client = new TestStorageAdapter();
             
             URI artifactURI = URI.create("cadc:test/path");
             NewArtifact newArtifact = new NewArtifact(artifactURI);
@@ -123,7 +121,6 @@ public class StorageClientTest {
             log.error("unexpected exception", unexpected);
             Assert.fail("unexpected exception: " + unexpected);
         } finally {
-            System.clearProperty(StorageClient.STORAGE_ADPATER_CLASS_PROPERTY);
         }
     }
     
@@ -142,8 +139,7 @@ public class StorageClientTest {
             
                 log.info("Testing input stream error with fail on write number " + failPoint);
                 
-                System.setProperty(StorageClient.STORAGE_ADPATER_CLASS_PROPERTY, TestStorageAdapter.class.getName());
-                StorageClient client = new StorageClient(TestStorageAdapter.BUF_SIZE, 3);
+                StorageAdapter client = new TestStorageAdapter();
                 
                 ErrorInputStream in = new ErrorInputStream(TestStorageAdapter.data, failPoint);
                 URI artifactURI = URI.create("cadc:test/path");
@@ -156,7 +152,7 @@ public class StorageClientTest {
                     Assert.fail("Should have received exception on get");
                 } catch (Exception e) {
                     // expected
-                    Assert.assertTrue("error msg", e.getMessage().contains("failed reading from input stream"));
+                    Assert.assertTrue("error type", e instanceof ReadException); 
                 }
                 
             }
@@ -165,7 +161,6 @@ public class StorageClientTest {
             log.error("unexpected exception", unexpected);
             Assert.fail("unexpected exception: " + unexpected);
         } finally {
-            System.clearProperty(StorageClient.STORAGE_ADPATER_CLASS_PROPERTY);
         }
     }
     
@@ -184,8 +179,7 @@ public class StorageClientTest {
             
                 log.info("Testing output stream error with fail on read number " + failPoint);
                 
-                System.setProperty(StorageClient.STORAGE_ADPATER_CLASS_PROPERTY, TestStorageAdapter.class.getName());
-                StorageClient client = new StorageClient(TestStorageAdapter.BUF_SIZE, 3);
+                StorageAdapter client = new TestStorageAdapter();
                 
                 ByteArrayOutputStream out = new ErrorOutputStream(failPoint);
                 try {
@@ -194,7 +188,7 @@ public class StorageClientTest {
                     Assert.fail("Should have received exception on get");
                 } catch (Exception e) {
                     // expected
-                    Assert.assertTrue("error msg", e.getMessage().contains("failed writing to output stream"));
+                    Assert.assertTrue("error type", e instanceof WriteException);
                 }
                 
             }
@@ -203,7 +197,6 @@ public class StorageClientTest {
             log.error("unexpected exception", unexpected);
             Assert.fail("unexpected exception: " + unexpected);
         } finally {
-            System.clearProperty(StorageClient.STORAGE_ADPATER_CLASS_PROPERTY);
         }
     }
     

@@ -62,121 +62,59 @@
  *  <http://www.gnu.org/licenses/>.      pas le cas, consultez :
  *                                       <http://www.gnu.org/licenses/>.
  *
- *  $Revision: 4 $
- *
  ************************************************************************
  */
 
 package org.opencadc.inventory.storage;
 
-import ca.nrc.cadc.net.InputStreamWrapper;
-import ca.nrc.cadc.net.OutputStreamWrapper;
-import ca.nrc.cadc.net.ResourceNotFoundException;
-import ca.nrc.cadc.net.TransientException;
-
-import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.io.StreamCorruptedException;
-import java.lang.reflect.Constructor;
-import java.util.Iterator;
 import java.util.concurrent.Callable;
 import java.util.concurrent.FutureTask;
 import java.util.concurrent.LinkedBlockingQueue;
 
 import org.apache.log4j.Logger;
-import org.opencadc.inventory.Artifact;
-import org.opencadc.inventory.StorageLocation;
 
 /**
- * Provides access to storage.  
- *
+ * This class performs two threaded IO through a queue of bytes.
+ * 
  * @author majorb
- *
  */
-public class StorageClient {
+public class ThreadedIO {
     
-    private static Logger log = Logger.getLogger(StorageClient.class);
-    public static String STORAGE_ADPATER_CLASS_PROPERTY = StorageAdapter.class.getName();
+    private static Logger log = Logger.getLogger(ThreadedIO.class);
+    
     private static int DEFAULT_BUFFER_SIZE_BYTES = 2 ^ 13; // = 8192
     private static int DEFAULT_MAX_QUEUE_SIZE_BUFFERS = 8; // = 65 536
     
-    private StorageAdapter adapter;
     private int bufferSize = DEFAULT_BUFFER_SIZE_BYTES;
     private int maxQueueSize = DEFAULT_MAX_QUEUE_SIZE_BUFFERS;
-
-    public StorageClient() {
-        adapter = getStorageAdapter();
-    }
     
-    public StorageClient(int bufferSize, int maxQueueSize) {
-        adapter = getStorageAdapter();
-        this.bufferSize = bufferSize;
-        this.maxQueueSize = maxQueueSize;
-    }
-    
-    public void get(StorageLocation storageLocation, OutputStream out) throws ResourceNotFoundException, IOException, TransientException {
-        InputStreamWrapper handler = new InputStreamWrapper() {
-            public void read(InputStream in) throws IOException {
-                ioLoop(out, in);
-            }
-        };
-        adapter.get(storageLocation, handler);
-    }
-
-    public StorageMetadata put(NewArtifact newArtifact, InputStream in) throws StreamCorruptedException, IOException, TransientException {
-        OutputStreamWrapper wrapper = new OutputStreamWrapper() {
-            public void write(OutputStream out) throws IOException {
-                ioLoop(out, in);
-            }
-        };
-        return adapter.put(newArtifact, wrapper);
-    }
-
-    public void delete(StorageLocation storageLocation) throws ResourceNotFoundException, IOException, TransientException {
-        adapter.delete(storageLocation);
-    }
-
-    public Iterator<StorageMetadata> iterator() throws IOException, TransientException {
-        return adapter.iterator();
-    }
-    
-    public Iterator<StorageMetadata> iterator(String bucket) throws IOException, TransientException {
-        return adapter.iterator(bucket);
-    }
-    
-    public Iterator<StorageMetadata> unsortedIterator(String bucket) throws IOException, TransientException {
-        return adapter.unsortedIterator(bucket);
+    /**
+     * Default no-arg constructor.
+     */
+    public ThreadedIO() {
     }
     
     /**
-     * Load the configured storage adapter or the default one if none
-     * are found.
-     * 
-     * @return The storage adapter to be used by this client.
+     * Override the default buffer size and max queue size.
+     * @param bufferSize The size of each byte[] in the queue (bytes)
+     * @param maxQueueSize The max size of the queue
      */
-    private StorageAdapter getStorageAdapter() {
-        // Load the adapter based on a classname in a system property
-        String cname = System.getProperty(STORAGE_ADPATER_CLASS_PROPERTY);
-        if (cname == null) {
-            throw new IllegalStateException(
-                "No storage adapter defined by system property: " + STORAGE_ADPATER_CLASS_PROPERTY);
-        }
-      
-        try {
-            Class c = Class.forName(cname);
-            Constructor con = c.getConstructor();
-            Object o = con.newInstance();
-            StorageAdapter ret = (StorageAdapter) o;
-            log.debug("Loaded Storage adapter: " + cname);
-            return ret;
-        } catch (Throwable t) {
-            throw new IllegalStateException("Failed to load storage adapter " + cname, t);
-        }
-        
+    public ThreadedIO(int bufferSize, int maxQueueSize) {
+        this.bufferSize = bufferSize;
+        this.maxQueueSize = maxQueueSize;
     }
-    
-    private void ioLoop(OutputStream out, InputStream in) {
+
+    /**
+     * Stream between the input stream and output stream until all bytes
+     * are read or until a read or write exception occurs.
+     * @param out The byte destination.
+     * @param in The byte source.
+     * @throws ReadException If a failure occurred reading from in.
+     * @throws WriteException If a failure occurred writing to out.
+     */
+    public void ioLoop(OutputStream out, InputStream in) throws ReadException, WriteException {
 
         Throwable producerThrowable = null;
         Throwable consumerThrowable = null;
@@ -208,12 +146,12 @@ public class StorageClient {
         if (producerThrowable != null) {
             String message = "failed reading from input stream";
             log.error(message, producerThrowable);
-            throw new IllegalStateException(message, producerThrowable);
+            throw new ReadException(message, producerThrowable);
         }
         if (consumerThrowable != null) {
             String message = "failed writing to output stream";
             log.error(message, consumerThrowable);
-            throw new IllegalStateException(message, consumerThrowable);
+            throw new WriteException(message, consumerThrowable);
         }
         
     }
@@ -306,5 +244,5 @@ public class StorageClient {
         }
 
     }
-
+    
 }
