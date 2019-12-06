@@ -67,11 +67,17 @@
 
 package org.opencadc.inventory.storage.fs;
 
+import ca.nrc.cadc.util.HexUtil;
+
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.DigestInputStream;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.EmptyStackException;
 import java.util.Iterator;
 import java.util.Stack;
@@ -187,7 +193,7 @@ public class FileSystemIterator implements Iterator<StorageMetadata> {
         URI storageID = URI.create(FileSystemStorageAdapter.STORAGE_URI_SCHEME + ":" + next.pathAndFileName);
         StorageLocation storageLocation = new StorageLocation(storageID);
         try {
-            URI checksum = FileSystemStorageAdapter.createMD5Checksum(next.path);
+            URI checksum = createMD5Checksum(next.path);
             long length = Files.size(next.path);
             return new StorageMetadata(storageLocation, checksum, length);
         } catch (Exception e) {
@@ -205,6 +211,21 @@ public class FileSystemIterator implements Iterator<StorageMetadata> {
     private class PathItem {
         Path path;
         String pathAndFileName;
+    }
+    
+    private static URI createMD5Checksum(Path path) throws NoSuchAlgorithmException, IOException {
+        MessageDigest md = MessageDigest.getInstance("MD5");
+        InputStream in = Files.newInputStream(path);
+        DigestInputStream dis = new DigestInputStream(in, md);
+        
+        int bytesRead = dis.read();
+        byte[] buf = new byte[512];
+        while (bytesRead > 0) {
+            bytesRead = dis.read(buf);
+        }
+        byte[] digest = md.digest();
+        String md5String = HexUtil.toHex(digest);
+        return URI.create(FileSystemStorageAdapter.MD5_CHECKSUM_SCHEME + ":" + md5String);
     }
 
 }

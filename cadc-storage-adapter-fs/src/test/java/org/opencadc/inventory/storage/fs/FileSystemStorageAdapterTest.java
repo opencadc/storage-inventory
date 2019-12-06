@@ -67,12 +67,12 @@
 
 package org.opencadc.inventory.storage.fs;
 
-import ca.nrc.cadc.net.InputStreamWrapper;
-import ca.nrc.cadc.net.OutputStreamWrapper;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.util.HexUtil;
 import ca.nrc.cadc.util.Log4jInit;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -85,7 +85,6 @@ import java.nio.file.attribute.PosixFilePermission;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.security.MessageDigest;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
@@ -93,10 +92,8 @@ import java.util.Set;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
-import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
-import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.storage.NewArtifact;
 import org.opencadc.inventory.storage.StorageMetadata;
 import org.opencadc.inventory.storage.fs.FileSystemStorageAdapter.BucketMode;
@@ -158,33 +155,28 @@ public class FileSystemStorageAdapterTest {
             String md5Val = HexUtil.toHex(md.digest(data));
             URI checksum = URI.create("md5:" + md5Val);
             log.info("expected md5sum: " + checksum);
-            Date lastModified = new Date();
             long length = data.length;
             NewArtifact newArtifact = new NewArtifact(uri);
             newArtifact.contentChecksum = checksum;
             newArtifact.contentLength = length;
             
-            OutputStreamWrapper outWrapper = new OutputStreamWrapper() {
-                public void write(OutputStream out) throws IOException {
-                    out.write(data);
-                }
-            };
+            ByteArrayInputStream source = new ByteArrayInputStream(data);
             
             FileSystemStorageAdapter fs = new FileSystemStorageAdapter(
                 testDir, bucketMode);
-            StorageMetadata storageMetadata = fs.put(newArtifact, outWrapper);
+            StorageMetadata storageMetadata = fs.put(newArtifact, source);
             
-            TestInputWrapper inWrapper = new TestInputWrapper();
-            fs.get(storageMetadata.getStorageLocation(), inWrapper);
+            TestOutputStream dest = new TestOutputStream();
+            fs.get(storageMetadata.getStorageLocation(), dest);
             
-            String resultData = new String(inWrapper.data);
+            String resultData = new String(dest.mydata);
             log.info("result data: " + resultData);
             Assert.assertEquals("data", dataString, resultData);
             
             fs.delete(storageMetadata.getStorageLocation());
             
             try {
-                fs.get(storageMetadata.getStorageLocation(), inWrapper);
+                fs.get(storageMetadata.getStorageLocation(), dest);
                 Assert.fail("Should have received resource not found exception");
             } catch (ResourceNotFoundException e) {
                 // expected
@@ -222,7 +214,6 @@ public class FileSystemStorageAdapterTest {
             String md5Val = HexUtil.toHex(md.digest(data));
             URI checksum = URI.create("md5:" + md5Val);
             log.info("expected md5sum: " + checksum);
-            Date lastModified = new Date();
             long length = data.length;
             
             String[] files = new String[] {
@@ -247,13 +238,10 @@ public class FileSystemStorageAdapterTest {
                 NewArtifact newArtifact = new NewArtifact(uri);
                 newArtifact.contentChecksum = checksum;
                 newArtifact.contentLength = length;
-                OutputStreamWrapper outWrapper = new OutputStreamWrapper() {
-                    public void write(OutputStream out) throws IOException {
-                        out.write(data);
-                    }
-                };
+                
+                ByteArrayInputStream source = new ByteArrayInputStream(data);
 
-                StorageMetadata meta = fs.put(newArtifact, outWrapper);
+                StorageMetadata meta = fs.put(newArtifact, source);
                 storageMetadataList.add(meta);
                 log.debug("added " + meta.getStorageLocation().getStorageID());
             }
@@ -311,7 +299,6 @@ public class FileSystemStorageAdapterTest {
             String md5Val = HexUtil.toHex(md.digest(data));
             URI checksum = URI.create("md5:" + md5Val);
             log.info("expected md5sum: " + checksum);
-            Date lastModified = new Date();
             long length = data.length;
             
             String[] files = new String[] {
@@ -336,13 +323,10 @@ public class FileSystemStorageAdapterTest {
                 NewArtifact newArtifact = new NewArtifact(uri);
                 newArtifact.contentChecksum = checksum;
                 newArtifact.contentLength = length;
-                OutputStreamWrapper outWrapper = new OutputStreamWrapper() {
-                    public void write(OutputStream out) throws IOException {
-                        out.write(data);
-                    }
-                };
 
-                StorageMetadata meta = fs.put(newArtifact, outWrapper);
+                ByteArrayInputStream source = new ByteArrayInputStream(data);
+                
+                StorageMetadata meta = fs.put(newArtifact, source);
                 storageIDs.add(meta.getStorageLocation().getStorageID());
                 log.debug("added " + meta.getStorageLocation().getStorageID());
             }
@@ -379,15 +363,15 @@ public class FileSystemStorageAdapterTest {
         }
     }
     
-    private class TestInputWrapper implements InputStreamWrapper {
-
-        byte[] data;
+    private class TestOutputStream extends ByteArrayOutputStream {
         
-        public void read(InputStream inputStream) throws IOException {
-            byte[] buff = new byte[100];
-            int bytesRead = inputStream.read(buff);
-            data = new byte[bytesRead];
-            System.arraycopy(buff, 0, data, 0, bytesRead);
+        byte[] mydata = new byte[data.length];
+        int mypos = 0;
+
+        @Override
+        public void write(byte[] buf, int pos, int bytes) {
+            System.arraycopy(buf, pos, mydata, mypos, bytes);
+            mypos += bytes;
         }
         
     }

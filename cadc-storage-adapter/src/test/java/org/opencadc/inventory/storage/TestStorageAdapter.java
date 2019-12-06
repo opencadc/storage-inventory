@@ -66,8 +66,6 @@
  */
 package org.opencadc.inventory.storage;
 
-import ca.nrc.cadc.net.InputStreamWrapper;
-import ca.nrc.cadc.net.OutputStreamWrapper;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.util.HexUtil;
@@ -76,6 +74,7 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.io.StreamCorruptedException;
 import java.net.URI;
 import java.security.MessageDigest;
@@ -83,7 +82,6 @@ import java.util.Iterator;
 import java.util.Set;
 
 import org.apache.log4j.Logger;
-import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.StorageLocation;
 
 /**
@@ -116,26 +114,26 @@ public class TestStorageAdapter implements StorageAdapter {
     public TestStorageAdapter() {
     }
 
-    @Override
-    public void get(StorageLocation storageLocation, InputStreamWrapper wrapper)
-            throws ResourceNotFoundException, IOException, TransientException {
-        InputStream in = new ByteArrayInputStream(data);
-        wrapper.read(in);
+    public void get(StorageLocation storageLocation, OutputStream dest)
+        throws ResourceNotFoundException, ReadException, WriteException, StorageEngageException, TransientException {
+        InputStream source = new ByteArrayInputStream(data);
+        ThreadedIO io = new ThreadedIO(BUF_SIZE, 3);
+        io.ioLoop(dest, source);
     }
 
-    @Override
-    public void get(StorageLocation storageLocation, InputStreamWrapper wrapper, Set<String> cutouts)
-            throws ResourceNotFoundException, IOException, TransientException {
+    public void get(StorageLocation storageLocation, OutputStream dest, Set<String> cutouts)
+        throws ResourceNotFoundException, ReadException, WriteException, StorageEngageException, TransientException {
         throw new UnsupportedOperationException();
     }
 
-    @Override
-    public StorageMetadata put(NewArtifact newArtifact, OutputStreamWrapper wrapper)
-            throws StreamCorruptedException, IOException, TransientException {
-        
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        wrapper.write(out);
-        byte[] newData = out.toByteArray();
+    public StorageMetadata put(NewArtifact newArtifact, InputStream source)
+        throws ResourceNotFoundException, StreamCorruptedException, ReadException, WriteException, StorageEngageException, TransientException {
+
+        ByteArrayOutputStream dest = new ByteArrayOutputStream();
+        ThreadedIO io = new ThreadedIO(BUF_SIZE, 3);
+        io.ioLoop(dest, source);
+
+        byte[] newData = dest.toByteArray();
         log.info("received data: " + new String(newData));
         
         URI newContentChecksum = null;
@@ -162,24 +160,24 @@ public class TestStorageAdapter implements StorageAdapter {
         storageMetadata.artifactURI = newArtifact.getArtifactURI();
         return storageMetadata;
     }
-
-    @Override
-    public void delete(StorageLocation storageLocation) throws ResourceNotFoundException, IOException, TransientException {
+        
+    public void delete(StorageLocation storageLocation)
+        throws ResourceNotFoundException, IOException, StorageEngageException, TransientException {
         throw new UnsupportedOperationException();
     }
 
-    @Override
-    public Iterator<StorageMetadata> iterator() throws TransientException {
+    public Iterator<StorageMetadata> iterator()
+        throws ReadException, WriteException, StorageEngageException, TransientException {
         throw new UnsupportedOperationException();
     }
 
-    @Override
-    public Iterator<StorageMetadata> iterator(String storageBucket) throws TransientException {
+    public Iterator<StorageMetadata> iterator(String storageBucket)
+        throws ReadException, WriteException, StorageEngageException, TransientException {
         throw new UnsupportedOperationException();
     }
-    
-    @Override
-    public Iterator<StorageMetadata> unsortedIterator(String storageBucket) throws TransientException {
+
+    public Iterator<StorageMetadata> unsortedIterator(String storageBucket)
+        throws ReadException, WriteException, StorageEngageException, TransientException {
         throw new UnsupportedOperationException();
     }
 
