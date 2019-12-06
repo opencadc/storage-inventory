@@ -85,20 +85,26 @@ import org.opencadc.inventory.InventoryUtil;
 public abstract class Grant {
 
     private final URI artifactURI;
+    private Date expiryDate;
+
     protected final List<GroupURI> groups = new ArrayList<GroupURI>();
-    protected final Date expiryDate = new Date();
 
     /**
-     * Construct a grant for the given artifactURI.
+     * Construct a grant for the given artifactURI and expiryDate.
+     *
      * @param artifactURI The applicable targetURI.
+     * @param expiryDate The expiry date of the grant.
      */
-    public Grant(URI artifactURI) {
+    public Grant(URI artifactURI, Date expiryDate) {
         InventoryUtil.assertNotNull(Grant.class, "artifactURI", artifactURI);
+        InventoryUtil.assertNotNull(Grant.class, "expiryDate", expiryDate);
         this.artifactURI = artifactURI;
+        this.expiryDate = expiryDate;
     }
-    
+
     /**
      * Get the artifactURI to which this grant applies.
+     *
      * @return The artifactURI.
      */
     public URI getArtifactURI() {
@@ -107,14 +113,19 @@ public abstract class Grant {
 
     /**
      * Get date after which the Grant is considered expired and should be renewed.
+     *
      * @return The grant expiry date.
      */
-    public abstract Date getExpiryDate();
+    public Date getExpiryDate() {
+        return expiryDate;
+    };
     
     /**
      * Get the group list.
      * @return The list of groups.
      */
-    public abstract List<GroupURI> getGroups();
+    public List<GroupURI> getGroups() {
+        return groups;
+    };
     
 }

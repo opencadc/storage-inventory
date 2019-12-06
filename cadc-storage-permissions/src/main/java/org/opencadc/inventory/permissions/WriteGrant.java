@@ -62,44 +62,31 @@
  *  <http://www.gnu.org/licenses/>.      pas le cas, consultez :
  *                                       <http://www.gnu.org/licenses/>.
  *
- *  $Revision: 5 $
+ *  $Revision: 4 $
  *
  ************************************************************************
  */
 
 package org.opencadc.inventory.permissions;
 
-import ca.nrc.cadc.vosi.AvailabilityPlugin;
-import ca.nrc.cadc.vosi.AvailabilityStatus;
-import org.apache.log4j.Logger;
+import java.net.URI;
+import java.util.Date;
 
-public class ServiceAvailability implements AvailabilityPlugin {
+/**
+ * Holds grant information about an artifact.
+ * 
+ * @author majorb
+ *
+ */
+public class WriteGrant extends Grant {
 
-    private static final Logger log = Logger.getLogger(ServiceAvailability.class);
-
-    private String appName;
-
-    public ServiceAvailability() {
+    /**
+     * Construct a grant for the given artifactURI.
+     * @param artifactURI The applicable targetURI.
+     * @param expiryDate The expiry date of the grant.
+     */
+    public WriteGrant(URI artifactURI, Date expiryDate) {
+        super(artifactURI, expiryDate);
     }
 
-    @Override
-    public void setAppName(String appName) {
-        this.appName = appName;
-    }
-
-    @Override
-    public boolean heartbeat() {
-        return true;
-    }
-
-    public AvailabilityStatus getStatus() {
-        boolean isGood = true;
-        String note = "service is accepting queries";
-        return new AvailabilityStatus(isGood, null, null, null, note);
-    }
-
-    @Override
-    public void setState(String state) {
-
-    }
 }

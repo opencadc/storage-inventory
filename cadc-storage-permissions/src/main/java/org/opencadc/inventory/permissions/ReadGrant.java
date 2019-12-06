@@ -71,8 +71,6 @@ package org.opencadc.inventory.permissions;
 
 import java.net.URI;
 import java.util.Date;
-import java.util.List;
-import org.opencadc.gms.GroupURI;
 
 /**
  * Holds read grant information about an artifact.
@@ -82,35 +80,20 @@ import org.opencadc.gms.GroupURI;
  */
 public class ReadGrant extends Grant {
 
-    // Is artifact read access available to anonymous (all) users.
+    // Is the artifact available to anonymous (all) users.
     private boolean anonymousAccess = false;
 
     /**
-     * Construct a grant for the given artifactURI.
+     * Construct a read grant for the given artifactURI and expiry date.
      * @param artifactURI The applicable targetURI.
+     * @param expiryDate The expiry date of the grant.
      */
-    public ReadGrant(URI artifactURI) {
-        super(artifactURI);
-    }
-    
-    /**
-     * Get the read group list.
-     * @return The read groups.
-     */
-    public List<GroupURI> getGroups() {
-        return groups;
+    public ReadGrant(URI artifactURI, Date expiryDate) {
+        super(artifactURI, expiryDate);
     }
 
     /**
-     * Get date after which the Grant is considered expired and should be renewed.
-     * @return The grant expiry date.
-     */
-    public Date getExpiryDate() {
-        return expiryDate;
-    }
-
-    /**
-     * Check if artifact access is available to anonymous (all) users.
+     * Check if artifact is accessible by anonymous (all) users.
      * @return true if the artifact has anonymous access, false otherwise.
      */
     public boolean isAnonymousAccess() {

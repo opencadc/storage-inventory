@@ -98,8 +98,8 @@ public class PermissionsClient {
      */
     public ReadGrant getReadGrant(URI artifactURI)
         throws ResourceNotFoundException, TransientException {
-        // TODO
-        return new ReadGrant(artifactURI);
+
+        throw new UnsupportedOperationException("Not implemented");
     }
 
     /**
@@ -111,10 +111,10 @@ public class PermissionsClient {
      * @throws ResourceNotFoundException If the file could not be found.
      * @throws TransientException If an unexpected, temporary exception occurred.
      */
-    public ReadWriteGrant getReadWriteGrant(URI artifactURI)
+    public WriteGrant getReadWriteGrant(URI artifactURI)
         throws ResourceNotFoundException, TransientException {
-        // TODO
-        return new ReadWriteGrant(artifactURI);
+
+        throw new UnsupportedOperationException("Not implemented");
     }
 
 }
