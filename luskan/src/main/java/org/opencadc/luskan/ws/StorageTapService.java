@@ -67,10 +67,8 @@
 
 package org.opencadc.luskan.ws;
 
-import ca.nrc.cadc.auth.AuthenticationUtil;
 import ca.nrc.cadc.db.DBUtil;
-import org.opencadc.luskan.impl.DataSourceProviderImpl;
-import org.opencadc.luskan.impl.InitLuskanSchemaContent;
+import org.opencadc.luskan.InitLuskanSchemaContent;
 import ca.nrc.cadc.reg.client.LocalAuthority;
 import ca.nrc.cadc.reg.client.RegistryClient;
 import ca.nrc.cadc.rest.RestAction;
@@ -82,10 +80,7 @@ import ca.nrc.cadc.vosi.avail.CheckDataSource;
 import ca.nrc.cadc.vosi.avail.CheckException;
 import ca.nrc.cadc.vosi.avail.CheckResource;
 
-import java.security.AccessControlContext;
-import java.security.AccessController;
 import java.security.Principal;
-import javax.security.auth.Subject;
 import javax.security.auth.x500.X500Principal;
 import javax.sql.DataSource;
 import org.apache.log4j.Logger;
@@ -98,8 +93,6 @@ public class StorageTapService implements AvailabilityPlugin {
 
     private static final Logger log = Logger.getLogger(StorageTapService.class);
     
-    private static final Principal TRUSTED = new X500Principal("cn=servops_4a2,ou=cadc,o=hia,c=ca");
-
     private static final String TAP_TEST = "select schema_name from tap_schema.schemas11 where schema_name='tap_schema'";
     private static final String UWS_TEST = "select jobID from uws.Job limit 1";
 
@@ -126,13 +119,11 @@ public class StorageTapService implements AvailabilityPlugin {
                 return new AvailabilityStatus(false, null, null, null, RestAction.STATE_READ_ONLY_MSG);
             }
 
-            String tapDsName = DataSourceProviderImpl.getDataSourceName(null, "tapadm");
-            DataSource tapadm = DBUtil.findJNDIDataSource(tapDsName);
+            DataSource tapadm = DBUtil.findJNDIDataSource("jdbc/tapadm");
             InitDatabaseTS tsi = new InitDatabaseTS(tapadm, null, "tap_schema");
             tsi.doInit();
 
-            String uwsDsName = DataSourceProviderImpl.getDataSourceName(null, "uws");
-            DataSource uws = DBUtil.findJNDIDataSource(uwsDsName);
+            DataSource uws = DBUtil.findJNDIDataSource("jdbc/tapuser");
             InitDatabaseUWS uwsi = new InitDatabaseUWS(uws, null, "uws");
             uwsi.doInit();
 
@@ -141,10 +132,7 @@ public class StorageTapService implements AvailabilityPlugin {
             lsc.doInit();
 
             // run a couple of queries
-            CheckResource cr = new CheckDataSource(tapDsName, TAP_TEST);
-            cr.check();
-
-            cr = new CheckDataSource(uwsDsName, UWS_TEST);
+            CheckResource cr = new CheckDataSource("jdbc/tapuser", TAP_TEST);
             cr.check();
 
             LocalAuthority localAuthority = new LocalAuthority();
@@ -181,30 +169,18 @@ public class StorageTapService implements AvailabilityPlugin {
 
     @Override
     public void setState(String state) {
-        AccessControlContext acContext = AccessController.getContext();
-        Subject subject = Subject.getSubject(acContext);
-
-        if (subject == null) {
-            return;
-        }
-
-        Principal caller = AuthenticationUtil.getX500Principal(subject);
-        if (AuthenticationUtil.equals(TRUSTED, caller)) {
-            String key = appName + RestAction.STATE_MODE_KEY;
-            if (RestAction.STATE_OFFLINE.equalsIgnoreCase(state)) {
-                System.setProperty(key, RestAction.STATE_OFFLINE);
-            //} else if (RestAction.STATE_READ_ONLY.equalsIgnoreCase(state)) {
-            //    System.setProperty(key, RestAction.STATE_READ_ONLY);
-            } else if (RestAction.STATE_READ_WRITE.equalsIgnoreCase(state)) {
-                System.setProperty(key, RestAction.STATE_READ_WRITE);
-            } else {
-                throw new IllegalArgumentException("invalid state: " + state 
-                    + " expected: " + RestAction.STATE_READ_WRITE + "|" + RestAction.STATE_OFFLINE);
-            }
-            log.info("WebService state changed: " + key + "=" + state + " by " + caller + " [OK]");
+        String key = appName + RestAction.STATE_MODE_KEY;
+        if (RestAction.STATE_OFFLINE.equalsIgnoreCase(state)) {
+            System.setProperty(key, RestAction.STATE_OFFLINE);
+        //} else if (RestAction.STATE_READ_ONLY.equalsIgnoreCase(state)) {
+        //    System.setProperty(key, RestAction.STATE_READ_ONLY);
+        } else if (RestAction.STATE_READ_WRITE.equalsIgnoreCase(state)) {
+            System.setProperty(key, RestAction.STATE_READ_WRITE);
         } else {
-            log.warn("WebService state change by " + caller + " [DENIED]");
+            throw new IllegalArgumentException("invalid state: " + state
+                + " expected: " + RestAction.STATE_READ_WRITE + "|" + RestAction.STATE_OFFLINE);
         }
+        log.info("WebService state changed: " + key + "=" + state + " [OK]");
     }
     
     @Override

@@ -14,6 +14,8 @@
   <capability standardID="ivo://ivoa.net/std/VOSI#availability">
     <interface xsi:type="vs:ParamHTTP" role="std">
       <accessURL use="full">https://replace.me.com/luskan/availability</accessURL>
+      <securityMethod />
+      <securityMethod standardID="ivo://ivoa.net/sso#tls-with-certificate"/>
     </interface>
   </capability>
   

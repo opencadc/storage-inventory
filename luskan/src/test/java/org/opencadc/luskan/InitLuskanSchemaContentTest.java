@@ -65,72 +65,94 @@
  ************************************************************************
  */
 
-package org.opencadc.luskan.impl;
+package org.opencadc.luskan;
 
-
-import ca.nrc.cadc.net.ResourceNotFoundException;
-import ca.nrc.cadc.rest.InlineContentHandler;
-import ca.nrc.cadc.rest.RestAction;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.InputStream;
-import java.io.OutputStream;
+import ca.nrc.cadc.util.Log4jInit;
+import java.util.List;
+import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
+import org.junit.Assert;
+import org.junit.Test;
 
 /**
  *
  * @author pdowler
  */
-public class TempStorageGetAction extends RestAction
-{
-    private static final Logger log = Logger.getLogger(TempStorageGetAction.class);
+public class InitLuskanSchemaContentTest {
+    private static final Logger log = Logger.getLogger(InitLuskanSchemaContentTest.class);
 
-    public TempStorageGetAction() { }
-
-    @Override
-    protected InlineContentHandler getInlineContentHandler()
-    {
-        return null;
+    static {
+        Log4jInit.setLevel("ca.nrc.cadc.tap.impl", Level.INFO);
+        Log4jInit.setLevel("ca.nrc.cadc.db.version", Level.INFO);
     }
 
-    @Override
-    public void doAction()
-            throws Exception
-    {
-        String filename = syncInput.getPath();
-        TempStorageManager sm = new TempStorageManager();
-        File f = sm.getStoredFile(filename);
-        if (!f.exists())
-            throw new ResourceNotFoundException("not found: " + filename);
+    private String schema = "tap_schema";
 
-        InputStream fis = null;
-        OutputStream ostream = null;
-        try
-        {
-            //TODO: TempStorageManager has to store the requested content-type somewhere
-            //syncOutput.setHeader("Content-Type", contentType);
-            syncOutput.setHeader("Content-Length", f.length());
-            syncOutput.setCode(200);
+    @Test
+    public void testParseCreateDDL() {
+        try {
+            InitLuskanSchemaContent init = new InitLuskanSchemaContent(null, null, schema);
+            for (String fname : InitLuskanSchemaContent.CREATE_SQL) {
+                log.info("process file: " + fname);
+                List<String> statements = init.parseDDL(fname, schema);
+                Assert.assertNotNull(statements);
+                Assert.assertFalse(statements.isEmpty());
+                for (String s : statements) {
+                    String[] tokens = s.split(" ");
+                    String cmd = tokens[0];
 
-            fis = new FileInputStream(f);
-            ostream = syncOutput.getOutputStream();
-            byte[] buf = new byte[16384];
-            int num = fis.read(buf);
-            while (num > 0)
-            {
-                ostream.write(buf, 0, num);
-                num = fis.read(buf);
+                    if ("select".equalsIgnoreCase(cmd)) {
+                        String table = "notFound";
+                        for (int i = 1; i < tokens.length; i++) {
+                            if ("from".equalsIgnoreCase(tokens[i])) {
+                                table = tokens[i + 1];
+                                break;
+                            }
+                        }
+                        if (table != null && table.startsWith("tap_schema.")) {
+                            // OK
+                        } else {
+                            Assert.fail("[select] accesssing table outside tap_schema: " + table);
+                        }
+                    } else if ("update".equalsIgnoreCase(cmd)) {
+                        String table = tokens[1];
+                        if (table != null && table.startsWith("tap_schema.")) {
+                            // OK
+                        } else {
+                            Assert.fail("[update] accesssing table outside tap_schema: " + table);
+                        }
+                    } else if ("insert".equalsIgnoreCase(cmd) || "delete".equalsIgnoreCase(cmd)) {
+                        // tokens[1] is into or from
+                        String table = tokens[2];
+                        if (table != null && table.startsWith("tap_schema.")) {
+                            // OK
+                        } else {
+                            Assert.fail("[insert|delete] accesssing table outside tap_schema: " + table);
+                        }
+                    } else {
+                        Assert.fail("unexpected command: " + cmd + " [" + s + "]");
+                    }
+                }
             }
-            ostream.flush();
+        } catch (Exception unexpected) {
+            log.error("unexpected exception", unexpected);
+            Assert.fail("unexpected exception: " + unexpected);
         }
-        finally
-        {
-            if (fis != null)
-                try { fis.close(); }
-                catch(Exception ignore) { }
-            if (ostream != null)
-                try { ostream.close(); }
-                catch(Exception ignore) { }
+    }
+
+    @Test
+    public void testParseUpgradeDDL() {
+        try {
+            InitLuskanSchemaContent init = new InitLuskanSchemaContent(null, null, schema);
+            for (String fname : InitLuskanSchemaContent.UPGRADE_SQL) {
+                log.info("process file: " + fname);
+                List<String> statements = init.parseDDL(fname, schema);
+                Assert.assertNotNull(statements);
+                Assert.assertFalse(statements.isEmpty());
+            }
+        } catch (Exception unexpected) {
+            log.error("unexpected exception", unexpected);
+            Assert.fail("unexpected exception: " + unexpected);
         }
     }
 }

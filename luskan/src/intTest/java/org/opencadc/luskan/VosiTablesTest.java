@@ -98,7 +98,7 @@ public class VosiTablesTest
 
     static
     {
-        Log4jInit.setLevel("ca.nrc.cadc.luskan", Level.INFO);
+        Log4jInit.setLevel("org.opencadc.luskan", Level.INFO);
         Log4jInit.setLevel("ca.nrc.cadc.reg.client", Level.DEBUG);
     }
     

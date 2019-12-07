@@ -65,94 +65,61 @@
  ************************************************************************
  */
 
-package org.opencadc.luskan.impl;
+package org.opencadc.luskan;
 
-import ca.nrc.cadc.util.Log4jInit;
-import java.util.List;
-import org.apache.log4j.Level;
+import ca.nrc.cadc.db.version.InitDatabase;
+import java.net.URL;
+import javax.sql.DataSource;
 import org.apache.log4j.Logger;
-import org.junit.Assert;
-import org.junit.Test;
 
 /**
+ * This class automates adding/updating the description of CAOM tables and views
+ * in the tap_schema. This class assumes that it can re-use the tap_schema.ModelVersion
+ * table (usually created by InitDatabaseTS in cadc-tap-schema library) and does
+ * not try to create it.  The init includes base CAOM tables and IVOA views (ObsCore++),
+ * but <em>does not include</em> aggregate (simple or materialised) views. The service
+ * operator must create simple views manually or implement a mechanism to create and
+ * update materialised views periodically.
  *
  * @author pdowler
  */
-public class InitLuskanSchemaContentTest {
-    private static final Logger log = Logger.getLogger(InitLuskanSchemaContentTest.class);
+public class InitLuskanSchemaContent extends InitDatabase {
+    private static final Logger log = Logger.getLogger(InitLuskanSchemaContent.class);
 
-    static {
-        Log4jInit.setLevel("ca.nrc.cadc.tap.impl", Level.INFO);
-        Log4jInit.setLevel("ca.nrc.cadc.db.version", Level.INFO);
-    }
+    public static final String MODEL_NAME = "luskan-schema";
+    public static final String MODEL_VERSION = "0.5";
+    public static final String PREV_MODEL_VERSION = "n/a";
 
-    private String schema = "tap_schema";
+    // the SQL is tightly coupled to cadc-tap-schema table names (for TAP-1.1)
+    static String[] CREATE_SQL = new String[] {
+            "inventory.tap_schema_content11.sql",
+    };
 
-    @Test
-    public void testParseCreateDDL() {
-        try {
-            InitLuskanSchemaContent init = new InitLuskanSchemaContent(null, null, schema);
-            for (String fname : InitLuskanSchemaContent.CREATE_SQL) {
-                log.info("process file: " + fname);
-                List<String> statements = init.parseDDL(fname, schema);
-                Assert.assertNotNull(statements);
-                Assert.assertFalse(statements.isEmpty());
-                for (String s : statements) {
-                    String[] tokens = s.split(" ");
-                    String cmd = tokens[0];
+    // upgrade is normally the same as create since SQL is idempotent
+    static String[] UPGRADE_SQL = new String[] {
+            "inventory.tap_schema_content11.sql"
+    };
 
-                    if ("select".equalsIgnoreCase(cmd)) {
-                        String table = "notFound";
-                        for (int i = 1; i < tokens.length; i++) {
-                            if ("from".equalsIgnoreCase(tokens[i])) {
-                                table = tokens[i + 1];
-                                break;
-                            }
-                        }
-                        if (table != null && table.startsWith("tap_schema.")) {
-                            // OK
-                        } else {
-                            Assert.fail("[select] accesssing table outside tap_schema: " + table);
-                        }
-                    } else if ("update".equalsIgnoreCase(cmd)) {
-                        String table = tokens[1];
-                        if (table != null && table.startsWith("tap_schema.")) {
-                            // OK
-                        } else {
-                            Assert.fail("[update] accesssing table outside tap_schema: " + table);
-                        }
-                    } else if ("insert".equalsIgnoreCase(cmd) || "delete".equalsIgnoreCase(cmd)) {
-                        // tokens[1] is into or from
-                        String table = tokens[2];
-                        if (table != null && table.startsWith("tap_schema.")) {
-                            // OK
-                        } else {
-                            Assert.fail("[insert|delete] accesssing table outside tap_schema: " + table);
-                        }
-                    } else {
-                        Assert.fail("unexpected command: " + cmd + " [" + s + "]");
-                    }
-                }
-            }
-        } catch (Exception unexpected) {
-            log.error("unexpected exception", unexpected);
-            Assert.fail("unexpected exception: " + unexpected);
+    /**
+     * Constructor. The schema argument is used to query the ModelVersion table
+     * as {schema}.ModelVersion.
+     *
+     * @param dataSource connection with write permission to tap_schema tables
+     * @param database database name (should be null if not needed in SQL)
+     * @param schema schema name (usually tap_schema)
+     */
+    public InitLuskanSchemaContent(DataSource dataSource, String database, String schema) {
+        super(dataSource, database, schema, MODEL_NAME, MODEL_VERSION, PREV_MODEL_VERSION);
+        for (String s : CREATE_SQL) {
+            createSQL.add(s);
+        }
+        for (String s : UPGRADE_SQL) {
+            upgradeSQL.add(s);
         }
     }
 
-    @Test
-    public void testParseUpgradeDDL() {
-        try {
-            InitLuskanSchemaContent init = new InitLuskanSchemaContent(null, null, schema);
-            for (String fname : InitLuskanSchemaContent.UPGRADE_SQL) {
-                log.info("process file: " + fname);
-                List<String> statements = init.parseDDL(fname, schema);
-                Assert.assertNotNull(statements);
-                Assert.assertFalse(statements.isEmpty());
-            }
-        } catch (Exception unexpected) {
-            log.error("unexpected exception", unexpected);
-            Assert.fail("unexpected exception: " + unexpected);
-        }
+    @Override
+    protected URL findSQL(String fname) {
+        return InitLuskanSchemaContent.class.getClassLoader().getResource("sql/" + fname);
     }
 }

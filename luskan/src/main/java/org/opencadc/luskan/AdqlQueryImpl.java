@@ -65,69 +65,67 @@
 ************************************************************************
 */
 
-package org.opencadc.luskan.impl;
+package org.opencadc.luskan;
 
-
-import ca.nrc.cadc.db.DBUtil;
-import ca.nrc.cadc.uws.Job;
-import ca.nrc.cadc.vosi.actions.DataSourceProvider;
-import javax.naming.NamingException;
-import javax.sql.DataSource;
+import ca.nrc.cadc.tap.AdqlQuery;
+import ca.nrc.cadc.tap.parser.BaseExpressionDeParser;
+import ca.nrc.cadc.tap.parser.PgsphereDeParser;
+import ca.nrc.cadc.tap.parser.converter.TableNameConverter;
+import ca.nrc.cadc.tap.parser.converter.TableNameReferenceConverter;
+import ca.nrc.cadc.tap.parser.converter.TopConverter;
+import ca.nrc.cadc.tap.parser.converter.postgresql.PgFunctionNameConverter;
+import ca.nrc.cadc.tap.parser.extractor.FunctionExpressionExtractor;
+import ca.nrc.cadc.tap.parser.navigator.ExpressionNavigator;
+import ca.nrc.cadc.tap.parser.navigator.FromItemNavigator;
+import ca.nrc.cadc.tap.parser.navigator.ReferenceNavigator;
+import ca.nrc.cadc.tap.parser.navigator.SelectNavigator;
+import net.sf.jsqlparser.util.deparser.SelectDeParser;
 import org.apache.log4j.Logger;
 
 /**
+ * AdqlQuery implementation for PostgreSQL + pg-sphere and arbitrary catalogue tables.
  *
  * @author pdowler
  */
-public class DataSourceProviderImpl extends DataSourceProvider {
-    private static final Logger log = Logger.getLogger(DataSourceProviderImpl.class);
+public class AdqlQueryImpl extends AdqlQuery {
 
-    public DataSourceProviderImpl() { 
+    private static Logger log = Logger.getLogger(AdqlQueryImpl.class);
+
+    public AdqlQueryImpl() {
     }
 
     @Override
-    public DataSource getDataSource(String requestPath) {
-        String db = extractDatabaseFromPath(requestPath);
-        String dsname = getDataSourceName(db, "tapadm");
-        try {
-            log.debug("JDNI lookup: " + dsname);
-            return DBUtil.findJNDIDataSource(dsname);
-        } catch (NamingException ex) {
-            throw new RuntimeException("CONFIG: failed to find datasource " + dsname, ex);
-        }
-    }
-    
-    static String getDataSourceNameForJob(Job job, String connectionType) {
-        String path = job.getRequestPath();
-        String dbName = extractDatabaseFromPath(path);
-        String dsName = getDataSourceName(dbName, connectionType);
-        log.debug("request path: " + path + "database: " + dbName + " datasource: " + dsName);
-        return dsName;
-    }
-    
-    // used for availability checks
-    public static String getDataSourceName(String db, String connectionType) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("jdbc/");
-        if (db != null) {
-            sb.append(db).append("-");
-        }
-        sb.append(connectionType);
-        return sb.toString();
-    }
-    
-    static String extractDatabaseFromPath(String requestPath) {
-        // single monolithic database
-        // 0: empty str
-        // 1: service name
-        // 2: resource name (sync|async|tables)
-        return null;
+    protected void init() {
+        super.init();
+
+        // convert TOP -> LIMIT
+        super.navigatorList.add(new TopConverter(
+                new ExpressionNavigator(), new ReferenceNavigator(), new FromItemNavigator()));
+
+        super.navigatorList.add(new FunctionExpressionExtractor(
+                new PgFunctionNameConverter(), new ReferenceNavigator(), new FromItemNavigator()));
         
-        //String[] ss = requestPath.split("/");
-        // 0: empty str
-        // 1: service name
-        // 2: database name
-        //return ss[2];
-        // 3: resource name (sync|async|tables)
+        // TAP-1.1 version of tap_schema
+        TableNameConverter tnc = new TableNameConverter(true);
+        tnc.put("tap_schema.schemas", "tap_schema.schemas11");
+        tnc.put("tap_schema.tables", "tap_schema.tables11");
+        tnc.put("tap_schema.columns", "tap_schema.columns11");
+        tnc.put("tap_schema.keys", "tap_schema.keys11");
+        tnc.put("tap_schema.key_columns", "tap_schema.key_columns11");
+        TableNameReferenceConverter tnrc = new TableNameReferenceConverter(tnc.map);
+        super.navigatorList.add(new SelectNavigator(new ExpressionNavigator(), tnrc, tnc));
+
+    }
+
+    @Override
+    protected BaseExpressionDeParser getExpressionDeparser(SelectDeParser dep, StringBuffer sb) {
+        return new PgsphereDeParser(dep, sb);
+    }
+
+    @Override
+    public String getSQL() {
+        String sql = super.getSQL();
+        log.debug("SQL:\n" + sql);
+        return sql;
     }
 }

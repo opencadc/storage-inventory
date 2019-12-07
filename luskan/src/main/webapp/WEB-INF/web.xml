@@ -16,6 +16,7 @@
     <init-param>
       <param-name>logLevelPackages</param-name>
       <param-value>
+        org.opencadc.luskan
         ca.nrc.cadc.reg
         ca.nrc.cadc.rest
         ca.nrc.cadc.uws
@@ -60,7 +61,7 @@
         </init-param>
         <init-param>
             <param-name>ca.nrc.cadc.rest.InlineContentHandler</param-name>
-            <param-value>org.opencadc.luskan.impl.TempStorageManager</param-value>
+            <param-value>org.opencadc.luskan.TempStorageManager</param-value>
         </init-param>
         
         <load-on-startup>2</load-on-startup>
@@ -84,7 +85,7 @@
         </init-param>
         <init-param>
             <param-name>ca.nrc.cadc.rest.InlineContentHandler</param-name>
-            <param-value>ca.nrc.cadc.tap.impl.TapUploadInlineContentHandler</param-value>
+            <param-value>org.opencadc.luskan.TempStorageManager</param-value>
         </init-param>
 
         <load-on-startup>2</load-on-startup>
@@ -95,7 +96,7 @@
         <servlet-class>ca.nrc.cadc.rest.RestServlet</servlet-class>
         <init-param>
         <param-name>get</param-name>
-            <param-value>org.opencadc.luskan.impl.TempStorageGetAction</param-value>
+            <param-value>org.opencadc.luskan.TempStorageGetAction</param-value>
         </init-param>
         <load-on-startup>3</load-on-startup>
     </servlet>
@@ -141,18 +142,10 @@
     <servlet-name>AsyncQueryServlet</servlet-name>
     <url-pattern>/async/*</url-pattern>
   </servlet-mapping>
-  <servlet-mapping>
-    <servlet-name>AsyncQueryServlet</servlet-name>
-    <url-pattern>/auth-async/*</url-pattern>
-  </servlet-mapping>
 
   <servlet-mapping>
     <servlet-name>SyncQueryServlet</servlet-name>
     <url-pattern>/sync/*</url-pattern>
-  </servlet-mapping>
-  <servlet-mapping>
-    <servlet-name>SyncQueryServlet</servlet-name>
-    <url-pattern>/auth-sync/*</url-pattern>
   </servlet-mapping>
 
   <servlet-mapping>
@@ -176,11 +169,6 @@
   </servlet-mapping>
 
   <servlet-mapping>
-    <servlet-name>TableServlet</servlet-name>
-    <url-pattern>/auth-tables/*</url-pattern>
-  </servlet-mapping>
-
-  <servlet-mapping>
     <servlet-name>TempStorageServlet</servlet-name>
     <url-pattern>/results/*</url-pattern>
   </servlet-mapping>
@@ -190,10 +178,6 @@
     <web-resource-collection>
       <web-resource-name>auth</web-resource-name>
       <description/>
-      <url-pattern>/auth-async/*</url-pattern>
-      <url-pattern>/auth-sync/*</url-pattern>
-      <url-pattern>/auth-tables/*</url-pattern>
-      <url-pattern>/logControl/*</url-pattern>
       <http-method>GET</http-method>
       <http-method>POST</http-method>
       <http-method>HEAD</http-method>

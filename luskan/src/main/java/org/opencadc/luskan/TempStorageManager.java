@@ -67,13 +67,15 @@
  ************************************************************************
  */
 
-package org.opencadc.luskan.impl;
+package org.opencadc.luskan;
 
 import ca.nrc.cadc.auth.AuthMethod;
 import ca.nrc.cadc.dali.tables.TableWriter;
 import ca.nrc.cadc.reg.Standards;
 import ca.nrc.cadc.reg.client.RegistryClient;
 import ca.nrc.cadc.tap.ResultStore;
+import ca.nrc.cadc.util.MultiValuedProperties;
+import ca.nrc.cadc.util.PropertiesReader;
 import ca.nrc.cadc.uws.Job;
 import ca.nrc.cadc.uws.server.RandomStringGenerator;
 import ca.nrc.cadc.uws.web.InlineContentException;
@@ -101,6 +103,7 @@ public class TempStorageManager implements ResultStore, UWSInlineContentHandler
 
     private static final String CONFIG = TempStorageManager.class.getSimpleName() + ".properties";
     private static final String BASE_DIR_KEY = TempStorageManager.class.getName() + ".baseStorageDir";
+    private static final String URI_KEY = "serviceURI";
 
     private Job job;
     private String contentType;
@@ -113,30 +116,26 @@ public class TempStorageManager implements ResultStore, UWSInlineContentHandler
     {
         try
         {
-            URL url = TempStorageManager.class.getClassLoader().getResource(CONFIG);
-            log.debug("read: " + url.toExternalForm());
-            Properties props = new Properties();
-            props.load(url.openStream());
-            for (String s : props.stringPropertyNames())
-                log.debug("props: " + s + "=" + props.getProperty(s));
-            this.baseDir = new File(props.getProperty(BASE_DIR_KEY));
+            PropertiesReader propReader = new PropertiesReader(CONFIG);
+            this.baseDir = new File(propReader.getFirstPropertyValue(BASE_DIR_KEY));
+
+            String uriString = propReader.getFirstPropertyValue(URI_KEY);
+            log.debug("baseStorageDir:" + this.baseDir + ", service URI: " + uriString);
+            URI serviceURI = new URI(uriString);
+            RegistryClient regClient = new RegistryClient();
+            URL serviceURL = regClient.getServiceURL(serviceURI, Standards.VOSI_AVAILABILITY, AuthMethod.ANON);
+            // NOTE: "results" is used in the servlet mapping in web.xml
+            this.baseURL = serviceURL.toString().replace("availability", "results");
         }
         catch(Exception ex)
         {
             log.error("CONFIG: failed to load/read config from TempStorageManager.properties", ex);
             throw new RuntimeException("CONFIG: failed to load/read config from TempStorageManager.properties", ex);
         }
-        if (baseDir == null)
-        {
+        if (baseDir == null) {
             log.error("CONFIG: incomplete: baseDir=" + baseDir);
             throw new RuntimeException("CONFIG incomplete: baseDir=" + baseDir);
         }
-        LocalServiceURI localServiceURI = new LocalServiceURI();
-        URI serviceURI = localServiceURI.getURI();
-        RegistryClient regClient = new RegistryClient();
-        URL serviceURL = regClient.getServiceURL(serviceURI, Standards.VOSI_AVAILABILITY, AuthMethod.ANON);
-        // NOTE: "results" is used in the servlet mapping in web.xml
-        this.baseURL = serviceURL.toString().replace("availability", "results");
     }
 
     // used by TempStorageGetAction

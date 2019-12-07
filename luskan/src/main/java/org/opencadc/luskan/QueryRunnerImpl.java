@@ -62,70 +62,42 @@
 *  <http://www.gnu.org/licenses/>.      pas le cas, consultez :
 *                                       <http://www.gnu.org/licenses/>.
 *
+*  $Revision: 5 $
+*
 ************************************************************************
-*/
+ */
 
-package org.opencadc.luskan.impl;
+package org.opencadc.luskan;
 
-import ca.nrc.cadc.tap.AdqlQuery;
-import ca.nrc.cadc.tap.parser.BaseExpressionDeParser;
-import ca.nrc.cadc.tap.parser.PgsphereDeParser;
-import ca.nrc.cadc.tap.parser.converter.TableNameConverter;
-import ca.nrc.cadc.tap.parser.converter.TableNameReferenceConverter;
-import ca.nrc.cadc.tap.parser.converter.TopConverter;
-import ca.nrc.cadc.tap.parser.converter.postgresql.PgFunctionNameConverter;
-import ca.nrc.cadc.tap.parser.extractor.FunctionExpressionExtractor;
-import ca.nrc.cadc.tap.parser.navigator.ExpressionNavigator;
-import ca.nrc.cadc.tap.parser.navigator.FromItemNavigator;
-import ca.nrc.cadc.tap.parser.navigator.ReferenceNavigator;
-import ca.nrc.cadc.tap.parser.navigator.SelectNavigator;
-import net.sf.jsqlparser.util.deparser.SelectDeParser;
+import ca.nrc.cadc.tap.QueryRunner;
+import ca.nrc.cadc.db.DBUtil;
+import javax.sql.DataSource;
 import org.apache.log4j.Logger;
 
 /**
- * AdqlQuery implementation for PostgreSQL + pg-sphere and arbitrary catalogue tables.
  *
  * @author pdowler
  */
-public class AdqlQueryImpl extends AdqlQuery {
+public class QueryRunnerImpl extends QueryRunner {
+    private static final Logger log = Logger.getLogger(QueryRunnerImpl.class);
 
-    private static Logger log = Logger.getLogger(AdqlQueryImpl.class);
-
-    public AdqlQueryImpl() {
+    public QueryRunnerImpl() {
     }
 
     @Override
-    protected void init() {
-        super.init();
-
-        // convert TOP -> LIMIT
-        super.navigatorList.add(new TopConverter(
-                new ExpressionNavigator(), new ReferenceNavigator(), new FromItemNavigator()));
-
-        super.navigatorList.add(new FunctionExpressionExtractor(
-                new PgFunctionNameConverter(), new ReferenceNavigator(), new FromItemNavigator()));
-        
-        // TAP-1.1 version of tap_schema
-        TableNameConverter tnc = new TableNameConverter(true);
-        tnc.put("tap_schema.schemas", "tap_schema.schemas11");
-        tnc.put("tap_schema.tables", "tap_schema.tables11");
-        tnc.put("tap_schema.columns", "tap_schema.columns11");
-        tnc.put("tap_schema.keys", "tap_schema.keys11");
-        tnc.put("tap_schema.key_columns", "tap_schema.key_columns11");
-        TableNameReferenceConverter tnrc = new TableNameReferenceConverter(tnc.map);
-        super.navigatorList.add(new SelectNavigator(new ExpressionNavigator(), tnrc, tnc));
-
+    protected DataSource getUploadDataSource()
+            throws Exception {
+        return getQueryDataSource();
     }
 
     @Override
-    protected BaseExpressionDeParser getExpressionDeparser(SelectDeParser dep, StringBuffer sb) {
-        return new PgsphereDeParser(dep, sb);
+    protected DataSource getTapSchemaDataSource() throws Exception {
+        return getQueryDataSource();
     }
 
     @Override
-    public String getSQL() {
-        String sql = super.getSQL();
-        log.debug("SQL:\n" + sql);
-        return sql;
+    protected DataSource getQueryDataSource() throws Exception {
+        log.debug("Data Source name: jdbc/tapuser");
+        return DBUtil.findJNDIDataSource("jdbc/tapuser");
     }
 }

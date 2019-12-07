@@ -88,7 +88,7 @@ public class LuskanSyncErrorTest extends TapSyncErrorTest
     private static final Logger log = Logger.getLogger(LuskanSyncErrorTest.class);
 
     static {
-        Log4jInit.setLevel("ca.nrc.cadc.cat", Level.INFO);
+        Log4jInit.setLevel("org.opencadc.luskan", Level.INFO);
         Log4jInit.setLevel("ca.nrc.cadc.tap", Level.INFO);
         Log4jInit.setLevel("ca.nrc.cadc.conformance.uws2", Level.INFO);
     }
@@ -96,7 +96,7 @@ public class LuskanSyncErrorTest extends TapSyncErrorTest
     public LuskanSyncErrorTest()
     { 
         super(Constants.RESOURCE_ID);
-        File testCertFile = FileUtil.getFileFromResource("testCert.pem", LuskanSyncQueryTest.class);
+        File testCertFile = FileUtil.getFileFromResource("x509_CADCAnontest1.pem", LuskanSyncQueryTest.class);
         setSubject(SSLUtil.createSubject(testCertFile));
         // re-use SyncResultTest files
         File testFile = FileUtil.getFileFromResource("SyncErrorTest-ATTEMPT-DELETE.properties", LuskanSyncErrorTest.class);

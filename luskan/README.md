@@ -38,9 +38,6 @@ luskan.uws.url=jdbc:postgresql://postgres/content
 
 ### optional intTest configuration
 ca.nrc.cadc.reg.client.RegistryClient.host={SSL terminator host name}
-ca.nrc.cadc.auth.BasicX509TrustManager.trust=true
-
-## LocalAuthority.properties
 
 ### local authority map
 ###
@@ -82,6 +79,6 @@ In a container environment, the intTest could run as follows:
 
 3. Start reg service using (https://github.com/opencadc/docker-base/tree/master/cadc-tomcat)
 4. Start luskan as above
-5. Link or copy a proxy certificate signed by a trusted CA or one of the CAs specified in /conf/cacerts to src/intTest/resource/testCert.pem
+5. (CADC ONY) Set the $A environment variable to point to the directory where the CADC test certs are. 
 6. Run command
 gradle -Dca.nrc.cadc.reg.client.RegistryClient.host={SSL terminator host name}  -Dca.nrc.cadc.auth.BasicX509TrustManager.trust=True intTest

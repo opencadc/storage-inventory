@@ -67,8 +67,8 @@
 
 package org.opencadc.luskan.ws;
 
-import org.opencadc.luskan.impl.CvodbQueryRunner;
-import ca.nrc.cadc.auth.ACIdentityManager;
+import ca.nrc.cadc.auth.X500IdentityManager;
+import org.opencadc.luskan.QueryRunnerImpl;
 import ca.nrc.cadc.uws.server.JobExecutor;
 import ca.nrc.cadc.uws.server.JobPersistence;
 import ca.nrc.cadc.uws.server.SimpleJobManager;
@@ -92,11 +92,11 @@ public class QueryJobManager extends SimpleJobManager
     {
         super();
         // persist UWS jobs to PostgreSQL.
-        JobPersistence jobPersist = new PostgresJobPersistence(new ACIdentityManager());
+        JobPersistence jobPersist = new PostgresJobPersistence(new X500IdentityManager());
 
         // max threads: 6 == number of simultaneously running async queries (per
         // web server), plus sync queries, plus VOSI-tables queries
-        JobExecutor jobExec = new ThreadPoolExecutor(jobPersist, CvodbQueryRunner.class, 6);
+        JobExecutor jobExec = new ThreadPoolExecutor(jobPersist, QueryRunnerImpl.class, 6);
 
         super.setJobPersistence(jobPersist);
         super.setJobExecutor(jobExec);
