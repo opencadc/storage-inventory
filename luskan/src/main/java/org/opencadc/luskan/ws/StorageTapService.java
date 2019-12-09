@@ -67,7 +67,10 @@
 
 package org.opencadc.luskan.ws;
 
+import ca.nrc.cadc.auth.AuthMethod;
 import ca.nrc.cadc.db.DBUtil;
+import ca.nrc.cadc.reg.Standards;
+import ca.nrc.cadc.vosi.avail.CheckWebService;
 import org.opencadc.luskan.InitLuskanSchemaContent;
 import ca.nrc.cadc.reg.client.LocalAuthority;
 import ca.nrc.cadc.reg.client.RegistryClient;
@@ -80,6 +83,7 @@ import ca.nrc.cadc.vosi.avail.CheckDataSource;
 import ca.nrc.cadc.vosi.avail.CheckException;
 import ca.nrc.cadc.vosi.avail.CheckResource;
 
+import java.net.URI;
 import java.security.Principal;
 import javax.security.auth.x500.X500Principal;
 import javax.sql.DataSource;
@@ -123,7 +127,7 @@ public class StorageTapService implements AvailabilityPlugin {
             InitDatabaseTS tsi = new InitDatabaseTS(tapadm, null, "tap_schema");
             tsi.doInit();
 
-            DataSource uws = DBUtil.findJNDIDataSource("jdbc/tapuser");
+            DataSource uws = DBUtil.findJNDIDataSource("jdbc/tapadm");
             InitDatabaseUWS uwsi = new InitDatabaseUWS(uws, null, "uws");
             uwsi.doInit();
 
@@ -139,20 +143,20 @@ public class StorageTapService implements AvailabilityPlugin {
             RegistryClient reg = new RegistryClient();
 
             // TODO - These do not work for intTest unless the testing environment deploys these services.
-//            URI credURI = localAuthority.getServiceURI(Standards.CRED_PROXY_10.toString());
-//            String url = reg.getServiceURL(credURI, Standards.VOSI_AVAILABILITY, AuthMethod.ANON).toExternalForm();
-//            CheckResource checkResource = new CheckWebService(url);
-//            //checkResource.check();
-//
-//            URI usersURI = localAuthority.getServiceURI(Standards.UMS_USERS_01.toString());
-//            url = reg.getServiceURL(usersURI, Standards.VOSI_AVAILABILITY, AuthMethod.ANON).toExternalForm();
-//            checkResource = new CheckWebService(url);
-//            //checkResource.check();
-//
-//            URI groupsURI = localAuthority.getServiceURI(Standards.GMS_SEARCH_01.toString());
-//            url = reg.getServiceURL(groupsURI, Standards.VOSI_AVAILABILITY, AuthMethod.ANON).toExternalForm();
-//            checkResource = new CheckWebService(url);
-//            checkResource.check();
+            URI credURI = localAuthority.getServiceURI(Standards.CRED_PROXY_10.toString());
+            String url = reg.getServiceURL(credURI, Standards.VOSI_AVAILABILITY, AuthMethod.ANON).toExternalForm();
+            CheckResource checkResource = new CheckWebService(url);
+            //checkResource.check();
+
+            URI usersURI = localAuthority.getServiceURI(Standards.UMS_USERS_01.toString());
+            url = reg.getServiceURL(usersURI, Standards.VOSI_AVAILABILITY, AuthMethod.ANON).toExternalForm();
+            checkResource = new CheckWebService(url);
+            //checkResource.check();
+
+            URI groupsURI = localAuthority.getServiceURI(Standards.GMS_SEARCH_01.toString());
+            url = reg.getServiceURL(groupsURI, Standards.VOSI_AVAILABILITY, AuthMethod.ANON).toExternalForm();
+            checkResource = new CheckWebService(url);
+            checkResource.check();
 
         } catch (CheckException ce) {
             // tests determined that the resource is not working
