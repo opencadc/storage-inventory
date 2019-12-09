@@ -71,6 +71,7 @@ package org.opencadc.inventory.permissions;
 
 import java.net.URI;
 import java.util.Date;
+import org.opencadc.inventory.InventoryUtil;
 
 /**
  * Holds read grant information about an artifact.
@@ -81,15 +82,18 @@ import java.util.Date;
 public class ReadGrant extends Grant {
 
     // Is the artifact available to anonymous (all) users.
-    private boolean anonymousAccess = false;
+    private boolean anonymousAccess;
 
     /**
      * Construct a read grant for the given artifactURI and expiry date.
      * @param artifactURI The applicable targetURI.
      * @param expiryDate The expiry date of the grant.
+     * @param anonymousAccess true is the artifact has anonymous access, false otherwise.
      */
-    public ReadGrant(URI artifactURI, Date expiryDate) {
+    public ReadGrant(URI artifactURI, Date expiryDate, boolean anonymousAccess) {
         super(artifactURI, expiryDate);
+        InventoryUtil.assertNotNull(ReadGrant.class, "anonymousAccess", anonymousAccess);
+        this.anonymousAccess = anonymousAccess;
     }
 
     /**

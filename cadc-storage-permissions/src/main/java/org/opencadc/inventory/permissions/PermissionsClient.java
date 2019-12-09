@@ -103,7 +103,7 @@ public class PermissionsClient {
     }
 
     /**
-     * Get the read-write permissions information about the file identified by fileURI.
+     * Get the write permissions information about the file identified by fileURI.
      *
      * @param artifactURI Identifies the artifact for which to retrieve grant information.
      * @return The read-write grant information.
