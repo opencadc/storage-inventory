@@ -1,0 +1,28 @@
+version: "3.2"
+services:
+
+  storage-permissions:
+    image: cadc-storage-permissions:latest
+    build: ./
+    depends_on:
+      - "haproxy"
+    ports:
+      - "8080:8080"
+    networks:
+      - "storage_permissions"
+    volumes:
+      - "/Users/jburke/work/docker/cadc-tomcat/conf:/conf:ro"
+      - "/Users/jburke/work/docker/cadc-tomcat/logs:/logs:rw"
+
+  haproxy:
+    image: cadc-haproxy-dev:latest
+    ports:
+      - "443:443"
+    networks:
+      - "storage_permissions"
+    volumes:
+      - "/Users/jburke/work/docker/cadc-haproxy-dev/conf:/conf:ro"
+      - "/Users/jburke/work/docker/cadc-tomcat/logs:/logs:rw"
+
+networks:
+  storage_permissions:

@@ -62,45 +62,44 @@
  *  <http://www.gnu.org/licenses/>.      pas le cas, consultez :
  *                                       <http://www.gnu.org/licenses/>.
  *
- *  $Revision: 4 $
+ *  $Revision: 5 $
  *
  ************************************************************************
  */
 
 package org.opencadc.inventory.permissions;
 
-import java.net.URI;
-import java.util.Date;
-import org.opencadc.inventory.InventoryUtil;
+import ca.nrc.cadc.vosi.AvailabilityPlugin;
+import ca.nrc.cadc.vosi.AvailabilityStatus;
+import org.apache.log4j.Logger;
 
-/**
- * Holds read grant information about an artifact.
- * 
- * @author majorb
- *
- */
-public class ReadGrant extends Grant {
+public class ServiceAvailability implements AvailabilityPlugin {
 
-    // Is the artifact available to anonymous (all) users.
-    private boolean anonymousAccess;
+    private static final Logger log = Logger.getLogger(ServiceAvailability.class);
 
-    /**
-     * Construct a read grant for the given artifactURI and expiry date.
-     * @param artifactURI The applicable targetURI.
-     * @param expiryDate The expiry date of the grant.
-     * @param anonymousAccess true is the artifact has anonymous access, false otherwise.
-     */
-    public ReadGrant(URI artifactURI, Date expiryDate, boolean anonymousAccess) {
-        super(artifactURI, expiryDate);
-        this.anonymousAccess = anonymousAccess;
+    private String appName;
+
+    public ServiceAvailability() {
     }
 
-    /**
-     * Check if artifact is accessible by anonymous (all) users.
-     * @return true if the artifact has anonymous access, false otherwise.
-     */
-    public boolean isAnonymousAccess() {
-        return anonymousAccess;
+    @Override
+    public void setAppName(String appName) {
+        this.appName = appName;
     }
 
+    @Override
+    public boolean heartbeat() {
+        return true;
+    }
+
+    public AvailabilityStatus getStatus() {
+        boolean isGood = true;
+        String note = "service is accepting queries";
+        return new AvailabilityStatus(isGood, null, null, null, note);
+    }
+
+    @Override
+    public void setState(String state) {
+
+    }
 }
