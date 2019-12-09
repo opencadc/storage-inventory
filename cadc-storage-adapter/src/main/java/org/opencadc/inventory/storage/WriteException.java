@@ -62,58 +62,39 @@
  *  <http://www.gnu.org/licenses/>.      pas le cas, consultez :
  *                                       <http://www.gnu.org/licenses/>.
  *
- *  $Revision: 4 $
- *
  ************************************************************************
  */
 
 package org.opencadc.inventory.storage;
 
-import java.net.URI;
-
-import org.opencadc.inventory.InventoryUtil;
-import org.opencadc.inventory.StorageLocation;
+import java.io.IOException;
 
 /**
- * Class to hold artifact metadata from a storage implementation.
+ * This exception indicates that the consumer of bytes in a stream
+ * failed or timed-out.
+ * On a GET this indicates a problem with the client.
+ * On a PUT this indicates a problem with the storage system.
  * 
  * @author majorb
- *
  */
-public class StorageMetadata {
-
-    private final StorageLocation storageLocation;
-    private final URI contentChecksum;
-    private final Long contentLength;
-    public URI artifactURI;
+@SuppressWarnings("serial")
+public class WriteException extends IOException {
     
-    public StorageMetadata(StorageLocation storageLocation, URI contentChecksum, Long contentLength) {
-        InventoryUtil.assertNotNull(StorageMetadata.class, "storageLocation", storageLocation);
-        InventoryUtil.assertNotNull(StorageMetadata.class, "contentChecksum", contentChecksum);
-        InventoryUtil.assertNotNull(StorageMetadata.class, "contentLength", contentLength);
-        this.storageLocation = storageLocation;
-        this.contentChecksum = contentChecksum;
-        this.contentLength = contentLength;
+    /**
+     * Construct an exception.
+     * @param message Exception message.
+     */
+    public WriteException(String message) {
+        super(message);
     }
 
-    public StorageLocation getStorageLocation() {
-        return storageLocation;
-    }
-
-    public URI getContentChecksum() {
-        return contentChecksum;
-    }
-
-    public Long getContentLength() {
-        return contentLength;
+    /**
+     * Construct an exception.
+     * @param message Exception message.
+     * @param cause Exception cause.
+     */
+    public WriteException(String message, Throwable cause) {
+        super(message, cause);
     }
     
-    public boolean equals(Object o) {
-        if (o == null || !(o instanceof StorageMetadata)) {
-            return false;
-        }
-        StorageMetadata other = (StorageMetadata) o;
-        return this.storageLocation.equals(other.storageLocation);
-    }
-
 }

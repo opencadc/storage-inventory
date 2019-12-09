@@ -62,107 +62,67 @@
  *  <http://www.gnu.org/licenses/>.      pas le cas, consultez :
  *                                       <http://www.gnu.org/licenses/>.
  *
- *  $Revision: 4 $
- *
  ************************************************************************
  */
 
-package org.opencadc.inventory.storage;
-
-import ca.nrc.cadc.net.InputStreamWrapper;
-import ca.nrc.cadc.net.OutputStreamWrapper;
-import ca.nrc.cadc.net.ResourceNotFoundException;
-import ca.nrc.cadc.net.TransientException;
+package org.opencadc.inventory.storage.fs;
 
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.io.StreamCorruptedException;
-import java.lang.reflect.Constructor;
 import java.net.URI;
-import java.util.Iterator;
+import java.net.URISyntaxException;
+import java.nio.file.Path;
 
 import org.apache.log4j.Logger;
-import org.opencadc.inventory.Artifact;
-import org.opencadc.inventory.StorageLocation;
+import org.opencadc.inventory.storage.StorageMetadata;
 
 /**
- * Provides access to storage.  
- *
+ * Class that will set the artifactURIs for items returned by a file
+ * system iterator.
+ * 
  * @author majorb
- *
  */
-public class StorageClient {
+public class ArtifactIterator extends FileSystemIterator {
     
-    private static Logger log = Logger.getLogger(StorageClient.class);
-    private static String STORAGE_ADPATER_CLASS_PROPERTY = StorageAdapter.class.getName();
-    
-    private StorageAdapter adapter;
+    private static final Logger log = Logger.getLogger(ArtifactIterator.class);
 
-    public StorageClient() {
-        adapter = getStorageAdapter();
-    }
-    
-    public void get(URI storageID, OutputStream out) throws ResourceNotFoundException, TransientException {
-        InputStreamWrapper handler = new InputStreamWrapper() {
-            public void read(InputStream in) throws IOException {
-                ioLoop(out, in);
-            }
-        };
-        adapter.get(storageID, handler);
-    }
-
-    public StorageLocation put(Artifact artifact, InputStream in, String bucket) throws StreamCorruptedException, TransientException {
-        OutputStreamWrapper wrapper = new OutputStreamWrapper() {
-            public void write(OutputStream out) throws IOException {
-                ioLoop(out, in);
-            }
-        };
-        return adapter.put(artifact, wrapper, bucket);
-    }
-
-    public void delete(URI storageID) throws ResourceNotFoundException, TransientException {
-        adapter.delete(storageID);
-    }
-
-    public Iterator<StorageMetadata> iterator() throws TransientException {
-        return adapter.iterator();
-    }
-    
-    public Iterator<StorageMetadata> iterator(String bucket) throws TransientException {
-        return adapter.iterator(bucket);
-    }
-    
-    private void ioLoop(OutputStream out, InputStream in) {
-        // TODO: Write 2 threaded io loop--one thread reading
-        // and one thread writing.
+    /**
+     * ArtifactIterator constructor.
+     * 
+     * @param dir The directory to iterate
+     * @param ignoreDepth The depth of directories to navigate until non-bucket
+     *     directories are seen.
+     * @param fixedParentDir A path to add to the start of all returned files.
+     * @throws IOException If there is a problem with file-system interaction.
+     */
+    public ArtifactIterator(Path dir, int ignoreDepth, String fixedParentDir) throws IOException {
+        super(dir, ignoreDepth, fixedParentDir);
+        // TODO Auto-generated constructor stub
     }
     
     /**
-     * Load the configured storage adapter or the default one if none
-     * are found.
-     * 
-     * @return The storage adapter to be used by this client.
+     * Get the next file element and add the artifact URI.
+     * @return The next file in the iterator, identified by StorageMetadata.
      */
-    private StorageAdapter getStorageAdapter() {
-        // Load the adapter based on a classname in a system property
-        String cname = System.getProperty(STORAGE_ADPATER_CLASS_PROPERTY);
-        if (cname == null) {
-            throw new IllegalStateException(
-                "No storage adapter defined by system property: " + STORAGE_ADPATER_CLASS_PROPERTY);
+    @Override
+    public StorageMetadata next() {
+        StorageMetadata meta = super.next();
+        URI storageID = meta.getStorageLocation().getStorageID();
+        String ssp = storageID.getSchemeSpecificPart();
+        int firstSlash = ssp.indexOf("/");
+        if (firstSlash < 1) {
+            log.debug("unrecognized storageID format");
+        } else {
+            StringBuilder sb = new StringBuilder();
+            sb.append(ssp.substring(0, firstSlash));
+            sb.append(ssp.substring(firstSlash + 1));
+            try {
+                meta.artifactURI = new URI(sb.toString());
+            } catch (URISyntaxException e) {
+                throw new RuntimeException("BUG: failed to reconstruct Artifact.uri for " + meta, e);
+            }
+            log.debug("set artifactURI to: " + meta.artifactURI);
         }
-      
-        try {
-            Class c = Class.forName(cname);
-            Constructor con = c.getConstructor();
-            Object o = con.newInstance();
-            StorageAdapter ret = (StorageAdapter) o;
-            log.debug("Loaded Storage adapter: " + cname);
-            return ret;
-        } catch (Throwable t) {
-            throw new IllegalStateException("Failed to load storage adapter " + cname, t);
-        }
-        
+        return meta;
     }
 
 }

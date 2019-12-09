@@ -62,58 +62,35 @@
  *  <http://www.gnu.org/licenses/>.      pas le cas, consultez :
  *                                       <http://www.gnu.org/licenses/>.
  *
- *  $Revision: 4 $
- *
  ************************************************************************
  */
 
 package org.opencadc.inventory.storage;
 
-import java.net.URI;
-
-import org.opencadc.inventory.InventoryUtil;
-import org.opencadc.inventory.StorageLocation;
-
 /**
- * Class to hold artifact metadata from a storage implementation.
+ * This exception indicates that the storage adapter failed
+ * to connect to or interact with its storage system.
  * 
  * @author majorb
- *
  */
-public class StorageMetadata {
+@SuppressWarnings("serial")
+public class StorageEngageException extends Exception {
 
-    private final StorageLocation storageLocation;
-    private final URI contentChecksum;
-    private final Long contentLength;
-    public URI artifactURI;
-    
-    public StorageMetadata(StorageLocation storageLocation, URI contentChecksum, Long contentLength) {
-        InventoryUtil.assertNotNull(StorageMetadata.class, "storageLocation", storageLocation);
-        InventoryUtil.assertNotNull(StorageMetadata.class, "contentChecksum", contentChecksum);
-        InventoryUtil.assertNotNull(StorageMetadata.class, "contentLength", contentLength);
-        this.storageLocation = storageLocation;
-        this.contentChecksum = contentChecksum;
-        this.contentLength = contentLength;
+    /**
+     * Construct an exception.
+     * @param message Exception message.
+     */
+    public StorageEngageException(String message) {
+        super(message);
     }
 
-    public StorageLocation getStorageLocation() {
-        return storageLocation;
-    }
-
-    public URI getContentChecksum() {
-        return contentChecksum;
-    }
-
-    public Long getContentLength() {
-        return contentLength;
+    /**
+     * Construct an exception.
+     * @param message Exception message.
+     * @param cause Exception cause.
+     */
+    public StorageEngageException(String message, Throwable cause) {
+        super(message, cause);
     }
     
-    public boolean equals(Object o) {
-        if (o == null || !(o instanceof StorageMetadata)) {
-            return false;
-        }
-        StorageMetadata other = (StorageMetadata) o;
-        return this.storageLocation.equals(other.storageLocation);
-    }
-
 }

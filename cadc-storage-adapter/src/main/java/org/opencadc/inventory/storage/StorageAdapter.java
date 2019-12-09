@@ -69,17 +69,16 @@
 
 package org.opencadc.inventory.storage;
 
-import ca.nrc.cadc.net.InputStreamWrapper;
-import ca.nrc.cadc.net.OutputStreamWrapper;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.io.StreamCorruptedException;
-import java.net.URI;
 import java.util.Iterator;
 import java.util.Set;
 
-import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.StorageLocation;
 
 /**
@@ -91,65 +90,108 @@ import org.opencadc.inventory.StorageLocation;
 public interface StorageAdapter {
 
     /**
-     * Get from storage the artifact identified by storageID.
+     * Get from storage the artifact identified by storageLocation.
      * 
-     * @param storageID The artifact location identifier.
-     * @param wrapper An input stream wrapper to receive the bytes.
+     * @param storageLocation The storage location containing storageID and storageBucket.
+     * @param dest The destination stream.
      * 
      * @throws ResourceNotFoundException If the artifact could not be found.
+     * @throws ReadException If the storage system failed to stream.
+     * @throws WriteException If the client failed to stream.
+     * @throws StorageEngageException If the adapter failed to interact with storage.
      * @throws TransientException If an unexpected, temporary exception occurred. 
      */
-    public void get(URI storageID, InputStreamWrapper wrapper) throws ResourceNotFoundException, TransientException;
+    public void get(StorageLocation storageLocation, OutputStream dest)
+        throws ResourceNotFoundException, ReadException, WriteException, StorageEngageException, TransientException;
     
     /**
-     * Get from storage the artifact identified by storageID.
+     * Get from storage the artifact identified by storageLocation.
      * 
-     * @param storageID The artifact location identifier.
-     * @param wrapper An input stream wrapper to receive the bytes.
+     * @param storageLocation The storage location containing storageID and storageBucket.
+     * @param dest The destination stream.
      * @param cutouts Cutouts to be applied to the artifact
      * 
      * @throws ResourceNotFoundException If the artifact could not be found.
+     * @throws ReadException If the storage system failed to stream.
+     * @throws WriteException If the client failed to stream.
+     * @throws StorageEngageException If the adapter failed to interact with storage.
      * @throws TransientException If an unexpected, temporary exception occurred. 
      */
-    public void get(URI storageID, InputStreamWrapper wrapper, Set<String> cutouts) throws ResourceNotFoundException, TransientException;
+    public void get(StorageLocation storageLocation, OutputStream dest, Set<String> cutouts)
+        throws ResourceNotFoundException, ReadException, WriteException, StorageEngageException, TransientException;
     
     /**
      * Write an artifact to storage.
+     * The value of storageBucket in the returned StorageMetadata and StorageLocation can be used to
+     * retrieve batches of artifacts in some of the iterator signatures defined in this interface.
+     * Batches of artifacts can be listed by bucket in two of the iterator methods in this interface.
+     * If storageBucket is null then the caller will not be able perform bucket-based batch
+     * validation through the iterator methods.
      * 
-     * @param artifact The artifact metadata.
-     * @param wrapper The wrapper for data of the artifact.
-     * @param bucket An organizational code for storage
-     * @return The storageLocation with storageID.
-     * 
-     * @throws StreamCorruptedException If the calculated checksum does not the expected checksum.
-     * @throws TransientException If an unexpected, temporary exception occurred.
-     */
-    public StorageLocation put(Artifact artifact, OutputStreamWrapper wrapper, String bucket) throws StreamCorruptedException, TransientException;
-        
-    /**
-     * Delete from storage the artifact identified by storageID.
-     * @param storageID Identifies the artifact to delete.
+     * @param newArtifact The holds information about the incoming artifact.  If the contentChecksum
+     *     and contentLength are set, they will be used to validate the bytes received.
+     * @param source The stream from which to read.
+     * @return The storage metadata.
      * 
      * @throws ResourceNotFoundException If the artifact could not be found.
+     * @throws StreamCorruptedException If the calculated checksum does not the expected checksum.
+     * @throws ReadException If the client failed to stream.
+     * @throws WriteException If the storage system failed to stream.
+     * @throws StorageEngageException If the adapter failed to interact with storage.
+     * @throws TransientException If an unexpected, temporary exception occurred.
+     */
+    public StorageMetadata put(NewArtifact newArtifact, InputStream source)
+        throws ResourceNotFoundException, StreamCorruptedException, ReadException, WriteException,
+            StorageEngageException, TransientException;
+        
+    /**
+     * Delete from storage the artifact identified by storageLocation.
+     * @param storageLocation Identifies the artifact to delete.
+     * 
+     * @throws ResourceNotFoundException If the artifact could not be found.
+     * @throws IOException If an unrecoverable error occurred.
+     * @throws StorageEngageException If the adapter failed to interact with storage.
      * @throws TransientException If an unexpected, temporary exception occurred. 
      */
-    public void delete(URI storageID) throws ResourceNotFoundException, TransientException;
+    public void delete(StorageLocation storageLocation)
+        throws ResourceNotFoundException, IOException, StorageEngageException, TransientException;
     
     /**
      * Iterator of items ordered by their storageIDs.
      * @return An iterator over an ordered list of items in storage.
      * 
+     * @throws ReadException If the storage system failed to stream.
+     * @throws WriteException If the client failed to stream.
+     * @throws StorageEngageException If the adapter failed to interact with storage.
      * @throws TransientException If an unexpected, temporary exception occurred. 
      */
-    public Iterator<StorageMetadata> iterator() throws TransientException;
+    public Iterator<StorageMetadata> iterator()
+        throws ReadException, WriteException, StorageEngageException, TransientException;
     
     /**
-     * Iterator of itmes ordered by their storageIDs.
-     * @param bucket Only iterate over items in this bucket.
+     * Iterator of items ordered by their storageIDs in the given bucket.
+     * @param storageBucket Only iterate over items in this bucket.
      * @return An iterator over an ordered list of items in this storage bucket.
      * 
+     * @throws ReadException If the storage system failed to stream.
+     * @throws WriteException If the client failed to stream.
+     * @throws StorageEngageException If the adapter failed to interact with storage.
      * @throws TransientException If an unexpected, temporary exception occurred. 
      */
-    public Iterator<StorageMetadata> iterator(String bucket) throws TransientException;
+    public Iterator<StorageMetadata> iterator(String storageBucket)
+        throws ReadException, WriteException, StorageEngageException, TransientException;
+    
+    /**
+     * An unordered iterator of items in the given bucket.
+     * @param storageBucket Only iterate over items in this bucket.
+     * @return An iterator over an ordered list of items in this storage bucket.
+     * 
+     * @throws ReadException If the storage system failed to stream.
+     * @throws WriteException If the client failed to stream.
+     * @throws StorageEngageException If the adapter failed to interact with storage.
+     * @throws TransientException If an unexpected, temporary exception occurred. 
+     */
+    public Iterator<StorageMetadata> unsortedIterator(String storageBucket)
+        throws ReadException, WriteException, StorageEngageException, TransientException;
     
 }

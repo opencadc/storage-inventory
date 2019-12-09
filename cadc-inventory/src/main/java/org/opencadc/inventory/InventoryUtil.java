@@ -70,6 +70,8 @@ package org.opencadc.inventory;
 import ca.nrc.cadc.util.HexUtil;
 import java.lang.reflect.Field;
 import java.net.URI;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.Date;
 import java.util.List;
 import java.util.UUID;
@@ -84,6 +86,27 @@ public abstract class InventoryUtil {
     private static final Logger log = Logger.getLogger(InventoryUtil.class);
 
     private InventoryUtil() { 
+    }
+    
+    /**
+     * Compute a short code based on the argument URI. The returned code is a hex
+     * string of the specified length generated from the URI.
+     * 
+     * @param uri the input URI
+     * @param length length of hex string
+     * @return short code
+     */
+    public static String computeBucket(URI uri, int length) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-1");
+            byte[] bytes = Entity.primitiveValueToBytes(uri, "File.uri", md.getAlgorithm());
+            md.update(bytes);
+            byte[] sha = md.digest();
+            String hex = HexUtil.toHex(sha);
+            return hex.substring(0, length);
+        } catch (NoSuchAlgorithmException ex) {
+            throw new RuntimeException("BUG: failed to get instance of SHA-1", ex);
+        }
     }
 
     /**
@@ -107,7 +130,11 @@ public abstract class InventoryUtil {
         String ssp = uri.getSchemeSpecificPart();
         if (scheme == null || ssp == null || ssp.isEmpty()) {
             throw new IllegalArgumentException(caller.getSimpleName() 
-                + ": invalid Artifact.uri: " + uri + " -- expected {scheme}:{scheme-specific-part}");
+                + ": invalid Artifact.uri: " + uri + " -- expected {scheme}:{scheme-specific-part} where {scheme-specific-part} is a relative path");
+        }
+        if (ssp.charAt(0) == '/') {
+            throw new IllegalArgumentException(caller.getSimpleName() 
+                + ": invalid Artifact.uri: " + uri + " -- expected {scheme}:{scheme-specific-part} where {scheme-specific-part} is a relative path");
         }
         String[] comps = ssp.split("/");
         for (String c : comps) {

@@ -141,7 +141,8 @@ public class SQLGenerator {
             "uriBucket",
             "contentChecksum", "contentLastModified", "contentLength", "contentType", "contentEncoding",
             "siteLocations",
-            "storageLocation",
+            "storageLocation_storageID",
+            "storageLocation_storageBucket",
             "lastModified",
             "metaChecksum",
             "id" // last column is always PK
@@ -432,6 +433,15 @@ public class SQLGenerator {
         }
     }
     
+    private void safeSetString(PreparedStatement prep, int col, String value) throws SQLException {
+        log.debug("safeSetString: " + col + " " + value);
+        if (value != null) {
+            prep.setString(col, value);
+        } else {
+            prep.setNull(col, Types.VARCHAR);
+        }
+    }
+    
     private class ArtifactPut implements EntityPut<Artifact> {
         private final Calendar utc = Calendar.getInstance(DateUtil.UTC);
         private final boolean update;
@@ -468,16 +478,8 @@ public class SQLGenerator {
             prep.setString(col++, value.getContentChecksum().toASCIIString());
             prep.setTimestamp(col++, new Timestamp(value.getContentLastModified().getTime()), utc);
             prep.setLong(col++, value.getContentLength());
-            if (value.contentType != null) {
-                prep.setString(col++, value.contentType);
-            } else {
-                prep.setNull(col++, Types.VARCHAR);
-            }
-            if (value.contentEncoding != null) {
-                prep.setString(col++, value.contentEncoding);
-            } else {
-                prep.setNull(col++, Types.VARCHAR);
-            }
+            safeSetString(prep, col++, value.contentType);
+            safeSetString(prep, col++, value.contentEncoding);
             
             if (!value.siteLocations.isEmpty()) {
                 UUID[] ua = new UUID[value.siteLocations.size()];
@@ -491,8 +493,10 @@ public class SQLGenerator {
             }
             if (value.storageLocation != null) {
                 prep.setString(col++, value.storageLocation.getStorageID().toASCIIString());
+                safeSetString(prep, col++, value.storageLocation.storageBucket);
             } else {
-                prep.setNull(col++, Types.VARCHAR); // storageLocation
+                prep.setNull(col++, Types.VARCHAR); // storageLocation.storageID
+                prep.setNull(col++, Types.VARCHAR); // storageLocation.storageBucket
             }
             
             prep.setTimestamp(col++, new Timestamp(value.getLastModified().getTime()), utc);
@@ -759,6 +763,7 @@ public class SQLGenerator {
             final String contentEncoding = rs.getString(col++);
             final UUID[] siteLocs = Util.getUUIDArray(rs, col++);
             final URI storLoc = Util.getURI(rs, col++);
+            final String storBucket = rs.getString(col++);
             final Date lastModified = Util.getDate(rs, col++, utc);
             final URI metaChecksum = Util.getURI(rs, col++);
             final UUID id = Util.getUUID(rs, col++);
@@ -771,8 +776,10 @@ public class SQLGenerator {
                     a.siteLocations.add(new SiteLocation(s));
                 }
             }
+            log.debug("ArtifactExtractor: " + storLoc + " " + storBucket);
             if (storLoc != null) {
                 a.storageLocation = new StorageLocation(storLoc);
+                a.storageLocation.storageBucket = storBucket;
             }
             InventoryUtil.assignLastModified(a, lastModified);
             InventoryUtil.assignMetaChecksum(a, metaChecksum);

@@ -272,6 +272,7 @@ public class ArtifactDAOTest {
             Assert.assertEquals("put metachecksum", mcs0, expected.getMetaChecksum());
             
             expected.storageLocation = new StorageLocation(URI.create("ceph:" + UUID.randomUUID()));
+            // no storageBucket
             
             dao.put(expected);
             
@@ -290,8 +291,10 @@ public class ArtifactDAOTest {
             Assert.assertEquals(expected.getLastModified(), a2.getLastModified());
             Assert.assertNotNull("force-update", a2.storageLocation);
             Assert.assertEquals(expected.storageLocation.getStorageID(), a2.storageLocation.getStorageID());
+            Assert.assertNull(a2.storageLocation.storageBucket);
             
             expected.storageLocation = new StorageLocation(URI.create("ceph:"  + UUID.randomUUID()));
+            expected.storageLocation.storageBucket = "abc";
             dao.put(expected, true);
             Artifact a3 = dao.get(expected.getID());
             Assert.assertNotNull(a2);
@@ -300,6 +303,7 @@ public class ArtifactDAOTest {
             Assert.assertEquals(expected.getLastModified(), a3.getLastModified());
             Assert.assertNotNull("updated", a3.storageLocation);
             Assert.assertEquals(expected.storageLocation.getStorageID(), a3.storageLocation.getStorageID());
+            Assert.assertEquals(expected.storageLocation.storageBucket, a3.storageLocation.storageBucket);
             
             expected.storageLocation = null;
             dao.put(expected, true);

@@ -137,6 +137,7 @@ public class Artifact extends Entity {
     
     private void init(URI uri, URI contentChecksum, Date contentLastModified, Long contentLength) {
         InventoryUtil.assertNotNull(Artifact.class, "uri", uri);
+        InventoryUtil.validateArtifactURI(Artifact.class, uri);
         InventoryUtil.assertNotNull(Artifact.class, "contentChecksum", contentChecksum);
         InventoryUtil.assertNotNull(Artifact.class, "contentLastModified", contentLastModified);
         InventoryUtil.assertNotNull(Artifact.class, "contentLength", contentLength);
@@ -188,16 +189,7 @@ public class Artifact extends Entity {
     }
     
     private String computeBucket(URI uri) {
-        try {
-            MessageDigest md = MessageDigest.getInstance("SHA-1");
-            byte[] bytes = super.primitiveValueToBytes(uri, "File.uri", md.getAlgorithm());
-            md.update(bytes);
-            byte[] sha = md.digest();
-            String hex = HexUtil.toHex(sha);
-            return hex.substring(0, 5); // 16^5 = 1 million buckets
-        } catch (NoSuchAlgorithmException ex) {
-            throw new RuntimeException("BUG: failed to get instance of SHA-1", ex);
-        }
+        return InventoryUtil.computeBucket(uri, 5); // 5 hex characters: 16^5 = 1 megabuckets
     }
 
     /**
