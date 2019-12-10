@@ -14,7 +14,7 @@ apply from: '../opencadc.gradle'
 
 sourceCompatibility = 1.7
 
-group = 'ca.nrc.cadc'
+group = 'org.opencadc'
 
 war {
     archiveFileName = project.name + '.war'
