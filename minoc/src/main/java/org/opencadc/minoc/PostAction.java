@@ -72,7 +72,6 @@ import java.net.URI;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.db.ArtifactDAO;
-import org.opencadc.inventory.storage.StorageClient;
 import org.opencadc.minoc.ArtifactUtil.HttpMethod;
 
 /**
@@ -105,13 +104,12 @@ public class PostAction extends ArtifactAction {
      */
     @Override
     public Artifact execute(URI artifactURI) throws Exception {
-        ArtifactDAO dao = new ArtifactDAO();
+        ArtifactDAO dao = getArtifactDAO();
         Artifact artifact = getArtifact(artifactURI, dao);
         
         dao.delete(artifact.getID());
-        StorageClient storage = new StorageClient();
         log.debug("deleting from storage...");
-        storage.delete(artifact.storageLocation);
+        getStorageAdapter().delete(artifact.storageLocation);
         log.debug("deletedfrom storage");
         
         return null;    

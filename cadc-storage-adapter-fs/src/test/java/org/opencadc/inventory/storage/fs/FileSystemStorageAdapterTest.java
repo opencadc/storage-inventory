@@ -134,12 +134,12 @@ public class FileSystemStorageAdapterTest {
     
     @Test
     public void testPutGetDeleteURIMode() {
-        this.testPutGetDelete(BucketMode.URI_BASED);
+        this.testPutGetDelete(BucketMode.URI);
     }
     
     @Test
     public void testPutGetDeleteURIBucketMode() {
-        this.testPutGetDelete(BucketMode.URI_BUCKET_BASED);
+        this.testPutGetDelete(BucketMode.URIBUCKET);
     }
     
     private void testPutGetDelete(BucketMode bucketMode) {
@@ -192,12 +192,12 @@ public class FileSystemStorageAdapterTest {
     
     @Test
     public void testUnsortedIteratorURIMode() {
-        this.testUnsortedIterator(BucketMode.URI_BASED);
+        this.testUnsortedIterator(BucketMode.URI);
     }
     
     @Test
     public void testUnsortedIteratorURIBucketMode() {
-        this.testUnsortedIterator(BucketMode.URI_BUCKET_BASED);
+        this.testUnsortedIterator(BucketMode.URIBUCKET);
     }
     
     private void testUnsortedIterator(BucketMode bucketMode) {
@@ -266,7 +266,7 @@ public class FileSystemStorageAdapterTest {
                 }
                 Assert.assertEquals("checksum", checksum, next.getContentChecksum());
                 Assert.assertEquals("length", new Long(length), next.getContentLength());
-                if (bucketMode.equals(BucketMode.URI_BASED)) {
+                if (bucketMode.equals(BucketMode.URI)) {
                     // check the artifact URI
                     Assert.assertEquals("artifactURI", orig.artifactURI, next.artifactURI);
                 }
@@ -293,7 +293,7 @@ public class FileSystemStorageAdapterTest {
             String testDir = TEST_ROOT + File.separator + "testIterateSubsetURIMode";
             this.createInstanceTestRoot(testDir);
             
-            FileSystemStorageAdapter fs = new FileSystemStorageAdapter(testDir, BucketMode.URI_BASED);
+            FileSystemStorageAdapter fs = new FileSystemStorageAdapter(testDir, BucketMode.URI);
             
             MessageDigest md = MessageDigest.getInstance("MD5");
             String md5Val = HexUtil.toHex(md.digest(data));

@@ -71,10 +71,13 @@ import ca.nrc.cadc.auth.AuthenticationUtil;
 import ca.nrc.cadc.auth.HttpPrincipal;
 import ca.nrc.cadc.rest.InlineContentHandler;
 import ca.nrc.cadc.rest.RestAction;
+import ca.nrc.cadc.util.PropertiesReader;
 
 import java.io.FileNotFoundException;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.util.HashMap;
+import java.util.Map;
 
 import javax.security.auth.Subject;
 
@@ -82,6 +85,8 @@ import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.db.ArtifactDAO;
+import org.opencadc.inventory.db.SQLGenerator;
+import org.opencadc.inventory.storage.StorageAdapter;
 import org.opencadc.minoc.ArtifactUtil.HttpMethod;
 
 /**
@@ -93,6 +98,10 @@ import org.opencadc.minoc.ArtifactUtil.HttpMethod;
 public abstract class ArtifactAction extends RestAction {
     private static final Logger log = Logger.getLogger(ArtifactAction.class);
     
+    public static final String JNDI_DATASOURCE = "jdbc/inventory";
+    public static final String DATABASE = "content";
+    public static final String SCHEMA = "inventory";
+    
     // The target artifact
     URI artifactURI;
     
@@ -101,6 +110,12 @@ public abstract class ArtifactAction extends RestAction {
     
     // The current http method
     private HttpMethod httpMethod;
+    
+    // interface to storage
+    private StorageAdapter storage = null;
+    
+    // artifact dao
+    private ArtifactDAO dao = null;
 
     /**
      * Default, no-arg constructor.
@@ -211,6 +226,53 @@ public abstract class ArtifactAction extends RestAction {
             log.debug(message, e);
             throw new IllegalArgumentException(message);
         }
+    }
+    
+    protected StorageAdapter getStorageAdapter() {
+        // lazy init
+        if (storage == null) {
+            PropertiesReader pr = new PropertiesReader("minoc.properties");
+            String adapterKey = StorageAdapter.class.getName();
+            String adapterClass = pr.getFirstPropertyValue(adapterKey);
+            if (adapterClass == null) {
+                throw new IllegalStateException("no storage adapter specified in minoc.properties");
+            }
+            try {
+                Class c = Class.forName(adapterClass);
+                Object o = c.newInstance();
+                StorageAdapter sa = (StorageAdapter) o;
+                log.debug("StorageAdapter: " + sa);
+                storage = sa;
+                return sa;
+            } catch (Throwable t) {
+                throw new IllegalStateException("failed to load storage adapter: " + adapterClass, t);
+            }
+        }
+        return storage;
+    }
+    
+    protected ArtifactDAO getArtifactDAO() {
+        // lazy init
+        if (dao == null) {
+            ArtifactDAO newDAO = new ArtifactDAO();
+            Map<String, Object> config = new HashMap<String, Object>();
+            PropertiesReader pr = new PropertiesReader("minoc.properties");
+            Class cls = null;
+            String sqlGenKey = SQLGenerator.class.getName();
+            try {
+                String sqlGenClass = pr.getFirstPropertyValue(sqlGenKey);
+                cls = Class.forName(sqlGenClass);
+            } catch (ClassNotFoundException e) {
+                throw new IllegalStateException("could not load SQLGenerator class: " + e.getMessage(), e);
+            }
+            config.put(sqlGenKey, cls);
+            config.put("jndiDataSourceName", JNDI_DATASOURCE);
+            config.put("database", DATABASE);
+            config.put("schema", SCHEMA);
+            newDAO.setConfig(config);
+            dao = newDAO;
+        }
+        return dao;
     }
 
 }

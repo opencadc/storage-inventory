@@ -81,7 +81,6 @@ import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.storage.NewArtifact;
-import org.opencadc.inventory.storage.StorageClient;
 import org.opencadc.inventory.storage.StorageMetadata;
 import org.opencadc.minoc.ArtifactUtil.HttpMethod;
 
@@ -126,8 +125,6 @@ public class PutAction extends ArtifactAction {
      */
     @Override
     public Artifact execute(URI artifactURI) throws Exception {
-                
-        StorageClient storage = new StorageClient();
         
         String md5Header = syncInput.getHeader("Content-MD5");
         String lengthHeader = syncInput.getHeader("Content-Length");
@@ -162,7 +159,7 @@ public class PutAction extends ArtifactAction {
         InputStream in = (InputStream) syncInput.getContent(INLINE_CONTENT_TAG);
         
         log.debug("writing new artifact to storage...");
-        StorageMetadata artifactMetadata = storage.put(newArtifact, in);
+        StorageMetadata artifactMetadata = getStorageAdapter().put(newArtifact, in);
         log.debug("wrote new artifact to storage");
         Artifact artifact = new Artifact(
             artifactURI, artifactMetadata.getContentChecksum(),
@@ -170,7 +167,7 @@ public class PutAction extends ArtifactAction {
         artifact.contentEncoding = encodingHeader;
         artifact.storageLocation = artifactMetadata.getStorageLocation();
         
-        ArtifactDAO dao = new ArtifactDAO();
+        ArtifactDAO dao = getArtifactDAO();
         Artifact existing = dao.get(artifactURI);
         if (existing == null) {
             dao.put(artifact);

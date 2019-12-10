@@ -133,7 +133,6 @@ public interface StorageAdapter {
      * @param source The stream from which to read.
      * @return The storage metadata.
      * 
-     * @throws ResourceNotFoundException If the artifact could not be found.
      * @throws StreamCorruptedException If the calculated checksum does not the expected checksum.
      * @throws ReadException If the client failed to stream.
      * @throws WriteException If the storage system failed to stream.
@@ -141,7 +140,7 @@ public interface StorageAdapter {
      * @throws TransientException If an unexpected, temporary exception occurred.
      */
     public StorageMetadata put(NewArtifact newArtifact, InputStream source)
-        throws ResourceNotFoundException, StreamCorruptedException, ReadException, WriteException,
+        throws StreamCorruptedException, ReadException, WriteException,
             StorageEngageException, TransientException;
         
     /**

@@ -18,6 +18,7 @@
     <init-param>
       <param-name>logLevelPackages</param-name>
       <param-value>
+            org.opencadc.inventory
             org.opencadc.minoc
             ca.nrc.cadc.rest
             ca.nrc.cadc.util
@@ -66,7 +67,7 @@
     <servlet-name>AvailabilityServlet</servlet-name>
     <servlet-class>ca.nrc.cadc.vosi.AvailabilityServlet</servlet-class>
     <init-param>
-      <param-name>ca.nrc.cadc.vosi.WebService</param-name>
+      <param-name>ca.nrc.cadc.vosi.AvailabilityPlugin</param-name>
       <param-value>org.opencadc.minoc.ServiceAvailability</param-value>
     </init-param>
     <load-on-startup>5</load-on-startup>

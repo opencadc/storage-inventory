@@ -146,17 +146,8 @@ public class FileSystemStorageAdapter implements StorageAdapter {
     private BucketMode bucketMode;
     
     public static enum BucketMode {
-        URI_BASED("uri"),              // use the URI of the artifact for bucketing
-        URI_BUCKET_BASED("uriBucket"); // use calculated 5 character uriBucket of the artifact URI for bucketing
-        private String val;
-        
-        BucketMode(String val) {
-            this.val = val;
-        }
-        
-        public String getVal() {
-            return val;
-        }
+        URI,       // use the URI of the artifact for bucketing
+        URIBUCKET; // use calculated 5 character uriBucket of the artifact URI for bucketing
     }
     
     /**
@@ -165,10 +156,24 @@ public class FileSystemStorageAdapter implements StorageAdapter {
      */
     public FileSystemStorageAdapter() {
         PropertiesReader pr = new PropertiesReader(CONFIG_FILE);
-        String root = pr.getFirstPropertyValue(CONFIG_PROPERTY_ROOT);
-        String mode = pr.getFirstPropertyValue(CONFIG_PROPERTY_BUCKETMODE);
-        BucketMode bucketMode = BucketMode.valueOf(mode);
-        init(root, bucketMode);
+        String rootVal = null;
+        BucketMode bucketMode = null;
+        try {
+            rootVal = pr.getFirstPropertyValue(CONFIG_PROPERTY_ROOT);
+            log.debug("root: " + rootVal);
+        } catch (Throwable t) {
+            throw new IllegalStateException("failed to load " + CONFIG_PROPERTY_ROOT +
+                " from " + CONFIG_FILE + ": " + t.getMessage(), t);
+        }
+        try {
+            String mode = pr.getFirstPropertyValue(CONFIG_PROPERTY_BUCKETMODE);
+            log.debug("bucketMode: " + mode);
+            bucketMode = BucketMode.valueOf(mode);
+        } catch (Throwable t) {
+            throw new IllegalStateException("failed to load " + CONFIG_PROPERTY_BUCKETMODE +
+                " from " + CONFIG_FILE + ": " + t.getMessage(), t);
+        }
+        init(rootVal, bucketMode);
     }
     
     /**
@@ -192,10 +197,10 @@ public class FileSystemStorageAdapter implements StorageAdapter {
             throw new IllegalArgumentException("Invalid rootdirectory: " + rootDirectory, e);
         }
         if (!Files.isDirectory(root)) {
-            throw new IllegalArgumentException("rootDirectory must be a directory");
+            throw new IllegalArgumentException("root must be a directory");
         }
         if (!Files.isReadable(root) || (!Files.isWritable(root))) {
-            throw new IllegalArgumentException("read-write permission required on rootDirectory");
+            throw new IllegalArgumentException("read-write permission required on root");
         }
         this.bucketMode = bucketMode;
     }
@@ -265,7 +270,6 @@ public class FileSystemStorageAdapter implements StorageAdapter {
      * @param source The stream from which to read.
      * @return The storage metadata.
      * 
-     * @throws ResourceNotFoundException If the artifact could not be found.
      * @throws StreamCorruptedException If the calculated checksum does not the expected checksum.
      * @throws ReadException If the client failed to stream.
      * @throws WriteException If the storage system failed to stream.
@@ -273,7 +277,7 @@ public class FileSystemStorageAdapter implements StorageAdapter {
      * @throws TransientException If an unexpected, temporary exception occurred.
      */
     public StorageMetadata put(NewArtifact newArtifact, InputStream source)
-        throws ResourceNotFoundException, StreamCorruptedException, ReadException, WriteException,
+        throws StreamCorruptedException, ReadException, WriteException,
             StorageEngageException, TransientException {
         InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "artifact", newArtifact);
         InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "source", source);
@@ -443,7 +447,7 @@ public class FileSystemStorageAdapter implements StorageAdapter {
         int bucketDepth = 0;
         String fixedParentDir = null;
         switch (bucketMode) {
-            case URI_BASED:
+            case URI:
                 if (storageBucket != null && storageBucket.length() > 0) {
                     try {
                         URI test = new URI(storageBucket + "/file");
@@ -460,7 +464,7 @@ public class FileSystemStorageAdapter implements StorageAdapter {
                     fixedParentDir = path.toString();
                 }
                 break;
-            case URI_BUCKET_BASED:
+            case URIBUCKET:
                 if (storageBucket != null) {
                     if (storageBucket.length() > BUCKET_LENGTH) {
                         throw new IllegalArgumentException("bucket must be a maximum of " + BUCKET_LENGTH + " characters");
@@ -485,10 +489,10 @@ public class FileSystemStorageAdapter implements StorageAdapter {
             Iterator<StorageMetadata> iterator = null;
             try {
                 switch (bucketMode) {
-                    case URI_BASED:
+                    case URI:
                         iterator = new ArtifactIterator(bucketPath, bucketDepth, fixedParentDir);
                         break;
-                    case URI_BUCKET_BASED:
+                    case URIBUCKET:
                         iterator = new FileSystemIterator(bucketPath, bucketDepth, fixedParentDir);
                         break;
                     default:
@@ -511,7 +515,7 @@ public class FileSystemStorageAdapter implements StorageAdapter {
         URI storageID = null;
         String storageBucket = null;
         switch (bucketMode) {
-            case URI_BASED:
+            case URI:
                 StringBuilder storageIDString = new StringBuilder(STORAGE_URI_SCHEME);
                 storageIDString.append(":");
                 storageIDString.append(artifactURI.getScheme());
@@ -522,7 +526,7 @@ public class FileSystemStorageAdapter implements StorageAdapter {
                 String sspPath = ssp.substring(0, ssp.lastIndexOf("/"));
                 storageBucket = artifactURI.getScheme() + ":" + sspPath;
                 break;
-            case URI_BUCKET_BASED:
+            case URIBUCKET:
                 String filename = UUID.randomUUID().toString();
                 String uriBucket = InventoryUtil.computeBucket(artifactURI, BUCKET_LENGTH);
                 storageID = URI.create(STORAGE_URI_SCHEME + ":" + filename);
@@ -544,10 +548,10 @@ public class FileSystemStorageAdapter implements StorageAdapter {
         }
         StringBuilder path = new StringBuilder();
         switch (bucketMode) {
-            case URI_BASED:
+            case URI:
                 path.append(storageID.getSchemeSpecificPart());
                 break;
-            case URI_BUCKET_BASED:
+            case URIBUCKET:
                 String bucket = storageLocation.storageBucket;
                 for (char c : bucket.toCharArray()) {
                     path.append(c).append(File.separator);

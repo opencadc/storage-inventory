@@ -105,7 +105,7 @@ public class HeadAction extends ArtifactAction {
      */
     @Override
     public Artifact execute(URI artifactURI) throws Exception {
-        ArtifactDAO dao = new ArtifactDAO();
+        ArtifactDAO dao = getArtifactDAO();
         Artifact artifact = getArtifact(artifactURI, dao);
 
         String filename = InventoryUtil.computeArtifactFilename(artifactURI);

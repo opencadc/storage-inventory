@@ -72,7 +72,6 @@ import java.net.URI;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.StorageLocation;
-import org.opencadc.inventory.storage.StorageClient;
 import org.opencadc.minoc.ArtifactUtil.HttpMethod;
 
 /**
@@ -98,10 +97,9 @@ public class GetAction extends HeadAction {
     @Override
     public Artifact execute(URI artifactURI) throws Exception {
         Artifact artifact = super.execute(artifactURI);
-        StorageClient storage = new StorageClient();
         StorageLocation storageLocation = new StorageLocation(artifact.storageLocation.getStorageID());
         log.debug("retrieving artifact from storage...");
-        storage.get(storageLocation, syncOutput.getOutputStream());
+        getStorageAdapter().get(storageLocation, syncOutput.getOutputStream());
         log.debug("retrieved artifact from storage");
         return artifact;
     }
