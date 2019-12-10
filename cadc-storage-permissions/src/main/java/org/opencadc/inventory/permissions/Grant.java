@@ -73,7 +73,6 @@ import java.net.URI;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
-
 import org.opencadc.gms.GroupURI;
 import org.opencadc.inventory.InventoryUtil;
 
@@ -83,48 +82,50 @@ import org.opencadc.inventory.InventoryUtil;
  * @author majorb
  *
  */
-public class Grant {
+public abstract class Grant {
 
     private final URI artifactURI;
-    
-    public Date releaseDate;
-    public boolean isPublic = false;
-    public final Date evaluationDate = new Date();
-    
-    private final List<GroupURI> readGroups = new ArrayList<GroupURI>();
-    private final List<GroupURI> readWriteGroups = new ArrayList<GroupURI>();
+    private Date expiryDate;
+
+    protected final List<GroupURI> groups = new ArrayList<GroupURI>();
 
     /**
-     * Contruct a grant for the given artifactURI
-     * @param artifactURI The applicable targetURI
+     * Construct a grant for the given artifactURI and expiryDate.
+     *
+     * @param artifactURI The applicable targetURI.
+     * @param expiryDate The expiry date of the grant.
      */
-    public Grant(URI artifactURI) {
+    public Grant(URI artifactURI, Date expiryDate) {
         InventoryUtil.assertNotNull(Grant.class, "artifactURI", artifactURI);
+        InventoryUtil.assertNotNull(Grant.class, "expiryDate", expiryDate);
         this.artifactURI = artifactURI;
+        this.expiryDate = expiryDate;
     }
-    
+
     /**
      * Get the artifactURI to which this grant applies.
-     * @return The artifactURI
+     *
+     * @return The artifactURI.
      */
     public URI getArtifactURI() {
         return artifactURI;
     }
-    
-    /**
-     * Get the read group list.
-     * @return The read groups
-     */
-    public List<GroupURI> getReadGroups() {
-        return readGroups;
-    }
 
     /**
-     * Get the read-write group list.
-     * @return The read-write groups
+     * Get date after which the Grant is considered expired and should be renewed.
+     *
+     * @return The grant expiry date.
      */
-    public List<GroupURI> getReadWriteGroups() {
-        return readWriteGroups;
+    public Date getExpiryDate() {
+        return expiryDate;
+    }
+    
+    /**
+     * Get the group list.
+     * @return The list of groups.
+     */
+    public List<GroupURI> getGroups() {
+        return groups;
     }
     
 }

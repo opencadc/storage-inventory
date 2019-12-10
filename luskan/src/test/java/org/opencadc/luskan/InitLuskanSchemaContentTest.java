@@ -62,59 +62,97 @@
  *  <http://www.gnu.org/licenses/>.      pas le cas, consultez :
  *                                       <http://www.gnu.org/licenses/>.
  *
- *  $Revision: 4 $
- *
  ************************************************************************
  */
 
-package org.opencadc.inventory.permissions;
+package org.opencadc.luskan;
 
-import ca.nrc.cadc.net.ResourceNotFoundException;
-import ca.nrc.cadc.net.TransientException;
-import java.net.URI;
+import ca.nrc.cadc.util.Log4jInit;
+import java.util.List;
+import org.apache.log4j.Level;
+import org.apache.log4j.Logger;
+import org.junit.Assert;
+import org.junit.Test;
 
 /**
- * Client for retrieving grant information about artifacts.
- * 
- * @author majorb
  *
+ * @author pdowler
  */
-public class PermissionsClient {
+public class InitLuskanSchemaContentTest {
+    private static final Logger log = Logger.getLogger(InitLuskanSchemaContentTest.class);
 
-    /**
-     * Public, no-arg constructor.
-     */
-    public PermissionsClient() {
-    }
-    
-    /**
-     * Get the read permissions information about the file identified by fileURI.
-     * 
-     * @param artifactURI Identifies the artifact for which to retrieve grant information.
-     * @return The read grant information.
-     * 
-     * @throws ResourceNotFoundException If the file could not be found.
-     * @throws TransientException If an unexpected, temporary exception occurred. 
-     */
-    public ReadGrant getReadGrant(URI artifactURI)
-        throws ResourceNotFoundException, TransientException {
-
-        throw new UnsupportedOperationException("Not implemented");
+    static {
+        Log4jInit.setLevel("ca.nrc.cadc.tap.impl", Level.INFO);
+        Log4jInit.setLevel("ca.nrc.cadc.db.version", Level.INFO);
     }
 
-    /**
-     * Get the write permissions information about the file identified by fileURI.
-     *
-     * @param artifactURI Identifies the artifact for which to retrieve grant information.
-     * @return The write grant information.
-     *
-     * @throws ResourceNotFoundException If the file could not be found.
-     * @throws TransientException If an unexpected, temporary exception occurred.
-     */
-    public WriteGrant getWriteGrant(URI artifactURI)
-        throws ResourceNotFoundException, TransientException {
+    private String schema = "tap_schema";
 
-        throw new UnsupportedOperationException("Not implemented");
+    @Test
+    public void testParseCreateDDL() {
+        try {
+            InitLuskanSchemaContent init = new InitLuskanSchemaContent(null, null, schema);
+            for (String fname : InitLuskanSchemaContent.CREATE_SQL) {
+                log.info("process file: " + fname);
+                List<String> statements = init.parseDDL(fname, schema);
+                Assert.assertNotNull(statements);
+                Assert.assertFalse(statements.isEmpty());
+                for (String s : statements) {
+                    String[] tokens = s.split(" ");
+                    String cmd = tokens[0];
+
+                    if ("select".equalsIgnoreCase(cmd)) {
+                        String table = "notFound";
+                        for (int i = 1; i < tokens.length; i++) {
+                            if ("from".equalsIgnoreCase(tokens[i])) {
+                                table = tokens[i + 1];
+                                break;
+                            }
+                        }
+                        if (table != null && table.startsWith("tap_schema.")) {
+                            // OK
+                        } else {
+                            Assert.fail("[select] accesssing table outside tap_schema: " + table);
+                        }
+                    } else if ("update".equalsIgnoreCase(cmd)) {
+                        String table = tokens[1];
+                        if (table != null && table.startsWith("tap_schema.")) {
+                            // OK
+                        } else {
+                            Assert.fail("[update] accesssing table outside tap_schema: " + table);
+                        }
+                    } else if ("insert".equalsIgnoreCase(cmd) || "delete".equalsIgnoreCase(cmd)) {
+                        // tokens[1] is into or from
+                        String table = tokens[2];
+                        if (table != null && table.startsWith("tap_schema.")) {
+                            // OK
+                        } else {
+                            Assert.fail("[insert|delete] accesssing table outside tap_schema: " + table);
+                        }
+                    } else {
+                        Assert.fail("unexpected command: " + cmd + " [" + s + "]");
+                    }
+                }
+            }
+        } catch (Exception unexpected) {
+            log.error("unexpected exception", unexpected);
+            Assert.fail("unexpected exception: " + unexpected);
+        }
     }
 
+    @Test
+    public void testParseUpgradeDDL() {
+        try {
+            InitLuskanSchemaContent init = new InitLuskanSchemaContent(null, null, schema);
+            for (String fname : InitLuskanSchemaContent.UPGRADE_SQL) {
+                log.info("process file: " + fname);
+                List<String> statements = init.parseDDL(fname, schema);
+                Assert.assertNotNull(statements);
+                Assert.assertFalse(statements.isEmpty());
+            }
+        } catch (Exception unexpected) {
+            log.error("unexpected exception", unexpected);
+            Assert.fail("unexpected exception: " + unexpected);
+        }
+    }
 }

@@ -69,52 +69,38 @@
 
 package org.opencadc.inventory.permissions;
 
-import ca.nrc.cadc.net.ResourceNotFoundException;
-import ca.nrc.cadc.net.TransientException;
 import java.net.URI;
+import java.util.Date;
+import org.opencadc.inventory.InventoryUtil;
 
 /**
- * Client for retrieving grant information about artifacts.
+ * Holds read grant information about an artifact.
  * 
  * @author majorb
  *
  */
-public class PermissionsClient {
+public class ReadGrant extends Grant {
+
+    // Is the artifact available to anonymous (all) users.
+    private boolean anonymousAccess;
 
     /**
-     * Public, no-arg constructor.
+     * Construct a read grant for the given artifactURI and expiry date.
+     * @param artifactURI The applicable targetURI.
+     * @param expiryDate The expiry date of the grant.
+     * @param anonymousAccess true is the artifact has anonymous access, false otherwise.
      */
-    public PermissionsClient() {
-    }
-    
-    /**
-     * Get the read permissions information about the file identified by fileURI.
-     * 
-     * @param artifactURI Identifies the artifact for which to retrieve grant information.
-     * @return The read grant information.
-     * 
-     * @throws ResourceNotFoundException If the file could not be found.
-     * @throws TransientException If an unexpected, temporary exception occurred. 
-     */
-    public ReadGrant getReadGrant(URI artifactURI)
-        throws ResourceNotFoundException, TransientException {
-
-        throw new UnsupportedOperationException("Not implemented");
+    public ReadGrant(URI artifactURI, Date expiryDate, boolean anonymousAccess) {
+        super(artifactURI, expiryDate);
+        this.anonymousAccess = anonymousAccess;
     }
 
     /**
-     * Get the write permissions information about the file identified by fileURI.
-     *
-     * @param artifactURI Identifies the artifact for which to retrieve grant information.
-     * @return The write grant information.
-     *
-     * @throws ResourceNotFoundException If the file could not be found.
-     * @throws TransientException If an unexpected, temporary exception occurred.
+     * Check if artifact is accessible by anonymous (all) users.
+     * @return true if the artifact has anonymous access, false otherwise.
      */
-    public WriteGrant getWriteGrant(URI artifactURI)
-        throws ResourceNotFoundException, TransientException {
-
-        throw new UnsupportedOperationException("Not implemented");
+    public boolean isAnonymousAccess() {
+        return anonymousAccess;
     }
 
 }

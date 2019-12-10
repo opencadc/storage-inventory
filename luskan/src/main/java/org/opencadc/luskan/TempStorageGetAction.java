@@ -62,59 +62,75 @@
  *  <http://www.gnu.org/licenses/>.      pas le cas, consultez :
  *                                       <http://www.gnu.org/licenses/>.
  *
- *  $Revision: 4 $
- *
  ************************************************************************
  */
 
-package org.opencadc.inventory.permissions;
+package org.opencadc.luskan;
+
 
 import ca.nrc.cadc.net.ResourceNotFoundException;
-import ca.nrc.cadc.net.TransientException;
-import java.net.URI;
+import ca.nrc.cadc.rest.InlineContentHandler;
+import ca.nrc.cadc.rest.RestAction;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.InputStream;
+import java.io.OutputStream;
+import org.apache.log4j.Logger;
 
 /**
- * Client for retrieving grant information about artifacts.
- * 
- * @author majorb
  *
+ * @author pdowler
  */
-public class PermissionsClient {
+public class TempStorageGetAction extends RestAction
+{
+    private static final Logger log = Logger.getLogger(TempStorageGetAction.class);
 
-    /**
-     * Public, no-arg constructor.
-     */
-    public PermissionsClient() {
-    }
-    
-    /**
-     * Get the read permissions information about the file identified by fileURI.
-     * 
-     * @param artifactURI Identifies the artifact for which to retrieve grant information.
-     * @return The read grant information.
-     * 
-     * @throws ResourceNotFoundException If the file could not be found.
-     * @throws TransientException If an unexpected, temporary exception occurred. 
-     */
-    public ReadGrant getReadGrant(URI artifactURI)
-        throws ResourceNotFoundException, TransientException {
+    public TempStorageGetAction() { }
 
-        throw new UnsupportedOperationException("Not implemented");
+    @Override
+    protected InlineContentHandler getInlineContentHandler()
+    {
+        return null;
     }
 
-    /**
-     * Get the write permissions information about the file identified by fileURI.
-     *
-     * @param artifactURI Identifies the artifact for which to retrieve grant information.
-     * @return The write grant information.
-     *
-     * @throws ResourceNotFoundException If the file could not be found.
-     * @throws TransientException If an unexpected, temporary exception occurred.
-     */
-    public WriteGrant getWriteGrant(URI artifactURI)
-        throws ResourceNotFoundException, TransientException {
+    @Override
+    public void doAction()
+            throws Exception
+    {
+        String filename = syncInput.getPath();
+        TempStorageManager sm = new TempStorageManager();
+        File f = sm.getStoredFile(filename);
+        if (!f.exists())
+            throw new ResourceNotFoundException("not found: " + filename);
 
-        throw new UnsupportedOperationException("Not implemented");
+        InputStream fis = null;
+        OutputStream ostream = null;
+        try
+        {
+            //TODO: TempStorageManager has to store the requested content-type somewhere
+            //syncOutput.setHeader("Content-Type", contentType);
+            syncOutput.setHeader("Content-Length", f.length());
+            syncOutput.setCode(200);
+
+            fis = new FileInputStream(f);
+            ostream = syncOutput.getOutputStream();
+            byte[] buf = new byte[16384];
+            int num = fis.read(buf);
+            while (num > 0)
+            {
+                ostream.write(buf, 0, num);
+                num = fis.read(buf);
+            }
+            ostream.flush();
+        }
+        finally
+        {
+            if (fis != null)
+                try { fis.close(); }
+                catch(Exception ignore) { }
+            if (ostream != null)
+                try { ostream.close(); }
+                catch(Exception ignore) { }
+        }
     }
-
 }

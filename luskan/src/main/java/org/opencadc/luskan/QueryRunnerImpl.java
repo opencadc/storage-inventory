@@ -62,12 +62,15 @@
 *  <http://www.gnu.org/licenses/>.      pas le cas, consultez :
 *                                       <http://www.gnu.org/licenses/>.
 *
+*  $Revision: 5 $
+*
 ************************************************************************
-*/
+ */
 
-package org.opencadc.inventory.version;
+package org.opencadc.luskan;
 
-import java.net.URL;
+import ca.nrc.cadc.tap.QueryRunner;
+import ca.nrc.cadc.db.DBUtil;
 import javax.sql.DataSource;
 import org.apache.log4j.Logger;
 
@@ -75,40 +78,26 @@ import org.apache.log4j.Logger;
  *
  * @author pdowler
  */
-public class InitDatabase extends ca.nrc.cadc.db.version.InitDatabase {
-    private static final Logger log = Logger.getLogger(InitDatabase.class);
-    
-    public static final String MODEL_NAME = "storage-inventory";
-    public static final String MODEL_VERSION = "0.5";
-    public static final String PREV_MODEL_VERSION = "0.4";
-    //public static final String PREV_MODEL_VERSION = "DO-NOT_UPGRADE-BY-ACCIDENT";
+public class QueryRunnerImpl extends QueryRunner {
+    private static final Logger log = Logger.getLogger(QueryRunnerImpl.class);
 
-    static String[] CREATE_SQL = new String[] {
-        "inventory.ModelVersion.sql",
-        "inventory.Artifact.sql",
-        "inventory.StorageSite.sql",
-        "inventory.DeletedArtifactEvent.sql",
-        "inventory.DeletedStorageLocationEvent.sql",
-        "inventory.permissions.sql"
-    };
-    
-    static String[] UPGRADE_SQL = new String[] {
-        "inventory.upgrade-0.5.sql"
-    };
-    
-    public InitDatabase(DataSource ds, String database, String schema) { 
-        super(ds, database, schema, MODEL_NAME, MODEL_VERSION, PREV_MODEL_VERSION);
-        for (String s : CREATE_SQL) {
-            createSQL.add(s);
-        }
-        for (String s : UPGRADE_SQL) {
-            upgradeSQL.add(s);
-        }
+    public QueryRunnerImpl() {
     }
 
     @Override
-    protected URL findSQL(String fname) {
-        // SQL files are stored inside the jar file
-        return InitDatabase.class.getClassLoader().getResource(fname);
+    protected DataSource getUploadDataSource()
+            throws Exception {
+        return getQueryDataSource();
+    }
+
+    @Override
+    protected DataSource getTapSchemaDataSource() throws Exception {
+        return getQueryDataSource();
+    }
+
+    @Override
+    protected DataSource getQueryDataSource() throws Exception {
+        log.debug("Data Source name: jdbc/tapuser");
+        return DBUtil.findJNDIDataSource("jdbc/tapuser");
     }
 }

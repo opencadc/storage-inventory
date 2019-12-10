@@ -62,59 +62,46 @@
  *  <http://www.gnu.org/licenses/>.      pas le cas, consultez :
  *                                       <http://www.gnu.org/licenses/>.
  *
- *  $Revision: 4 $
- *
  ************************************************************************
  */
 
-package org.opencadc.inventory.permissions;
+package org.opencadc.luskan.ws;
 
-import ca.nrc.cadc.net.ResourceNotFoundException;
-import ca.nrc.cadc.net.TransientException;
-import java.net.URI;
+import ca.nrc.cadc.auth.X500IdentityManager;
+import org.opencadc.luskan.QueryRunnerImpl;
+import ca.nrc.cadc.uws.server.JobExecutor;
+import ca.nrc.cadc.uws.server.JobPersistence;
+import ca.nrc.cadc.uws.server.SimpleJobManager;
+import ca.nrc.cadc.uws.server.ThreadPoolExecutor;
+import ca.nrc.cadc.uws.server.impl.PostgresJobPersistence;
+import org.apache.log4j.Logger;
 
 /**
- * Client for retrieving grant information about artifacts.
- * 
- * @author majorb
  *
+ * @author pdowler
  */
-public class PermissionsClient {
+public class QueryJobManager extends SimpleJobManager
+{
+    private static final Logger log = Logger.getLogger(QueryJobManager.class);
 
-    /**
-     * Public, no-arg constructor.
-     */
-    public PermissionsClient() {
+    private static final Long MAX_EXEC_DURATION = new Long(4*3600L);    // 4 hours to dump a catalog to vpsace
+    private static final Long MAX_DESTRUCTION = new Long(7*24*60*60); // 1 week
+    private static final Long MAX_QUOTE = new Long(24*3600L);         // 24 hours since we have a threadpool with queued jobs
+
+    public QueryJobManager()
+    {
+        super();
+        // persist UWS jobs to PostgreSQL.
+        JobPersistence jobPersist = new PostgresJobPersistence(new X500IdentityManager());
+
+        // max threads: 6 == number of simultaneously running async queries (per
+        // web server), plus sync queries, plus VOSI-tables queries
+        JobExecutor jobExec = new ThreadPoolExecutor(jobPersist, QueryRunnerImpl.class, 6);
+
+        super.setJobPersistence(jobPersist);
+        super.setJobExecutor(jobExec);
+        super.setMaxExecDuration(MAX_EXEC_DURATION);
+        super.setMaxDestruction(MAX_DESTRUCTION);
+        super.setMaxQuote(MAX_QUOTE);
     }
-    
-    /**
-     * Get the read permissions information about the file identified by fileURI.
-     * 
-     * @param artifactURI Identifies the artifact for which to retrieve grant information.
-     * @return The read grant information.
-     * 
-     * @throws ResourceNotFoundException If the file could not be found.
-     * @throws TransientException If an unexpected, temporary exception occurred. 
-     */
-    public ReadGrant getReadGrant(URI artifactURI)
-        throws ResourceNotFoundException, TransientException {
-
-        throw new UnsupportedOperationException("Not implemented");
-    }
-
-    /**
-     * Get the write permissions information about the file identified by fileURI.
-     *
-     * @param artifactURI Identifies the artifact for which to retrieve grant information.
-     * @return The write grant information.
-     *
-     * @throws ResourceNotFoundException If the file could not be found.
-     * @throws TransientException If an unexpected, temporary exception occurred.
-     */
-    public WriteGrant getWriteGrant(URI artifactURI)
-        throws ResourceNotFoundException, TransientException {
-
-        throw new UnsupportedOperationException("Not implemented");
-    }
-
 }
