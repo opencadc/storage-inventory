@@ -190,12 +190,14 @@ public class FileSystemIterator implements Iterator<StorageMetadata> {
         if (next == null) {
             throw new IllegalStateException("No more elements");
         }
-        URI storageID = URI.create(FileSystemStorageAdapter.STORAGE_URI_SCHEME + ":" + next.pathAndFileName);
+        URI storageID = URI.create(next.pathAndFileName);
         StorageLocation storageLocation = new StorageLocation(storageID);
         try {
             URI checksum = createMD5Checksum(next.path);
             long length = Files.size(next.path);
-            return new StorageMetadata(storageLocation, checksum, length);
+            StorageMetadata meta = new StorageMetadata(storageLocation, checksum, length);
+            meta.artifactURI = storageID;
+            return meta;
         } catch (Exception e) {
             throw new RuntimeException("Failed to compute file metadata: " + e.getMessage(), e);
         }

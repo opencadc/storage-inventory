@@ -111,10 +111,8 @@ import org.opencadc.inventory.storage.WriteException;
  * filenames and paths have no relation to the artifact URI.  The contents
  * of the file system will not be recognizable without the inventory database
  * to provide the mapping.  Subsets of the bucket can be used to change the
- * scope of the tree seen in unsortedIterator.  The items in the iterator in
- * this mode will not contain corresponding artifactURIs.  Artifacts are
- * decoupled from the files in this mode so external artifact URIs may change
- * without consequence.
+ * scope of the tree seen in unsortedIterator.  Artifacts are decoupled from the
+ * files in this mode so external artifact URIs may change without consequence.
  * In URI_BASED mode, files are organized by their artifact URI (path and filename).
  * The file system resembles the path and file hierarchy of the artifact URIs it holds.
  * In this mode, the storage location bucket is the path of the scheme-specific-part
@@ -136,18 +134,24 @@ public class FileSystemStorageAdapter implements StorageAdapter {
     public static final String CONFIG_FILE = "cadc-storage-adapter-fs.properties";
     public static final String CONFIG_PROPERTY_ROOT = "root";
     public static final String CONFIG_PROPERTY_BUCKETMODE = "bucketMode";
+    public static final String CONFIG_PROPERTY_BUCKETDEPTH = "bucketLength";
     
-    static final String STORAGE_URI_SCHEME = "fs";
     static final String MD5_CHECKSUM_SCHEME = "md5";
-    static final int BUCKET_LENGTH = 5;
+    static final int MAX_BUCKET_LENGTH = 5;
+    static final int DEFAULT_BUCKET_LENGTH = 2;
     
     private FileSystem fs;
     private Path root;
     private BucketMode bucketMode;
+    private int bucketLength = DEFAULT_BUCKET_LENGTH;
     
     public static enum BucketMode {
         URI,       // use the URI of the artifact for bucketing
+                       // This mode is functional except that the bucket sizes exceed
+                       // the database column length when used with minoc.  Work on this
+                       // mode is suspended until a use case arises.
         URIBUCKET; // use calculated 5 character uriBucket of the artifact URI for bucketing
+                       // This mode has been tested with minoc
     }
     
     /**
@@ -158,13 +162,16 @@ public class FileSystemStorageAdapter implements StorageAdapter {
         PropertiesReader pr = new PropertiesReader(CONFIG_FILE);
         String rootVal = null;
         BucketMode bucketMode = null;
-        try {
-            rootVal = pr.getFirstPropertyValue(CONFIG_PROPERTY_ROOT);
-            log.debug("root: " + rootVal);
-        } catch (Throwable t) {
+        
+        // get the configured root directory
+        rootVal = pr.getFirstPropertyValue(CONFIG_PROPERTY_ROOT);
+        log.debug("root: " + rootVal);
+        if (rootVal == null) {
             throw new IllegalStateException("failed to load " + CONFIG_PROPERTY_ROOT +
-                " from " + CONFIG_FILE + ": " + t.getMessage(), t);
+                " from " + CONFIG_FILE);
         }
+        
+        // get the configured bucket mode
         try {
             String mode = pr.getFirstPropertyValue(CONFIG_PROPERTY_BUCKETMODE);
             log.debug("bucketMode: " + mode);
@@ -172,6 +179,24 @@ public class FileSystemStorageAdapter implements StorageAdapter {
         } catch (Throwable t) {
             throw new IllegalStateException("failed to load " + CONFIG_PROPERTY_BUCKETMODE +
                 " from " + CONFIG_FILE + ": " + t.getMessage(), t);
+        }
+        
+        // in uriBucket mode get the bucket depth
+        if (bucketMode.equals(BucketMode.URIBUCKET)) {
+            try {
+                String length = pr.getFirstPropertyValue(CONFIG_PROPERTY_BUCKETDEPTH);
+                log.debug("bucketDepth: " + length);
+                if (length != null) {
+                    bucketLength = Integer.parseInt(length);
+                    if (bucketLength > MAX_BUCKET_LENGTH) {
+                        throw new IllegalStateException("Bucket length of " + bucketLength +
+                            " exceeds max bucket size of " + MAX_BUCKET_LENGTH);
+                    }
+                }
+            } catch (Throwable t) {
+                throw new IllegalStateException("failed to load " + CONFIG_PROPERTY_BUCKETMODE +
+                    " from " + CONFIG_FILE + ": " + t.getMessage(), t);
+            }
         }
         init(rootVal, bucketMode);
     }
@@ -455,10 +480,7 @@ public class FileSystemStorageAdapter implements StorageAdapter {
                     } catch (URISyntaxException | IllegalArgumentException e) {
                         throw new IllegalArgumentException("bucket must be in the form 'scheme:path'");
                     }
-                    int colonIndex = storageBucket.indexOf(":");
-                    path.append(storageBucket.substring(0, colonIndex + 1));
-                    path.append(File.separator);
-                    path.append(storageBucket.substring(colonIndex + 1));
+                    path.append(storageBucket);
                 }
                 if (path.length() > 0) {
                     fixedParentDir = path.toString();
@@ -466,15 +488,15 @@ public class FileSystemStorageAdapter implements StorageAdapter {
                 break;
             case URIBUCKET:
                 if (storageBucket != null) {
-                    if (storageBucket.length() > BUCKET_LENGTH) {
-                        throw new IllegalArgumentException("bucket must be a maximum of " + BUCKET_LENGTH + " characters");
+                    if (storageBucket.length() > bucketLength) {
+                        throw new IllegalArgumentException("bucket must be a maximum of " + bucketLength + " characters");
                     }
                     for (char c : storageBucket.toCharArray()) {
                         path.append(c).append(File.separator);
                     }
-                    bucketDepth = BUCKET_LENGTH - storageBucket.length();
+                    bucketDepth = bucketLength - storageBucket.length();
                 } else {
-                    bucketDepth = BUCKET_LENGTH;
+                    bucketDepth = bucketLength;
                 }
                 break;
             default:
@@ -483,21 +505,15 @@ public class FileSystemStorageAdapter implements StorageAdapter {
         try {
             log.debug("resolving path: " + path.toString());
             Path bucketPath = root.resolve(path.toString());
+            log.debug("bucketPath: " + bucketPath);
+            log.debug("exists: " + Files.exists(bucketPath));
+            log.debug("isDir: " + Files.isDirectory(bucketPath));
             if (!Files.exists(bucketPath) || !Files.isDirectory(bucketPath)) {
                 throw new IllegalArgumentException("Invalid bucket: " + storageBucket);
             }
             Iterator<StorageMetadata> iterator = null;
             try {
-                switch (bucketMode) {
-                    case URI:
-                        iterator = new ArtifactIterator(bucketPath, bucketDepth, fixedParentDir);
-                        break;
-                    case URIBUCKET:
-                        iterator = new FileSystemIterator(bucketPath, bucketDepth, fixedParentDir);
-                        break;
-                    default:
-                        throw new IllegalStateException("unsupported bucket mode");
-                }
+                iterator = new FileSystemIterator(bucketPath, bucketDepth, fixedParentDir);
             } catch (IOException e) {
                 throw new StorageEngageException("failed to obtain iterator", e);
             }
@@ -507,30 +523,17 @@ public class FileSystemStorageAdapter implements StorageAdapter {
         }   
     }
     
-    
-    
-    
-    
     private StorageLocation createStorageLocation(URI artifactURI) {
-        URI storageID = null;
+        URI storageID = artifactURI;
         String storageBucket = null;
         switch (bucketMode) {
             case URI:
-                StringBuilder storageIDString = new StringBuilder(STORAGE_URI_SCHEME);
-                storageIDString.append(":");
-                storageIDString.append(artifactURI.getScheme());
-                storageIDString.append(":").append(File.separator);
-                storageIDString.append(artifactURI.getSchemeSpecificPart());
-                storageID = URI.create(storageIDString.toString());
                 String ssp = artifactURI.getSchemeSpecificPart();
                 String sspPath = ssp.substring(0, ssp.lastIndexOf("/"));
                 storageBucket = artifactURI.getScheme() + ":" + sspPath;
                 break;
             case URIBUCKET:
-                String filename = UUID.randomUUID().toString();
-                String uriBucket = InventoryUtil.computeBucket(artifactURI, BUCKET_LENGTH);
-                storageID = URI.create(STORAGE_URI_SCHEME + ":" + filename);
-                storageBucket = uriBucket;
+                storageBucket = InventoryUtil.computeBucket(artifactURI, bucketLength);
                 break;
             default:
                 throw new IllegalStateException("unsupported bucket mode");
@@ -543,20 +546,19 @@ public class FileSystemStorageAdapter implements StorageAdapter {
     
     private Path createStorageLocationPath(StorageLocation storageLocation) {
         URI storageID = storageLocation.getStorageID();
-        if (!storageID.getScheme().equals(STORAGE_URI_SCHEME)) {
-            throw new IllegalArgumentException("Unkown storage id scheme: " + storageID.getScheme());
-        }
         StringBuilder path = new StringBuilder();
         switch (bucketMode) {
             case URI:
-                path.append(storageID.getSchemeSpecificPart());
+                path.append(storageID.toString());
                 break;
             case URIBUCKET:
                 String bucket = storageLocation.storageBucket;
+                log.debug("bucket: " + bucket);
+                InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "storageLocation.bucket", bucket);
                 for (char c : bucket.toCharArray()) {
                     path.append(c).append(File.separator);
                 }
-                path.append(storageLocation.getStorageID().getSchemeSpecificPart());
+                path.append(storageLocation.getStorageID().toString());
                 break;
             default:
                 throw new IllegalStateException("unsupported bucket mode");

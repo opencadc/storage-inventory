@@ -129,9 +129,11 @@ public class PutAction extends ArtifactAction {
         String md5Header = syncInput.getHeader("Content-MD5");
         String lengthHeader = syncInput.getHeader("Content-Length");
         String encodingHeader = syncInput.getHeader("Content-Encoding");
+        String typeHeader = syncInput.getHeader("Content-Type");
         log.debug("Content-MD5: " + md5Header);
         log.debug("Content-Length: " + lengthHeader);
         log.debug("Content-Encoding: " + encodingHeader);
+        log.debug("Content-Type: " + typeHeader);
         
         URI contentMD5 = null;
         Long contentLength = null;
@@ -165,6 +167,7 @@ public class PutAction extends ArtifactAction {
             artifactURI, artifactMetadata.getContentChecksum(),
             new Date(), artifactMetadata.getContentLength());
         artifact.contentEncoding = encodingHeader;
+        artifact.contentType = typeHeader;
         artifact.storageLocation = artifactMetadata.getStorageLocation();
         
         ArtifactDAO dao = getArtifactDAO();

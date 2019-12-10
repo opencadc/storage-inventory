@@ -98,6 +98,7 @@ public class GetAction extends HeadAction {
     public Artifact execute(URI artifactURI) throws Exception {
         Artifact artifact = super.execute(artifactURI);
         StorageLocation storageLocation = new StorageLocation(artifact.storageLocation.getStorageID());
+        storageLocation.storageBucket = artifact.storageLocation.storageBucket;
         log.debug("retrieving artifact from storage...");
         getStorageAdapter().get(storageLocation, syncOutput.getOutputStream());
         log.debug("retrieved artifact from storage");

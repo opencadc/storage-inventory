@@ -75,8 +75,6 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -150,13 +148,13 @@ public class FileSystemStorageAdapterTest {
             String testDir = TEST_ROOT + File.separator + "testPutGetDelete-" + bucketMode;
             this.createInstanceTestRoot(testDir);
             
-            URI uri = URI.create("test:path/file");
+            URI artifactURI = URI.create("test:path/file");
             MessageDigest md = MessageDigest.getInstance("MD5");
             String md5Val = HexUtil.toHex(md.digest(data));
             URI checksum = URI.create("md5:" + md5Val);
             log.info("expected md5sum: " + checksum);
             long length = data.length;
-            NewArtifact newArtifact = new NewArtifact(uri);
+            NewArtifact newArtifact = new NewArtifact(artifactURI);
             newArtifact.contentChecksum = checksum;
             newArtifact.contentLength = length;
             
@@ -165,6 +163,7 @@ public class FileSystemStorageAdapterTest {
             FileSystemStorageAdapter fs = new FileSystemStorageAdapter(
                 testDir, bucketMode);
             StorageMetadata storageMetadata = fs.put(newArtifact, source);
+            Assert.assertEquals("artifactURI",  artifactURI, storageMetadata.artifactURI);
             
             TestOutputStream dest = new TestOutputStream();
             fs.get(storageMetadata.getStorageLocation(), dest);
@@ -266,10 +265,7 @@ public class FileSystemStorageAdapterTest {
                 }
                 Assert.assertEquals("checksum", checksum, next.getContentChecksum());
                 Assert.assertEquals("length", new Long(length), next.getContentLength());
-                if (bucketMode.equals(BucketMode.URI)) {
-                    // check the artifact URI
-                    Assert.assertEquals("artifactURI", orig.artifactURI, next.artifactURI);
-                }
+                Assert.assertEquals("artifactURI", orig.artifactURI, next.artifactURI);
                 visitedStorageIDs.add(nextStorageID);
                 count++;
             }
