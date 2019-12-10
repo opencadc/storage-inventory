@@ -67,12 +67,11 @@
  ************************************************************************
  */
 
-package org.opencadc.inventory.permissions;
+package org.opencadc.baldur;
 
 import ca.nrc.cadc.vosi.AvailabilityPlugin;
 import ca.nrc.cadc.vosi.AvailabilityStatus;
 import org.apache.log4j.Logger;
-import sun.reflect.generics.reflectiveObjects.NotImplementedException;
 
 public class ServiceAvailability implements AvailabilityPlugin {
 
@@ -90,7 +89,7 @@ public class ServiceAvailability implements AvailabilityPlugin {
 
     @Override
     public boolean heartbeat() {
-        throw new NotImplementedException();
+        throw new RuntimeException("Not yet implemented");
     }
 
     public AvailabilityStatus getStatus() {

@@ -6,7 +6,7 @@
 
 <web-app>
 
-    <display-name>TBD</display-name>
+    <display-name>baldur</display-name>
 
     <!-- Servlets -->
 
@@ -22,6 +22,7 @@
             <param-name>logLevelPackages</param-name>
             <param-value>
                 org.opencadc.inventory.permissions
+                org.opencadc.baldur
             </param-value>
         </init-param>
         <load-on-startup>1</load-on-startup>
@@ -33,7 +34,7 @@
         <servlet-class>ca.nrc.cadc.vosi.AvailabilityServlet</servlet-class>
         <init-param>
             <param-name>ca.nrc.cadc.vosi.AvailabilityPlugin</param-name>
-            <param-value>org.opencadc.inventory.permissions.ServiceAvailability</param-value>
+            <param-value>org.opencadc.baldur.ServiceAvailability</param-value>
         </init-param>
         <load-on-startup>3</load-on-startup>
     </servlet>
