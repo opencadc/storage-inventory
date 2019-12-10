@@ -69,52 +69,24 @@
 
 package org.opencadc.inventory.permissions;
 
-import ca.nrc.cadc.net.ResourceNotFoundException;
-import ca.nrc.cadc.net.TransientException;
 import java.net.URI;
+import java.util.Date;
 
 /**
- * Client for retrieving grant information about artifacts.
+ * Holds grant information about an artifact.
  * 
  * @author majorb
  *
  */
-public class PermissionsClient {
+public class WriteGrant extends Grant {
 
     /**
-     * Public, no-arg constructor.
+     * Construct a write grant for the given artifactURI.
+     * @param artifactURI The applicable targetURI.
+     * @param expiryDate The expiry date of the grant.
      */
-    public PermissionsClient() {
-    }
-    
-    /**
-     * Get the read permissions information about the file identified by fileURI.
-     * 
-     * @param artifactURI Identifies the artifact for which to retrieve grant information.
-     * @return The read grant information.
-     * 
-     * @throws ResourceNotFoundException If the file could not be found.
-     * @throws TransientException If an unexpected, temporary exception occurred. 
-     */
-    public ReadGrant getReadGrant(URI artifactURI)
-        throws ResourceNotFoundException, TransientException {
-
-        throw new UnsupportedOperationException("Not implemented");
-    }
-
-    /**
-     * Get the write permissions information about the file identified by fileURI.
-     *
-     * @param artifactURI Identifies the artifact for which to retrieve grant information.
-     * @return The write grant information.
-     *
-     * @throws ResourceNotFoundException If the file could not be found.
-     * @throws TransientException If an unexpected, temporary exception occurred.
-     */
-    public WriteGrant getWriteGrant(URI artifactURI)
-        throws ResourceNotFoundException, TransientException {
-
-        throw new UnsupportedOperationException("Not implemented");
+    public WriteGrant(URI artifactURI, Date expiryDate) {
+        super(artifactURI, expiryDate);
     }
 
 }

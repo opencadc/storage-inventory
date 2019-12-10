@@ -1,2 +1,2 @@
 # storage-inventory
-Storage Inventory Permissions API 
+Storage Inventory Permissions library
