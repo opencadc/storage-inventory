@@ -62,53 +62,52 @@
 *  <http://www.gnu.org/licenses/>.      pas le cas, consultez :
 *                                       <http://www.gnu.org/licenses/>.
 *
+*  $Revision: 5 $
+*
 ************************************************************************
-*/
+ */
 
-package org.opencadc.inventory.version;
+package org.opencadc.luskan;
 
-import java.net.URL;
-import javax.sql.DataSource;
+import ca.nrc.cadc.auth.AuthMethod;
+import ca.nrc.cadc.reg.Capabilities;
+import ca.nrc.cadc.reg.Capability;
+import ca.nrc.cadc.reg.Interface;
+import ca.nrc.cadc.reg.Standards;
+import ca.nrc.cadc.util.Log4jInit;
+import ca.nrc.cadc.vosi.CapabilitiesTest;
+import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
+import org.junit.Assert;
 
 /**
  *
- * @author pdowler
+ * @author original pdowler - adapted by adriand
  */
-public class InitDatabase extends ca.nrc.cadc.db.version.InitDatabase {
-    private static final Logger log = Logger.getLogger(InitDatabase.class);
-    
-    public static final String MODEL_NAME = "storage-inventory";
-    public static final String MODEL_VERSION = "0.5";
-    public static final String PREV_MODEL_VERSION = "0.4";
-    //public static final String PREV_MODEL_VERSION = "DO-NOT_UPGRADE-BY-ACCIDENT";
+public class VosiCapabilitiesTest extends CapabilitiesTest {
 
-    static String[] CREATE_SQL = new String[] {
-        "inventory.ModelVersion.sql",
-        "inventory.Artifact.sql",
-        "inventory.StorageSite.sql",
-        "inventory.DeletedArtifactEvent.sql",
-        "inventory.DeletedStorageLocationEvent.sql",
-        "inventory.permissions.sql"
-    };
+    private static final Logger log = Logger.getLogger(VosiCapabilitiesTest.class);
+
+    static {
+        Log4jInit.setLevel("ca.nrc.cadc.vosi", Level.INFO);
+        Log4jInit.setLevel("org.opencadc.luskan", Level.INFO);
+    }
     
-    static String[] UPGRADE_SQL = new String[] {
-        "inventory.upgrade-0.5.sql"
-    };
-    
-    public InitDatabase(DataSource ds, String database, String schema) { 
-        super(ds, database, schema, MODEL_NAME, MODEL_VERSION, PREV_MODEL_VERSION);
-        for (String s : CREATE_SQL) {
-            createSQL.add(s);
-        }
-        for (String s : UPGRADE_SQL) {
-            upgradeSQL.add(s);
-        }
+    public VosiCapabilitiesTest() {
+        super(Constants.RESOURCE_ID);
     }
 
     @Override
-    protected URL findSQL(String fname) {
-        // SQL files are stored inside the jar file
-        return InitDatabase.class.getClassLoader().getResource(fname);
+    protected void validateContent(Capabilities caps) throws Exception {
+        super.validateContent(caps);
+
+        // TAP-1.1
+        Capability tap = caps.findCapability(Standards.TAP_10);
+        Interface base = tap.findInterface(AuthMethod.CERT, Standards.INTERFACE_PARAM_HTTP);
+        Assert.assertNotNull("base", base);
+        Assert.assertTrue("cert base", base.getSecurityMethods().contains(Standards.SECURITY_METHOD_CERT));
+        Capability tables = caps.findCapability(Standards.VOSI_TABLES_11);
+        Assert.assertNotNull("tables", tables);
+        Assert.assertNotNull("cert tables", tables.findInterface(Standards.SECURITY_METHOD_ANON, Standards.INTERFACE_PARAM_HTTP));
     }
 }

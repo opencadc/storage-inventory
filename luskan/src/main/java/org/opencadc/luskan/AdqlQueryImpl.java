@@ -65,50 +65,67 @@
 ************************************************************************
 */
 
-package org.opencadc.inventory.version;
+package org.opencadc.luskan;
 
-import java.net.URL;
-import javax.sql.DataSource;
+import ca.nrc.cadc.tap.AdqlQuery;
+import ca.nrc.cadc.tap.parser.BaseExpressionDeParser;
+import ca.nrc.cadc.tap.parser.PgsphereDeParser;
+import ca.nrc.cadc.tap.parser.converter.TableNameConverter;
+import ca.nrc.cadc.tap.parser.converter.TableNameReferenceConverter;
+import ca.nrc.cadc.tap.parser.converter.TopConverter;
+import ca.nrc.cadc.tap.parser.converter.postgresql.PgFunctionNameConverter;
+import ca.nrc.cadc.tap.parser.extractor.FunctionExpressionExtractor;
+import ca.nrc.cadc.tap.parser.navigator.ExpressionNavigator;
+import ca.nrc.cadc.tap.parser.navigator.FromItemNavigator;
+import ca.nrc.cadc.tap.parser.navigator.ReferenceNavigator;
+import ca.nrc.cadc.tap.parser.navigator.SelectNavigator;
+import net.sf.jsqlparser.util.deparser.SelectDeParser;
 import org.apache.log4j.Logger;
 
 /**
+ * AdqlQuery implementation for PostgreSQL + pg-sphere and arbitrary catalogue tables.
  *
  * @author pdowler
  */
-public class InitDatabase extends ca.nrc.cadc.db.version.InitDatabase {
-    private static final Logger log = Logger.getLogger(InitDatabase.class);
-    
-    public static final String MODEL_NAME = "storage-inventory";
-    public static final String MODEL_VERSION = "0.5";
-    public static final String PREV_MODEL_VERSION = "0.4";
-    //public static final String PREV_MODEL_VERSION = "DO-NOT_UPGRADE-BY-ACCIDENT";
+public class AdqlQueryImpl extends AdqlQuery {
 
-    static String[] CREATE_SQL = new String[] {
-        "inventory.ModelVersion.sql",
-        "inventory.Artifact.sql",
-        "inventory.StorageSite.sql",
-        "inventory.DeletedArtifactEvent.sql",
-        "inventory.DeletedStorageLocationEvent.sql",
-        "inventory.permissions.sql"
-    };
-    
-    static String[] UPGRADE_SQL = new String[] {
-        "inventory.upgrade-0.5.sql"
-    };
-    
-    public InitDatabase(DataSource ds, String database, String schema) { 
-        super(ds, database, schema, MODEL_NAME, MODEL_VERSION, PREV_MODEL_VERSION);
-        for (String s : CREATE_SQL) {
-            createSQL.add(s);
-        }
-        for (String s : UPGRADE_SQL) {
-            upgradeSQL.add(s);
-        }
+    private static Logger log = Logger.getLogger(AdqlQueryImpl.class);
+
+    public AdqlQueryImpl() {
     }
 
     @Override
-    protected URL findSQL(String fname) {
-        // SQL files are stored inside the jar file
-        return InitDatabase.class.getClassLoader().getResource(fname);
+    protected void init() {
+        super.init();
+
+        // convert TOP -> LIMIT
+        super.navigatorList.add(new TopConverter(
+                new ExpressionNavigator(), new ReferenceNavigator(), new FromItemNavigator()));
+
+        super.navigatorList.add(new FunctionExpressionExtractor(
+                new PgFunctionNameConverter(), new ReferenceNavigator(), new FromItemNavigator()));
+        
+        // TAP-1.1 version of tap_schema
+        TableNameConverter tnc = new TableNameConverter(true);
+        tnc.put("tap_schema.schemas", "tap_schema.schemas11");
+        tnc.put("tap_schema.tables", "tap_schema.tables11");
+        tnc.put("tap_schema.columns", "tap_schema.columns11");
+        tnc.put("tap_schema.keys", "tap_schema.keys11");
+        tnc.put("tap_schema.key_columns", "tap_schema.key_columns11");
+        TableNameReferenceConverter tnrc = new TableNameReferenceConverter(tnc.map);
+        super.navigatorList.add(new SelectNavigator(new ExpressionNavigator(), tnrc, tnc));
+
+    }
+
+    @Override
+    protected BaseExpressionDeParser getExpressionDeparser(SelectDeParser dep, StringBuffer sb) {
+        return new PgsphereDeParser(dep, sb);
+    }
+
+    @Override
+    public String getSQL() {
+        String sql = super.getSQL();
+        log.debug("SQL:\n" + sql);
+        return sql;
     }
 }
