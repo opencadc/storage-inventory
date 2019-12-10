@@ -10,7 +10,7 @@ create table <schema>.Artifact (
 
     siteLocations uuid[],
     storageLocation_storageID varchar(256),
-    storageLocation_storageBucket varchar(8);
+    storageLocation_storageBucket varchar(8),
 
     lastModified timestamp not null,
     metaChecksum varchar(136) not null,
