@@ -106,12 +106,12 @@ public class PermissionsClient {
      * Get the write permissions information about the file identified by fileURI.
      *
      * @param artifactURI Identifies the artifact for which to retrieve grant information.
-     * @return The read-write grant information.
+     * @return The write grant information.
      *
      * @throws ResourceNotFoundException If the file could not be found.
      * @throws TransientException If an unexpected, temporary exception occurred.
      */
-    public WriteGrant getReadWriteGrant(URI artifactURI)
+    public WriteGrant getWriteGrant(URI artifactURI)
         throws ResourceNotFoundException, TransientException {
 
         throw new UnsupportedOperationException("Not implemented");
