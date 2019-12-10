@@ -188,9 +188,9 @@ public class FileSystemStorageAdapter implements StorageAdapter {
                 log.debug("bucketDepth: " + length);
                 if (length != null) {
                     bucketLength = Integer.parseInt(length);
-                    if (bucketLength > MAX_BUCKET_LENGTH) {
+                    if (bucketLength < 0 || bucketLength > MAX_BUCKET_LENGTH) {
                         throw new IllegalStateException("Bucket length of " + bucketLength +
-                            " exceeds max bucket size of " + MAX_BUCKET_LENGTH);
+                            " not in allowed range of 0-" + MAX_BUCKET_LENGTH);
                     }
                 }
             } catch (Throwable t) {

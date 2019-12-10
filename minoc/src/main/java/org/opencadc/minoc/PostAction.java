@@ -89,30 +89,44 @@ public class PostAction extends ArtifactAction {
     public PostAction() {
         super(HttpMethod.POST);
     }
-    
-    /**
-     * Constructor for subclass, GetAction
-     * @param method
-     */
-    public PostAction(HttpMethod method) {
-        super(method);
-    }
 
     /**
-     * Download the artifact or cutouts of the artifact.
+     * Update artifact metadata.
      * @param artifactURI The identifier for the artifact. 
      */
     @Override
     public Artifact execute(URI artifactURI) throws Exception {
+        
         ArtifactDAO dao = getArtifactDAO();
         Artifact artifact = getArtifact(artifactURI, dao);
         
-        dao.delete(artifact.getID());
-        log.debug("deleting from storage...");
-        getStorageAdapter().delete(artifact.storageLocation);
-        log.debug("deletedfrom storage");
+        String newURI = syncInput.getParameter("uri");
+        String newContentType = syncInput.getParameter("contentType");
+        String newContentEncoding = syncInput.getParameter("contentEncoding");
+        log.debug("new uri: " + newURI);
+        log.debug("new contentType: " + newContentType);
+        log.debug("new contentEncoding: " + newContentEncoding);
         
-        return null;    
+        // TODO: enable modifying URIs when supported by DAO
+        // TODO: how to support clearing values?
+        boolean changes = false;
+        if (newContentType != null && !newContentType.equals(artifact.contentType)) {
+            artifact.contentType = newContentType;
+            changes = true;
+        }
+        if (newContentEncoding != null && !newContentEncoding.equals(artifact.contentEncoding)) {
+            artifact.contentEncoding = newContentEncoding;
+            changes = true;
+        }
+        if (changes) {
+            log.debug("updating artifact metadata...");
+            dao.put(artifact);
+            log.debug("updated artifact metadata");
+        } else {
+            log.debug("no updates to make");
+        }
+        
+        return artifact;
     }
 
 }

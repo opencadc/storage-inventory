@@ -90,40 +90,22 @@ public class DeleteAction extends ArtifactAction {
     public DeleteAction() {
         super(HttpMethod.DELETE);
     }
-    
-    /**
-     * Constructor for subclass, GetAction
-     * @param method
-     */
-    public DeleteAction(HttpMethod method) {
-        super(method);
-    }
 
     /**
-     * Download the artifact or cutouts of the artifact.
+     * Delete the artifact.
      * @param artifactURI The identifier for the artifact. 
      */
     @Override
     public Artifact execute(URI artifactURI) throws Exception {
         ArtifactDAO dao = getArtifactDAO();
         Artifact artifact = getArtifact(artifactURI, dao);
-
-        String filename = InventoryUtil.computeArtifactFilename(artifactURI);
-        URI contentChecksum = artifact.getContentChecksum();
-        Long contentLength = artifact.getContentLength();
-        String contentEncoding = artifact.contentEncoding;
-        String contentType = artifact.contentType;
-        log.debug("Content-MD5: " + contentChecksum.getSchemeSpecificPart());
-        log.debug("Content-Length: " + contentLength);
-        log.debug("Content-Encoding: " + contentEncoding);
-        log.debug("Content-Type: " + contentType);
-
-        syncOutput.setHeader("Content-Disposition", "attachment; filename=" + filename);
-        syncOutput.setHeader("Content-MD5", contentChecksum.getSchemeSpecificPart());
-        syncOutput.setHeader("Content-Length", contentLength);
-        syncOutput.setHeader("Content-Encoding", contentEncoding);
-        syncOutput.setHeader("Content-Type", contentType);
-        return artifact;    
+        
+        dao.delete(artifact.getID());
+        log.debug("deleting from storage...");
+        getStorageAdapter().delete(artifact.storageLocation);
+        log.debug("deletedfrom storage");
+        
+        return null;     
     }
 
 }

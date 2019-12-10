@@ -69,6 +69,7 @@ package org.opencadc.minoc;
 
 import ca.nrc.cadc.auth.AuthenticationUtil;
 import ca.nrc.cadc.auth.HttpPrincipal;
+import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.rest.InlineContentHandler;
 import ca.nrc.cadc.rest.RestAction;
 import ca.nrc.cadc.util.PropertiesReader;
@@ -199,13 +200,13 @@ public abstract class ArtifactAction extends RestAction {
         log.debug("authToken: " + authToken);
     }
     
-    Artifact getArtifact(URI artifactURI, ArtifactDAO dao) throws FileNotFoundException {
+    Artifact getArtifact(URI artifactURI, ArtifactDAO dao) throws ResourceNotFoundException {
         Artifact artifact = dao.get(artifactURI);
         if (artifact == null) {
-            throw new FileNotFoundException("not found: " + artifactURI);
+            throw new ResourceNotFoundException("not found: " + artifactURI);
         }
         if (artifact.storageLocation == null) {
-            throw new FileNotFoundException("not available: " + artifactURI);
+            throw new ResourceNotFoundException("not available: " + artifactURI);
         }
         return artifact;
     }
