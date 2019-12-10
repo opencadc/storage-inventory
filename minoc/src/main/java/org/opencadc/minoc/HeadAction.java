@@ -108,7 +108,6 @@ public class HeadAction extends ArtifactAction {
         ArtifactDAO dao = getArtifactDAO();
         Artifact artifact = getArtifact(artifactURI, dao);
 
-        String filename = InventoryUtil.computeArtifactFilename(artifactURI);
         URI contentChecksum = artifact.getContentChecksum();
         Long contentLength = artifact.getContentLength();
         String contentEncoding = artifact.contentEncoding;
@@ -118,6 +117,7 @@ public class HeadAction extends ArtifactAction {
         log.debug("Content-Encoding: " + contentEncoding);
         log.debug("Content-Type: " + contentType);
 
+        String filename = InventoryUtil.computeArtifactFilename(artifactURI);
         syncOutput.setHeader("Content-Disposition", "attachment; filename=" + filename);
         syncOutput.setHeader("Content-MD5", contentChecksum.getSchemeSpecificPart());
         syncOutput.setHeader("Content-Length", contentLength);

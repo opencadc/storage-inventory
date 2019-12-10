@@ -255,7 +255,6 @@ public abstract class ArtifactAction extends RestAction {
     protected ArtifactDAO getArtifactDAO() {
         // lazy init
         if (dao == null) {
-            ArtifactDAO newDAO = new ArtifactDAO();
             Map<String, Object> config = new HashMap<String, Object>();
             PropertiesReader pr = new PropertiesReader("minoc.properties");
             Class cls = null;
@@ -270,6 +269,7 @@ public abstract class ArtifactAction extends RestAction {
             config.put("jndiDataSourceName", JNDI_DATASOURCE);
             config.put("database", DATABASE);
             config.put("schema", SCHEMA);
+            ArtifactDAO newDAO = new ArtifactDAO();
             newDAO.setConfig(config);
             dao = newDAO;
         }

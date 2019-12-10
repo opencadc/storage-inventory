@@ -97,15 +97,15 @@ public class PostAction extends ArtifactAction {
     @Override
     public Artifact execute(URI artifactURI) throws Exception {
         
-        ArtifactDAO dao = getArtifactDAO();
-        Artifact artifact = getArtifact(artifactURI, dao);
-        
         String newURI = syncInput.getParameter("uri");
         String newContentType = syncInput.getParameter("contentType");
         String newContentEncoding = syncInput.getParameter("contentEncoding");
         log.debug("new uri: " + newURI);
         log.debug("new contentType: " + newContentType);
         log.debug("new contentEncoding: " + newContentEncoding);
+        
+        ArtifactDAO dao = getArtifactDAO();
+        Artifact artifact = getArtifact(artifactURI, dao);
         
         // TODO: enable modifying URIs when supported by DAO
         // TODO: how to support clearing values?

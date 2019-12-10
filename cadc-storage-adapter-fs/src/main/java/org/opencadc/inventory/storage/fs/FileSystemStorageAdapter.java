@@ -147,11 +147,11 @@ public class FileSystemStorageAdapter implements StorageAdapter {
     
     public static enum BucketMode {
         URI,       // use the URI of the artifact for bucketing
-                       // This mode is functional except that the bucket sizes exceed
-                       // the database column length when used with minoc.  Work on this
-                       // mode is suspended until a use case arises.
+        // This mode is functional except that the bucket sizes exceed
+        // the database column length when used with minoc.  Work on this
+        // mode is suspended until a use case arises.
         URIBUCKET; // use calculated 5 character uriBucket of the artifact URI for bucketing
-                       // This mode has been tested with minoc
+        // This mode has been tested with minoc
     }
     
     /**
@@ -167,8 +167,8 @@ public class FileSystemStorageAdapter implements StorageAdapter {
         rootVal = pr.getFirstPropertyValue(CONFIG_PROPERTY_ROOT);
         log.debug("root: " + rootVal);
         if (rootVal == null) {
-            throw new IllegalStateException("failed to load " + CONFIG_PROPERTY_ROOT +
-                " from " + CONFIG_FILE);
+            throw new IllegalStateException("failed to load " + CONFIG_PROPERTY_ROOT
+                + " from " + CONFIG_FILE);
         }
         
         // get the configured bucket mode
@@ -177,8 +177,8 @@ public class FileSystemStorageAdapter implements StorageAdapter {
             log.debug("bucketMode: " + mode);
             bucketMode = BucketMode.valueOf(mode);
         } catch (Throwable t) {
-            throw new IllegalStateException("failed to load " + CONFIG_PROPERTY_BUCKETMODE +
-                " from " + CONFIG_FILE + ": " + t.getMessage(), t);
+            throw new IllegalStateException("failed to load " + CONFIG_PROPERTY_BUCKETMODE
+                + " from " + CONFIG_FILE + ": " + t.getMessage(), t);
         }
         
         // in uriBucket mode get the bucket depth
@@ -189,13 +189,13 @@ public class FileSystemStorageAdapter implements StorageAdapter {
                 if (length != null) {
                     bucketLength = Integer.parseInt(length);
                     if (bucketLength < 0 || bucketLength > MAX_BUCKET_LENGTH) {
-                        throw new IllegalStateException("Bucket length of " + bucketLength +
-                            " not in allowed range of 0-" + MAX_BUCKET_LENGTH);
+                        throw new IllegalStateException("Bucket length of " + bucketLength
+                            + " not in allowed range of 0-" + MAX_BUCKET_LENGTH);
                     }
                 }
             } catch (Throwable t) {
-                throw new IllegalStateException("failed to load " + CONFIG_PROPERTY_BUCKETMODE +
-                    " from " + CONFIG_FILE + ": " + t.getMessage(), t);
+                throw new IllegalStateException("failed to load " + CONFIG_PROPERTY_BUCKETMODE
+                    + " from " + CONFIG_FILE + ": " + t.getMessage(), t);
             }
         }
         init(rootVal, bucketMode);
