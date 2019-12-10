@@ -9,7 +9,7 @@ create table <schema>.Artifact (
     contentEncoding varchar(128),
 
     siteLocations uuid[],
-    storageLocation_storageID varchar(256),
+    storageLocation_storageID varchar(512),
     storageLocation_storageBucket varchar(8),
 
     lastModified timestamp not null,

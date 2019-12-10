@@ -17,9 +17,6 @@ sourceCompatibility = 1.7
 group = 'org.opencadc'
 
 war {
-    archiveFileName = project.name + '.war'
-
-    // Include the swagger-ui so that /ad provides the AD API documentation
     from(System.getenv('RPS') + '/resources/') {
         include 'swagger-ui/'
     }
