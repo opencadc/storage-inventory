@@ -119,7 +119,8 @@ public abstract class ArtifactAction extends RestAction {
     private ArtifactDAO dao = null;
 
     /**
-     * Default, no-arg constructor.
+     * Abstract constructor.
+     * @param httpMethod The method associated with this action
      */
     protected ArtifactAction(HttpMethod httpMethod) {
         this.httpMethod = httpMethod;
@@ -138,6 +139,7 @@ public abstract class ArtifactAction extends RestAction {
      * Do the work of the subclass.
      * 
      * @param artifactURI The target artifact
+     * @return The artifact (if applicable)
      * @throws Exception If an something goes wrong.
      */
     public abstract Artifact execute(URI artifactURI) throws Exception;

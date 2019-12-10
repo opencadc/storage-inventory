@@ -93,6 +93,7 @@ public class PostAction extends ArtifactAction {
     /**
      * Update artifact metadata.
      * @param artifactURI The identifier for the artifact. 
+     * @return The artifact
      */
     @Override
     public Artifact execute(URI artifactURI) throws Exception {

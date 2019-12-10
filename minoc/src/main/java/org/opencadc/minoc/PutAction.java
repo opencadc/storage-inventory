@@ -121,7 +121,8 @@ public class PutAction extends ArtifactAction {
     /**
      * Perform the PUT.
      * 
-     * @param The URI of the artifact.
+     * @param artifactURI The URI of the artifact.
+     * @return The artifact
      */
     @Override
     public Artifact execute(URI artifactURI) throws Exception {

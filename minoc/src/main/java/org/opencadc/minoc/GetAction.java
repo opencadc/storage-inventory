@@ -92,7 +92,8 @@ public class GetAction extends HeadAction {
 
     /**
      * Download the artifact or cutouts of the artifact.
-     * @param artifactURI The identifier for the artifact. 
+     * @param artifactURI The identifier for the artifact.
+     * @return The artifact
      */
     @Override
     public Artifact execute(URI artifactURI) throws Exception {

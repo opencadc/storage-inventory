@@ -93,7 +93,7 @@ public class HeadAction extends ArtifactAction {
     
     /**
      * Constructor for subclass, GetAction
-     * @param method
+     * @param method The http method
      */
     public HeadAction(HttpMethod method) {
         super(method);
@@ -102,6 +102,7 @@ public class HeadAction extends ArtifactAction {
     /**
      * Download the artifact or cutouts of the artifact.
      * @param artifactURI The identifier for the artifact. 
+     * @return The artifact
      */
     @Override
     public Artifact execute(URI artifactURI) throws Exception {
