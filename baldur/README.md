@@ -12,7 +12,7 @@ docker run --rm -it baldur:latest /bin/bash
 
 running it on container port 8080
 
-docker run --rm -d -v /:/conf:ro -v /:/logs:rw baldur:latest
+docker run --rm -d -v /path/to/local/conf:/conf:ro -v /path/to/local/logs:/logs:rw baldur:latest
 
 running it on localhost port 80
 
