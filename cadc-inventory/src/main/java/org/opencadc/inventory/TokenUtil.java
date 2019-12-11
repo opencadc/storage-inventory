@@ -65,8 +65,9 @@
 ************************************************************************
  */
 
-package org.opencadc.minoc;
+package org.opencadc.inventory;
 
+import ca.nrc.cadc.util.Base64;
 import ca.nrc.cadc.util.RsaSignatureGenerator;
 import ca.nrc.cadc.util.RsaSignatureVerifier;
 
@@ -77,24 +78,24 @@ import java.security.AccessControlException;
 import java.security.InvalidKeyException;
 
 import org.apache.log4j.Logger;
-import org.bouncycastle.util.encoders.Base64;
 
 /**
- * Utilities for artifact handling.
+ * Utilities the generation and validation of pre-authorized tokens for artifact
+ * download and upload.
  * 
  * @author majorb
  *
  */
-public class ArtifactUtil {
+public class TokenUtil {
 
-    private static final Logger log = Logger.getLogger(ArtifactUtil.class);
+    private static final Logger log = Logger.getLogger(TokenUtil.class);
 
     private static final String KEY_META_URI = "uri";
     private static final String KEY_META_METHOD = "met";
     private static final String KEY_META_SUBJECT = "sub";
     
-    private static final String PUB_KEY_FILENAME = "MinocPub.key";
-    private static final String PRIV_KEY_FILENAME = "MinocPriv.key";
+    private static final String PUB_KEY_FILENAME = "InventoryPub.key";
+    private static final String PRIV_KEY_FILENAME = "InventoryPriv.key";
     
     private static final String TOKEN_DELIM = "~";
     
@@ -102,7 +103,7 @@ public class ArtifactUtil {
      * Valid methods that apply to authorization.
      */
     public static enum HttpMethod {
-        GET, PUT, POST, DELETE
+        GET, PUT
     }
 
     /**

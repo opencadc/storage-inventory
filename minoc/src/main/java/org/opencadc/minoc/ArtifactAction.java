@@ -88,8 +88,9 @@ import javax.security.auth.Subject;
 import javax.security.auth.x500.X500Principal;
 
 import org.apache.log4j.Logger;
+import org.opencadc.inventory.ArtifactUtil;
 import org.opencadc.inventory.InventoryUtil;
-import org.opencadc.minoc.ArtifactUtil.HttpMethod;
+import org.opencadc.inventory.ArtifactUtil.HttpMethod;
 
 /**
  * Abstract class for performing tasks all action classes have in common,

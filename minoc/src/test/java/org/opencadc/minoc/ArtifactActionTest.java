@@ -76,7 +76,7 @@ import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.Test;
-import org.opencadc.minoc.ArtifactUtil.HttpMethod;
+import org.opencadc.inventory.ArtifactUtil.HttpMethod;
 
 import ca.nrc.cadc.rest.InlineContentHandler;
 import ca.nrc.cadc.rest.SyncInput;

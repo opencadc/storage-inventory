@@ -70,7 +70,7 @@ package org.opencadc.minoc;
 import java.net.URI;
 
 import org.apache.log4j.Logger;
-import org.opencadc.minoc.ArtifactUtil.HttpMethod;
+import org.opencadc.inventory.ArtifactUtil.HttpMethod;
 
 /**
  * Interface with storage to get an artifact.

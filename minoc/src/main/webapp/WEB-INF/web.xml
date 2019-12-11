@@ -8,19 +8,21 @@
 
   <display-name>minoc</display-name>
 
-<servlet>
+  <servlet>
     <servlet-name>logControl</servlet-name>
     <servlet-class>ca.nrc.cadc.log.LogControlServlet</servlet-class>
     <init-param>
       <param-name>logLevel</param-name>
-      <param-value>info</param-value>
+      <param-value>debug</param-value>
     </init-param>
     <init-param>
       <param-name>logLevelPackages</param-name>
       <param-value>
+            org.opencadc.inventory
             org.opencadc.minoc
             ca.nrc.cadc.rest
             ca.nrc.cadc.util
+            ca.nrc.cadc.vosi
       </param-value>
     </init-param>
     <init-param>
@@ -38,10 +40,13 @@
     <servlet-name>ArtifactsServlet</servlet-name>
         <servlet-class>ca.nrc.cadc.rest.RestServlet</servlet-class>
         <init-param>
+            <param-name>augmentSubject</param-name>
+            <param-value>false</param-value>
+        </init-param>
+        <init-param>
             <param-name>get</param-name>
             <param-value>org.opencadc.minoc.GetAction</param-value>
         </init-param>
-      <!-- 
         <init-param>
             <param-name>put</param-name>
             <param-value>org.opencadc.minoc.PutAction</param-value>
@@ -54,8 +59,11 @@
             <param-name>delete</param-name>
             <param-value>org.opencadc.minoc.DeleteAction</param-value>
         </init-param>
+        <init-param>
+            <param-name>head</param-name>
+            <param-value>org.opencadc.minoc.HeadAction</param-value>
+        </init-param>
         <load-on-startup>2</load-on-startup>
-      -->
     </servlet>
 
   <!-- VOSI availability -->
@@ -63,7 +71,7 @@
     <servlet-name>AvailabilityServlet</servlet-name>
     <servlet-class>ca.nrc.cadc.vosi.AvailabilityServlet</servlet-class>
     <init-param>
-      <param-name>ca.nrc.cadc.vosi.WebService</param-name>
+      <param-name>ca.nrc.cadc.vosi.AvailabilityPlugin</param-name>
       <param-value>org.opencadc.minoc.ServiceAvailability</param-value>
     </init-param>
     <load-on-startup>5</load-on-startup>
