@@ -16,8 +16,6 @@ sourceCompatibility = 1.8
 
 group = 'org.opencadc'
 
-version = '1000'
-
 dependencies {
     compile 'log4j:log4j:[1.2,)'
     compile 'org.opencadc:cadc-inventory:[0.1,)'
