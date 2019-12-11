@@ -70,40 +70,61 @@ package org.opencadc.minoc;
 import java.net.URI;
 
 import org.apache.log4j.Logger;
-import org.opencadc.inventory.TokenUtil.HttpMethod;
 import org.opencadc.inventory.Artifact;
-import org.opencadc.inventory.StorageLocation;
+import org.opencadc.inventory.InventoryUtil;
+import org.opencadc.inventory.TokenUtil.HttpMethod;
+import org.opencadc.inventory.db.ArtifactDAO;
 
 /**
- * Interface with storage and inventory to get an artifact.
+ * Interface with storage and inventory to get the metadata of an artifact.
  *
  * @author majorb
  */
-public class GetAction extends HeadAction {
+public class HeadAction extends ArtifactAction {
     
-    private static final Logger log = Logger.getLogger(GetAction.class);
+    private static final Logger log = Logger.getLogger(HeadAction.class);
 
     /**
      * Default, no-arg constructor.
      */
-    public GetAction() {
-        super(HttpMethod.GET);
+    public HeadAction() {
+        super(HttpMethod.HEAD);
+    }
+    
+    /**
+     * Constructor for subclass, GetAction
+     * @param method The http method
+     */
+    public HeadAction(HttpMethod method) {
+        super(method);
     }
 
     /**
      * Download the artifact or cutouts of the artifact.
-     * @param artifactURI The identifier for the artifact.
+     * @param artifactURI The identifier for the artifact. 
      * @return The artifact
      */
     @Override
     public Artifact execute(URI artifactURI) throws Exception {
-        Artifact artifact = super.execute(artifactURI);
-        StorageLocation storageLocation = new StorageLocation(artifact.storageLocation.getStorageID());
-        storageLocation.storageBucket = artifact.storageLocation.storageBucket;
-        log.debug("retrieving artifact from storage...");
-        getStorageAdapter().get(storageLocation, syncOutput.getOutputStream());
-        log.debug("retrieved artifact from storage");
-        return artifact;
+        ArtifactDAO dao = getArtifactDAO();
+        Artifact artifact = getArtifact(artifactURI, dao);
+
+        URI contentChecksum = artifact.getContentChecksum();
+        Long contentLength = artifact.getContentLength();
+        String contentEncoding = artifact.contentEncoding;
+        String contentType = artifact.contentType;
+        log.debug("Content-MD5: " + contentChecksum.getSchemeSpecificPart());
+        log.debug("Content-Length: " + contentLength);
+        log.debug("Content-Encoding: " + contentEncoding);
+        log.debug("Content-Type: " + contentType);
+
+        String filename = InventoryUtil.computeArtifactFilename(artifactURI);
+        syncOutput.setHeader("Content-Disposition", "attachment; filename=" + filename);
+        syncOutput.setHeader("Content-MD5", contentChecksum.getSchemeSpecificPart());
+        syncOutput.setHeader("Content-Length", contentLength);
+        syncOutput.setHeader("Content-Encoding", contentEncoding);
+        syncOutput.setHeader("Content-Type", contentType);
+        return artifact;    
     }
 
 }

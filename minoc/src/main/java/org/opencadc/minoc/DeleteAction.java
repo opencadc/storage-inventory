@@ -70,40 +70,41 @@ package org.opencadc.minoc;
 import java.net.URI;
 
 import org.apache.log4j.Logger;
-import org.opencadc.inventory.TokenUtil.HttpMethod;
 import org.opencadc.inventory.Artifact;
-import org.opencadc.inventory.StorageLocation;
+import org.opencadc.inventory.TokenUtil.HttpMethod;
+import org.opencadc.inventory.db.ArtifactDAO;
 
 /**
- * Interface with storage and inventory to get an artifact.
+ * Interface with storage and inventory to delete an artifact.
  *
  * @author majorb
  */
-public class GetAction extends HeadAction {
+public class DeleteAction extends ArtifactAction {
     
-    private static final Logger log = Logger.getLogger(GetAction.class);
+    private static final Logger log = Logger.getLogger(DeleteAction.class);
 
     /**
      * Default, no-arg constructor.
      */
-    public GetAction() {
-        super(HttpMethod.GET);
+    public DeleteAction() {
+        super(HttpMethod.DELETE);
     }
 
     /**
-     * Download the artifact or cutouts of the artifact.
-     * @param artifactURI The identifier for the artifact.
-     * @return The artifact
+     * Delete the artifact.
+     * @param artifactURI The identifier for the artifact. 
      */
     @Override
     public Artifact execute(URI artifactURI) throws Exception {
-        Artifact artifact = super.execute(artifactURI);
-        StorageLocation storageLocation = new StorageLocation(artifact.storageLocation.getStorageID());
-        storageLocation.storageBucket = artifact.storageLocation.storageBucket;
-        log.debug("retrieving artifact from storage...");
-        getStorageAdapter().get(storageLocation, syncOutput.getOutputStream());
-        log.debug("retrieved artifact from storage");
-        return artifact;
+        ArtifactDAO dao = getArtifactDAO();
+        Artifact artifact = getArtifact(artifactURI, dao);
+        
+        dao.delete(artifact.getID());
+        log.debug("deleting from storage...");
+        getStorageAdapter().delete(artifact.storageLocation);
+        log.debug("deletedfrom storage");
+        
+        return null;     
     }
 
 }

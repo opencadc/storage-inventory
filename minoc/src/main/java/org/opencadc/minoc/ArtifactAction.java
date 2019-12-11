@@ -69,18 +69,26 @@ package org.opencadc.minoc;
 
 import ca.nrc.cadc.auth.AuthenticationUtil;
 import ca.nrc.cadc.auth.HttpPrincipal;
+import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.rest.InlineContentHandler;
 import ca.nrc.cadc.rest.RestAction;
+import ca.nrc.cadc.util.PropertiesReader;
 
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.util.HashMap;
+import java.util.Map;
 
 import javax.security.auth.Subject;
 
 import org.apache.log4j.Logger;
+import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.TokenUtil;
-import org.opencadc.inventory.TokenUtil.HttpMethod;;
+import org.opencadc.inventory.TokenUtil.HttpMethod;
+import org.opencadc.inventory.db.ArtifactDAO;
+import org.opencadc.inventory.db.SQLGenerator;
+import org.opencadc.inventory.storage.StorageAdapter;
 
 /**
  * Abstract class for performing tasks all action classes have in common,
@@ -91,6 +99,10 @@ import org.opencadc.inventory.TokenUtil.HttpMethod;;
 public abstract class ArtifactAction extends RestAction {
     private static final Logger log = Logger.getLogger(ArtifactAction.class);
     
+    public static final String JNDI_DATASOURCE = "jdbc/inventory";
+    public static final String DATABASE = "content";
+    public static final String SCHEMA = "inventory";
+    
     // The target artifact
     URI artifactURI;
     
@@ -99,9 +111,16 @@ public abstract class ArtifactAction extends RestAction {
     
     // The current http method
     private HttpMethod httpMethod;
+    
+    // interface to storage
+    private StorageAdapter storage = null;
+    
+    // artifact dao
+    private ArtifactDAO dao = null;
 
     /**
-     * Default, no-arg constructor.
+     * Abstract constructor.
+     * @param httpMethod The method associated with this action
      */
     protected ArtifactAction(HttpMethod httpMethod) {
         this.httpMethod = httpMethod;
@@ -120,9 +139,10 @@ public abstract class ArtifactAction extends RestAction {
      * Do the work of the subclass.
      * 
      * @param artifactURI The target artifact
+     * @return The artifact (if applicable)
      * @throws Exception If an something goes wrong.
      */
-    public abstract void execute(URI artifactURI) throws Exception;
+    public abstract Artifact execute(URI artifactURI) throws Exception;
     
     /**
      * Do authorization and perform the action.
@@ -157,16 +177,16 @@ public abstract class ArtifactAction extends RestAction {
         String path = syncInput.getPath();
         log.debug("path: " + path);
         if (path == null) {
-            throw new IllegalArgumentException("Mising artifact URI");
+            throw new IllegalArgumentException("mising artifact URI");
         }
         int colonIndex = path.indexOf(":");
         int firstSlashIndex = path.indexOf("/");
         
         if (colonIndex < 0) {
             if (firstSlashIndex > 0 && path.length() > firstSlashIndex + 1) {
-                throw new IllegalArgumentException("Missing scheme in artifact URI: " + path.substring(firstSlashIndex + 1));
+                throw new IllegalArgumentException("missing scheme in artifact URI: " + path.substring(firstSlashIndex + 1));
             } else {
-                throw new IllegalArgumentException("Missing artifact URI in path: " + path);
+                throw new IllegalArgumentException("missing artifact URI in path: " + path);
             }
         }
         
@@ -182,6 +202,17 @@ public abstract class ArtifactAction extends RestAction {
         log.debug("authToken: " + authToken);
     }
     
+    Artifact getArtifact(URI artifactURI, ArtifactDAO dao) throws ResourceNotFoundException {
+        Artifact artifact = dao.get(artifactURI);
+        if (artifact == null) {
+            throw new ResourceNotFoundException("not found: " + artifactURI);
+        }
+        if (artifact.storageLocation == null) {
+            throw new ResourceNotFoundException("not available: " + artifactURI);
+        }
+        return artifact;
+    }
+    
     /**
      * Create a valid artifact uri.
      * @param uri The input string.
@@ -189,14 +220,62 @@ public abstract class ArtifactAction extends RestAction {
      */
     private URI createArtifactURI(String uri) {
         try {
+            log.debug("artifactURI: " + uri);
             artifactURI = new URI(uri);
             InventoryUtil.validateArtifactURI(ArtifactAction.class, artifactURI);
             return artifactURI;
         } catch (URISyntaxException e) {
-            String message = "Illegal artifact URI: " + uri;
+            String message = "illegal artifact URI: " + uri;
             log.debug(message, e);
             throw new IllegalArgumentException(message);
         }
+    }
+    
+    protected StorageAdapter getStorageAdapter() {
+        // lazy init
+        if (storage == null) {
+            PropertiesReader pr = new PropertiesReader("minoc.properties");
+            String adapterKey = StorageAdapter.class.getName();
+            String adapterClass = pr.getFirstPropertyValue(adapterKey);
+            if (adapterClass == null) {
+                throw new IllegalStateException("no storage adapter specified in minoc.properties");
+            }
+            try {
+                Class c = Class.forName(adapterClass);
+                Object o = c.newInstance();
+                StorageAdapter sa = (StorageAdapter) o;
+                log.debug("StorageAdapter: " + sa);
+                storage = sa;
+                return sa;
+            } catch (Throwable t) {
+                throw new IllegalStateException("failed to load storage adapter: " + adapterClass, t);
+            }
+        }
+        return storage;
+    }
+    
+    protected ArtifactDAO getArtifactDAO() {
+        // lazy init
+        if (dao == null) {
+            Map<String, Object> config = new HashMap<String, Object>();
+            PropertiesReader pr = new PropertiesReader("minoc.properties");
+            Class cls = null;
+            String sqlGenKey = SQLGenerator.class.getName();
+            try {
+                String sqlGenClass = pr.getFirstPropertyValue(sqlGenKey);
+                cls = Class.forName(sqlGenClass);
+            } catch (ClassNotFoundException e) {
+                throw new IllegalStateException("could not load SQLGenerator class: " + e.getMessage(), e);
+            }
+            config.put(sqlGenKey, cls);
+            config.put("jndiDataSourceName", JNDI_DATASOURCE);
+            config.put("database", DATABASE);
+            config.put("schema", SCHEMA);
+            ArtifactDAO newDAO = new ArtifactDAO();
+            newDAO.setConfig(config);
+            dao = newDAO;
+        }
+        return dao;
     }
 
 }

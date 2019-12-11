@@ -70,39 +70,63 @@ package org.opencadc.minoc;
 import java.net.URI;
 
 import org.apache.log4j.Logger;
-import org.opencadc.inventory.TokenUtil.HttpMethod;
 import org.opencadc.inventory.Artifact;
-import org.opencadc.inventory.StorageLocation;
+import org.opencadc.inventory.TokenUtil.HttpMethod;
+import org.opencadc.inventory.db.ArtifactDAO;
 
 /**
- * Interface with storage and inventory to get an artifact.
+ * Interface with storage and inventory to update the metadata of an artifact.
  *
  * @author majorb
  */
-public class GetAction extends HeadAction {
+public class PostAction extends ArtifactAction {
     
-    private static final Logger log = Logger.getLogger(GetAction.class);
+    private static final Logger log = Logger.getLogger(PostAction.class);
 
     /**
      * Default, no-arg constructor.
      */
-    public GetAction() {
-        super(HttpMethod.GET);
+    public PostAction() {
+        super(HttpMethod.POST);
     }
 
     /**
-     * Download the artifact or cutouts of the artifact.
-     * @param artifactURI The identifier for the artifact.
+     * Update artifact metadata.
+     * @param artifactURI The identifier for the artifact. 
      * @return The artifact
      */
     @Override
     public Artifact execute(URI artifactURI) throws Exception {
-        Artifact artifact = super.execute(artifactURI);
-        StorageLocation storageLocation = new StorageLocation(artifact.storageLocation.getStorageID());
-        storageLocation.storageBucket = artifact.storageLocation.storageBucket;
-        log.debug("retrieving artifact from storage...");
-        getStorageAdapter().get(storageLocation, syncOutput.getOutputStream());
-        log.debug("retrieved artifact from storage");
+        
+        String newURI = syncInput.getParameter("uri");
+        String newContentType = syncInput.getParameter("contentType");
+        String newContentEncoding = syncInput.getParameter("contentEncoding");
+        log.debug("new uri: " + newURI);
+        log.debug("new contentType: " + newContentType);
+        log.debug("new contentEncoding: " + newContentEncoding);
+        
+        ArtifactDAO dao = getArtifactDAO();
+        Artifact artifact = getArtifact(artifactURI, dao);
+        
+        // TODO: enable modifying URIs when supported by DAO
+        // TODO: how to support clearing values?
+        boolean changes = false;
+        if (newContentType != null && !newContentType.equals(artifact.contentType)) {
+            artifact.contentType = newContentType;
+            changes = true;
+        }
+        if (newContentEncoding != null && !newContentEncoding.equals(artifact.contentEncoding)) {
+            artifact.contentEncoding = newContentEncoding;
+            changes = true;
+        }
+        if (changes) {
+            log.debug("updating artifact metadata...");
+            dao.put(artifact);
+            log.debug("updated artifact metadata");
+        } else {
+            log.debug("no updates to make");
+        }
+        
         return artifact;
     }
 

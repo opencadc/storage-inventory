@@ -103,7 +103,7 @@ public class TokenUtil {
      * Valid methods that apply to authorization.
      */
     public static enum HttpMethod {
-        GET, PUT
+        GET, PUT, DELETE, HEAD, POST
     }
 
     /**

@@ -77,6 +77,7 @@ import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.Test;
+import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.TokenUtil.HttpMethod;
 
 public class ArtifactActionTest {
@@ -112,7 +113,8 @@ public class ArtifactActionTest {
             }
         }
         
-        public void execute(URI artifactURI) throws Exception {
+        public Artifact execute(URI artifactURI) throws Exception {
+            return null;
         }
 
     }
