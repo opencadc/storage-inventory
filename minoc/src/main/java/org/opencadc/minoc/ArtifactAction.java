@@ -88,6 +88,8 @@ import org.opencadc.inventory.TokenUtil;
 import org.opencadc.inventory.TokenUtil.HttpMethod;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.SQLGenerator;
+import org.opencadc.inventory.permissions.Grant;
+import org.opencadc.inventory.permissions.PermissionsClient;
 import org.opencadc.inventory.storage.StorageAdapter;
 
 /**
@@ -153,17 +155,32 @@ public abstract class ArtifactAction extends RestAction {
         parsePath();
         
         // do authorization (with token or subject)
+        Subject subject = AuthenticationUtil.getCurrentSubject();
         if (authToken != null) {
             String tokenUser = TokenUtil.validateToken(authToken, artifactURI, httpMethod);
-            Subject subject = AuthenticationUtil.getCurrentSubject();
-            if (subject == null) {
-                subject = new Subject();
-            }
             subject.getPrincipals().clear();
             subject.getPrincipals().add(new HttpPrincipal(tokenUser));
             logInfo.setSubject(subject);
         } else {
-            // TODO get permissions and perform authorization
+            // augment subject (minoc is configured so augment is not done in rest library)
+            AuthenticationUtil.augmentSubject(subject);
+
+            // TODO: enable authorization when the permissions service is ready
+            // TODO: consult the two permissions services (ams and cadc-write) and
+            // consolidate the responses.
+            
+//            PermissionsClient pc = new PermissionsClient();
+//            Grant grant = null;
+//            switch (httpMethod) {
+//                case HEAD:
+//                case GET:
+//                    grant = pc.getReadGrant(artifactURI);
+//                    break;
+//                case PUT:
+//                case POST:
+//                case DELETE:
+//                    grant = pc.getWriteGrant(artifactURI);
+//            }
         }
         
         execute(artifactURI);

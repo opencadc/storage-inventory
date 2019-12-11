@@ -102,7 +102,7 @@ import org.junit.Test;
 public class MinocIntTest {
     
     private static final Logger log = Logger.getLogger(MinocIntTest.class);
-    private static final URI MINOC_SERVICE_ID = URI.create("ivo://cadc.nrc.ca/minoc");
+    public static final URI MINOC_SERVICE_ID = URI.create("ivo://cadc.nrc.ca/minoc");
     // TODO: Move this to Standards.java
     private static final URI MINOC_STANDARD_ID = URI.create("vos://cadc.nrc.ca~vospace/CADC/std/inventory#artifacts-1.0");
 
