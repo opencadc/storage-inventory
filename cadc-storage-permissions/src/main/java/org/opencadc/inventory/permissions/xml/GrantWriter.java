@@ -62,44 +62,84 @@
  *  <http://www.gnu.org/licenses/>.      pas le cas, consultez :
  *                                       <http://www.gnu.org/licenses/>.
  *
- *  $Revision: 4 $
+ *  $Revision: 5 $
  *
  ************************************************************************
  */
 
-package org.opencadc.inventory.permissions;
+package org.opencadc.inventory.permissions.xml;
 
-import java.net.URI;
-import java.util.Date;
+import ca.nrc.cadc.date.DateUtil;
+import java.io.IOException;
+import java.io.OutputStream;
+import java.io.OutputStreamWriter;
+import java.io.Writer;
+import java.text.DateFormat;
+import java.util.List;
+import org.jdom2.Document;
+import org.jdom2.Element;
+import org.jdom2.output.Format;
+import org.jdom2.output.XMLOutputter;
+import org.opencadc.gms.GroupURI;
+import org.opencadc.inventory.permissions.Grant;
+import org.opencadc.inventory.permissions.ReadGrant;
 
-/**
- * Holds read grant information about an artifact.
- * 
- * @author majorb
- *
- */
-public class ReadGrant extends Grant {
+public class GrantWriter {
 
-    // Is the artifact available to anonymous (all) users.
-    private boolean anonymousAccess;
+    private DateFormat dateFormat;
+    private final boolean writeEmptyCollections;
 
-    /**
-     * Construct a read grant for the given artifactURI and expiry date.
-     * @param artifactURI The applicable targetURI.
-     * @param expiryDate The expiry date of the grant.
-     * @param anonymousAccess true is the artifact has anonymous access, false otherwise.
-     */
-    public ReadGrant(URI artifactURI, Date expiryDate, boolean anonymousAccess) {
-        super(artifactURI, expiryDate);
-        this.anonymousAccess = anonymousAccess;
+    public GrantWriter() {
+        this(false);
     }
 
-    /**
-     * Check if artifact is accessible by anonymous (all) users.
-     * @return true if the artifact has anonymous access, false otherwise.
-     */
-    public boolean isAnonymousAccess() {
-        return anonymousAccess;
+    public GrantWriter(boolean writeEmptyCollections) {
+        this.writeEmptyCollections = writeEmptyCollections;
+        this.dateFormat = DateUtil.getDateFormat(DateUtil.IVOA_DATE_FORMAT, DateUtil.UTC);
     }
 
+    public void write(Grant grant, OutputStream ostream) throws IOException {
+        write(grant, new OutputStreamWriter(ostream));
+    }
+
+    public void write(Grant grant, Writer writer) throws IOException {
+        Element root = new Element(GrantReader.ENAMES.grant.name());
+
+        addChild(root, GrantReader.ENAMES.artifactURI.name(), grant.getArtifactURI().toASCIIString());
+        addChild(root, GrantReader.ENAMES.expiryDate.name(), dateFormat.format(grant.getExpiryDate()));
+
+        if (grant instanceof ReadGrant) {
+            root.setAttribute(GrantReader.ENAMES.type.name(), GrantReader.ENAMES.Read.name());
+            Element pub = new Element(GrantReader.ENAMES.isAnonymousAccess.name());
+            pub.setText(Boolean.toString(((ReadGrant) grant).isAnonymousAccess()));
+            root.addContent(pub);
+        } else {
+            root.setAttribute(GrantReader.ENAMES.type.name(), GrantReader.ENAMES.Write.name());
+        }
+
+        Element groups = new Element(GrantReader.ENAMES.groups.name());
+        if (!grant.getGroups().isEmpty() || writeEmptyCollections) {
+            root.addContent(groups);
+        }
+        addGroups(grant.getGroups(), groups);
+
+        Document doc = new Document(root);
+        XMLOutputter outputter = new XMLOutputter();
+        outputter.setFormat(Format.getPrettyFormat());
+        outputter.output(doc, writer);
+    }
+
+    private void addChild(Element parent, String ename, String eval) {
+        Element uri = new Element(ename);
+        uri.setText(eval);
+        parent.addContent(uri);
+    }
+
+    private void addGroups(List<GroupURI> groups, Element parent) {
+        for (GroupURI groupURI : groups) {
+            Element uri = new Element(GrantReader.ENAMES.groupURI.name());
+            uri.setText(groupURI.getURI().toASCIIString());
+            parent.addContent(uri);
+        }
+    }
 }
