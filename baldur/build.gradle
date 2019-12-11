@@ -18,10 +18,6 @@ group = 'org.opencadc'
 
 version = '1000'
 
-war {
-    archiveName = project.name + '##' + project.version + '.war'
-}
-
 dependencies {
     compile 'log4j:log4j:[1.2,)'
     compile 'org.opencadc:cadc-inventory:[0.1,)'
