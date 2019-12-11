@@ -71,26 +71,16 @@ import ca.nrc.cadc.auth.AuthenticationUtil;
 import ca.nrc.cadc.auth.HttpPrincipal;
 import ca.nrc.cadc.rest.InlineContentHandler;
 import ca.nrc.cadc.rest.RestAction;
-import ca.nrc.cadc.util.PropertiesReader;
 
-import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.nio.file.attribute.GroupPrincipal;
-import java.nio.file.attribute.UserPrincipalLookupService;
-import java.security.AccessControlException;
-import java.security.Principal;
-import java.util.Set;
 
 import javax.security.auth.Subject;
-import javax.security.auth.x500.X500Principal;
 
 import org.apache.log4j.Logger;
-import org.opencadc.inventory.ArtifactUtil;
 import org.opencadc.inventory.InventoryUtil;
-import org.opencadc.inventory.ArtifactUtil.HttpMethod;
+import org.opencadc.inventory.TokenUtil;
+import org.opencadc.inventory.TokenUtil.HttpMethod;;
 
 /**
  * Abstract class for performing tasks all action classes have in common,
@@ -144,7 +134,7 @@ public abstract class ArtifactAction extends RestAction {
         
         // do authorization (with token or subject)
         if (authToken != null) {
-            String tokenUser = ArtifactUtil.validateToken(authToken, artifactURI, httpMethod);
+            String tokenUser = TokenUtil.validateToken(authToken, artifactURI, httpMethod);
             Subject subject = AuthenticationUtil.getCurrentSubject();
             if (subject == null) {
                 subject = new Subject();

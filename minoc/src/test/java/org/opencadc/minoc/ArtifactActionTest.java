@@ -67,20 +67,17 @@
 
 package org.opencadc.minoc;
 
+import ca.nrc.cadc.rest.SyncInput;
+import ca.nrc.cadc.util.Log4jInit;
+
 import java.io.IOException;
 import java.net.URI;
-
-import javax.servlet.http.HttpServletRequest;
 
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.Test;
-import org.opencadc.inventory.ArtifactUtil.HttpMethod;
-
-import ca.nrc.cadc.rest.InlineContentHandler;
-import ca.nrc.cadc.rest.SyncInput;
-import ca.nrc.cadc.util.Log4jInit;
+import org.opencadc.inventory.TokenUtil.HttpMethod;
 
 public class ArtifactActionTest {
 
