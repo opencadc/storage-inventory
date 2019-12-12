@@ -70,13 +70,15 @@ package org.opencadc.minoc;
 import ca.nrc.cadc.auth.AuthenticationUtil;
 import ca.nrc.cadc.auth.HttpPrincipal;
 import ca.nrc.cadc.net.ResourceNotFoundException;
+import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.rest.InlineContentHandler;
 import ca.nrc.cadc.rest.RestAction;
 import ca.nrc.cadc.util.PropertiesReader;
 
-import java.io.FileNotFoundException;
+import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.security.AccessControlException;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -86,9 +88,14 @@ import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.db.ArtifactDAO;
+import org.opencadc.inventory.db.DeletedEventDAO;
 import org.opencadc.inventory.db.SQLGenerator;
+import org.opencadc.inventory.permissions.Grant;
+import org.opencadc.inventory.permissions.PermissionsClient;
+import org.opencadc.inventory.permissions.ReadGrant;
+import org.opencadc.inventory.permissions.TokenUtil;
+import org.opencadc.inventory.permissions.WriteGrant;
 import org.opencadc.inventory.storage.StorageAdapter;
-import org.opencadc.minoc.ArtifactUtil.HttpMethod;
 
 /**
  * Abstract class for performing tasks all action classes have in common,
@@ -100,8 +107,9 @@ public abstract class ArtifactAction extends RestAction {
     private static final Logger log = Logger.getLogger(ArtifactAction.class);
     
     public static final String JNDI_DATASOURCE = "jdbc/inventory";
-    public static final String DATABASE = "content";
-    public static final String SCHEMA = "inventory";
+    static final String SQL_GEN_KEY = SQLGenerator.class.getName();
+    static final String DATABASE_KEY = SQLGenerator.class.getPackage().toString() + ".database";
+    static final String SCHEMA_KEY = SQLGenerator.class.getPackage().toString() + ".schema";
     
     // The target artifact
     URI artifactURI;
@@ -109,22 +117,12 @@ public abstract class ArtifactAction extends RestAction {
     // The (possibly null) authentication token.
     String authToken;
     
-    // The current http method
-    private HttpMethod httpMethod;
-    
     // interface to storage
     private StorageAdapter storage = null;
     
-    // artifact dao
-    private ArtifactDAO dao = null;
-
-    /**
-     * Abstract constructor.
-     * @param httpMethod The method associated with this action
-     */
-    protected ArtifactAction(HttpMethod httpMethod) {
-        this.httpMethod = httpMethod;
-    }
+    // Database Access Objects
+    private ArtifactDAO artifactDAO = null;
+    private DeletedEventDAO deletedEventDAO = null;
 
     /**
      * Default implementation.
@@ -135,45 +133,47 @@ public abstract class ArtifactAction extends RestAction {
         return null;
     }
     
-    /**
-     * Do the work of the subclass.
-     * 
-     * @param artifactURI The target artifact
-     * @return The artifact (if applicable)
-     * @throws Exception If an something goes wrong.
-     */
-    public abstract Artifact execute(URI artifactURI) throws Exception;
-    
-    /**
-     * Do authorization and perform the action.
-     */
-    @Override
-    public void doAction() throws Exception {
+    protected void initAndAuthorize(Class<? extends Grant> grantClass)
+        throws AccessControlException, IOException, ResourceNotFoundException, TransientException {
         
-        parsePath();
+        init();
         
         // do authorization (with token or subject)
+        Subject subject = AuthenticationUtil.getCurrentSubject();
         if (authToken != null) {
-            String tokenUser = ArtifactUtil.validateToken(authToken, artifactURI, httpMethod);
-            Subject subject = AuthenticationUtil.getCurrentSubject();
-            if (subject == null) {
-                subject = new Subject();
-            }
+            String tokenUser = TokenUtil.validateToken(authToken, artifactURI, grantClass);
             subject.getPrincipals().clear();
             subject.getPrincipals().add(new HttpPrincipal(tokenUser));
             logInfo.setSubject(subject);
         } else {
-            // TODO get permissions and perform authorization
+            // augment subject (minoc is configured so augment is not done in rest library)
+            AuthenticationUtil.augmentSubject(subject);
+
+            // TODO: consult the two permissions services (ams and cadc-write) and
+            // consolidate the responses.
+            PermissionsClient pc = new PermissionsClient();
+            if (ReadGrant.class.isAssignableFrom(grantClass)) {
+                ReadGrant grant = pc.getReadGrant(artifactURI);
+                //if (grant == null) {
+                //    throw new AccessControlException("no grant information on artifact");
+                //}
+                // TODO: complete auth check
+            } else if (WriteGrant.class.isAssignableFrom(grantClass)) {
+                WriteGrant grant = pc.getWriteGrant(artifactURI);
+                //if (grant == null) {
+                //    throw new AccessControlException("no grant information on artifact");
+                //}
+                // TODO: complete auth check
+            } else {
+                throw new IllegalStateException("Unsupported grant class: " + grantClass);
+            }
         }
-        
-        execute(artifactURI);
-        
     }
     
     /**
      * Parse the request path.
      */
-    void parsePath() {
+    void init() {
         String path = syncInput.getPath();
         log.debug("path: " + path);
         if (path == null) {
@@ -256,26 +256,49 @@ public abstract class ArtifactAction extends RestAction {
     
     protected ArtifactDAO getArtifactDAO() {
         // lazy init
-        if (dao == null) {
-            Map<String, Object> config = new HashMap<String, Object>();
-            PropertiesReader pr = new PropertiesReader("minoc.properties");
-            Class cls = null;
-            String sqlGenKey = SQLGenerator.class.getName();
-            try {
-                String sqlGenClass = pr.getFirstPropertyValue(sqlGenKey);
-                cls = Class.forName(sqlGenClass);
-            } catch (ClassNotFoundException e) {
-                throw new IllegalStateException("could not load SQLGenerator class: " + e.getMessage(), e);
-            }
-            config.put(sqlGenKey, cls);
-            config.put("jndiDataSourceName", JNDI_DATASOURCE);
-            config.put("database", DATABASE);
-            config.put("schema", SCHEMA);
+        if (artifactDAO == null) {
             ArtifactDAO newDAO = new ArtifactDAO();
-            newDAO.setConfig(config);
-            dao = newDAO;
+            newDAO.setConfig(getDaoConfig());
+            artifactDAO = newDAO;
         }
-        return dao;
+        return artifactDAO;
+    }
+    
+    protected DeletedEventDAO getDeletedEventDAO(ArtifactDAO src) {
+        // lazy init
+        if (deletedEventDAO == null) {
+            DeletedEventDAO newDAO = new DeletedEventDAO(src);
+            deletedEventDAO = newDAO;
+        }
+        return deletedEventDAO;
+    }
+    
+    static Map<String, Object> getDaoConfig() {
+        Map<String, Object> config = new HashMap<String, Object>();
+        PropertiesReader pr = new PropertiesReader("minoc.properties");
+        Class cls = null;
+        try {
+            String sqlGenClass = pr.getFirstPropertyValue(SQL_GEN_KEY);
+            if (sqlGenClass == null) {
+                throw new IllegalStateException("a value for " + SQLGenerator.class.getName()
+                    + " is needed in minoc.properties");
+            }
+            cls = Class.forName(sqlGenClass);
+        } catch (ClassNotFoundException e) {
+            throw new IllegalStateException("could not load SQLGenerator class: " + e.getMessage(), e);
+        }
+        config.put(SQL_GEN_KEY, cls);
+        config.put("jndiDataSourceName", JNDI_DATASOURCE);
+        String database = pr.getFirstPropertyValue(DATABASE_KEY);
+        String schema = pr.getFirstPropertyValue(SCHEMA_KEY);
+        if (database == null || schema == null) {
+            throw new IllegalStateException("values for " + DATABASE_KEY + " and "
+                + SCHEMA_KEY + " are needed in minoc.properties");
+        }
+        config.put("database", database);
+        config.put("schema", schema);
+            
+        return config;
     }
 
 }

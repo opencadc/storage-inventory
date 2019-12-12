@@ -67,12 +67,10 @@
 
 package org.opencadc.minoc;
 
-import java.net.URI;
-
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.db.ArtifactDAO;
-import org.opencadc.minoc.ArtifactUtil.HttpMethod;
+import org.opencadc.inventory.permissions.WriteGrant;
 
 /**
  * Interface with storage and inventory to update the metadata of an artifact.
@@ -87,16 +85,16 @@ public class PostAction extends ArtifactAction {
      * Default, no-arg constructor.
      */
     public PostAction() {
-        super(HttpMethod.POST);
+        super();
     }
 
     /**
      * Update artifact metadata.
-     * @param artifactURI The identifier for the artifact. 
-     * @return The artifact
      */
     @Override
-    public Artifact execute(URI artifactURI) throws Exception {
+    public void doAction() throws Exception {
+        
+        initAndAuthorize(WriteGrant.class);
         
         String newURI = syncInput.getParameter("uri");
         String newContentType = syncInput.getParameter("contentType");
@@ -110,24 +108,15 @@ public class PostAction extends ArtifactAction {
         
         // TODO: enable modifying URIs when supported by DAO
         // TODO: how to support clearing values?
-        boolean changes = false;
-        if (newContentType != null && !newContentType.equals(artifact.contentType)) {
+        if (newContentType != null) {
             artifact.contentType = newContentType;
-            changes = true;
         }
-        if (newContentEncoding != null && !newContentEncoding.equals(artifact.contentEncoding)) {
+        if (newContentEncoding != null) {
             artifact.contentEncoding = newContentEncoding;
-            changes = true;
         }
-        if (changes) {
-            log.debug("updating artifact metadata...");
-            dao.put(artifact);
-            log.debug("updated artifact metadata");
-        } else {
-            log.debug("no updates to make");
-        }
-        
-        return artifact;
+        log.debug("updating artifact metadata...");
+        dao.put(artifact);
+        log.debug("updated artifact metadata");
     }
 
 }

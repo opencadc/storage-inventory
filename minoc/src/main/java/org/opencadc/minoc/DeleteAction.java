@@ -67,13 +67,14 @@
 
 package org.opencadc.minoc;
 
-import java.net.URI;
+import ca.nrc.cadc.db.TransactionManager;
 
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
-import org.opencadc.inventory.InventoryUtil;
+import org.opencadc.inventory.DeletedArtifactEvent;
 import org.opencadc.inventory.db.ArtifactDAO;
-import org.opencadc.minoc.ArtifactUtil.HttpMethod;
+import org.opencadc.inventory.db.DeletedEventDAO;
+import org.opencadc.inventory.permissions.WriteGrant;
 
 /**
  * Interface with storage and inventory to delete an artifact.
@@ -88,24 +89,45 @@ public class DeleteAction extends ArtifactAction {
      * Default, no-arg constructor.
      */
     public DeleteAction() {
-        super(HttpMethod.DELETE);
+        super();
     }
 
     /**
-     * Delete the artifact.
-     * @param artifactURI The identifier for the artifact. 
+     * Delete the artifact. 
      */
     @Override
-    public Artifact execute(URI artifactURI) throws Exception {
-        ArtifactDAO dao = getArtifactDAO();
-        Artifact artifact = getArtifact(artifactURI, dao);
+    public void doAction() throws Exception {
         
-        dao.delete(artifact.getID());
-        log.debug("deleting from storage...");
-        getStorageAdapter().delete(artifact.storageLocation);
-        log.debug("deletedfrom storage");
+        initAndAuthorize(WriteGrant.class);
         
-        return null;     
+        ArtifactDAO artifactDAO = getArtifactDAO();
+        Artifact artifact = getArtifact(artifactURI, artifactDAO);
+        DeletedEventDAO deletedEventDAO = getDeletedEventDAO(artifactDAO);
+        TransactionManager txnMgr = artifactDAO.getTransactionManager();
+        try {
+            txnMgr.startTransaction();
+            DeletedArtifactEvent deletedArtifact = new DeletedArtifactEvent(artifact.getID());
+            artifactDAO.delete(artifact.getID());
+            deletedEventDAO.put(deletedArtifact);
+            log.debug("deleting from storage...");
+            getStorageAdapter().delete(artifact.storageLocation);
+            log.debug("deletedfrom storage");
+            txnMgr.commitTransaction();
+        } catch (Throwable t) {
+            String msg = "failed to delete artifact";
+            log.error(msg, t);
+            throw t;
+        } finally {
+            if (txnMgr.isOpen()) {
+                try {
+                    log.debug("rolling back transaction...");
+                    txnMgr.rollbackTransaction();
+                    log.error("rollback successful");
+                } catch (Exception e) {
+                    log.error("failed to rollback transaction", e);
+                }
+            }
+        }
     }
 
 }
