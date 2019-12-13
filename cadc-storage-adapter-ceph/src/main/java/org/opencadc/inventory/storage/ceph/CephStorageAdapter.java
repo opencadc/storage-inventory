@@ -71,11 +71,8 @@ package org.opencadc.inventory.storage.ceph;
 
 import com.ceph.rados.Completion;
 import com.ceph.rados.IoCTX;
-import com.ceph.rados.ListCtx;
 import com.ceph.rados.Rados;
-import com.ceph.rados.ReadOp;
 import com.ceph.rados.exceptions.RadosException;
-import com.ceph.radosstriper.IoCTXStriper;
 import com.ceph.radosstriper.RadosStriper;
 import nom.tam.fits.BasicHDU;
 import nom.tam.fits.Fits;
@@ -98,9 +95,6 @@ import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.util.StringUtil;
 
-import java.io.BufferedInputStream;
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -111,11 +105,8 @@ import java.net.URI;
 import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.util.Arrays;
 import java.util.Iterator;
-import java.util.NoSuchElementException;
 import java.util.Set;
-import java.util.function.Consumer;
 
 
 /**
@@ -123,14 +114,15 @@ import java.util.function.Consumer;
  */
 public class CephStorageAdapter implements StorageAdapter {
 
-    static final String META_POOL_NAME = "default.rgw.meta";
-    static final String META_NAMESPACE = "root";
-
-    static final String DATA_POOL_NAME = "default.rgw.buckets.non-ec";
-    static final String BUCKET_NAME_LOOKUP = ".bucket.meta.%s";
-    static final String OBJECT_ID_LOOKUP = "%s_%s";
-
     private static final Logger LOGGER = Logger.getLogger(CephStorageAdapter.class);
+
+    private static final String META_POOL_NAME = "default.rgw.meta";
+    private static final String META_NAMESPACE = "root";
+
+    private static final String DATA_POOL_NAME = "default.rgw.buckets.non-ec";
+    private static final String BUCKET_NAME_LOOKUP = ".bucket.meta.%s";
+    private static final String OBJECT_ID_LOOKUP = "%s_%s";
+
     static final String DIGEST_ALGORITHM = "MD5";
     private static final int BUFFER_SIZE_BYTES = 8192;
 
@@ -159,10 +151,10 @@ public class CephStorageAdapter implements StorageAdapter {
         final RadosStriper radosStriper = new RadosStriper(clusterName, cephxID, Rados.OPERATION_NOFLAG);
         radosStriper.confReadFile(
                 new File(String.format("%s/.ceph/%s.conf", System.getProperty("user.home"), clusterName)));
-        log(String.format("Connecting to Ceph OSD at %s...", radosStriper.confGet("mon_host")));
+        LOGGER.debug(String.format("Connecting to Ceph OSD at %s...", radosStriper.confGet("mon_host")));
         radosStriper.connect();
-        log(String.format("Connected to Ceph OSD at %s as %s.", radosStriper.confGet("mon_host"),
-                          cephxID));
+        LOGGER.debug(String.format("Connected to Ceph OSD at %s as %s.", radosStriper.confGet("mon_host"),
+                                   cephxID));
         return radosStriper;
     }
 
@@ -170,10 +162,10 @@ public class CephStorageAdapter implements StorageAdapter {
         final Rados rados = createRadosClient();
         rados.confReadFile(new File(String.format("%s/.ceph/%s.conf", System.getProperty("user.home"), clusterName)));
 
-        log(String.format("Connecting to Ceph OSD at %s...", rados.confGet("mon_host")));
+        LOGGER.debug(String.format("Connecting to Ceph OSD at %s...", rados.confGet("mon_host")));
         rados.connect();
-        log(String.format("Connected to Ceph OSD at %s as %s.", rados.confGet("mon_host"),
-                          cephxID));
+        LOGGER.debug(String.format("Connected to Ceph OSD at %s as %s.", rados.confGet("mon_host"),
+                                   cephxID));
         return rados;
     }
 
@@ -188,12 +180,6 @@ public class CephStorageAdapter implements StorageAdapter {
     private URI createChecksum(final MessageDigest messageDigest) {
         return URI.create(String.format("%s:%s", messageDigest.getAlgorithm().toLowerCase(),
                                         new BigInteger(1, messageDigest.digest()).toString(16)));
-    }
-
-    private IoCTXStriper contextConnectStriper(final String poolName) throws RadosException {
-        final RadosStriper radosStriper = connectStriper();
-        final IoCTX ioCTX = contextConnect(radosStriper, poolName);
-        return radosStriper.ioCtxCreateStriper(ioCTX);
     }
 
     private IoCTX contextConnect(final Rados client, final String poolName) throws RadosException {
@@ -233,7 +219,7 @@ public class CephStorageAdapter implements StorageAdapter {
             for (final String s : objects) {
                 if (s.startsWith(bucketKey)) {
                     final String bucketMarker = s.split(":")[1];
-                    log(String.format("Found marker %s for bucket %s.", bucketMarker, bucket));
+                    LOGGER.debug(String.format("Found marker %s for bucket %s.", bucketMarker, bucket));
                     return bucketMarker;
                 }
             }
@@ -298,10 +284,11 @@ public class CephStorageAdapter implements StorageAdapter {
                     final Header header = hdu.getHeader();
                     final long afterReadHDU = System.currentTimeMillis();
                     final HeaderCard headerNameCard = header.findCard("EXTNAME");
-                    log(String.format("Read HDU %d (%s) in %d milliseconds.", count, headerNameCard == null
-                                                                                     ? "N/A"
-                                                                                     : headerNameCard.getValue(),
-                                      afterReadHDU - beforeHDU));
+                    LOGGER.debug(String.format("%d,\"%s\",%d,\"milliseconds\"",
+                                               count,
+                                               headerNameCard == null ? "N/A" : headerNameCard.getValue(),
+                                               afterReadHDU - beforeHDU));
+                    beforeHDU = System.currentTimeMillis();
                     if (hdu.getAxes() != null) {
                         final int axesCount = hdu.getAxes().length;
                         for (int i = 0; i < axesCount; i++) {
@@ -309,14 +296,8 @@ public class CephStorageAdapter implements StorageAdapter {
                         }
                     }
 
-                    final long beforeWriteHDU = System.currentTimeMillis();
                     header.write(dataOutput);
                     dataOutput.write(new short[0]);
-                    log(String.format("Wrote HDU %d (%s) in %d milliseconds.", count, headerNameCard == null
-                                                                                      ? "N/A"
-                                                                                      : headerNameCard.getValue(),
-                                      System.currentTimeMillis() - beforeWriteHDU));
-                    beforeHDU = System.currentTimeMillis();
                     count++;
                 }
             } catch (RadosException e) {
@@ -324,7 +305,7 @@ public class CephStorageAdapter implements StorageAdapter {
             } catch (FitsException | IOException e) {
                 throw new ReadException("Unable to process FITS file.", e);
             }
-            log(String.format("Read and wrote HDUs in %d milliseconds.", System.currentTimeMillis() - start));
+            LOGGER.debug(String.format("Read and wrote HDUs in %d milliseconds.", System.currentTimeMillis() - start));
         }
     }
 
@@ -343,19 +324,17 @@ public class CephStorageAdapter implements StorageAdapter {
             long offset = 0L;
             final Completion completion = new Completion(false, false);
             if (bytesRead > 0) {
-                //ioCTX.write(objectID, buffer);
                 while ((bytesRead = byteCountInputStream.read(buffer)) >= 0) {
                     ioCTX.aioWrite(objectID, completion, buffer, offset);
                     offset += bytesRead;
                     completion.waitForSafe();
                     ioCTX.aioFlush();
                     completion.waitForSafe();
-                    //    ioCTX.append(objectID, buffer, bytesRead);
                 }
             }
             completion.waitForComplete();
 
-            log(String.format("Wrote %d bytes to %s.", byteCountInputStream.getByteCount(), objectID));
+            LOGGER.debug(String.format("Wrote %d bytes to %s.", byteCountInputStream.getByteCount(), objectID));
             final URI expectedChecksum = newArtifact.contentChecksum;
             final URI calculatedChecksum = createChecksum(digestInputStream.getMessageDigest());
 
@@ -425,113 +404,11 @@ public class CephStorageAdapter implements StorageAdapter {
         return null;
     }
 
-    void log(final String message) {
-        System.out.println(message);
-    }
-
     private InputStream createStriperInputStream(final String objectID) throws IOException {
         return new RadosStriperInputStream(connectStriper(), objectID);
     }
 
     private InputStream createInputStream(final String objectID) throws IOException {
         return new RadosInputStream(connect(), objectID);
-    }
-
-    private class StorageMetadataIterator implements Iterator<StorageMetadata> {
-
-        private static final int DEFAULT_PAGE_SIZE = 25;
-
-        private final IoCTX context;
-        private final int pageSize;
-        private String[] source;
-
-        public StorageMetadataIterator(final IoCTX context) throws RadosException {
-            this(context, DEFAULT_PAGE_SIZE);
-        }
-
-        public StorageMetadataIterator(final IoCTX context, final int pageSize) throws RadosException {
-            this.context = context;
-            this.pageSize = pageSize;
-            loadPage();
-        }
-
-        void loadPage() throws RadosException {
-            final ListCtx listContext = context.listObjectsPartial(pageSize);
-            if (listContext.nextObjects() > 0) {
-                source = listContext.getObjects();
-            }
-        }
-
-        /**
-         * Removes from the underlying collection the last element returned
-         * by this iterator (optional operation).  This method can be called
-         * only once per call to {@link #next}.
-         * <p>
-         * The behavior of an iterator is unspecified if the underlying collection
-         * is modified while the iteration is in progress in any way other than by
-         * calling this method, unless an overriding class has specified a
-         * concurrent modification policy.
-         * <p>
-         * The behavior of an iterator is unspecified if this method is called
-         * after a call to the {@link #forEachRemaining forEachRemaining} method.
-         *
-         * @throws UnsupportedOperationException if the {@code remove}
-         *                                       operation is not supported by this iterator
-         * @throws IllegalStateException         if the {@code next} method has not
-         *                                       yet been called, or the {@code remove} method has already
-         *                                       been called after the last call to the {@code next}
-         *                                       method
-         */
-        @Override
-        public void remove() {
-
-        }
-
-        /**
-         * Performs the given action for each remaining element until all elements
-         * have been processed or the action throws an exception.  Actions are
-         * performed in the order of iteration, if that order is specified.
-         * Exceptions thrown by the action are relayed to the caller.
-         * <p>
-         * The behavior of an iterator is unspecified if the action modifies the
-         * collection in any way (even by calling the {@link #remove remove} method
-         * or other mutator methods of {@code Iterator} subtypes),
-         * unless an overriding class has specified a concurrent modification policy.
-         * <p>
-         * Subsequent behavior of an iterator is unspecified if the action throws an
-         * exception.
-         *
-         * @param action The action to be performed for each element
-         * @throws NullPointerException if the specified action is null
-         * @since 1.8
-         */
-        @Override
-        public void forEachRemaining(Consumer<? super StorageMetadata> action) {
-
-        }
-
-        /**
-         * Returns {@code true} if the iteration has more elements.
-         * (In other words, returns {@code true} if {@link #next} would
-         * return an element rather than throwing an exception.)
-         *
-         * @return {@code true} if the iteration has more elements
-         */
-        @Override
-        public boolean hasNext() {
-            return false;
-        }
-
-        /**
-         * Returns the next element in the iteration.
-         *
-         * @return the next element in the iteration
-         *
-         * @throws NoSuchElementException if the iteration has no more elements
-         */
-        @Override
-        public StorageMetadata next() {
-            throw new NoSuchElementException("Nothing more to give.");
-        }
     }
 }

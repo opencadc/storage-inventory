@@ -74,19 +74,10 @@ import nom.tam.fits.Fits;
 import nom.tam.fits.FitsException;
 import nom.tam.fits.Header;
 import nom.tam.fits.HeaderCard;
-import nom.tam.fits.ImageData;
-import nom.tam.fits.ImageHDU;
-import nom.tam.image.StandardImageTiler;
 import nom.tam.util.ArrayDataOutput;
 import nom.tam.util.BufferedDataOutputStream;
 import org.apache.log4j.Logger;
-import org.opencadc.inventory.storage.Cutout;
-import org.opencadc.inventory.storage.CutoutValidator;
-import org.opencadc.inventory.storage.HDULocation;
-import org.opencadc.inventory.storage.NamedHDULocation;
 import org.opencadc.inventory.storage.NewArtifact;
-import org.opencadc.inventory.storage.NumberedHDULocation;
-import org.opencadc.inventory.storage.PrimaryHDULocation;
 import org.opencadc.inventory.storage.ReadException;
 import org.opencadc.inventory.storage.StorageEngageException;
 import org.opencadc.inventory.storage.WriteException;
@@ -105,7 +96,6 @@ import software.amazon.awssdk.services.s3.model.S3Exception;
 import ca.nrc.cadc.io.ByteCountInputStream;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
-import ca.nrc.cadc.util.StringUtil;
 
 import java.io.BufferedInputStream;
 import java.io.IOException;
@@ -117,9 +107,7 @@ import java.net.URI;
 import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.util.ArrayList;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Set;
 
 
@@ -129,6 +117,7 @@ import java.util.Set;
 public class S3StorageAdapter implements StorageAdapter {
 
     private static final Logger LOGGER = Logger.getLogger(S3StorageAdapter.class);
+
     static final String DIGEST_ALGORITHM = "MD5";
     private static final int BUFFER_SIZE_BYTES = 8192;
 
@@ -143,7 +132,7 @@ public class S3StorageAdapter implements StorageAdapter {
                      .build());
     }
 
-    public S3StorageAdapter(final S3Client s3Client) {
+    S3StorageAdapter(final S3Client s3Client) {
         this.s3Client = s3Client;
     }
 
@@ -230,10 +219,11 @@ public class S3StorageAdapter implements StorageAdapter {
                     final Header header = hdu.getHeader();
                     final long afterReadHDU = System.currentTimeMillis();
                     final HeaderCard headerNameCard = header.findCard("EXTNAME");
-                    log(String.format("Read HDU %d (%s) in %d milliseconds.", count, headerNameCard == null
-                                                                                     ? "N/A"
-                                                                                     : headerNameCard.getValue(),
-                                      afterReadHDU - beforeHDU));
+                    LOGGER.debug(String.format("%d,\"%s\",%d,\"milliseconds\"",
+                                               count,
+                                               headerNameCard == null ? "N/A" : headerNameCard.getValue(),
+                                               afterReadHDU - beforeHDU));
+                    beforeHDU = System.currentTimeMillis();
                     if (hdu.getAxes() != null) {
                         final int axesCount = hdu.getAxes().length;
                         for (int i = 0; i < axesCount; i++) {
@@ -241,14 +231,8 @@ public class S3StorageAdapter implements StorageAdapter {
                         }
                     }
 
-                    final long beforeWriteHDU = System.currentTimeMillis();
                     header.write(dataOutput);
                     dataOutput.write(new short[0]);
-                    log(String.format("Wrote HDU %d (%s) in %d milliseconds.", count, headerNameCard == null
-                                                                                      ? "N/A"
-                                                                                      : headerNameCard.getValue(),
-                                      System.currentTimeMillis() - beforeWriteHDU));
-                    beforeHDU = System.currentTimeMillis();
                     count++;
                 }
             } catch (FitsException e) {
@@ -260,7 +244,7 @@ public class S3StorageAdapter implements StorageAdapter {
             } catch (IOException e) {
                 throw new ReadException(e.getMessage(), e);
             }
-            log(String.format("Read and wrote HDUs in %d milliseconds.", System.currentTimeMillis() - start));
+            LOGGER.debug(String.format("Read and wrote HDUs in %d milliseconds.", System.currentTimeMillis() - start));
         }
     }
 
@@ -330,9 +314,5 @@ public class S3StorageAdapter implements StorageAdapter {
     public Iterator<StorageMetadata> unsortedIterator(String s)
             throws ReadException, WriteException, StorageEngageException, TransientException {
         return null;
-    }
-
-    void log(final String message) {
-        System.out.println(message);
     }
 }

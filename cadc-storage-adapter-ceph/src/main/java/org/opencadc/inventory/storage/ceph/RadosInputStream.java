@@ -199,8 +199,7 @@ public class RadosInputStream extends InputStream {
      * encouraged to provide a more efficient implementation of this method.
      *
      * @param b   the buffer into which the data is read.
-     * @param off the start offset in array <code>b</code>
-     *            at which the data is written.
+     * @param off Ignored.
      * @param len the maximum number of bytes to read.
      * @return the total number of bytes read into the buffer, or
      * <code>-1</code> if there is no more data because the end of
@@ -217,11 +216,6 @@ public class RadosInputStream extends InputStream {
      */
     @Override
     public int read(byte[] b, int off, int len) throws IOException {
-        LOGGER.debug(String.format("Adjusting position by %d bytes.", off));
-
-        // Add the provided offset as well.
-        position += off;
-
         /*
          * This read() method will return <code>0</code> when there are no more bytes to be found.  This needs to be
          * taken into account as the <code>InputStream</code> API requires a <code>-1</code> to be returned when the
