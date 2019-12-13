@@ -24,7 +24,6 @@
             ca.nrc.cadc.util
             ca.nrc.cadc.vosi
             ca.nrc.cadc.db
-            ca.nrc.cadc.reg
       </param-value>
     </init-param>
     <init-param>
