@@ -37,8 +37,6 @@ dependencies {
 
     intTestCompile 'org.opencadc:cadc-test-vosi:[1.0.2,)'
     
-    intTestCompile 'org.opencadc:cadc-test-vosi:[1.0.2,)'
-    
     runtime 'org.opencadc:cadc-storage-adapter-fs:[0.1,)'
 }
 

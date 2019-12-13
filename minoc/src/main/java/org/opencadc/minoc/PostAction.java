@@ -69,7 +69,6 @@ package org.opencadc.minoc;
 
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
-import org.opencadc.inventory.TokenUtil.HttpMethod;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.permissions.WriteGrant;
 

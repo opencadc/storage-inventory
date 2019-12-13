@@ -120,7 +120,7 @@ public class ArtifactActionTest {
     private void assertCorrectPath(String path, String expURI, String expToken) {
         ArtifactAction a = new TestArtifactAction(path);
         try {
-            a.init();
+            a.parsePath();
             Assert.assertEquals("artifactURI", URI.create(expURI), a.artifactURI);
             Assert.assertEquals("authToken", expToken, a.authToken);
         } catch (IllegalArgumentException e) {
@@ -132,7 +132,7 @@ public class ArtifactActionTest {
     private void assertIllegalPath(String path) {
         ArtifactAction a = new TestArtifactAction(path);
         try {
-            a.init();
+            a.parsePath();
             Assert.fail("Should have failed to parse path: " + path);
         } catch (IllegalArgumentException e) {
             // expected

@@ -72,6 +72,9 @@ package org.opencadc.inventory.permissions;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
 import java.net.URI;
+import java.util.Date;
+
+import org.opencadc.gms.GroupURI;
 
 /**
  * Client for retrieving grant information about artifacts.
@@ -99,7 +102,8 @@ public class PermissionsClient {
     public ReadGrant getReadGrant(URI artifactURI)
         throws ResourceNotFoundException, TransientException {
 
-        throw new UnsupportedOperationException("Not implemented");
+        // temporary for testing
+        return new ReadGrant(artifactURI, new Date(), true);
     }
 
     /**
@@ -114,7 +118,10 @@ public class PermissionsClient {
     public WriteGrant getWriteGrant(URI artifactURI)
         throws ResourceNotFoundException, TransientException {
 
-        throw new UnsupportedOperationException("Not implemented");
+        // temporary for testing
+        WriteGrant grant = new WriteGrant(artifactURI, new Date());
+        grant.getGroups().add(new GroupURI("ivo://cadc.nrc.ca/gms?testgroup"));
+        return grant;
     }
 
 }

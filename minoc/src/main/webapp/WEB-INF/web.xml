@@ -13,7 +13,7 @@
     <servlet-class>ca.nrc.cadc.log.LogControlServlet</servlet-class>
     <init-param>
       <param-name>logLevel</param-name>
-      <param-value>info</param-value>
+      <param-value>debug</param-value>
     </init-param>
     <init-param>
       <param-name>logLevelPackages</param-name>
@@ -23,6 +23,8 @@
             ca.nrc.cadc.rest
             ca.nrc.cadc.util
             ca.nrc.cadc.vosi
+            ca.nrc.cadc.db
+            ca.nrc.cadc.reg
       </param-value>
     </init-param>
     <init-param>

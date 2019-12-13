@@ -85,7 +85,7 @@ public class VosiAvailabilityTest extends AvailabilityTest
     
     static {
         Log4jInit.setLevel("ca.nrc.cadc.vosi", Level.INFO);
-        Log4jInit.setLevel("ca.nrc.cadc.cat", Level.INFO);
+        Log4jInit.setLevel("org.opencadc.inventory", Level.INFO);
     }
 
     public VosiAvailabilityTest() 
