@@ -67,6 +67,7 @@
 
 package org.opencadc.minoc;
 
+import ca.nrc.cadc.db.TransactionManager;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.rest.InlineContentException;
 import ca.nrc.cadc.rest.InlineContentHandler;
@@ -79,8 +80,10 @@ import java.util.Date;
 
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
-import org.opencadc.inventory.TokenUtil.HttpMethod;
+import org.opencadc.inventory.DeletedArtifactEvent;
 import org.opencadc.inventory.db.ArtifactDAO;
+import org.opencadc.inventory.db.DeletedEventDAO;
+import org.opencadc.inventory.permissions.WriteGrant;
 import org.opencadc.inventory.storage.NewArtifact;
 import org.opencadc.inventory.storage.StorageMetadata;
 
@@ -98,7 +101,7 @@ public class PutAction extends ArtifactAction {
      * Default, no-arg constructor.
      */
     public PutAction() {
-        super(HttpMethod.PUT);
+        super();
     }
     
     /**
@@ -120,12 +123,11 @@ public class PutAction extends ArtifactAction {
 
     /**
      * Perform the PUT.
-     * 
-     * @param artifactURI The URI of the artifact.
-     * @return The artifact
      */
     @Override
-    public Artifact execute(URI artifactURI) throws Exception {
+    public void doAction() throws Exception {
+        
+        initAndAuthorize(WriteGrant.class);
         
         String md5Header = syncInput.getHeader("Content-MD5");
         String lengthHeader = syncInput.getHeader("Content-Length");
@@ -171,31 +173,39 @@ public class PutAction extends ArtifactAction {
         artifact.contentType = typeHeader;
         artifact.storageLocation = artifactMetadata.getStorageLocation();
         
-        ArtifactDAO dao = getArtifactDAO();
-        Artifact existing = dao.get(artifactURI);
+        ArtifactDAO artifactDAO = getArtifactDAO();
+        Artifact existing = artifactDAO.get(artifactURI);
         if (existing == null) {
-            dao.put(artifact);
+            artifactDAO.put(artifact);
             log.debug("put artifact in database: " + artifactURI);
         } else {
+            DeletedEventDAO deletedEventDAO = getDeletedEventDAO(artifactDAO);
+            TransactionManager txnMgr = artifactDAO.getTransactionManager();
             try {
-                dao.getTransactionManager().startTransaction();
-                dao.delete(existing.getID());
-                dao.put(artifact);
-                dao.getTransactionManager().commitTransaction();
-                log.debug("replaced artifact in database: " + artifactURI);
+                txnMgr.startTransaction();
+                DeletedArtifactEvent deletedArtifact = new DeletedArtifactEvent(existing.getID());
+                artifactDAO.delete(existing.getID());
+                artifactDAO.put(artifact);
+                deletedEventDAO.put(deletedArtifact);
+                txnMgr.commitTransaction();
+                log.debug("replaced artifact in database: " + deletedArtifact.getID()
+                    + " with " + artifact.getID());
             } catch (Throwable t) {
-                log.error("failure replacing artifact, attempting rollback");
-                try {
-                    dao.getTransactionManager().rollbackTransaction();
-                    log.error("rollback successful");
-                } catch (Exception e) {
-                    log.error("failed to rollback transaction", e);
-                }
+                String msg = "failed to replace inventory artifact";
+                log.error(msg, t);
                 throw t;
-            }   
+            } finally {
+                if (txnMgr.isOpen()) {
+                    try {
+                        log.debug("rolling back transaction...");
+                        txnMgr.rollbackTransaction();
+                        log.error("rollback successful");
+                    } catch (Exception e) {
+                        log.error("failed to rollback transaction", e);
+                    }
+                }
+            }
         }
-        
-        return artifact;
         
     }
 

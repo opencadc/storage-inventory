@@ -65,7 +65,7 @@
 ************************************************************************
  */
 
-package org.opencadc.inventory;
+package org.opencadc.inventory.permissions;
 
 import ca.nrc.cadc.util.Base64;
 import ca.nrc.cadc.util.RsaSignatureGenerator;
@@ -91,35 +91,28 @@ public class TokenUtil {
     private static final Logger log = Logger.getLogger(TokenUtil.class);
 
     private static final String KEY_META_URI = "uri";
-    private static final String KEY_META_METHOD = "met";
+    private static final String KEY_META_GRANT = "gnt";
     private static final String KEY_META_SUBJECT = "sub";
     
     private static final String PUB_KEY_FILENAME = "InventoryPub.key";
     private static final String PRIV_KEY_FILENAME = "InventoryPriv.key";
     
     private static final String TOKEN_DELIM = "~";
-    
-    /**
-     * Valid methods that apply to authorization.
-     */
-    public static enum HttpMethod {
-        GET, PUT, DELETE, HEAD, POST
-    }
 
     /**
      * Generate an artifact token given the input parameters.
      * @param uri The artifact URI
-     * @param method The method applied to the artifact.
+     * @param grantClass The grant to be applied to the artifact.
      * @param user The user initiating the action on the artifact.
      * @return A pre-authorized signed token.
      */
-    public static String generateToken(URI uri, HttpMethod method, String user) {
+    public static String generateToken(URI uri, Class<? extends Grant> grantClass, String user) {
 
         // create the metadata and signature segments
         StringBuilder metaSb = new StringBuilder();
         metaSb.append(KEY_META_URI).append("=").append(uri.toString());
         metaSb.append("&");
-        metaSb.append(KEY_META_METHOD).append("=").append(method.toString());
+        metaSb.append(KEY_META_GRANT).append("=").append(grantClass.getSimpleName());
         metaSb.append("&");
         metaSb.append(KEY_META_SUBJECT).append("=").append(user);
         byte[] metaBytes = metaSb.toString().getBytes();
@@ -158,12 +151,12 @@ public class TokenUtil {
      * 
      * @param token The token to validate.
      * @param expectedURI The expected artifact URI.
-     * @param expectedMethod The expected method to be applied to the artifact.
+     * @param expectedGrantClass The expected grant applied to the artifact.
      * @return The user contained in the token.
      * @throws AccessControlException If any of the expectations are not met or if the token is invalid.
      * @throws IOException If a processing error occurs.
      */
-    public static String validateToken(String token, URI expectedURI, HttpMethod expectedMethod) throws AccessControlException, IOException {
+    public static String validateToken(String token, URI expectedURI, Class<? extends Grant> expectedGrantClass) throws AccessControlException, IOException {
 
         log.debug("validating token: " + token);
         String[] parts = token.split(TOKEN_DELIM);
@@ -190,7 +183,7 @@ public class TokenUtil {
 
         String[] metaParams = new String(metaBytes).split("&");
         String uri = null;
-        String method = null;
+        String grant = null;
         String user = null;
         for (String metaParam : metaParams) {
             log.debug("Processing param: " + metaParam);
@@ -204,22 +197,22 @@ public class TokenUtil {
             if (KEY_META_URI.equals(key)) {
                 uri = value;
             }
-            if (KEY_META_METHOD.equals(key)) {
-                method = value;
+            if (KEY_META_GRANT.equals(key)) {
+                grant = value;
             }
             if (KEY_META_SUBJECT.equals(key)) {
                 user = value;
             }
         }
         log.debug("uri: " + uri);
-        log.debug("method: " + method);
+        log.debug("grant: " + grant);
         log.debug("subject: " + user);
         
         if (!expectedURI.toString().equals(uri)) {
             log.debug("wrong target uri");
             throw new AccessControlException("Invalid auth token");
         }
-        if (!expectedMethod.toString().equals(method)) {
+        if (!expectedGrantClass.getSimpleName().equals(grant)) {
             log.debug("wrong http method");
             throw new AccessControlException("Invalid auth token");
         }

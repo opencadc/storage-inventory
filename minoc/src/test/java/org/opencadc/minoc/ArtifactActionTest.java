@@ -77,8 +77,6 @@ import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.Test;
-import org.opencadc.inventory.Artifact;
-import org.opencadc.inventory.TokenUtil.HttpMethod;
 
 public class ArtifactActionTest {
 
@@ -105,16 +103,16 @@ public class ArtifactActionTest {
     class TestArtifactAction extends ArtifactAction {
         
         public TestArtifactAction(String path) {
-            super(HttpMethod.GET);
+            super();
             try {
                 super.syncInput = new TestSyncInput(path);
             } catch (Throwable t) {
                 throw new RuntimeException(t);
             }
         }
-        
-        public Artifact execute(URI artifactURI) throws Exception {
-            return null;
+
+        @Override
+        public void doAction() throws Exception {
         }
 
     }
@@ -122,7 +120,7 @@ public class ArtifactActionTest {
     private void assertCorrectPath(String path, String expURI, String expToken) {
         ArtifactAction a = new TestArtifactAction(path);
         try {
-            a.parsePath();
+            a.init();
             Assert.assertEquals("artifactURI", URI.create(expURI), a.artifactURI);
             Assert.assertEquals("authToken", expToken, a.authToken);
         } catch (IllegalArgumentException e) {
@@ -134,7 +132,7 @@ public class ArtifactActionTest {
     private void assertIllegalPath(String path) {
         ArtifactAction a = new TestArtifactAction(path);
         try {
-            a.parsePath();
+            a.init();
             Assert.fail("Should have failed to parse path: " + path);
         } catch (IllegalArgumentException e) {
             // expected

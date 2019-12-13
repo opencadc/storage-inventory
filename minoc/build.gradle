@@ -34,7 +34,8 @@ dependencies {
     compile 'org.opencadc:cadc-access-control-identity:[1.0.3,2.0)'
 
     testCompile 'junit:junit:[4.0,)'
-    testCompile 'org.opencadc:cadc-storage-adapter-fs:[0.1,)'
+
+    intTestCompile 'org.opencadc:cadc-test-vosi:[1.0.2,)'
     
     intTestCompile 'org.opencadc:cadc-test-vosi:[1.0.2,)'
     

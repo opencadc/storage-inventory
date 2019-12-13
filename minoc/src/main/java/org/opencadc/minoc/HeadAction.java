@@ -67,13 +67,13 @@
 
 package org.opencadc.minoc;
 
-import java.net.URI;
+import ca.nrc.cadc.rest.SyncOutput;
 
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.InventoryUtil;
-import org.opencadc.inventory.TokenUtil.HttpMethod;
 import org.opencadc.inventory.db.ArtifactDAO;
+import org.opencadc.inventory.permissions.ReadGrant;
 
 /**
  * Interface with storage and inventory to get the metadata of an artifact.
@@ -88,43 +88,39 @@ public class HeadAction extends ArtifactAction {
      * Default, no-arg constructor.
      */
     public HeadAction() {
-        super(HttpMethod.HEAD);
+        super();
+    }
+
+    /**
+     * Return the artifact metadata as repsonse headers.
+     */
+    @Override
+    public void doAction() throws Exception {
+        
+        initAndAuthorize(ReadGrant.class);
+        
+        ArtifactDAO dao = getArtifactDAO();
+        Artifact artifact = getArtifact(artifactURI, dao);
+        setHeaders(artifact, syncOutput);
+        
     }
     
     /**
-     * Constructor for subclass, GetAction
-     * @param method The http method
+     * Set the HTTP response headers for an artifact.
+     * @param artifact The artifact with metadata
+     * @param syncOutput The target response
      */
-    public HeadAction(HttpMethod method) {
-        super(method);
-    }
-
-    /**
-     * Download the artifact or cutouts of the artifact.
-     * @param artifactURI The identifier for the artifact. 
-     * @return The artifact
-     */
-    @Override
-    public Artifact execute(URI artifactURI) throws Exception {
-        ArtifactDAO dao = getArtifactDAO();
-        Artifact artifact = getArtifact(artifactURI, dao);
-
-        URI contentChecksum = artifact.getContentChecksum();
-        Long contentLength = artifact.getContentLength();
-        String contentEncoding = artifact.contentEncoding;
-        String contentType = artifact.contentType;
-        log.debug("Content-MD5: " + contentChecksum.getSchemeSpecificPart());
-        log.debug("Content-Length: " + contentLength);
-        log.debug("Content-Encoding: " + contentEncoding);
-        log.debug("Content-Type: " + contentType);
-
-        String filename = InventoryUtil.computeArtifactFilename(artifactURI);
+    public static void setHeaders(Artifact artifact, SyncOutput syncOutput) {
+        syncOutput.setHeader("Content-MD5", artifact.getContentChecksum().getSchemeSpecificPart());
+        syncOutput.setHeader("Content-Length", artifact.getContentLength());
+        String filename = InventoryUtil.computeArtifactFilename(artifact.getURI());
         syncOutput.setHeader("Content-Disposition", "attachment; filename=" + filename);
-        syncOutput.setHeader("Content-MD5", contentChecksum.getSchemeSpecificPart());
-        syncOutput.setHeader("Content-Length", contentLength);
-        syncOutput.setHeader("Content-Encoding", contentEncoding);
-        syncOutput.setHeader("Content-Type", contentType);
-        return artifact;    
+        if (artifact.contentEncoding != null) {
+            syncOutput.setHeader("Content-Encoding", artifact.contentEncoding);
+        }
+        if (artifact.contentType != null) {
+            syncOutput.setHeader("Content-Type", artifact.contentType);
+        }
     }
 
 }

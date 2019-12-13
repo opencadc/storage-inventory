@@ -78,6 +78,7 @@ import ca.nrc.cadc.vosi.avail.CheckException;
 import ca.nrc.cadc.vosi.avail.CheckResource;
 import ca.nrc.cadc.vosi.avail.CheckWebService;
 import java.net.URI;
+import java.util.Map;
 
 import javax.sql.DataSource;
 
@@ -129,7 +130,10 @@ public class ServiceAvailability implements AvailabilityPlugin {
             
             log.info("init database...");
             DataSource ds = DBUtil.findJNDIDataSource(ArtifactAction.JNDI_DATASOURCE);
-            InitDatabase init = new InitDatabase(ds, ArtifactAction.DATABASE, ArtifactAction.SCHEMA);
+            Map<String, Object> config = ArtifactAction.getDaoConfig();
+            InitDatabase init = new InitDatabase(ds,
+                (String) config.get(ArtifactAction.DATABASE_KEY),
+                (String) config.get(ArtifactAction.SCHEMA_KEY));
             init.doInit();
             log.info("init database... OK");
 

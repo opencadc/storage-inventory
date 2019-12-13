@@ -1,22 +1,21 @@
-package org.opencadc.inventory;
+package org.opencadc.inventory.permissions;
+
+import ca.nrc.cadc.util.Log4jInit;
+import ca.nrc.cadc.util.RsaSignatureGenerator;
 
 import java.io.File;
 import java.net.URI;
 import java.security.AccessControlException;
+import java.util.ArrayList;
+import java.util.List;
 
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.apache.xerces.impl.dv.util.Base64;
-import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Assert;
-import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
-import org.opencadc.inventory.TokenUtil.HttpMethod;
-
-import ca.nrc.cadc.util.Log4jInit;
-import ca.nrc.cadc.util.RsaSignatureGenerator;
 
 public class TokenUtilTest {
     
@@ -62,14 +61,14 @@ public class TokenUtilTest {
                 "cadc:TEST/file.fits",
                 "cadc:TEST/file.fits",
             };
-            HttpMethod[] methods = new HttpMethod[] {
-                HttpMethod.GET,
-                HttpMethod.PUT,
-                HttpMethod.GET,
-                HttpMethod.PUT,
-                HttpMethod.GET,
-                HttpMethod.PUT,
-            };
+            List<Class<? extends Grant>> grants = new ArrayList<Class<? extends Grant>>();
+            grants.add(ReadGrant.class);
+            grants.add(WriteGrant.class);
+            grants.add(ReadGrant.class);
+            grants.add(WriteGrant.class);
+            grants.add(ReadGrant.class);
+            grants.add(WriteGrant.class);
+
             String[] users = new String[] {
                 "user",
                 "user",
@@ -81,10 +80,10 @@ public class TokenUtilTest {
             
             for (int i=0; i<uris.length; i++) {
                 String uri = uris[i];
-                HttpMethod method = methods[i];
+                Class<? extends Grant> grant = grants.get(i);
                 String user = users[i];
-                String token = TokenUtil.generateToken(URI.create(uri), method, user);
-                String actUser = TokenUtil.validateToken(token, URI.create(uri), method);
+                String token = TokenUtil.generateToken(URI.create(uri), grant, user);
+                String actUser = TokenUtil.validateToken(token, URI.create(uri), grant);
                 Assert.assertEquals("user", user, actUser);
             }
             
@@ -99,11 +98,11 @@ public class TokenUtilTest {
         try {
 
             String uri = "cadc:TEST/file.fits";
-            HttpMethod method = HttpMethod.GET;
+            Class readGrant = ReadGrant.class;
             String user = "user";
-            String token = TokenUtil.generateToken(URI.create(uri), method, user);
+            String token = TokenUtil.generateToken(URI.create(uri), readGrant, user);
             try {
-                TokenUtil.validateToken(token, URI.create("cadc:TEST/file2.fits"), HttpMethod.GET);
+                TokenUtil.validateToken(token, URI.create("cadc:TEST/file2.fits"), readGrant);
                 Assert.fail("Should have failed with wrong uri");
             } catch (AccessControlException e) {
                 // expected
@@ -116,15 +115,15 @@ public class TokenUtilTest {
     }
     
     @Test
-    public void testWrongMethod() {
+    public void testWrongGrant() {
         try {
 
             String uri = "cadc:TEST/file.fits";
-            HttpMethod method = HttpMethod.GET;
+            Class readGrant = ReadGrant.class;
             String user = "user";
-            String token = TokenUtil.generateToken(URI.create(uri), method, user);
+            String token = TokenUtil.generateToken(URI.create(uri), readGrant, user);
             try {
-                TokenUtil.validateToken(token, URI.create(uri), HttpMethod.PUT);
+                TokenUtil.validateToken(token, URI.create(uri), WriteGrant.class);
                 Assert.fail("Should have failed with wrong method");
             } catch (AccessControlException e) {
                 // expected
@@ -141,13 +140,13 @@ public class TokenUtilTest {
         try {
 
             String uri = "cadc:TEST/file.fits";
-            HttpMethod method = HttpMethod.GET;
+            Class readGrant = ReadGrant.class;
             String user = "user";
-            String token = TokenUtil.generateToken(URI.create(uri), method, user);
+            String token = TokenUtil.generateToken(URI.create(uri), readGrant, user);
             String[] parts = token.split("~");
             String newToken = TokenUtil.base64URLEncode(Base64.encode("junk".getBytes())) + "~" + parts[1];
             try {
-                TokenUtil.validateToken(newToken, URI.create(uri), HttpMethod.PUT);
+                TokenUtil.validateToken(newToken, URI.create(uri), readGrant);
                 Assert.fail("Should have failed with invalid metadata");
             } catch (AccessControlException e) {
                 // expected
@@ -164,13 +163,13 @@ public class TokenUtilTest {
         try {
 
             String uri = "cadc:TEST/file.fits";
-            HttpMethod method = HttpMethod.GET;
+            Class readGrant = ReadGrant.class;
             String user = "user";
-            String token = TokenUtil.generateToken(URI.create(uri), method, user);
+            String token = TokenUtil.generateToken(URI.create(uri), readGrant, user);
             String[] parts = token.split("~");
             String newToken = parts[0] + "~" + TokenUtil.base64URLEncode(Base64.encode("junk".getBytes()));
             try {
-                TokenUtil.validateToken(newToken, URI.create(uri), HttpMethod.PUT);
+                TokenUtil.validateToken(newToken, URI.create(uri), readGrant);
                 Assert.fail("Should have failed with invalid signature");
             } catch (AccessControlException e) {
                 // expected
@@ -183,3 +182,4 @@ public class TokenUtilTest {
     }
 
 }
+
