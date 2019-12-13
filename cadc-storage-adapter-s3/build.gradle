@@ -1,0 +1,34 @@
+plugins {
+    id 'java'
+    id 'maven'
+    id 'maven-publish'
+    id 'com.jfrog.bintray' version '1.8.4'
+    id 'checkstyle'
+}
+
+repositories {
+    jcenter()
+    mavenLocal()
+}
+
+dependencies {
+    compile 'log4j:log4j:[1.2,)'
+    compile 'org.opencadc:cadc-util:[1.2.25,)'
+    compile 'org.opencadc:cadc-storage-adapter:[0.1,)'
+
+    // Amazon S3 Java Library
+    // For Gradle 5 and up, use the platform....
+    implementation platform('software.amazon.awssdk:bom:2.5.29')
+    implementation 'software.amazon.awssdk:s3'
+
+    // Java FITS library.
+    compile 'gov.nasa.gsfc.heasarc:nom-tam-fits:[1,2)'
+
+    testCompile 'junit:junit:[4.0,)'
+}
+
+group = 'org.opencadc'
+version = '0.1.0'
+sourceCompatibility = 1.8
+
+apply from: '../opencadc.gradle'
