@@ -70,6 +70,8 @@
 package org.opencadc.inventory.storage.ceph;
 
 import com.ceph.rados.IoCTX;
+import com.ceph.rados.exceptions.RadosException;
+import com.ceph.rados.exceptions.RadosNotFoundException;
 import com.ceph.radosstriper.IoCTXStriper;
 import com.ceph.radosstriper.RadosStriper;
 import org.apache.log4j.Logger;
@@ -107,7 +109,16 @@ public class RadosStriperInputStream extends RadosInputStream {
         try (final IoCTXStriper ioCTXStriper = ((RadosStriper) rados).ioCtxCreateStriper(ioCTX)) {
             return ioCTXStriper.read(objectID, len, position, b);
         } catch (Exception e) {
-            throw new IOException("Cannot close RADOS stream.", e);
+            if (e instanceof RadosNotFoundException) {
+                throw (RadosNotFoundException) e;
+            } else if (e instanceof RadosException) {
+                throw (RadosException) e;
+            } else if (e instanceof IOException) {
+                throw (IOException) e;
+            } else {
+                LOGGER.warn("Unable to close the IO RADOS Context.", e);
+                return -1;
+            }
         }
     }
 }

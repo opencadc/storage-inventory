@@ -73,6 +73,8 @@ import com.ceph.rados.Completion;
 import com.ceph.rados.IoCTX;
 import com.ceph.rados.Rados;
 import com.ceph.rados.exceptions.RadosException;
+import com.ceph.rados.exceptions.RadosNotFoundException;
+import com.ceph.radosstriper.IoCTXStriper;
 import com.ceph.radosstriper.RadosStriper;
 import nom.tam.fits.BasicHDU;
 import nom.tam.fits.Fits;
@@ -108,7 +110,6 @@ import java.security.NoSuchAlgorithmException;
 import java.util.Iterator;
 import java.util.Set;
 
-
 /**
  * Implementation of a Storage Adapter using the Ceph RADOS API.
  */
@@ -124,11 +125,10 @@ public class CephStorageAdapter implements StorageAdapter {
     private static final String OBJECT_ID_LOOKUP = "%s_%s";
 
     static final String DIGEST_ALGORITHM = "MD5";
-    private static final int BUFFER_SIZE_BYTES = 8192;
+    private static final int BUFFER_SIZE_BYTES = 1024 * 1024; // One Megabyte.
 
     private final String cephxID;
     private final String clusterName;
-
 
     public CephStorageAdapter(final String userID, final String clusterName) {
         this.cephxID = String.format("client.%s", userID);
@@ -137,11 +137,10 @@ public class CephStorageAdapter implements StorageAdapter {
         LOGGER.setLevel(Level.DEBUG);
     }
 
-
     /**
-     * Create a new client.  Override this to Mock test, if needed.
+     * Create a new client. Override this to Mock test, if needed.
      *
-     * @return An instance of Rados.  Never null.
+     * @return An instance of Rados. Never null.
      */
     Rados createRadosClient() {
         return new Rados(clusterName, cephxID, Rados.OPERATION_NOFLAG);
@@ -153,8 +152,7 @@ public class CephStorageAdapter implements StorageAdapter {
                 new File(String.format("%s/.ceph/%s.conf", System.getProperty("user.home"), clusterName)));
         LOGGER.debug(String.format("Connecting to Ceph OSD at %s...", radosStriper.confGet("mon_host")));
         radosStriper.connect();
-        LOGGER.debug(String.format("Connected to Ceph OSD at %s as %s.", radosStriper.confGet("mon_host"),
-                                   cephxID));
+        LOGGER.debug(String.format("Connected to Ceph OSD at %s as %s.", radosStriper.confGet("mon_host"), cephxID));
         return radosStriper;
     }
 
@@ -164,8 +162,7 @@ public class CephStorageAdapter implements StorageAdapter {
 
         LOGGER.debug(String.format("Connecting to Ceph OSD at %s...", rados.confGet("mon_host")));
         rados.connect();
-        LOGGER.debug(String.format("Connected to Ceph OSD at %s as %s.", rados.confGet("mon_host"),
-                                   cephxID));
+        LOGGER.debug(String.format("Connected to Ceph OSD at %s as %s.", rados.confGet("mon_host"), cephxID));
         return rados;
     }
 
@@ -179,12 +176,21 @@ public class CephStorageAdapter implements StorageAdapter {
 
     private URI createChecksum(final MessageDigest messageDigest) {
         return URI.create(String.format("%s:%s", messageDigest.getAlgorithm().toLowerCase(),
-                                        new BigInteger(1, messageDigest.digest()).toString(16)));
+                new BigInteger(1, messageDigest.digest()).toString(16)));
     }
 
     private IoCTX contextConnect(final Rados client, final String poolName) throws RadosException {
         try {
             return client.ioCtxCreate(poolName);
+        } catch (IOException e) {
+            throw new RadosException(e.getMessage(), e);
+        }
+    }
+
+    private IoCTXStriper contextConnectStriper(final String poolName) throws RadosException {
+        try {
+            final RadosStriper radosStriper = connectStriper();
+            return radosStriper.ioCtxCreateStriper(contextConnect(poolName));
         } catch (IOException e) {
             throw new RadosException(e.getMessage(), e);
         }
@@ -198,10 +204,12 @@ public class CephStorageAdapter implements StorageAdapter {
         }
     }
 
-    private String parseObjectID(final URI storageID) {
+    private String getObjectID(final StorageLocation storageLocation) throws IOException {
+        final URI storageID = storageLocation.getStorageID();
+        final String bucketMarker = lookupBucketMarker(storageLocation);
         final String path = storageID.getSchemeSpecificPart();
         final String[] pathItems = path.split("/");
-        return pathItems[pathItems.length - 1];
+        return String.format(OBJECT_ID_LOOKUP, bucketMarker, pathItems[pathItems.length - 1]);
     }
 
     private String parseBucket(final URI storageID) {
@@ -228,25 +236,16 @@ public class CephStorageAdapter implements StorageAdapter {
     }
 
     @Override
-    public void get(StorageLocation storageLocation, OutputStream outputStream)
-            throws ResourceNotFoundException, ReadException, WriteException, StorageEngageException,
-                   TransientException {
-        final URI storageID = storageLocation.getStorageID();
-        String bucketMarker;
-        try {
-            bucketMarker = lookupBucketMarker(storageLocation);
-        } catch (IOException e) {
-            throw new StorageEngageException(e.getMessage(), e);
-        }
-
-        final String objectID = String.format(OBJECT_ID_LOOKUP, bucketMarker, parseObjectID(storageID));
-        try (final InputStream inputStream = createInputStream(objectID)) {
-
+    public void get(StorageLocation storageLocation, OutputStream outputStream) throws ResourceNotFoundException,
+            ReadException, WriteException, StorageEngageException, TransientException {
+        try (final InputStream inputStream = createInputStream(getObjectID(storageLocation))) {
             final byte[] buffer = new byte[BUFFER_SIZE_BYTES];
             int bytesRead;
             while ((bytesRead = inputStream.read(buffer)) >= 0) {
                 outputStream.write(buffer, 0, bytesRead);
             }
+        } catch (RadosNotFoundException e) {
+            throw new ResourceNotFoundException(e.getMessage(), e);
         } catch (RadosException e) {
             throw new StorageEngageException(e.getMessage(), e);
         } catch (IOException e) {
@@ -257,22 +256,13 @@ public class CephStorageAdapter implements StorageAdapter {
     @Override
     public void get(StorageLocation storageLocation, OutputStream outputStream, Set<String> cutouts)
             throws ResourceNotFoundException, ReadException, WriteException, StorageEngageException,
-                   TransientException {
+            TransientException {
         if ((cutouts == null) || cutouts.isEmpty()) {
             get(storageLocation, outputStream);
         } else {
-            final URI storageID = storageLocation.getStorageID();
-            String bucketMarker;
-            try {
-                bucketMarker = lookupBucketMarker(storageLocation);
-            } catch (IOException e) {
-                throw new StorageEngageException(e.getMessage(), e);
-            }
-
-            final String objectID = String.format(OBJECT_ID_LOOKUP, bucketMarker, parseObjectID(storageID));
             final long start = System.currentTimeMillis();
 
-            try (final InputStream inputStream = createStriperInputStream(objectID)) {
+            try (final InputStream inputStream = createStriperInputStream(getObjectID(storageLocation))) {
                 final Fits fitsFile = new Fits(inputStream);
                 final ArrayDataOutput dataOutput = new BufferedDataOutputStream(outputStream);
 
@@ -284,10 +274,8 @@ public class CephStorageAdapter implements StorageAdapter {
                     final Header header = hdu.getHeader();
                     final long afterReadHDU = System.currentTimeMillis();
                     final HeaderCard headerNameCard = header.findCard("EXTNAME");
-                    LOGGER.debug(String.format("%d,\"%s\",%d,\"milliseconds\"",
-                                               count,
-                                               headerNameCard == null ? "N/A" : headerNameCard.getValue(),
-                                               afterReadHDU - beforeHDU));
+                    LOGGER.debug(String.format("%d,\"%s\",%d,\"milliseconds\"", count,
+                            headerNameCard == null ? "N/A" : headerNameCard.getValue(), afterReadHDU - beforeHDU));
                     beforeHDU = System.currentTimeMillis();
                     if (hdu.getAxes() != null) {
                         final int axesCount = hdu.getAxes().length;
@@ -300,6 +288,8 @@ public class CephStorageAdapter implements StorageAdapter {
                     dataOutput.write(new short[0]);
                     count++;
                 }
+            } catch (RadosNotFoundException e) {
+                throw new ResourceNotFoundException(e.getMessage(), e);
             } catch (RadosException e) {
                 throw new StorageEngageException(e.getMessage(), e);
             } catch (FitsException | IOException e) {
@@ -310,29 +300,23 @@ public class CephStorageAdapter implements StorageAdapter {
     }
 
     @Override
-    public StorageMetadata put(NewArtifact newArtifact, InputStream inputStream)
-            throws ResourceNotFoundException, StreamCorruptedException, ReadException, WriteException,
-                   StorageEngageException, TransientException {
-        try (final IoCTX ioCTX = contextConnect(DATA_POOL_NAME)) {
+    public StorageMetadata put(NewArtifact newArtifact, InputStream inputStream) throws ResourceNotFoundException,
+            StreamCorruptedException, ReadException, WriteException, StorageEngageException, TransientException {
+        try {
             final URI storageID = newArtifact.getArtifactURI();
-            final String objectID = parseObjectID(storageID);
+            final String objectID = getObjectID(new StorageLocation(storageID));
             final DigestInputStream digestInputStream = new DigestInputStream(inputStream, createDigester());
             final ByteCountInputStream byteCountInputStream = new ByteCountInputStream(digestInputStream);
             final byte[] buffer = new byte[BUFFER_SIZE_BYTES];
 
-            int bytesRead = byteCountInputStream.read(buffer);
+            int bytesRead;
             long offset = 0L;
-            final Completion completion = new Completion(false, false);
-            if (bytesRead > 0) {
-                while ((bytesRead = byteCountInputStream.read(buffer)) >= 0) {
-                    ioCTX.aioWrite(objectID, completion, buffer, offset);
-                    offset += bytesRead;
-                    completion.waitForSafe();
-                    ioCTX.aioFlush();
-                    completion.waitForSafe();
+            while ((bytesRead = byteCountInputStream.read(buffer)) >= 0) {
+                try (final IoCTX ioCTX = contextConnect(DATA_POOL_NAME)) {
+                    ioCTX.write(objectID, buffer, offset);
                 }
+                offset += bytesRead;
             }
-            completion.waitForComplete();
 
             LOGGER.debug(String.format("Wrote %d bytes to %s.", byteCountInputStream.getByteCount(), objectID));
             final URI expectedChecksum = newArtifact.contentChecksum;
@@ -341,9 +325,8 @@ public class CephStorageAdapter implements StorageAdapter {
             if (expectedChecksum == null) {
                 LOGGER.debug("No checksum provided.  Defaulting the calculated one.");
             } else if (!expectedChecksum.equals(calculatedChecksum)) {
-                throw new StreamCorruptedException(
-                        String.format("Checksums do not match.  Expected %s but was %s.", expectedChecksum.toString(),
-                                      calculatedChecksum.toString()));
+                throw new StreamCorruptedException(String.format("Checksums do not match.  Expected %s but was %s.",
+                        expectedChecksum.toString(), calculatedChecksum.toString()));
             }
 
             final Long expectedContentLength = newArtifact.contentLength;
@@ -354,7 +337,7 @@ public class CephStorageAdapter implements StorageAdapter {
             } else if (expectedContentLength != calculatedContentLength) {
                 throw new StreamCorruptedException(
                         String.format("Content lengths do not match.  Expected %d but was %d.", expectedContentLength,
-                                      calculatedContentLength));
+                                calculatedContentLength));
             }
 
             return new StorageMetadata(new StorageLocation(storageID), calculatedChecksum, calculatedContentLength);
@@ -362,27 +345,23 @@ public class CephStorageAdapter implements StorageAdapter {
             throw new StorageEngageException(e.getMessage(), e);
         } catch (IOException e) {
             throw new WriteException(e.getMessage(), e);
+        } catch (Exception e) {
+            throw new TransientException(e.getMessage(), e);
         }
     }
 
     @Override
-    public void delete(StorageLocation storageLocation)
+    public void delete(final StorageLocation storageLocation)
             throws ResourceNotFoundException, IOException, StorageEngageException, TransientException {
         final String bucketMarker = lookupBucketMarker(storageLocation);
 
-        try (final IoCTX ioCTX = contextConnect(DATA_POOL_NAME)) {
-            final String objectID = String.format(OBJECT_ID_LOOKUP, bucketMarker,
-                                                  parseObjectID(storageLocation.getStorageID()));
+        try (final IoCTXStriper ioCTX = contextConnectStriper(DATA_POOL_NAME)) {
+            final String objectID = String.format(OBJECT_ID_LOOKUP, bucketMarker, getObjectID(storageLocation));
             ioCTX.remove(objectID);
-        } catch (IOException e) {
-            final String message = e.getMessage();
-
-            if (StringUtil.hasLength(message) && message.contains("ENOENT")) {
-                throw new ResourceNotFoundException(String.format("No such object '%s'.",
-                                                                  parseObjectID(storageLocation.getStorageID())));
-            } else {
-                throw new StorageEngageException(e.getMessage(), e);
-            }
+        } catch (RadosNotFoundException e) {
+            throw new ResourceNotFoundException(e.getMessage(), e);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
         }
     }
 

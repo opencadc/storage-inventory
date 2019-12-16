@@ -171,8 +171,19 @@ public class S3StorageAdapter implements StorageAdapter {
         }
     }
 
+    /**
+     * Get from storage the artifact identified by storageLocation.
+     *
+     * @param storageLocation The storage location containing storageID and storageBucket.
+     * @param dest            The destination stream.
+     * @throws ResourceNotFoundException If the artifact could not be found.
+     * @throws ReadException             If the storage system failed to stream.
+     * @throws WriteException            If the client failed to stream.
+     * @throws StorageEngageException    If the adapter failed to interact with storage.
+     * @throws TransientException        If an unexpected, temporary exception occurred.
+     */
     @Override
-    public void get(StorageLocation storageLocation, OutputStream outputStream)
+    public void get(StorageLocation storageLocation, OutputStream dest)
             throws ResourceNotFoundException, ReadException, WriteException, StorageEngageException,
                    TransientException {
         final URI storageID = storageLocation.getStorageID();
@@ -183,7 +194,7 @@ public class S3StorageAdapter implements StorageAdapter {
                                                                                 .build(),
                                                                 ResponseTransformer.toInputStream())) {
 
-            transferInputStreamTo(inputStream, outputStream);
+            transferInputStreamTo(inputStream, dest);
         } catch (NoSuchKeyException e) {
             throw new ResourceNotFoundException(e.getMessage(), e);
         } catch (S3Exception | SdkClientException e) {
@@ -193,12 +204,24 @@ public class S3StorageAdapter implements StorageAdapter {
         }
     }
 
+    /**
+     * Get from storage the artifact identified by storageLocation.
+     *
+     * @param storageLocation The storage location containing storageID and storageBucket.
+     * @param dest            The destination stream.
+     * @param cutouts         Cutouts to be applied to the artifact
+     * @throws ResourceNotFoundException If the artifact could not be found.
+     * @throws ReadException             If the storage system failed to stream.
+     * @throws WriteException            If the client failed to stream.
+     * @throws StorageEngageException    If the adapter failed to interact with storage.
+     * @throws TransientException        If an unexpected, temporary exception occurred.
+     */
     @Override
-    public void get(StorageLocation storageLocation, OutputStream outputStream, Set<String> cutouts)
+    public void get(StorageLocation storageLocation, OutputStream dest, Set<String> cutouts)
             throws ResourceNotFoundException, ReadException, WriteException, StorageEngageException,
                    TransientException {
         if ((cutouts == null) || cutouts.isEmpty()) {
-            get(storageLocation, outputStream);
+            get(storageLocation, dest);
         } else {
             final URI storageID = storageLocation.getStorageID();
             final long start = System.currentTimeMillis();
@@ -209,7 +232,7 @@ public class S3StorageAdapter implements StorageAdapter {
                                                                     ResponseTransformer.toInputStream())) {
 
                 final Fits fitsFile = new Fits(inputStream);
-                final ArrayDataOutput dataOutput = new BufferedDataOutputStream(outputStream);
+                final ArrayDataOutput dataOutput = new BufferedDataOutputStream(dest);
 
                 // Just get the first cutout for now.
                 BasicHDU<?> hdu;
@@ -248,11 +271,30 @@ public class S3StorageAdapter implements StorageAdapter {
         }
     }
 
+    /**
+     * Write an artifact to storage.
+     * The value of storageBucket in the returned StorageMetadata and StorageLocation can be used to
+     * retrieve batches of artifacts in some of the iterator signatures defined in this interface.
+     * Batches of artifacts can be listed by bucket in two of the iterator methods in this interface.
+     * If storageBucket is null then the caller will not be able perform bucket-based batch
+     * validation through the iterator methods.
+     *
+     * @param newArtifact The holds information about the incoming artifact.  If the contentChecksum
+     *                    and contentLength are set, they will be used to validate the bytes received.
+     * @param source      The stream from which to read.
+     * @return The storage metadata.
+     *
+     * @throws StreamCorruptedException If the calculated checksum does not the expected checksum.
+     * @throws ReadException            If the client failed to stream.
+     * @throws WriteException           If the storage system failed to stream.
+     * @throws StorageEngageException   If the adapter failed to interact with storage.
+     * @throws TransientException       If an unexpected, temporary exception occurred.
+     */
     @Override
-    public StorageMetadata put(NewArtifact newArtifact, InputStream inputStream)
+    public StorageMetadata put(NewArtifact newArtifact, InputStream source)
             throws StreamCorruptedException, ReadException, WriteException, StorageEngageException, TransientException {
         final URI storageID = newArtifact.getArtifactURI();
-        final DigestInputStream digestInputStream = new DigestInputStream(inputStream, createDigester());
+        final DigestInputStream digestInputStream = new DigestInputStream(source, createDigester());
         final ByteCountInputStream byteCountInputStream = new ByteCountInputStream(digestInputStream);
         final InputStream bufferedInputStream = new BufferedInputStream(byteCountInputStream);
 
@@ -293,25 +335,66 @@ public class S3StorageAdapter implements StorageAdapter {
         }
     }
 
-    @Override
+    /**
+     * Delete from storage the artifact identified by storageLocation.
+     *
+     * @param storageLocation Identifies the artifact to delete.
+     * @throws ResourceNotFoundException If the artifact could not be found.
+     * @throws IOException               If an unrecoverable error occurred.
+     * @throws StorageEngageException    If the adapter failed to interact with storage.
+     * @throws TransientException        If an unexpected, temporary exception occurred.
+     */
     public void delete(StorageLocation storageLocation)
             throws ResourceNotFoundException, IOException, StorageEngageException, TransientException {
+
     }
 
+    /**
+     * Iterator of items ordered by their storageIDs.
+     *
+     * @return An iterator over an ordered list of items in storage.
+     *
+     * @throws ReadException          If the storage system failed to stream.
+     * @throws WriteException         If the client failed to stream.
+     * @throws StorageEngageException If the adapter failed to interact with storage.
+     * @throws TransientException     If an unexpected, temporary exception occurred.
+     */
     @Override
     public Iterator<StorageMetadata> iterator()
             throws ReadException, WriteException, StorageEngageException, TransientException {
         return null;
     }
 
+    /**
+     * Iterator of items ordered by their storageIDs in the given bucket.
+     *
+     * @param storageBucket Only iterate over items in this bucket.
+     * @return An iterator over an ordered list of items in this storage bucket.
+     *
+     * @throws ReadException          If the storage system failed to stream.
+     * @throws WriteException         If the client failed to stream.
+     * @throws StorageEngageException If the adapter failed to interact with storage.
+     * @throws TransientException     If an unexpected, temporary exception occurred.
+     */
     @Override
-    public Iterator<StorageMetadata> iterator(String s)
+    public Iterator<StorageMetadata> iterator(final String storageBucket)
             throws ReadException, WriteException, StorageEngageException, TransientException {
         return null;
     }
 
+    /**
+     * An unordered iterator of items in the given bucket.
+     *
+     * @param storageBucket Only iterate over items in this bucket.
+     * @return An iterator over an ordered list of items in this storage bucket.
+     *
+     * @throws ReadException          If the storage system failed to stream.
+     * @throws WriteException         If the client failed to stream.
+     * @throws StorageEngageException If the adapter failed to interact with storage.
+     * @throws TransientException     If an unexpected, temporary exception occurred.
+     */
     @Override
-    public Iterator<StorageMetadata> unsortedIterator(String s)
+    public Iterator<StorageMetadata> unsortedIterator(final String storageBucket)
             throws ReadException, WriteException, StorageEngageException, TransientException {
         return null;
     }

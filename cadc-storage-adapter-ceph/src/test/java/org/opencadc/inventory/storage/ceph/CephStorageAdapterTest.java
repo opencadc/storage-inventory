@@ -69,7 +69,6 @@
 
 package org.opencadc.inventory.storage.ceph;
 
-
 import com.ceph.rados.exceptions.RadosException;
 import org.junit.Assert;
 import org.junit.Ignore;
@@ -97,38 +96,36 @@ import java.security.MessageDigest;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
-
+import java.util.UUID;
 
 public class CephStorageAdapterTest {
 
     static final String CLUSTER_NAME = "beta1";
     static final String USER_ID = System.getProperty("user.name");
 
-
     @Test
-    @Ignore
     public void get() throws Exception {
         final CephStorageAdapter testSubject = new CephStorageAdapter(USER_ID, CLUSTER_NAME);
 
-        final URI testURI = URI.create("site:jenkinsd/test-jcmt.fits");
+        final URI testURI = URI.create("site:jenkinsd/test-jcmt-file.fits");
         final long expectedByteCount = 3144960L;
         final URI expectedChecksum = URI.create("md5:9307240a34ed65a0a252b0046b6e87be");
 
         final OutputStream outputStream = new ByteArrayOutputStream();
-        final DigestOutputStream digestOutputStream = new DigestOutputStream(outputStream, MessageDigest
-                .getInstance(CephStorageAdapter.DIGEST_ALGORITHM));
+        final DigestOutputStream digestOutputStream = new DigestOutputStream(outputStream,
+                MessageDigest.getInstance(CephStorageAdapter.DIGEST_ALGORITHM));
         final ByteCountOutputStream byteCountOutputStream = new ByteCountOutputStream(digestOutputStream);
         final MessageDigest messageDigest = digestOutputStream.getMessageDigest();
 
         testSubject.get(new StorageLocation(testURI), byteCountOutputStream);
 
         Assert.assertEquals("Wrong byte count.", expectedByteCount, byteCountOutputStream.getByteCount());
-        Assert.assertEquals("Wrong checksum.", expectedChecksum,
-                            URI.create(String.format("%s:%s", messageDigest.getAlgorithm().toLowerCase(),
-                                                     new BigInteger(1, messageDigest.digest()).toString(16))));
+        Assert.assertEquals("Wrong checksum.", expectedChecksum, URI.create(String.format("%s:%s",
+                messageDigest.getAlgorithm().toLowerCase(), new BigInteger(1, messageDigest.digest()).toString(16))));
     }
 
     @Test
+    @Ignore
     public void getHeaders() throws Exception {
         final CephStorageAdapter testSubject = new CephStorageAdapter(USER_ID, CLUSTER_NAME);
         final String fileName = System.getProperty("file.name");
@@ -136,8 +133,8 @@ public class CephStorageAdapterTest {
                 String.format("cadc:jenkinsd/%s", fileName == null ? "test-megaprime-rados.fits.fz" : fileName));
 
         final ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-        final DigestOutputStream digestOutputStream = new DigestOutputStream(outputStream, MessageDigest
-                .getInstance(CephStorageAdapter.DIGEST_ALGORITHM));
+        final DigestOutputStream digestOutputStream = new DigestOutputStream(outputStream,
+                MessageDigest.getInstance(CephStorageAdapter.DIGEST_ALGORITHM));
 
         final Set<String> cutouts = new HashSet<>();
         cutouts.add("fhead");
@@ -148,51 +145,45 @@ public class CephStorageAdapterTest {
     }
 
     @Test
-    @Ignore
     public void put() throws Exception {
-        final URI testURI = URI.create("site:jenkinsd/test-jcmt.fits");
+        final URI testURI = URI.create(String.format("site:jenkinsd/%s.fits", UUID.randomUUID().toString()));
         try {
+            final CephStorageAdapter putTestSubject = new CephStorageAdapter(USER_ID, CLUSTER_NAME);
+            final File file = FileUtil.getFileFromResource("test-jcmt.fits", CephStorageAdapterTest.class);
+            final NewArtifact artifact = new NewArtifact(testURI);
+
+            artifact.contentChecksum = URI.create("md5:9307240a34ed65a0a252b0046b6e87be");
+            artifact.contentLength = file.length();
+
+            final InputStream fileInputStream = new FileInputStream(file);
+
+            final StorageMetadata storageMetadata = putTestSubject.put(artifact, fileInputStream);
+            fileInputStream.close();
+
+            final URI resultChecksum = storageMetadata.getContentChecksum();
+            final long resultLength = storageMetadata.getContentLength();
+
+            Assert.assertEquals("Checksum does not match.", artifact.contentChecksum, resultChecksum);
+            Assert.assertEquals("Lengths do not match.", artifact.contentLength.longValue(), resultLength);
+
+            // Get it out again.
+            final CephStorageAdapter getTestSubject = new CephStorageAdapter(USER_ID, CLUSTER_NAME);
+
+            final OutputStream outputStream = new ByteArrayOutputStream();
+            final DigestOutputStream digestOutputStream = new DigestOutputStream(outputStream,
+                    MessageDigest.getInstance(CephStorageAdapter.DIGEST_ALGORITHM));
+            final ByteCountOutputStream byteCountOutputStream = new ByteCountOutputStream(digestOutputStream);
+            final MessageDigest messageDigest = digestOutputStream.getMessageDigest();
+
+            getTestSubject.get(new StorageLocation(testURI), byteCountOutputStream);
+            Assert.assertEquals("Retrieved file is not the same.", artifact.contentLength.longValue(),
+                    byteCountOutputStream.getByteCount());
+            Assert.assertEquals("Wrong checksum.", artifact.contentChecksum,
+                    URI.create(String.format("%s:%s", messageDigest.getAlgorithm().toLowerCase(),
+                            new BigInteger(1, messageDigest.digest()).toString(16))));
+        } finally {
             final CephStorageAdapter deleteTestSubject = new CephStorageAdapter(USER_ID, CLUSTER_NAME);
             deleteTestSubject.delete(new StorageLocation(testURI));
-            System.out.println("DELETE SUCCESSFUL!");
-        } catch (ResourceNotFoundException e) {
-            System.out.println(String.format("DELETE UNSUCCESSFUL > \n\n%s\n", e.getMessage()));
-            // Doesn't exist.  Good!
         }
-
-        final CephStorageAdapter putTestSubject = new CephStorageAdapter(USER_ID, CLUSTER_NAME);
-        final File file = FileUtil.getFileFromResource("test-jcmt.fits", CephStorageAdapterTest.class);
-        final NewArtifact artifact = new NewArtifact(testURI);
-
-        artifact.contentChecksum = URI.create("md5:9307240a34ed65a0a252b0046b6e87be");
-        artifact.contentLength = 3144960L;
-
-        final InputStream fileInputStream = new FileInputStream(file);
-
-        final StorageMetadata storageMetadata = putTestSubject.put(artifact, fileInputStream);
-        fileInputStream.close();
-
-        final URI resultChecksum = storageMetadata.getContentChecksum();
-        final long resultLength = storageMetadata.getContentLength();
-
-        Assert.assertEquals("Checksum does not match.", artifact.contentChecksum, resultChecksum);
-        Assert.assertEquals("Lengths do not match.", artifact.contentLength.longValue(), resultLength);
-
-        // Get it out again.
-        final CephStorageAdapter getTestSubject = new CephStorageAdapter(USER_ID, CLUSTER_NAME);
-
-        final OutputStream outputStream = new ByteArrayOutputStream();
-        final DigestOutputStream digestOutputStream = new DigestOutputStream(outputStream, MessageDigest
-                .getInstance(CephStorageAdapter.DIGEST_ALGORITHM));
-        final ByteCountOutputStream byteCountOutputStream = new ByteCountOutputStream(digestOutputStream);
-        final MessageDigest messageDigest = digestOutputStream.getMessageDigest();
-
-        getTestSubject.get(new StorageLocation(testURI), byteCountOutputStream);
-        Assert.assertEquals("Retrieved file is not the same.", artifact.contentLength.longValue(),
-                            byteCountOutputStream.getByteCount());
-        Assert.assertEquals("Wrong checksum.", artifact.contentChecksum,
-                            URI.create(String.format("%s:%s", messageDigest.getAlgorithm().toLowerCase(),
-                                                     new BigInteger(1, messageDigest.digest()).toString(16))));
     }
 }
-
