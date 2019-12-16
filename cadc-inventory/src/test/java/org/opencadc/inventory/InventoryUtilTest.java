@@ -188,4 +188,24 @@ public class InventoryUtilTest {
             Assert.fail("unexpected exception: " + unexpected);
         }
     }
+    
+    @Test
+    public void testComputeArtifactFilename() {
+        try {
+            String randomUUID = UUID.randomUUID().toString();
+            Assert.assertEquals("bar.fits",
+                InventoryUtil.computeArtifactFilename(URI.create("cadc:bar.fits")));
+            Assert.assertEquals("bar.fits",
+                InventoryUtil.computeArtifactFilename(URI.create("cadc:FOO/bar.fits")));
+            Assert.assertEquals("bar.fits",
+                InventoryUtil.computeArtifactFilename(URI.create("cadc:FOO/organised/into/directories/bar.fits")));
+            Assert.assertEquals(randomUUID,
+                InventoryUtil.computeArtifactFilename(URI.create("vault:" + randomUUID)));
+            Assert.assertEquals("bar+baz.fits",
+                InventoryUtil.computeArtifactFilename(URI.create("cadc:FOO/bar+baz.fits")));
+        } catch (Exception unexpected) {
+            log.error("unexpected exception", unexpected);
+            Assert.fail("unexpected exception: " + unexpected);
+        }
+    }
 }
