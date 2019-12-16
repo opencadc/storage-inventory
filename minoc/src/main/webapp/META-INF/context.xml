@@ -2,5 +2,17 @@
 <Context>
 
     <WatchedResource>WEB-INF/web.xml</WatchedResource>
+
+    <Resource name="jdbc/inventory"
+        auth="Container"
+        type="javax.sql.DataSource"
+        factory="org.apache.tomcat.jdbc.pool.DataSourceFactory" closeMethod="close"
+        minEvictableIdleTimeMillis="60000" timeBetweenEvictionRunsMillis="30000"
+        maxWait="20000"
+        initialSize="0" minIdle="0" maxIdle="${minoc.invadm.maxActive}" maxActive="${minoc.invadm.maxActive}"
+        username="${minoc.invadm.username}" password="${minoc.invadm.password}"
+        driverClassName="org.postgresql.Driver" url="${minoc.invadm.url}"
+        removeAbandoned="false"
+        testOnBorrow="true" validationQuery="select 123" />
     
 </Context>

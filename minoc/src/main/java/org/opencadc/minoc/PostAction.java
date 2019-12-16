@@ -69,44 +69,54 @@ package org.opencadc.minoc;
 
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
-import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.db.ArtifactDAO;
-import org.opencadc.inventory.permissions.ReadGrant;
+import org.opencadc.inventory.permissions.WriteGrant;
 
 /**
- * Interface with storage and inventory to get an artifact.
+ * Interface with storage and inventory to update the metadata of an artifact.
  *
  * @author majorb
  */
-public class GetAction extends ArtifactAction {
+public class PostAction extends ArtifactAction {
     
-    private static final Logger log = Logger.getLogger(GetAction.class);
+    private static final Logger log = Logger.getLogger(PostAction.class);
 
     /**
      * Default, no-arg constructor.
      */
-    public GetAction() {
+    public PostAction() {
         super();
     }
 
     /**
-     * Download the artifact or cutouts of the artifact.
+     * Update artifact metadata.
      */
     @Override
     public void doAction() throws Exception {
         
-        initAndAuthorize(ReadGrant.class);
+        initAndAuthorize(WriteGrant.class);
+        
+        String newURI = syncInput.getParameter("uri");
+        String newContentType = syncInput.getParameter("contentType");
+        String newContentEncoding = syncInput.getParameter("contentEncoding");
+        log.debug("new uri: " + newURI);
+        log.debug("new contentType: " + newContentType);
+        log.debug("new contentEncoding: " + newContentEncoding);
         
         ArtifactDAO dao = getArtifactDAO();
         Artifact artifact = getArtifact(artifactURI, dao);
-        HeadAction.setHeaders(artifact, syncOutput);
         
-        StorageLocation storageLocation = new StorageLocation(artifact.storageLocation.getStorageID());
-        storageLocation.storageBucket = artifact.storageLocation.storageBucket;
-        log.debug("retrieving artifact from storage...");
-        getStorageAdapter().get(storageLocation, syncOutput.getOutputStream());
-        log.debug("retrieved artifact from storage");
-
+        // TODO: enable modifying URIs when supported by DAO
+        // TODO: how to support clearing values?
+        if (newContentType != null) {
+            artifact.contentType = newContentType;
+        }
+        if (newContentEncoding != null) {
+            artifact.contentEncoding = newContentEncoding;
+        }
+        log.debug("updating artifact metadata...");
+        dao.put(artifact);
+        log.debug("updated artifact metadata");
     }
 
 }

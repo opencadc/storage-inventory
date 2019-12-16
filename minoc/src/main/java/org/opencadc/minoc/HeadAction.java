@@ -67,30 +67,32 @@
 
 package org.opencadc.minoc;
 
+import ca.nrc.cadc.rest.SyncOutput;
+
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
-import org.opencadc.inventory.StorageLocation;
+import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.permissions.ReadGrant;
 
 /**
- * Interface with storage and inventory to get an artifact.
+ * Interface with storage and inventory to get the metadata of an artifact.
  *
  * @author majorb
  */
-public class GetAction extends ArtifactAction {
+public class HeadAction extends ArtifactAction {
     
-    private static final Logger log = Logger.getLogger(GetAction.class);
+    private static final Logger log = Logger.getLogger(HeadAction.class);
 
     /**
      * Default, no-arg constructor.
      */
-    public GetAction() {
+    public HeadAction() {
         super();
     }
 
     /**
-     * Download the artifact or cutouts of the artifact.
+     * Return the artifact metadata as repsonse headers.
      */
     @Override
     public void doAction() throws Exception {
@@ -99,14 +101,26 @@ public class GetAction extends ArtifactAction {
         
         ArtifactDAO dao = getArtifactDAO();
         Artifact artifact = getArtifact(artifactURI, dao);
-        HeadAction.setHeaders(artifact, syncOutput);
+        setHeaders(artifact, syncOutput);
         
-        StorageLocation storageLocation = new StorageLocation(artifact.storageLocation.getStorageID());
-        storageLocation.storageBucket = artifact.storageLocation.storageBucket;
-        log.debug("retrieving artifact from storage...");
-        getStorageAdapter().get(storageLocation, syncOutput.getOutputStream());
-        log.debug("retrieved artifact from storage");
-
+    }
+    
+    /**
+     * Set the HTTP response headers for an artifact.
+     * @param artifact The artifact with metadata
+     * @param syncOutput The target response
+     */
+    public static void setHeaders(Artifact artifact, SyncOutput syncOutput) {
+        syncOutput.setHeader("Content-MD5", artifact.getContentChecksum().getSchemeSpecificPart());
+        syncOutput.setHeader("Content-Length", artifact.getContentLength());
+        String filename = InventoryUtil.computeArtifactFilename(artifact.getURI());
+        syncOutput.setHeader("Content-Disposition", "attachment; filename=" + filename);
+        if (artifact.contentEncoding != null) {
+            syncOutput.setHeader("Content-Encoding", artifact.contentEncoding);
+        }
+        if (artifact.contentType != null) {
+            syncOutput.setHeader("Content-Type", artifact.contentType);
+        }
     }
 
 }

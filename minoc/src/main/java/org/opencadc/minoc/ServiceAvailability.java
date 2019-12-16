@@ -68,6 +68,7 @@
 package org.opencadc.minoc;
 
 import ca.nrc.cadc.auth.AuthMethod;
+import ca.nrc.cadc.db.DBUtil;
 import ca.nrc.cadc.reg.Standards;
 import ca.nrc.cadc.reg.client.LocalAuthority;
 import ca.nrc.cadc.reg.client.RegistryClient;
@@ -77,7 +78,12 @@ import ca.nrc.cadc.vosi.avail.CheckException;
 import ca.nrc.cadc.vosi.avail.CheckResource;
 import ca.nrc.cadc.vosi.avail.CheckWebService;
 import java.net.URI;
+import java.util.Map;
+
+import javax.sql.DataSource;
+
 import org.apache.log4j.Logger;
+import org.opencadc.inventory.version.InitDatabase;
 
 /**
  * This class performs the work of determining if the executing artifact
@@ -121,6 +127,15 @@ public class ServiceAvailability implements AvailabilityPlugin {
         boolean isGood = true;
         String note = "service is accepting requests";
         try {
+            
+            log.info("init database...");
+            DataSource ds = DBUtil.findJNDIDataSource(ArtifactAction.JNDI_DATASOURCE);
+            Map<String, Object> config = ArtifactAction.getDaoConfig();
+            InitDatabase init = new InitDatabase(ds,
+                (String) config.get(ArtifactAction.DATABASE_KEY),
+                (String) config.get(ArtifactAction.SCHEMA_KEY));
+            init.doInit();
+            log.info("init database... OK");
 
             // check other services we depend on
             RegistryClient reg = new RegistryClient();

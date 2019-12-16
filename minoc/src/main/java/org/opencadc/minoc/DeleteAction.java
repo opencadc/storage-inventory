@@ -67,46 +67,67 @@
 
 package org.opencadc.minoc;
 
+import ca.nrc.cadc.db.TransactionManager;
+
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
-import org.opencadc.inventory.StorageLocation;
+import org.opencadc.inventory.DeletedArtifactEvent;
 import org.opencadc.inventory.db.ArtifactDAO;
-import org.opencadc.inventory.permissions.ReadGrant;
+import org.opencadc.inventory.db.DeletedEventDAO;
+import org.opencadc.inventory.permissions.WriteGrant;
 
 /**
- * Interface with storage and inventory to get an artifact.
+ * Interface with storage and inventory to delete an artifact.
  *
  * @author majorb
  */
-public class GetAction extends ArtifactAction {
+public class DeleteAction extends ArtifactAction {
     
-    private static final Logger log = Logger.getLogger(GetAction.class);
+    private static final Logger log = Logger.getLogger(DeleteAction.class);
 
     /**
      * Default, no-arg constructor.
      */
-    public GetAction() {
+    public DeleteAction() {
         super();
     }
 
     /**
-     * Download the artifact or cutouts of the artifact.
+     * Delete the artifact. 
      */
     @Override
     public void doAction() throws Exception {
         
-        initAndAuthorize(ReadGrant.class);
+        initAndAuthorize(WriteGrant.class);
         
-        ArtifactDAO dao = getArtifactDAO();
-        Artifact artifact = getArtifact(artifactURI, dao);
-        HeadAction.setHeaders(artifact, syncOutput);
-        
-        StorageLocation storageLocation = new StorageLocation(artifact.storageLocation.getStorageID());
-        storageLocation.storageBucket = artifact.storageLocation.storageBucket;
-        log.debug("retrieving artifact from storage...");
-        getStorageAdapter().get(storageLocation, syncOutput.getOutputStream());
-        log.debug("retrieved artifact from storage");
-
+        ArtifactDAO artifactDAO = getArtifactDAO();
+        Artifact artifact = getArtifact(artifactURI, artifactDAO);
+        DeletedEventDAO deletedEventDAO = getDeletedEventDAO(artifactDAO);
+        TransactionManager txnMgr = artifactDAO.getTransactionManager();
+        try {
+            txnMgr.startTransaction();
+            DeletedArtifactEvent deletedArtifact = new DeletedArtifactEvent(artifact.getID());
+            artifactDAO.delete(artifact.getID());
+            deletedEventDAO.put(deletedArtifact);
+            log.debug("deleting from storage...");
+            getStorageAdapter().delete(artifact.storageLocation);
+            log.debug("deletedfrom storage");
+            txnMgr.commitTransaction();
+        } catch (Throwable t) {
+            String msg = "failed to delete artifact";
+            log.error(msg, t);
+            throw t;
+        } finally {
+            if (txnMgr.isOpen()) {
+                try {
+                    log.debug("rolling back transaction...");
+                    txnMgr.rollbackTransaction();
+                    log.error("rollback successful");
+                } catch (Exception e) {
+                    log.error("failed to rollback transaction", e);
+                }
+            }
+        }
     }
 
 }
