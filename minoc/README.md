@@ -20,12 +20,16 @@ A minoc.properties file in /<myconfigdir> is required to run this service.  The 
 ```
 # The storage adapter to use for storage.
 org.opencadc.inventory.storage.StorageAdapter=org.opencadc.inventory.storage.fs.FileSystemStorageAdapter
+
 # The SQL generator implementation (optional property, will default to the once below if not present)
 org.opencadc.inventory.db.SQLGenerator=org.opencadc.inventory.db.SQLGenerator
+
 # The schema to use
 org.opencadc.inventory.db.schema=inventory
+
 # The service ID of a permissions system providing read permission grants.  There may be multiple instances of this key/value pair.
 org.opencadc.inventory.permissions.ReadGrant.serviceID=ivo://cadc.nrc.ca/servicewithperms
+
 # The service ID of a permissions system providing write permission grants.  There may be multiple instances of this key/value pair.
 org.opencadc.inventory.permissions.WriteGrant.serviceID=ivo://cadc.nrc.ca/servicewithperms
 ```
@@ -37,10 +41,13 @@ to be configured in catalina.properties:
 ```
 # The maximum number of active database connections
 minoc.invadm.maxActive=1
+
 # The username with which to connect
 minoc.invadm.username=invadm
+
 # The password for the username
 minoc.invadm.password=pw-invadm
+
 # The JDBC connection URL
 minoc.invadm.url=jdbc:postgresql://mydbhost/content
 ```
