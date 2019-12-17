@@ -94,7 +94,7 @@ public class VosiCapabilitiesTest extends CapabilitiesTest {
     }
     
     public VosiCapabilitiesTest() {
-        super(MinocIntTest.MINOC_SERVICE_ID);
+        super(BasicOpsIntTest.MINOC_SERVICE_ID);
     }
 
     @Override

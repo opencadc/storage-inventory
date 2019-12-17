@@ -68,45 +68,44 @@
 package org.opencadc.minoc;
 
 import ca.nrc.cadc.auth.AuthMethod;
-import ca.nrc.cadc.net.HttpDelete;
-import ca.nrc.cadc.net.HttpDownload;
-import ca.nrc.cadc.net.HttpPost;
-import ca.nrc.cadc.net.HttpUpload;
+import ca.nrc.cadc.auth.AuthenticationUtil;
+import ca.nrc.cadc.auth.SSLUtil;
 import ca.nrc.cadc.reg.client.RegistryClient;
+import ca.nrc.cadc.util.FileUtil;
 import ca.nrc.cadc.util.HexUtil;
 import ca.nrc.cadc.util.Log4jInit;
 
 import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.FileNotFoundException;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
 import java.net.URI;
 import java.net.URL;
 import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.util.HashMap;
-import java.util.Map;
+
+import javax.security.auth.Subject;
 
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
-import org.junit.Assert;
-import org.junit.Test;
 
 /**
+ * Abstract integration test class with general setup and test support.
+ * 
  * @author majorb
- *
  */
 public class MinocIntTest {
     
-    private static final Logger log = Logger.getLogger(MinocIntTest.class);
+    private static final Logger log = Logger.getLogger(BasicOpsIntTest.class);
     public static final URI MINOC_SERVICE_ID = URI.create("ivo://cadc.nrc.ca/minoc");
     // TODO: Move this to Standards.java
     private static final URI MINOC_STANDARD_ID = URI.create("vos://cadc.nrc.ca~vospace/CADC/std/inventory#artifacts-1.0");
 
-    private URL anonURL;
+    protected URL anonURL;
+    protected URL certURL;
+    protected Subject anonSubject;
+    protected Subject userSubject;
     
     static {
         Log4jInit.setLevel("org.opencadc.minoc", Level.INFO);
@@ -116,84 +115,16 @@ public class MinocIntTest {
         RegistryClient regClient = new RegistryClient();
         anonURL = regClient.getServiceURL(MINOC_SERVICE_ID, MINOC_STANDARD_ID, AuthMethod.ANON);
         log.info("anonURL: " + anonURL);
+        certURL = regClient.getServiceURL(MINOC_SERVICE_ID, MINOC_STANDARD_ID, AuthMethod.CERT);
+        log.info("certURL: " + certURL);
+        anonSubject = AuthenticationUtil.getAnonSubject();
+        File cert = FileUtil.getFileFromResource("x509_CADCRegtest1.pem", MinocIntTest.class);
+        log.info("userSubject: " + userSubject);
+        userSubject = SSLUtil.createSubject(cert);
+        log.info("userSubject: " + userSubject);
     }
     
-    @Test
-    public void testAllMethodsSimple() {
-        try {
-            
-            String data = "abcdefghijklmnopqrstuvwxyz";
-            URI artifactURI = URI.create("cadc:TEST/file.fits");
-            URL artifactURL = new URL(anonURL + "/" + artifactURI.toString());
-            String encoding = "test-encoding";
-            String type = "test-type";
-            
-            // put
-            InputStream in = new ByteArrayInputStream(data.getBytes());
-            HttpUpload put = new HttpUpload(in, artifactURL);
-            put.setContentEncoding(encoding);
-            put.setContentType(type);
-            put.run();
-            Assert.assertNull(put.getThrowable());
-            
-            // get
-            OutputStream out = new ByteArrayOutputStream();
-            HttpDownload get = new HttpDownload(artifactURL, out);
-            get.run();
-            Assert.assertNull(get.getThrowable());
-            String contentMD5 = get.getContentMD5();
-            long contentLength = get.getContentLength();
-            String contentType = get.getContentType();
-            String contentEncoding = get.getContentEncoding();
-            Assert.assertEquals(getMd5(data.getBytes()), contentMD5);
-            Assert.assertEquals(data.getBytes().length, contentLength);
-            Assert.assertEquals(type, contentType);
-            Assert.assertEquals(encoding, contentEncoding);
-            
-            // update
-            // TODO: add update to artifactURI when functionality available
-            String newEncoding = "test-encoding-2";
-            String newType = "test-type-2";
-            Map<String,Object> params = new HashMap<String,Object>(2);
-            params.put("contentEncoding", newEncoding);
-            params.put("contentType", newType);
-            HttpPost post = new HttpPost(artifactURL, params, false);
-            post.run();
-            Assert.assertNull(post.getThrowable());
-            
-            // head
-            HttpDownload head = new HttpDownload(artifactURL, out);
-            head.setHeadOnly(true);
-            head.run();
-            Assert.assertNull(head.getThrowable());
-            contentMD5 = head.getContentMD5();
-            contentLength = head.getContentLength();
-            contentType = head.getContentType();
-            contentEncoding = head.getContentEncoding();
-            Assert.assertEquals(getMd5(data.getBytes()), contentMD5);
-            Assert.assertEquals(data.getBytes().length, contentLength);
-            Assert.assertEquals(newType, contentType);
-            Assert.assertEquals(newEncoding, contentEncoding);
-            
-            // delete
-            HttpDelete delete = new HttpDelete(artifactURL, false);
-            delete.run();
-            Assert.assertNull(delete.getThrowable());
-            
-            // get
-            get = new HttpDownload(artifactURL, out);
-            get.run();
-            Throwable throwable = get.getThrowable();
-            Assert.assertNotNull(throwable);
-            Assert.assertTrue(throwable instanceof FileNotFoundException);
-            
-        } catch (Throwable t) {
-            log.error("unexpected throwable", t);
-            Assert.fail("unexpected throwable: " + t);
-        }
-    }
-    
-    public static String getMd5(byte[] input) throws NoSuchAlgorithmException, IOException {
+    protected static String getMd5(byte[] input) throws NoSuchAlgorithmException, IOException {
         MessageDigest md = MessageDigest.getInstance("MD5");
         InputStream in = new ByteArrayInputStream(input);
         DigestInputStream dis = new DigestInputStream(in, md);
@@ -205,4 +136,5 @@ public class MinocIntTest {
         byte[] digest = md.digest();
         return HexUtil.toHex(digest);
     }
+
 }

@@ -20,10 +20,8 @@ A minoc.properties file in /<myconfigdir> is required to run this service.  The 
 ```
 # The storage adapter to use for storage.
 org.opencadc.inventory.storage.StorageAdapter=org.opencadc.inventory.storage.fs.FileSystemStorageAdapter
-# The SQL generator implementation
+# The SQL generator implementation (optional property, will default to the once below if not present)
 org.opencadc.inventory.db.SQLGenerator=org.opencadc.inventory.db.SQLGenerator
-# The database to use
-org.opencadc.inventory.db.database=content
 # The schema to use
 org.opencadc.inventory.db.schema=inventory
 # The service ID of a permissions system providing read permission grants.  There may be multiple instances of this key/value pair.

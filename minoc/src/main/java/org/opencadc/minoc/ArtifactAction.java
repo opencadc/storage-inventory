@@ -67,6 +67,7 @@
 
 package org.opencadc.minoc;
 
+import ca.nrc.cadc.auth.AuthMethod;
 import ca.nrc.cadc.auth.AuthenticationUtil;
 import ca.nrc.cadc.auth.HttpPrincipal;
 import ca.nrc.cadc.net.ResourceNotFoundException;
@@ -113,7 +114,6 @@ public abstract class ArtifactAction extends RestAction {
     
     public static final String JNDI_DATASOURCE = "jdbc/inventory";
     static final String SQL_GEN_KEY = SQLGenerator.class.getName();
-    static final String DATABASE_KEY = SQLGenerator.class.getPackage().getName() + ".database";
     static final String SCHEMA_KEY = SQLGenerator.class.getPackage().getName() + ".schema";
     
     // The target artifact
@@ -167,12 +167,16 @@ public abstract class ArtifactAction extends RestAction {
     public void checkReadPermission() throws AccessControlException, ResourceNotFoundException, TransientException {
         List<String> readGrantServices = getReadGrantServices(props);
         PermissionsClient pc = null;
+
+        /*
         // TODO: optimize with threads
         for (String readService : readGrantServices) {
             try {
                 URI serviceID = new URI(readService);
                 // TODO: add this argument to PermissionsClient constructor
-                //pc = new PermissionsClient(serviceID);
+                pc = new PermissionsClient(serviceID);
+                
+                // uncomment when ready
                 pc = new PermissionsClient();
                 ReadGrant grant = pc.getReadGrant(artifactURI);
                 if (grant.isAnonymousAccess()) {
@@ -183,32 +187,46 @@ public abstract class ArtifactAction extends RestAction {
                     // TODO: check group membership
                     return;
                 }
+                return;
             } catch (URISyntaxException e) {
                 throw new IllegalStateException("Invalid read grant service: " + readService);
             }
         }
         throw new AccessControlException("read permission denied");
+        */
     }
     
     public void checkWritePermission() throws AccessControlException, ResourceNotFoundException, TransientException {
         List<String> writeGrantServices = getWriteGrantServices(props);
         PermissionsClient pc = null;
+        
+        // current write auth is simply to be non-anonymous
+        AuthMethod am = AuthenticationUtil.getAuthMethod(AuthenticationUtil.getCurrentSubject());
+        if (am != null && !am.equals(AuthMethod.ANON)) {
+            return;
+        }
+        
+        /*
         // TODO: optimize with threads
         for (String writeService : writeGrantServices) {
             try {
                 URI serviceID = new URI(writeService);
                 // TODO: add this argument to PermissionsClient constructor
-                //pc = new PermissionsClient(serviceID);
+                pc = new PermissionsClient(serviceID);
+                
+                // uncomment when ready
                 pc = new PermissionsClient();
                 WriteGrant grant = pc.getWriteGrant(artifactURI);
                 if (grant.getGroups().size() > 0) {
                     // TODO: check group membership
                     return;
                 }
+                return;
             } catch (URISyntaxException e) {
                 throw new IllegalStateException("Invalid read grant service: " + writeService);
             }
         }
+        */
         throw new AccessControlException("write permission denied");
     }
     
@@ -342,29 +360,28 @@ public abstract class ArtifactAction extends RestAction {
     static Map<String, Object> getDaoConfig(MultiValuedProperties props) {
         Map<String, Object> config = new HashMap<String, Object>();
         Class cls = null;
-        try {
-            List<String> sqlGenList = props.getProperty(SQL_GEN_KEY);
-            String sqlGenClass = null;
-            if (sqlGenList != null && sqlGenList.size() > 0) {
-                sqlGenClass = sqlGenList.get(0);
-            } else {
-                throw new IllegalStateException("a value for " + SQLGenerator.class.getName()
-                    + " is needed in minoc.properties");
+        List<String> sqlGenList = props.getProperty(SQL_GEN_KEY);
+        if (sqlGenList != null && sqlGenList.size() > 0) {
+            try {
+                String sqlGenClass = sqlGenList.get(0);
+                cls = Class.forName(sqlGenClass);
+            } catch (ClassNotFoundException e) {
+                throw new IllegalStateException("could not load SQLGenerator class: " + e.getMessage(), e);
             }
-            cls = Class.forName(sqlGenClass);
-        } catch (ClassNotFoundException e) {
-            throw new IllegalStateException("could not load SQLGenerator class: " + e.getMessage(), e);
+        } else {
+            // use the default SQL generator
+            cls = SQLGenerator.class;
         }
+
         config.put(SQL_GEN_KEY, cls);
         config.put("jndiDataSourceName", JNDI_DATASOURCE);
-        List<String> dbList = props.getProperty(DATABASE_KEY);
         List<String> schemaList = props.getProperty(SCHEMA_KEY);
-        if (dbList == null || dbList.size() < 1 || schemaList == null || schemaList.size() < 1) {
-            throw new IllegalStateException("values for " + DATABASE_KEY + " and "
-                + SCHEMA_KEY + " are needed in minoc.properties");
+        if (schemaList == null || schemaList.size() < 1) {
+            throw new IllegalStateException("a value for " + SCHEMA_KEY + " is needed"
+                + " in minoc.properties");
         }
-        config.put("database", dbList.get(0));
         config.put("schema", schemaList.get(0));
+        config.put("database", null); 
             
         return config;
     }
