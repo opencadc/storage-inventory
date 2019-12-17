@@ -392,16 +392,13 @@ paths:
       responses:
         '200':
           description: A VOSI availability document in XML.
-          schema:
-            $ref: '#/definitions/availability'
   /capabilities:
     get:
       summary: VOSI Capabilities
       tags:
         - Support Interfaces
       description: |
-        Provides the service metadata in the form of a list of Capability descriptions.  Each of these descriptions is an 
-        XML element that:
+        Provides the service metadata in the form of a list of Capability descriptions.  Each of these descriptions is an XML element that:
         <ul>
         <li>states that the service provides a particular, IVOA-standard function;</li>
         <li>lists the interfaces for invoking that function;</li>
@@ -410,61 +407,7 @@ paths:
       responses:
         '200':
           description: A VOSI Capabilities document in XML.
-          schema:
-            $ref: '#/definitions/capabilities'
         '500':
           description: Internal server error
         '503':
           description: Service too busy
-definitions:
-  availability:
-    type: object
-    xml:
-      name: availability
-      namespace: 'http://www.ivoa.net/xml/VOSIAvailability/v1.0'
-      prefix: vosi
-    properties:
-      available:
-        type: boolean
-        xml:
-          attribute: true
-          prefix: vosi
-      note:
-        type: string
-        xml:
-          attribute: true
-          prefix: vosi
-  capabilities:
-    type: array
-    items:
-      $ref: '#/definitions/capability'
-    xml:
-      namespace: 'http://www.ivoa.net/xml/VOSICapabilities/v1.0'
-      prefix: vosi
-      wrapped: true
-  capability:
-    type: object
-    properties:
-      standardID:
-        type: string
-        format: uri
-        xml:
-          attribute: true
-      interface:
-        type: object
-        properties:
-          accessURL:
-            type: string
-            properties:
-              use:
-                type: string
-                xml:
-                  attribute: true
-          securityMethod:
-            type: string
-            properties:
-              standardID:
-                type: string
-                format: uri
-                xml:
-                  attribute: true
