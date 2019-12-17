@@ -76,6 +76,7 @@ import java.util.Date;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.opencadc.gms.GroupURI;
 import org.opencadc.inventory.permissions.Grant;
@@ -119,7 +120,8 @@ public class GrantReaderWriterTest {
             Assert.fail("unexpected exception: " + unexpected);
         }
     }
-    
+
+    @Test
     public void testMinimalWriteGrant() {
         try {
             WriteGrant expected = new WriteGrant(URI.create("ivo://foo/bar"), new Date());
@@ -134,7 +136,7 @@ public class GrantReaderWriterTest {
             GrantReader reader = new GrantReader();
             Grant actual = reader.read(xml);
 
-            Assert.assertTrue(actual instanceof ReadGrant);
+            Assert.assertTrue(actual instanceof WriteGrant);
             
             Assert.assertEquals(expected.getArtifactURI(), actual.getArtifactURI());
             Assert.assertEquals(expected.getExpiryDate(), actual.getExpiryDate());
@@ -159,6 +161,7 @@ public class GrantReaderWriterTest {
             
             String xml = bos.toString();
             log.info("xml:\n" + xml);
+            System.out.println("xml:\n" + xml);
             
             GrantReader reader = new GrantReader();
             ReadGrant actual = (ReadGrant) reader.read(xml);

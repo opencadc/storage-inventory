@@ -93,11 +93,10 @@ public class GrantReader {
 
     static enum ENAMES {
         grant(), artifactURI(), expiryDate(), isAnonymousAccess(), groups(), groupURI(),
-        type(), Read(), Write();
+        type(), ReadGrant(), WriteGrant();
     }
 
-    public GrantReader() {
-    }
+    public GrantReader() { }
 
     public Grant read(String xml)  throws IOException {
         return read(new StringReader(xml));
@@ -147,7 +146,7 @@ public class GrantReader {
         if (type == null) {
             throw new IllegalArgumentException("invalid grant element, missing expected 'type' attribute");
         }
-        if (type.equals(ENAMES.Read.name())) {
+        if (type.equals(ENAMES.ReadGrant.name())) {
             return true;
         }
         return false;

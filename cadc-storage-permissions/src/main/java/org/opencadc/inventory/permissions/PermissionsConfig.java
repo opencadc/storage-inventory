@@ -67,80 +67,131 @@
  ************************************************************************
  */
 
-package org.opencadc.inventory.permissions.xml;
+package org.opencadc.inventory.permissions;
 
-import ca.nrc.cadc.date.DateUtil;
+import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.io.OutputStream;
-import java.io.OutputStreamWriter;
-import java.io.Writer;
-import java.text.DateFormat;
+import java.net.URI;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.List;
-import org.jdom2.Document;
-import org.jdom2.Element;
-import org.jdom2.output.Format;
-import org.jdom2.output.XMLOutputter;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+import org.apache.log4j.Logger;
 import org.opencadc.gms.GroupURI;
-import org.opencadc.inventory.permissions.Grant;
-import org.opencadc.inventory.permissions.ReadGrant;
 
-public class GrantWriter {
+public class PermissionsConfig {
+    private static final Logger log = Logger.getLogger(PermissionsConfig.class);
 
-    private DateFormat dateFormat;
-    private final boolean writeEmptyCollections;
+    private List<String> config;
 
-    public GrantWriter() {
-        this(false);
+    /**
+     *
+     * @param propertiesFile
+     * @throws IOException
+     */
+    public PermissionsConfig(File propertiesFile)
+        throws IOException {
+        this.config = loadConfig(propertiesFile);
     }
 
-    public GrantWriter(boolean writeEmptyCollections) {
-        this.writeEmptyCollections = writeEmptyCollections;
-        this.dateFormat = DateUtil.getDateFormat(DateUtil.IVOA_DATE_FORMAT, DateUtil.UTC);
+    List<String> loadConfig(File propertiesFile)
+        throws IOException {
+        if (!propertiesFile.exists()) {
+            throw new FileNotFoundException("File not found: " + propertiesFile.getAbsolutePath());
+        }
+        Stream<String> lines = Files.lines(Paths.get(propertiesFile.getAbsolutePath()));
+        return lines.filter(s -> !s.startsWith("#") && !s.isEmpty()).collect(Collectors.toList());
     }
 
-    public void write(Grant grant, OutputStream ostream) throws IOException {
-        write(grant, new OutputStreamWriter(ostream));
+    /**
+     *
+     * @param uri
+     * @return
+     */
+    public Permissions getPermissions(URI uri) {
+        if (uri == null) {
+            throw new IllegalArgumentException("getPermissions: null argument");
+        }
+        Permissions permissions = null;
+
+        //^ad:cadc\\.nrc\\.ca\\/gms\\?CFHT\\s*=*
+        String uriString = uri.toString();
+        StringBuilder sb = new StringBuilder();
+        sb.append("^");
+        sb.append(uriString.replace(".", "\\.").replace("/", "\\/").replace("?", "\\?"));
+        sb.append("\\s*=*");
+        Pattern pattern = Pattern.compile(sb.toString());
+
+        for (String line : this.config) {
+            if (pattern.matcher(line).lookingAt()) {
+                permissions = parsePermissions(line);
+            }
+        }
+
+        if (permissions == null) {
+            permissions = new Permissions(false, new ArrayList<GroupURI>(), new ArrayList<GroupURI>());
+        }
+
+        return permissions;
     }
 
-    public void write(Grant grant, Writer writer) throws IOException {
-        Element root = new Element(GrantReader.ENAMES.grant.name());
+    Permissions parsePermissions(String line) {
 
-        addChild(root, GrantReader.ENAMES.artifactURI.name(), grant.getArtifactURI().toASCIIString());
-        addChild(root, GrantReader.ENAMES.expiryDate.name(), dateFormat.format(grant.getExpiryDate()));
+        StringBuilder message = new StringBuilder();
+        boolean isAnonymous = false;
+        List<GroupURI> readOnlyGroups = new ArrayList<GroupURI>();
+        List<GroupURI> readWriteGroups = new ArrayList<GroupURI>();
 
-        if (grant instanceof ReadGrant) {
-            // root.addNamespaceDeclaration(XSI_NS);
-            root.setAttribute(GrantReader.ENAMES.type.name(), GrantReader.ENAMES.ReadGrant.name());
-            Element pub = new Element(GrantReader.ENAMES.isAnonymousAccess.name());
-            pub.setText(Boolean.toString(((ReadGrant) grant).isAnonymousAccess()));
-            root.addContent(pub);
+        // Split the line into key value pair
+        String[] keyValue = line.split("=");
+        if (keyValue.length == 2) {
+            String[] values = keyValue[1].trim().split("\\s+");
+            if (values.length == 3) {
+                if (values[0].trim().matches("^(T|F)$")) {
+                    isAnonymous = values[0].equals("T");
+                } else {
+                    message.append("invalid anonymous flag ");
+                    message.append(values[0]);
+                    message.append(", expected T or n");
+                }
+
+                loadGroupURIS(readOnlyGroups, message, values[1].trim(), "read-only");
+                loadGroupURIS(readWriteGroups, message, values[2].trim(), "read-write");
+            } else {
+                message.append("expected 3 values, found ");
+                message.append(values.length);
+                message.append(": ");
+                message.append(keyValue[1]);
+                message.append("\n");
+            }
         } else {
-            root.setAttribute(GrantReader.ENAMES.type.name(), GrantReader.ENAMES.WriteGrant.name());
+            message.append("invalid line: ");
+            message.append(line);
+            message.append("\n");
         }
 
-        Element groups = new Element(GrantReader.ENAMES.groups.name());
-        if (!grant.getGroups().isEmpty() || writeEmptyCollections) {
-            root.addContent(groups);
+        if (message.length() > 0) {
+            throw new IllegalArgumentException(message.toString());
         }
-        addGroups(grant.getGroups(), groups);
-
-        Document doc = new Document(root);
-        XMLOutputter outputter = new XMLOutputter();
-        outputter.setFormat(Format.getPrettyFormat());
-        outputter.output(doc, writer);
+        return new Permissions(isAnonymous, readOnlyGroups, readWriteGroups);
     }
 
-    private void addChild(Element parent, String ename, String eval) {
-        Element uri = new Element(ename);
-        uri.setText(eval);
-        parent.addContent(uri);
-    }
-
-    private void addGroups(List<GroupURI> groups, Element parent) {
-        for (GroupURI groupURI : groups) {
-            Element uri = new Element(GrantReader.ENAMES.groupURI.name());
-            uri.setText(groupURI.getURI().toASCIIString());
-            parent.addContent(uri);
+    void loadGroupURIS(List<GroupURI> groupURIS, StringBuilder message, String value,  String groupType) {
+        String[] groups = value.split(",");
+        for (String groupUri : groups) {
+            try {
+                groupURIS.add(new GroupURI(groupUri));
+            } catch (IllegalArgumentException e) {
+                message.append("invalid ");
+                message.append(groupType);
+                message.append(" group URI: ");
+                message.append(groupUri);
+                message.append("\n");
+            }
         }
     }
 }

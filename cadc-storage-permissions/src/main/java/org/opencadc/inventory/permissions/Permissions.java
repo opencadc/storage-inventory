@@ -69,24 +69,31 @@
 
 package org.opencadc.inventory.permissions;
 
-import java.net.URI;
-import java.util.Date;
+import java.util.List;
+import org.opencadc.gms.GroupURI;
 
-/**
- * Holds grant information about an artifact.
- * 
- * @author majorb
- *
- */
-public class WriteGrant extends Grant {
+public class Permissions {
 
-    /**
-     * Construct a write grant for the given artifactURI.
-     * @param artifactURI The applicable targetURI.
-     * @param expiryDate The expiry date of the grant.
-     */
-    public WriteGrant(URI artifactURI, Date expiryDate) {
-        super(artifactURI, expiryDate);
+    private boolean isAnonymous;
+    private List<GroupURI> readOnlyGroups;
+    private List<GroupURI> readWriteGroups;
+
+    public Permissions(boolean isAnonymous, List<GroupURI> readOnlyGroups, List<GroupURI> readWriteGroups) {
+        this.isAnonymous = isAnonymous;
+        this.readOnlyGroups = readOnlyGroups;
+        this.readWriteGroups = readWriteGroups;
+    }
+
+    public boolean getIsAnonymous() {
+        return this.isAnonymous;
+    }
+
+    public  List<GroupURI> getReadOnlyGroups() {
+        return this.readOnlyGroups;
+    }
+
+    public  List<GroupURI> getReadWriteGroups() {
+        return this.readWriteGroups;
     }
 
 }
