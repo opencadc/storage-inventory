@@ -67,100 +67,74 @@
 
 package org.opencadc.minoc;
 
-import ca.nrc.cadc.net.HttpDelete;
-import ca.nrc.cadc.net.HttpDownload;
-import ca.nrc.cadc.net.HttpUpload;
+import ca.nrc.cadc.auth.AuthMethod;
+import ca.nrc.cadc.auth.AuthenticationUtil;
+import ca.nrc.cadc.auth.SSLUtil;
+import ca.nrc.cadc.reg.client.RegistryClient;
+import ca.nrc.cadc.util.FileUtil;
+import ca.nrc.cadc.util.HexUtil;
 import ca.nrc.cadc.util.Log4jInit;
 
 import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
 import java.net.URI;
 import java.net.URL;
-import java.security.PrivilegedExceptionAction;
+import java.security.DigestInputStream;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 
 import javax.security.auth.Subject;
 
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
-import org.junit.Assert;
-import org.junit.Test;
 
 /**
- * Test artifact replacement
+ * Abstract integration test class with general setup and test support.
  * 
  * @author majorb
  */
-public class ReplaceArtifactIntTest extends MinocIntTest {
+public abstract class MinocTest {
     
-    private static final Logger log = Logger.getLogger(ReplaceArtifactIntTest.class);
+    private static final Logger log = Logger.getLogger(BasicOpsTest.class);
+    public static final URI MINOC_SERVICE_ID = URI.create("ivo://cadc.nrc.ca/minoc");
+    // TODO: Move this to Standards.java
+    private static final URI MINOC_STANDARD_ID = URI.create("vos://cadc.nrc.ca~vospace/CADC/std/inventory#artifacts-1.0");
+
+    protected URL anonURL;
+    protected URL certURL;
+    protected Subject anonSubject;
+    protected Subject userSubject;
     
     static {
         Log4jInit.setLevel("org.opencadc.minoc", Level.INFO);
     }
     
-    public ReplaceArtifactIntTest() {
-        super();
+    public MinocTest() {
+        RegistryClient regClient = new RegistryClient();
+        anonURL = regClient.getServiceURL(MINOC_SERVICE_ID, MINOC_STANDARD_ID, AuthMethod.ANON);
+        log.info("anonURL: " + anonURL);
+        certURL = regClient.getServiceURL(MINOC_SERVICE_ID, MINOC_STANDARD_ID, AuthMethod.CERT);
+        log.info("certURL: " + certURL);
+        anonSubject = AuthenticationUtil.getAnonSubject();
+        File cert = FileUtil.getFileFromResource("minoc-test.pem", MinocTest.class);
+        log.info("userSubject: " + userSubject);
+        userSubject = SSLUtil.createSubject(cert);
+        log.info("userSubject: " + userSubject);
     }
     
-    @Test
-    public void testReplaceFile() {
-        try {
-            
-            Subject.doAs(userSubject, new PrivilegedExceptionAction<Object>() {
-                public Object run() throws Exception {
-            
-                    String data1 = "first artifact";
-                    String data2 = "second artifact";
-                    URI artifactURI = URI.create("cadc:TEST/file.fits");
-                    URL artifactURL = new URL(certURL + "/" + artifactURI.toString());
-                    
-                    // put initial file
-                    InputStream in = new ByteArrayInputStream(data1.getBytes());
-                    HttpUpload put = new HttpUpload(in, artifactURL);
-                    put.run();
-                    Assert.assertNull(put.getThrowable());
-                    
-                    // assert file and metadata
-                    OutputStream out = new ByteArrayOutputStream();
-                    HttpDownload get = new HttpDownload(artifactURL, out);
-                    get.run();
-                    Assert.assertNull(get.getThrowable());
-                    String contentMD5 = get.getContentMD5();
-                    long contentLength = get.getContentLength();
-                    Assert.assertEquals(getMd5(data1.getBytes()), contentMD5);
-                    Assert.assertEquals(data1.getBytes().length, contentLength);
-                    
-                    // replace with new data
-                    in = new ByteArrayInputStream(data2.getBytes());
-                    put = new HttpUpload(in, artifactURL);
-                    put.run();
-                    Assert.assertNull(put.getThrowable());
-                    
-                    // assert new file and metadata
-                    out = new ByteArrayOutputStream();
-                    get = new HttpDownload(artifactURL, out);
-                    get.run();
-                    Assert.assertNull(get.getThrowable());
-                    contentMD5 = get.getContentMD5();
-                    contentLength = get.getContentLength();
-                    Assert.assertEquals(getMd5(data2.getBytes()), contentMD5);
-                    Assert.assertEquals(data2.getBytes().length, contentLength);
-                    
-                    // delete
-                    HttpDelete delete = new HttpDelete(artifactURL, false);
-                    delete.run();
-                    Assert.assertNull(delete.getThrowable());
-                    
-                    return null;
-                }
-            });
-            
-        } catch (Throwable t) {
-            log.error("unexpected throwable", t);
-            Assert.fail("unexpected throwable: " + t);
+    protected static String getMd5(byte[] input) throws NoSuchAlgorithmException, IOException {
+        MessageDigest md = MessageDigest.getInstance("MD5");
+        InputStream in = new ByteArrayInputStream(input);
+        DigestInputStream dis = new DigestInputStream(in, md);
+        int bytesRead = dis.read();
+        byte[] buf = new byte[512];
+        while (bytesRead > 0) {
+            bytesRead = dis.read(buf);
         }
+        byte[] digest = md.digest();
+        return HexUtil.toHex(digest);
     }
-    
+
 }

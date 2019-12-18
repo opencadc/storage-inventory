@@ -90,6 +90,6 @@ public class VosiAvailabilityTest extends AvailabilityTest
 
     public VosiAvailabilityTest() 
     { 
-        super(BasicOpsIntTest.MINOC_SERVICE_ID);
+        super(BasicOpsTest.MINOC_SERVICE_ID);
     }
 }
