@@ -23,6 +23,7 @@
             ca.nrc.cadc.rest
             ca.nrc.cadc.util
             ca.nrc.cadc.vosi
+            ca.nrc.cadc.db
       </param-value>
     </init-param>
     <init-param>
@@ -39,6 +40,10 @@
   <servlet>
     <servlet-name>ArtifactsServlet</servlet-name>
         <servlet-class>ca.nrc.cadc.rest.RestServlet</servlet-class>
+        <init-param>
+            <param-name>augmentSubject</param-name>
+            <param-value>false</param-value>
+        </init-param>
         <init-param>
             <param-name>get</param-name>
             <param-value>org.opencadc.minoc.GetAction</param-value>

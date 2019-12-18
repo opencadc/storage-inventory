@@ -382,6 +382,9 @@ public class FileSystemStorageAdapter implements StorageAdapter {
             metadata.artifactURI = artifactURI;
             return metadata;
             
+        } catch (ReadException | WriteException | StreamCorruptedException e) {
+            // pass through
+            throw e;
         } catch (Throwable t) {
             throwable = t;
             log.error("put error", t);

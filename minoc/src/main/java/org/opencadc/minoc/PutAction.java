@@ -74,6 +74,7 @@ import ca.nrc.cadc.rest.InlineContentHandler;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.StreamCorruptedException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.Date;
@@ -163,9 +164,17 @@ public class PutAction extends ArtifactAction {
         
         InputStream in = (InputStream) syncInput.getContent(INLINE_CONTENT_TAG);
         
-        log.debug("writing new artifact to storage...");
-        StorageMetadata artifactMetadata = getStorageAdapter().put(newArtifact, in);
-        log.debug("wrote new artifact to storage");
+        StorageMetadata artifactMetadata = null;
+        try {
+            log.debug("writing new artifact to storage...");
+            artifactMetadata = getStorageAdapter().put(newArtifact, in);
+            log.debug("wrote new artifact to storage");
+        } catch (StreamCorruptedException e) {
+            // file did not meet md5 or length expectations
+            syncOutput.setCode(412); // precondition failed
+            syncOutput.getOutputStream().write("incorrect checksum or length".getBytes());
+            return;
+        } 
         Artifact artifact = new Artifact(
             artifactURI, artifactMetadata.getContentChecksum(),
             new Date(), artifactMetadata.getContentLength());

@@ -67,20 +67,26 @@
 
 package org.opencadc.minoc;
 
+import ca.nrc.cadc.auth.AuthMethod;
 import ca.nrc.cadc.auth.AuthenticationUtil;
 import ca.nrc.cadc.auth.HttpPrincipal;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.rest.InlineContentHandler;
 import ca.nrc.cadc.rest.RestAction;
+import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.util.PropertiesReader;
 
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.security.AccessControlException;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.Callable;
 
 import javax.security.auth.Subject;
 
@@ -108,8 +114,7 @@ public abstract class ArtifactAction extends RestAction {
     
     public static final String JNDI_DATASOURCE = "jdbc/inventory";
     static final String SQL_GEN_KEY = SQLGenerator.class.getName();
-    static final String DATABASE_KEY = SQLGenerator.class.getPackage().toString() + ".database";
-    static final String SCHEMA_KEY = SQLGenerator.class.getPackage().toString() + ".schema";
+    static final String SCHEMA_KEY = SQLGenerator.class.getPackage().getName() + ".schema";
     
     // The target artifact
     URI artifactURI;
@@ -117,12 +122,8 @@ public abstract class ArtifactAction extends RestAction {
     // The (possibly null) authentication token.
     String authToken;
     
-    // interface to storage
-    private StorageAdapter storage = null;
-    
-    // Database Access Objects
-    private ArtifactDAO artifactDAO = null;
-    private DeletedEventDAO deletedEventDAO = null;
+    // minoc properties config
+    MultiValuedProperties props = null;
 
     /**
      * Default implementation.
@@ -148,32 +149,91 @@ public abstract class ArtifactAction extends RestAction {
         } else {
             // augment subject (minoc is configured so augment is not done in rest library)
             AuthenticationUtil.augmentSubject(subject);
-
-            // TODO: consult the two permissions services (ams and cadc-write) and
-            // consolidate the responses.
-            PermissionsClient pc = new PermissionsClient();
             if (ReadGrant.class.isAssignableFrom(grantClass)) {
-                ReadGrant grant = pc.getReadGrant(artifactURI);
-                //if (grant == null) {
-                //    throw new AccessControlException("no grant information on artifact");
-                //}
-                // TODO: complete auth check
+                checkReadPermission();
             } else if (WriteGrant.class.isAssignableFrom(grantClass)) {
-                WriteGrant grant = pc.getWriteGrant(artifactURI);
-                //if (grant == null) {
-                //    throw new AccessControlException("no grant information on artifact");
-                //}
-                // TODO: complete auth check
+                checkWritePermission();
             } else {
                 throw new IllegalStateException("Unsupported grant class: " + grantClass);
             }
         }
     }
     
+    void init() {
+        parsePath();
+        props = readConfig();
+    }
+    
+    public void checkReadPermission() throws AccessControlException, ResourceNotFoundException, TransientException {
+        List<String> readGrantServices = getReadGrantServices(props);
+        PermissionsClient pc = null;
+
+        /*
+        // TODO: optimize with threads
+        for (String readService : readGrantServices) {
+            try {
+                URI serviceID = new URI(readService);
+                // TODO: add this argument to PermissionsClient constructor
+                pc = new PermissionsClient(serviceID);
+                
+                // uncomment when ready
+                pc = new PermissionsClient();
+                ReadGrant grant = pc.getReadGrant(artifactURI);
+                if (grant.isAnonymousAccess()) {
+                    log.debug("anonymous read access granted");
+                    return;
+                }
+                if (grant.getGroups().size() > 0) {
+                    // TODO: check group membership
+                    return;
+                }
+                return;
+            } catch (URISyntaxException e) {
+                throw new IllegalStateException("Invalid read grant service: " + readService);
+            }
+        }
+        throw new AccessControlException("read permission denied");
+        */
+    }
+    
+    public void checkWritePermission() throws AccessControlException, ResourceNotFoundException, TransientException {
+        List<String> writeGrantServices = getWriteGrantServices(props);
+        PermissionsClient pc = null;
+        
+        // current write auth is simply to be non-anonymous
+        AuthMethod am = AuthenticationUtil.getAuthMethod(AuthenticationUtil.getCurrentSubject());
+        if (am != null && !am.equals(AuthMethod.ANON)) {
+            return;
+        }
+        
+        /*
+        // TODO: optimize with threads
+        for (String writeService : writeGrantServices) {
+            try {
+                URI serviceID = new URI(writeService);
+                // TODO: add this argument to PermissionsClient constructor
+                pc = new PermissionsClient(serviceID);
+                
+                // uncomment when ready
+                pc = new PermissionsClient();
+                WriteGrant grant = pc.getWriteGrant(artifactURI);
+                if (grant.getGroups().size() > 0) {
+                    // TODO: check group membership
+                    return;
+                }
+                return;
+            } catch (URISyntaxException e) {
+                throw new IllegalStateException("Invalid read grant service: " + writeService);
+            }
+        }
+        */
+        throw new AccessControlException("write permission denied");
+    }
+    
     /**
      * Parse the request path.
      */
-    void init() {
+    void parsePath() {
         String path = syncInput.getPath();
         log.debug("path: " + path);
         if (path == null) {
@@ -232,71 +292,96 @@ public abstract class ArtifactAction extends RestAction {
     }
     
     protected StorageAdapter getStorageAdapter() {
+        return getStorageAdapter(props);
+    }
+    
+    static StorageAdapter getStorageAdapter(MultiValuedProperties config) {
         // lazy init
-        if (storage == null) {
-            PropertiesReader pr = new PropertiesReader("minoc.properties");
-            String adapterKey = StorageAdapter.class.getName();
-            String adapterClass = pr.getFirstPropertyValue(adapterKey);
-            if (adapterClass == null) {
-                throw new IllegalStateException("no storage adapter specified in minoc.properties");
-            }
-            try {
-                Class c = Class.forName(adapterClass);
-                Object o = c.newInstance();
-                StorageAdapter sa = (StorageAdapter) o;
-                log.debug("StorageAdapter: " + sa);
-                storage = sa;
-                return sa;
-            } catch (Throwable t) {
-                throw new IllegalStateException("failed to load storage adapter: " + adapterClass, t);
-            }
+        String adapterKey = StorageAdapter.class.getName();
+        List<String> adapterList = config.getProperty(adapterKey);
+        String adapterClass = null;
+        if (adapterList != null && adapterList.size() > 0) {
+            adapterClass = adapterList.get(0);
+        } else {
+            throw new IllegalStateException("no storage adapter specified in minoc.properties");
         }
-        return storage;
+        try {
+            Class c = Class.forName(adapterClass);
+            Object o = c.newInstance();
+            StorageAdapter sa = (StorageAdapter) o;
+            log.debug("StorageAdapter: " + sa);
+            return sa;
+        } catch (Throwable t) {
+            throw new IllegalStateException("failed to load storage adapter: " + adapterClass, t);
+        }
     }
     
     protected ArtifactDAO getArtifactDAO() {
-        // lazy init
-        if (artifactDAO == null) {
-            ArtifactDAO newDAO = new ArtifactDAO();
-            newDAO.setConfig(getDaoConfig());
-            artifactDAO = newDAO;
-        }
-        return artifactDAO;
+        ArtifactDAO dao = new ArtifactDAO();
+        dao.setConfig(getDaoConfig(props));
+        return dao;
     }
     
     protected DeletedEventDAO getDeletedEventDAO(ArtifactDAO src) {
-        // lazy init
-        if (deletedEventDAO == null) {
-            DeletedEventDAO newDAO = new DeletedEventDAO(src);
-            deletedEventDAO = newDAO;
-        }
-        return deletedEventDAO;
+        return new DeletedEventDAO(src);
     }
     
-    static Map<String, Object> getDaoConfig() {
-        Map<String, Object> config = new HashMap<String, Object>();
-        PropertiesReader pr = new PropertiesReader("minoc.properties");
-        Class cls = null;
-        try {
-            String sqlGenClass = pr.getFirstPropertyValue(SQL_GEN_KEY);
-            if (sqlGenClass == null) {
-                throw new IllegalStateException("a value for " + SQLGenerator.class.getName()
-                    + " is needed in minoc.properties");
-            }
-            cls = Class.forName(sqlGenClass);
-        } catch (ClassNotFoundException e) {
-            throw new IllegalStateException("could not load SQLGenerator class: " + e.getMessage(), e);
+    protected List<String> getReadGrantServices(MultiValuedProperties props) {
+        String key = ReadGrant.class.getName() + ".serviceID";
+        List<String> values = props.getProperty(key);
+        if (values == null) {
+            return Collections.emptyList();
         }
+        return values;
+    }
+    
+    protected List<String> getWriteGrantServices(MultiValuedProperties props) {
+        String key = WriteGrant.class.getName() + ".serviceID";
+        List<String> values = props.getProperty(key);
+        if (values == null) {
+            return Collections.emptyList();
+        }
+        return values;
+    }
+    
+    static MultiValuedProperties readConfig() {
+        PropertiesReader pr = new PropertiesReader("minoc.properties");
+        MultiValuedProperties props = pr.getAllProperties();
+        if (log.isDebugEnabled()) {
+            log.debug("minoc.properties:");
+            Set<String> keys = props.keySet();
+            for (String key : keys) {
+                log.debug("    " + key + " = " + props.getProperty(key));
+            }
+        }
+        return props;
+    }
+    
+    static Map<String, Object> getDaoConfig(MultiValuedProperties props) {
+        Map<String, Object> config = new HashMap<String, Object>();
+        Class cls = null;
+        List<String> sqlGenList = props.getProperty(SQL_GEN_KEY);
+        if (sqlGenList != null && sqlGenList.size() > 0) {
+            try {
+                String sqlGenClass = sqlGenList.get(0);
+                cls = Class.forName(sqlGenClass);
+            } catch (ClassNotFoundException e) {
+                throw new IllegalStateException("could not load SQLGenerator class: " + e.getMessage(), e);
+            }
+        } else {
+            // use the default SQL generator
+            cls = SQLGenerator.class;
+        }
+
         config.put(SQL_GEN_KEY, cls);
         config.put("jndiDataSourceName", JNDI_DATASOURCE);
-        String database = pr.getFirstPropertyValue(DATABASE_KEY);
-        String schema = pr.getFirstPropertyValue(SCHEMA_KEY);
-        if (database == null || schema == null) {
-            throw new IllegalStateException("values for " + DATABASE_KEY + " and "
-                + SCHEMA_KEY + " are needed in minoc.properties");
+        List<String> schemaList = props.getProperty(SCHEMA_KEY);
+        if (schemaList == null || schemaList.size() < 1) {
+            throw new IllegalStateException("a value for " + SCHEMA_KEY + " is needed"
+                + " in minoc.properties");
         }
-        config.put("database", database);
-        config.put("schema", schema);
+        config.put("schema", schemaList.get(0));
+        config.put("database", null); 
             
         return config;
     }
