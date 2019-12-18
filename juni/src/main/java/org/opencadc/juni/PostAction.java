@@ -69,13 +69,11 @@ package org.opencadc.juni;
 
 import ca.nrc.cadc.auth.AuthMethod;
 import ca.nrc.cadc.auth.AuthenticationUtil;
-import ca.nrc.cadc.auth.HttpPrincipal;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.reg.client.RegistryClient;
 import ca.nrc.cadc.rest.InlineContentException;
 import ca.nrc.cadc.rest.InlineContentHandler;
 import ca.nrc.cadc.rest.RestAction;
-import ca.nrc.cadc.rest.InlineContentHandler.Content;
 import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.util.PropertiesReader;
 import ca.nrc.cadc.vos.Direction;
@@ -105,10 +103,10 @@ import org.opencadc.inventory.db.SQLGenerator;
 import org.opencadc.inventory.db.StorageSiteDAO;
 import org.opencadc.inventory.permissions.ReadGrant;
 import org.opencadc.inventory.permissions.TokenUtil;
-import org.opencadc.inventory.permissions.WriteGrant;
 
 /**
- * Interface with storage and inventory to update the metadata of an artifact.
+ * Given a transfer request object return a transfer response object with all
+ * available endpoints to the target artifact.
  *
  * @author majorb
  */
@@ -199,7 +197,12 @@ public class PostAction extends RestAction {
         // create an auth token
         String authToken = TokenUtil.generateToken(artifactURI, ReadGrant.class, user);
         
+        // gather all copies of the artifact
         List<SiteLocation> locations = artifact.siteLocations;
+        if (locations == null || locations.size() == 0) {
+            throw new ResourceNotFoundException("no copies");
+        }
+        
         RegistryClient regClient = new RegistryClient();
         StorageSiteDAO storageSiteDAO = new StorageSiteDAO(artifactDAO);
         StorageSite storageSite = null;
@@ -209,6 +212,7 @@ public class PostAction extends RestAction {
         // TODO: move the standard ID to Standards.java
         URI artifactsStdId = URI.create("vos://cadc.nrc.ca~vospace/CADC/std/inventory#artifacts-1.0");
         
+        // produce URLs to each of the copies
         for (SiteLocation site : locations) {
             storageSite = storageSiteDAO.get(site.getSiteID());
             resourceID = storageSite.getResourceID();

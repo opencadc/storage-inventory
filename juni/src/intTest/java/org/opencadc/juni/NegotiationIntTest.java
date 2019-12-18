@@ -67,74 +67,98 @@
 
 package org.opencadc.juni;
 
-import ca.nrc.cadc.auth.AuthMethod;
-import ca.nrc.cadc.auth.AuthenticationUtil;
-import ca.nrc.cadc.auth.SSLUtil;
-import ca.nrc.cadc.reg.client.RegistryClient;
-import ca.nrc.cadc.util.FileUtil;
-import ca.nrc.cadc.util.HexUtil;
+import ca.nrc.cadc.net.HttpDelete;
+import ca.nrc.cadc.net.HttpDownload;
+import ca.nrc.cadc.net.HttpPost;
+import ca.nrc.cadc.net.HttpUpload;
 import ca.nrc.cadc.util.Log4jInit;
+import ca.nrc.cadc.util.MultiValuedProperties;
 
 import java.io.ByteArrayInputStream;
-import java.io.File;
-import java.io.IOException;
+import java.io.ByteArrayOutputStream;
+import java.io.FileNotFoundException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.URI;
 import java.net.URL;
-import java.security.DigestInputStream;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
+import java.security.PrivilegedExceptionAction;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
 
 import javax.security.auth.Subject;
 
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
+import org.junit.Assert;
+import org.junit.Test;
+import org.opencadc.inventory.Artifact;
+import org.opencadc.inventory.SiteLocation;
+import org.opencadc.inventory.StorageSite;
+import org.opencadc.inventory.db.ArtifactDAO;
+import org.opencadc.inventory.db.StorageSiteDAO;
 
 /**
- * Abstract integration test class with general setup and test support.
+ * Test transfer negotiation.
  * 
  * @author majorb
  */
-public class JuniIntTest {
+public class NegotiationIntTest extends JuniIntTest {
     
     private static final Logger log = Logger.getLogger(NegotiationIntTest.class);
-    public static final URI MINOC_SERVICE_ID = URI.create("ivo://cadc.nrc.ca/minoc");
-    // TODO: Move this to Standards.java
-    private static final URI MINOC_STANDARD_ID = URI.create("vos://cadc.nrc.ca~vospace/CADC/std/inventory#artifacts-1.0");
-
-    protected URL anonURL;
-    protected URL certURL;
-    protected Subject anonSubject;
-    protected Subject userSubject;
     
     static {
-        Log4jInit.setLevel("org.opencadc.minoc", Level.INFO);
+        Log4jInit.setLevel("org.opencadc.juni", Level.INFO);
     }
     
-    public JuniIntTest() {
-        RegistryClient regClient = new RegistryClient();
-        anonURL = regClient.getServiceURL(MINOC_SERVICE_ID, MINOC_STANDARD_ID, AuthMethod.ANON);
-        log.info("anonURL: " + anonURL);
-        certURL = regClient.getServiceURL(MINOC_SERVICE_ID, MINOC_STANDARD_ID, AuthMethod.CERT);
-        log.info("certURL: " + certURL);
-        anonSubject = AuthenticationUtil.getAnonSubject();
-        File cert = FileUtil.getFileFromResource("juni-test.pem", JuniIntTest.class);
-        log.info("userSubject: " + userSubject);
-        userSubject = SSLUtil.createSubject(cert);
-        log.info("userSubject: " + userSubject);
+    public NegotiationIntTest() {
+        super();
     }
     
-    protected static String getMd5(byte[] input) throws NoSuchAlgorithmException, IOException {
-        MessageDigest md = MessageDigest.getInstance("MD5");
-        InputStream in = new ByteArrayInputStream(input);
-        DigestInputStream dis = new DigestInputStream(in, md);
-        int bytesRead = dis.read();
-        byte[] buf = new byte[512];
-        while (bytesRead > 0) {
-            bytesRead = dis.read(buf);
+    @Test
+    public void testGetAllCopies() {
+        try {
+            
+            Subject.doAs(userSubject, new PrivilegedExceptionAction<Object>() {
+                public Object run() throws Exception {
+            
+                    MultiValuedProperties props = PostAction.readConfig();
+                    Map<String, Object> config = PostAction.getDaoConfig(props);
+                    ArtifactDAO artifactDAO = new ArtifactDAO();
+                    artifactDAO.setConfig(config);
+                    
+                    URI artifactURI = URI.create("cadc:TEST/file.fits");
+                    URI checksum = URI.create("md5:testvalue");
+                    Artifact artifact = new Artifact(artifactURI, checksum, new Date(), 1L);
+                    
+                    StorageSiteDAO siteDAO = new StorageSiteDAO(artifactDAO);
+                    URI resourceID1 = URI.create("ivo://site1");
+                    URI resourceID2 = URI.create("ivo://site2");
+                    StorageSite site1 = new StorageSite(resourceID1, "site1");
+                    StorageSite site2 = new StorageSite(resourceID2, "site2");
+                    siteDAO.put(site1);
+                    siteDAO.put(site2);
+                    
+                    SiteLocation location1 = new SiteLocation(site1.getID());
+                    SiteLocation location2 = new SiteLocation(site2.getID());
+                    
+                    artifact.siteLocations.add(location1);
+                    artifact.siteLocations.add(location2);
+                    
+                    artifactDAO.put(artifact);
+                    
+                    
+                    
+                    
+                    return null;
+                }
+            });
+            
+        } catch (Throwable t) {
+            log.error("unexpected throwable", t);
+            Assert.fail("unexpected throwable: " + t);
         }
-        byte[] digest = md.digest();
-        return HexUtil.toHex(digest);
     }
-
+    
 }
