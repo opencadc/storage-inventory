@@ -1,21 +1,21 @@
-# Artifact locate service (juni)
+# Artifact locate service (raven)
 
 ### building
 
 1. gradle clean build
-2. docker build -t juni -f Dockerfile .
+2. docker build -t raven -f Dockerfile .
 
 ### checking it
-docker run --rm -it minoc:latest /bin/bash
+docker run --rm -it raven /bin/bash
 
 ### running it on container port 8080
-docker run --rm -d -v /<myconfigdiar>:/conf:ro -v /<mylogdir>:/logs:rw minoc:latest
+docker run --rm -d -v /<myconfigdiar>:/conf:ro -v /<mylogdir>:/logs:rw raven:latest
 
 ### running it on localhost port 80
-docker run --rm -d -v /<myconfigdir>:/conf:ro -v /<mylogdir>:/logs:rw -p 80:8080 minoc:latest
+docker run --rm -d -v /<myconfigdir>:/conf:ro -v /<mylogdir>:/logs:rw -p 80:8080 raven:latest
 
 ### minoc.properties
-A minoc.properties file in /<myconfigdir> is required to run this service.  The following keys (with example values) are needed:
+A raven.properties file in /<myconfigdir> is required to run this service.  The following keys (with example values) are needed:
 
 ```
 # The storage adapter to use for storage.
@@ -35,19 +35,19 @@ org.opencadc.inventory.permissions.WriteGrant.serviceID=ivo://cadc.nrc.ca/servic
 ```
 
 ### catalina.properties
-When running minoc.war in tomcat, some parameters of the connection pool in META-INF/context.xml need
+When running raven.war in tomcat, some parameters of the connection pool in META-INF/context.xml need
 to be configured in catalina.properties:
 
 ```
 # The maximum number of active database connections
-minoc.invadm.maxActive=1
+raven.invadm.maxActive=1
 
 # The username with which to connect
-minoc.invadm.username=invadm
+raven.invadm.username=invadmr
 
 # The password for the username
-minoc.invadm.password=pw-invadm
+raven.invadm.password=pw-invadm
 
 # The JDBC connection URL
-minoc.invadm.url=jdbc:postgresql://mydbhost/content
+raven.invadm.url=jdbc:postgresql://mydbhost/content
 ```

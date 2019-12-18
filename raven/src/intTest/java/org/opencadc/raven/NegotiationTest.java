@@ -65,7 +65,7 @@
  ************************************************************************
  */
 
-package org.opencadc.juni;
+package org.opencadc.raven;
 
 import ca.nrc.cadc.net.HttpDelete;
 import ca.nrc.cadc.net.HttpDownload;
@@ -98,21 +98,22 @@ import org.opencadc.inventory.SiteLocation;
 import org.opencadc.inventory.StorageSite;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.StorageSiteDAO;
+import org.opencadc.raven.PostAction;
 
 /**
  * Test transfer negotiation.
  * 
  * @author majorb
  */
-public class NegotiationIntTest extends JuniIntTest {
+public class NegotiationTest extends RavenTest {
     
-    private static final Logger log = Logger.getLogger(NegotiationIntTest.class);
+    private static final Logger log = Logger.getLogger(NegotiationTest.class);
     
     static {
         Log4jInit.setLevel("org.opencadc.juni", Level.INFO);
     }
     
-    public NegotiationIntTest() {
+    public NegotiationTest() {
         super();
     }
     

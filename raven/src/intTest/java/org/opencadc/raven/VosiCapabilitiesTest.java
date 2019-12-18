@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2011.                            (c) 2011.
+*  (c) 2019.                            (c) 2019.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -65,31 +65,45 @@
 *  $Revision: 5 $
 *
 ************************************************************************
-*/
+ */
 
-package org.opencadc.juni;
+package org.opencadc.raven;
 
-
+import ca.nrc.cadc.auth.AuthMethod;
+import ca.nrc.cadc.reg.Capabilities;
+import ca.nrc.cadc.reg.Capability;
+import ca.nrc.cadc.reg.Interface;
+import ca.nrc.cadc.reg.Standards;
 import ca.nrc.cadc.util.Log4jInit;
-import ca.nrc.cadc.vosi.AvailabilityTest;
+import ca.nrc.cadc.vosi.CapabilitiesTest;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
+import org.junit.Assert;
 
 /**
  *
  * @author pdowler
  */
-public class VosiAvailabilityTest extends AvailabilityTest
-{
-    private static final Logger log = Logger.getLogger(VosiAvailabilityTest.class);
-    
+public class VosiCapabilitiesTest extends CapabilitiesTest {
+
+    private static final Logger log = Logger.getLogger(VosiCapabilitiesTest.class);
+
     static {
         Log4jInit.setLevel("ca.nrc.cadc.vosi", Level.INFO);
         Log4jInit.setLevel("org.opencadc.inventory", Level.INFO);
     }
+    
+    public VosiCapabilitiesTest() {
+        super(NegotiationTest.RAVEN_SERVICE_ID);
+    }
 
-    public VosiAvailabilityTest() 
-    { 
-        super(NegotiationIntTest.MINOC_SERVICE_ID);
+    @Override
+    protected void validateContent(Capabilities caps) throws Exception {
+        super.validateContent(caps);        
+        // TODO: add checking for the minoc capabilities as per the example below
+//        Capability stu = caps.findCapability(Standards.PROTO_TABLE_LOAD_SYNC);
+//        Assert.assertNotNull("table-load-sync", stu);
+//        Assert.assertNotNull("cert table-load-sync", stu.findInterface(Standards.SECURITY_METHOD_CERT, Standards.INTERFACE_PARAM_HTTP));
+//        Assert.assertNotNull("cookie table-load-sync", stu.findInterface(Standards.SECURITY_METHOD_COOKIE, Standards.INTERFACE_PARAM_HTTP));
     }
 }

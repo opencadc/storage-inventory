@@ -65,7 +65,7 @@
  ************************************************************************
  */
 
-package org.opencadc.juni;
+package org.opencadc.raven;
 
 import ca.nrc.cadc.auth.AuthMethod;
 import ca.nrc.cadc.auth.AuthenticationUtil;
@@ -95,12 +95,12 @@ import org.apache.log4j.Logger;
  * 
  * @author majorb
  */
-public class JuniIntTest {
+public abstract class RavenTest {
     
-    private static final Logger log = Logger.getLogger(NegotiationIntTest.class);
-    public static final URI MINOC_SERVICE_ID = URI.create("ivo://cadc.nrc.ca/minoc");
+    private static final Logger log = Logger.getLogger(NegotiationTest.class);
+    public static final URI RAVEN_SERVICE_ID = URI.create("ivo://cadc.nrc.ca/raven");
     // TODO: Move this to Standards.java
-    private static final URI MINOC_STANDARD_ID = URI.create("vos://cadc.nrc.ca~vospace/CADC/std/inventory#artifacts-1.0");
+    private static final URI RAVEN_STANDARD_ID = URI.create("vos://cadc.nrc.ca~vospace/CADC/std/inventory#locate-1.0");
 
     protected URL anonURL;
     protected URL certURL;
@@ -108,17 +108,17 @@ public class JuniIntTest {
     protected Subject userSubject;
     
     static {
-        Log4jInit.setLevel("org.opencadc.minoc", Level.INFO);
+        Log4jInit.setLevel("org.opencadc.raven", Level.INFO);
     }
     
-    public JuniIntTest() {
+    public RavenTest() {
         RegistryClient regClient = new RegistryClient();
-        anonURL = regClient.getServiceURL(MINOC_SERVICE_ID, MINOC_STANDARD_ID, AuthMethod.ANON);
+        anonURL = regClient.getServiceURL(RAVEN_SERVICE_ID, RAVEN_STANDARD_ID, AuthMethod.ANON);
         log.info("anonURL: " + anonURL);
-        certURL = regClient.getServiceURL(MINOC_SERVICE_ID, MINOC_STANDARD_ID, AuthMethod.CERT);
+        certURL = regClient.getServiceURL(RAVEN_SERVICE_ID, RAVEN_STANDARD_ID, AuthMethod.CERT);
         log.info("certURL: " + certURL);
         anonSubject = AuthenticationUtil.getAnonSubject();
-        File cert = FileUtil.getFileFromResource("juni-test.pem", JuniIntTest.class);
+        File cert = FileUtil.getFileFromResource("raven-test.pem", RavenTest.class);
         log.info("userSubject: " + userSubject);
         userSubject = SSLUtil.createSubject(cert);
         log.info("userSubject: " + userSubject);

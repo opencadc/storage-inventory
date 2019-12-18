@@ -6,7 +6,7 @@
 
   <capability standardID="vos://cadc.nrc.ca~vospace/CADC/std/inventory#locate-1.0">
     <interface xsi:type="vs:ParamHTTP" role="std">
-      <accessURL use="base">https://replace.com/juni/locate</accessURL>
+      <accessURL use="base">https://replace.com/raven/locate</accessURL>
       <securityMethod />
       <securityMethod standardID="ivo://ivoa.net/sso#cookie" />
       <securityMethod standardID="ivo://ivoa.net/sso#tls-with-certificate" /> 
@@ -15,13 +15,13 @@
 
   <capability standardID="ivo://ivoa.net/std/VOSI#capabilities">
     <interface xsi:type="vs:ParamHTTP" role="std">
-      <accessURL use="full">https://replace.com/juni/capabilities</accessURL>
+      <accessURL use="full">https://replace.com/raven/capabilities</accessURL>
     </interface>
   </capability>
 
   <capability standardID="ivo://ivoa.net/std/VOSI#availability">
     <interface xsi:type="vs:ParamHTTP" role="std">
-      <accessURL use="full">https://replace.com/juni/availability</accessURL>
+      <accessURL use="full">https://replace.com/raven/availability</accessURL>
       <securityMethod />
       <securityMethod standardID="ivo://ivoa.net/sso#tls-with-certificate" />
     </interface>
@@ -29,7 +29,7 @@
   
   <capability standardID="vos://cadc.nrc.ca~vospace/CADC/std/LOGGING#logControl-1.0">
     <interface xsi:type="vs:ParamHTTP" role="std" version="1.0">
-      <accessURL use="full">https://replace.com/juni/logControl</accessURL>
+      <accessURL use="full">https://replace.com/raven/logControl</accessURL>
       <securityMethod standardID="ivo://ivoa.net/sso#tls-with-certificate" />
     </interface>
   </capability>

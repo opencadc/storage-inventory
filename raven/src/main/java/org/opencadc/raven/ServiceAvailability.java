@@ -62,48 +62,125 @@
 *  <http://www.gnu.org/licenses/>.      pas le cas, consultez :
 *                                       <http://www.gnu.org/licenses/>.
 *
-*  $Revision: 5 $
-*
 ************************************************************************
  */
 
-package org.opencadc.juni;
+package org.opencadc.raven;
 
 import ca.nrc.cadc.auth.AuthMethod;
-import ca.nrc.cadc.reg.Capabilities;
-import ca.nrc.cadc.reg.Capability;
-import ca.nrc.cadc.reg.Interface;
+import ca.nrc.cadc.db.DBUtil;
 import ca.nrc.cadc.reg.Standards;
-import ca.nrc.cadc.util.Log4jInit;
-import ca.nrc.cadc.vosi.CapabilitiesTest;
-import org.apache.log4j.Level;
+import ca.nrc.cadc.reg.client.LocalAuthority;
+import ca.nrc.cadc.reg.client.RegistryClient;
+import ca.nrc.cadc.util.MultiValuedProperties;
+import ca.nrc.cadc.vosi.AvailabilityPlugin;
+import ca.nrc.cadc.vosi.AvailabilityStatus;
+import ca.nrc.cadc.vosi.avail.CheckException;
+import ca.nrc.cadc.vosi.avail.CheckResource;
+import ca.nrc.cadc.vosi.avail.CheckWebService;
+
+import java.net.URI;
+import java.util.Map;
+
+import javax.sql.DataSource;
+
 import org.apache.log4j.Logger;
-import org.junit.Assert;
+import org.opencadc.inventory.version.InitDatabase;
 
 /**
- *
- * @author pdowler
+ * This class performs the work of determining if the executing locate
+ * service is operating as expected.
+ * 
+ * @author majorb
  */
-public class VosiCapabilitiesTest extends CapabilitiesTest {
+public class ServiceAvailability implements AvailabilityPlugin {
 
-    private static final Logger log = Logger.getLogger(VosiCapabilitiesTest.class);
+    private static final Logger log = Logger.getLogger(ServiceAvailability.class);
 
-    static {
-        Log4jInit.setLevel("ca.nrc.cadc.vosi", Level.INFO);
-        Log4jInit.setLevel("org.opencadc.inventory", Level.INFO);
-    }
-    
-    public VosiCapabilitiesTest() {
-        super(NegotiationIntTest.MINOC_SERVICE_ID);
+    /**
+     * Default, no-arg constructor.
+     */
+    public ServiceAvailability() {
     }
 
+    /**
+     * Sets the name of the application.
+     */
     @Override
-    protected void validateContent(Capabilities caps) throws Exception {
-        super.validateContent(caps);        
-        // TODO: add checking for the minoc capabilities as per the example below
-//        Capability stu = caps.findCapability(Standards.PROTO_TABLE_LOAD_SYNC);
-//        Assert.assertNotNull("table-load-sync", stu);
-//        Assert.assertNotNull("cert table-load-sync", stu.findInterface(Standards.SECURITY_METHOD_CERT, Standards.INTERFACE_PARAM_HTTP));
-//        Assert.assertNotNull("cookie table-load-sync", stu.findInterface(Standards.SECURITY_METHOD_COOKIE, Standards.INTERFACE_PARAM_HTTP));
+    public void setAppName(String string) {
+        //no-op
     }
+
+    /**
+     * Performs a simple check for the availability of the object.
+     * @return true always
+     */
+    @Override
+    public boolean heartbeat() {
+        return true;
+    }
+
+    /**
+     * Do a comprehensive check of the service and it's dependencies.
+     * @return Information of the availability check.
+     */
+    @Override
+    public AvailabilityStatus getStatus() {
+        boolean isGood = true;
+        String note = "service is accepting requests";
+        
+        try {
+            
+            log.info("init database...");
+            DataSource ds = DBUtil.findJNDIDataSource(PostAction.JNDI_DATASOURCE);
+            MultiValuedProperties props = PostAction.readConfig();
+            Map<String, Object> config = PostAction.getDaoConfig(props);
+            InitDatabase init = new InitDatabase(ds, (String) config.get("database"), (String) config.get("schema"));
+            init.doInit();
+            log.info("init database... OK");
+
+            // check other services we depend on
+            RegistryClient reg = new RegistryClient();
+            String url;
+            CheckResource checkResource;
+            
+            LocalAuthority localAuthority = new LocalAuthority();
+
+            URI credURI = localAuthority.getServiceURI(Standards.CRED_PROXY_10.toString());
+            url = reg.getServiceURL(credURI, Standards.VOSI_AVAILABILITY, AuthMethod.ANON).toExternalForm();
+            checkResource = new CheckWebService(url);
+            checkResource.check();
+
+            URI usersURI = localAuthority.getServiceURI(Standards.UMS_USERS_01.toString());
+            url = reg.getServiceURL(usersURI, Standards.VOSI_AVAILABILITY, AuthMethod.ANON).toExternalForm();
+            checkResource = new CheckWebService(url);
+            checkResource.check();
+            
+            URI groupsURI = localAuthority.getServiceURI(Standards.GMS_SEARCH_01.toString());
+            url = reg.getServiceURL(groupsURI, Standards.VOSI_AVAILABILITY, AuthMethod.ANON).toExternalForm();
+            checkResource = new CheckWebService(url);
+            checkResource.check();
+            
+        } catch (CheckException ce) {
+            // tests determined that the resource is not working
+            isGood = false;
+            note = ce.getMessage();
+        } catch (Throwable t) {
+            // the test itself failed
+            log.debug("failure", t);
+            isGood = false;
+            note = "test failed, reason: " + t;
+        }
+
+        return new AvailabilityStatus(isGood, null, null, null, note);
+    }
+
+    /**
+     * Sets the state of the service.
+     */
+    @Override
+    public void setState(String state) {
+        // ignore
+    }
+
 }

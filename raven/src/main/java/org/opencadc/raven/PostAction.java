@@ -65,7 +65,7 @@
 ************************************************************************
 */
 
-package org.opencadc.juni;
+package org.opencadc.raven;
 
 import ca.nrc.cadc.auth.AuthMethod;
 import ca.nrc.cadc.auth.AuthenticationUtil;
@@ -258,7 +258,7 @@ public class PostAction extends RestAction {
         List<String> schemaList = props.getProperty(SCHEMA_KEY);
         if (schemaList == null || schemaList.size() < 1) {
             throw new IllegalStateException("a value for " + SCHEMA_KEY + " is needed"
-                + " in minoc.properties");
+                + " in raven.properties");
         }
         config.put("schema", schemaList.get(0));
         config.put("database", null); 
@@ -267,10 +267,10 @@ public class PostAction extends RestAction {
     }
     
     static MultiValuedProperties readConfig() {
-        PropertiesReader pr = new PropertiesReader("juni.properties");
+        PropertiesReader pr = new PropertiesReader("raven.properties");
         MultiValuedProperties props = pr.getAllProperties();
         if (log.isDebugEnabled()) {
-            log.debug("juni.properties:");
+            log.debug("raven.properties:");
             Set<String> keys = props.keySet();
             for (String key : keys) {
                 log.debug("    " + key + " = " + props.getProperty(key));
