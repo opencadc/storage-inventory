@@ -118,7 +118,7 @@ public class MinocIntTest {
         certURL = regClient.getServiceURL(MINOC_SERVICE_ID, MINOC_STANDARD_ID, AuthMethod.CERT);
         log.info("certURL: " + certURL);
         anonSubject = AuthenticationUtil.getAnonSubject();
-        File cert = FileUtil.getFileFromResource("x509_CADCRegtest1.pem", MinocIntTest.class);
+        File cert = FileUtil.getFileFromResource("minoc-test.pem", MinocIntTest.class);
         log.info("userSubject: " + userSubject);
         userSubject = SSLUtil.createSubject(cert);
         log.info("userSubject: " + userSubject);

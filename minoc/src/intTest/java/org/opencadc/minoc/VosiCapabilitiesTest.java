@@ -100,10 +100,9 @@ public class VosiCapabilitiesTest extends CapabilitiesTest {
     @Override
     protected void validateContent(Capabilities caps) throws Exception {
         super.validateContent(caps);        
-        // TODO: add checking for the minoc capabilities as per the example below
-//        Capability stu = caps.findCapability(Standards.PROTO_TABLE_LOAD_SYNC);
-//        Assert.assertNotNull("table-load-sync", stu);
-//        Assert.assertNotNull("cert table-load-sync", stu.findInterface(Standards.SECURITY_METHOD_CERT, Standards.INTERFACE_PARAM_HTTP));
-//        Assert.assertNotNull("cookie table-load-sync", stu.findInterface(Standards.SECURITY_METHOD_COOKIE, Standards.INTERFACE_PARAM_HTTP));
+        Capability stu = caps.findCapability(Standards.PROTO_TABLE_LOAD_SYNC);
+        Assert.assertNotNull("table-load-sync", stu);
+        Assert.assertNotNull("cert table-load-sync", stu.findInterface(Standards.SECURITY_METHOD_CERT, Standards.INTERFACE_PARAM_HTTP));
+        Assert.assertNotNull("cookie table-load-sync", stu.findInterface(Standards.SECURITY_METHOD_COOKIE, Standards.INTERFACE_PARAM_HTTP));
     }
 }
