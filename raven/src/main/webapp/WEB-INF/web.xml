@@ -6,7 +6,7 @@
 
 <web-app>
 
-  <display-name>juni</display-name>
+  <display-name>raven</display-name>
 
   <servlet>
     <servlet-name>logControl</servlet-name>
@@ -19,7 +19,7 @@
       <param-name>logLevelPackages</param-name>
       <param-value>
             org.opencadc.inventory
-            org.opencadc.juni
+            org.opencadc.raven
             ca.nrc.cadc.rest
             ca.nrc.cadc.util
             ca.nrc.cadc.vosi

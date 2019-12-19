@@ -167,8 +167,7 @@ public abstract class RavenTest {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         writer.write(request, out);
         FileContent content = new FileContent(out.toByteArray(), "text/xml");
-        URL negotiateURL = new URL(certURL.toString() + "/locate");
-        HttpPost post = new HttpPost(negotiateURL, content, false);
+        HttpPost post = new HttpPost(certURL, content, false);
         post.run();
         if (post.getThrowable() != null && post.getThrowable() instanceof FileNotFoundException) {
             throw (FileNotFoundException) post.getThrowable();
@@ -176,7 +175,9 @@ public abstract class RavenTest {
         Assert.assertNull(post.getThrowable());
         String response = post.getResponseBody();
         TransferReader reader = new TransferReader();
-        return reader.read(response, null);
+        Transfer t = reader.read(response,  null);
+        log.info("Response transfer: " + t);
+        return t;
     }
 
 }

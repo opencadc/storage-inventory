@@ -134,55 +134,65 @@ public class NegotiationTest extends RavenTest {
             
             Subject.doAs(userSubject, new PrivilegedExceptionAction<Object>() {
                 public Object run() throws Exception {
-            
+                    
+                    URI resourceID1 = URI.create("ivo://negotiation-test-site1");
+                    URI resourceID2 = URI.create("ivo://negotiation-test-site2");
+                    
                     ArtifactDAO artifactDAO = new ArtifactDAO();
                     artifactDAO.setConfig(config);
-                    
+                    StorageSiteDAO siteDAO = new StorageSiteDAO();
+                    siteDAO.setConfig(config);
+                    StorageSite site1 = new StorageSite(resourceID1, "site1");
+                    StorageSite site2 = new StorageSite(resourceID2, "site2");
+
                     URI artifactURI = URI.create("cadc:TEST/" + UUID.randomUUID() + ".fits");
                     URI checksum = URI.create("md5:testvalue");
                     Artifact artifact = new Artifact(artifactURI, checksum, new Date(), 1L);
-                    
-                    StorageSiteDAO siteDAO = new StorageSiteDAO();
-                    siteDAO.setConfig(config);
-                    URI resourceID1 = URI.create("ivo://site1-" + UUID.randomUUID());
-                    URI resourceID2 = URI.create("ivo://site2-" + UUID.randomUUID());
-                    StorageSite site1 = new StorageSite(resourceID1, "site1");
-                    StorageSite site2 = new StorageSite(resourceID2, "site2");
-                    siteDAO.put(site1);
-                    siteDAO.put(site2);
-                    
-                    SiteLocation location1 = new SiteLocation(site1.getID());
-                    SiteLocation location2 = new SiteLocation(site2.getID());
-                    
-                    Protocol protocol = new Protocol(VOS.PROTOCOL_HTTPS_GET);
-                    Transfer transfer = new Transfer(
-                        artifactURI, Direction.pullFromVoSpace, Arrays.asList(protocol));
-                    
-                    artifactDAO.put(artifact);
-                    
-                    // test that there are no copies available
+
                     try {
-                        negotiate(transfer);
-                        Assert.fail("should have received file not found exception");
-                    } catch (FileNotFoundException e) {
-                        // expected
+                        siteDAO.put(site1);
+                        siteDAO.put(site2);
+                        
+                        SiteLocation location1 = new SiteLocation(site1.getID());
+                        SiteLocation location2 = new SiteLocation(site2.getID());
+                        
+                        Protocol protocol = new Protocol(VOS.PROTOCOL_HTTPS_GET);
+                        Transfer transfer = new Transfer(
+                            artifactURI, Direction.pullFromVoSpace, Arrays.asList(protocol));
+                        transfer.version = VOS.VOSPACE_21;
+                        
+                        artifactDAO.put(artifact);
+                        
+                        // test that there are no copies available
+                        try {
+                            negotiate(transfer);
+                            Assert.fail("should have received file not found exception");
+                        } catch (FileNotFoundException e) {
+                            // expected
+                        }
+                        
+                        artifact.siteLocations.add(location1);
+                        artifactDAO.put(artifact, true);
+                        
+                        // test that there's one copy
+                        Transfer response = negotiate(transfer);
+                        Assert.assertEquals(1, response.getAllEndpoints().size());
+                        
+                        artifact.siteLocations.add(location2);
+                        artifactDAO.put(artifact, true);
+                        
+                        // test that there are now two copies
+                        response = negotiate(transfer);
+                        Assert.assertEquals(2, response.getAllEndpoints().size());
+                        
+                        return null;
+                        
+                    } finally {
+                        // cleanup sites
+                        siteDAO.delete(site1.getID());
+                        siteDAO.delete(site2.getID());
+                        artifactDAO.delete(artifact.getID());
                     }
-                    
-                    artifact.siteLocations.add(location1);
-                    artifactDAO.put(artifact, true);
-                    
-                    // test that there's one copy
-                    Transfer response = negotiate(transfer);
-                    Assert.assertTrue(response.getAllEndpoints().size() == 1);
-                    
-                    artifact.siteLocations.add(location2);
-                    artifactDAO.put(artifact, true);
-                    
-                    // test that there are now two copies
-                    response = negotiate(transfer);
-                    Assert.assertTrue(response.getAllEndpoints().size() == 2);
-                    
-                    return null;
                 }
             });
             

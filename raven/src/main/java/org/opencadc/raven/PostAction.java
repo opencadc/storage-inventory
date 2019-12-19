@@ -70,6 +70,7 @@ package org.opencadc.raven;
 import ca.nrc.cadc.auth.AuthMethod;
 import ca.nrc.cadc.auth.AuthenticationUtil;
 import ca.nrc.cadc.net.ResourceNotFoundException;
+import ca.nrc.cadc.reg.Standards;
 import ca.nrc.cadc.reg.client.RegistryClient;
 import ca.nrc.cadc.rest.InlineContentException;
 import ca.nrc.cadc.rest.InlineContentHandler;
@@ -77,9 +78,11 @@ import ca.nrc.cadc.rest.RestAction;
 import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.util.PropertiesReader;
 import ca.nrc.cadc.vos.Direction;
+import ca.nrc.cadc.vos.Protocol;
 import ca.nrc.cadc.vos.Transfer;
 import ca.nrc.cadc.vos.TransferReader;
 import ca.nrc.cadc.vos.TransferWriter;
+import ca.nrc.cadc.vos.VOS;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -149,12 +152,10 @@ public class PostAction extends RestAction {
     }
 
     /**
-     * Update artifact metadata.
+     * Perform transfer negotiation.
      */
     @Override
     public void doAction() throws Exception {
-        
-        Subject subject = AuthenticationUtil.getCurrentSubject();
         
         TransferReader reader = new TransferReader();
         InputStream in = (InputStream) syncInput.getContent(INLINE_CONTENT_TAG);
@@ -164,6 +165,13 @@ public class PostAction extends RestAction {
         if (!Direction.pullFromVoSpace.equals(transfer.getDirection())) {
             throw new IllegalArgumentException("direction not supported: " + transfer.getDirection());
         }
+        
+        // only support https over anonymous auth method for now
+        Protocol supportedProtocol = new Protocol(VOS.PROTOCOL_HTTPS_GET);
+        if (!transfer.getProtocols().contains(supportedProtocol)) {
+            throw new IllegalArgumentException("no supported protocols (require https with anon security method)");
+        }
+        transfer.getProtocols().clear();
         
         // ensure artifact uri is valid and exists
         URI artifactURI = transfer.getTarget();
@@ -207,6 +215,9 @@ public class PostAction extends RestAction {
         // TODO: move the standard ID to Standards.java
         URI artifactsStdId = URI.create("vos://cadc.nrc.ca~vospace/CADC/std/inventory#artifacts-1.0");
         
+        // TODO: Cache the full list of storage sites (using storageSiteDAO.list())
+        // and check for updates to that list periodically (every 5 min or so)
+        
         // produce URLs to each of the copies
         for (SiteLocation site : locations) {
             storageSite = storageSiteDAO.get(site.getSiteID());
@@ -215,7 +226,12 @@ public class PostAction extends RestAction {
             log.debug("base url for site " + site.toString() + ": " + baseURL);
             if (baseURL != null) {
                 endpointURL = baseURL.toString() + "/" + authToken + "/" + artifactURI.toString();
-                transfer.getAllEndpoints().add(endpointURL);
+                Protocol p = new Protocol(supportedProtocol.getUri());
+                if (transfer.version == VOS.VOSPACE_21) {
+                    p.setSecurityMethod(Standards.SECURITY_METHOD_ANON);
+                }
+                p.setEndpoint(endpointURL);
+                transfer.getProtocols().add(p);
                 log.debug("added endpoint url: " + endpointURL);
             }
         }
@@ -227,7 +243,7 @@ public class PostAction extends RestAction {
     
     private void checkReadPermission(URI artifactURI) {
         // TODO: the same thing minoc does for checking read permission
-        // probably should be done in the cadc-storage-permissions
+        // probably should be done in the cadc-storage-permissions client
         return;
     }
        
