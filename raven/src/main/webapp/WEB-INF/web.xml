@@ -42,7 +42,7 @@
         <servlet-class>ca.nrc.cadc.rest.RestServlet</servlet-class>
         <init-param>
             <param-name>post</param-name>
-            <param-value>org.opencadc.juni.PostAction</param-value>
+            <param-value>org.opencadc.raven.PostAction</param-value>
         </init-param>
         <load-on-startup>2</load-on-startup>
     </servlet>
@@ -53,7 +53,7 @@
     <servlet-class>ca.nrc.cadc.vosi.AvailabilityServlet</servlet-class>
     <init-param>
       <param-name>ca.nrc.cadc.vosi.AvailabilityPlugin</param-name>
-      <param-value>org.opencadc.minoc.ServiceAvailability</param-value>
+      <param-value>org.opencadc.raven.ServiceAvailability</param-value>
     </init-param>
     <load-on-startup>5</load-on-startup>
   </servlet>

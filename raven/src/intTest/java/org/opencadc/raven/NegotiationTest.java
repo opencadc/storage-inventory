@@ -73,6 +73,11 @@ import ca.nrc.cadc.net.HttpPost;
 import ca.nrc.cadc.net.HttpUpload;
 import ca.nrc.cadc.util.Log4jInit;
 import ca.nrc.cadc.util.MultiValuedProperties;
+import ca.nrc.cadc.util.PropertiesReader;
+import ca.nrc.cadc.vos.Direction;
+import ca.nrc.cadc.vos.Protocol;
+import ca.nrc.cadc.vos.Transfer;
+import ca.nrc.cadc.vos.VOS;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -82,8 +87,11 @@ import java.io.OutputStream;
 import java.net.URI;
 import java.net.URL;
 import java.security.PrivilegedExceptionAction;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -110,10 +118,11 @@ public class NegotiationTest extends RavenTest {
     private static final Logger log = Logger.getLogger(NegotiationTest.class);
     
     static {
-        Log4jInit.setLevel("org.opencadc.juni", Level.INFO);
+        Log4jInit.setLevel("org.opencadc.raven", Level.INFO);
+        Log4jInit.setLevel("ca.nrc.cadc.db", Level.DEBUG);
     }
     
-    public NegotiationTest() {
+    public NegotiationTest() throws Exception {
         super();
     }
     
@@ -121,21 +130,22 @@ public class NegotiationTest extends RavenTest {
     public void testGetAllCopies() {
         try {
             
+            System.setProperty(PropertiesReader.CONFIG_DIR_SYSTEM_PROPERTY, "build/resources/test");
+            
             Subject.doAs(userSubject, new PrivilegedExceptionAction<Object>() {
                 public Object run() throws Exception {
             
-                    MultiValuedProperties props = PostAction.readConfig();
-                    Map<String, Object> config = PostAction.getDaoConfig(props);
                     ArtifactDAO artifactDAO = new ArtifactDAO();
                     artifactDAO.setConfig(config);
                     
-                    URI artifactURI = URI.create("cadc:TEST/file.fits");
+                    URI artifactURI = URI.create("cadc:TEST/" + UUID.randomUUID() + ".fits");
                     URI checksum = URI.create("md5:testvalue");
                     Artifact artifact = new Artifact(artifactURI, checksum, new Date(), 1L);
                     
-                    StorageSiteDAO siteDAO = new StorageSiteDAO(artifactDAO);
-                    URI resourceID1 = URI.create("ivo://site1");
-                    URI resourceID2 = URI.create("ivo://site2");
+                    StorageSiteDAO siteDAO = new StorageSiteDAO();
+                    siteDAO.setConfig(config);
+                    URI resourceID1 = URI.create("ivo://site1-" + UUID.randomUUID());
+                    URI resourceID2 = URI.create("ivo://site2-" + UUID.randomUUID());
                     StorageSite site1 = new StorageSite(resourceID1, "site1");
                     StorageSite site2 = new StorageSite(resourceID2, "site2");
                     siteDAO.put(site1);
@@ -144,13 +154,33 @@ public class NegotiationTest extends RavenTest {
                     SiteLocation location1 = new SiteLocation(site1.getID());
                     SiteLocation location2 = new SiteLocation(site2.getID());
                     
-                    artifact.siteLocations.add(location1);
-                    artifact.siteLocations.add(location2);
+                    Protocol protocol = new Protocol(VOS.PROTOCOL_HTTPS_GET);
+                    Transfer transfer = new Transfer(
+                        artifactURI, Direction.pullFromVoSpace, Arrays.asList(protocol));
                     
                     artifactDAO.put(artifact);
                     
+                    // test that there are no copies available
+                    try {
+                        negotiate(transfer);
+                        Assert.fail("should have received file not found exception");
+                    } catch (FileNotFoundException e) {
+                        // expected
+                    }
                     
+                    artifact.siteLocations.add(location1);
+                    artifactDAO.put(artifact, true);
                     
+                    // test that there's one copy
+                    Transfer response = negotiate(transfer);
+                    Assert.assertTrue(response.getAllEndpoints().size() == 1);
+                    
+                    artifact.siteLocations.add(location2);
+                    artifactDAO.put(artifact, true);
+                    
+                    // test that there are now two copies
+                    response = negotiate(transfer);
+                    Assert.assertTrue(response.getAllEndpoints().size() == 2);
                     
                     return null;
                 }
@@ -159,6 +189,8 @@ public class NegotiationTest extends RavenTest {
         } catch (Throwable t) {
             log.error("unexpected throwable", t);
             Assert.fail("unexpected throwable: " + t);
+        } finally {
+            System.clearProperty(PropertiesReader.CONFIG_DIR_SYSTEM_PROPERTY);
         }
     }
     

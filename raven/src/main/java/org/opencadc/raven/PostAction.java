@@ -120,8 +120,6 @@ public class PostAction extends RestAction {
     
     private static final String INLINE_CONTENT_TAG = "inputstream";
     private static final String CONTENT_TYPE = "text/xml";
-    
-    private MultiValuedProperties props;
 
     /**
      * Default, no-arg constructor.
@@ -162,18 +160,15 @@ public class PostAction extends RestAction {
         InputStream in = (InputStream) syncInput.getContent(INLINE_CONTENT_TAG);
         Transfer transfer = reader.read(in, null);
         
+        log.debug("transfer request: " + transfer);
         if (!Direction.pullFromVoSpace.equals(transfer.getDirection())) {
             throw new IllegalArgumentException("direction not supported: " + transfer.getDirection());
-        }
-        
-        if (!transfer.getAllEndpoints().isEmpty()) {
-            throw new IllegalArgumentException("transfer request must not contain endpoints");
         }
         
         // ensure artifact uri is valid and exists
         URI artifactURI = transfer.getTarget();
         InventoryUtil.validateArtifactURI(PostAction.class, artifactURI);
-        props = readConfig();
+        MultiValuedProperties props = readConfig();
         ArtifactDAO artifactDAO = new ArtifactDAO();
         artifactDAO.setConfig(getDaoConfig(props));
         Artifact artifact = artifactDAO.get(artifactURI);
@@ -194,14 +189,14 @@ public class PostAction extends RestAction {
             }
         }
         
-        // create an auth token
-        String authToken = TokenUtil.generateToken(artifactURI, ReadGrant.class, user);
-        
         // gather all copies of the artifact
         List<SiteLocation> locations = artifact.siteLocations;
         if (locations == null || locations.size() == 0) {
             throw new ResourceNotFoundException("no copies");
         }
+        
+        // create an auth token
+        String authToken = TokenUtil.generateToken(artifactURI, ReadGrant.class, user);
         
         RegistryClient regClient = new RegistryClient();
         StorageSiteDAO storageSiteDAO = new StorageSiteDAO(artifactDAO);

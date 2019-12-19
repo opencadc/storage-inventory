@@ -21,6 +21,12 @@ war {
     from(System.getenv('RPS') + '/resources/') {
         include 'swagger-ui/'
     }
+    // expect a private key in this location
+    from(System.getenv('A') + '/etc/') {
+        include 'DelegationTokenKey.priv'
+        rename 'DelegationTokenKey.priv', 'InventoryPriv.key'
+        into 'WEB-INF/classes'
+    }
 }
 
 dependencies {
@@ -42,6 +48,7 @@ dependencies {
     testCompile 'junit:junit:[4.0,)'
 
     intTestCompile 'org.opencadc:cadc-test-vosi:[1.0.2,)'
+    intTestRuntime 'org.postgresql:postgresql:[42.2.8,)'
 }
 
 
