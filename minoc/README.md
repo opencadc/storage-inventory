@@ -2,8 +2,8 @@
 
 ## building
 
-gradle clean build
-docker build -t minoc -f Dockerfile .
+- gradle clean build
+- docker build -t minoc -f Dockerfile .
 
 ## checking it
 docker run -it minoc:latest /bin/bash
