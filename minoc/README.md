@@ -9,13 +9,13 @@
 docker run --rm -it minoc:latest /bin/bash
 
 ### running it on container port 8080
-docker run --rm -d -v /<myconfigdiar>:/conf:ro -v /<mylogdir>:/logs:rw minoc:latest
+docker run --rm -d -v /path/to/external/conf:/conf:ro -v /path/to/external/logs:/logs:rw minoc:latest
 
 ### running it on localhost port 80
-docker run --rm -d -v /<myconfigdir>:/conf:ro -v /<mylogdir>:/logs:rw -p 80:8080 minoc:latest
+docker run --rm -d -v /path/to/external/conf:/conf:ro -v /path/to/external/logs:/logs:rw -p 80:8080 minoc:latest
 
 ### minoc.properties
-A minoc.properties file in /<myconfigdir> is required to run this service.  The following keys (with example values) are needed:
+A minoc.properties file in /path/to/external/conf is required to run this service.  The following keys (with example values) are needed:
 
 ```
 # The storage adapter to use for storage.
@@ -27,15 +27,15 @@ org.opencadc.inventory.db.SQLGenerator=org.opencadc.inventory.db.SQLGenerator
 # The schema to use
 org.opencadc.inventory.db.schema=inventory
 
-# The service ID of a permissions system providing read permission grants.  There may be multiple instances of this key/value pair.
+# The service ID of a permissions service(s) providing read permissions. There may be multiple instances of this key/value pair.
 org.opencadc.inventory.permissions.ReadGrant.serviceID=ivo://cadc.nrc.ca/servicewithperms
 
-# The service ID of a permissions system providing write permission grants.  There may be multiple instances of this key/value pair.
+# The service ID of a permissions system providing write pwermissions. There may be multiple instances of this key/value pair.
 org.opencadc.inventory.permissions.WriteGrant.serviceID=ivo://cadc.nrc.ca/servicewithperms
 ```
 
 ### catalina.properties
-When running minoc.war in tomcat, some parameters of the connection pool in META-INF/context.xml need
+When running minoc.war in tomcat, parameters of the connection pool in META-INF/context.xml need
 to be configured in catalina.properties:
 
 ```
