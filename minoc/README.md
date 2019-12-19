@@ -1,18 +1,36 @@
-# Artifact storage and management service (minoc)
+# Storage Inventory file service (minoc)
 
-### building
+## building
 
-1. gradle clean build
-2. docker build -t minoc -f Dockerfile .
+gradle clean build
+docker build -t minoc -f Dockerfile .
 
-### checking it
-docker run --rm -it minoc:latest /bin/bash
+## checking it
+docker run -it minoc:latest /bin/bash
 
-### running it on container port 8080
-docker run --rm -d -v /path/to/external/conf:/conf:ro -v /path/to/external/logs:/logs:rw minoc:latest
+## running it
+docker run -d --volume=/path/to/external/conf:/conf:ro --volume=/path/to/external/logs:/logs:rw --name minoc minoc:latest
 
-### running it on localhost port 80
-docker run --rm -d -v /path/to/external/conf:/conf:ro -v /path/to/external/logs:/logs:rw -p 80:8080 minoc:latest
+## configuration
+See the <a href="https://github.com/opencadc/docker-base/tree/master/cadc-tomcat">cadc-tomcat</a> image docs 
+for expected deployment and general config requirements.
+
+### catalina.properties
+When running minoc.war in tomcat, parameters of the connection pool in META-INF/context.xml need
+to be configured in catalina.properties:
+```
+# The maximum number of active database connections
+minoc.invadm.maxActive=1
+
+# The username with which to connect
+minoc.invadm.username=invadm
+
+# The password for the username
+minoc.invadm.password=pw-invadm
+
+# The JDBC connection URL
+minoc.invadm.url=jdbc:postgresql://mydbhost/content
+```
 
 ### minoc.properties
 A minoc.properties file in /path/to/external/conf is required to run this service.  The following keys (with example values) are needed:
@@ -32,22 +50,4 @@ org.opencadc.inventory.permissions.ReadGrant.serviceID=ivo://cadc.nrc.ca/service
 
 # The service ID of a permissions system providing write pwermissions. There may be multiple instances of this key/value pair.
 org.opencadc.inventory.permissions.WriteGrant.serviceID=ivo://cadc.nrc.ca/servicewithperms
-```
-
-### catalina.properties
-When running minoc.war in tomcat, parameters of the connection pool in META-INF/context.xml need
-to be configured in catalina.properties:
-
-```
-# The maximum number of active database connections
-minoc.invadm.maxActive=1
-
-# The username with which to connect
-minoc.invadm.username=invadm
-
-# The password for the username
-minoc.invadm.password=pw-invadm
-
-# The JDBC connection URL
-minoc.invadm.url=jdbc:postgresql://mydbhost/content
 ```
