@@ -2,14 +2,16 @@
 
 ## building
 
-- gradle clean build
-- docker build -t minoc -f Dockerfile .
+```
+gradle clean build
+docker build -t minoc -f Dockerfile .
+```
 
 ## checking it
-docker run -it minoc:latest /bin/bash
+```docker run -it minoc:latest /bin/bash```
 
 ## running it
-docker run -d --volume=/path/to/external/conf:/conf:ro --volume=/path/to/external/logs:/logs:rw --name minoc minoc:latest
+```docker run -d --volume=/path/to/external/conf:/conf:ro --volume=/path/to/external/logs:/logs:rw --name minoc minoc:latest```
 
 ## configuration
 See the <a href="https://github.com/opencadc/docker-base/tree/master/cadc-tomcat">cadc-tomcat</a> image docs 
