@@ -17,6 +17,12 @@ sourceCompatibility = 1.8
 
 group = 'org.opencadc'
 
+war {
+    from(System.getenv('RPS') + '/resources/') {
+        include 'swagger-ui/'
+    }
+}
+
 dependencies {
     compile 'log4j:log4j:[1.2,)'
     compile 'org.opencadc:cadc-util:[1.2,)'
