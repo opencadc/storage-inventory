@@ -22,34 +22,25 @@ When running raven.war in tomcat, parameters of the connection pool in META-INF/
 to be configured in catalina.properties:
 ```
 # The maximum number of active database connections
-raven.invadm.maxActive=1
+raven.invuser.maxActive=1
 
 # The username with which to connect
-raven.invadm.username=invadm
+raven.invuser.username=invadm
 
 # The password for the username
-raven.invadm.password=pw-invadm
+raven.invuser.password=pw-invadm
 
 # The JDBC connection URL
-raven.invadm.url=jdbc:postgresql://mydbhost/content
+raven.invuser.url=jdbc:postgresql://mydbhost/content
 ```
 
 ### raven.properties
 A raven.properties file in /path/to/external/conf is required to run this service.  The following keys (with example values) are needed:
 
 ```
-# The storage adapter to use for storage.
-org.opencadc.inventory.storage.StorageAdapter=org.opencadc.inventory.storage.fs.FileSystemStorageAdapter
-
 # The SQL generator implementation (optional property, will default to the once below if not present)
 org.opencadc.inventory.db.SQLGenerator=org.opencadc.inventory.db.SQLGenerator
 
 # The schema to use
 org.opencadc.inventory.db.schema=inventory
-
-# The service ID of a permissions service(s) providing read permissions. There may be multiple instances of this key/value pair.
-org.opencadc.inventory.permissions.ReadGrant.serviceID=ivo://cadc.nrc.ca/servicewithperms
-
-# The service ID of a permissions system providing write pwermissions. There may be multiple instances of this key/value pair.
-org.opencadc.inventory.permissions.WriteGrant.serviceID=ivo://cadc.nrc.ca/servicewithperms
 ```

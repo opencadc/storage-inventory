@@ -130,14 +130,6 @@ public class ServiceAvailability implements AvailabilityPlugin {
         String note = "service is accepting requests";
         
         try {
-            
-            log.info("init database...");
-            DataSource ds = DBUtil.findJNDIDataSource(PostAction.JNDI_DATASOURCE);
-            MultiValuedProperties props = PostAction.readConfig();
-            Map<String, Object> config = PostAction.getDaoConfig(props);
-            InitDatabase init = new InitDatabase(ds, (String) config.get("database"), (String) config.get("schema"));
-            init.doInit();
-            log.info("init database... OK");
 
             // check other services we depend on
             RegistryClient reg = new RegistryClient();

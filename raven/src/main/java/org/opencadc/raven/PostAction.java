@@ -188,7 +188,7 @@ public class PostAction extends RestAction {
         checkReadPermission(artifactURI);
         
         // get the user for logging
-        String user = "anonUser";
+        String user = AuthMethod.ANON.toString();
         AuthMethod authMethod = AuthenticationUtil.getAuthMethod(AuthenticationUtil.getCurrentSubject());
         if (authMethod != null && !authMethod.equals(AuthMethod.ANON)) {
             Set<String> userids = AuthenticationUtil.getUseridsFromSubject();
