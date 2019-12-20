@@ -239,8 +239,8 @@ The cadc-storage-adapter API places two requirements on the implementation:
 1. store and return (via iterator) the Artifact.uri, Artifact.contentChecksum, and Artifact.contentLength
 2. support ordered iteration (by storageID) *or* batched iteration (by storageBucket):  **preferrably both**
 
-|backend impl|:ordered iterator:|:bucket iterator:|:random access:|
-|------------|----------------|---------------|-------------|
+|backend impl|ordered iterator|bucket iterator|random access|
+|------------|:--------------:|:-------------:|:-----------:|
 |opaque filesystem|N|Y|Y|
 |mountable filesystem (RO)|N|path-components|Y|
 |mountable filesystem|N|N*|Y|
