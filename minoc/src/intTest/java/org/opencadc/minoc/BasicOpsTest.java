@@ -67,14 +67,23 @@
 
 package org.opencadc.minoc;
 
+import ca.nrc.cadc.net.HttpDelete;
+import ca.nrc.cadc.net.HttpDownload;
+import ca.nrc.cadc.net.HttpPost;
 import ca.nrc.cadc.net.HttpUpload;
 import ca.nrc.cadc.util.Log4jInit;
 
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.FileNotFoundException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.URI;
 import java.net.URL;
 import java.security.PrivilegedExceptionAction;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
 
 import javax.security.auth.Subject;
 
@@ -84,165 +93,180 @@ import org.junit.Assert;
 import org.junit.Test;
 
 /**
- * Upload with wrong md5sum and/or length and ensure failure.
+ * Test PUT, GET, DELETE, POST, HEAD and common errors
  * 
  * @author majorb
  */
-public class IncorrectPutMetadataIntTest extends MinocIntTest {
+public class BasicOpsTest extends MinocTest {
     
-    private static final Logger log = Logger.getLogger(IncorrectPutMetadataIntTest.class);
+    private static final Logger log = Logger.getLogger(BasicOpsTest.class);
     
     static {
         Log4jInit.setLevel("org.opencadc.minoc", Level.INFO);
     }
     
-    public IncorrectPutMetadataIntTest() {
+    public BasicOpsTest() {
         super();
     }
     
     @Test
-    public void testUploadWrongMd5() {
+    public void testAllMethodsSimple() {
         try {
             
             Subject.doAs(userSubject, new PrivilegedExceptionAction<Object>() {
                 public Object run() throws Exception {
-            
-                    String data = "first artifact";
-                    String incorrectData = "incorrect artifact";
-                    URI artifactURI = URI.create("cadc:TEST/file.fits");
-                    URL artifactURL = new URL(certURL + "/" + artifactURI.toString());
                     
-                    // put file
+                    String data = "abcdefghijklmnopqrstuvwxyz";
+                    URI artifactURI = URI.create("cadc:TEST/file.fits");
+                    URL artifactURL = new URL(anonURL + "/" + artifactURI.toString());
+                    String encoding = "test-encoding";
+                    String type = "test-type";
+                    
+                    // put
                     InputStream in = new ByteArrayInputStream(data.getBytes());
                     HttpUpload put = new HttpUpload(in, artifactURL);
-                    put.setContentMD5(getMd5(incorrectData.getBytes()));
-                    put.setContentLength((long) data.getBytes().length);
-                    put.run();
-                    Assert.assertNotNull(put.getThrowable());
-                    Assert.assertEquals("should be 412, precondition failed", 412, put.getResponseCode());
-            
-                    return null;
-                }
-            });
-            
-        } catch (Throwable t) {
-            log.error("unexpected throwable", t);
-            Assert.fail("unexpected throwable: " + t);
-        }
-    }
-    
-    @Test
-    public void testUploadWithLongerContentLength() {
-        try {
-            
-            Subject.doAs(userSubject, new PrivilegedExceptionAction<Object>() {
-                public Object run() throws Exception {
-            
-                    String data = "first artifact";
-                    String incorrectData = "longer conent-length artifact";
-                    URI artifactURI = URI.create("cadc:TEST/file.fits");
-                    URL artifactURL = new URL(certURL + "/" + artifactURI.toString());
-                    
-                    // put file
-                    InputStream in = new ByteArrayInputStream(data.getBytes());
-                    HttpUpload put = new HttpUpload(in, artifactURL);
-                    put.setContentMD5(getMd5(data.getBytes()));
-                    put.setContentLength((long) incorrectData.getBytes().length);
-                    put.run();
-                    Assert.assertNotNull(put.getThrowable());
-                    Assert.assertEquals("should be 412, precondition failed", 412, put.getResponseCode());
-            
-                    return null;
-                }
-            });
-            
-        } catch (Throwable t) {
-            log.error("unexpected throwable", t);
-            Assert.fail("unexpected throwable: " + t);
-        }
-    }
-    
-    @Test
-    public void testUploadWithShorterContentLength() {
-        try {
-            
-            Subject.doAs(userSubject, new PrivilegedExceptionAction<Object>() {
-                public Object run() throws Exception {
-            
-                    String data = "first artifact";
-                    String incorrectData = "artifact";
-                    URI artifactURI = URI.create("cadc:TEST/file.fits");
-                    URL artifactURL = new URL(certURL + "/" + artifactURI.toString());
-                    
-                    // put file
-                    InputStream in = new ByteArrayInputStream(data.getBytes());
-                    HttpUpload put = new HttpUpload(in, artifactURL);
-                    put.setContentMD5(getMd5(data.getBytes()));
-                    put.setContentLength((long) incorrectData.getBytes().length);
-                    put.run();
-                    Assert.assertNotNull(put.getThrowable());
-                    Assert.assertEquals("should be 412, precondition failed", 412, put.getResponseCode());
-            
-                    return null;
-                }
-            });
-            
-        } catch (Throwable t) {
-            log.error("unexpected throwable", t);
-            Assert.fail("unexpected throwable: " + t);
-        }
-    }
-    
-    @Test
-    public void testUploadWrongMd5AndWrongLength() {
-        try {
-            
-            Subject.doAs(userSubject, new PrivilegedExceptionAction<Object>() {
-                public Object run() throws Exception {
-            
-                    String data = "first artifact";
-                    String incorrectData = "incorrect artifact";
-                    URI artifactURI = URI.create("cadc:TEST/file.fits");
-                    URL artifactURL = new URL(certURL + "/" + artifactURI.toString());
-                    
-                    // put file
-                    InputStream in = new ByteArrayInputStream(data.getBytes());
-                    HttpUpload put = new HttpUpload(in, artifactURL);
-                    put.setContentMD5(getMd5(incorrectData.getBytes()));
-                    put.setContentLength((long) incorrectData.getBytes().length);
-                    put.run();
-                    Assert.assertNotNull(put.getThrowable());
-                    Assert.assertEquals("should be 412, precondition failed", 412, put.getResponseCode());
-            
-                    return null;
-                }
-            });
-            
-        } catch (Throwable t) {
-            log.error("unexpected throwable", t);
-            Assert.fail("unexpected throwable: " + t);
-        }
-    }
-    
-    @Test
-    public void testCorrectMd5AndLength() {
-        try {
-            
-            Subject.doAs(userSubject, new PrivilegedExceptionAction<Object>() {
-                public Object run() throws Exception {
-            
-                    String data = "first artifact";
-                    URI artifactURI = URI.create("cadc:TEST/file.fits");
-                    URL artifactURL = new URL(certURL + "/" + artifactURI.toString());
-                    
-                    // put file
-                    InputStream in = new ByteArrayInputStream(data.getBytes());
-                    HttpUpload put = new HttpUpload(in, artifactURL);
-                    put.setContentMD5(getMd5(data.getBytes()));
-                    put.setContentLength((long) data.getBytes().length);
+                    put.setContentEncoding(encoding);
+                    put.setContentType(type);
                     put.run();
                     Assert.assertNull(put.getThrowable());
-                    Assert.assertEquals("should be 200, ok", 200, put.getResponseCode());
+                    
+                    // get
+                    OutputStream out = new ByteArrayOutputStream();
+                    HttpDownload get = new HttpDownload(artifactURL, out);
+                    get.run();
+                    Assert.assertNull(get.getThrowable());
+                    String contentMD5 = get.getContentMD5();
+                    long contentLength = get.getContentLength();
+                    String contentType = get.getContentType();
+                    String contentEncoding = get.getContentEncoding();
+                    Assert.assertEquals(getMd5(data.getBytes()), contentMD5);
+                    Assert.assertEquals(data.getBytes().length, contentLength);
+                    Assert.assertEquals(type, contentType);
+                    Assert.assertEquals(encoding, contentEncoding);
+                    
+                    // update
+                    // TODO: add update to artifactURI when functionality available
+                    String newEncoding = "test-encoding-2";
+                    String newType = "test-type-2";
+                    Map<String,Object> params = new HashMap<String,Object>(2);
+                    params.put("contentEncoding", newEncoding);
+                    params.put("contentType", newType);
+                    HttpPost post = new HttpPost(artifactURL, params, false);
+                    post.run();
+                    Assert.assertNull(post.getThrowable());
+                    
+                    // head
+                    HttpDownload head = new HttpDownload(artifactURL, out);
+                    head.setHeadOnly(true);
+                    head.run();
+                    Assert.assertNull(head.getThrowable());
+                    contentMD5 = head.getContentMD5();
+                    contentLength = head.getContentLength();
+                    contentType = head.getContentType();
+                    contentEncoding = head.getContentEncoding();
+                    Assert.assertEquals(getMd5(data.getBytes()), contentMD5);
+                    Assert.assertEquals(data.getBytes().length, contentLength);
+                    Assert.assertEquals(newType, contentType);
+                    Assert.assertEquals(newEncoding, contentEncoding);
+                    
+                    // delete
+                    HttpDelete delete = new HttpDelete(artifactURL, false);
+                    delete.run();
+                    Assert.assertNull(delete.getThrowable());
+                    
+                    // get
+                    get = new HttpDownload(artifactURL, out);
+                    get.run();
+                    Throwable throwable = get.getThrowable();
+                    Assert.assertNotNull(throwable);
+                    Assert.assertTrue(throwable instanceof FileNotFoundException);
+                    
+                    return null;
+                }
+                
+            });
+            
+        } catch (Throwable t) {
+            log.error("unexpected throwable", t);
+            Assert.fail("unexpected throwable: " + t);
+        }
+    }
+    
+    @Test
+    public void testGetNotFound() {
+        try {
+            
+            Subject.doAs(userSubject, new PrivilegedExceptionAction<Object>() {
+                public Object run() throws Exception {
+                
+                    URI artifactURI = URI.create("cadc:TEST/" + UUID.randomUUID().toString());
+                    URL artifactURL = new URL(certURL + "/" + artifactURI.toString());
+                    
+                    // get
+                    OutputStream out = new ByteArrayOutputStream();
+                    HttpDownload get = new HttpDownload(artifactURL, out);
+                    get.run();
+                    Assert.assertNotNull(get.getThrowable());
+                    Assert.assertEquals("should be 404, not found", 404, get.getResponseCode());
+                    Assert.assertTrue(get.getThrowable() instanceof FileNotFoundException);
+                
+                    return null;
+                }
+            });
+            
+        } catch (Throwable t) {
+            log.error("unexpected throwable", t);
+            Assert.fail("unexpected throwable: " + t);
+        }
+    }
+    
+    @Test
+    public void testDeleteNotFound() {
+        try {
+            
+            Subject.doAs(userSubject, new PrivilegedExceptionAction<Object>() {
+                public Object run() throws Exception {
+                
+                    URI artifactURI = URI.create("cadc:TEST/" + UUID.randomUUID().toString());
+                    URL artifactURL = new URL(certURL + "/" + artifactURI.toString());
+                    
+                    // delete
+                    HttpDelete delete = new HttpDelete(artifactURL, false);
+                    delete.run();
+                    Assert.assertNotNull(delete.getThrowable());
+                    Assert.assertEquals("should be 404, not found", 404, delete.getResponseCode());
+                    Assert.assertTrue(delete.getThrowable() instanceof FileNotFoundException);
+                
+                    return null;
+                }
+            });
+            
+        } catch (Throwable t) {
+            log.error("unexpected throwable", t);
+            Assert.fail("unexpected throwable: " + t);
+        }
+    }
+    
+    @Test
+    public void testZeroLengthFile() {
+        try {
+            
+            Subject.doAs(userSubject, new PrivilegedExceptionAction<Object>() {
+                public Object run() throws Exception {
+            
+                    String data = "";
+                    URI artifactURI = URI.create("cadc:TEST/file.fits");
+                    URL artifactURL = new URL(certURL + "/" + artifactURI.toString());
+                    String encoding = "test-encoding";
+                    String type = "test-type";
+                    
+                    // put
+                    InputStream in = new ByteArrayInputStream(data.getBytes());
+                    HttpUpload put = new HttpUpload(in, artifactURL);
+                    put.setContentEncoding(encoding);
+                    put.setContentType(type);
+                    put.run();
+                    Assert.assertEquals("should be 400, bad request", 400, put.getResponseCode());
                     
                     return null;
                 }

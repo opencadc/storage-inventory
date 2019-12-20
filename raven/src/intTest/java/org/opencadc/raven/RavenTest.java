@@ -65,18 +65,30 @@
  ************************************************************************
  */
 
-package org.opencadc.minoc;
+package org.opencadc.raven;
 
 import ca.nrc.cadc.auth.AuthMethod;
 import ca.nrc.cadc.auth.AuthenticationUtil;
 import ca.nrc.cadc.auth.SSLUtil;
+import ca.nrc.cadc.db.ConnectionConfig;
+import ca.nrc.cadc.db.DBConfig;
+import ca.nrc.cadc.db.DBUtil;
+import ca.nrc.cadc.net.FileContent;
+import ca.nrc.cadc.net.HttpPost;
+import ca.nrc.cadc.reg.Standards;
 import ca.nrc.cadc.reg.client.RegistryClient;
 import ca.nrc.cadc.util.FileUtil;
 import ca.nrc.cadc.util.HexUtil;
 import ca.nrc.cadc.util.Log4jInit;
+import ca.nrc.cadc.vos.Transfer;
+import ca.nrc.cadc.vos.TransferParsingException;
+import ca.nrc.cadc.vos.TransferReader;
+import ca.nrc.cadc.vos.TransferWriter;
 
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
@@ -84,57 +96,87 @@ import java.net.URL;
 import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.security.PrivilegedActionException;
+import java.security.PrivilegedExceptionAction;
+import java.util.Map;
+import java.util.TreeMap;
 
 import javax.security.auth.Subject;
 
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
+import org.junit.Assert;
+import org.opencadc.inventory.db.SQLGenerator;
 
 /**
  * Abstract integration test class with general setup and test support.
  * 
  * @author majorb
  */
-public class MinocIntTest {
+public abstract class RavenTest {
     
-    private static final Logger log = Logger.getLogger(BasicOpsIntTest.class);
-    public static final URI MINOC_SERVICE_ID = URI.create("ivo://cadc.nrc.ca/minoc");
-    // TODO: Move this to Standards.java
-    private static final URI MINOC_STANDARD_ID = URI.create("vos://cadc.nrc.ca~vospace/CADC/std/inventory#artifacts-1.0");
+    private static final Logger log = Logger.getLogger(NegotiationTest.class);
+    public static final URI RAVEN_SERVICE_ID = URI.create("ivo://cadc.nrc.ca/raven");;
+    
+    static String SERVER = "INVENTORY_TEST";
+    static String DATABASE = "content";
+    static String SCHEMA = "inventory";
 
     protected URL anonURL;
     protected URL certURL;
     protected Subject anonSubject;
     protected Subject userSubject;
     
+    Map<String,Object> config;
+    
     static {
-        Log4jInit.setLevel("org.opencadc.minoc", Level.INFO);
+        Log4jInit.setLevel("org.opencadc.raven", Level.INFO);
     }
     
-    public MinocIntTest() {
+    public RavenTest() throws Exception {
         RegistryClient regClient = new RegistryClient();
-        anonURL = regClient.getServiceURL(MINOC_SERVICE_ID, MINOC_STANDARD_ID, AuthMethod.ANON);
+        anonURL = regClient.getServiceURL(RAVEN_SERVICE_ID, Standards.SI_LOCATE, AuthMethod.ANON);
         log.info("anonURL: " + anonURL);
-        certURL = regClient.getServiceURL(MINOC_SERVICE_ID, MINOC_STANDARD_ID, AuthMethod.CERT);
+        certURL = regClient.getServiceURL(RAVEN_SERVICE_ID, Standards.SI_LOCATE, AuthMethod.CERT);
         log.info("certURL: " + certURL);
         anonSubject = AuthenticationUtil.getAnonSubject();
-        File cert = FileUtil.getFileFromResource("minoc-test.pem", MinocIntTest.class);
+        File cert = FileUtil.getFileFromResource("raven-test.pem", RavenTest.class);
         log.info("userSubject: " + userSubject);
         userSubject = SSLUtil.createSubject(cert);
         log.info("userSubject: " + userSubject);
+        
+        try {
+            DBConfig dbrc = new DBConfig();
+            ConnectionConfig cc = dbrc.getConnectionConfig(SERVER, DATABASE);
+            DBUtil.createJNDIDataSource("jdbc/inventory", cc);
+
+            config = new TreeMap<String,Object>();
+            config.put(SQLGenerator.class.getName(), SQLGenerator.class);
+            config.put("jndiDataSourceName", "jdbc/inventory");
+            config.put("schema", SCHEMA);
+
+        } catch (Exception ex) {
+            log.error("setup failed", ex);
+            throw ex;
+        }
     }
     
-    protected static String getMd5(byte[] input) throws NoSuchAlgorithmException, IOException {
-        MessageDigest md = MessageDigest.getInstance("MD5");
-        InputStream in = new ByteArrayInputStream(input);
-        DigestInputStream dis = new DigestInputStream(in, md);
-        int bytesRead = dis.read();
-        byte[] buf = new byte[512];
-        while (bytesRead > 0) {
-            bytesRead = dis.read(buf);
+    protected Transfer negotiate(Transfer request) throws IOException, TransferParsingException, PrivilegedActionException {
+        TransferWriter writer = new TransferWriter();
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        writer.write(request, out);
+        FileContent content = new FileContent(out.toByteArray(), "text/xml");
+        HttpPost post = new HttpPost(certURL, content, false);
+        post.run();
+        if (post.getThrowable() != null && post.getThrowable() instanceof FileNotFoundException) {
+            throw (FileNotFoundException) post.getThrowable();
         }
-        byte[] digest = md.digest();
-        return HexUtil.toHex(digest);
+        Assert.assertNull(post.getThrowable());
+        String response = post.getResponseBody();
+        TransferReader reader = new TransferReader();
+        Transfer t = reader.read(response,  null);
+        log.info("Response transfer: " + t);
+        return t;
     }
 
 }

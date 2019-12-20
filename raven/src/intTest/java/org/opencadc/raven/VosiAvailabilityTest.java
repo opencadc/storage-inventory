@@ -67,7 +67,7 @@
 ************************************************************************
 */
 
-package org.opencadc.minoc;
+package org.opencadc.raven;
 
 
 import ca.nrc.cadc.util.Log4jInit;
@@ -90,6 +90,6 @@ public class VosiAvailabilityTest extends AvailabilityTest
 
     public VosiAvailabilityTest() 
     { 
-        super(BasicOpsTest.MINOC_SERVICE_ID);
+        super(NegotiationTest.RAVEN_SERVICE_ID);
     }
 }
