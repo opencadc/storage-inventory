@@ -71,15 +71,23 @@ package org.opencadc.inventory.storage.s3;
 
 import nom.tam.fits.BasicHDU;
 import nom.tam.fits.Fits;
+import nom.tam.fits.Header;
 import nom.tam.util.ArrayDataInput;
 import nom.tam.util.BufferedDataInputStream;
+import org.apache.log4j.Logger;
 import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.Assert;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.storage.NewArtifact;
 import org.opencadc.inventory.storage.StorageMetadata;
+import software.amazon.awssdk.core.ResponseBytes;
+import software.amazon.awssdk.core.ResponseInputStream;
+import software.amazon.awssdk.core.sync.ResponseTransformer;
 import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.GetObjectRequest;
+import software.amazon.awssdk.services.s3.model.GetObjectResponse;
 
 import ca.nrc.cadc.io.ByteCountOutputStream;
 import ca.nrc.cadc.net.InputStreamWrapper;
@@ -94,17 +102,39 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.math.BigInteger;
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
 import java.security.DigestOutputStream;
 import java.security.MessageDigest;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
+import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 
 
 public class S3StorageAdapterTest {
 
+    private static final Logger LOGGER = Logger.getLogger(S3StorageAdapterTest.class);
     private static final URI ENDPOINT = URI.create("http://dao-wkr-04.cadc.dao.nrc.ca:8080");
     private static final String REGION = Region.US_EAST_1.id();
+    private static final String DEFAULT_BUCKET = System.getProperty("user.name");
+
+    @Test
+    public void list() throws Exception {
+        final S3StorageAdapter testSubject = new S3StorageAdapter(ENDPOINT, REGION);
+        // The cadctest bucket contains 2001 items.
+        int count = 0;
+        final long start = System.currentTimeMillis();
+        for (final Iterator<StorageMetadata> storageMetadataIterator = testSubject.iterator("cadctest");
+             storageMetadataIterator.hasNext(); ) {
+            storageMetadataIterator.next();
+            count++;
+            // Do nothing
+        }
+        LOGGER.debug(String.format("Listed %d items in %d milliseconds.", count, System.currentTimeMillis() - start));
+    }
 
     @Test
     @Ignore
@@ -129,6 +159,67 @@ public class S3StorageAdapterTest {
     }
 
     @Test
+    @Ignore
+    public void jumpHDUs() throws Exception {
+        final String objectID = "test-megaprime-s3.fits.fz";
+        final String bucket = System.getProperty("user.name");
+        final Map<Integer, Long> hduByteOffsets = new HashMap<>();
+        hduByteOffsets.put(0, 0L);
+        hduByteOffsets.put(19, 148380480L);
+        hduByteOffsets.put(40, 312117120L);
+
+        try (S3Client s3Client = S3Client.builder()
+                                         .endpointOverride(ENDPOINT)
+                                         .region(Region.of(REGION))
+                                         .build()) {
+            for (final Map.Entry<Integer, Long> entry : hduByteOffsets.entrySet()) {
+                LOGGER.info(String.format("\nReading %d bytes at %d.\n", 2880, entry.getValue()));
+                final long start = System.currentTimeMillis();
+                s3Client.getObject(GetObjectRequest.builder().bucket(bucket).key(objectID)
+                                                   .range(String.format("bytes=%d-%d",
+                                                                        entry.getValue(),
+                                                                        entry.getValue() + 2880L))
+                                                   .build(),
+                                   ResponseTransformer.toBytes()).asByteArray();
+                final long readTime = System.currentTimeMillis() - start;
+                LOGGER.info(String.format("\nRead time for HDU %d is %d.\n", entry.getKey(), readTime));
+            }
+        }
+    }
+
+    @Test
+    @Ignore
+    public void jumpHDUsReconnect() throws Exception {
+        final String objectID = "test-megaprime-s3.fits.fz";
+        final String bucket = System.getProperty("user.name");
+        final Map<Integer, Long> hduByteOffsets = new HashMap<>();
+        hduByteOffsets.put(0, 0L);
+        hduByteOffsets.put(19, 148380480L);
+        hduByteOffsets.put(40, 312117120L);
+
+        for (final Map.Entry<Integer, Long> entry : hduByteOffsets.entrySet()) {
+            LOGGER.info(String.format("\nReading %d bytes at %d.\n", 2880, entry.getValue()));
+            final S3Client innerS3Client = S3Client.builder()
+                                                   .endpointOverride(ENDPOINT)
+                                                   .region(Region.of(REGION))
+                                                   .build();
+            final long start = System.currentTimeMillis();
+            final byte[] bytes = innerS3Client.getObject(GetObjectRequest.builder().bucket(bucket).key(objectID)
+                                                                         .range(String.format("bytes=%d-%d",
+                                                                                              entry.getValue(),
+                                                                                              entry.getValue() + 2880L))
+                                                                         .build(),
+                                                         ResponseTransformer.toBytes()).asByteArray();
+            final long readTime = System.currentTimeMillis() - start;
+            innerS3Client.close();
+            LOGGER.info(
+                    String.format("\nReading %d bytes for HDU %d is %d with reconnect.\n", bytes.length, entry.getKey(),
+                                  readTime));
+        }
+    }
+
+    @Test
+    @Ignore
     public void getHeaders() throws Exception {
         final S3StorageAdapter testSubject = new S3StorageAdapter(ENDPOINT, REGION);
         final String fileName = System.getProperty("file.name");
@@ -192,44 +283,46 @@ public class S3StorageAdapterTest {
     @Test
     @Ignore
     public void put() throws Exception {
-        final S3StorageAdapter putTestSubject = new S3StorageAdapter(ENDPOINT, REGION);
-        final URI testURI = URI.create("site:jenkinsd/test-jcmt.fits");
-        final File file = FileUtil.getFileFromResource("test-jcmt.fits", S3StorageAdapterTest.class);
-        final NewArtifact artifact = new NewArtifact(testURI);
-
-        artifact.contentChecksum = URI.create("md5:9307240a34ed65a0a252b0046b6e87be");
-        artifact.contentLength = 3144960L;
-
-        final InputStream inputStream = new FileInputStream(file);
+        final URI testURI = URI.create(String.format("site:jenkinsd/%s.fits", UUID.randomUUID().toString()));
         try {
-            putTestSubject.delete(new StorageLocation(testURI));
-        } catch (IOException e) {
-            // Doesn't exist.  Good!
+            final S3StorageAdapter putTestSubject = new S3StorageAdapter(ENDPOINT, REGION);
+            final File file = FileUtil.getFileFromResource("test-jcmt.fits", S3StorageAdapterTest.class);
+            final NewArtifact artifact = new NewArtifact(testURI);
+
+            artifact.contentChecksum = URI.create("md5:9307240a34ed65a0a252b0046b6e87be");
+            artifact.contentLength = file.length();
+
+            final InputStream fileInputStream = new FileInputStream(file);
+
+            final StorageMetadata storageMetadata = putTestSubject.put(artifact, fileInputStream);
+            fileInputStream.close();
+
+            final URI resultChecksum = storageMetadata.getContentChecksum();
+            final long resultLength = storageMetadata.getContentLength();
+
+            Assert.assertEquals("Checksum does not match.", artifact.contentChecksum, resultChecksum);
+            Assert.assertEquals("Lengths do not match.", artifact.contentLength.longValue(), resultLength);
+
+            // Get it out again.
+            final S3StorageAdapter getTestSubject = new S3StorageAdapter(ENDPOINT, REGION);
+
+            final OutputStream outputStream = new ByteArrayOutputStream();
+            final DigestOutputStream digestOutputStream = new DigestOutputStream(outputStream,
+                                                                                 MessageDigest.getInstance(
+                                                                                         S3StorageAdapter.DIGEST_ALGORITHM));
+            final ByteCountOutputStream byteCountOutputStream = new ByteCountOutputStream(digestOutputStream);
+            final MessageDigest messageDigest = digestOutputStream.getMessageDigest();
+
+            getTestSubject.get(new StorageLocation(testURI), byteCountOutputStream);
+            Assert.assertEquals("Retrieved file is not the same.", artifact.contentLength.longValue(),
+                                byteCountOutputStream.getByteCount());
+            Assert.assertEquals("Wrong checksum.", artifact.contentChecksum,
+                                URI.create(String.format("%s:%s", messageDigest.getAlgorithm().toLowerCase(),
+                                                         new BigInteger(1, messageDigest.digest()).toString(16))));
+        } finally {
+            final S3StorageAdapter deleteTestSubject = new S3StorageAdapter(ENDPOINT, REGION);
+            deleteTestSubject.delete(new StorageLocation(testURI));
         }
-        final StorageMetadata storageMetadata = putTestSubject.put(artifact, inputStream);
-        inputStream.close();
-
-        final URI resultChecksum = storageMetadata.getContentChecksum();
-        final long resultLength = storageMetadata.getContentLength();
-
-        Assert.assertEquals("Checksum does not match.", artifact.contentChecksum, resultChecksum);
-        Assert.assertEquals("Lengths do not match.", artifact.contentLength.longValue(), resultLength);
-
-        // Get it out again.
-        final S3StorageAdapter getTestSubject = new S3StorageAdapter(ENDPOINT, REGION);
-
-        final OutputStream outputStream = new ByteArrayOutputStream();
-        final DigestOutputStream digestOutputStream = new DigestOutputStream(outputStream, MessageDigest
-                .getInstance(S3StorageAdapter.DIGEST_ALGORITHM));
-        final ByteCountOutputStream byteCountOutputStream = new ByteCountOutputStream(digestOutputStream);
-        final MessageDigest messageDigest = digestOutputStream.getMessageDigest();
-
-        getTestSubject.get(new StorageLocation(testURI), byteCountOutputStream);
-        Assert.assertEquals("Retrieved file is not the same.", artifact.contentLength.longValue(),
-                            byteCountOutputStream.getByteCount());
-        Assert.assertEquals("Wrong checksum.", artifact.contentChecksum,
-                            URI.create(String.format("%s:%s", messageDigest.getAlgorithm().toLowerCase(),
-                                                     new BigInteger(1, messageDigest.digest()).toString(16))));
     }
 
     private static class TestByteCountInputStreamWrapper implements InputStreamWrapper {

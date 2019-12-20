@@ -69,8 +69,8 @@
 
 package org.opencadc.inventory.storage.ceph;
 
-import com.ceph.rados.Completion;
 import com.ceph.rados.IoCTX;
+import com.ceph.rados.ListCtx;
 import com.ceph.rados.Rados;
 import com.ceph.rados.exceptions.RadosException;
 import com.ceph.rados.exceptions.RadosNotFoundException;
@@ -107,8 +107,14 @@ import java.net.URI;
 import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.Arrays;
 import java.util.Iterator;
+import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
+import java.util.function.IntFunction;
+import java.util.stream.Stream;
+
 
 /**
  * Implementation of a Storage Adapter using the Ceph RADOS API.
@@ -126,13 +132,26 @@ public class CephStorageAdapter implements StorageAdapter {
 
     static final String DIGEST_ALGORITHM = "MD5";
     private static final int BUFFER_SIZE_BYTES = 1024 * 1024; // One Megabyte.
+    private static final int DEFAULT_LIST_PAGE_SIZE = 1000;
 
     private final String cephxID;
     private final String clusterName;
 
+    private final Rados radosClient;
+    private final RadosStriper radosStriperClient;
+
+
     public CephStorageAdapter(final String userID, final String clusterName) {
         this.cephxID = String.format("client.%s", userID);
         this.clusterName = clusterName;
+
+        try {
+            this.radosClient = connect();
+            this.radosStriperClient = connectStriper();
+        } catch (RadosException e) {
+            // Can't connect, so no further action can be taken.
+            throw new RuntimeException(e);
+        }
 
         LOGGER.setLevel(Level.DEBUG);
     }
@@ -176,7 +195,7 @@ public class CephStorageAdapter implements StorageAdapter {
 
     private URI createChecksum(final MessageDigest messageDigest) {
         return URI.create(String.format("%s:%s", messageDigest.getAlgorithm().toLowerCase(),
-                new BigInteger(1, messageDigest.digest()).toString(16)));
+                                        new BigInteger(1, messageDigest.digest()).toString(16)));
     }
 
     private IoCTX contextConnect(final Rados client, final String poolName) throws RadosException {
@@ -189,8 +208,7 @@ public class CephStorageAdapter implements StorageAdapter {
 
     private IoCTXStriper contextConnectStriper(final String poolName) throws RadosException {
         try {
-            final RadosStriper radosStriper = connectStriper();
-            return radosStriper.ioCtxCreateStriper(contextConnect(poolName));
+            return radosStriperClient.ioCtxCreateStriper(contextConnect(poolName));
         } catch (IOException e) {
             throw new RadosException(e.getMessage(), e);
         }
@@ -198,7 +216,7 @@ public class CephStorageAdapter implements StorageAdapter {
 
     private IoCTX contextConnect(final String poolName) throws RadosException {
         try {
-            return contextConnect(connect(), poolName);
+            return contextConnect(radosClient, poolName);
         } catch (IOException e) {
             throw new RadosException(e.getMessage(), e);
         }
@@ -219,7 +237,10 @@ public class CephStorageAdapter implements StorageAdapter {
     }
 
     String lookupBucketMarker(final StorageLocation storageLocation) throws IOException {
-        final String bucket = parseBucket(storageLocation.getStorageID());
+        return lookupBucketMarker(parseBucket(storageLocation.getStorageID()));
+    }
+
+    String lookupBucketMarker(final String bucket) throws IOException {
         try (final IoCTX ioCTX = contextConnect(META_POOL_NAME)) {
             ioCTX.setNamespace(META_NAMESPACE);
             final String bucketKey = String.format(BUCKET_NAME_LOOKUP, bucket);
@@ -237,7 +258,9 @@ public class CephStorageAdapter implements StorageAdapter {
 
     @Override
     public void get(StorageLocation storageLocation, OutputStream outputStream) throws ResourceNotFoundException,
-            ReadException, WriteException, StorageEngageException, TransientException {
+                                                                                       ReadException, WriteException,
+                                                                                       StorageEngageException,
+                                                                                       TransientException {
         try (final InputStream inputStream = createInputStream(getObjectID(storageLocation))) {
             final byte[] buffer = new byte[BUFFER_SIZE_BYTES];
             int bytesRead;
@@ -256,7 +279,7 @@ public class CephStorageAdapter implements StorageAdapter {
     @Override
     public void get(StorageLocation storageLocation, OutputStream outputStream, Set<String> cutouts)
             throws ResourceNotFoundException, ReadException, WriteException, StorageEngageException,
-            TransientException {
+                   TransientException {
         if ((cutouts == null) || cutouts.isEmpty()) {
             get(storageLocation, outputStream);
         } else {
@@ -275,7 +298,8 @@ public class CephStorageAdapter implements StorageAdapter {
                     final long afterReadHDU = System.currentTimeMillis();
                     final HeaderCard headerNameCard = header.findCard("EXTNAME");
                     LOGGER.debug(String.format("%d,\"%s\",%d,\"milliseconds\"", count,
-                            headerNameCard == null ? "N/A" : headerNameCard.getValue(), afterReadHDU - beforeHDU));
+                                               headerNameCard == null ? "N/A" : headerNameCard.getValue(),
+                                               afterReadHDU - beforeHDU));
                     beforeHDU = System.currentTimeMillis();
                     if (hdu.getAxes() != null) {
                         final int axesCount = hdu.getAxes().length;
@@ -301,7 +325,10 @@ public class CephStorageAdapter implements StorageAdapter {
 
     @Override
     public StorageMetadata put(NewArtifact newArtifact, InputStream inputStream) throws ResourceNotFoundException,
-            StreamCorruptedException, ReadException, WriteException, StorageEngageException, TransientException {
+                                                                                        StreamCorruptedException,
+                                                                                        ReadException, WriteException,
+                                                                                        StorageEngageException,
+                                                                                        TransientException {
         try {
             final URI storageID = newArtifact.getArtifactURI();
             final String objectID = getObjectID(new StorageLocation(storageID));
@@ -326,7 +353,8 @@ public class CephStorageAdapter implements StorageAdapter {
                 LOGGER.debug("No checksum provided.  Defaulting the calculated one.");
             } else if (!expectedChecksum.equals(calculatedChecksum)) {
                 throw new StreamCorruptedException(String.format("Checksums do not match.  Expected %s but was %s.",
-                        expectedChecksum.toString(), calculatedChecksum.toString()));
+                                                                 expectedChecksum.toString(),
+                                                                 calculatedChecksum.toString()));
             }
 
             final Long expectedContentLength = newArtifact.contentLength;
@@ -337,7 +365,7 @@ public class CephStorageAdapter implements StorageAdapter {
             } else if (expectedContentLength != calculatedContentLength) {
                 throw new StreamCorruptedException(
                         String.format("Content lengths do not match.  Expected %d but was %d.", expectedContentLength,
-                                calculatedContentLength));
+                                      calculatedContentLength));
             }
 
             return new StorageMetadata(new StorageLocation(storageID), calculatedChecksum, calculatedContentLength);
@@ -350,13 +378,20 @@ public class CephStorageAdapter implements StorageAdapter {
         }
     }
 
-    @Override
-    public void delete(final StorageLocation storageLocation)
+    /**
+     * Delete from storage the artifact identified by storageLocation.
+     *
+     * @param storageLocation Identifies the artifact to delete.
+     * @throws ResourceNotFoundException If the artifact could not be found.
+     * @throws IOException               If an unrecoverable error occurred.
+     * @throws StorageEngageException    If the adapter failed to interact with storage.
+     * @throws TransientException        If an unexpected, temporary exception occurred.
+     */
+    public void delete(StorageLocation storageLocation)
             throws ResourceNotFoundException, IOException, StorageEngageException, TransientException {
-        final String bucketMarker = lookupBucketMarker(storageLocation);
-
         try (final IoCTXStriper ioCTX = contextConnectStriper(DATA_POOL_NAME)) {
-            final String objectID = String.format(OBJECT_ID_LOOKUP, bucketMarker, getObjectID(storageLocation));
+            final String objectID = String.format(OBJECT_ID_LOOKUP, lookupBucketMarker(storageLocation),
+                                                  getObjectID(storageLocation));
             ioCTX.remove(objectID);
         } catch (RadosNotFoundException e) {
             throw new ResourceNotFoundException(e.getMessage(), e);
@@ -365,29 +400,127 @@ public class CephStorageAdapter implements StorageAdapter {
         }
     }
 
-    @Override
+    StorageMetadata head(final String storageBucket, final String objectID) {
+        try (IoCTX ioCTX = contextConnect(DATA_POOL_NAME)) {
+            final Map<String, String> extendedAttributes = ioCTX.getExtendedAttributes(objectID);
+            final String artifactURIMetadataValue = extendedAttributes.get("uri");
+            final URI metadataArtifactURI = StringUtil.hasLength(artifactURIMetadataValue)
+                                            ? URI.create(artifactURIMetadataValue)
+                                            : URI.create(String.format("%s:%s/%s", "UNKNOWN", storageBucket, objectID));
+            final String md5ChecksumValue = extendedAttributes.get("md5");
+            final URI md5 = URI.create(String.format("%s:%s", "md5", StringUtil.hasLength(md5ChecksumValue)
+                                                                     ? md5ChecksumValue
+                                                                     : "UNKNOWN"));
+            final String lengthValue = extendedAttributes.get("sizeInBytes");
+            final Long contentLength = StringUtil.hasLength(lengthValue) ? Long.parseLong(lengthValue) : -1L;
+            return new StorageMetadata(new StorageLocation(metadataArtifactURI), md5, contentLength);
+        } catch (IOException e) {
+            throw new RuntimeException(e.getMessage(), e);
+        }
+    }
+
+    Iterator<StorageMetadata> pageIterator(final String storageBucket, final Integer pageSize) throws IOException {
+        final String bucket = lookupBucketMarker(storageBucket);
+        final Optional<Integer> optionalPageSize = Optional.ofNullable(pageSize);
+
+        try (final IoCTX ioCTX = contextConnect(DATA_POOL_NAME)) {
+            final int configuredPageSize = optionalPageSize.orElse(DEFAULT_LIST_PAGE_SIZE);
+
+            return new Iterator<StorageMetadata>() {
+                private final ListCtx listCtx = ioCTX.listObjectsPartial(configuredPageSize);
+                private String[] buffer = Arrays.stream(listCtx.getObjects()).filter(val -> {
+                    return !StringUtil.hasLength(bucket) || val.startsWith(bucket);
+                }).toArray(String[]::new);
+                private int bufferPosition = 0;
+
+                @Override
+                public boolean hasNext() {
+                    return bufferPosition < buffer.length || fillBuffer() > 0;
+                }
+
+                @Override
+                public StorageMetadata next() {
+                    return head(storageBucket, buffer[bufferPosition++]);
+                }
+
+                int fillBuffer() {
+                    try {
+                        final int objectCount = listCtx.nextObjects();
+                        if (objectCount > 0) {
+                            LOGGER.debug(String.format("Read in %d objects.", objectCount));
+                            buffer = Arrays.stream(listCtx.getObjects()).filter(val -> {
+                                return !StringUtil.hasLength(bucket) || val.startsWith(bucket);
+                            }).toArray(String[]::new);
+                            bufferPosition = 0;
+                        } else {
+                            LOGGER.debug("No more objects to read.");
+                        }
+
+                        return objectCount;
+                    } catch (IOException e) {
+                        throw new RuntimeException(e.getMessage(), e);
+                    }
+                }
+            };
+        }
+    }
+
+    /**
+     * Iterator of items ordered by their storageIDs.
+     *
+     * @return An iterator over an ordered list of items in storage.
+     *
+     * @throws ReadException          If the storage system failed to stream.
+     * @throws WriteException         If the client failed to stream.
+     * @throws StorageEngageException If the adapter failed to interact with storage.
+     * @throws TransientException     If an unexpected, temporary exception occurred.
+     */
     public Iterator<StorageMetadata> iterator()
             throws ReadException, WriteException, StorageEngageException, TransientException {
-        return null;
+        return iterator(null);
     }
 
-    @Override
-    public Iterator<StorageMetadata> iterator(String s)
+    /**
+     * Iterator of items ordered by their storageIDs in the given bucket.
+     *
+     * @param storageBucket Only iterate over items in this bucket.
+     * @return An iterator over an ordered list of items in this storage bucket.
+     *
+     * @throws ReadException          If the storage system failed to stream.
+     * @throws WriteException         If the client failed to stream.
+     * @throws StorageEngageException If the adapter failed to interact with storage.
+     * @throws TransientException     If an unexpected, temporary exception occurred.
+     */
+    public Iterator<StorageMetadata> iterator(String storageBucket)
             throws ReadException, WriteException, StorageEngageException, TransientException {
-        return null;
+        try {
+            return new CephStorageMetadataIterator(this, storageBucket);
+        } catch (IOException e) {
+            throw new StorageEngageException(e.getMessage(), e);
+        }
     }
 
-    @Override
-    public Iterator<StorageMetadata> unsortedIterator(String s)
+    /**
+     * An unordered iterator of items in the given bucket.
+     *
+     * @param storageBucket Only iterate over items in this bucket.
+     * @return An iterator over an ordered list of items in this storage bucket.
+     *
+     * @throws ReadException          If the storage system failed to stream.
+     * @throws WriteException         If the client failed to stream.
+     * @throws StorageEngageException If the adapter failed to interact with storage.
+     * @throws TransientException     If an unexpected, temporary exception occurred.
+     */
+    public Iterator<StorageMetadata> unsortedIterator(String storageBucket)
             throws ReadException, WriteException, StorageEngageException, TransientException {
-        return null;
+        return iterator(storageBucket);
     }
 
     private InputStream createStriperInputStream(final String objectID) throws IOException {
-        return new RadosStriperInputStream(connectStriper(), objectID);
+        return new RadosStriperInputStream(radosStriperClient, objectID);
     }
 
     private InputStream createInputStream(final String objectID) throws IOException {
-        return new RadosInputStream(connect(), objectID);
+        return new RadosInputStream(radosClient, objectID);
     }
 }

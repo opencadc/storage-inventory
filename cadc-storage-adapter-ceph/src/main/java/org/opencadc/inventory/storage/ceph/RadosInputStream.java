@@ -118,6 +118,11 @@ public class RadosInputStream extends InputStream {
         this.objectID = objectID;
     }
 
+
+    public long getPosition() {
+        return position;
+    }
+
     /**
      * Reads the next byte of data from the input stream. The value byte is
      * returned as an <code>int</code> in the range <code>0</code> to
@@ -133,33 +138,6 @@ public class RadosInputStream extends InputStream {
     @Override
     public int read() {
         throw new UnsupportedOperationException("Cannot read single byte.  Use read(byte[], int, int).");
-    }
-
-    /**
-     * Skips over and discards <code>n</code> bytes of data from this input
-     * stream. The <code>skip</code> method may, for a variety of reasons, end
-     * up skipping over some smaller number of bytes, possibly <code>0</code>.
-     * This may result from any of a number of conditions; reaching end of file
-     * before <code>n</code> bytes have been skipped is only one possibility.
-     * The actual number of bytes skipped is returned. If {@code n} is
-     * negative, the {@code skip} method for class {@code InputStream} always
-     * returns 0, and no bytes are skipped. Subclasses may handle the negative
-     * value differently.
-     * <p> The <code>skip</code> method implementation of this class creates a
-     * byte array and then repeatedly reads into it until <code>n</code> bytes
-     * have been read or the end of the stream has been reached. Subclasses are
-     * encouraged to provide a more efficient implementation of this method.
-     * For instance, the implementation may depend on the ability to seek.
-     *
-     * @param n the number of bytes to be skipped.
-     * @return the actual number of bytes skipped.
-     *
-     * @throws IOException if an I/O error occurs.
-     */
-    @Override
-    public long skip(long n) throws IOException {
-        position += n;
-        return n;
     }
 
     /**
@@ -224,24 +202,13 @@ public class RadosInputStream extends InputStream {
         try (final IoCTX ioCTX = rados.ioCtxCreate(DATA_POOL_NAME)) {
             final int bytesRead = readRadosBytes(ioCTX, b, len);
 
-            LOGGER.debug(String.format("Read %d bytes from RADOS.", bytesRead));
-
             // Update the current position in the stream.
             position += bytesRead;
 
-            LOGGER.debug(String.format("Current position in stream is at byte %d.", position));
             return (bytesRead == 0) ? -1 : bytesRead;
         }
     }
 
-    /**
-     * Read bytes from the RADOS back end.
-     * @param ioCTX     The IO Context connection.
-     * @param b         The byte array to read into.
-     * @param len       The amount of bytes to read.
-     * @return          Count of bytes read.
-     * @throws IOException  For any backend reading.
-     */
     int readRadosBytes(final IoCTX ioCTX, byte[] b, int len) throws IOException {
         return ioCTX.read(objectID, len, position, b);
     }

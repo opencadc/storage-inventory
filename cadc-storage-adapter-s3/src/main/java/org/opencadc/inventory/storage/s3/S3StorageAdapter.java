@@ -77,11 +77,14 @@ import nom.tam.fits.HeaderCard;
 import nom.tam.util.ArrayDataOutput;
 import nom.tam.util.BufferedDataOutputStream;
 import org.apache.log4j.Logger;
+import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.storage.NewArtifact;
 import org.opencadc.inventory.storage.ReadException;
 import org.opencadc.inventory.storage.StorageEngageException;
 import org.opencadc.inventory.storage.WriteException;
+import software.amazon.awssdk.core.ResponseInputStream;
 import software.amazon.awssdk.core.exception.SdkClientException;
+import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.core.sync.ResponseTransformer;
 import software.amazon.awssdk.regions.Region;
@@ -90,12 +93,23 @@ import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.storage.StorageAdapter;
 import org.opencadc.inventory.storage.StorageMetadata;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
+import software.amazon.awssdk.services.s3.model.GetObjectResponse;
+import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
+import software.amazon.awssdk.services.s3.model.HeadObjectResponse;
+import software.amazon.awssdk.services.s3.model.ListObjectsRequest;
+import software.amazon.awssdk.services.s3.model.ListObjectsResponse;
+import software.amazon.awssdk.services.s3.model.ListObjectsV2Request;
+import software.amazon.awssdk.services.s3.model.ListObjectsV2Response;
 import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+import software.amazon.awssdk.services.s3.model.PutObjectResponse;
 import software.amazon.awssdk.services.s3.model.S3Exception;
+import software.amazon.awssdk.services.s3.model.S3Object;
+import software.amazon.awssdk.services.s3.paginators.ListObjectsV2Iterable;
 import ca.nrc.cadc.io.ByteCountInputStream;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
+import ca.nrc.cadc.util.StringUtil;
 
 import java.io.BufferedInputStream;
 import java.io.IOException;
@@ -107,7 +121,11 @@ import java.net.URI;
 import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.Iterator;
+import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 
@@ -144,9 +162,7 @@ public class S3StorageAdapter implements StorageAdapter {
     }
 
     private String parseBucket(final URI storageID) {
-        final String path = storageID.getSchemeSpecificPart();
-        final String[] pathItems = path.split("/");
-        return pathItems[0];
+        return InventoryUtil.computeBucket(storageID, 5);
     }
 
     private MessageDigest createDigester() {
@@ -155,11 +171,6 @@ public class S3StorageAdapter implements StorageAdapter {
         } catch (NoSuchAlgorithmException e) {
             throw new RuntimeException("Unable to proceed with checksum implementation.", e);
         }
-    }
-
-    private URI createChecksum(final MessageDigest messageDigest) {
-        return URI.create(String.format("%s:%s", messageDigest.getAlgorithm().toLowerCase(),
-                                        new BigInteger(1, messageDigest.digest()).toString(16)));
     }
 
     private void transferInputStreamTo(final InputStream inputStream, final OutputStream outputStream)
@@ -225,11 +236,12 @@ public class S3StorageAdapter implements StorageAdapter {
         } else {
             final URI storageID = storageLocation.getStorageID();
             final long start = System.currentTimeMillis();
-            try (final InputStream inputStream = s3Client.getObject(GetObjectRequest.builder()
-                                                                                    .bucket(parseBucket(storageID))
-                                                                                    .key(parseObjectID(storageID))
-                                                                                    .build(),
-                                                                    ResponseTransformer.toInputStream())) {
+            try (final ResponseInputStream<GetObjectResponse> inputStream = s3Client.getObject(
+                    GetObjectRequest.builder()
+                                    .bucket(parseBucket(storageID))
+                                    .key(parseObjectID(storageID))
+                                    .build(),
+                    ResponseTransformer.toInputStream())) {
 
                 final Fits fitsFile = new Fits(inputStream);
                 final ArrayDataOutput dataOutput = new BufferedDataOutputStream(dest);
@@ -297,42 +309,52 @@ public class S3StorageAdapter implements StorageAdapter {
         final DigestInputStream digestInputStream = new DigestInputStream(source, createDigester());
         final ByteCountInputStream byteCountInputStream = new ByteCountInputStream(digestInputStream);
         final InputStream bufferedInputStream = new BufferedInputStream(byteCountInputStream);
+        final String objectID = parseObjectID(storageID);
+        final String bucket = parseBucket(storageID);
 
         try {
-            s3Client.putObject(PutObjectRequest.builder()
-                                               .bucket(parseBucket(storageID))
-                                               .key(parseObjectID(storageID))
-                                               .build(),
-                               RequestBody.fromInputStream(bufferedInputStream, newArtifact.contentLength));
+            final PutObjectRequest.Builder putObjectRequestBuilder = PutObjectRequest.builder()
+                                                                                     .bucket(bucket)
+                                                                                     .key(objectID);
 
-            final URI expectedChecksum = newArtifact.contentChecksum;
-            final URI calculatedChecksum = createChecksum(digestInputStream.getMessageDigest());
+            final Map<String, String> metadata = new HashMap<>();
+            metadata.put("uri", newArtifact.getArtifactURI().toString());
 
-            if (expectedChecksum == null) {
-                LOGGER.debug("No checksum provided.  Defaulting the calculated one.");
-            } else if (!expectedChecksum.equals(calculatedChecksum)) {
-                throw new StreamCorruptedException(
-                        String.format("Checksums do not match.  Expected %s but was %s.", expectedChecksum.toString(),
-                                      calculatedChecksum.toString()));
+            if (newArtifact.contentChecksum != null) {
+                putObjectRequestBuilder.contentMD5(newArtifact.contentChecksum.getSchemeSpecificPart());
+                metadata.put("md5", newArtifact.contentChecksum.toString());
             }
 
-            final Long expectedContentLength = newArtifact.contentLength;
-            final long calculatedContentLength = byteCountInputStream.getByteCount();
-
-            if (expectedContentLength == null) {
-                LOGGER.debug("No content length provided.  Defaulting the calculated one.");
-            } else if (expectedContentLength != calculatedContentLength) {
-                throw new StreamCorruptedException(
-                        String.format("Content lengths do not match.  Expected %d but was %d.", expectedContentLength,
-                                      calculatedContentLength));
+            if (newArtifact.contentLength != null) {
+                putObjectRequestBuilder.contentLength(newArtifact.contentLength);
             }
 
-            return new StorageMetadata(new StorageLocation(storageID), calculatedChecksum, calculatedContentLength);
+            putObjectRequestBuilder.metadata(metadata);
+
+            s3Client.putObject(putObjectRequestBuilder.build(), RequestBody.fromInputStream(bufferedInputStream,
+                                                                                            newArtifact.contentLength));
+
+            return head(bucket, objectID);
         } catch (S3Exception | SdkClientException e) {
             throw new StorageEngageException(e.getMessage(), e);
-        } catch (IOException e) {
-            throw new WriteException(e.getMessage(), e);
         }
+    }
+
+    StorageMetadata head(final String bucket, final String key) {
+        final HeadObjectRequest.Builder headBuilder = HeadObjectRequest.builder().key(key);
+        final HeadObjectResponse headResponse = s3Client.headObject(StringUtil.hasLength(bucket)
+                                                                    ? headBuilder.bucket(bucket).build()
+                                                                    : headBuilder.build());
+        final String artifactURIMetadataValue = headResponse.metadata().get("uri");
+        final URI metadataArtifactURI = StringUtil.hasLength(artifactURIMetadataValue)
+                                        ? URI.create(artifactURIMetadataValue)
+                                        : URI.create(String.format("%s:%s/%s", "UNKNOWN", bucket, key));
+        final String md5ChecksumValue = headResponse.sseCustomerKeyMD5();
+        final URI md5 = URI.create(String.format("%s:%s", "md5", StringUtil.hasLength(md5ChecksumValue)
+                                                                 ? md5ChecksumValue
+                                                                 : headResponse.eTag().replaceAll("\"", "")));
+
+        return new StorageMetadata(new StorageLocation(metadataArtifactURI), md5, headResponse.contentLength());
     }
 
     /**
@@ -349,6 +371,56 @@ public class S3StorageAdapter implements StorageAdapter {
 
     }
 
+
+    Iterator<StorageMetadata> pageIterator(final String storageBucket, final URI startAfterKey) {
+        LOGGER.debug(String.format("Requesting more pages starting at %s.", startAfterKey));
+        final Optional<URI> startAfterKeyOptional = Optional.ofNullable(startAfterKey);
+        final ListObjectsV2Request.Builder listBuilder = ListObjectsV2Request.builder();
+
+        if (StringUtil.hasLength(storageBucket)) {
+            listBuilder.bucket(storageBucket);
+        }
+
+        startAfterKeyOptional.ifPresent(uri -> listBuilder.startAfter(String.format("%s", parseObjectID(uri))));
+
+        return new Iterator<StorageMetadata>() {
+            private final Iterator<ListObjectsV2Response> listObjectsV2Responses =
+                    s3Client.listObjectsV2Paginator(listBuilder.build()).iterator();
+
+            // State of this iterator.
+            private Iterator<S3Object> currIterator;
+            private boolean lastResponseWasTruncated;
+
+
+            @Override
+            public boolean hasNext() {
+                if (currIterator == null || !currIterator.hasNext()) {
+                    if (listObjectsV2Responses.hasNext()) {
+                        final ListObjectsV2Response response = listObjectsV2Responses.next();
+                        currIterator = response.contents().iterator();
+                        lastResponseWasTruncated = response.isTruncated();
+                    } else {
+                        currIterator = Collections.emptyIterator();
+                    }
+                }
+
+                final boolean iteratorHasMore = currIterator.hasNext();
+                if (!iteratorHasMore && lastResponseWasTruncated) {
+                    LOGGER.debug(
+                            "\n\nIterator listings are empty but there are still more items available from the " +
+                            "server!\n\n");
+                }
+
+                return iteratorHasMore;
+            }
+
+            @Override
+            public StorageMetadata next() {
+                return head(storageBucket, currIterator.next().key());
+            }
+        };
+    }
+
     /**
      * Iterator of items ordered by their storageIDs.
      *
@@ -362,7 +434,7 @@ public class S3StorageAdapter implements StorageAdapter {
     @Override
     public Iterator<StorageMetadata> iterator()
             throws ReadException, WriteException, StorageEngageException, TransientException {
-        return null;
+        return iterator(null);
     }
 
     /**
@@ -379,7 +451,7 @@ public class S3StorageAdapter implements StorageAdapter {
     @Override
     public Iterator<StorageMetadata> iterator(final String storageBucket)
             throws ReadException, WriteException, StorageEngageException, TransientException {
-        return null;
+        return new S3StorageMetadataIterator(this, storageBucket);
     }
 
     /**
@@ -396,6 +468,6 @@ public class S3StorageAdapter implements StorageAdapter {
     @Override
     public Iterator<StorageMetadata> unsortedIterator(final String storageBucket)
             throws ReadException, WriteException, StorageEngageException, TransientException {
-        return null;
+        return iterator(storageBucket);
     }
 }
