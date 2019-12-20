@@ -4,7 +4,7 @@
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
     xmlns:vs="http://www.ivoa.net/xml/VODataService/v1.1">
 
-  <capability standardID="vos://cadc.nrc.ca~vospace/CADC/std/inventory#locate-1.0">
+  <capability standardID="http://www.opencadc.org/std/storage#locate-1.0">
     <interface xsi:type="vs:ParamHTTP" role="std">
       <accessURL use="base">https://replace.com/raven/locate</accessURL>
       <securityMethod />

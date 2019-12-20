@@ -212,8 +212,6 @@ public class PostAction extends RestAction {
         URI resourceID = null;
         URL baseURL = null;
         String endpointURL = null;
-        // TODO: move the standard ID to Standards.java
-        URI artifactsStdId = URI.create("vos://cadc.nrc.ca~vospace/CADC/std/inventory#artifacts-1.0");
         
         // TODO: Cache the full list of storage sites (using storageSiteDAO.list())
         // and check for updates to that list periodically (every 5 min or so)
@@ -222,7 +220,7 @@ public class PostAction extends RestAction {
         for (SiteLocation site : locations) {
             storageSite = storageSiteDAO.get(site.getSiteID());
             resourceID = storageSite.getResourceID();
-            baseURL = regClient.getServiceURL(resourceID, artifactsStdId, AuthMethod.ANON);
+            baseURL = regClient.getServiceURL(resourceID, Standards.SI_FILES, AuthMethod.ANON);
             log.debug("base url for site " + site.toString() + ": " + baseURL);
             if (baseURL != null) {
                 endpointURL = baseURL.toString() + "/" + authToken + "/" + artifactURI.toString();

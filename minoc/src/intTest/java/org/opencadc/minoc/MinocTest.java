@@ -70,6 +70,7 @@ package org.opencadc.minoc;
 import ca.nrc.cadc.auth.AuthMethod;
 import ca.nrc.cadc.auth.AuthenticationUtil;
 import ca.nrc.cadc.auth.SSLUtil;
+import ca.nrc.cadc.reg.Standards;
 import ca.nrc.cadc.reg.client.RegistryClient;
 import ca.nrc.cadc.util.FileUtil;
 import ca.nrc.cadc.util.HexUtil;
@@ -99,9 +100,7 @@ public abstract class MinocTest {
     
     private static final Logger log = Logger.getLogger(BasicOpsTest.class);
     public static final URI MINOC_SERVICE_ID = URI.create("ivo://cadc.nrc.ca/minoc");
-    // TODO: Move this to Standards.java
-    private static final URI MINOC_STANDARD_ID = URI.create("vos://cadc.nrc.ca~vospace/CADC/std/inventory#artifacts-1.0");
-
+    
     protected URL anonURL;
     protected URL certURL;
     protected Subject anonSubject;
@@ -113,9 +112,9 @@ public abstract class MinocTest {
     
     public MinocTest() {
         RegistryClient regClient = new RegistryClient();
-        anonURL = regClient.getServiceURL(MINOC_SERVICE_ID, MINOC_STANDARD_ID, AuthMethod.ANON);
+        anonURL = regClient.getServiceURL(MINOC_SERVICE_ID, Standards.SI_FILES, AuthMethod.ANON);
         log.info("anonURL: " + anonURL);
-        certURL = regClient.getServiceURL(MINOC_SERVICE_ID, MINOC_STANDARD_ID, AuthMethod.CERT);
+        certURL = regClient.getServiceURL(MINOC_SERVICE_ID, Standards.SI_FILES, AuthMethod.CERT);
         log.info("certURL: " + certURL);
         anonSubject = AuthenticationUtil.getAnonSubject();
         File cert = FileUtil.getFileFromResource("minoc-test.pem", MinocTest.class);

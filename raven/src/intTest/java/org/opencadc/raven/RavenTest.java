@@ -75,6 +75,7 @@ import ca.nrc.cadc.db.DBConfig;
 import ca.nrc.cadc.db.DBUtil;
 import ca.nrc.cadc.net.FileContent;
 import ca.nrc.cadc.net.HttpPost;
+import ca.nrc.cadc.reg.Standards;
 import ca.nrc.cadc.reg.client.RegistryClient;
 import ca.nrc.cadc.util.FileUtil;
 import ca.nrc.cadc.util.HexUtil;
@@ -115,9 +116,7 @@ import org.opencadc.inventory.db.SQLGenerator;
 public abstract class RavenTest {
     
     private static final Logger log = Logger.getLogger(NegotiationTest.class);
-    public static final URI RAVEN_SERVICE_ID = URI.create("ivo://cadc.nrc.ca/raven");
-    // TODO: Move this to Standards.java
-    private static final URI RAVEN_STANDARD_ID = URI.create("vos://cadc.nrc.ca~vospace/CADC/std/inventory#locate-1.0");
+    public static final URI RAVEN_SERVICE_ID = URI.create("ivo://cadc.nrc.ca/raven");;
     
     static String SERVER = "INVENTORY_TEST";
     static String DATABASE = "content";
@@ -136,9 +135,9 @@ public abstract class RavenTest {
     
     public RavenTest() throws Exception {
         RegistryClient regClient = new RegistryClient();
-        anonURL = regClient.getServiceURL(RAVEN_SERVICE_ID, RAVEN_STANDARD_ID, AuthMethod.ANON);
+        anonURL = regClient.getServiceURL(RAVEN_SERVICE_ID, Standards.SI_LOCATE, AuthMethod.ANON);
         log.info("anonURL: " + anonURL);
-        certURL = regClient.getServiceURL(RAVEN_SERVICE_ID, RAVEN_STANDARD_ID, AuthMethod.CERT);
+        certURL = regClient.getServiceURL(RAVEN_SERVICE_ID, Standards.SI_LOCATE, AuthMethod.CERT);
         log.info("certURL: " + certURL);
         anonSubject = AuthenticationUtil.getAnonSubject();
         File cert = FileUtil.getFileFromResource("raven-test.pem", RavenTest.class);
