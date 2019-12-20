@@ -39,6 +39,7 @@ A minoc.properties file in /path/to/external/conf is required to run this servic
 
 ```
 # The storage adapter to use for storage.
+# Consult the storage adapter instructions for adapter-specific configuration
 org.opencadc.inventory.storage.StorageAdapter=org.opencadc.inventory.storage.fs.FileSystemStorageAdapter
 
 # The SQL generator implementation (optional property, will default to the once below if not present)
