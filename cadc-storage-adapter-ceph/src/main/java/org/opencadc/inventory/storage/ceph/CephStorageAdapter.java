@@ -74,6 +74,7 @@ import com.ceph.rados.ListCtx;
 import com.ceph.rados.Rados;
 import com.ceph.rados.exceptions.RadosException;
 import com.ceph.rados.exceptions.RadosNotFoundException;
+import com.ceph.rados.jna.RadosObjectInfo;
 import com.ceph.radosstriper.IoCTXStriper;
 import com.ceph.radosstriper.RadosStriper;
 import nom.tam.fits.BasicHDU;
@@ -402,6 +403,7 @@ public class CephStorageAdapter implements StorageAdapter {
 
     StorageMetadata head(final String storageBucket, final String objectID) {
         try (IoCTX ioCTX = contextConnect(DATA_POOL_NAME)) {
+            final RadosObjectInfo radosObjectInfo = ioCTX.stat(objectID);
             final Map<String, String> extendedAttributes = ioCTX.getExtendedAttributes(objectID);
             final String artifactURIMetadataValue = extendedAttributes.get("uri");
             final URI metadataArtifactURI = StringUtil.hasLength(artifactURIMetadataValue)
@@ -411,9 +413,7 @@ public class CephStorageAdapter implements StorageAdapter {
             final URI md5 = URI.create(String.format("%s:%s", "md5", StringUtil.hasLength(md5ChecksumValue)
                                                                      ? md5ChecksumValue
                                                                      : "UNKNOWN"));
-            final String lengthValue = extendedAttributes.get("sizeInBytes");
-            final Long contentLength = StringUtil.hasLength(lengthValue) ? Long.parseLong(lengthValue) : -1L;
-            return new StorageMetadata(new StorageLocation(metadataArtifactURI), md5, contentLength);
+            return new StorageMetadata(new StorageLocation(metadataArtifactURI), md5, radosObjectInfo.getSize());
         } catch (IOException e) {
             throw new RuntimeException(e.getMessage(), e);
         }
