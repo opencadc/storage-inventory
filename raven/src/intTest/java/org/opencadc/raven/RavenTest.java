@@ -65,64 +65,118 @@
  ************************************************************************
  */
 
-package org.opencadc.inventory.storage.fs;
+package org.opencadc.raven;
 
+import ca.nrc.cadc.auth.AuthMethod;
+import ca.nrc.cadc.auth.AuthenticationUtil;
+import ca.nrc.cadc.auth.SSLUtil;
+import ca.nrc.cadc.db.ConnectionConfig;
+import ca.nrc.cadc.db.DBConfig;
+import ca.nrc.cadc.db.DBUtil;
+import ca.nrc.cadc.net.FileContent;
+import ca.nrc.cadc.net.HttpPost;
+import ca.nrc.cadc.reg.Standards;
+import ca.nrc.cadc.reg.client.RegistryClient;
+import ca.nrc.cadc.util.FileUtil;
+import ca.nrc.cadc.util.HexUtil;
+import ca.nrc.cadc.util.Log4jInit;
+import ca.nrc.cadc.vos.Transfer;
+import ca.nrc.cadc.vos.TransferParsingException;
+import ca.nrc.cadc.vos.TransferReader;
+import ca.nrc.cadc.vos.TransferWriter;
+
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.URI;
-import java.net.URISyntaxException;
-import java.nio.file.Path;
+import java.net.URL;
+import java.security.DigestInputStream;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.security.PrivilegedActionException;
+import java.security.PrivilegedExceptionAction;
+import java.util.Map;
+import java.util.TreeMap;
 
+import javax.security.auth.Subject;
+
+import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
-import org.opencadc.inventory.storage.StorageMetadata;
+import org.junit.Assert;
+import org.opencadc.inventory.db.SQLGenerator;
 
 /**
- * Class that will set the artifactURIs for items returned by a file
- * system iterator.
+ * Abstract integration test class with general setup and test support.
  * 
  * @author majorb
  */
-public class ArtifactIterator extends FileSystemIterator {
+public abstract class RavenTest {
     
-    private static final Logger log = Logger.getLogger(ArtifactIterator.class);
+    private static final Logger log = Logger.getLogger(NegotiationTest.class);
+    public static final URI RAVEN_SERVICE_ID = URI.create("ivo://cadc.nrc.ca/raven");;
+    
+    static String SERVER = "INVENTORY_TEST";
+    static String DATABASE = "content";
+    static String SCHEMA = "inventory";
 
-    /**
-     * ArtifactIterator constructor.
-     * 
-     * @param dir The directory to iterate
-     * @param ignoreDepth The depth of directories to navigate until non-bucket
-     *     directories are seen.
-     * @param fixedParentDir A path to add to the start of all returned files.
-     * @throws IOException If there is a problem with file-system interaction.
-     */
-    public ArtifactIterator(Path dir, int ignoreDepth, String fixedParentDir) throws IOException {
-        super(dir, ignoreDepth, fixedParentDir);
-        // TODO Auto-generated constructor stub
+    protected URL anonURL;
+    protected URL certURL;
+    protected Subject anonSubject;
+    protected Subject userSubject;
+    
+    Map<String,Object> config;
+    
+    static {
+        Log4jInit.setLevel("org.opencadc.raven", Level.INFO);
     }
     
-    /**
-     * Get the next file element and add the artifact URI.
-     * @return The next file in the iterator, identified by StorageMetadata.
-     */
-    @Override
-    public StorageMetadata next() {
-        StorageMetadata meta = super.next();
-        URI storageID = meta.getStorageLocation().getStorageID();
-        String ssp = storageID.getSchemeSpecificPart();
-        int firstSlash = ssp.indexOf("/");
-        if (firstSlash < 1) {
-            log.debug("unrecognized storageID format");
-        } else {
-            StringBuilder sb = new StringBuilder();
-            sb.append(ssp.substring(0, firstSlash));
-            sb.append(ssp.substring(firstSlash + 1));
-            try {
-                meta.artifactURI = new URI(sb.toString());
-            } catch (URISyntaxException e) {
-                throw new RuntimeException("BUG: failed to reconstruct Artifact.uri for " + meta, e);
-            }
-            log.debug("set artifactURI to: " + meta.artifactURI);
+    public RavenTest() throws Exception {
+        RegistryClient regClient = new RegistryClient();
+        anonURL = regClient.getServiceURL(RAVEN_SERVICE_ID, Standards.SI_LOCATE, AuthMethod.ANON);
+        log.info("anonURL: " + anonURL);
+        certURL = regClient.getServiceURL(RAVEN_SERVICE_ID, Standards.SI_LOCATE, AuthMethod.CERT);
+        log.info("certURL: " + certURL);
+        anonSubject = AuthenticationUtil.getAnonSubject();
+        File cert = FileUtil.getFileFromResource("raven-test.pem", RavenTest.class);
+        log.info("userSubject: " + userSubject);
+        userSubject = SSLUtil.createSubject(cert);
+        log.info("userSubject: " + userSubject);
+        
+        try {
+            DBConfig dbrc = new DBConfig();
+            ConnectionConfig cc = dbrc.getConnectionConfig(SERVER, DATABASE);
+            DBUtil.createJNDIDataSource("jdbc/inventory", cc);
+
+            config = new TreeMap<String,Object>();
+            config.put(SQLGenerator.class.getName(), SQLGenerator.class);
+            config.put("jndiDataSourceName", "jdbc/inventory");
+            config.put("schema", SCHEMA);
+
+        } catch (Exception ex) {
+            log.error("setup failed", ex);
+            throw ex;
         }
-        return meta;
+    }
+    
+    protected Transfer negotiate(Transfer request) throws IOException, TransferParsingException, PrivilegedActionException {
+        TransferWriter writer = new TransferWriter();
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        writer.write(request, out);
+        FileContent content = new FileContent(out.toByteArray(), "text/xml");
+        HttpPost post = new HttpPost(certURL, content, false);
+        post.run();
+        if (post.getThrowable() != null && post.getThrowable() instanceof FileNotFoundException) {
+            throw (FileNotFoundException) post.getThrowable();
+        }
+        Assert.assertNull(post.getThrowable());
+        String response = post.getResponseBody();
+        TransferReader reader = new TransferReader();
+        Transfer t = reader.read(response,  null);
+        log.info("Response transfer: " + t);
+        return t;
     }
 
 }

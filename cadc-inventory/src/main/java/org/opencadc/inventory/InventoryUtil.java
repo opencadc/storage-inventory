@@ -108,6 +108,21 @@ public abstract class InventoryUtil {
             throw new RuntimeException("BUG: failed to get instance of SHA-1", ex);
         }
     }
+    
+    /**
+     * Compute the filename of an artifact URI.
+     * @param uri The uri to parse
+     * @return The filename
+     */
+    public static String computeArtifactFilename(URI uri) {
+        validateArtifactURI(InventoryUtil.class, uri);
+        String ssp = uri.getSchemeSpecificPart();
+        int lastSlash = ssp.lastIndexOf("/");
+        if (lastSlash > 0) {
+            return ssp.substring(lastSlash + 1);
+        }
+        return ssp;
+    }
 
     /**
      * Validates that a URI conforms to the {scheme}:{scheme-specific-part}

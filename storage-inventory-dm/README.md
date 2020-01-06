@@ -161,9 +161,10 @@ files (basic put/get/delete):
 - POST can modify the Artifact.uri (rename), the Artifact.contentType, and the Artifact.contentEncoding
 
 locate (transfer negotiation):
-- negotiate with global to get: locate available copies and return URL(s), order by proximity
-- negotiate with global to put: sites that are writable, try to match policy? (like--)
-- negotiate with global to delete: same as get
+- GET: negotiate with global, locate available copies, return URL(s), order by proximity
+- PUT: negotiate with global? sites that are writable, try to match policy? (like--)
+- DELETE: delete from global? global deletes Artifact, creates DeletedArtifactEvent, sites harvest and delete as usual
+- DELETE: negotiate with global? find sites with a copy and delete from one?
 - global should implement heartbeat check with sites so negotiated transfers likely to work
 - vault transfer negotiation maps vos {path} to DataNode.uuid and then negotiates with global
 - vault implementation could maintain it's own global inventory of vault files (policy)
@@ -176,26 +177,25 @@ how does a curl/wget user download a file?
   failed GETs back to global, but that introduces tighter coupling between global and sites (like--)
 
 overwrite a file at storage site: atomic delete + create
-- write a new File (new UUID), File.lastModified/metaChecksum must change, global harvests, sites harvest
-- add DeletedFile record with old UUID
+- create a new Artifact (new UUID), Artifact.lastModified/metaChecksum must change, global harvests, sites harvest
+- create DeletedArtifactEvent with old UUID
 - before global harvests: eventually consistent (but detectable by clients in principle)
 - after global harvests: consistent (only new file accessible, sites limited until sync'ed
 - direct access: other storage sites would deliver previous version of file until they sync
-- race condition - put at two sites -> two File(s) with same fileID but different id: keep max(File.lastModified)
+- race condition when put at two sites -> two Artifact(s) with same uri but different id: keep max(Artifact.lastModified)
 
 how does delete file get propagated?
 - delete from any site with a copy; delete harvested to global and then to other sites
-- process harvested delete by File UUID so it is decoupled from put new file with same name
-- negotiate with global to find a copy to delete, delete one or more copies?
+- process harvested delete by Artifact.id so it is decoupled from put new file with same name
 - race condition - delete and put at different sites: the put always wins
 - delete by Artifact UUID is idempotent so duplicate DeletedArtifactEvent records are ok
 
 how does global learn about copies at sites other than the original?
 - when a site syncs a file (adds a local StorageLocation): update the Artifact.lastModified
-- global metadata-sync from site(s) will see this and add a local SiteLocation
+- global metadata-sync from site(s) will see this and add a SiteLocation
+- global does not update Artitact.lastModified?
 - the Artifact.id and Artifact.metaChecksum never change during sync
-- global's view of the Artifact.lastModified will be the latest change at all sites, but that doesn't stop it from getting an
-  "event" out of order and still merging in the new SiteLocation
+- global's view of the Artifact.lastModified will be the latest change at all sites, but that doesn't stop it from getting an "event" out of order and still merging in the new SiteLocation
 
 how would a temporary cache instance at a site be maintained?
 - site could accept writes to a "cache" instance for Artifact(s) that do not match local policy
@@ -208,21 +208,49 @@ how does global inventory validate vs site?  how does site validate vs global (w
 - get list of Artifact(s) from the site and compare with Artifact+SiteLocation
 - add missing Artifact(s)
 - add misssing SiteLocation(s)
+- update mutable Artifact metadata (validate sees it before metadata-sync)
 - remove orphaned SiteLocation(s)
 - remove Artifact(s) with no SiteLocation??
-- use uriBucket prefix to batch validation
+- use uriBucket to do validation in batches/parallel
+- use streaming (merge-join) to minimise memory requirements
 
 how does a storage site validate vs local storage system?
 - compare List of Artifact+StorageLocation vs storage content using storageID
-- use uriBucket prefix to batch validation??
+- use storageBucket prefix to batch validation?
+- use sorted iterator to stream (merge join) for validation?
 - if file in inventory & not in storage: pending file-sync job
-- if file in storage and not in inventory && can generate File.uri: query global, create StorageLocation, maybe create File
-- if file in storage and not in inventory && cannot generate File.uri: delete from storage? alert operator?
+- if file in storage and not in inventory && can generate Artifact.uri: query global, create StorageLocation, maybe create Artifact
+- if file in storage and not in inventory && cannot generate Artifact.uri: delete from storage? alert operator?
+- if file in storage and inventory: compare checksum and length && act on discrepancies
 
 what happens when a storage site detects that a Artifact.contentChecksum != storage.checksum?
-- if copies-in-global: delete the Artifact and the stored file and re-sync w.r.t policy?
+- depends on whether the storage checksum matches bytes or is simply an attached attribute
+- if attached attr: can be used to detect that file was overwritten but inventory update failed
+- if actual storage checksum: how to disambiguate bit-rot from update inconsistency?
+- if copies-in-global: delete the Artifact and the stored file, fire DeletedStorageLocationEvent, re-sync w.r.t policy?
 - if !copies-in-global: mark it bad && human intervention
 
 should harvesting detect if site Artifact.lastModified stream is out of whack?
 - non-monotonic, except for volatile head of stack?
 - clock skew
+
+# storage back end implementation notes
+The cadc-storage-adapter API places two requirements on the implementation:
+1. store and return (via iterator) the Artifact.uri, Artifact.contentChecksum, and Artifact.contentLength
+2. support ordered iteration (by storageID) *or* batched iteration (by storageBucket):  **preferrably both**
+
+|backend impl|ordered iterator|bucket iterator|random access|
+|------------|:--------------:|:-------------:|:-----------:|
+|opaque filesystem|N|Y|Y|
+|mountable filesystem (RO)|N|path-components|Y|
+|mountable filesystem|N|N*|Y|
+|Ceph-OS + rados|?|?|Y|
+|Ceph-OS + S3|?|Y|Y|
+|AD|SQL order-by|archive|code on storage node|
+
+Note: for a write-mountable filesystem, simple operations in the filesystem (mv) can invalidate an arbitrary
+number of storageID values, make all those artifacts inaccessible, and cause file-validate to do an arbitrary amount
+of work to fix the storageID values. It is not feasible to avoid treating it as a new Artifact and 
+DeletedArtifactEvent that gets propagated to all sites unless you trust the Artifact.contentChecksum to be a unique 
+and reliable identifier.
+

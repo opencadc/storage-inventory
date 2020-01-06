@@ -11,25 +11,40 @@ repositories {
     mavenLocal()
 }
 
+apply from: '../opencadc.gradle'
+
 sourceCompatibility = 1.8
 
 group = 'org.opencadc'
+
+war {
+    from(System.getenv('RPS') + '/resources/') {
+        include 'swagger-ui/'
+    }
+}
 
 dependencies {
     compile 'log4j:log4j:[1.2,)'
     compile 'org.opencadc:cadc-util:[1.2,)'
     compile 'org.opencadc:cadc-log:[1.0,)'
-    compile 'org.opencadc:cadc-registry:[1.2.1,)'
+    compile 'org.opencadc:cadc-registry:[1.5.6,)'
     compile 'org.opencadc:cadc-vosi:[1.0,)'
     compile 'org.opencadc:cadc-rest:[1.0,)'
     compile 'org.opencadc:cadc-cdp:[1.0,)'
     compile 'org.opencadc:cadc-gms:[1.0.0,)'
     compile 'org.opencadc:cadc-inventory:[0.1,)'
+    compile 'org.opencadc:cadc-inventory-db:[0.1,)'
+    compile 'org.opencadc:cadc-storage-adapter:[0.1,)'
+    compile 'org.opencadc:cadc-storage-permissions:[0.1,)'
     compile 'org.opencadc:cadc-access-control:[1.1.1,2.0)'
     compile 'org.opencadc:cadc-access-control-identity:[1.0.3,2.0)'
 
     testCompile 'junit:junit:[4.0,)'
+
+    intTestCompile 'org.opencadc:cadc-test-vosi:[1.0.2,)'
+    
+    runtime 'org.opencadc:cadc-storage-adapter-fs:[0.1,)'
 }
 
-apply from: '../opencadc.gradle'
+
 

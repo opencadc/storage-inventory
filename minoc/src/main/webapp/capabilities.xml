@@ -4,9 +4,9 @@
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
     xmlns:vs="http://www.ivoa.net/xml/VODataService/v1.1">
 
-  <capability standardID="vos://cadc.nrc.ca~vospace/CADC/std/inventory#artifacts-1.0">
+  <capability standardID="http://www.opencadc.org/std/storage#files-1.0">
     <interface xsi:type="vs:ParamHTTP" role="std">
-      <accessURL use="base">http://replace.com/minoc/files</accessURL>
+      <accessURL use="base">https://replace.com/minoc/files</accessURL>
       <securityMethod />
       <securityMethod standardID="ivo://ivoa.net/sso#cookie" />
       <securityMethod standardID="ivo://ivoa.net/sso#tls-with-certificate" />

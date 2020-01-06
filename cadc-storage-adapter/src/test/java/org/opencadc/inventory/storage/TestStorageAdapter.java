@@ -127,7 +127,7 @@ public class TestStorageAdapter implements StorageAdapter {
     }
 
     public StorageMetadata put(NewArtifact newArtifact, InputStream source)
-        throws ResourceNotFoundException, StreamCorruptedException, ReadException, WriteException, StorageEngageException, TransientException {
+        throws StreamCorruptedException, ReadException, WriteException, StorageEngageException, TransientException {
 
         ByteArrayOutputStream dest = new ByteArrayOutputStream();
         ThreadedIO io = new ThreadedIO(BUF_SIZE, 3);

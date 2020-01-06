@@ -67,13 +67,14 @@
 
 package org.opencadc.minoc;
 
-import java.net.URI;
-
 import org.apache.log4j.Logger;
-import org.opencadc.minoc.ArtifactUtil.HttpMethod;
+import org.opencadc.inventory.Artifact;
+import org.opencadc.inventory.StorageLocation;
+import org.opencadc.inventory.db.ArtifactDAO;
+import org.opencadc.inventory.permissions.ReadGrant;
 
 /**
- * Interface with storage to get an artifact.
+ * Interface with storage and inventory to get an artifact.
  *
  * @author majorb
  */
@@ -85,16 +86,27 @@ public class GetAction extends ArtifactAction {
      * Default, no-arg constructor.
      */
     public GetAction() {
-        super(HttpMethod.GET);
+        super();
     }
 
     /**
      * Download the artifact or cutouts of the artifact.
-     * @param artifactURI The identifier for the artifact. 
      */
     @Override
-    public void execute(URI artifactURI) throws Exception {
-        // TODO
+    public void doAction() throws Exception {
+        
+        initAndAuthorize(ReadGrant.class);
+        
+        ArtifactDAO dao = getArtifactDAO();
+        Artifact artifact = getArtifact(artifactURI, dao);
+        HeadAction.setHeaders(artifact, syncOutput);
+        
+        StorageLocation storageLocation = new StorageLocation(artifact.storageLocation.getStorageID());
+        storageLocation.storageBucket = artifact.storageLocation.storageBucket;
+        log.debug("retrieving artifact from storage...");
+        getStorageAdapter().get(storageLocation, syncOutput.getOutputStream());
+        log.debug("retrieved artifact from storage");
+
     }
 
 }

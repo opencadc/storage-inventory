@@ -67,20 +67,16 @@
 
 package org.opencadc.minoc;
 
+import ca.nrc.cadc.rest.SyncInput;
+import ca.nrc.cadc.util.Log4jInit;
+
 import java.io.IOException;
 import java.net.URI;
-
-import javax.servlet.http.HttpServletRequest;
 
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.Test;
-import org.opencadc.minoc.ArtifactUtil.HttpMethod;
-
-import ca.nrc.cadc.rest.InlineContentHandler;
-import ca.nrc.cadc.rest.SyncInput;
-import ca.nrc.cadc.util.Log4jInit;
 
 public class ArtifactActionTest {
 
@@ -107,15 +103,16 @@ public class ArtifactActionTest {
     class TestArtifactAction extends ArtifactAction {
         
         public TestArtifactAction(String path) {
-            super(HttpMethod.GET);
+            super();
             try {
                 super.syncInput = new TestSyncInput(path);
             } catch (Throwable t) {
                 throw new RuntimeException(t);
             }
         }
-        
-        public void execute(URI artifactURI) throws Exception {
+
+        @Override
+        public void doAction() throws Exception {
         }
 
     }
