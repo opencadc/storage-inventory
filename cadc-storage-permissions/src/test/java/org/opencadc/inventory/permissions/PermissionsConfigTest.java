@@ -76,6 +76,7 @@ import java.io.FileNotFoundException;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Pattern;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
@@ -115,14 +116,14 @@ public class PermissionsConfigTest {
             groupUris = "ivo://cadc.nrc.ca/gms?CFHT";
 
             testSubject.loadGroupURIS(groups, sb, groupUris, accessType);
-            Assert.assertTrue(sb.length() == 0);
+            Assert.assertEquals(0, sb.length());
 
             // Two Valid group uri's
             sb.setLength(0);
             groupUris = "ivo://cadc.nrc.ca/gms?CFHT,ivo://cadc.nrc.ca/gms?JCMT";
 
             testSubject.loadGroupURIS(groups, sb, groupUris, accessType);
-            Assert.assertTrue(sb.length() == 0);
+            Assert.assertEquals(0, sb.length());
 
             // One Valid group uri, one invalid
             sb.setLength(0);
@@ -137,6 +138,13 @@ public class PermissionsConfigTest {
         }
     }
 
+    private void testParsePermissions(PermissionsConfig testSubject, String value) {
+        Permissions actual = testSubject.parsePermissions(value);
+        Assert.assertNotNull(actual);
+        Assert.assertFalse(actual.getIsAnonymous());
+        Assert.assertEquals(0, actual.getReadOnlyGroups().size());
+        Assert.assertEquals(0, actual.getReadWriteGroups().size());
+    }
     @Test
     public void testParsePermissions() throws Exception {
         try {
@@ -156,53 +164,28 @@ public class PermissionsConfigTest {
             PermissionsConfig testSubject = getTestSubject(null);
 
             value = "";
-            try {
-                actual = testSubject.parsePermissions(value);
-                Assert.fail("Should have thrown IllegalArgumentException");
-            } catch (IllegalArgumentException expected) {
-                Assert.assertTrue(expected.getMessage().contains("invalid line"));
-            }
+            testParsePermissions(testSubject, value);
 
-            value = "ad:foo/bar?baz = T foo ";
-            try {
-                actual = testSubject.parsePermissions(value);
-                Assert.fail("Should have thrown IllegalArgumentException");
-            } catch (IllegalArgumentException expected) {
-                Assert.assertTrue(expected.getMessage().contains("expected 3 values"));
-            }
+            value = "T foo ";
+            testParsePermissions(testSubject, value);
 
-            value = "ad:foo/bar?baz = Z foo://bar far://foo";
-            try {
-                actual = testSubject.parsePermissions(value);
-                Assert.fail("Should have thrown IllegalArgumentException");
-            } catch (IllegalArgumentException expected) {
-                Assert.assertTrue(expected.getMessage().contains("invalid anonymous flag"));
-            }
+            value = "Z foo://bar far://foo";
+            testParsePermissions(testSubject, value);
 
-            value = "ad:foo/bar?baz = T foo foo://bar";
-            try {
-                actual = testSubject.parsePermissions(value);
-                Assert.fail("Should have thrown IllegalArgumentException");
-            } catch (IllegalArgumentException expected) {
-                Assert.assertTrue(expected.getMessage().contains("invalid read-only group"));
-            }
+            value = "T foo foo://bar";
+            testParsePermissions(testSubject, value);
 
-            value = "ad:foo/bar?baz = F foo://bar bar";
-            try {
-                actual = testSubject.parsePermissions(value);
-                Assert.fail("Should have thrown IllegalArgumentException");
-            } catch (IllegalArgumentException expected) {
-                Assert.assertTrue(expected.getMessage().contains("invalid read-write group"));
-            }
+            value = "F foo://bar bar";
+            testParsePermissions(testSubject, value);
 
-            value = "ad:foo/bar?baz = T " + fooUri + " " + barUri;
+            value = "T " + fooUri + " " + barUri;
             actual = testSubject.parsePermissions(value);
             Assert.assertNotNull(actual);
             Assert.assertTrue(actual.getIsAnonymous());
             Assert.assertEquals(fooURI, actual.getReadOnlyGroups().get(0));
             Assert.assertEquals(barURI, actual.getReadWriteGroups().get(0));
 
-            value = "ad:foo/bar?baz = F " + fooUri + "," + barUri + "," + bazUri + " " + hamUri + "," + spamUri;
+            value = "F " + fooUri + "," + barUri + "," + bazUri + " " + hamUri + "," + spamUri;
             actual = testSubject.parsePermissions(value);
             Assert.assertNotNull(actual);
             Assert.assertFalse(actual.getIsAnonymous());
@@ -233,7 +216,7 @@ public class PermissionsConfigTest {
             File file = FileUtil.getFileFromResource("empty.properties", PermissionsConfigTest.class);
             try {
                 PermissionsConfig testSubject = new PermissionsConfig(file);
-                Permissions actual = testSubject.getPermissions(new URI("ad:CFHT/*"));
+                Permissions actual = testSubject.getPermissions(new URI("ad:CFHT/1234.fits"));
                 Assert.assertFalse(actual.getIsAnonymous());
                 Assert.assertTrue(actual.getReadOnlyGroups().isEmpty());
                 Assert.assertTrue(actual.getReadWriteGroups().isEmpty());
@@ -247,95 +230,102 @@ public class PermissionsConfigTest {
     }
 
     @Test
+    public void testGetPattern() throws Exception {
+        try {
+            PermissionsConfig testSubject = getTestSubject(null);
+
+            // matches that fail
+            String configKey = "ivo:foo0/*";
+            String artifactUri = "ad:foo0/1234.fits";
+
+            Pattern pattern = testSubject.getPattern(configKey);
+            boolean matches = pattern.matcher(artifactUri).matches();
+            Assert.assertFalse(matches);
+
+            configKey = "ad:foo0/*";
+            artifactUri = "ad:foo1/1234.fits";
+
+            pattern = testSubject.getPattern(configKey);
+            matches = pattern.matcher(artifactUri).matches();
+            Assert.assertFalse(matches);
+
+            // matches that succeed
+            configKey = "ad:foo0/*";
+            artifactUri = "ad:foo0/a";
+
+            pattern = testSubject.getPattern(configKey);
+            matches = pattern.matcher(artifactUri).matches();
+            Assert.assertTrue(matches);
+
+            configKey = "ad:foo0/*";
+            artifactUri = "ad:foo0/1.fz";
+
+            pattern = testSubject.getPattern(configKey);
+            matches = pattern.matcher(artifactUri).matches();
+            Assert.assertTrue(matches);
+
+            configKey = "ad:foo0/*";
+            artifactUri = "ad:foo0/1234.fits";
+
+            pattern = testSubject.getPattern(configKey);
+            matches = pattern.matcher(artifactUri).matches();
+            Assert.assertTrue(matches);
+
+        } catch (Exception unexpected) {
+            log.error("unexpected exception", unexpected);
+            Assert.fail("unexpected exception: " + unexpected);
+        }
+    }
+
+    @Test
     public void testLoadInvalidConfig() throws Exception {
         try {
             // Invalid properties file
             File file = FileUtil.getFileFromResource("invalid.properties", PermissionsConfigTest.class);
             PermissionsConfig testSubject = new PermissionsConfig(file);
+            Permissions actual;
 
-            // key with no value
-            // foo:bar0/*=
-            try {
-                testSubject.getPermissions(new URI("foo:bar0/*"));
-                Assert.fail("Should throw IllegalArgumentException");
-            } catch (Exception expected) {
-                Assert.assertTrue(expected instanceof IllegalArgumentException);
-                Assert.assertTrue(expected.getMessage().contains("invalid line"));
-            }
+            // missing flag and groups
+            testInvalidConfig(testSubject, new URI("foo:bar0/1234.fits"));
 
-            // key with anonymous flag only
-            // foo:bar1/* = T
-            try {
-                testSubject.getPermissions(new URI("foo:bar1/*"));
-                Assert.fail("Should throw IllegalArgumentException");
-            } catch (Exception expected) {
-                Assert.assertTrue(expected instanceof IllegalArgumentException);
-                Assert.assertTrue(expected.getMessage().contains("expected 3 values"));
-            }
+            // missing groups
+            testInvalidConfig(testSubject, new URI("foo:bar1/1234.fits"));
 
-            // key with anonymous flag and read-only group
+            // missing read-write group
             // foo:bar2/*=F ivo://cadc.nrc.ca/gms?BAR-RO-1
-            try {
-                testSubject.getPermissions(new URI("foo:bar2/*"));
-                Assert.fail("Should throw IllegalArgumentException");
-            } catch (Exception expected) {
-                Assert.assertTrue(expected instanceof IllegalArgumentException);
-                Assert.assertTrue(expected.getMessage().contains("expected 3 values"));
-            }
+            testInvalidConfig(testSubject, new URI("foo:bar2/1234.fits"));
 
-            // key with anonymous flag and read-only group and invalid read-write group
+            // invalid read-write group
             // foo:bar3/* = F ivo://cadc.nrc.ca/gms?BAR-RO-1 bar
-            try {
-                testSubject.getPermissions(new URI("foo:bar3/*"));
-                Assert.fail("Should throw IllegalArgumentException");
-            } catch (Exception expected) {
-                Assert.assertTrue(expected instanceof IllegalArgumentException);
-                Assert.assertTrue(expected.getMessage().contains("invalid read-write group"));
-            }
+            testInvalidConfig(testSubject, new URI("foo:bar3/1234.fits"));
 
-            // key with anonymous flag and invalid read-only group and read-write group
+            // invalid read-only group
             // foo:bar4/*=T foo ivo://cadc.nrc.ca/gms?BAR-RW-1
-            try {
-                testSubject.getPermissions(new URI("foo:bar4/*"));
-                Assert.fail("Should throw IllegalArgumentException");
-            } catch (Exception expected) {
-                Assert.assertTrue(expected instanceof IllegalArgumentException);
-                Assert.assertTrue(expected.getMessage().contains("invalid read-only group"));
-            }
+            testInvalidConfig(testSubject, new URI("foo:bar4/1234.fits"));
 
-            // key with invalid anonymous flag and read-only group and read-write group
+            // invalid anonymous flag
             // foo:bar5/* = Z ivo://cadc.nrc.ca/gms?BAR-RO-1 ivo://cadc.nrc.ca/gms?BAR-RW-1
-            try {
-                testSubject.getPermissions(new URI("foo:bar5/*"));
-                Assert.fail("Should throw IllegalArgumentException");
-            } catch (Exception expected) {
-                Assert.assertTrue(expected instanceof IllegalArgumentException);
-                Assert.assertTrue(expected.getMessage().contains("invalid anonymous flag"));
-            }
+            testInvalidConfig(testSubject, new URI("foo:bar5/1234.fits"));
 
-            // key with invalid anonymous flag and read-only group and read-write group
+            // invalid read-only group
             // foo:bar6/*=F ivo://cadc.nrc.ca/gms?BAR-RO-1,foo ivo://cadc.nrc.ca/gms?BAR-RW-1
-            try {
-                testSubject.getPermissions(new URI("foo:bar6/*"));
-                Assert.fail("Should throw IllegalArgumentException");
-            } catch (Exception expected) {
-                Assert.assertTrue(expected instanceof IllegalArgumentException);
-                Assert.assertTrue(expected.getMessage().contains("invalid read-only group"));
-            }
+            testInvalidConfig(testSubject, new URI("foo:bar6/1234.fits"));
 
-            // key with invalid anonymous flag and read-only group and read-write group
+            // invalid read-write group
             // foo:bar7/* = T ivo://cadc.nrc.ca/gms?BAR-RO-1 ivo://cadc.nrc.ca/gms?BAR-RW-1,bar
-            try {
-                testSubject.getPermissions(new URI("foo:bar7/*"));
-                Assert.fail("Should throw IllegalArgumentException");
-            } catch (Exception expected) {
-                Assert.assertTrue(expected instanceof IllegalArgumentException);
-                Assert.assertTrue(expected.getMessage().contains("invalid read-write group"));
-            }
+            testInvalidConfig(testSubject, new URI("foo:bar7/1234.fits"));
         } catch (Exception unexpected) {
             log.error("unexpected exception", unexpected);
             Assert.fail("unexpected exception: " + unexpected);
         }
+    }
+
+    private void testInvalidConfig(PermissionsConfig testSubject, URI testUri) {
+        Permissions actual = testSubject.getPermissions(testUri);
+        Assert.assertNotNull(actual);
+        Assert.assertFalse(actual.getIsAnonymous());
+        Assert.assertEquals(0, actual.getReadOnlyGroups().size());
+        Assert.assertEquals(0, actual.getReadWriteGroups().size());
     }
 
     @Test
@@ -347,43 +337,43 @@ public class PermissionsConfigTest {
 
             // One group each
             // foo:bar0/* = T ivo://cadc.nrc.ca/gms?BAR-RO-1     ivo://cadc.nrc.ca/gms?BAR-RW-1
-            actual = testSubject.getPermissions(new URI("foo:bar0/*"));
+            actual = testSubject.getPermissions(new URI("foo:bar0/1234.fits"));
             Assert.assertNotNull(actual);
             Assert.assertTrue(actual.getIsAnonymous());
-            Assert.assertTrue(actual.getReadOnlyGroups().size() == 1);
-            Assert.assertTrue(actual.getReadWriteGroups().size() == 1);
+            Assert.assertEquals(1, actual.getReadOnlyGroups().size());
+            Assert.assertEquals(1, actual.getReadWriteGroups().size());
             Assert.assertTrue(actual.getReadOnlyGroups().contains(new GroupURI("ivo://cadc.nrc.ca/gms?BAR-RO-1")));
             Assert.assertTrue(actual.getReadWriteGroups().contains(new GroupURI("ivo://cadc.nrc.ca/gms?BAR-RW-1")));
 
             // Two read-only groups, one read-write group
             // foo:bar1/* =F ivo://cadc.nrc.ca/gms?BAR-RO-1,ivo://cadc.nrc.ca/gms?BAR-RO-2 ivo://cadc.nrc.ca/gms?BAR-RW-1
-            actual = testSubject.getPermissions(new URI("foo:bar1/*"));
+            actual = testSubject.getPermissions(new URI("foo:bar1/1234.fits"));
             Assert.assertNotNull(actual);
             Assert.assertFalse(actual.getIsAnonymous());
-            Assert.assertTrue(actual.getReadOnlyGroups().size() == 2);
-            Assert.assertTrue(actual.getReadWriteGroups().size() == 1);
+            Assert.assertEquals(2, actual.getReadOnlyGroups().size());
+            Assert.assertEquals(1, actual.getReadWriteGroups().size());
             Assert.assertTrue(actual.getReadOnlyGroups().contains(new GroupURI("ivo://cadc.nrc.ca/gms?BAR-RO-1")));
             Assert.assertTrue(actual.getReadOnlyGroups().contains(new GroupURI("ivo://cadc.nrc.ca/gms?BAR-RO-2")));
             Assert.assertTrue(actual.getReadWriteGroups().contains(new GroupURI("ivo://cadc.nrc.ca/gms?BAR-RW-1")));
 
             // One read-only group, two read-write groups
             // foo:bar2/* = T ivo://cadc.nrc.ca/gms?BAR-RO-1     ivo://cadc.nrc.ca/gms?BAR-RW-1,ivo://cadc.nrc.ca/gms?BAR-RW-2
-            actual = testSubject.getPermissions(new URI("foo:bar2/*"));
+            actual = testSubject.getPermissions(new URI("foo:bar2/1234.fits"));
             Assert.assertNotNull(actual);
             Assert.assertTrue(actual.getIsAnonymous());
-            Assert.assertTrue(actual.getReadOnlyGroups().size() == 1);
-            Assert.assertTrue(actual.getReadWriteGroups().size() == 2);
+            Assert.assertEquals(1, actual.getReadOnlyGroups().size());
+            Assert.assertEquals(2, actual.getReadWriteGroups().size());
             Assert.assertTrue(actual.getReadOnlyGroups().contains(new GroupURI("ivo://cadc.nrc.ca/gms?BAR-RO-1")));
             Assert.assertTrue(actual.getReadWriteGroups().contains(new GroupURI("ivo://cadc.nrc.ca/gms?BAR-RW-1")));
             Assert.assertTrue(actual.getReadWriteGroups().contains(new GroupURI("ivo://cadc.nrc.ca/gms?BAR-RW-2")));
 
             // Two read-only groups, two read-write groups
             // foo:bar3/* =  F ivo://cadc.nrc.ca/gms?BAR-RO-1,ivo://cadc.nrc.ca/gms?BAR-RO-2  ivo://cadc.nrc.ca/gms?BAR-RW-1,ivo://cadc.nrc.ca/gms?BAR-RW-2
-            actual = testSubject.getPermissions(new URI("foo:bar3/*"));
+            actual = testSubject.getPermissions(new URI("foo:bar3/1234.fits"));
             Assert.assertNotNull(actual);
             Assert.assertFalse(actual.getIsAnonymous());
-            Assert.assertTrue(actual.getReadOnlyGroups().size() == 2);
-            Assert.assertTrue(actual.getReadWriteGroups().size() == 2);
+            Assert.assertEquals(2, actual.getReadOnlyGroups().size());
+            Assert.assertEquals(2, actual.getReadWriteGroups().size());
             Assert.assertTrue(actual.getReadOnlyGroups().contains(new GroupURI("ivo://cadc.nrc.ca/gms?BAR-RO-1")));
             Assert.assertTrue(actual.getReadOnlyGroups().contains(new GroupURI("ivo://cadc.nrc.ca/gms?BAR-RO-2")));
             Assert.assertTrue(actual.getReadWriteGroups().contains(new GroupURI("ivo://cadc.nrc.ca/gms?BAR-RW-1")));
