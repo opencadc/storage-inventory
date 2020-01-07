@@ -72,10 +72,8 @@ import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.rest.InlineContentException;
 import ca.nrc.cadc.rest.InlineContentHandler;
 
-import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.StreamCorruptedException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.Date;
@@ -87,6 +85,7 @@ import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.DeletedEventDAO;
 import org.opencadc.inventory.permissions.WriteGrant;
 import org.opencadc.inventory.storage.NewArtifact;
+import org.opencadc.inventory.storage.ReadException;
 import org.opencadc.inventory.storage.StorageMetadata;
 
 /**
@@ -168,7 +167,17 @@ public class PutAction extends ArtifactAction {
         StorageMetadata artifactMetadata = null;
         
         log.debug("writing new artifact to storage...");
-        artifactMetadata = getStorageAdapter().put(newArtifact, in);
+        try {
+            artifactMetadata = getStorageAdapter().put(newArtifact, in);
+        } catch (ReadException e) {
+            // error on client read
+            String msg = "read input error";
+            log.debug(msg, e);
+            if (e.getMessage() != null) {
+                msg += ": " + e.getMessage();
+            }
+            throw new IllegalArgumentException(msg, e);
+        }
         log.debug("wrote new artifact to storage");
 
         Artifact artifact = new Artifact(

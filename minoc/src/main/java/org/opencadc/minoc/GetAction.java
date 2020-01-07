@@ -72,6 +72,7 @@ import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.permissions.ReadGrant;
+import org.opencadc.inventory.storage.WriteException;
 
 /**
  * Interface with storage and inventory to get an artifact.
@@ -104,7 +105,17 @@ public class GetAction extends ArtifactAction {
         StorageLocation storageLocation = new StorageLocation(artifact.storageLocation.getStorageID());
         storageLocation.storageBucket = artifact.storageLocation.storageBucket;
         log.debug("retrieving artifact from storage...");
-        getStorageAdapter().get(storageLocation, syncOutput.getOutputStream());
+        try {
+            getStorageAdapter().get(storageLocation, syncOutput.getOutputStream());
+        } catch (WriteException e) {
+            // error on client write
+            String msg = "write output error";
+            log.debug(msg, e);
+            if (e.getMessage() != null) {
+                msg += ": " + e.getMessage();
+            }
+            throw new IllegalArgumentException(msg, e);
+        }
         log.debug("retrieved artifact from storage");
 
     }

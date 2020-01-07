@@ -145,12 +145,10 @@ public class ThreadedIO {
         
         if (producerThrowable != null) {
             String message = "failed reading from input stream";
-            log.error(message, producerThrowable);
             throw new ReadException(message, producerThrowable);
         }
         if (consumerThrowable != null) {
-            String message = "failed writing to output stream";
-            log.error(message, consumerThrowable);
+            String message = "failed writing to output stream"; 
             throw new WriteException(message, consumerThrowable);
         }
         
@@ -189,7 +187,6 @@ public class ThreadedIO {
                 log.debug("Producer interrupted", e);
                 return null;
             } catch (Throwable t) {
-                log.error(t);
                 consumer.interrupt();
                 return t;
             }
@@ -226,7 +223,6 @@ public class ThreadedIO {
                 log.debug("consumer interrupted", e);
                 return null;
             } catch (Throwable t) {
-                log.error(t);
                 producer.interrupt();
                 return t;
             }
