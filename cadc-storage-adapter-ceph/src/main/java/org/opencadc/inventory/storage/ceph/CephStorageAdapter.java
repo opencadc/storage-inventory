@@ -416,6 +416,16 @@ public class CephStorageAdapter implements StorageAdapter {
         }
     }
 
+    /**
+     * Obtain an Iterator that contains a set size of items.  The internal listing mechanism from RADOS will be used to
+     * obtain a page of data when needed via the <code>fillBuffer()</code> method.
+     *
+     * @param storageBucket The bucket to match against.
+     * @param pageSize      The page size of data.
+     * @return Iterator of StorageMetadata objects.  Never null.
+     *
+     * @throws IOException If any Ceph interaction fails.
+     */
     Iterator<StorageMetadata> pageIterator(final String storageBucket, final Integer pageSize) throws IOException {
         final String bucket = lookupBucketMarker(storageBucket);
         final Optional<Integer> optionalPageSize = Optional.ofNullable(pageSize);
@@ -425,9 +435,8 @@ public class CephStorageAdapter implements StorageAdapter {
 
             return new Iterator<StorageMetadata>() {
                 private final ListCtx listCtx = ioCTX.listObjectsPartial(configuredPageSize);
-                private String[] buffer = Arrays.stream(listCtx.getObjects()).filter(val -> {
-                    return !StringUtil.hasLength(bucket) || val.startsWith(bucket);
-                }).toArray(String[]::new);
+                private String[] buffer = Arrays.stream(listCtx.getObjects()).filter(
+                        val -> !StringUtil.hasLength(bucket) || val.startsWith(bucket)).toArray(String[]::new);
                 private int bufferPosition = 0;
 
                 @Override
@@ -443,17 +452,25 @@ public class CephStorageAdapter implements StorageAdapter {
                 int fillBuffer() {
                     try {
                         final int objectCount = listCtx.nextObjects();
+                        final int bufferCount;
                         if (objectCount > 0) {
                             LOGGER.debug(String.format("Read in %d objects.", objectCount));
-                            buffer = Arrays.stream(listCtx.getObjects()).filter(val -> {
-                                return !StringUtil.hasLength(bucket) || val.startsWith(bucket);
-                            }).toArray(String[]::new);
-                            bufferPosition = 0;
+                            buffer = Arrays.stream(listCtx.getObjects()).filter(
+                                    val -> !StringUtil.hasLength(bucket) || val.startsWith(bucket)).toArray(
+                                    String[]::new);
+                            if (buffer.length == 0) {
+                                LOGGER.debug("No objects match.  Fetching more results.");
+                                bufferCount = fillBuffer();
+                            } else {
+                                bufferPosition = 0;
+                                bufferCount = buffer.length;
+                            }
                         } else {
                             LOGGER.debug("No more objects to read.");
+                            bufferCount = 0;
                         }
 
-                        return objectCount;
+                        return bufferCount;
                     } catch (IOException e) {
                         throw new RuntimeException(e.getMessage(), e);
                     }

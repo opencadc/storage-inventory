@@ -72,28 +72,18 @@ package org.opencadc.inventory.storage.ceph;
 import org.opencadc.inventory.storage.StorageMetadata;
 
 import java.io.IOException;
-import java.net.URI;
 import java.util.Iterator;
 
 
 public class CephStorageMetadataIterator implements Iterator<StorageMetadata> {
-
-    //private final CephStorageAdapter storageAdapter;
-    //private final String bucket;
 
     /**
      * A buffering Iterator to pull pages of keys from the RADOS backend.
      */
     private final Iterator<StorageMetadata> bufferedIterator;
 
-    private URI currentKey;
-    private int count;
-
-
     public CephStorageMetadataIterator(final CephStorageAdapter storageAdapter, final String bucket)
             throws IOException {
-        //this.storageAdapter = storageAdapter;
-        //this.bucket = bucket;
         bufferedIterator = storageAdapter.pageIterator(bucket, null);
     }
 

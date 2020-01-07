@@ -116,15 +116,16 @@ public class CephStorageAdapterTest {
     static final String CLUSTER_NAME = "beta1";
     static final String DATA_POOL_NAME = "default.rgw.buckets.non-ec";
     static final String USER_ID = System.getProperty("user.name");
+    static final String BUCKET_NAME = System.getProperty("bucket.name", USER_ID);
 
 
     @Test
     public void list() throws Exception {
         final CephStorageAdapter testSubject = new CephStorageAdapter(USER_ID, CLUSTER_NAME);
-        // The cadctest bucket contains 2001 items.
+        // The cadctest bucket contains 2002 items.
         int count = 0;
         final long start = System.currentTimeMillis();
-        for (final Iterator<StorageMetadata> storageMetadataIterator = testSubject.iterator(USER_ID);
+        for (final Iterator<StorageMetadata> storageMetadataIterator = testSubject.iterator(BUCKET_NAME);
              storageMetadataIterator.hasNext(); ) {
             storageMetadataIterator.next();
             count++;

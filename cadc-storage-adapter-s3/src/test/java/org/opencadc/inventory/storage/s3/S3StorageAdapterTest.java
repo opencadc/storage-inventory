@@ -71,9 +71,6 @@ package org.opencadc.inventory.storage.s3;
 
 import nom.tam.fits.BasicHDU;
 import nom.tam.fits.Fits;
-import nom.tam.fits.Header;
-import nom.tam.util.ArrayDataInput;
-import nom.tam.util.BufferedDataInputStream;
 import org.apache.log4j.Logger;
 import org.junit.Ignore;
 import org.junit.Test;
@@ -81,13 +78,10 @@ import org.junit.Assert;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.storage.NewArtifact;
 import org.opencadc.inventory.storage.StorageMetadata;
-import software.amazon.awssdk.core.ResponseBytes;
-import software.amazon.awssdk.core.ResponseInputStream;
 import software.amazon.awssdk.core.sync.ResponseTransformer;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
-import software.amazon.awssdk.services.s3.model.GetObjectResponse;
 
 import ca.nrc.cadc.io.ByteCountOutputStream;
 import ca.nrc.cadc.net.InputStreamWrapper;
@@ -102,10 +96,8 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.math.BigInteger;
 import java.net.URI;
-import java.nio.charset.StandardCharsets;
 import java.security.DigestOutputStream;
 import java.security.MessageDigest;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -119,7 +111,8 @@ public class S3StorageAdapterTest {
     private static final Logger LOGGER = Logger.getLogger(S3StorageAdapterTest.class);
     private static final URI ENDPOINT = URI.create("http://dao-wkr-04.cadc.dao.nrc.ca:8080");
     private static final String REGION = Region.US_EAST_1.id();
-    private static final String DEFAULT_BUCKET = System.getProperty("user.name");
+    private static final String USER_ID = System.getProperty("user.name");
+
 
     @Test
     public void list() throws Exception {
@@ -127,7 +120,7 @@ public class S3StorageAdapterTest {
         // The cadctest bucket contains 2001 items.
         int count = 0;
         final long start = System.currentTimeMillis();
-        for (final Iterator<StorageMetadata> storageMetadataIterator = testSubject.iterator("cadctest");
+        for (final Iterator<StorageMetadata> storageMetadataIterator = testSubject.iterator(USER_ID);
              storageMetadataIterator.hasNext(); ) {
             storageMetadataIterator.next();
             count++;
