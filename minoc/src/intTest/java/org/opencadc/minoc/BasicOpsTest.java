@@ -139,7 +139,7 @@ public class BasicOpsTest extends MinocTest {
                     long contentLength = get.getContentLength();
                     String contentType = get.getContentType();
                     String contentEncoding = get.getContentEncoding();
-                    Assert.assertEquals(getMd5(data.getBytes()), contentMD5);
+                    Assert.assertEquals(computeMD5(data.getBytes()), contentMD5);
                     Assert.assertEquals(data.getBytes().length, contentLength);
                     Assert.assertEquals(type, contentType);
                     Assert.assertEquals(encoding, contentEncoding);
@@ -164,7 +164,7 @@ public class BasicOpsTest extends MinocTest {
                     contentLength = head.getContentLength();
                     contentType = head.getContentType();
                     contentEncoding = head.getContentEncoding();
-                    Assert.assertEquals(getMd5(data.getBytes()), contentMD5);
+                    Assert.assertEquals(computeMD5(data.getBytes()), contentMD5);
                     Assert.assertEquals(data.getBytes().length, contentLength);
                     Assert.assertEquals(newType, contentType);
                     Assert.assertEquals(newEncoding, contentEncoding);

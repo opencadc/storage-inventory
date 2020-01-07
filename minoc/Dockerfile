@@ -3,8 +3,5 @@
 
 FROM cadc-tomcat:latest
 
-RUN ln -s /conf /root/config
-
-RUN rm -rf /usr/share/tomcat/webapps/*
-COPY build/libs/minoc.war /usr/share/tomcat/webapps
+COPY build/libs/minoc.war /usr/share/tomcat/webapps/
 
