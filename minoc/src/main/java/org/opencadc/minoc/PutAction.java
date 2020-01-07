@@ -72,6 +72,7 @@ import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.rest.InlineContentException;
 import ca.nrc.cadc.rest.InlineContentHandler;
 
+import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.StreamCorruptedException;
@@ -165,16 +166,11 @@ public class PutAction extends ArtifactAction {
         InputStream in = (InputStream) syncInput.getContent(INLINE_CONTENT_TAG);
         
         StorageMetadata artifactMetadata = null;
-        try {
-            log.debug("writing new artifact to storage...");
-            artifactMetadata = getStorageAdapter().put(newArtifact, in);
-            log.debug("wrote new artifact to storage");
-        } catch (StreamCorruptedException e) {
-            // file did not meet md5 or length expectations
-            syncOutput.setCode(412); // precondition failed
-            syncOutput.getOutputStream().write("incorrect checksum or length".getBytes());
-            return;
-        } 
+        
+        log.debug("writing new artifact to storage...");
+        artifactMetadata = getStorageAdapter().put(newArtifact, in);
+        log.debug("wrote new artifact to storage");
+
         Artifact artifact = new Artifact(
             artifactURI, artifactMetadata.getContentChecksum(),
             new Date(), artifactMetadata.getContentLength());
