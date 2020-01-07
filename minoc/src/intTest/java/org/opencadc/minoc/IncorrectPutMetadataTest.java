@@ -67,10 +67,12 @@
 
 package org.opencadc.minoc;
 
+import ca.nrc.cadc.net.HttpDownload;
 import ca.nrc.cadc.net.HttpUpload;
 import ca.nrc.cadc.util.Log4jInit;
 
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.net.URI;
 import java.net.URL;
@@ -101,22 +103,23 @@ public class IncorrectPutMetadataTest extends MinocTest {
     }
     
     @Test
-    public void testUploadWrongMd5() {
+    public void testUploadContentMD5_Mismatch() {
         try {
             
             Subject.doAs(userSubject, new PrivilegedExceptionAction<Object>() {
                 public Object run() throws Exception {
             
                     String data = "first artifact";
+                    byte[] bytes = data.getBytes();
                     String incorrectData = "incorrect artifact";
                     URI artifactURI = URI.create("cadc:TEST/file.fits");
                     URL artifactURL = new URL(certURL + "/" + artifactURI.toString());
                     
                     // put file
-                    InputStream in = new ByteArrayInputStream(data.getBytes());
+                    InputStream in = new ByteArrayInputStream(bytes);
                     HttpUpload put = new HttpUpload(in, artifactURL);
-                    put.setContentMD5(getMd5(incorrectData.getBytes()));
-                    put.setContentLength((long) data.getBytes().length);
+                    put.setContentMD5(computeMD5(incorrectData.getBytes()));
+                    put.setContentLength((long) bytes.length);
                     put.run();
                     Assert.assertNotNull(put.getThrowable());
                     Assert.assertEquals("should be 412, precondition failed", 412, put.getResponseCode());
@@ -132,22 +135,21 @@ public class IncorrectPutMetadataTest extends MinocTest {
     }
     
     @Test
-    public void testUploadWithLongerContentLength() {
+    public void testUploadContentLengthHeader_TooLarge() {
         try {
             
             Subject.doAs(userSubject, new PrivilegedExceptionAction<Object>() {
                 public Object run() throws Exception {
             
                     String data = "first artifact";
-                    String incorrectData = "longer conent-length artifact";
+                    byte[] bytes = data.getBytes();
                     URI artifactURI = URI.create("cadc:TEST/file.fits");
                     URL artifactURL = new URL(certURL + "/" + artifactURI.toString());
                     
                     // put file
-                    InputStream in = new ByteArrayInputStream(data.getBytes());
+                    InputStream in = new ByteArrayInputStream(bytes);
                     HttpUpload put = new HttpUpload(in, artifactURL);
-                    put.setContentMD5(getMd5(data.getBytes()));
-                    put.setContentLength((long) incorrectData.getBytes().length);
+                    put.setContentLength((long) bytes.length + 1L);
                     put.run();
                     Assert.assertNotNull(put.getThrowable());
                     Assert.assertEquals("should be 412, precondition failed", 412, put.getResponseCode());
@@ -163,22 +165,21 @@ public class IncorrectPutMetadataTest extends MinocTest {
     }
     
     @Test
-    public void testUploadWithShorterContentLength() {
+    public void testUploadContentLengthHeader_TooSmall() {
         try {
             
             Subject.doAs(userSubject, new PrivilegedExceptionAction<Object>() {
                 public Object run() throws Exception {
             
                     String data = "first artifact";
-                    String incorrectData = "artifact";
+                    byte[] bytes = data.getBytes();
                     URI artifactURI = URI.create("cadc:TEST/file.fits");
                     URL artifactURL = new URL(certURL + "/" + artifactURI.toString());
                     
                     // put file
-                    InputStream in = new ByteArrayInputStream(data.getBytes());
+                    InputStream in = new ByteArrayInputStream(bytes);
                     HttpUpload put = new HttpUpload(in, artifactURL);
-                    put.setContentMD5(getMd5(data.getBytes()));
-                    put.setContentLength((long) incorrectData.getBytes().length);
+                    put.setContentLength((long) bytes.length - 1L);
                     put.run();
                     Assert.assertNotNull(put.getThrowable());
                     Assert.assertEquals("should be 412, precondition failed", 412, put.getResponseCode());
@@ -194,25 +195,25 @@ public class IncorrectPutMetadataTest extends MinocTest {
     }
     
     @Test
-    public void testUploadWrongMd5AndWrongLength() {
+    public void testUploadContentMD5_Correct_ContentLengthHeader_TooSmall() {
         try {
             
             Subject.doAs(userSubject, new PrivilegedExceptionAction<Object>() {
                 public Object run() throws Exception {
             
                     String data = "first artifact";
-                    String incorrectData = "incorrect artifact";
+                    byte[] bytes = data.getBytes();
                     URI artifactURI = URI.create("cadc:TEST/file.fits");
                     URL artifactURL = new URL(certURL + "/" + artifactURI.toString());
                     
                     // put file
-                    InputStream in = new ByteArrayInputStream(data.getBytes());
+                    InputStream in = new ByteArrayInputStream(bytes);
                     HttpUpload put = new HttpUpload(in, artifactURL);
-                    put.setContentMD5(getMd5(incorrectData.getBytes()));
-                    put.setContentLength((long) incorrectData.getBytes().length);
+                    put.setContentMD5(computeMD5(bytes));
+                    put.setContentLength((long) bytes.length - 1L);
                     put.run();
                     Assert.assertNotNull(put.getThrowable());
-                    Assert.assertEquals("should be 412, precondition failed", 412, put.getResponseCode());
+                    Assert.assertEquals("should be 400, precondition failed", 400, put.getResponseCode());
             
                     return null;
                 }
@@ -225,21 +226,22 @@ public class IncorrectPutMetadataTest extends MinocTest {
     }
     
     @Test
-    public void testCorrectMd5AndLength() {
+    public void testUpload_ContentMD5_ContentLength_Correct() {
         try {
             
             Subject.doAs(userSubject, new PrivilegedExceptionAction<Object>() {
                 public Object run() throws Exception {
             
                     String data = "first artifact";
+                    byte[] bytes = data.getBytes();
                     URI artifactURI = URI.create("cadc:TEST/file.fits");
                     URL artifactURL = new URL(certURL + "/" + artifactURI.toString());
                     
                     // put file
-                    InputStream in = new ByteArrayInputStream(data.getBytes());
+                    InputStream in = new ByteArrayInputStream(bytes);
                     HttpUpload put = new HttpUpload(in, artifactURL);
-                    put.setContentMD5(getMd5(data.getBytes()));
-                    put.setContentLength((long) data.getBytes().length);
+                    put.setContentMD5(computeMD5(bytes));
+                    put.setContentLength((long) bytes.length);
                     put.run();
                     Assert.assertNull(put.getThrowable());
                     Assert.assertEquals("should be 200, ok", 200, put.getResponseCode());
