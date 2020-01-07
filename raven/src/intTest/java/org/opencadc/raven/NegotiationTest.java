@@ -65,144 +65,143 @@
  ************************************************************************
  */
 
-package org.opencadc.minoc;
+package org.opencadc.raven;
 
-import ca.nrc.cadc.auth.AuthMethod;
 import ca.nrc.cadc.net.HttpDelete;
 import ca.nrc.cadc.net.HttpDownload;
 import ca.nrc.cadc.net.HttpPost;
 import ca.nrc.cadc.net.HttpUpload;
-import ca.nrc.cadc.reg.client.RegistryClient;
-import ca.nrc.cadc.util.HexUtil;
 import ca.nrc.cadc.util.Log4jInit;
+import ca.nrc.cadc.util.MultiValuedProperties;
+import ca.nrc.cadc.util.PropertiesReader;
+import ca.nrc.cadc.vos.Direction;
+import ca.nrc.cadc.vos.Protocol;
+import ca.nrc.cadc.vos.Transfer;
+import ca.nrc.cadc.vos.VOS;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.FileNotFoundException;
-import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URI;
 import java.net.URL;
-import java.security.DigestInputStream;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
+import java.security.PrivilegedExceptionAction;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Date;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.UUID;
+
+import javax.security.auth.Subject;
 
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.Test;
+import org.opencadc.inventory.Artifact;
+import org.opencadc.inventory.SiteLocation;
+import org.opencadc.inventory.StorageSite;
+import org.opencadc.inventory.db.ArtifactDAO;
+import org.opencadc.inventory.db.StorageSiteDAO;
+import org.opencadc.raven.PostAction;
 
 /**
+ * Test transfer negotiation.
+ * 
  * @author majorb
- *
  */
-public class MinocIntTest {
+public class NegotiationTest extends RavenTest {
     
-    private static final Logger log = Logger.getLogger(MinocIntTest.class);
-    private static final URI MINOC_SERVICE_ID = URI.create("ivo://cadc.nrc.ca/minoc");
-    // TODO: Move this to Standards.java
-    private static final URI MINOC_STANDARD_ID = URI.create("vos://cadc.nrc.ca~vospace/CADC/std/inventory#artifacts-1.0");
-
-    private URL anonURL;
+    private static final Logger log = Logger.getLogger(NegotiationTest.class);
     
     static {
-        Log4jInit.setLevel("org.opencadc.minoc", Level.INFO);
+        Log4jInit.setLevel("org.opencadc.raven", Level.INFO);
+        Log4jInit.setLevel("ca.nrc.cadc.db", Level.DEBUG);
     }
     
-    public MinocIntTest() {
-        RegistryClient regClient = new RegistryClient();
-        anonURL = regClient.getServiceURL(MINOC_SERVICE_ID, MINOC_STANDARD_ID, AuthMethod.ANON);
-        log.info("anonURL: " + anonURL);
+    public NegotiationTest() throws Exception {
+        super();
     }
     
     @Test
-    public void testAllMethodsSimple() {
+    public void testGetAllCopies() {
         try {
             
-            String data = "abcdefghijklmnopqrstuvwxyz";
-            URI artifactURI = URI.create("cadc:TEST/file.fits");
-            URL artifactURL = new URL(anonURL + "/" + artifactURI.toString());
-            String encoding = "test-encoding";
-            String type = "test-type";
+            System.setProperty(PropertiesReader.CONFIG_DIR_SYSTEM_PROPERTY, "build/resources/test");
             
-            // put
-            InputStream in = new ByteArrayInputStream(data.getBytes());
-            HttpUpload put = new HttpUpload(in, artifactURL);
-            put.setContentEncoding(encoding);
-            put.setContentType(type);
-            put.run();
-            Assert.assertNull(put.getThrowable());
-            
-            // get
-            OutputStream out = new ByteArrayOutputStream();
-            HttpDownload get = new HttpDownload(artifactURL, out);
-            get.run();
-            Assert.assertNull(get.getThrowable());
-            String contentMD5 = get.getContentMD5();
-            long contentLength = get.getContentLength();
-            String contentType = get.getContentType();
-            String contentEncoding = get.getContentEncoding();
-            Assert.assertEquals(getMd5(data.getBytes()), contentMD5);
-            Assert.assertEquals(data.getBytes().length, contentLength);
-            Assert.assertEquals(type, contentType);
-            Assert.assertEquals(encoding, contentEncoding);
-            
-            // update
-            // TODO: add update to artifactURI when functionality available
-            String newEncoding = "test-encoding-2";
-            String newType = "test-type-2";
-            Map<String,Object> params = new HashMap<String,Object>(2);
-            params.put("contentEncoding", newEncoding);
-            params.put("contentType", newType);
-            HttpPost post = new HttpPost(artifactURL, params, false);
-            post.run();
-            Assert.assertNull(post.getThrowable());
-            
-            // head
-            HttpDownload head = new HttpDownload(artifactURL, out);
-            head.setHeadOnly(true);
-            head.run();
-            Assert.assertNull(head.getThrowable());
-            contentMD5 = head.getContentMD5();
-            contentLength = head.getContentLength();
-            contentType = head.getContentType();
-            contentEncoding = head.getContentEncoding();
-            Assert.assertEquals(getMd5(data.getBytes()), contentMD5);
-            Assert.assertEquals(data.getBytes().length, contentLength);
-            Assert.assertEquals(newType, contentType);
-            Assert.assertEquals(newEncoding, contentEncoding);
-            
-            // delete
-            HttpDelete delete = new HttpDelete(artifactURL, false);
-            delete.run();
-            Assert.assertNull(delete.getThrowable());
-            
-            // get
-            get = new HttpDownload(artifactURL, out);
-            get.run();
-            Throwable throwable = get.getThrowable();
-            Assert.assertNotNull(throwable);
-            Assert.assertTrue(throwable instanceof FileNotFoundException);
+            Subject.doAs(userSubject, new PrivilegedExceptionAction<Object>() {
+                public Object run() throws Exception {
+                    
+                    URI resourceID1 = URI.create("ivo://negotiation-test-site1");
+                    URI resourceID2 = URI.create("ivo://negotiation-test-site2");
+                    
+                    ArtifactDAO artifactDAO = new ArtifactDAO();
+                    artifactDAO.setConfig(config);
+                    StorageSiteDAO siteDAO = new StorageSiteDAO();
+                    siteDAO.setConfig(config);
+                    StorageSite site1 = new StorageSite(resourceID1, "site1");
+                    StorageSite site2 = new StorageSite(resourceID2, "site2");
+
+                    URI artifactURI = URI.create("cadc:TEST/" + UUID.randomUUID() + ".fits");
+                    URI checksum = URI.create("md5:testvalue");
+                    Artifact artifact = new Artifact(artifactURI, checksum, new Date(), 1L);
+
+                    try {
+                        siteDAO.put(site1);
+                        siteDAO.put(site2);
+                        
+                        SiteLocation location1 = new SiteLocation(site1.getID());
+                        SiteLocation location2 = new SiteLocation(site2.getID());
+                        
+                        Protocol protocol = new Protocol(VOS.PROTOCOL_HTTPS_GET);
+                        Transfer transfer = new Transfer(
+                            artifactURI, Direction.pullFromVoSpace, Arrays.asList(protocol));
+                        transfer.version = VOS.VOSPACE_21;
+                        
+                        artifactDAO.put(artifact);
+                        
+                        // test that there are no copies available
+                        try {
+                            negotiate(transfer);
+                            Assert.fail("should have received file not found exception");
+                        } catch (FileNotFoundException e) {
+                            // expected
+                        }
+                        
+                        artifact.siteLocations.add(location1);
+                        artifactDAO.put(artifact, true);
+                        
+                        // test that there's one copy
+                        Transfer response = negotiate(transfer);
+                        Assert.assertEquals(1, response.getAllEndpoints().size());
+                        
+                        artifact.siteLocations.add(location2);
+                        artifactDAO.put(artifact, true);
+                        
+                        // test that there are now two copies
+                        response = negotiate(transfer);
+                        Assert.assertEquals(2, response.getAllEndpoints().size());
+                        
+                        return null;
+                        
+                    } finally {
+                        // cleanup sites
+                        siteDAO.delete(site1.getID());
+                        siteDAO.delete(site2.getID());
+                        artifactDAO.delete(artifact.getID());
+                    }
+                }
+            });
             
         } catch (Throwable t) {
             log.error("unexpected throwable", t);
             Assert.fail("unexpected throwable: " + t);
+        } finally {
+            System.clearProperty(PropertiesReader.CONFIG_DIR_SYSTEM_PROPERTY);
         }
     }
     
-    public static String getMd5(byte[] input) throws NoSuchAlgorithmException, IOException {
-        MessageDigest md = MessageDigest.getInstance("MD5");
-        InputStream in = new ByteArrayInputStream(input);
-        DigestInputStream dis = new DigestInputStream(in, md);
-        int bytesRead = dis.read();
-        byte[] buf = new byte[512];
-        while (bytesRead > 0) {
-            bytesRead = dis.read(buf);
-        }
-        byte[] digest = md.digest();
-        return HexUtil.toHex(digest);
-    }
 }

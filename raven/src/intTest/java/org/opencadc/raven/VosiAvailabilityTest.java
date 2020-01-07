@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2019.                            (c) 2019.
+*  (c) 2011.                            (c) 2011.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -62,113 +62,34 @@
 *  <http://www.gnu.org/licenses/>.      pas le cas, consultez :
 *                                       <http://www.gnu.org/licenses/>.
 *
+*  $Revision: 5 $
+*
 ************************************************************************
 */
 
-package org.opencadc.minoc;
+package org.opencadc.raven;
 
-import ca.nrc.cadc.rest.SyncInput;
+
 import ca.nrc.cadc.util.Log4jInit;
-
-import java.io.IOException;
-import java.net.URI;
-
+import ca.nrc.cadc.vosi.AvailabilityTest;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
-import org.junit.Assert;
-import org.junit.Test;
 
-public class ArtifactActionTest {
-
-    private static final Logger log = Logger.getLogger(ArtifactActionTest.class);
-
+/**
+ *
+ * @author pdowler
+ */
+public class VosiAvailabilityTest extends AvailabilityTest
+{
+    private static final Logger log = Logger.getLogger(VosiAvailabilityTest.class);
+    
     static {
-        Log4jInit.setLevel("org.opencadc.minoc", Level.DEBUG);
+        Log4jInit.setLevel("ca.nrc.cadc.vosi", Level.INFO);
+        Log4jInit.setLevel("org.opencadc.inventory", Level.INFO);
     }
-    
-    class TestSyncInput extends SyncInput {
 
-        private String path;
-        
-        public TestSyncInput(String path) throws IOException {
-            super(null, null);
-            this.path = path;
-        }
-        
-        public String getPath() {
-            return path;
-        }
+    public VosiAvailabilityTest() 
+    { 
+        super(NegotiationTest.RAVEN_SERVICE_ID);
     }
-    
-    class TestArtifactAction extends ArtifactAction {
-        
-        public TestArtifactAction(String path) {
-            super();
-            try {
-                super.syncInput = new TestSyncInput(path);
-            } catch (Throwable t) {
-                throw new RuntimeException(t);
-            }
-        }
-
-        @Override
-        public void doAction() throws Exception {
-        }
-
-    }
-    
-    private void assertCorrectPath(String path, String expURI, String expToken) {
-        ArtifactAction a = new TestArtifactAction(path);
-        try {
-            a.parsePath();
-            Assert.assertEquals("artifactURI", URI.create(expURI), a.artifactURI);
-            Assert.assertEquals("authToken", expToken, a.authToken);
-        } catch (IllegalArgumentException e) {
-            log.error(e);
-            Assert.fail("Failed to parse legal path: " + path);
-        }
-    }
-    
-    private void assertIllegalPath(String path) {
-        ArtifactAction a = new TestArtifactAction(path);
-        try {
-            a.parsePath();
-            Assert.fail("Should have failed to parse path: " + path);
-        } catch (IllegalArgumentException e) {
-            // expected
-            log.info(e);
-        }
-    }
-    
-    @Test
-    public void testParsePath() {
-        try {
-            
-            assertCorrectPath("cadc:TEST/myartifact", "cadc:TEST/myartifact", null);
-            assertCorrectPath("token/cadc:TEST/myartifact", "cadc:TEST/myartifact", "token");
-            assertCorrectPath("cadc:TEST/myartifact", "cadc:TEST/myartifact", null);
-            assertCorrectPath("token/cadc:TEST/myartifact", "cadc:TEST/myartifact", "token");
-            assertCorrectPath("mast:long/uri/with/segments/fits.fits", "mast:long/uri/with/segments/fits.fits", null);
-            assertCorrectPath("token/mast:long/uri/with/segments/fits.fits", "mast:long/uri/with/segments/fits.fits", "token");
-            assertCorrectPath("token-with-dashes/cadc:TEST/myartifact", "cadc:TEST/myartifact", "token-with-dashes");
-            
-            assertIllegalPath("");
-            assertIllegalPath("noschemeinuri");
-            assertIllegalPath("token/noschemeinuri");
-            assertIllegalPath("cadc:path#fragment");
-            assertIllegalPath("cadc:path?query");
-            assertIllegalPath("cadc:path#fragment?query");
-            assertIllegalPath("cadc://host/path");
-            assertIllegalPath("cadc://:port/path");
-            assertIllegalPath("artifacts/token1/token2/cadc:FOO/bar");
-            assertIllegalPath("artifacts/token/cadc:ccda:FOO/bar");
-            
-            assertIllegalPath(null);
-            
-        } catch (Exception unexpected) {
-            log.error("unexpected exception", unexpected);
-            Assert.fail("unexpected exception: " + unexpected);
-        }
-    }
-    
 }

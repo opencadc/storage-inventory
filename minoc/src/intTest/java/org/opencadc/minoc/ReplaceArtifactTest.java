@@ -62,60 +62,105 @@
  *  <http://www.gnu.org/licenses/>.      pas le cas, consultez :
  *                                       <http://www.gnu.org/licenses/>.
  *
- *  $Revision: 4 $
- *
  ************************************************************************
  */
 
-package org.opencadc.inventory.permissions;
+package org.opencadc.minoc;
 
-import ca.nrc.cadc.net.ResourceNotFoundException;
-import ca.nrc.cadc.net.TransientException;
+import ca.nrc.cadc.net.HttpDelete;
+import ca.nrc.cadc.net.HttpDownload;
+import ca.nrc.cadc.net.HttpUpload;
+import ca.nrc.cadc.util.Log4jInit;
+
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.URI;
-import java.util.Date;
+import java.net.URL;
+import java.security.PrivilegedExceptionAction;
 
-import org.opencadc.gms.GroupURI;
+import javax.security.auth.Subject;
+
+import org.apache.log4j.Level;
+import org.apache.log4j.Logger;
+import org.junit.Assert;
+import org.junit.Test;
 
 /**
- * Client for retrieving grant information about artifacts.
+ * Test artifact replacement
  * 
  * @author majorb
- *
  */
-public class PermissionsClient {
-
-    /**
-     * Public, no-arg constructor.
-     */
-    public PermissionsClient() {
+public class ReplaceArtifactTest extends MinocTest {
+    
+    private static final Logger log = Logger.getLogger(ReplaceArtifactTest.class);
+    
+    static {
+        Log4jInit.setLevel("org.opencadc.minoc", Level.INFO);
     }
     
-    /**
-     * Get the read permissions information about the file identified by fileURI.
-     * 
-     * @param artifactURI Identifies the artifact for which to retrieve grant information.
-     * @return The read grant information.
-     * 
-     * @throws ResourceNotFoundException If the file could not be found.
-     * @throws TransientException If an unexpected, temporary exception occurred. 
-     */
-    public ReadGrant getReadGrant(URI artifactURI)
-        throws ResourceNotFoundException, TransientException {
-        return null;
+    public ReplaceArtifactTest() {
+        super();
     }
-
-    /**
-     * Get the write permissions information about the file identified by fileURI.
-     *
-     * @param artifactURI Identifies the artifact for which to retrieve grant information.
-     * @return The write grant information.
-     *
-     * @throws ResourceNotFoundException If the file could not be found.
-     * @throws TransientException If an unexpected, temporary exception occurred.
-     */
-    public WriteGrant getWriteGrant(URI artifactURI)
-        throws ResourceNotFoundException, TransientException {
-        return null;
+    
+    @Test
+    public void testReplaceFile() {
+        try {
+            
+            Subject.doAs(userSubject, new PrivilegedExceptionAction<Object>() {
+                public Object run() throws Exception {
+            
+                    String data1 = "first artifact";
+                    String data2 = "second artifact";
+                    URI artifactURI = URI.create("cadc:TEST/file.fits");
+                    URL artifactURL = new URL(certURL + "/" + artifactURI.toString());
+                    
+                    // put initial file
+                    InputStream in = new ByteArrayInputStream(data1.getBytes());
+                    HttpUpload put = new HttpUpload(in, artifactURL);
+                    put.run();
+                    Assert.assertNull(put.getThrowable());
+                    
+                    // assert file and metadata
+                    OutputStream out = new ByteArrayOutputStream();
+                    HttpDownload get = new HttpDownload(artifactURL, out);
+                    get.run();
+                    Assert.assertNull(get.getThrowable());
+                    String contentMD5 = get.getContentMD5();
+                    long contentLength = get.getContentLength();
+                    Assert.assertEquals(getMd5(data1.getBytes()), contentMD5);
+                    Assert.assertEquals(data1.getBytes().length, contentLength);
+                    
+                    // replace with new data
+                    in = new ByteArrayInputStream(data2.getBytes());
+                    put = new HttpUpload(in, artifactURL);
+                    put.run();
+                    Assert.assertNull(put.getThrowable());
+                    
+                    // assert new file and metadata
+                    out = new ByteArrayOutputStream();
+                    get = new HttpDownload(artifactURL, out);
+                    get.run();
+                    Assert.assertNull(get.getThrowable());
+                    contentMD5 = get.getContentMD5();
+                    contentLength = get.getContentLength();
+                    Assert.assertEquals(getMd5(data2.getBytes()), contentMD5);
+                    Assert.assertEquals(data2.getBytes().length, contentLength);
+                    
+                    // delete
+                    HttpDelete delete = new HttpDelete(artifactURL, false);
+                    delete.run();
+                    Assert.assertNull(delete.getThrowable());
+                    
+                    return null;
+                }
+            });
+            
+        } catch (Throwable t) {
+            log.error("unexpected throwable", t);
+            Assert.fail("unexpected throwable: " + t);
+        }
     }
-
+    
 }

@@ -4,25 +4,24 @@
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
     xmlns:vs="http://www.ivoa.net/xml/VODataService/v1.1">
 
-  <capability standardID="http://www.opencadc.org/std/storage#files-1.0">
+  <capability standardID="http://www.opencadc.org/std/storage#locate-1.0">
     <interface xsi:type="vs:ParamHTTP" role="std">
-      <accessURL use="base">https://replace.com/minoc/files</accessURL>
+      <accessURL use="base">https://replace.com/raven/locate</accessURL>
       <securityMethod />
       <securityMethod standardID="ivo://ivoa.net/sso#cookie" />
-      <securityMethod standardID="ivo://ivoa.net/sso#tls-with-certificate" />
-      <securityMethod standardID="vos://cadc.nrc.ca~vospace/CADC/std/Auth#token-1.0"/>    
+      <securityMethod standardID="ivo://ivoa.net/sso#tls-with-certificate" /> 
     </interface>
   </capability>
 
   <capability standardID="ivo://ivoa.net/std/VOSI#capabilities">
     <interface xsi:type="vs:ParamHTTP" role="std">
-      <accessURL use="full">https://replace.com/minoc/capabilities</accessURL>
+      <accessURL use="full">https://replace.com/raven/capabilities</accessURL>
     </interface>
   </capability>
 
   <capability standardID="ivo://ivoa.net/std/VOSI#availability">
     <interface xsi:type="vs:ParamHTTP" role="std">
-      <accessURL use="full">https://replace.com/minoc/availability</accessURL>
+      <accessURL use="full">https://replace.com/raven/availability</accessURL>
       <securityMethod />
       <securityMethod standardID="ivo://ivoa.net/sso#tls-with-certificate" />
     </interface>
@@ -30,7 +29,7 @@
   
   <capability standardID="vos://cadc.nrc.ca~vospace/CADC/std/LOGGING#logControl-1.0">
     <interface xsi:type="vs:ParamHTTP" role="std" version="1.0">
-      <accessURL use="full">https://replace.com/minoc/logControl</accessURL>
+      <accessURL use="full">https://replace.com/raven/logControl</accessURL>
       <securityMethod standardID="ivo://ivoa.net/sso#tls-with-certificate" />
     </interface>
   </capability>

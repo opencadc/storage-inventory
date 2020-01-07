@@ -62,60 +62,78 @@
  *  <http://www.gnu.org/licenses/>.      pas le cas, consultez :
  *                                       <http://www.gnu.org/licenses/>.
  *
- *  $Revision: 4 $
- *
  ************************************************************************
  */
 
-package org.opencadc.inventory.permissions;
+package org.opencadc.minoc;
 
-import ca.nrc.cadc.net.ResourceNotFoundException;
-import ca.nrc.cadc.net.TransientException;
+import ca.nrc.cadc.auth.AuthMethod;
+import ca.nrc.cadc.auth.AuthenticationUtil;
+import ca.nrc.cadc.auth.SSLUtil;
+import ca.nrc.cadc.reg.Standards;
+import ca.nrc.cadc.reg.client.RegistryClient;
+import ca.nrc.cadc.util.FileUtil;
+import ca.nrc.cadc.util.HexUtil;
+import ca.nrc.cadc.util.Log4jInit;
+
+import java.io.ByteArrayInputStream;
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
 import java.net.URI;
-import java.util.Date;
+import java.net.URL;
+import java.security.DigestInputStream;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 
-import org.opencadc.gms.GroupURI;
+import javax.security.auth.Subject;
+
+import org.apache.log4j.Level;
+import org.apache.log4j.Logger;
 
 /**
- * Client for retrieving grant information about artifacts.
+ * Abstract integration test class with general setup and test support.
  * 
  * @author majorb
- *
  */
-public class PermissionsClient {
-
-    /**
-     * Public, no-arg constructor.
-     */
-    public PermissionsClient() {
+public abstract class MinocTest {
+    
+    private static final Logger log = Logger.getLogger(BasicOpsTest.class);
+    public static final URI MINOC_SERVICE_ID = URI.create("ivo://cadc.nrc.ca/minoc");
+    
+    protected URL anonURL;
+    protected URL certURL;
+    protected Subject anonSubject;
+    protected Subject userSubject;
+    
+    static {
+        Log4jInit.setLevel("org.opencadc.minoc", Level.INFO);
     }
     
-    /**
-     * Get the read permissions information about the file identified by fileURI.
-     * 
-     * @param artifactURI Identifies the artifact for which to retrieve grant information.
-     * @return The read grant information.
-     * 
-     * @throws ResourceNotFoundException If the file could not be found.
-     * @throws TransientException If an unexpected, temporary exception occurred. 
-     */
-    public ReadGrant getReadGrant(URI artifactURI)
-        throws ResourceNotFoundException, TransientException {
-        return null;
+    public MinocTest() {
+        RegistryClient regClient = new RegistryClient();
+        anonURL = regClient.getServiceURL(MINOC_SERVICE_ID, Standards.SI_FILES, AuthMethod.ANON);
+        log.info("anonURL: " + anonURL);
+        certURL = regClient.getServiceURL(MINOC_SERVICE_ID, Standards.SI_FILES, AuthMethod.CERT);
+        log.info("certURL: " + certURL);
+        anonSubject = AuthenticationUtil.getAnonSubject();
+        File cert = FileUtil.getFileFromResource("minoc-test.pem", MinocTest.class);
+        log.info("userSubject: " + userSubject);
+        userSubject = SSLUtil.createSubject(cert);
+        log.info("userSubject: " + userSubject);
     }
-
-    /**
-     * Get the write permissions information about the file identified by fileURI.
-     *
-     * @param artifactURI Identifies the artifact for which to retrieve grant information.
-     * @return The write grant information.
-     *
-     * @throws ResourceNotFoundException If the file could not be found.
-     * @throws TransientException If an unexpected, temporary exception occurred.
-     */
-    public WriteGrant getWriteGrant(URI artifactURI)
-        throws ResourceNotFoundException, TransientException {
-        return null;
+    
+    protected static String getMd5(byte[] input) throws NoSuchAlgorithmException, IOException {
+        MessageDigest md = MessageDigest.getInstance("MD5");
+        InputStream in = new ByteArrayInputStream(input);
+        DigestInputStream dis = new DigestInputStream(in, md);
+        int bytesRead = dis.read();
+        byte[] buf = new byte[512];
+        while (bytesRead > 0) {
+            bytesRead = dis.read(buf);
+        }
+        byte[] digest = md.digest();
+        return HexUtil.toHex(digest);
     }
 
 }

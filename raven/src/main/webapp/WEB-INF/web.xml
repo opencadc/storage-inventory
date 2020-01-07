@@ -6,20 +6,20 @@
 
 <web-app>
 
-  <display-name>minoc</display-name>
+  <display-name>raven</display-name>
 
   <servlet>
     <servlet-name>logControl</servlet-name>
     <servlet-class>ca.nrc.cadc.log.LogControlServlet</servlet-class>
     <init-param>
       <param-name>logLevel</param-name>
-      <param-value>info</param-value>
+      <param-value>debug</param-value>
     </init-param>
     <init-param>
       <param-name>logLevelPackages</param-name>
       <param-value>
             org.opencadc.inventory
-            org.opencadc.minoc
+            org.opencadc.raven
             ca.nrc.cadc.rest
             ca.nrc.cadc.util
             ca.nrc.cadc.vosi
@@ -38,31 +38,11 @@
   </servlet>
     
   <servlet>
-    <servlet-name>ArtifactsServlet</servlet-name>
+    <servlet-name>LocateServlet</servlet-name>
         <servlet-class>ca.nrc.cadc.rest.RestServlet</servlet-class>
         <init-param>
-            <param-name>augmentSubject</param-name>
-            <param-value>false</param-value>
-        </init-param>
-        <init-param>
-            <param-name>get</param-name>
-            <param-value>org.opencadc.minoc.GetAction</param-value>
-        </init-param>
-        <init-param>
-            <param-name>put</param-name>
-            <param-value>org.opencadc.minoc.PutAction</param-value>
-        </init-param>
-        <init-param>
             <param-name>post</param-name>
-            <param-value>org.opencadc.minoc.PostAction</param-value>
-        </init-param>
-        <init-param>
-            <param-name>delete</param-name>
-            <param-value>org.opencadc.minoc.DeleteAction</param-value>
-        </init-param>
-        <init-param>
-            <param-name>head</param-name>
-            <param-value>org.opencadc.minoc.HeadAction</param-value>
+            <param-value>org.opencadc.raven.PostAction</param-value>
         </init-param>
         <load-on-startup>2</load-on-startup>
     </servlet>
@@ -73,7 +53,7 @@
     <servlet-class>ca.nrc.cadc.vosi.AvailabilityServlet</servlet-class>
     <init-param>
       <param-name>ca.nrc.cadc.vosi.AvailabilityPlugin</param-name>
-      <param-value>org.opencadc.minoc.ServiceAvailability</param-value>
+      <param-value>org.opencadc.raven.ServiceAvailability</param-value>
     </init-param>
     <load-on-startup>5</load-on-startup>
   </servlet>
@@ -91,8 +71,8 @@
   <!-- Endpoints -->
 
   <servlet-mapping>
-    <servlet-name>ArtifactsServlet</servlet-name>
-    <url-pattern>/files/*</url-pattern>
+    <servlet-name>LocateServlet</servlet-name>
+    <url-pattern>/locate/*</url-pattern>
   </servlet-mapping>
   
   <!-- Availability servlet endpoint -->
@@ -116,6 +96,5 @@
   <welcome-file-list>
     <welcome-file>index.html</welcome-file>
   </welcome-file-list>
-
 
 </web-app>

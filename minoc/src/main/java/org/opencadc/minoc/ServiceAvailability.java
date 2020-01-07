@@ -72,13 +72,17 @@ import ca.nrc.cadc.db.DBUtil;
 import ca.nrc.cadc.reg.Standards;
 import ca.nrc.cadc.reg.client.LocalAuthority;
 import ca.nrc.cadc.reg.client.RegistryClient;
+import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.vosi.AvailabilityPlugin;
 import ca.nrc.cadc.vosi.AvailabilityStatus;
 import ca.nrc.cadc.vosi.avail.CheckException;
 import ca.nrc.cadc.vosi.avail.CheckResource;
 import ca.nrc.cadc.vosi.avail.CheckWebService;
+
 import java.net.URI;
 import java.util.Map;
+import java.util.Properties;
+import java.util.Set;
 
 import javax.sql.DataSource;
 
@@ -126,14 +130,14 @@ public class ServiceAvailability implements AvailabilityPlugin {
     public AvailabilityStatus getStatus() {
         boolean isGood = true;
         String note = "service is accepting requests";
+        
         try {
             
             log.info("init database...");
             DataSource ds = DBUtil.findJNDIDataSource(ArtifactAction.JNDI_DATASOURCE);
-            Map<String, Object> config = ArtifactAction.getDaoConfig();
-            InitDatabase init = new InitDatabase(ds,
-                (String) config.get(ArtifactAction.DATABASE_KEY),
-                (String) config.get(ArtifactAction.SCHEMA_KEY));
+            MultiValuedProperties props = ArtifactAction.readConfig();
+            Map<String, Object> config = ArtifactAction.getDaoConfig(props);
+            InitDatabase init = new InitDatabase(ds, (String) config.get("database"), (String) config.get("schema"));
             init.doInit();
             log.info("init database... OK");
 

@@ -62,60 +62,121 @@
  *  <http://www.gnu.org/licenses/>.      pas le cas, consultez :
  *                                       <http://www.gnu.org/licenses/>.
  *
- *  $Revision: 4 $
- *
  ************************************************************************
  */
 
-package org.opencadc.inventory.permissions;
+package org.opencadc.raven;
 
-import ca.nrc.cadc.net.ResourceNotFoundException;
-import ca.nrc.cadc.net.TransientException;
+import ca.nrc.cadc.auth.AuthMethod;
+import ca.nrc.cadc.auth.AuthenticationUtil;
+import ca.nrc.cadc.auth.SSLUtil;
+import ca.nrc.cadc.db.ConnectionConfig;
+import ca.nrc.cadc.db.DBConfig;
+import ca.nrc.cadc.db.DBUtil;
+import ca.nrc.cadc.net.FileContent;
+import ca.nrc.cadc.net.HttpPost;
+import ca.nrc.cadc.reg.Standards;
+import ca.nrc.cadc.reg.client.RegistryClient;
+import ca.nrc.cadc.util.FileUtil;
+import ca.nrc.cadc.util.HexUtil;
+import ca.nrc.cadc.util.Log4jInit;
+import ca.nrc.cadc.vos.Transfer;
+import ca.nrc.cadc.vos.TransferParsingException;
+import ca.nrc.cadc.vos.TransferReader;
+import ca.nrc.cadc.vos.TransferWriter;
+
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.io.InputStream;
 import java.net.URI;
-import java.util.Date;
+import java.net.URL;
+import java.security.DigestInputStream;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.security.PrivilegedActionException;
+import java.security.PrivilegedExceptionAction;
+import java.util.Map;
+import java.util.TreeMap;
 
-import org.opencadc.gms.GroupURI;
+import javax.security.auth.Subject;
+
+import org.apache.log4j.Level;
+import org.apache.log4j.Logger;
+import org.junit.Assert;
+import org.opencadc.inventory.db.SQLGenerator;
 
 /**
- * Client for retrieving grant information about artifacts.
+ * Abstract integration test class with general setup and test support.
  * 
  * @author majorb
- *
  */
-public class PermissionsClient {
+public abstract class RavenTest {
+    
+    private static final Logger log = Logger.getLogger(NegotiationTest.class);
+    public static final URI RAVEN_SERVICE_ID = URI.create("ivo://cadc.nrc.ca/raven");;
+    
+    static String SERVER = "INVENTORY_TEST";
+    static String DATABASE = "content";
+    static String SCHEMA = "inventory";
 
-    /**
-     * Public, no-arg constructor.
-     */
-    public PermissionsClient() {
+    protected URL anonURL;
+    protected URL certURL;
+    protected Subject anonSubject;
+    protected Subject userSubject;
+    
+    Map<String,Object> config;
+    
+    static {
+        Log4jInit.setLevel("org.opencadc.raven", Level.INFO);
     }
     
-    /**
-     * Get the read permissions information about the file identified by fileURI.
-     * 
-     * @param artifactURI Identifies the artifact for which to retrieve grant information.
-     * @return The read grant information.
-     * 
-     * @throws ResourceNotFoundException If the file could not be found.
-     * @throws TransientException If an unexpected, temporary exception occurred. 
-     */
-    public ReadGrant getReadGrant(URI artifactURI)
-        throws ResourceNotFoundException, TransientException {
-        return null;
-    }
+    public RavenTest() throws Exception {
+        RegistryClient regClient = new RegistryClient();
+        anonURL = regClient.getServiceURL(RAVEN_SERVICE_ID, Standards.SI_LOCATE, AuthMethod.ANON);
+        log.info("anonURL: " + anonURL);
+        certURL = regClient.getServiceURL(RAVEN_SERVICE_ID, Standards.SI_LOCATE, AuthMethod.CERT);
+        log.info("certURL: " + certURL);
+        anonSubject = AuthenticationUtil.getAnonSubject();
+        File cert = FileUtil.getFileFromResource("raven-test.pem", RavenTest.class);
+        log.info("userSubject: " + userSubject);
+        userSubject = SSLUtil.createSubject(cert);
+        log.info("userSubject: " + userSubject);
+        
+        try {
+            DBConfig dbrc = new DBConfig();
+            ConnectionConfig cc = dbrc.getConnectionConfig(SERVER, DATABASE);
+            DBUtil.createJNDIDataSource("jdbc/inventory", cc);
 
-    /**
-     * Get the write permissions information about the file identified by fileURI.
-     *
-     * @param artifactURI Identifies the artifact for which to retrieve grant information.
-     * @return The write grant information.
-     *
-     * @throws ResourceNotFoundException If the file could not be found.
-     * @throws TransientException If an unexpected, temporary exception occurred.
-     */
-    public WriteGrant getWriteGrant(URI artifactURI)
-        throws ResourceNotFoundException, TransientException {
-        return null;
+            config = new TreeMap<String,Object>();
+            config.put(SQLGenerator.class.getName(), SQLGenerator.class);
+            config.put("jndiDataSourceName", "jdbc/inventory");
+            config.put("schema", SCHEMA);
+
+        } catch (Exception ex) {
+            log.error("setup failed", ex);
+            throw ex;
+        }
+    }
+    
+    protected Transfer negotiate(Transfer request) throws IOException, TransferParsingException, PrivilegedActionException {
+        TransferWriter writer = new TransferWriter();
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        writer.write(request, out);
+        FileContent content = new FileContent(out.toByteArray(), "text/xml");
+        HttpPost post = new HttpPost(certURL, content, false);
+        post.run();
+        if (post.getThrowable() != null && post.getThrowable() instanceof FileNotFoundException) {
+            throw (FileNotFoundException) post.getThrowable();
+        }
+        Assert.assertNull(post.getThrowable());
+        String response = post.getResponseBody();
+        TransferReader reader = new TransferReader();
+        Transfer t = reader.read(response,  null);
+        log.info("Response transfer: " + t);
+        return t;
     }
 
 }
