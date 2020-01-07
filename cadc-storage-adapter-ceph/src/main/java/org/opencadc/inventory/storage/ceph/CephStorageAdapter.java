@@ -325,11 +325,8 @@ public class CephStorageAdapter implements StorageAdapter {
     }
 
     @Override
-    public StorageMetadata put(NewArtifact newArtifact, InputStream inputStream) throws ResourceNotFoundException,
-                                                                                        StreamCorruptedException,
-                                                                                        ReadException, WriteException,
-                                                                                        StorageEngageException,
-                                                                                        TransientException {
+    public StorageMetadata put(NewArtifact newArtifact, InputStream inputStream)
+            throws StreamCorruptedException, ReadException, WriteException, StorageEngageException, TransientException {
         try {
             final URI storageID = newArtifact.getArtifactURI();
             final String objectID = getObjectID(new StorageLocation(storageID));

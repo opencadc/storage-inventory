@@ -84,7 +84,6 @@ import org.opencadc.inventory.storage.StorageEngageException;
 import org.opencadc.inventory.storage.WriteException;
 import software.amazon.awssdk.core.ResponseInputStream;
 import software.amazon.awssdk.core.exception.SdkClientException;
-import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.core.sync.ResponseTransformer;
 import software.amazon.awssdk.regions.Region;
@@ -92,20 +91,16 @@ import software.amazon.awssdk.services.s3.S3Client;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.storage.StorageAdapter;
 import org.opencadc.inventory.storage.StorageMetadata;
+import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectResponse;
 import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectResponse;
 import software.amazon.awssdk.services.s3.model.ListObjectsRequest;
 import software.amazon.awssdk.services.s3.model.ListObjectsResponse;
-import software.amazon.awssdk.services.s3.model.ListObjectsV2Request;
-import software.amazon.awssdk.services.s3.model.ListObjectsV2Response;
 import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
-import software.amazon.awssdk.services.s3.model.PutObjectResponse;
 import software.amazon.awssdk.services.s3.model.S3Exception;
-import software.amazon.awssdk.services.s3.model.S3Object;
-import software.amazon.awssdk.services.s3.paginators.ListObjectsV2Iterable;
 import ca.nrc.cadc.io.ByteCountInputStream;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
@@ -116,16 +111,13 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.StreamCorruptedException;
-import java.math.BigInteger;
 import java.net.URI;
 import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 
 
@@ -155,7 +147,7 @@ public class S3StorageAdapter implements StorageAdapter {
     }
 
 
-    private String parseObjectID(final URI storageID) {
+    private String parseKey(final URI storageID) {
         final String path = storageID.getSchemeSpecificPart();
         final String[] pathItems = path.split("/");
         return pathItems[pathItems.length - 1];
@@ -189,19 +181,16 @@ public class S3StorageAdapter implements StorageAdapter {
      * @param dest            The destination stream.
      * @throws ResourceNotFoundException If the artifact could not be found.
      * @throws ReadException             If the storage system failed to stream.
-     * @throws WriteException            If the client failed to stream.
      * @throws StorageEngageException    If the adapter failed to interact with storage.
-     * @throws TransientException        If an unexpected, temporary exception occurred.
      */
     @Override
     public void get(StorageLocation storageLocation, OutputStream dest)
-            throws ResourceNotFoundException, ReadException, WriteException, StorageEngageException,
-                   TransientException {
+            throws ResourceNotFoundException, ReadException, StorageEngageException {
         final URI storageID = storageLocation.getStorageID();
 
         try (final InputStream inputStream = s3Client.getObject(GetObjectRequest.builder()
                                                                                 .bucket(parseBucket(storageID))
-                                                                                .key(parseObjectID(storageID))
+                                                                                .key(parseKey(storageID))
                                                                                 .build(),
                                                                 ResponseTransformer.toInputStream())) {
 
@@ -223,14 +212,11 @@ public class S3StorageAdapter implements StorageAdapter {
      * @param cutouts         Cutouts to be applied to the artifact
      * @throws ResourceNotFoundException If the artifact could not be found.
      * @throws ReadException             If the storage system failed to stream.
-     * @throws WriteException            If the client failed to stream.
      * @throws StorageEngageException    If the adapter failed to interact with storage.
-     * @throws TransientException        If an unexpected, temporary exception occurred.
      */
     @Override
     public void get(StorageLocation storageLocation, OutputStream dest, Set<String> cutouts)
-            throws ResourceNotFoundException, ReadException, WriteException, StorageEngageException,
-                   TransientException {
+            throws ResourceNotFoundException, ReadException, StorageEngageException {
         if ((cutouts == null) || cutouts.isEmpty()) {
             get(storageLocation, dest);
         } else {
@@ -239,7 +225,7 @@ public class S3StorageAdapter implements StorageAdapter {
             try (final ResponseInputStream<GetObjectResponse> inputStream = s3Client.getObject(
                     GetObjectRequest.builder()
                                     .bucket(parseBucket(storageID))
-                                    .key(parseObjectID(storageID))
+                                    .key(parseKey(storageID))
                                     .build(),
                     ResponseTransformer.toInputStream())) {
 
@@ -300,16 +286,15 @@ public class S3StorageAdapter implements StorageAdapter {
      * @throws ReadException            If the client failed to stream.
      * @throws WriteException           If the storage system failed to stream.
      * @throws StorageEngageException   If the adapter failed to interact with storage.
-     * @throws TransientException       If an unexpected, temporary exception occurred.
      */
     @Override
     public StorageMetadata put(NewArtifact newArtifact, InputStream source)
-            throws StreamCorruptedException, ReadException, WriteException, StorageEngageException, TransientException {
+            throws StreamCorruptedException, ReadException, WriteException, StorageEngageException {
         final URI storageID = newArtifact.getArtifactURI();
         final DigestInputStream digestInputStream = new DigestInputStream(source, createDigester());
         final ByteCountInputStream byteCountInputStream = new ByteCountInputStream(digestInputStream);
         final InputStream bufferedInputStream = new BufferedInputStream(byteCountInputStream);
-        final String objectID = parseObjectID(storageID);
+        final String objectID = parseKey(storageID);
         final String bucket = parseBucket(storageID);
 
         try {
@@ -335,8 +320,10 @@ public class S3StorageAdapter implements StorageAdapter {
                                                                                             newArtifact.contentLength));
 
             return head(bucket, objectID);
-        } catch (S3Exception | SdkClientException e) {
+        } catch (S3Exception e) {
             throw new StorageEngageException(e.getMessage(), e);
+        } catch (SdkClientException e) {
+            throw new WriteException(e.getMessage(), e);
         }
     }
 
@@ -368,57 +355,32 @@ public class S3StorageAdapter implements StorageAdapter {
      */
     public void delete(StorageLocation storageLocation)
             throws ResourceNotFoundException, IOException, StorageEngageException, TransientException {
-
-    }
-
-
-    Iterator<StorageMetadata> pageIterator(final String storageBucket, final URI startAfterKey) {
-        LOGGER.debug(String.format("Requesting more pages starting at %s.", startAfterKey));
-        final Optional<URI> startAfterKeyOptional = Optional.ofNullable(startAfterKey);
-        final ListObjectsV2Request.Builder listBuilder = ListObjectsV2Request.builder();
-
-        if (StringUtil.hasLength(storageBucket)) {
-            listBuilder.bucket(storageBucket);
+        final DeleteObjectRequest.Builder deleteObjectRequestBuilder = DeleteObjectRequest.builder();
+        if (StringUtil.hasLength(storageLocation.storageBucket)) {
+            deleteObjectRequestBuilder.bucket(storageLocation.storageBucket);
         }
 
-        startAfterKeyOptional.ifPresent(uri -> listBuilder.startAfter(String.format("%s", parseObjectID(uri))));
+        deleteObjectRequestBuilder.key(parseKey(storageLocation.getStorageID()));
 
-        return new Iterator<StorageMetadata>() {
-            private final Iterator<ListObjectsV2Response> listObjectsV2Responses =
-                    s3Client.listObjectsV2Paginator(listBuilder.build()).iterator();
+        try {
+            s3Client.deleteObject(deleteObjectRequestBuilder.build());
+        } catch (S3Exception e) {
+            throw new StorageEngageException(e.getMessage(), e);
+        } catch (SdkClientException e) {
+            throw new IOException(e.getMessage(), e);
+        }
+    }
 
-            // State of this iterator.
-            private Iterator<S3Object> currIterator;
-            private boolean lastResponseWasTruncated;
+    ListObjectsResponse listObjects(final String storageBucket, final String nextMarker) {
+        final ListObjectsRequest.Builder listBuilder = ListObjectsRequest.builder();
 
+        listBuilder.bucket(storageBucket);
 
-            @Override
-            public boolean hasNext() {
-                if (currIterator == null || !currIterator.hasNext()) {
-                    if (listObjectsV2Responses.hasNext()) {
-                        final ListObjectsV2Response response = listObjectsV2Responses.next();
-                        currIterator = response.contents().iterator();
-                        lastResponseWasTruncated = response.isTruncated();
-                    } else {
-                        currIterator = Collections.emptyIterator();
-                    }
-                }
+        if (StringUtil.hasLength(nextMarker)) {
+            listBuilder.marker(nextMarker);
+        }
 
-                final boolean iteratorHasMore = currIterator.hasNext();
-                if (!iteratorHasMore && lastResponseWasTruncated) {
-                    LOGGER.debug(
-                            "\n\nIterator listings are empty but there are still more items available from the " +
-                            "server!\n\n");
-                }
-
-                return iteratorHasMore;
-            }
-
-            @Override
-            public StorageMetadata next() {
-                return head(storageBucket, currIterator.next().key());
-            }
-        };
+        return s3Client.listObjects(listBuilder.build());
     }
 
     /**
@@ -426,14 +388,9 @@ public class S3StorageAdapter implements StorageAdapter {
      *
      * @return An iterator over an ordered list of items in storage.
      *
-     * @throws ReadException          If the storage system failed to stream.
-     * @throws WriteException         If the client failed to stream.
-     * @throws StorageEngageException If the adapter failed to interact with storage.
-     * @throws TransientException     If an unexpected, temporary exception occurred.
      */
     @Override
-    public Iterator<StorageMetadata> iterator()
-            throws ReadException, WriteException, StorageEngageException, TransientException {
+    public Iterator<StorageMetadata> iterator() {
         return iterator(null);
     }
 
@@ -443,14 +400,9 @@ public class S3StorageAdapter implements StorageAdapter {
      * @param storageBucket Only iterate over items in this bucket.
      * @return An iterator over an ordered list of items in this storage bucket.
      *
-     * @throws ReadException          If the storage system failed to stream.
-     * @throws WriteException         If the client failed to stream.
-     * @throws StorageEngageException If the adapter failed to interact with storage.
-     * @throws TransientException     If an unexpected, temporary exception occurred.
      */
     @Override
-    public Iterator<StorageMetadata> iterator(final String storageBucket)
-            throws ReadException, WriteException, StorageEngageException, TransientException {
+    public Iterator<StorageMetadata> iterator(final String storageBucket) {
         return new S3StorageMetadataIterator(this, storageBucket);
     }
 
@@ -460,14 +412,9 @@ public class S3StorageAdapter implements StorageAdapter {
      * @param storageBucket Only iterate over items in this bucket.
      * @return An iterator over an ordered list of items in this storage bucket.
      *
-     * @throws ReadException          If the storage system failed to stream.
-     * @throws WriteException         If the client failed to stream.
-     * @throws StorageEngageException If the adapter failed to interact with storage.
-     * @throws TransientException     If an unexpected, temporary exception occurred.
      */
     @Override
-    public Iterator<StorageMetadata> unsortedIterator(final String storageBucket)
-            throws ReadException, WriteException, StorageEngageException, TransientException {
+    public Iterator<StorageMetadata> unsortedIterator(final String storageBucket) {
         return iterator(storageBucket);
     }
 }

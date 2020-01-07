@@ -18,7 +18,7 @@ dependencies {
 
     // Amazon S3 Java Library
     // For Gradle 5 and up, use the platform....
-    implementation platform('software.amazon.awssdk:bom:2.10.38')
+    implementation platform('software.amazon.awssdk:bom:2.10.43')
     implementation 'software.amazon.awssdk:s3'
 
     // Java FITS library.

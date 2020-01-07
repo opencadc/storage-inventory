@@ -70,8 +70,12 @@
 package org.opencadc.inventory.storage.s3;
 
 import org.opencadc.inventory.storage.StorageMetadata;
+import software.amazon.awssdk.services.s3.model.ListObjectsResponse;
+import software.amazon.awssdk.services.s3.model.S3Object;
 
-import java.net.URI;
+import ca.nrc.cadc.util.StringUtil;
+
+import java.util.Collections;
 import java.util.Iterator;
 
 
@@ -80,12 +84,13 @@ public class S3StorageMetadataIterator implements Iterator<StorageMetadata> {
     private final S3StorageAdapter storageAdapter;
     private final String bucket;
 
-    private Iterator<StorageMetadata> currentIterator;
-    private URI currentKey;
+    // State of this iterator.
+    private Iterator<S3Object> currIterator;
+    private String nextMarker;
     private int count;
 
 
-    public S3StorageMetadataIterator(S3StorageAdapter storageAdapter, final String bucket) {
+    public S3StorageMetadataIterator(final S3StorageAdapter storageAdapter, final String bucket) {
         this.storageAdapter = storageAdapter;
         this.bucket = bucket;
     }
@@ -100,11 +105,17 @@ public class S3StorageMetadataIterator implements Iterator<StorageMetadata> {
      */
     @Override
     public boolean hasNext() {
-        if (currentIterator == null || !currentIterator.hasNext()) {
-            requestMoreObjects();
+        if (currIterator == null || (!currIterator.hasNext() && StringUtil.hasLength(nextMarker))) {
+            final ListObjectsResponse listObjectsResponse = storageAdapter.listObjects(bucket, nextMarker);
+            if (listObjectsResponse.hasContents()) {
+                currIterator = listObjectsResponse.contents().iterator();
+                nextMarker = listObjectsResponse.nextMarker();
+            } else {
+                currIterator = Collections.emptyIterator();
+            }
         }
 
-        return currentIterator.hasNext();
+        return currIterator.hasNext();
     }
 
     /**
@@ -116,22 +127,13 @@ public class S3StorageMetadataIterator implements Iterator<StorageMetadata> {
      */
     @Override
     public StorageMetadata next() {
-        final StorageMetadata storageMetadata = currentIterator.next();
+        final StorageMetadata storageMetadata = storageAdapter.head(bucket, currIterator.next().key());
         count++;
-        currentKey = storageMetadata.getStorageLocation().getStorageID();
 
         return storageMetadata;
     }
 
-    public URI getCurrentKey() {
-        return currentKey;
-    }
-
     public int getCount() {
         return count;
-    }
-
-    private void requestMoreObjects() {
-        currentIterator = storageAdapter.pageIterator(bucket, currentKey);
     }
 }

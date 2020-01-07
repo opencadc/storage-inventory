@@ -180,7 +180,7 @@ public class S3StorageAdapterTest {
                                                                         entry.getValue(),
                                                                         entry.getValue() + 2880L))
                                                    .build(),
-                                   ResponseTransformer.toBytes()).asByteArray();
+                                   ResponseTransformer.toBytes());
                 final long readTime = System.currentTimeMillis() - start;
                 LOGGER.info(String.format("\nRead time for HDU %d is %d.\n", entry.getKey(), readTime));
             }
