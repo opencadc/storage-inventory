@@ -100,9 +100,11 @@ public class VosiCapabilitiesTest extends CapabilitiesTest {
     @Override
     protected void validateContent(Capabilities caps) throws Exception {
         super.validateContent(caps);        
-        Capability stu = caps.findCapability(Standards.PROTO_TABLE_LOAD_SYNC);
-        Assert.assertNotNull("table-load-sync", stu);
-        Assert.assertNotNull("cert table-load-sync", stu.findInterface(Standards.SECURITY_METHOD_CERT, Standards.INTERFACE_PARAM_HTTP));
-        Assert.assertNotNull("cookie table-load-sync", stu.findInterface(Standards.SECURITY_METHOD_COOKIE, Standards.INTERFACE_PARAM_HTTP));
+        Capability stu = caps.findCapability(Standards.SI_FILES);
+        Assert.assertNotNull("files", stu);
+        Assert.assertNotNull("files anon", stu.findInterface(Standards.SECURITY_METHOD_ANON, Standards.INTERFACE_PARAM_HTTP));
+        Assert.assertNotNull("files cert", stu.findInterface(Standards.SECURITY_METHOD_CERT, Standards.INTERFACE_PARAM_HTTP));
+        Assert.assertNotNull("files cookie", stu.findInterface(Standards.SECURITY_METHOD_COOKIE, Standards.INTERFACE_PARAM_HTTP));
+        Assert.assertNotNull("files token", stu.findInterface(Standards.SECURITY_METHOD_TOKEN, Standards.INTERFACE_PARAM_HTTP));
     }
 }
