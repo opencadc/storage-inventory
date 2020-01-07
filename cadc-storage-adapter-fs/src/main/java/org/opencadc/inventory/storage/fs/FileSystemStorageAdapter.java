@@ -395,8 +395,8 @@ public class FileSystemStorageAdapter implements StorageAdapter {
             metadata.artifactURI = artifactURI;
             return metadata;
             
-        } catch (ReadException | WriteException | IllegalArgumentException |
-                IncorrectContentChecksumException | IncorrectContentLengthException e) {
+        } catch (ReadException | WriteException | IllegalArgumentException
+            | IncorrectContentChecksumException | IncorrectContentLengthException e) {
             // pass through
             throw e;
         } catch (Throwable t) {
