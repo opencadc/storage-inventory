@@ -67,7 +67,7 @@
  ************************************************************************
  */
 
-package org.opencadc.inventory.permissions;
+package org.opencadc.baldur;
 
 import ca.nrc.cadc.auth.AuthenticationUtil;
 import ca.nrc.cadc.rest.InlineContentHandler;

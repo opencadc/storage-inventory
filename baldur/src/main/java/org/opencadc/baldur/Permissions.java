@@ -67,7 +67,7 @@
  ************************************************************************
  */
 
-package org.opencadc.inventory.permissions;
+package org.opencadc.baldur;
 
 import java.util.List;
 import org.opencadc.gms.GroupURI;

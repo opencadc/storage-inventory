@@ -67,7 +67,7 @@
  ************************************************************************
  */
 
-package org.opencadc.inventory.permissions;
+package org.opencadc.baldur;
 
 import ca.nrc.cadc.auth.AuthenticationUtil;
 import java.io.OutputStream;
@@ -79,6 +79,9 @@ import java.util.Date;
 import javax.security.auth.Subject;
 import javax.servlet.ServletException;
 import org.apache.log4j.Logger;
+import org.opencadc.inventory.permissions.Grant;
+import org.opencadc.inventory.permissions.ReadGrant;
+import org.opencadc.inventory.permissions.WriteGrant;
 import org.opencadc.inventory.permissions.xml.GrantWriter;
 
 public class GetAction extends PermissionsAction {
@@ -96,6 +99,13 @@ public class GetAction extends PermissionsAction {
     @Override
     public void doAction() throws Exception {
 
+        // Check if the calling user is authorized to make the request.
+        Subject subject = AuthenticationUtil.getCurrentSubject();
+        log.debug(subject.toString());
+        if (!isAuthorized(subject)) {
+            throw new AccessControlException("User authorization failed.");
+        }
+        
         String op = syncInput.getParameter(OP);
         if (op == null) {
             throw new ServletException("missing required parameter: " + OP);
@@ -116,13 +126,6 @@ public class GetAction extends PermissionsAction {
         }
         log.debug(OP + " = " + op);
         log.debug(URI + " = " + artifactURI.toASCIIString());
-
-        // Check if the calling user is authorized to make the request.
-        Subject subject = AuthenticationUtil.getCurrentSubject();
-        log.debug(subject.toString());
-        if (!isAuthorized(subject)) {
-            throw new AccessControlException("User authorization failed.");
-        }
 
         Permissions permissions = getPermissions(artifactURI);
         Date expiryDate = getExpiryDate(artifactURI);

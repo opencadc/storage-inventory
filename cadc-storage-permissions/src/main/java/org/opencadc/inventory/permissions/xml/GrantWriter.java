@@ -111,7 +111,7 @@ public class GrantWriter {
         if (grant instanceof ReadGrant) {
             // root.addNamespaceDeclaration(XSI_NS);
             root.setAttribute(GrantReader.ENAMES.type.name(), GrantReader.ENAMES.ReadGrant.name());
-            Element pub = new Element(GrantReader.ENAMES.isAnonymousAccess.name());
+            Element pub = new Element(GrantReader.ENAMES.anonymousRead.name());
             pub.setText(Boolean.toString(((ReadGrant) grant).isAnonymousAccess()));
             root.addContent(pub);
         } else {

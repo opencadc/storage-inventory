@@ -92,7 +92,7 @@ import org.opencadc.inventory.permissions.WriteGrant;
 public class GrantReader {
 
     static enum ENAMES {
-        grant(), artifactURI(), expiryDate(), isAnonymousAccess(), groups(), groupURI(),
+        grant(), artifactURI(), expiryDate(), anonymousRead(), groups(), groupURI(),
         type(), ReadGrant(), WriteGrant();
     }
 
@@ -130,7 +130,7 @@ public class GrantReader {
 
         Grant grant;
         if (isReadGrant) {
-            boolean isAnonymousAccess = getBoolean(ENAMES.isAnonymousAccess.name(), root.getChildTextTrim(ENAMES.isAnonymousAccess.name()));
+            boolean isAnonymousAccess = getBoolean(ENAMES.anonymousRead.name(), root.getChildTextTrim(ENAMES.anonymousRead.name()));
             grant = new ReadGrant(artifactURI, expiryDate, isAnonymousAccess);
         } else {
             grant = new WriteGrant(artifactURI, expiryDate);

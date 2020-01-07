@@ -67,7 +67,7 @@
  ************************************************************************
  */
 
-package org.opencadc.inventory.permissions;
+package org.opencadc.baldur;
 
 import ca.nrc.cadc.util.FileUtil;
 import ca.nrc.cadc.util.Log4jInit;
@@ -83,11 +83,12 @@ import org.junit.Assert;
 import org.junit.Test;
 import org.opencadc.gms.GroupURI;
 
+
 public class PermissionsConfigTest {
     private static final Logger log = Logger.getLogger(PermissionsConfig.class);
 
     static {
-        Log4jInit.setLevel("org.opencadc.inventory.permissions", Level.INFO);
+        Log4jInit.setLevel("org.opencadc.baldur", Level.INFO);
     }
 
     @Test

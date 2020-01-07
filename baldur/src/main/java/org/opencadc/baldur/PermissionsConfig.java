@@ -67,7 +67,7 @@
  ************************************************************************
  */
 
-package org.opencadc.inventory.permissions;
+package org.opencadc.baldur;
 
 import java.io.File;
 import java.io.FileNotFoundException;
