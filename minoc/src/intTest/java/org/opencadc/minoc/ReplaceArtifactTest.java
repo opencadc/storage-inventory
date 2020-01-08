@@ -129,7 +129,7 @@ public class ReplaceArtifactTest extends MinocTest {
                     Assert.assertNull(get.getThrowable());
                     String contentMD5 = get.getContentMD5();
                     long contentLength = get.getContentLength();
-                    Assert.assertEquals(getMd5(data1.getBytes()), contentMD5);
+                    Assert.assertEquals(computeMD5(data1.getBytes()), contentMD5);
                     Assert.assertEquals(data1.getBytes().length, contentLength);
                     
                     // replace with new data
@@ -145,7 +145,7 @@ public class ReplaceArtifactTest extends MinocTest {
                     Assert.assertNull(get.getThrowable());
                     contentMD5 = get.getContentMD5();
                     contentLength = get.getContentLength();
-                    Assert.assertEquals(getMd5(data2.getBytes()), contentMD5);
+                    Assert.assertEquals(computeMD5(data2.getBytes()), contentMD5);
                     Assert.assertEquals(data2.getBytes().length, contentLength);
                     
                     // delete

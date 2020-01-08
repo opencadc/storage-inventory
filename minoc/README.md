@@ -8,10 +8,14 @@ docker build -t minoc -f Dockerfile .
 ```
 
 ## checking it
-```docker run -it minoc:latest /bin/bash```
+```
+docker run -it minoc:latest /bin/bash
+```
 
 ## running it
-```docker run -d --volume=/path/to/external/conf:/conf:ro --volume=/path/to/external/logs:/logs:rw --name minoc minoc:latest```
+```
+docker run -d --volume=/path/to/external/config:/config:ro --volume=/path/to/external/logs:/logs:rw --name minoc minoc:latest
+```
 
 ## configuration
 See the <a href="https://github.com/opencadc/docker-base/tree/master/cadc-tomcat">cadc-tomcat</a> image docs 
@@ -35,7 +39,7 @@ minoc.invadm.url=jdbc:postgresql://mydbhost/content
 ```
 
 ### minoc.properties
-A minoc.properties file in /path/to/external/conf is required to run this service.  The following keys (with example values) are needed:
+A minoc.properties file in /config is required to run this service.  The following keys (with example values) are needed:
 
 ```
 # The storage adapter to use for storage.

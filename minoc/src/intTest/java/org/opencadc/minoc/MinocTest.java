@@ -123,7 +123,7 @@ public abstract class MinocTest {
         log.info("userSubject: " + userSubject);
     }
     
-    protected static String getMd5(byte[] input) throws NoSuchAlgorithmException, IOException {
+    protected static String computeMD5(byte[] input) throws NoSuchAlgorithmException, IOException {
         MessageDigest md = MessageDigest.getInstance("MD5");
         InputStream in = new ByteArrayInputStream(input);
         DigestInputStream dis = new DigestInputStream(in, md);

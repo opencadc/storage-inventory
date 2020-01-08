@@ -16,7 +16,7 @@ docker run -it luskan:latest /bin/bash
 
 ## running it
 ```
-docker run -d --volume=/path/to/external/conf:/conf:ro --volume=/path/to/external/logs:/logs:rw --name luskan luskan:latest
+docker run -d --volume=/path/to/external/config:/config:ro --volume=/path/to/external/logs:/logs:rw --name luskan luskan:latest
 ```
 
 ## configuration
