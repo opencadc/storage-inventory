@@ -118,9 +118,9 @@ public abstract class MinocTest {
         log.info("certURL: " + certURL);
         anonSubject = AuthenticationUtil.getAnonSubject();
         File cert = FileUtil.getFileFromResource("minoc-test.pem", MinocTest.class);
-        log.info("userSubject: " + userSubject);
+        log.debug("anonSubject: " + anonSubject);
         userSubject = SSLUtil.createSubject(cert);
-        log.info("userSubject: " + userSubject);
+        log.debug("userSubject: " + userSubject);
     }
     
     protected static String computeMD5(byte[] input) throws NoSuchAlgorithmException, IOException {
