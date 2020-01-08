@@ -101,24 +101,22 @@ import software.amazon.awssdk.services.s3.model.ListObjectsResponse;
 import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.model.S3Exception;
-import ca.nrc.cadc.io.ByteCountInputStream;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.util.StringUtil;
 
-import java.io.BufferedInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.StreamCorruptedException;
 import java.net.URI;
-import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 
 
 /**
@@ -130,6 +128,8 @@ public class S3StorageAdapter implements StorageAdapter {
 
     static final String DIGEST_ALGORITHM = "MD5";
     private static final int BUFFER_SIZE_BYTES = 8192;
+    private static final int DEFAULT_BUCKET_HASH_LENGTH = 5;
+
 
     // S3Client is thread safe, and re-usability is encouraged.
     private final S3Client s3Client;
@@ -155,6 +155,10 @@ public class S3StorageAdapter implements StorageAdapter {
 
     private String parseBucket(final URI storageID) {
         return InventoryUtil.computeBucket(storageID, 5);
+    }
+
+    String generateObjectID() {
+        return UUID.randomUUID().toString();
     }
 
     private MessageDigest createDigester() {
@@ -290,12 +294,8 @@ public class S3StorageAdapter implements StorageAdapter {
     @Override
     public StorageMetadata put(NewArtifact newArtifact, InputStream source)
             throws StreamCorruptedException, ReadException, WriteException, StorageEngageException {
-        final URI storageID = newArtifact.getArtifactURI();
-        final DigestInputStream digestInputStream = new DigestInputStream(source, createDigester());
-        final ByteCountInputStream byteCountInputStream = new ByteCountInputStream(digestInputStream);
-        final InputStream bufferedInputStream = new BufferedInputStream(byteCountInputStream);
-        final String objectID = parseKey(storageID);
-        final String bucket = parseBucket(storageID);
+        final String objectID = generateObjectID();
+        final String bucket = InventoryUtil.computeBucket(objectID, DEFAULT_BUCKET_HASH_LENGTH);
 
         try {
             final PutObjectRequest.Builder putObjectRequestBuilder = PutObjectRequest.builder()
@@ -303,7 +303,7 @@ public class S3StorageAdapter implements StorageAdapter {
                                                                                      .key(objectID);
 
             final Map<String, String> metadata = new HashMap<>();
-            metadata.put("uri", newArtifact.getArtifactURI().toString());
+            metadata.put("uri", newArtifact.getArtifactURI().toASCIIString().trim());
 
             if (newArtifact.contentChecksum != null) {
                 putObjectRequestBuilder.contentMD5(newArtifact.contentChecksum.getSchemeSpecificPart());
@@ -316,7 +316,7 @@ public class S3StorageAdapter implements StorageAdapter {
 
             putObjectRequestBuilder.metadata(metadata);
 
-            s3Client.putObject(putObjectRequestBuilder.build(), RequestBody.fromInputStream(bufferedInputStream,
+            s3Client.putObject(putObjectRequestBuilder.build(), RequestBody.fromInputStream(source,
                                                                                             newArtifact.contentLength));
 
             return head(bucket, objectID);
@@ -387,7 +387,6 @@ public class S3StorageAdapter implements StorageAdapter {
      * Iterator of items ordered by their storageIDs.
      *
      * @return An iterator over an ordered list of items in storage.
-     *
      */
     @Override
     public Iterator<StorageMetadata> iterator() {
@@ -399,7 +398,6 @@ public class S3StorageAdapter implements StorageAdapter {
      *
      * @param storageBucket Only iterate over items in this bucket.
      * @return An iterator over an ordered list of items in this storage bucket.
-     *
      */
     @Override
     public Iterator<StorageMetadata> iterator(final String storageBucket) {
@@ -411,7 +409,6 @@ public class S3StorageAdapter implements StorageAdapter {
      *
      * @param storageBucket Only iterate over items in this bucket.
      * @return An iterator over an ordered list of items in this storage bucket.
-     *
      */
     @Override
     public Iterator<StorageMetadata> unsortedIterator(final String storageBucket) {

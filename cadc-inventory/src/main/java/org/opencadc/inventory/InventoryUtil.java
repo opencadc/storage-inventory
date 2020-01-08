@@ -89,17 +89,17 @@ public abstract class InventoryUtil {
     }
     
     /**
-     * Compute a short code based on the argument URI. The returned code is a hex
-     * string of the specified length generated from the URI.
-     * 
-     * @param uri the input URI
+     * Compute a short code based on the Object argument. The returned code is a hex
+     * string of the specified length generated from the given Object.
+     *
+     * @param o the Object input
      * @param length length of hex string
      * @return short code
      */
-    public static String computeBucket(URI uri, int length) {
+    public static <T> String computeBucket(T o, int length) {
         try {
             MessageDigest md = MessageDigest.getInstance("SHA-1");
-            byte[] bytes = Entity.primitiveValueToBytes(uri, "File.uri", md.getAlgorithm());
+            byte[] bytes = Entity.primitiveValueToBytes(o, "File.uri", md.getAlgorithm());
             md.update(bytes);
             byte[] sha = md.digest();
             String hex = HexUtil.toHex(sha);

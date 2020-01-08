@@ -86,6 +86,7 @@ import nom.tam.util.ArrayDataOutput;
 import nom.tam.util.BufferedDataOutputStream;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
+import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.storage.NewArtifact;
 import org.opencadc.inventory.storage.ReadException;
@@ -113,8 +114,7 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.function.IntFunction;
-import java.util.stream.Stream;
+import java.util.UUID;
 
 
 /**
@@ -126,12 +126,14 @@ public class CephStorageAdapter implements StorageAdapter {
 
     private static final String META_POOL_NAME = "default.rgw.meta";
     private static final String META_NAMESPACE = "root";
+    private static final String SOTRAGE_ID_URI_TEMPLATE = "%s:%s/%s";
 
     private static final String DATA_POOL_NAME = "default.rgw.buckets.non-ec";
     private static final String BUCKET_NAME_LOOKUP = ".bucket.meta.%s";
     private static final String OBJECT_ID_LOOKUP = "%s_%s";
 
     static final String DIGEST_ALGORITHM = "MD5";
+    private static final int DEFAULT_BUCKET_HASH_LENGTH = 5;
     private static final int BUFFER_SIZE_BYTES = 1024 * 1024; // One Megabyte.
     private static final int DEFAULT_LIST_PAGE_SIZE = 1000;
 
@@ -237,6 +239,10 @@ public class CephStorageAdapter implements StorageAdapter {
         return pathItems[0];
     }
 
+    String generateObjectID() {
+        return UUID.randomUUID().toString();
+    }
+
     String lookupBucketMarker(final StorageLocation storageLocation) throws IOException {
         return lookupBucketMarker(parseBucket(storageLocation.getStorageID()));
     }
@@ -324,24 +330,30 @@ public class CephStorageAdapter implements StorageAdapter {
         }
     }
 
+    void writeStream(final String objectID, final ByteCountInputStream byteCountInputStream) throws IOException {
+        final byte[] buffer = new byte[BUFFER_SIZE_BYTES];
+
+        int bytesRead;
+        long offset = 0L;
+        while ((bytesRead = byteCountInputStream.read(buffer)) >= 0) {
+            try (final IoCTX ioCTX = contextConnect(DATA_POOL_NAME)) {
+                ioCTX.write(objectID, buffer, offset);
+            }
+            offset += bytesRead;
+        }
+    }
+
     @Override
     public StorageMetadata put(NewArtifact newArtifact, InputStream inputStream)
-            throws StreamCorruptedException, ReadException, WriteException, StorageEngageException, TransientException {
+            throws StreamCorruptedException, WriteException, StorageEngageException, TransientException {
         try {
             final URI storageID = newArtifact.getArtifactURI();
-            final String objectID = getObjectID(new StorageLocation(storageID));
+            final String objectID = generateObjectID();
+            final String bucket = InventoryUtil.computeBucket(objectID, DEFAULT_BUCKET_HASH_LENGTH);
             final DigestInputStream digestInputStream = new DigestInputStream(inputStream, createDigester());
             final ByteCountInputStream byteCountInputStream = new ByteCountInputStream(digestInputStream);
-            final byte[] buffer = new byte[BUFFER_SIZE_BYTES];
 
-            int bytesRead;
-            long offset = 0L;
-            while ((bytesRead = byteCountInputStream.read(buffer)) >= 0) {
-                try (final IoCTX ioCTX = contextConnect(DATA_POOL_NAME)) {
-                    ioCTX.write(objectID, buffer, offset);
-                }
-                offset += bytesRead;
-            }
+            writeStream(objectID, byteCountInputStream);
 
             LOGGER.debug(String.format("Wrote %d bytes to %s.", byteCountInputStream.getByteCount(), objectID));
             final URI expectedChecksum = newArtifact.contentChecksum;
@@ -366,7 +378,14 @@ public class CephStorageAdapter implements StorageAdapter {
                                       calculatedContentLength));
             }
 
-            return new StorageMetadata(new StorageLocation(storageID), calculatedChecksum, calculatedContentLength);
+            try (final IoCTX ioCTX = contextConnect(DATA_POOL_NAME)) {
+                ioCTX.setExtendedAttribute(objectID, "uri", newArtifact.getArtifactURI().toASCIIString().trim());
+                ioCTX.setExtendedAttribute(objectID, "md5", calculatedChecksum.toString());
+            }
+
+            return new StorageMetadata(new StorageLocation(
+                    URI.create(String.format(SOTRAGE_ID_URI_TEMPLATE, storageID.getAuthority(), bucket, objectID))),
+                                       calculatedChecksum, calculatedContentLength);
         } catch (RadosException e) {
             throw new StorageEngageException(e.getMessage(), e);
         } catch (IOException e) {
