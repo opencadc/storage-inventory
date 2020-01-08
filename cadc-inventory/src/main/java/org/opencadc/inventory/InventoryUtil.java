@@ -253,7 +253,7 @@ public abstract class InventoryUtil {
      */
     public static void assertValidPathComponent(Class caller, String name, String test) {
         assertNotNull(caller, name, test);
-        log.warn("assertValidPathComponent: " + test);
+        log.debug("assertValidPathComponent: " + test);
         boolean space = (test.indexOf(' ') >= 0);
         boolean slash = (test.indexOf('/') >= 0);
         boolean escape = (test.indexOf('\\') >= 0);

@@ -74,7 +74,6 @@ import ca.nrc.cadc.rest.InlineContentHandler;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.StreamCorruptedException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.Date;
@@ -86,6 +85,7 @@ import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.DeletedEventDAO;
 import org.opencadc.inventory.permissions.WriteGrant;
 import org.opencadc.inventory.storage.NewArtifact;
+import org.opencadc.inventory.storage.ReadException;
 import org.opencadc.inventory.storage.StorageMetadata;
 
 /**
@@ -165,16 +165,21 @@ public class PutAction extends ArtifactAction {
         InputStream in = (InputStream) syncInput.getContent(INLINE_CONTENT_TAG);
         
         StorageMetadata artifactMetadata = null;
+        
+        log.debug("writing new artifact to storage...");
         try {
-            log.debug("writing new artifact to storage...");
             artifactMetadata = getStorageAdapter().put(newArtifact, in);
-            log.debug("wrote new artifact to storage");
-        } catch (StreamCorruptedException e) {
-            // file did not meet md5 or length expectations
-            syncOutput.setCode(412); // precondition failed
-            syncOutput.getOutputStream().write("incorrect checksum or length".getBytes());
-            return;
-        } 
+        } catch (ReadException e) {
+            // error on client read
+            String msg = "read input error";
+            log.debug(msg, e);
+            if (e.getMessage() != null) {
+                msg += ": " + e.getMessage();
+            }
+            throw new IllegalArgumentException(msg, e);
+        }
+        log.debug("wrote new artifact to storage");
+
         Artifact artifact = new Artifact(
             artifactURI, artifactMetadata.getContentChecksum(),
             new Date(), artifactMetadata.getContentLength());
