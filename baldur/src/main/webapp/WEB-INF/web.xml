@@ -23,6 +23,7 @@
             <param-value>
                 org.opencadc.inventory.permissions
                 org.opencadc.baldur
+                ca.nrc.cadc.rest
             </param-value>
         </init-param>
         <load-on-startup>1</load-on-startup>
@@ -50,6 +51,25 @@
         <load-on-startup>3</load-on-startup>
     </servlet>
 
+    <!-- Permissions Servlet -->
+    <servlet>
+        <servlet-name>PermissionsServlet</servlet-name>
+        <servlet-class>ca.nrc.cadc.rest.RestServlet</servlet-class>
+        <init-param>
+            <param-name>get</param-name>
+            <param-value>org.opencadc.inventory.permissions.GetAction</param-value>
+        </init-param>
+        <init-param>
+            <param-name>permissionsAuthProperties</param-name>
+            <param-value>baldur-permissions-auth.properties</param-value>
+        </init-param>
+        <init-param>
+            <param-name>permissionsConfigProperties</param-name>
+            <param-value>baldur-permissions-config.properties</param-value>
+        </init-param>
+        <load-on-startup>2</load-on-startup>
+    </servlet>
+
     <!-- Endpoints -->
 
     <!-- Log control servlet endpoint -->
@@ -68,6 +88,12 @@
     <servlet-mapping>
         <servlet-name>CapabilitiesServlet</servlet-name>
         <url-pattern>/capabilities</url-pattern>
+    </servlet-mapping>
+
+    <!-- Permissions servlet endpoint -->
+    <servlet-mapping>
+        <servlet-name>PermissionsServlet</servlet-name>
+        <url-pattern>/permissions</url-pattern>
     </servlet-mapping>
 
     <welcome-file-list>

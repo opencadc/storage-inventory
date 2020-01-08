@@ -62,7 +62,7 @@
  *  <http://www.gnu.org/licenses/>.      pas le cas, consultez :
  *                                       <http://www.gnu.org/licenses/>.
  *
- *  $Revision: 4 $
+ *  $Revision: 5 $
  *
  ************************************************************************
  */
@@ -71,7 +71,6 @@ package org.opencadc.inventory.permissions;
 
 import java.net.URI;
 import java.util.Date;
-import org.opencadc.inventory.InventoryUtil;
 
 /**
  * Holds read grant information about an artifact.

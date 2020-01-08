@@ -67,26 +67,109 @@
  ************************************************************************
  */
 
-package org.opencadc.inventory.permissions;
+package org.opencadc.baldur;
 
+import ca.nrc.cadc.auth.AuthenticationUtil;
+import java.io.OutputStream;
 import java.net.URI;
+import java.net.URISyntaxException;
+import java.security.AccessControlException;
+import java.util.Calendar;
 import java.util.Date;
+import javax.security.auth.Subject;
+import javax.servlet.ServletException;
+import org.apache.log4j.Logger;
+import org.opencadc.inventory.permissions.Grant;
+import org.opencadc.inventory.permissions.ReadGrant;
+import org.opencadc.inventory.permissions.WriteGrant;
+import org.opencadc.inventory.permissions.xml.GrantWriter;
 
-/**
- * Holds grant information about an artifact.
- * 
- * @author majorb
- *
- */
-public class WriteGrant extends Grant {
+public class GetAction extends PermissionsAction {
+    private static final Logger log = Logger.getLogger(GetAction.class);
+
+    private static final String OP = "OP";
+    private static final String URI = "URI";
+    private static final String READ = "read";
+    private static final String WRITE = "write";
+
+    public GetAction() {
+        super();
+    }
+
+    @Override
+    public void doAction() throws Exception {
+
+        // Check if the calling user is authorized to make the request.
+        Subject subject = AuthenticationUtil.getCurrentSubject();
+        log.debug(subject.toString());
+        if (!isAuthorized(subject)) {
+            throw new AccessControlException("User authorization failed.");
+        }
+        
+        String op = syncInput.getParameter(OP);
+        if (op == null) {
+            throw new ServletException("missing required parameter: " + OP);
+        }
+        if (!op.equals(READ) && !op.equals(WRITE)) {
+            throw new ServletException("invalid " + OP + " parameter, must be " + READ  + " or " + WRITE);
+        }
+
+        String uri = syncInput.getParameter(URI);
+        if (uri == null) {
+            throw new ServletException("missing required parameter: " + URI);
+        }
+        java.net.URI artifactURI;
+        try {
+            artifactURI = new URI(uri);
+        } catch (URISyntaxException e) {
+            throw new ServletException(URI + " parameter is not a valid URI");
+        }
+        log.debug(OP + " = " + op);
+        log.debug(URI + " = " + artifactURI.toASCIIString());
+
+        Permissions permissions = getPermissions(artifactURI);
+        Date expiryDate = getExpiryDate(artifactURI);
+
+        Grant grant;
+        if (op.equals(READ)) {
+            grant = new ReadGrant(artifactURI, expiryDate, permissions.getIsAnonymous());
+            grant.getGroups().addAll(permissions.getReadOnlyGroups());
+        } else {
+            grant = new WriteGrant(artifactURI, expiryDate);
+            grant.getGroups().addAll(permissions.getReadWriteGroups());
+        }
+
+        OutputStream out = null;
+        try {
+            syncOutput.setHeader("Content-Type", PERMISSIONS_CONTENT_TYPE);
+            syncOutput.setCode(200);
+
+            out = syncOutput.getOutputStream();
+            GrantWriter writer = new GrantWriter();
+            writer.write(grant, out);
+            out.flush();
+        } finally {
+            if (out != null) {
+                try {
+                    out.close();
+                } catch (Exception ignore) {
+                    // ignore
+                }
+            }
+        }
+    }
 
     /**
-     * Construct a write grant for the given artifactURI.
-     * @param artifactURI The applicable targetURI.
-     * @param expiryDate The expiry date of the grant.
+     * Calculate the expiry date of the grant for the given artifact URI.
+     * Arbitrarily set to a week from now.
+     *
+     * @param artifactURI The Artifact URI.
+     * @return A Date.
      */
-    public WriteGrant(URI artifactURI, Date expiryDate) {
-        super(artifactURI, expiryDate);
+    private Date getExpiryDate(URI artifactURI) {
+        Calendar cal = Calendar.getInstance();
+        cal.add(Calendar.DAY_OF_YEAR, 7);
+        return cal.getTime();
     }
 
 }
