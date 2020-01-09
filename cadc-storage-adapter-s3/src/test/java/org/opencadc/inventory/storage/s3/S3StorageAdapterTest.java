@@ -87,20 +87,27 @@ import ca.nrc.cadc.io.ByteCountOutputStream;
 import ca.nrc.cadc.net.InputStreamWrapper;
 import ca.nrc.cadc.util.FileUtil;
 
+import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.math.BigInteger;
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
 import java.security.DigestOutputStream;
 import java.security.MessageDigest;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -112,21 +119,92 @@ public class S3StorageAdapterTest {
     private static final URI ENDPOINT = URI.create("http://dao-wkr-04.cadc.dao.nrc.ca:8080");
     private static final String REGION = Region.US_EAST_1.id();
     private static final String USER_ID = System.getProperty("user.name");
+    private static final String BUCKET_NAME = System.getProperty("bucket.name", USER_ID);
 
 
     @Test
+    @Ignore
     public void list() throws Exception {
+        final File s3ListOutput = FileUtil.getFileFromResource("list.out", S3StorageAdapter.class);
+        final List<String> s3AdapterListObjectsOutput = new ArrayList<>();
+        final List<String> s3ListOutputItems = new ArrayList<>();
+        final FileReader fileReader = new FileReader(s3ListOutput);
+        final BufferedReader bufferedReader = new BufferedReader(fileReader);
+
+        String line;
+        while ((line = bufferedReader.readLine()) != null) {
+            s3ListOutputItems.add(line);
+        }
+
+        bufferedReader.close();
+
+        final List<String> utf8SortedItems = new ArrayList<>(s3ListOutputItems);
+
+        utf8SortedItems.sort(Comparator.comparing(o -> new String(o.getBytes(StandardCharsets.UTF_8),
+                                                                  StandardCharsets.UTF_8)));
+
         final S3StorageAdapter testSubject = new S3StorageAdapter(ENDPOINT, REGION);
         // The cadctest bucket contains 2001 items.
-        int count = 0;
         final long start = System.currentTimeMillis();
-        for (final Iterator<StorageMetadata> storageMetadataIterator = testSubject.iterator(USER_ID);
+        for (final Iterator<StorageMetadata> storageMetadataIterator = testSubject.iterator(BUCKET_NAME);
              storageMetadataIterator.hasNext(); ) {
-            storageMetadataIterator.next();
-            count++;
+            s3AdapterListObjectsOutput.add(
+                    storageMetadataIterator.next().getStorageLocation().getStorageID().getSchemeSpecificPart()
+                                           .split("/")[1]);
             // Do nothing
         }
-        LOGGER.debug(String.format("Listed %d items in %d milliseconds.", count, System.currentTimeMillis() - start));
+        LOGGER.debug(String.format("Listed %d items in %d milliseconds.", s3AdapterListObjectsOutput.size(),
+                                   System.currentTimeMillis() - start));
+
+        Assert.assertEquals("Wrong list output.", utf8SortedItems, s3AdapterListObjectsOutput);
+    }
+
+    @Test
+    public void put() throws Exception {
+        final URI testURI = URI.create(String.format("cadc:%s/%s.fits", BUCKET_NAME, UUID.randomUUID().toString()));
+        try {
+            final S3StorageAdapter putTestSubject = new S3StorageAdapter(ENDPOINT, REGION);
+            final File file = FileUtil.getFileFromResource("test-jcmt.fits", S3StorageAdapterTest.class);
+            final NewArtifact artifact = new NewArtifact(testURI);
+
+            artifact.contentChecksum = URI.create("md5:9307240a34ed65a0a252b0046b6e87be");
+            artifact.contentLength = file.length();
+
+            final InputStream fileInputStream = new FileInputStream(file);
+
+            final StorageMetadata storageMetadata = putTestSubject.put(artifact, fileInputStream);
+            fileInputStream.close();
+
+            final URI resultChecksum = storageMetadata.getContentChecksum();
+            final long resultLength = storageMetadata.getContentLength();
+
+            Assert.assertEquals("Checksum does not match.", artifact.contentChecksum, resultChecksum);
+            Assert.assertEquals("Lengths do not match.", artifact.contentLength.longValue(), resultLength);
+
+            // Get it out again.
+            final S3StorageAdapter getTestSubject = new S3StorageAdapter(ENDPOINT, REGION);
+
+            final OutputStream outputStream = new ByteArrayOutputStream();
+            final DigestOutputStream digestOutputStream = new DigestOutputStream(outputStream,
+                                                                                 MessageDigest.getInstance(
+                                                                                         S3StorageAdapter.DIGEST_ALGORITHM));
+            final ByteCountOutputStream byteCountOutputStream = new ByteCountOutputStream(digestOutputStream);
+            final MessageDigest messageDigest = digestOutputStream.getMessageDigest();
+
+            getTestSubject.get(storageMetadata.getStorageLocation(), byteCountOutputStream);
+            Assert.assertEquals("Retrieved file is not the same.", artifact.contentLength.longValue(),
+                                byteCountOutputStream.getByteCount());
+            Assert.assertEquals("Wrong checksum.", artifact.contentChecksum,
+                                URI.create(String.format("%s:%s", messageDigest.getAlgorithm().toLowerCase(),
+                                                         new BigInteger(1, messageDigest.digest()).toString(16))));
+        } finally {
+            final S3StorageAdapter deleteTestSubject = new S3StorageAdapter(ENDPOINT, REGION);
+            try {
+                deleteTestSubject.delete(new StorageLocation(testURI));
+            } catch (Exception e) {
+                // Oh well.
+            }
+        }
     }
 
     @Test
@@ -271,51 +349,6 @@ public class S3StorageAdapterTest {
         //final BasicHDU<?> hdu126 = fitsFile.getHDU(2);
 
         byteArrayInputStream.close();
-    }
-
-    @Test
-    @Ignore
-    public void put() throws Exception {
-        final URI testURI = URI.create(String.format("site:jenkinsd/%s.fits", UUID.randomUUID().toString()));
-        try {
-            final S3StorageAdapter putTestSubject = new S3StorageAdapter(ENDPOINT, REGION);
-            final File file = FileUtil.getFileFromResource("test-jcmt.fits", S3StorageAdapterTest.class);
-            final NewArtifact artifact = new NewArtifact(testURI);
-
-            artifact.contentChecksum = URI.create("md5:9307240a34ed65a0a252b0046b6e87be");
-            artifact.contentLength = file.length();
-
-            final InputStream fileInputStream = new FileInputStream(file);
-
-            final StorageMetadata storageMetadata = putTestSubject.put(artifact, fileInputStream);
-            fileInputStream.close();
-
-            final URI resultChecksum = storageMetadata.getContentChecksum();
-            final long resultLength = storageMetadata.getContentLength();
-
-            Assert.assertEquals("Checksum does not match.", artifact.contentChecksum, resultChecksum);
-            Assert.assertEquals("Lengths do not match.", artifact.contentLength.longValue(), resultLength);
-
-            // Get it out again.
-            final S3StorageAdapter getTestSubject = new S3StorageAdapter(ENDPOINT, REGION);
-
-            final OutputStream outputStream = new ByteArrayOutputStream();
-            final DigestOutputStream digestOutputStream = new DigestOutputStream(outputStream,
-                                                                                 MessageDigest.getInstance(
-                                                                                         S3StorageAdapter.DIGEST_ALGORITHM));
-            final ByteCountOutputStream byteCountOutputStream = new ByteCountOutputStream(digestOutputStream);
-            final MessageDigest messageDigest = digestOutputStream.getMessageDigest();
-
-            getTestSubject.get(new StorageLocation(testURI), byteCountOutputStream);
-            Assert.assertEquals("Retrieved file is not the same.", artifact.contentLength.longValue(),
-                                byteCountOutputStream.getByteCount());
-            Assert.assertEquals("Wrong checksum.", artifact.contentChecksum,
-                                URI.create(String.format("%s:%s", messageDigest.getAlgorithm().toLowerCase(),
-                                                         new BigInteger(1, messageDigest.digest()).toString(16))));
-        } finally {
-            final S3StorageAdapter deleteTestSubject = new S3StorageAdapter(ENDPOINT, REGION);
-            deleteTestSubject.delete(new StorageLocation(testURI));
-        }
     }
 
     private static class TestByteCountInputStreamWrapper implements InputStreamWrapper {

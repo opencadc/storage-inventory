@@ -91,20 +91,28 @@ import ca.nrc.cadc.net.InputStreamWrapper;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.util.FileUtil;
 
+import java.io.BufferedInputStream;
+import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.math.BigInteger;
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
 import java.security.DigestOutputStream;
 import java.security.MessageDigest;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -121,17 +129,39 @@ public class CephStorageAdapterTest {
 
     @Test
     public void list() throws Exception {
+        final File s3ListOutput = FileUtil.getFileFromResource("list-ceph.out", CephStorageAdapterTest.class);
+        final List<String> cephAdapterListObjectsOutput = new ArrayList<>();
+        final List<String> radosListOutputItems = new ArrayList<>();
+        final FileReader fileReader = new FileReader(s3ListOutput);
+        final BufferedReader bufferedReader = new BufferedReader(fileReader);
+
+        String line;
+        while ((line = bufferedReader.readLine()) != null) {
+            radosListOutputItems.add(line);
+        }
+
+        bufferedReader.close();
+
+        final List<String> utf8SortedItems = new ArrayList<>(radosListOutputItems);
+
+        utf8SortedItems.sort(Comparator.comparing(o -> new String(o.getBytes(StandardCharsets.UTF_8),
+                                                                  StandardCharsets.UTF_8)));
+
         final CephStorageAdapter testSubject = new CephStorageAdapter(USER_ID, CLUSTER_NAME);
-        // The cadctest bucket contains 2002 items.
-        int count = 0;
         final long start = System.currentTimeMillis();
-        for (final Iterator<StorageMetadata> storageMetadataIterator = testSubject.iterator(BUCKET_NAME);
+        for (final Iterator<StorageMetadata> storageMetadataIterator = testSubject.iterator(null);
              storageMetadataIterator.hasNext(); ) {
-            storageMetadataIterator.next();
-            count++;
+            cephAdapterListObjectsOutput.add(
+                    storageMetadataIterator.next().getStorageLocation().getStorageID().getSchemeSpecificPart()
+                                           .split("/")[1]);
             // Do nothing
         }
-        LOGGER.debug(String.format("Listed %d items in %d milliseconds.", count, System.currentTimeMillis() - start));
+        LOGGER.debug(String.format("Listed %d items in %d milliseconds.", cephAdapterListObjectsOutput.size(),
+                                   System.currentTimeMillis() - start));
+
+        //cephAdapterListObjectsOutput.sort(Comparator.comparing(o -> new String(o.getBytes(StandardCharsets.UTF_8),
+        //                                                                       StandardCharsets.UTF_8)));
+        Assert.assertEquals("Wrong list output.", utf8SortedItems, cephAdapterListObjectsOutput);
     }
 
     @Test

@@ -82,6 +82,7 @@ import org.opencadc.inventory.storage.NewArtifact;
 import org.opencadc.inventory.storage.ReadException;
 import org.opencadc.inventory.storage.StorageEngageException;
 import org.opencadc.inventory.storage.WriteException;
+import software.amazon.awssdk.awscore.exception.AwsErrorDetails;
 import software.amazon.awssdk.core.ResponseInputStream;
 import software.amazon.awssdk.core.exception.SdkClientException;
 import software.amazon.awssdk.core.sync.RequestBody;
@@ -91,16 +92,22 @@ import software.amazon.awssdk.services.s3.S3Client;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.storage.StorageAdapter;
 import org.opencadc.inventory.storage.StorageMetadata;
+import software.amazon.awssdk.services.s3.model.BucketAlreadyExistsException;
+import software.amazon.awssdk.services.s3.model.BucketAlreadyOwnedByYouException;
+import software.amazon.awssdk.services.s3.model.CreateBucketRequest;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectResponse;
+import software.amazon.awssdk.services.s3.model.HeadBucketRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectResponse;
 import software.amazon.awssdk.services.s3.model.ListObjectsRequest;
 import software.amazon.awssdk.services.s3.model.ListObjectsResponse;
+import software.amazon.awssdk.services.s3.model.NoSuchBucketException;
 import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.model.S3Exception;
+import ca.nrc.cadc.net.ResourceAlreadyExistsException;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.util.StringUtil;
@@ -110,8 +117,6 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.StreamCorruptedException;
 import java.net.URI;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
@@ -154,19 +159,13 @@ public class S3StorageAdapter implements StorageAdapter {
     }
 
     private String parseBucket(final URI storageID) {
-        return InventoryUtil.computeBucket(storageID, 5);
+        final String path = storageID.getSchemeSpecificPart();
+        final String[] pathItems = path.split("/");
+        return pathItems[0];
     }
 
     String generateObjectID() {
         return UUID.randomUUID().toString();
-    }
-
-    private MessageDigest createDigester() {
-        try {
-            return MessageDigest.getInstance(DIGEST_ALGORITHM);
-        } catch (NoSuchAlgorithmException e) {
-            throw new RuntimeException("Unable to proceed with checksum implementation.", e);
-        }
     }
 
     private void transferInputStreamTo(final InputStream inputStream, final OutputStream outputStream)
@@ -273,6 +272,42 @@ public class S3StorageAdapter implements StorageAdapter {
         }
     }
 
+    void createBucket(final String bucket) throws ResourceAlreadyExistsException, IOException {
+        final CreateBucketRequest createBucketRequest = CreateBucketRequest.builder().bucket(bucket).build();
+
+        try {
+            s3Client.createBucket(createBucketRequest);
+        } catch (BucketAlreadyExistsException | BucketAlreadyOwnedByYouException e) {
+            throw new ResourceAlreadyExistsException(e.getMessage(), e);
+        } catch (SdkClientException | S3Exception e) {
+            throw new IOException(e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Ensure the bucket for the given Object ID exists and return it.
+     *
+     * @param objectID The Object ID to ensure a bucket for.
+     * @return String name of the given Object's bucket.
+     *
+     * @throws ResourceAlreadyExistsException If the bucket needed to be created but already exists.  Should never
+     *                                        really happen, but here for completeness.
+     * @throws IOException                    Any other I/O related errors.
+     */
+    String ensureBucket(final String objectID) throws ResourceAlreadyExistsException, IOException {
+        final String bucket = InventoryUtil.computeBucket(objectID, DEFAULT_BUCKET_HASH_LENGTH);
+        final HeadBucketRequest headBucketRequest = HeadBucketRequest.builder().bucket(bucket).build();
+
+        try {
+            s3Client.headBucket(headBucketRequest);
+        } catch (NoSuchBucketException e) {
+            // Bucket does not exist, so create it.
+            createBucket(bucket);
+        }
+
+        return bucket;
+    }
+
     /**
      * Write an artifact to storage.
      * The value of storageBucket in the returned StorageMetadata and StorageLocation can be used to
@@ -295,9 +330,10 @@ public class S3StorageAdapter implements StorageAdapter {
     public StorageMetadata put(NewArtifact newArtifact, InputStream source)
             throws StreamCorruptedException, ReadException, WriteException, StorageEngageException {
         final String objectID = generateObjectID();
-        final String bucket = InventoryUtil.computeBucket(objectID, DEFAULT_BUCKET_HASH_LENGTH);
 
         try {
+            final String bucket = ensureBucket(objectID);
+
             final PutObjectRequest.Builder putObjectRequestBuilder = PutObjectRequest.builder()
                                                                                      .bucket(bucket)
                                                                                      .key(objectID);
@@ -305,10 +341,10 @@ public class S3StorageAdapter implements StorageAdapter {
             final Map<String, String> metadata = new HashMap<>();
             metadata.put("uri", newArtifact.getArtifactURI().toASCIIString().trim());
 
-            if (newArtifact.contentChecksum != null) {
-                putObjectRequestBuilder.contentMD5(newArtifact.contentChecksum.getSchemeSpecificPart());
-                metadata.put("md5", newArtifact.contentChecksum.toString());
-            }
+            //if (newArtifact.contentChecksum != null) {
+            //    putObjectRequestBuilder.contentMD5(newArtifact.contentChecksum.getSchemeSpecificPart());
+            //    metadata.put("md5", newArtifact.contentChecksum.toString());
+            //}
 
             if (newArtifact.contentLength != null) {
                 putObjectRequestBuilder.contentLength(newArtifact.contentLength);
@@ -321,8 +357,22 @@ public class S3StorageAdapter implements StorageAdapter {
 
             return head(bucket, objectID);
         } catch (S3Exception e) {
+            final AwsErrorDetails awsErrorDetails = e.awsErrorDetails();
+            if (awsErrorDetails != null) {
+                if (awsErrorDetails.errorCode().equals("InvalidDigest")) {
+                    e.printStackTrace();
+                    throw new StreamCorruptedException(String.format("Checksums do not match.  Expected %s but got %s",
+                                                                     newArtifact.contentChecksum
+                                                                             .getSchemeSpecificPart(), ""));
+                } else {
+                    throw new WriteException(e.getMessage(), e);
+                }
+            } else {
+                throw new WriteException(e.getMessage(), e);
+            }
+        } catch (IOException e) {
             throw new StorageEngageException(e.getMessage(), e);
-        } catch (SdkClientException e) {
+        } catch (SdkClientException | ResourceAlreadyExistsException e) {
             throw new WriteException(e.getMessage(), e);
         }
     }
@@ -333,15 +383,25 @@ public class S3StorageAdapter implements StorageAdapter {
                                                                     ? headBuilder.bucket(bucket).build()
                                                                     : headBuilder.build());
         final String artifactURIMetadataValue = headResponse.metadata().get("uri");
-        final URI metadataArtifactURI = StringUtil.hasLength(artifactURIMetadataValue)
-                                        ? URI.create(artifactURIMetadataValue)
-                                        : URI.create(String.format("%s:%s/%s", "UNKNOWN", bucket, key));
+        final URI artifactURIAttributeValue = StringUtil.hasLength(artifactURIMetadataValue)
+                                              ? URI.create(artifactURIMetadataValue)
+                                              : null;
+
+        final URI metadataArtifactURI = URI.create(String.format("%s:%s/%s",
+                                                                 (artifactURIAttributeValue == null) ? "UNKNOWN"
+                                                                                                     :
+                                                                 artifactURIAttributeValue.getScheme(), bucket, key));
+
         final String md5ChecksumValue = headResponse.sseCustomerKeyMD5();
         final URI md5 = URI.create(String.format("%s:%s", "md5", StringUtil.hasLength(md5ChecksumValue)
                                                                  ? md5ChecksumValue
                                                                  : headResponse.eTag().replaceAll("\"", "")));
 
-        return new StorageMetadata(new StorageLocation(metadataArtifactURI), md5, headResponse.contentLength());
+        final StorageMetadata storageMetadata =
+                new StorageMetadata(new StorageLocation(metadataArtifactURI), md5, headResponse.contentLength());
+        storageMetadata.artifactURI = artifactURIAttributeValue;
+
+        return storageMetadata;
     }
 
     /**
@@ -355,13 +415,10 @@ public class S3StorageAdapter implements StorageAdapter {
      */
     public void delete(StorageLocation storageLocation)
             throws ResourceNotFoundException, IOException, StorageEngageException, TransientException {
-        final DeleteObjectRequest.Builder deleteObjectRequestBuilder = DeleteObjectRequest.builder();
-        if (StringUtil.hasLength(storageLocation.storageBucket)) {
-            deleteObjectRequestBuilder.bucket(storageLocation.storageBucket);
-        }
-
-        deleteObjectRequestBuilder.key(parseKey(storageLocation.getStorageID()));
-
+        final DeleteObjectRequest.Builder deleteObjectRequestBuilder =
+                DeleteObjectRequest.builder()
+                                   .bucket(parseBucket(storageLocation.getStorageID()))
+                                   .key(parseKey(storageLocation.getStorageID()));
         try {
             s3Client.deleteObject(deleteObjectRequestBuilder.build());
         } catch (S3Exception e) {

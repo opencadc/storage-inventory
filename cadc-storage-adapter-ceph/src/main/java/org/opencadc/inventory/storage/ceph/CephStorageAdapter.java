@@ -227,10 +227,11 @@ public class CephStorageAdapter implements StorageAdapter {
 
     private String getObjectID(final StorageLocation storageLocation) throws IOException {
         final URI storageID = storageLocation.getStorageID();
-        final String bucketMarker = lookupBucketMarker(storageLocation);
+        //final String bucketMarker = lookupBucketMarker(storageLocation);
         final String path = storageID.getSchemeSpecificPart();
         final String[] pathItems = path.split("/");
-        return String.format(OBJECT_ID_LOOKUP, bucketMarker, pathItems[pathItems.length - 1]);
+        //return String.format(OBJECT_ID_LOOKUP, parseBucket(storageID), pathItems[pathItems.length - 1]);
+        return pathItems[pathItems.length - 1];
     }
 
     private String parseBucket(final URI storageID) {
@@ -243,25 +244,25 @@ public class CephStorageAdapter implements StorageAdapter {
         return UUID.randomUUID().toString();
     }
 
-    String lookupBucketMarker(final StorageLocation storageLocation) throws IOException {
-        return lookupBucketMarker(parseBucket(storageLocation.getStorageID()));
-    }
+    //String lookupBucketMarker(final StorageLocation storageLocation) throws IOException {
+    //    return lookupBucketMarker(parseBucket(storageLocation.getStorageID()));
+    //}
 
-    String lookupBucketMarker(final String bucket) throws IOException {
-        try (final IoCTX ioCTX = contextConnect(META_POOL_NAME)) {
-            ioCTX.setNamespace(META_NAMESPACE);
-            final String bucketKey = String.format(BUCKET_NAME_LOOKUP, bucket);
-            final String[] objects = ioCTX.listObjects();
-            for (final String s : objects) {
-                if (s.startsWith(bucketKey)) {
-                    final String bucketMarker = s.split(":")[1];
-                    LOGGER.debug(String.format("Found marker %s for bucket %s.", bucketMarker, bucket));
-                    return bucketMarker;
-                }
-            }
-            throw new RadosException(String.format("No such bucket %s.", bucket));
-        }
-    }
+    //String lookupBucketMarker(final String bucket) throws IOException {
+    //    try (final IoCTX ioCTX = contextConnect(META_POOL_NAME)) {
+    //        ioCTX.setNamespace(META_NAMESPACE);
+    //        final String bucketKey = String.format(BUCKET_NAME_LOOKUP, bucket);
+    //        final String[] objects = ioCTX.listObjects();
+    //        for (final String s : objects) {
+    //            if (s.startsWith(bucketKey)) {
+    //                final String bucketMarker = s.split(":")[1];
+    //                LOGGER.debug(String.format("Found marker %s for bucket %s.", bucketMarker, bucket));
+    //                return bucketMarker;
+    //            }
+    //        }
+    //        throw new RadosException(String.format("No such bucket %s.", bucket));
+    //    }
+    //}
 
     @Override
     public void get(StorageLocation storageLocation, OutputStream outputStream) throws ResourceNotFoundException,
@@ -407,9 +408,9 @@ public class CephStorageAdapter implements StorageAdapter {
     public void delete(StorageLocation storageLocation)
             throws ResourceNotFoundException, IOException, StorageEngageException, TransientException {
         try (final IoCTXStriper ioCTX = contextConnectStriper(DATA_POOL_NAME)) {
-            final String objectID = String.format(OBJECT_ID_LOOKUP, lookupBucketMarker(storageLocation),
-                                                  getObjectID(storageLocation));
-            ioCTX.remove(objectID);
+            //final String objectID = String.format(OBJECT_ID_LOOKUP, lookupBucketMarker(storageLocation),
+            //                                      getObjectID(storageLocation));
+            ioCTX.remove(getObjectID(storageLocation));
         } catch (RadosNotFoundException e) {
             throw new ResourceNotFoundException(e.getMessage(), e);
         } catch (Exception e) {
@@ -446,7 +447,7 @@ public class CephStorageAdapter implements StorageAdapter {
      * @throws IOException If any Ceph interaction fails.
      */
     Iterator<StorageMetadata> pageIterator(final String storageBucket, final Integer pageSize) throws IOException {
-        final String bucket = lookupBucketMarker(storageBucket);
+        //final String bucket = lookupBucketMarker(storageBucket);
         final Optional<Integer> optionalPageSize = Optional.ofNullable(pageSize);
 
         try (final IoCTX ioCTX = contextConnect(DATA_POOL_NAME)) {
@@ -454,8 +455,9 @@ public class CephStorageAdapter implements StorageAdapter {
 
             return new Iterator<StorageMetadata>() {
                 private final ListCtx listCtx = ioCTX.listObjectsPartial(configuredPageSize);
-                private String[] buffer = Arrays.stream(listCtx.getObjects()).filter(
-                        val -> !StringUtil.hasLength(bucket) || val.startsWith(bucket)).toArray(String[]::new);
+                //private String[] buffer = Arrays.stream(listCtx.getObjects()).filter(
+                //        val -> !StringUtil.hasLength(bucket) || val.startsWith(bucket)).toArray(String[]::new);
+                private String[] buffer = listCtx.getObjects();
                 private int bufferPosition = 0;
 
                 @Override
@@ -474,9 +476,10 @@ public class CephStorageAdapter implements StorageAdapter {
                         final int bufferCount;
                         if (objectCount > 0) {
                             LOGGER.debug(String.format("Read in %d objects.", objectCount));
-                            buffer = Arrays.stream(listCtx.getObjects()).filter(
-                                    val -> !StringUtil.hasLength(bucket) || val.startsWith(bucket)).toArray(
-                                    String[]::new);
+                            buffer = listCtx.getObjects();
+                            //buffer = Arrays.stream(listCtx.getObjects()).filter(
+                            //        val -> !StringUtil.hasLength(bucket) || val.startsWith(bucket)).toArray(
+                            //        String[]::new);
                             if (buffer.length == 0) {
                                 LOGGER.debug("No objects match.  Fetching more results.");
                                 bufferCount = fillBuffer();
