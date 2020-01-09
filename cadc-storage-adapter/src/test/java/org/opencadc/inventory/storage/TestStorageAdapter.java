@@ -66,6 +66,8 @@
  */
 package org.opencadc.inventory.storage;
 
+import ca.nrc.cadc.net.IncorrectContentChecksumException;
+import ca.nrc.cadc.net.IncorrectContentLengthException;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.util.HexUtil;
@@ -75,7 +77,6 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.io.StreamCorruptedException;
 import java.net.URI;
 import java.security.MessageDigest;
 import java.util.Iterator;
@@ -127,8 +128,8 @@ public class TestStorageAdapter implements StorageAdapter {
     }
 
     public StorageMetadata put(NewArtifact newArtifact, InputStream source)
-        throws StreamCorruptedException, ReadException, WriteException, StorageEngageException, TransientException {
-
+        throws IncorrectContentChecksumException, IncorrectContentLengthException, ReadException,
+            WriteException, StorageEngageException, TransientException {
         ByteArrayOutputStream dest = new ByteArrayOutputStream();
         ThreadedIO io = new ThreadedIO(BUF_SIZE, 3);
         io.ioLoop(dest, source);
@@ -147,11 +148,11 @@ public class TestStorageAdapter implements StorageAdapter {
         }
         long newContentLength = newData.length;
         if (!newContentChecksum.equals(contentChecksum)) {
-            throw new StreamCorruptedException("checksum: " +
+            throw new IncorrectContentChecksumException("checksum: " +
                 newContentChecksum + " does not equal " + contentChecksum);
         }
         if (newContentLength != contentLength) {
-            throw new StreamCorruptedException("length: " +
+            throw new IncorrectContentLengthException("length: " +
                 newContentLength + " does not equal " + contentLength);
         }
         

@@ -69,13 +69,14 @@
 
 package org.opencadc.inventory.storage;
 
+import ca.nrc.cadc.net.IncorrectContentChecksumException;
+import ca.nrc.cadc.net.IncorrectContentLengthException;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.io.StreamCorruptedException;
 import java.util.Iterator;
 import java.util.Set;
 
@@ -133,15 +134,18 @@ public interface StorageAdapter {
      * @param source The stream from which to read.
      * @return The storage metadata.
      * 
-     * @throws StreamCorruptedException If the calculated checksum does not the expected checksum.
+     * @throws IncorrectContentChecksumException If the calculated checksum does not the expected
+     *     checksum as described in newArtifact.
+     * @throws IncorrectContentLengthException If the calculated length does not the expected
+     *     length as described in newArtifact.
      * @throws ReadException If the client failed to stream.
      * @throws WriteException If the storage system failed to stream.
      * @throws StorageEngageException If the adapter failed to interact with storage.
      * @throws TransientException If an unexpected, temporary exception occurred.
      */
     public StorageMetadata put(NewArtifact newArtifact, InputStream source)
-        throws StreamCorruptedException, ReadException, WriteException,
-            StorageEngageException, TransientException;
+        throws IncorrectContentChecksumException, IncorrectContentLengthException, ReadException,
+            WriteException, StorageEngageException, TransientException;
         
     /**
      * Delete from storage the artifact identified by storageLocation.

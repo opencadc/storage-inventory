@@ -67,6 +67,8 @@
 
 package org.opencadc.inventory.storage.fs;
 
+import ca.nrc.cadc.net.IncorrectContentChecksumException;
+import ca.nrc.cadc.net.IncorrectContentLengthException;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.util.HexUtil;
@@ -76,7 +78,6 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.io.StreamCorruptedException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.file.FileSystem;
@@ -295,14 +296,15 @@ public class FileSystemStorageAdapter implements StorageAdapter {
      * @param source The stream from which to read.
      * @return The storage metadata.
      * 
-     * @throws StreamCorruptedException If the calculated checksum does not the expected checksum.
+     * @throws IncorrectContentChecksumException If the calculated checksum does not the expected checksum.
+     * @throws IncorrectContentLengthException If the calculated length does not the expected length.
      * @throws ReadException If the client failed to stream.
      * @throws WriteException If the storage system failed to stream.
      * @throws StorageEngageException If the adapter failed to interact with storage.
      * @throws TransientException If an unexpected, temporary exception occurred.
      */
     public StorageMetadata put(NewArtifact newArtifact, InputStream source)
-        throws StreamCorruptedException, ReadException, WriteException,
+        throws IncorrectContentChecksumException, IncorrectContentLengthException, ReadException, WriteException,
             StorageEngageException, TransientException {
         InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "artifact", newArtifact);
         InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "source", source);
@@ -353,12 +355,13 @@ public class FileSystemStorageAdapter implements StorageAdapter {
             log.debug("calculated md5sum: " + checksum);
             log.debug("calculated file size: " + length);
             
+            boolean checksumProvided = newArtifact.contentChecksum != null && newArtifact.contentChecksum.getScheme().equals(MD5_CHECKSUM_SCHEME);
             // checksum comparison
-            if (newArtifact.contentChecksum != null && newArtifact.contentChecksum.getScheme().equals(MD5_CHECKSUM_SCHEME)) {
+            if (checksumProvided) {
                 String expectedMD5 = newArtifact.contentChecksum.getSchemeSpecificPart();
                 String actualMD5 = checksum.getSchemeSpecificPart();
                 if (!expectedMD5.equals(actualMD5)) {
-                    throw new StreamCorruptedException(
+                    throw new IncorrectContentChecksumException(
                         "expected md5 checksum [" + expectedMD5 + "] "
                         + "but calculated [" + actualMD5 + "]");
                 }
@@ -370,7 +373,13 @@ public class FileSystemStorageAdapter implements StorageAdapter {
             if (newArtifact.contentLength != null) {
                 Long expectedLength = newArtifact.contentLength;
                 if (!expectedLength.equals(length)) {
-                    throw new StreamCorruptedException(
+                    if (checksumProvided) {
+                        // likely bug in the client, throw a 400 instead
+                        throw new IllegalArgumentException("correct md5 checksum ["
+                            + newArtifact.contentChecksum + "] but incorrect length ["
+                            + expectedLength + "]");
+                    }
+                    throw new IncorrectContentLengthException(
                         "expected contentLength [" + expectedLength + "] "
                         + "but calculated [" + length + "]");
                 }
@@ -382,7 +391,8 @@ public class FileSystemStorageAdapter implements StorageAdapter {
             metadata.artifactURI = artifactURI;
             return metadata;
             
-        } catch (ReadException | WriteException | StreamCorruptedException e) {
+        } catch (ReadException | WriteException | IllegalArgumentException
+            | IncorrectContentChecksumException | IncorrectContentLengthException e) {
             // pass through
             throw e;
         } catch (Throwable t) {

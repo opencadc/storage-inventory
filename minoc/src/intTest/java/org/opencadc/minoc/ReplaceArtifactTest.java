@@ -157,7 +157,7 @@ public class ReplaceArtifactTest extends MinocTest {
                 }
             });
             
-        } catch (Throwable t) {
+        } catch (Exception t) {
             log.error("unexpected throwable", t);
             Assert.fail("unexpected throwable: " + t);
         }
