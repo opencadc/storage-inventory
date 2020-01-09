@@ -211,7 +211,6 @@ public abstract class ArtifactAction extends RestAction {
         } catch (URISyntaxException ex) {
             throw new IllegalStateException("CONFIG: invalid " + RESOURCE_ID_KEY + " = " + rid, ex);
         }
-        finally { }
     }
     
     public void checkReadPermission() throws AccessControlException, ResourceNotFoundException, TransientException {
