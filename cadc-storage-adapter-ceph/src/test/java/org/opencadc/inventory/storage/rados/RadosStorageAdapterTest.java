@@ -109,6 +109,10 @@ import java.util.Set;
 import java.util.UUID;
 
 
+/**
+ * All tests are ignored for now.  Re-instate when the librados-dev and libradosstriper-dev libraries are installed on
+ * the host where tests are being run.
+ */
 public class RadosStorageAdapterTest {
 
     private static final Logger LOGGER = Logger.getLogger(RadosStorageAdapterTest.class);
@@ -119,6 +123,7 @@ public class RadosStorageAdapterTest {
 
 
     @Test
+    @Ignore
     public void list() throws Exception {
         final File s3ListOutput = FileUtil.getFileFromResource("list-ceph.out", RadosStorageAdapterTest.class);
         final List<String> cephAdapterListObjectsOutput = new ArrayList<>();

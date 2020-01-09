@@ -117,7 +117,6 @@ import ca.nrc.cadc.util.StringUtil;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.io.StreamCorruptedException;
 import java.net.URI;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -451,7 +450,7 @@ public class S3StorageAdapter implements StorageAdapter {
      */
     ListObjectsResponse listObjects(final String storageBucket, final String nextMarkerKey) {
         final ListObjectsRequest.Builder listBuilder = ListObjectsRequest.builder();
-        final Optional<String> optionalNextMarkerKey = Optional.of(nextMarkerKey);
+        final Optional<String> optionalNextMarkerKey = Optional.ofNullable(nextMarkerKey);
 
         listBuilder.bucket(storageBucket);
         optionalNextMarkerKey.ifPresent(listBuilder::marker);

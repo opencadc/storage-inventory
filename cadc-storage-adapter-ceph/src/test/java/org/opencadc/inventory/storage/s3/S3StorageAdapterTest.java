@@ -84,7 +84,6 @@ import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 
 import ca.nrc.cadc.io.ByteCountOutputStream;
-import ca.nrc.cadc.net.InputStreamWrapper;
 import ca.nrc.cadc.util.FileUtil;
 
 import java.io.BufferedReader;
@@ -93,7 +92,6 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileReader;
-import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.math.BigInteger;
@@ -102,7 +100,6 @@ import java.nio.charset.StandardCharsets;
 import java.security.DigestOutputStream;
 import java.security.MessageDigest;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -118,14 +115,20 @@ public class S3StorageAdapterTest {
     private static final Logger LOGGER = Logger.getLogger(S3StorageAdapterTest.class);
     private static final URI ENDPOINT = URI.create("http://dao-wkr-04.cadc.dao.nrc.ca:8080");
     private static final String REGION = Region.US_EAST_1.id();
-    private static final String USER_ID = System.getProperty("user.name");
-    private static final String BUCKET_NAME = System.getProperty("bucket.name", USER_ID);
+
+    /**
+     * Override the bucket to use by setting -Dbucket.name=mybucket in your test command.
+     */
+    private static final String BUCKET_NAME = System.getProperty("bucket.name", "cadctest");
 
 
+    /**
+     * The list-s3.out file contains the list of objects in S3 in UTF-8 binary order as it was taken from S3.
+     * @throws Exception    Any exceptions.
+     */
     @Test
-    @Ignore
     public void list() throws Exception {
-        final File s3ListOutput = FileUtil.getFileFromResource("list.out", S3StorageAdapter.class);
+        final File s3ListOutput = FileUtil.getFileFromResource("list-s3.out", S3StorageAdapter.class);
         final List<String> s3AdapterListObjectsOutput = new ArrayList<>();
         final List<String> s3ListOutputItems = new ArrayList<>();
         final FileReader fileReader = new FileReader(s3ListOutput);
@@ -144,8 +147,8 @@ public class S3StorageAdapterTest {
                                                                   StandardCharsets.UTF_8)));
 
         final S3StorageAdapter testSubject = new S3StorageAdapter(ENDPOINT, REGION);
-        // The cadctest bucket contains 2001 items.
         final long start = System.currentTimeMillis();
+
         for (final Iterator<StorageMetadata> storageMetadataIterator = testSubject.iterator(BUCKET_NAME);
              storageMetadataIterator.hasNext(); ) {
             s3AdapterListObjectsOutput.add(
@@ -301,7 +304,6 @@ public class S3StorageAdapterTest {
         final DigestOutputStream digestOutputStream = new DigestOutputStream(outputStream, MessageDigest
                 .getInstance(S3StorageAdapter.DIGEST_ALGORITHM));
         final ByteCountOutputStream byteCountOutputStream = new ByteCountOutputStream(digestOutputStream);
-        //final MessageDigest messageDigest = digestOutputStream.getMessageDigest();
 
         final Set<String> cutouts = new HashSet<>();
         cutouts.add("fhead");
@@ -311,7 +313,7 @@ public class S3StorageAdapterTest {
     }
 
     @Test
-    @Ignore
+    @Ignore("Not currently supported.")
     public void getCutouts() throws Exception {
         final S3StorageAdapter testSubject = new S3StorageAdapter(ENDPOINT, REGION);
         final URI testURI = URI.create("cadc:jenkinsd/test-hst-mef.fits");
@@ -349,32 +351,5 @@ public class S3StorageAdapterTest {
         //final BasicHDU<?> hdu126 = fitsFile.getHDU(2);
 
         byteArrayInputStream.close();
-    }
-
-    private static class TestByteCountInputStreamWrapper implements InputStreamWrapper {
-
-        private final int expectedByteCount;
-
-        public TestByteCountInputStreamWrapper(final int expectedByteCount) {
-            this.expectedByteCount = expectedByteCount;
-        }
-
-        /**
-         * Read the bytes of the inputStream.
-         *
-         * @param inputStream The InputStream to read bytes from.
-         */
-        @Override
-        public void read(InputStream inputStream) throws IOException {
-            final byte[] buffer = new byte[8092];
-            int byteCount = 0;
-            int bytesRead;
-            while ((bytesRead = inputStream.read(buffer)) >= 0) {
-                byteCount += bytesRead;
-            }
-
-            Assert.assertEquals(String.format("Should have %d bytes.", expectedByteCount), expectedByteCount,
-                                byteCount);
-        }
     }
 }
