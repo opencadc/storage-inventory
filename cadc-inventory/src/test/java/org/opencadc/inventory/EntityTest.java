@@ -245,22 +245,36 @@ public class EntityTest {
     
     @Test
     public void testStorageSite() {
-        URI resourceID = URI.create("ivo://example.net/foo");
-        String name = "foo";
+        final URI resourceID = URI.create("ivo://example.net/foo");
+        final String name = "foo";
+        
+        final URI resourceID2 = URI.create("ivo://example.net/bar");
+        final String name2 = "flibble";
                 
         try {
             StorageSite ok = new StorageSite(resourceID, name);
             log.info("created: " + ok);
             Assert.assertEquals(resourceID, ok.getResourceID());
             Assert.assertEquals(name, ok.getName());
-            
+
             UUID id = UUID.randomUUID();
             StorageSite recon = new StorageSite(id, resourceID, name);
             log.info("created: " + recon);
             Assert.assertEquals(id, recon.getID());
             Assert.assertEquals(resourceID, recon.getResourceID());
             Assert.assertEquals(name, recon.getName());
+
+            // rename
+            StorageSite ren = new StorageSite(resourceID, name);
+            log.info("created: " + ren);
+            ren.setResourceID(resourceID2);
+            Assert.assertEquals(resourceID2, ren.getResourceID());
+            Assert.assertEquals(name, ren.getName());
+            ren.setName(name2);
+            Assert.assertEquals(resourceID2, ren.getResourceID());
+            Assert.assertEquals(name2, ren.getName());
             
+            recon.setResourceID(resourceID);
             try {
                 StorageSite invalid = new StorageSite(null, name);
                 Assert.fail("created: " + invalid);
