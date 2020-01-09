@@ -212,6 +212,7 @@ public class S3StorageAdapter implements StorageAdapter {
     /**
      * Get from storage the artifact identified by storageLocation with cutout specifications.  Currently needs full
      * implementation.
+     *
      * TODO
      * TODO Complete the implementation to check for an astronomy file (i.e. FITS, HDF5), and determine what cutout
      * TODO system to use.

@@ -132,7 +132,7 @@ public class RadosStorageAdapter implements StorageAdapter {
     private static final String BUCKET_NAME_LOOKUP = ".bucket.meta.%s";
     private static final String OBJECT_ID_LOOKUP = "%s_%s";
 
-    static final String DIGEST_ALGORITHM = "MD5";
+    private static final String DIGEST_ALGORITHM = "MD5";
     private static final int DEFAULT_BUCKET_HASH_LENGTH = 5;
     private static final int BUFFER_SIZE_BYTES = 1024 * 1024; // One Megabyte.
     private static final int DEFAULT_LIST_PAGE_SIZE = 1000;
@@ -144,6 +144,11 @@ public class RadosStorageAdapter implements StorageAdapter {
     private final RadosStriper radosStriperClient;
 
 
+    /**
+     * New RADOS adapter.
+     * @param userID        User ID to connect with.  This may be temporary until we have a dedicated account.
+     * @param clusterName   The cluster to connect to.
+     */
     public RadosStorageAdapter(final String userID, final String clusterName) {
         this.cephxID = String.format("client.%s", userID);
         this.clusterName = clusterName;

@@ -67,7 +67,7 @@
  ************************************************************************
  */
 
-package org.opencadc.inventory.storage.rados;
+package org.opencadc.inventory.storage.ceph.integration;
 
 import com.ceph.rados.IoCTX;
 import com.ceph.rados.Rados;
@@ -83,6 +83,8 @@ import org.junit.Test;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.storage.NewArtifact;
 import org.opencadc.inventory.storage.StorageMetadata;
+import org.opencadc.inventory.storage.rados.RadosStorageAdapter;
+import org.opencadc.inventory.storage.rados.RadosStriperInputStream;
 import ca.nrc.cadc.io.ByteCountOutputStream;
 import ca.nrc.cadc.util.FileUtil;
 
@@ -118,8 +120,8 @@ public class RadosStorageAdapterTest {
     private static final Logger LOGGER = Logger.getLogger(RadosStorageAdapterTest.class);
     static final String CLUSTER_NAME = "beta1";
     static final String DATA_POOL_NAME = "default.rgw.buckets.non-ec";
+    private static final String DIGEST_ALGORITHM = "MD5";
     static final String USER_ID = System.getProperty("user.name");
-    static final String BUCKET_NAME = System.getProperty("bucket.name", USER_ID);
 
 
     @Test
@@ -172,7 +174,7 @@ public class RadosStorageAdapterTest {
         final OutputStream outputStream = new ByteArrayOutputStream();
         final DigestOutputStream digestOutputStream = new DigestOutputStream(outputStream,
                                                                              MessageDigest.getInstance(
-                                                                                     RadosStorageAdapter.DIGEST_ALGORITHM));
+                                                                                     RadosStorageAdapterTest.DIGEST_ALGORITHM));
         final ByteCountOutputStream byteCountOutputStream = new ByteCountOutputStream(digestOutputStream);
         final MessageDigest messageDigest = digestOutputStream.getMessageDigest();
 
@@ -291,9 +293,9 @@ public class RadosStorageAdapterTest {
                 String.format("cadc:jenkinsd/%s", fileName == null ? "test-megaprime-rados.fits.fz" : fileName));
 
         final ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-        final DigestOutputStream digestOutputStream = new DigestOutputStream(outputStream,
-                                                                             MessageDigest.getInstance(
-                                                                                     RadosStorageAdapter.DIGEST_ALGORITHM));
+        final DigestOutputStream digestOutputStream =
+                new DigestOutputStream(outputStream,
+                                       MessageDigest.getInstance(RadosStorageAdapterTest.DIGEST_ALGORITHM));
 
         final Set<String> cutouts = new HashSet<>();
         cutouts.add("fhead");
@@ -330,9 +332,9 @@ public class RadosStorageAdapterTest {
             final RadosStorageAdapter getTestSubject = new RadosStorageAdapter(USER_ID, CLUSTER_NAME);
 
             final OutputStream outputStream = new ByteArrayOutputStream();
-            final DigestOutputStream digestOutputStream = new DigestOutputStream(outputStream,
-                                                                                 MessageDigest.getInstance(
-                                                                                         RadosStorageAdapter.DIGEST_ALGORITHM));
+            final DigestOutputStream digestOutputStream =
+                    new DigestOutputStream(outputStream,
+                                           MessageDigest.getInstance(RadosStorageAdapterTest.DIGEST_ALGORITHM));
             final ByteCountOutputStream byteCountOutputStream = new ByteCountOutputStream(digestOutputStream);
             final MessageDigest messageDigest = digestOutputStream.getMessageDigest();
 

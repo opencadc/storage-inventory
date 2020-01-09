@@ -1,10 +1,12 @@
 configurations {
     checkstyleDep
+    intTestImplementation.extendsFrom testImplementation
     intTestCompile.extendsFrom testCompile
     intTestRuntime.extendsFrom testRuntime
 }
 
 dependencies {
+    testImplementation 'com.puppycrawl.tools:checkstyle:8.2'
     testCompile 'com.puppycrawl.tools:checkstyle:8.2'
     checkstyleDep 'org.opencadc:cadc-quality:[1.0,)'
 }

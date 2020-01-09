@@ -67,7 +67,7 @@
  ************************************************************************
  */
 
-package org.opencadc.inventory.storage.s3;
+package org.opencadc.inventory.storage.ceph.integration;
 
 import nom.tam.fits.BasicHDU;
 import nom.tam.fits.Fits;
@@ -78,6 +78,7 @@ import org.junit.Assert;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.storage.NewArtifact;
 import org.opencadc.inventory.storage.StorageMetadata;
+import org.opencadc.inventory.storage.s3.S3StorageAdapter;
 import software.amazon.awssdk.core.sync.ResponseTransformer;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
@@ -115,6 +116,7 @@ public class S3StorageAdapterTest {
     private static final Logger LOGGER = Logger.getLogger(S3StorageAdapterTest.class);
     private static final URI ENDPOINT = URI.create("http://dao-wkr-04.cadc.dao.nrc.ca:8080");
     private static final String REGION = Region.US_EAST_1.id();
+    private static final String DIGEST_ALGORITHM = "MD5";
 
     /**
      * Override the bucket to use by setting -Dbucket.name=mybucket in your test command.
@@ -190,7 +192,7 @@ public class S3StorageAdapterTest {
             final OutputStream outputStream = new ByteArrayOutputStream();
             final DigestOutputStream digestOutputStream = new DigestOutputStream(outputStream,
                                                                                  MessageDigest.getInstance(
-                                                                                         S3StorageAdapter.DIGEST_ALGORITHM));
+                                                                                         S3StorageAdapterTest.DIGEST_ALGORITHM));
             final ByteCountOutputStream byteCountOutputStream = new ByteCountOutputStream(digestOutputStream);
             final MessageDigest messageDigest = digestOutputStream.getMessageDigest();
 
@@ -220,7 +222,7 @@ public class S3StorageAdapterTest {
 
         final OutputStream outputStream = new ByteArrayOutputStream();
         final DigestOutputStream digestOutputStream = new DigestOutputStream(outputStream, MessageDigest
-                .getInstance(S3StorageAdapter.DIGEST_ALGORITHM));
+                .getInstance(S3StorageAdapterTest.DIGEST_ALGORITHM));
         final ByteCountOutputStream byteCountOutputStream = new ByteCountOutputStream(digestOutputStream);
         final MessageDigest messageDigest = digestOutputStream.getMessageDigest();
 
@@ -302,7 +304,7 @@ public class S3StorageAdapterTest {
 
         final ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
         final DigestOutputStream digestOutputStream = new DigestOutputStream(outputStream, MessageDigest
-                .getInstance(S3StorageAdapter.DIGEST_ALGORITHM));
+                .getInstance(S3StorageAdapterTest.DIGEST_ALGORITHM));
         final ByteCountOutputStream byteCountOutputStream = new ByteCountOutputStream(digestOutputStream);
 
         final Set<String> cutouts = new HashSet<>();
@@ -322,7 +324,7 @@ public class S3StorageAdapterTest {
 
         final ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
         final DigestOutputStream digestOutputStream = new DigestOutputStream(outputStream, MessageDigest
-                .getInstance(S3StorageAdapter.DIGEST_ALGORITHM));
+                .getInstance(S3StorageAdapterTest.DIGEST_ALGORITHM));
         final ByteCountOutputStream byteCountOutputStream = new ByteCountOutputStream(digestOutputStream);
         final MessageDigest messageDigest = digestOutputStream.getMessageDigest();
 

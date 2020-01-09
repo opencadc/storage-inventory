@@ -15,23 +15,26 @@ sourceCompatibility = 1.8
 group = 'org.opencadc'
 version = '0.1.0'
 
+apply from: '../opencadc.gradle'
+
 dependencies {
-    compile 'log4j:log4j:[1.2,)'
-    compile 'org.opencadc:cadc-util:[1.2.25,)'
-    compile 'org.opencadc:cadc-storage-adapter:[0.1,)'
+    implementation 'log4j:log4j:[1.2,)'
+    implementation 'org.opencadc:cadc-util:[1.2.25,)'
+    implementation 'org.opencadc:cadc-storage-adapter:[0.1,)'
 
     // Java FITS library.
-    compile 'gov.nasa.gsfc.heasarc:nom-tam-fits:[1,2)'
+    implementation 'gov.nasa.gsfc.heasarc:nom-tam-fits:[1,2)'
 
     // RADOS Java Library from Ceph
-    compile 'com.ceph:rados:[0.5,)'
+    implementation 'com.ceph:rados:[0.5,)'
 
     // Amazon S3 Java Library
     // Requires Gradle 5 and up.
     implementation platform('software.amazon.awssdk:bom:2.10.43')
     implementation 'software.amazon.awssdk:s3'
 
-    testCompile 'junit:junit:[4.0,)'
-}
+    intTestImplementation platform('software.amazon.awssdk:bom:2.10.43')
+    intTestImplementation 'software.amazon.awssdk:s3'
 
-apply from: '../opencadc.gradle'
+    testImplementation 'junit:junit:[4.0,)'
+}
