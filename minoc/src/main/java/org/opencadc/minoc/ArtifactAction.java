@@ -86,16 +86,17 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.Callable;
 
 import javax.security.auth.Subject;
 
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.InventoryUtil;
+import org.opencadc.inventory.StorageSite;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.DeletedEventDAO;
 import org.opencadc.inventory.db.SQLGenerator;
+import org.opencadc.inventory.db.StorageSiteDAO;
 import org.opencadc.inventory.permissions.Grant;
 import org.opencadc.inventory.permissions.PermissionsClient;
 import org.opencadc.inventory.permissions.ReadGrant;
@@ -115,6 +116,7 @@ public abstract class ArtifactAction extends RestAction {
     public static final String JNDI_DATASOURCE = "jdbc/inventory";
     static final String SQL_GEN_KEY = SQLGenerator.class.getName();
     static final String SCHEMA_KEY = SQLGenerator.class.getPackage().getName() + ".schema";
+    static final String RESOURCE_ID_KEY = "org.opencadc.minoc.resourceID";
     
     // The target artifact
     URI artifactURI;
@@ -161,7 +163,55 @@ public abstract class ArtifactAction extends RestAction {
     
     void init() {
         parsePath();
-        props = readConfig();
+        if (props == null) {
+            this.props = readConfig();
+        }
+        initStorageSite();
+    }
+        
+    // HACK: lazy single init in first request thread
+    private static URI SELF_RESOURCE_ID;
+    
+    private void initStorageSite() {
+        if (SELF_RESOURCE_ID != null) {
+            // HACK: already did the init
+            return;
+        }
+        List<String> rids = props.getProperty(RESOURCE_ID_KEY);
+        if (rids.size() != 1) {
+            throw new IllegalStateException("CONFIG: found " + rids.size() + " values for " + RESOURCE_ID_KEY + " in config; expected 1");
+        }
+        String rid = rids.get(0);
+        try {
+            URI resourceID = new URI(rid);
+            StorageSiteDAO ssdao = new StorageSiteDAO();
+            ssdao.setConfig(getDaoConfig(props));
+            List<StorageSite> curlist = ssdao.list();
+            if (curlist.size() > 1) {
+                throw new IllegalStateException("found: " + curlist.size() + " StorageSite(s) in database; expected 0 or 1");
+            }
+            // TODO: get display name from config
+            // use path from resourceID as default
+            String name = resourceID.getPath();
+            if (name.charAt(0) == '/') {
+                name = name.substring(1);
+            }
+            
+            if (curlist.isEmpty()) {
+                StorageSite self = new StorageSite(resourceID, name);
+                ssdao.put(self);
+            } else {
+                StorageSite cur = curlist.get(0);
+                cur.setResourceID(resourceID);
+                cur.setName(name);
+                ssdao.put(cur);
+            }
+            log.info("initStorageSite: " + resourceID + " " + name);
+            SELF_RESOURCE_ID = resourceID;
+        } catch (URISyntaxException ex) {
+            throw new IllegalStateException("CONFIG: invalid " + RESOURCE_ID_KEY + " = " + rid, ex);
+        }
+        finally { }
     }
     
     public void checkReadPermission() throws AccessControlException, ResourceNotFoundException, TransientException {
