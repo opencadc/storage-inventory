@@ -83,10 +83,8 @@ import org.opencadc.inventory.storage.ReadException;
 import org.opencadc.inventory.storage.StorageEngageException;
 import org.opencadc.inventory.storage.WriteException;
 import software.amazon.awssdk.awscore.exception.AwsErrorDetails;
-import software.amazon.awssdk.core.ResponseInputStream;
 import software.amazon.awssdk.core.exception.SdkClientException;
 import software.amazon.awssdk.core.sync.RequestBody;
-import software.amazon.awssdk.core.sync.ResponseTransformer;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
 import org.opencadc.inventory.StorageLocation;
@@ -96,8 +94,8 @@ import software.amazon.awssdk.services.s3.model.BucketAlreadyExistsException;
 import software.amazon.awssdk.services.s3.model.BucketAlreadyOwnedByYouException;
 import software.amazon.awssdk.services.s3.model.CreateBucketRequest;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
+import software.amazon.awssdk.services.s3.model.DeleteObjectResponse;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
-import software.amazon.awssdk.services.s3.model.GetObjectResponse;
 import software.amazon.awssdk.services.s3.model.HeadBucketRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectResponse;
@@ -112,12 +110,14 @@ import ca.nrc.cadc.net.IncorrectContentLengthException;
 import ca.nrc.cadc.net.ResourceAlreadyExistsException;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
+import ca.nrc.cadc.util.HexUtil;
 import ca.nrc.cadc.util.StringUtil;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URI;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
@@ -133,9 +133,9 @@ public class S3StorageAdapter implements StorageAdapter {
 
     private static final Logger LOGGER = Logger.getLogger(S3StorageAdapter.class);
 
-    static final String DIGEST_ALGORITHM = "MD5";
     private static final int BUFFER_SIZE_BYTES = 8192;
     private static final int DEFAULT_BUCKET_HASH_LENGTH = 5;
+    static final String STORAGE_ID_URI_TEMPLATE = "%s:%s/%s";
 
 
     // S3Client is thread safe, and re-usability is encouraged.
@@ -179,6 +179,13 @@ public class S3StorageAdapter implements StorageAdapter {
         }
     }
 
+    InputStream toObjectInputStream(final URI storageID) {
+        return s3Client.getObject(GetObjectRequest.builder()
+                                                  .bucket(parseBucket(storageID))
+                                                  .key(parseKey(storageID))
+                                                  .build());
+    }
+
     /**
      * Get from storage the artifact identified by storageLocation.
      *
@@ -191,14 +198,7 @@ public class S3StorageAdapter implements StorageAdapter {
     @Override
     public void get(StorageLocation storageLocation, OutputStream dest)
             throws ResourceNotFoundException, ReadException, StorageEngageException {
-        final URI storageID = storageLocation.getStorageID();
-
-        try (final InputStream inputStream = s3Client.getObject(GetObjectRequest.builder()
-                                                                                .bucket(parseBucket(storageID))
-                                                                                .key(parseKey(storageID))
-                                                                                .build(),
-                                                                ResponseTransformer.toInputStream())) {
-
+        try (final InputStream inputStream = toObjectInputStream(storageLocation.getStorageID())) {
             transferInputStreamTo(inputStream, dest);
         } catch (NoSuchKeyException e) {
             throw new ResourceNotFoundException(e.getMessage(), e);
@@ -212,7 +212,6 @@ public class S3StorageAdapter implements StorageAdapter {
     /**
      * Get from storage the artifact identified by storageLocation with cutout specifications.  Currently needs full
      * implementation.
-     *
      * TODO
      * TODO Complete the implementation to check for an astronomy file (i.e. FITS, HDF5), and determine what cutout
      * TODO system to use.
@@ -233,15 +232,8 @@ public class S3StorageAdapter implements StorageAdapter {
         if ((cutouts == null) || cutouts.isEmpty()) {
             get(storageLocation, dest);
         } else {
-            final URI storageID = storageLocation.getStorageID();
             final long start = System.currentTimeMillis();
-            try (final ResponseInputStream<GetObjectResponse> inputStream = s3Client.getObject(
-                    GetObjectRequest.builder()
-                                    .bucket(parseBucket(storageID))
-                                    .key(parseKey(storageID))
-                                    .build(),
-                    ResponseTransformer.toInputStream())) {
-
+            try (final InputStream inputStream = toObjectInputStream(storageLocation.getStorageID())) {
                 final Fits fitsFile = new Fits(inputStream);
                 final ArrayDataOutput dataOutput = new BufferedDataOutputStream(dest);
 
@@ -318,6 +310,7 @@ public class S3StorageAdapter implements StorageAdapter {
         return bucket;
     }
 
+
     /**
      * Write an artifact to storage.
      * The value of storageBucket in the returned StorageMetadata and StorageLocation can be used to
@@ -340,6 +333,7 @@ public class S3StorageAdapter implements StorageAdapter {
             throws IncorrectContentChecksumException, IncorrectContentLengthException, ReadException, WriteException,
                    StorageEngageException {
         final String objectID = generateObjectID();
+        String checksum = "N/A";
 
         try {
             final String bucket = ensureBucket(objectID);
@@ -351,10 +345,13 @@ public class S3StorageAdapter implements StorageAdapter {
             final Map<String, String> metadata = new HashMap<>();
             metadata.put("uri", newArtifact.getArtifactURI().toASCIIString().trim());
 
-            //if (newArtifact.contentChecksum != null) {
-            //    putObjectRequestBuilder.contentMD5(newArtifact.contentChecksum.getSchemeSpecificPart());
-            //    metadata.put("md5", newArtifact.contentChecksum.toString());
-            //}
+            if (newArtifact.contentChecksum != null) {
+                // Reconvert to Hex bytes before Base64 encoding it as per what S3 expects.
+                final byte[] value = HexUtil.toBytes(newArtifact.contentChecksum.getSchemeSpecificPart());
+                checksum = new String(Base64.getEncoder().encode(value));
+                putObjectRequestBuilder.contentMD5(checksum);
+                metadata.put("md5", newArtifact.contentChecksum.toString());
+            }
 
             if (newArtifact.contentLength != null) {
                 putObjectRequestBuilder.contentLength(newArtifact.contentLength);
@@ -369,12 +366,15 @@ public class S3StorageAdapter implements StorageAdapter {
         } catch (S3Exception e) {
             final AwsErrorDetails awsErrorDetails = e.awsErrorDetails();
             if (awsErrorDetails != null) {
-                if (awsErrorDetails.errorCode().equals("InvalidDigest")) {
-                    e.printStackTrace();
+                final String errorCode = awsErrorDetails.errorCode();
+                if (errorCode.equals("InvalidDigest")) {
                     throw new IncorrectContentChecksumException(
-                            String.format("Checksums do not match.  Expected %s but got %s",
-                                          newArtifact.contentChecksum
-                                                  .getSchemeSpecificPart(), ""));
+                            String.format("Checksums do not match.  Expected %s but got %s", checksum, ""));
+                } else if (errorCode.equals("IncompleteBody")) {
+                    throw new IncorrectContentLengthException(
+                            String.format("Content length does not match bytes written.  Expected %d bytes.",
+                                          newArtifact.contentLength));
+
                 } else {
                     throw new WriteException(e.getMessage(), e);
                 }
@@ -388,6 +388,14 @@ public class S3StorageAdapter implements StorageAdapter {
         }
     }
 
+    /**
+     * Perform a head (headObject) request for the given key in the given bucket.  This is used to translate into a
+     * StorageMetadata object to verify after a PUT and to translate S3Objects for a LIST function.
+     *
+     * @param bucket The bucket to look.
+     * @param key    The key to look for.
+     * @return StorageMetadata instance.  Never null
+     */
     StorageMetadata head(final String bucket, final String key) {
         final HeadObjectRequest.Builder headBuilder = HeadObjectRequest.builder().key(key);
         final HeadObjectResponse headResponse = s3Client.headObject(StringUtil.hasLength(bucket)
@@ -398,18 +406,21 @@ public class S3StorageAdapter implements StorageAdapter {
                                               ? URI.create(artifactURIMetadataValue)
                                               : null;
 
-        final URI metadataArtifactURI = URI.create(String.format("%s:%s/%s",
+        final URI metadataArtifactURI = URI.create(String.format(S3StorageAdapter.STORAGE_ID_URI_TEMPLATE,
                                                                  (artifactURIAttributeValue == null) ? "UNKNOWN"
                                                                                                      :
                                                                  artifactURIAttributeValue.getScheme(), bucket, key));
 
-        final String md5ChecksumValue = headResponse.sseCustomerKeyMD5();
+        final String md5ChecksumValue = headResponse.metadata().get("md5");
         final URI md5 = URI.create(String.format("%s:%s", "md5", StringUtil.hasLength(md5ChecksumValue)
                                                                  ? md5ChecksumValue
                                                                  : headResponse.eTag().replaceAll("\"", "")));
 
-        final StorageMetadata storageMetadata =
-                new StorageMetadata(new StorageLocation(metadataArtifactURI), md5, headResponse.contentLength());
+        final StorageLocation storageLocation = new StorageLocation(metadataArtifactURI);
+        // TODO: Does this need to be set?
+        storageLocation.storageBucket = bucket;
+
+        final StorageMetadata storageMetadata = new StorageMetadata(storageLocation, md5, headResponse.contentLength());
         storageMetadata.artifactURI = artifactURIAttributeValue;
 
         return storageMetadata;
@@ -426,12 +437,18 @@ public class S3StorageAdapter implements StorageAdapter {
      */
     public void delete(StorageLocation storageLocation)
             throws ResourceNotFoundException, IOException, StorageEngageException, TransientException {
+        final URI storageID = storageLocation.getStorageID();
         final DeleteObjectRequest.Builder deleteObjectRequestBuilder =
                 DeleteObjectRequest.builder()
-                                   .bucket(parseBucket(storageLocation.getStorageID()))
-                                   .key(parseKey(storageLocation.getStorageID()));
+                                   .bucket(parseBucket(storageID))
+                                   .key(parseKey(storageID));
         try {
-            s3Client.deleteObject(deleteObjectRequestBuilder.build());
+            final DeleteObjectResponse deleteObjectResponse = s3Client.deleteObject(deleteObjectRequestBuilder.build());
+
+            // TODO: Figure out how a delete of a missing Key is handled.
+            if (!Optional.ofNullable(deleteObjectResponse.deleteMarker()).orElse(Boolean.FALSE)) {
+                throw new ResourceNotFoundException(String.format("No such key to delete \"%s\"", storageID));
+            }
         } catch (S3Exception e) {
             throw new StorageEngageException(e.getMessage(), e);
         } catch (SdkClientException e) {

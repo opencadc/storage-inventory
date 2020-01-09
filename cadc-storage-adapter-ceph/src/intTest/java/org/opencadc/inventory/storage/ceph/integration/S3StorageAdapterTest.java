@@ -235,8 +235,9 @@ public class S3StorageAdapterTest {
     }
 
     @Test
-    @Ignore
     public void jumpHDUs() throws Exception {
+        LOGGER.info("Jumping HDUS...");
+        LOGGER.info("***");
         final String objectID = "test-megaprime-s3.fits.fz";
         final String bucket = System.getProperty("user.name");
         final Map<Integer, Long> hduByteOffsets = new HashMap<>();
@@ -261,11 +262,15 @@ public class S3StorageAdapterTest {
                 LOGGER.info(String.format("\nRead time for HDU %d is %d.\n", entry.getKey(), readTime));
             }
         }
+
+        LOGGER.info("***");
+        LOGGER.info("Jumping HDUS done.");
     }
 
     @Test
-    @Ignore
     public void jumpHDUsReconnect() throws Exception {
+        LOGGER.info("Jumping HDUS with reconnect...");
+        LOGGER.info("***");
         final String objectID = "test-megaprime-s3.fits.fz";
         final String bucket = System.getProperty("user.name");
         final Map<Integer, Long> hduByteOffsets = new HashMap<>();
@@ -292,11 +297,15 @@ public class S3StorageAdapterTest {
                     String.format("\nReading %d bytes for HDU %d is %d with reconnect.\n", bytes.length, entry.getKey(),
                                   readTime));
         }
+
+        LOGGER.info("Jumping HDUS with reconnect done.");
+        LOGGER.info("***");
     }
 
     @Test
-    @Ignore
     public void getHeaders() throws Exception {
+        LOGGER.info("Skip to headers...");
+        LOGGER.info("***");
         final S3StorageAdapter testSubject = new S3StorageAdapter(ENDPOINT, REGION);
         final String fileName = System.getProperty("file.name");
         final URI testURI = URI.create(
@@ -312,6 +321,8 @@ public class S3StorageAdapterTest {
 
         testSubject.get(new StorageLocation(testURI), byteCountOutputStream, cutouts);
         byteCountOutputStream.close();
+        LOGGER.info("***");
+        LOGGER.info("Skip to headers done.");
     }
 
     @Test
