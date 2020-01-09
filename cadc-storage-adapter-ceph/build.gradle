@@ -12,9 +12,7 @@ repositories {
 }
 
 sourceCompatibility = 1.8
-
 group = 'org.opencadc'
-
 version = '0.1.0'
 
 dependencies {
@@ -27,6 +25,11 @@ dependencies {
 
     // RADOS Java Library from Ceph
     compile 'com.ceph:rados:[0.5,)'
+
+    // Amazon S3 Java Library
+    // Requires Gradle 5 and up.
+    implementation platform('software.amazon.awssdk:bom:2.10.43')
+    implementation 'software.amazon.awssdk:s3'
 
     testCompile 'junit:junit:[4.0,)'
 }

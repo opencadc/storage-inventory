@@ -67,11 +67,10 @@
  ************************************************************************
  */
 
-package org.opencadc.inventory.storage.ceph;
+package org.opencadc.inventory.storage.rados;
 
 import com.ceph.rados.IoCTX;
 import com.ceph.rados.Rados;
-import com.ceph.rados.exceptions.RadosException;
 import com.ceph.radosstriper.IoCTXStriper;
 import com.ceph.radosstriper.RadosStriper;
 import nom.tam.fits.BasicHDU;
@@ -83,21 +82,15 @@ import org.junit.Ignore;
 import org.junit.Test;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.storage.NewArtifact;
-import org.opencadc.inventory.storage.StorageEngageException;
 import org.opencadc.inventory.storage.StorageMetadata;
-import ca.nrc.cadc.io.ByteCountInputStream;
 import ca.nrc.cadc.io.ByteCountOutputStream;
-import ca.nrc.cadc.net.InputStreamWrapper;
-import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.util.FileUtil;
 
-import java.io.BufferedInputStream;
 import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileReader;
-import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.math.BigInteger;
@@ -106,8 +99,6 @@ import java.nio.charset.StandardCharsets;
 import java.security.DigestOutputStream;
 import java.security.MessageDigest;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -118,9 +109,9 @@ import java.util.Set;
 import java.util.UUID;
 
 
-public class CephStorageAdapterTest {
+public class RadosStorageAdapterTest {
 
-    private static final Logger LOGGER = Logger.getLogger(CephStorageAdapterTest.class);
+    private static final Logger LOGGER = Logger.getLogger(RadosStorageAdapterTest.class);
     static final String CLUSTER_NAME = "beta1";
     static final String DATA_POOL_NAME = "default.rgw.buckets.non-ec";
     static final String USER_ID = System.getProperty("user.name");
@@ -129,7 +120,7 @@ public class CephStorageAdapterTest {
 
     @Test
     public void list() throws Exception {
-        final File s3ListOutput = FileUtil.getFileFromResource("list-ceph.out", CephStorageAdapterTest.class);
+        final File s3ListOutput = FileUtil.getFileFromResource("list-ceph.out", RadosStorageAdapterTest.class);
         final List<String> cephAdapterListObjectsOutput = new ArrayList<>();
         final List<String> radosListOutputItems = new ArrayList<>();
         final FileReader fileReader = new FileReader(s3ListOutput);
@@ -147,7 +138,7 @@ public class CephStorageAdapterTest {
         utf8SortedItems.sort(Comparator.comparing(o -> new String(o.getBytes(StandardCharsets.UTF_8),
                                                                   StandardCharsets.UTF_8)));
 
-        final CephStorageAdapter testSubject = new CephStorageAdapter(USER_ID, CLUSTER_NAME);
+        final RadosStorageAdapter testSubject = new RadosStorageAdapter(USER_ID, CLUSTER_NAME);
         final long start = System.currentTimeMillis();
         for (final Iterator<StorageMetadata> storageMetadataIterator = testSubject.iterator(null);
              storageMetadataIterator.hasNext(); ) {
@@ -167,7 +158,7 @@ public class CephStorageAdapterTest {
     @Test
     @Ignore
     public void get() throws Exception {
-        final CephStorageAdapter testSubject = new CephStorageAdapter(USER_ID, CLUSTER_NAME);
+        final RadosStorageAdapter testSubject = new RadosStorageAdapter(USER_ID, CLUSTER_NAME);
 
         final URI testURI = URI.create("site:jenkinsd/test-jcmt-file.fits");
         final long expectedByteCount = 3144960L;
@@ -176,7 +167,7 @@ public class CephStorageAdapterTest {
         final OutputStream outputStream = new ByteArrayOutputStream();
         final DigestOutputStream digestOutputStream = new DigestOutputStream(outputStream,
                                                                              MessageDigest.getInstance(
-                                                                                     CephStorageAdapter.DIGEST_ALGORITHM));
+                                                                                     RadosStorageAdapter.DIGEST_ALGORITHM));
         final ByteCountOutputStream byteCountOutputStream = new ByteCountOutputStream(digestOutputStream);
         final MessageDigest messageDigest = digestOutputStream.getMessageDigest();
 
@@ -289,7 +280,7 @@ public class CephStorageAdapterTest {
     @Test
     @Ignore
     public void getHeaders() throws Exception {
-        final CephStorageAdapter testSubject = new CephStorageAdapter(USER_ID, CLUSTER_NAME);
+        final RadosStorageAdapter testSubject = new RadosStorageAdapter(USER_ID, CLUSTER_NAME);
         final String fileName = System.getProperty("file.name");
         final URI testURI = URI.create(
                 String.format("cadc:jenkinsd/%s", fileName == null ? "test-megaprime-rados.fits.fz" : fileName));
@@ -297,7 +288,7 @@ public class CephStorageAdapterTest {
         final ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
         final DigestOutputStream digestOutputStream = new DigestOutputStream(outputStream,
                                                                              MessageDigest.getInstance(
-                                                                                     CephStorageAdapter.DIGEST_ALGORITHM));
+                                                                                     RadosStorageAdapter.DIGEST_ALGORITHM));
 
         final Set<String> cutouts = new HashSet<>();
         cutouts.add("fhead");
@@ -312,8 +303,8 @@ public class CephStorageAdapterTest {
     public void put() throws Exception {
         final URI testURI = URI.create(String.format("site:jenkinsd/%s.fits", UUID.randomUUID().toString()));
         try {
-            final CephStorageAdapter putTestSubject = new CephStorageAdapter(USER_ID, CLUSTER_NAME);
-            final File file = FileUtil.getFileFromResource("test-jcmt.fits", CephStorageAdapterTest.class);
+            final RadosStorageAdapter putTestSubject = new RadosStorageAdapter(USER_ID, CLUSTER_NAME);
+            final File file = FileUtil.getFileFromResource("test-jcmt.fits", RadosStorageAdapterTest.class);
             final NewArtifact artifact = new NewArtifact(testURI);
 
             artifact.contentChecksum = URI.create("md5:9307240a34ed65a0a252b0046b6e87be");
@@ -331,12 +322,12 @@ public class CephStorageAdapterTest {
             Assert.assertEquals("Lengths do not match.", artifact.contentLength.longValue(), resultLength);
 
             // Get it out again.
-            final CephStorageAdapter getTestSubject = new CephStorageAdapter(USER_ID, CLUSTER_NAME);
+            final RadosStorageAdapter getTestSubject = new RadosStorageAdapter(USER_ID, CLUSTER_NAME);
 
             final OutputStream outputStream = new ByteArrayOutputStream();
             final DigestOutputStream digestOutputStream = new DigestOutputStream(outputStream,
                                                                                  MessageDigest.getInstance(
-                                                                                         CephStorageAdapter.DIGEST_ALGORITHM));
+                                                                                         RadosStorageAdapter.DIGEST_ALGORITHM));
             final ByteCountOutputStream byteCountOutputStream = new ByteCountOutputStream(digestOutputStream);
             final MessageDigest messageDigest = digestOutputStream.getMessageDigest();
 
@@ -347,7 +338,7 @@ public class CephStorageAdapterTest {
                                 URI.create(String.format("%s:%s", messageDigest.getAlgorithm().toLowerCase(),
                                                          new BigInteger(1, messageDigest.digest()).toString(16))));
         } finally {
-            final CephStorageAdapter deleteTestSubject = new CephStorageAdapter(USER_ID, CLUSTER_NAME);
+            final RadosStorageAdapter deleteTestSubject = new RadosStorageAdapter(USER_ID, CLUSTER_NAME);
             deleteTestSubject.delete(new StorageLocation(testURI));
         }
     }

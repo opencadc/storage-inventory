@@ -67,7 +67,7 @@
  ************************************************************************
  */
 
-package org.opencadc.inventory.storage.ceph;
+package org.opencadc.inventory.storage.rados;
 
 import org.opencadc.inventory.storage.StorageMetadata;
 
@@ -75,14 +75,14 @@ import java.io.IOException;
 import java.util.Iterator;
 
 
-public class CephStorageMetadataIterator implements Iterator<StorageMetadata> {
+public class RadosStorageMetadataIterator implements Iterator<StorageMetadata> {
 
     /**
      * A buffering Iterator to pull pages of keys from the RADOS backend.
      */
     private final Iterator<StorageMetadata> bufferedIterator;
 
-    public CephStorageMetadataIterator(final CephStorageAdapter storageAdapter, final String bucket)
+    public RadosStorageMetadataIterator(final RadosStorageAdapter storageAdapter, final String bucket)
             throws IOException {
         bufferedIterator = storageAdapter.pageIterator(bucket, null);
     }

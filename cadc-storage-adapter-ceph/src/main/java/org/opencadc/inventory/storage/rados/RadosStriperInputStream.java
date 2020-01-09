@@ -67,73 +67,58 @@
  ************************************************************************
  */
 
-package org.opencadc.inventory.storage.s3;
+package org.opencadc.inventory.storage.rados;
 
-import org.opencadc.inventory.storage.StorageMetadata;
-import software.amazon.awssdk.services.s3.model.ListObjectsResponse;
-import software.amazon.awssdk.services.s3.model.S3Object;
+import com.ceph.rados.IoCTX;
+import com.ceph.rados.exceptions.RadosException;
+import com.ceph.rados.exceptions.RadosNotFoundException;
+import com.ceph.radosstriper.IoCTXStriper;
+import com.ceph.radosstriper.RadosStriper;
+import org.apache.log4j.Logger;
 
-import ca.nrc.cadc.util.StringUtil;
-
-import java.util.Collections;
-import java.util.Iterator;
-
-
-public class S3StorageMetadataIterator implements Iterator<StorageMetadata> {
-
-    private final S3StorageAdapter storageAdapter;
-    private final String bucket;
-
-    // State of this iterator.
-    private Iterator<S3Object> currIterator;
-    private String nextMarker;
-    private int count;
+import java.io.IOException;
 
 
-    public S3StorageMetadataIterator(final S3StorageAdapter storageAdapter, final String bucket) {
-        this.storageAdapter = storageAdapter;
-        this.bucket = bucket;
+/**
+ * Creates an InputStream for the underlying IO Context from RADOS.  Since RADOS wants to only write out Byte Arrays,
+ * we need to use that as a data source to this Input Stream.
+ * Note that the main read() method is not implemented here as it relies on the RADOS API to populate the underlying
+ * buffer array, which relies on the buffer array being passed in.
+ * jenkinsd 2019.12.11
+ */
+public class RadosStriperInputStream extends RadosInputStream {
+
+    private static final Logger LOGGER = Logger.getLogger(RadosStriperInputStream.class);
+
+    public RadosStriperInputStream(final RadosStriper rados, final String objectID) {
+        super(rados, objectID);
     }
 
-
     /**
-     * Returns {@code true} if the iteration has more elements.
-     * (In other words, returns {@code true} if {@link #next} would
-     * return an element rather than throwing an exception.)
+     * Read bytes from the RADOS back end.
      *
-     * @return {@code true} if the iteration has more elements
+     * @param ioCTX The IO Context connection.
+     * @param b     The byte array to read into.
+     * @param len   The amount of bytes to read.
+     * @return Count of bytes read.
+     *
+     * @throws IOException For any backend reading.
      */
     @Override
-    public boolean hasNext() {
-        if (currIterator == null || (!currIterator.hasNext() && StringUtil.hasLength(nextMarker))) {
-            final ListObjectsResponse listObjectsResponse = storageAdapter.listObjects(bucket, nextMarker);
-            if (listObjectsResponse.hasContents()) {
-                currIterator = listObjectsResponse.contents().iterator();
-                nextMarker = listObjectsResponse.nextMarker();
+    int readRadosBytes(IoCTX ioCTX, byte[] b, int len) throws IOException {
+        try (final IoCTXStriper ioCTXStriper = ((RadosStriper) rados).ioCtxCreateStriper(ioCTX)) {
+            return ioCTXStriper.read(objectID, len, position, b);
+        } catch (Exception e) {
+            if (e instanceof RadosNotFoundException) {
+                throw (RadosNotFoundException) e;
+            } else if (e instanceof RadosException) {
+                throw (RadosException) e;
+            } else if (e instanceof IOException) {
+                throw (IOException) e;
             } else {
-                currIterator = Collections.emptyIterator();
+                LOGGER.warn("Unable to close the IO RADOS Context.", e);
+                return -1;
             }
         }
-
-        return currIterator.hasNext();
-    }
-
-    /**
-     * Returns the next element in the iteration.
-     *
-     * @return the next element in the iteration
-     *
-     * @throws java.util.NoSuchElementException if the iteration has no more elements
-     */
-    @Override
-    public StorageMetadata next() {
-        final StorageMetadata storageMetadata = storageAdapter.head(bucket, currIterator.next().key());
-        count++;
-
-        return storageMetadata;
-    }
-
-    public int getCount() {
-        return count;
     }
 }

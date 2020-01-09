@@ -67,7 +67,7 @@
  ************************************************************************
  */
 
-package org.opencadc.inventory.storage.ceph;
+package org.opencadc.inventory.storage.rados;
 
 import com.ceph.rados.IoCTX;
 import com.ceph.rados.Rados;

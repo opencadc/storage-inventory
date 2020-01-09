@@ -107,6 +107,8 @@ import software.amazon.awssdk.services.s3.model.NoSuchBucketException;
 import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.model.S3Exception;
+import ca.nrc.cadc.net.IncorrectContentChecksumException;
+import ca.nrc.cadc.net.IncorrectContentLengthException;
 import ca.nrc.cadc.net.ResourceAlreadyExistsException;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
@@ -120,6 +122,7 @@ import java.net.URI;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -208,7 +211,14 @@ public class S3StorageAdapter implements StorageAdapter {
     }
 
     /**
-     * Get from storage the artifact identified by storageLocation.
+     * Get from storage the artifact identified by storageLocation with cutout specifications.  Currently needs full
+     * implementation.
+     * TODO
+     * TODO Complete the implementation to check for an astronomy file (i.e. FITS, HDF5), and determine what cutout
+     * TODO system to use.
+     * TODO
+     * TODO jenkinsd 2020.01.09
+     * TODO
      *
      * @param storageLocation The storage location containing storageID and storageBucket.
      * @param dest            The destination stream.
@@ -321,14 +331,14 @@ public class S3StorageAdapter implements StorageAdapter {
      * @param source      The stream from which to read.
      * @return The storage metadata.
      *
-     * @throws StreamCorruptedException If the calculated checksum does not the expected checksum.
-     * @throws ReadException            If the client failed to stream.
-     * @throws WriteException           If the storage system failed to stream.
-     * @throws StorageEngageException   If the adapter failed to interact with storage.
+     * @throws ReadException          If the client failed to stream.
+     * @throws WriteException         If the storage system failed to stream.
+     * @throws StorageEngageException If the adapter failed to interact with storage.
      */
     @Override
     public StorageMetadata put(NewArtifact newArtifact, InputStream source)
-            throws StreamCorruptedException, ReadException, WriteException, StorageEngageException {
+            throws IncorrectContentChecksumException, IncorrectContentLengthException, ReadException, WriteException,
+                   StorageEngageException {
         final String objectID = generateObjectID();
 
         try {
@@ -361,9 +371,10 @@ public class S3StorageAdapter implements StorageAdapter {
             if (awsErrorDetails != null) {
                 if (awsErrorDetails.errorCode().equals("InvalidDigest")) {
                     e.printStackTrace();
-                    throw new StreamCorruptedException(String.format("Checksums do not match.  Expected %s but got %s",
-                                                                     newArtifact.contentChecksum
-                                                                             .getSchemeSpecificPart(), ""));
+                    throw new IncorrectContentChecksumException(
+                            String.format("Checksums do not match.  Expected %s but got %s",
+                                          newArtifact.contentChecksum
+                                                  .getSchemeSpecificPart(), ""));
                 } else {
                     throw new WriteException(e.getMessage(), e);
                 }
@@ -428,14 +439,22 @@ public class S3StorageAdapter implements StorageAdapter {
         }
     }
 
-    ListObjectsResponse listObjects(final String storageBucket, final String nextMarker) {
+    /**
+     * Obtain a list of objects from the S3 server.  This will use the nextMarkerKey value to start listing the next
+     * page of data from.  This is hard-coded to 1000 objects by default, but is modifiable to something smaller
+     * using the <code>maxKeys(int)</code> call.
+     * This is used by a StorageMetadata Iterator to list all objects from a bucket.
+     *
+     * @param storageBucket The bucket to pull from.
+     * @param nextMarkerKey The optional key from which to start listing the next page of objects.
+     * @return ListObjectsResponse instance.
+     */
+    ListObjectsResponse listObjects(final String storageBucket, final String nextMarkerKey) {
         final ListObjectsRequest.Builder listBuilder = ListObjectsRequest.builder();
+        final Optional<String> optionalNextMarkerKey = Optional.of(nextMarkerKey);
 
         listBuilder.bucket(storageBucket);
-
-        if (StringUtil.hasLength(nextMarker)) {
-            listBuilder.marker(nextMarker);
-        }
+        optionalNextMarkerKey.ifPresent(listBuilder::marker);
 
         return s3Client.listObjects(listBuilder.build());
     }

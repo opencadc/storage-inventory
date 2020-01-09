@@ -67,58 +67,94 @@
  ************************************************************************
  */
 
-package org.opencadc.inventory.storage.ceph;
+package org.opencadc.inventory.storage.s3;
 
-import com.ceph.rados.IoCTX;
-import com.ceph.rados.exceptions.RadosException;
-import com.ceph.rados.exceptions.RadosNotFoundException;
-import com.ceph.radosstriper.IoCTXStriper;
-import com.ceph.radosstriper.RadosStriper;
-import org.apache.log4j.Logger;
+import org.opencadc.inventory.storage.StorageMetadata;
+import software.amazon.awssdk.services.s3.model.ListObjectsResponse;
+import software.amazon.awssdk.services.s3.model.S3Object;
 
-import java.io.IOException;
+import ca.nrc.cadc.util.StringUtil;
+
+import java.util.Collections;
+import java.util.Iterator;
 
 
 /**
- * Creates an InputStream for the underlying IO Context from RADOS.  Since RADOS wants to only write out Byte Arrays,
- * we need to use that as a data source to this Input Stream.
- * Note that the main read() method is not implemented here as it relies on the RADOS API to populate the underlying
- * buffer array, which relies on the buffer array being passed in.
- * jenkinsd 2019.12.11
+ * Main Iterator over StorageMetadata objects.  This will use the S3 Storage Adapter to obtain the metadata via a head
+ * call, and to obtain the next page of data via a listObjects call.
  */
-public class RadosStriperInputStream extends RadosInputStream {
+public class S3StorageMetadataIterator implements Iterator<StorageMetadata> {
 
-    private static final Logger LOGGER = Logger.getLogger(RadosStriperInputStream.class);
+    /**
+     * The Storage Adapter to interact with the S3 server.
+     */
+    private final S3StorageAdapter storageAdapter;
 
-    public RadosStriperInputStream(final RadosStriper rados, final String objectID) {
-        super(rados, objectID);
+    /**
+     * The bucket to look into.  Mandatory.
+     */
+    private final String bucket;
+
+    /**
+     * Current page of S3Objects.
+     */
+    private Iterator<S3Object> currIterator;
+
+    /**
+     * S3 Key of where to start listing the next page of objects.  Will be null for the first call.
+     */
+    private String nextMarkerKey;
+
+    /**
+     * Keep a count.  Not currently used, but could be useful.
+     */
+    private int count;
+
+
+    public S3StorageMetadataIterator(final S3StorageAdapter storageAdapter, final String bucket) {
+        this.storageAdapter = storageAdapter;
+        this.bucket = bucket;
+    }
+
+
+    /**
+     * Returns {@code true} if the iteration has more elements.
+     * (In other words, returns {@code true} if {@link #next} would
+     * return an element rather than throwing an exception.)
+     *
+     * @return {@code true} if the iteration has more elements
+     */
+    @Override
+    public boolean hasNext() {
+        if (currIterator == null || (!currIterator.hasNext() && StringUtil.hasLength(nextMarkerKey))) {
+            final ListObjectsResponse listObjectsResponse = storageAdapter.listObjects(bucket, nextMarkerKey);
+            if (listObjectsResponse.hasContents()) {
+                currIterator = listObjectsResponse.contents().iterator();
+                nextMarkerKey = listObjectsResponse.nextMarker();
+            } else {
+                currIterator = Collections.emptyIterator();
+            }
+        }
+
+        return currIterator.hasNext();
     }
 
     /**
-     * Read bytes from the RADOS back end.
+     * Returns the next element in the iteration.
      *
-     * @param ioCTX The IO Context connection.
-     * @param b     The byte array to read into.
-     * @param len   The amount of bytes to read.
-     * @return Count of bytes read.
+     * @return the next element in the iteration
      *
-     * @throws IOException For any backend reading.
+     * @throws java.util.NoSuchElementException if the iteration has no more elements
      */
     @Override
-    int readRadosBytes(IoCTX ioCTX, byte[] b, int len) throws IOException {
-        try (final IoCTXStriper ioCTXStriper = ((RadosStriper) rados).ioCtxCreateStriper(ioCTX)) {
-            return ioCTXStriper.read(objectID, len, position, b);
-        } catch (Exception e) {
-            if (e instanceof RadosNotFoundException) {
-                throw (RadosNotFoundException) e;
-            } else if (e instanceof RadosException) {
-                throw (RadosException) e;
-            } else if (e instanceof IOException) {
-                throw (IOException) e;
-            } else {
-                LOGGER.warn("Unable to close the IO RADOS Context.", e);
-                return -1;
-            }
-        }
+    public StorageMetadata next() {
+        final StorageMetadata storageMetadata = storageAdapter.head(bucket, currIterator.next().key());
+        count++;
+
+        return storageMetadata;
+    }
+
+    public int getCount() {
+        return count;
     }
 }

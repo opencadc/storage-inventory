@@ -67,7 +67,7 @@
  ************************************************************************
  */
 
-package org.opencadc.inventory.storage.ceph;
+package org.opencadc.inventory.storage.rados;
 
 import com.ceph.rados.IoCTX;
 import com.ceph.rados.ListCtx;
@@ -95,6 +95,8 @@ import org.opencadc.inventory.storage.StorageEngageException;
 import org.opencadc.inventory.storage.StorageMetadata;
 import org.opencadc.inventory.storage.WriteException;
 import ca.nrc.cadc.io.ByteCountInputStream;
+import ca.nrc.cadc.net.IncorrectContentChecksumException;
+import ca.nrc.cadc.net.IncorrectContentLengthException;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.util.StringUtil;
@@ -103,13 +105,11 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.io.StreamCorruptedException;
 import java.math.BigInteger;
 import java.net.URI;
 import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.util.Arrays;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Optional;
@@ -120,9 +120,9 @@ import java.util.UUID;
 /**
  * Implementation of a Storage Adapter using the Ceph RADOS API.
  */
-public class CephStorageAdapter implements StorageAdapter {
+public class RadosStorageAdapter implements StorageAdapter {
 
-    private static final Logger LOGGER = Logger.getLogger(CephStorageAdapter.class);
+    private static final Logger LOGGER = Logger.getLogger(RadosStorageAdapter.class);
 
     private static final String META_POOL_NAME = "default.rgw.meta";
     private static final String META_NAMESPACE = "root";
@@ -144,7 +144,7 @@ public class CephStorageAdapter implements StorageAdapter {
     private final RadosStriper radosStriperClient;
 
 
-    public CephStorageAdapter(final String userID, final String clusterName) {
+    public RadosStorageAdapter(final String userID, final String clusterName) {
         this.cephxID = String.format("client.%s", userID);
         this.clusterName = clusterName;
 
@@ -346,7 +346,8 @@ public class CephStorageAdapter implements StorageAdapter {
 
     @Override
     public StorageMetadata put(NewArtifact newArtifact, InputStream inputStream)
-            throws StreamCorruptedException, WriteException, StorageEngageException, TransientException {
+            throws IncorrectContentChecksumException, IncorrectContentLengthException, WriteException,
+                   StorageEngageException, TransientException {
         try {
             final URI storageID = newArtifact.getArtifactURI();
             final String objectID = generateObjectID();
@@ -363,9 +364,10 @@ public class CephStorageAdapter implements StorageAdapter {
             if (expectedChecksum == null) {
                 LOGGER.debug("No checksum provided.  Defaulting the calculated one.");
             } else if (!expectedChecksum.equals(calculatedChecksum)) {
-                throw new StreamCorruptedException(String.format("Checksums do not match.  Expected %s but was %s.",
-                                                                 expectedChecksum.toString(),
-                                                                 calculatedChecksum.toString()));
+                throw new IncorrectContentChecksumException(
+                        String.format("Checksums do not match.  Expected %s but was %s.",
+                                      expectedChecksum.toString(),
+                                      calculatedChecksum.toString()));
             }
 
             final Long expectedContentLength = newArtifact.contentLength;
@@ -374,7 +376,7 @@ public class CephStorageAdapter implements StorageAdapter {
             if (expectedContentLength == null) {
                 LOGGER.debug("No content length provided.  Defaulting the calculated one.");
             } else if (expectedContentLength != calculatedContentLength) {
-                throw new StreamCorruptedException(
+                throw new IncorrectContentLengthException(
                         String.format("Content lengths do not match.  Expected %d but was %d.", expectedContentLength,
                                       calculatedContentLength));
             }
@@ -530,7 +532,7 @@ public class CephStorageAdapter implements StorageAdapter {
     public Iterator<StorageMetadata> iterator(String storageBucket)
             throws ReadException, WriteException, StorageEngageException, TransientException {
         try {
-            return new CephStorageMetadataIterator(this, storageBucket);
+            return new RadosStorageMetadataIterator(this, storageBucket);
         } catch (IOException e) {
             throw new StorageEngageException(e.getMessage(), e);
         }
