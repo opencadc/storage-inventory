@@ -91,16 +91,16 @@ ivo://cadc.nrc.ca/{archive}?{path}/{filename} *resolvable archive?*
 
 ivo://cadc.nrc.ca/{srv}?{path}/{filename} *resolvable multi-archive service?*
 
-The fully resolveable uri (ivo scheme) can be used to extract a resourceID (up to the ?) and perform a registry lookup.
+The fully resolvable uri (ivo scheme) can be used to extract a resourceID (up to the ?) and perform a registry lookup.
 The resulting record would contain at least two capabilities: a transfer negotiation or a files endpoint and a permissions endpoint. Classic (ad) and proposed new (cadc scheme) usage is to use a shortcut scheme that is configured to be equivalent to the multi-archive data centre. The first form (with the archive in the resourceID) allows for changes from a common to a different permission service (for that archive); the second form is the resolvable version of current practice. The short forms (ad and cadc schemes) require configuration at storage sites to map the scheme (e.g. cadc -> ivo://cadc.nrc.ca/archive) for capability lookup. For externally harvested and sync'ed CAOM artifacts, we would use the URI as-is in the Artifact.uri field. For the simple form (e.g. mast:HST/path/to/file.fits) we would configure the scheme (mast) as a shortcut to the CAOM archive metadata service.
 
 Validation of CAOM versus storage requires querying CAOM (1+ collections) and storage (single namespace) and 
-cross-matching URIs to look for anomolies.
+cross-matching URIs to look for anomalies.
 
 For vault (vospace), data nodes would have a generated identifier and use something like 
 ivo://cadc.nrc.ca/vault?{uuid}/{filename} or vault:{uuid}/{filename}. For the latter, storage sites would require
 configuration to support the shortcut (as would other instances). There should be no use of the "vos" scheme in a uri so paths within the vospace never get used in storage and move/rename operations (container or data nodes) do not effect the storage system.  Validation of vault versus storage requires querying vault (and building uri values programmatically unless
-vaultdb stores the full URI) and storage and cross-matching to look for anomolies.
+vaultdb stores the full URI) and storage and cross-matching to look for anomalies.
 
 Since we need to support mast and vault schemes (at least), it is assumed that we would use the "cadc" scheme going 
 forward and support (configure) the "ad" scheme for backwards compatibility. 
@@ -193,7 +193,7 @@ how does delete file get propagated?
 how does global learn about copies at sites other than the original?
 - when a site syncs a file (adds a local StorageLocation): update the Artifact.lastModified
 - global metadata-sync from site(s) will see this and add a SiteLocation
-- global does not update Artitact.lastModified?
+- global does not update Artifact.lastModified?
 - the Artifact.id and Artifact.metaChecksum never change during sync
 - global's view of the Artifact.lastModified will be the latest change at all sites, but that doesn't stop it from getting an "event" out of order and still merging in the new SiteLocation
 
@@ -207,7 +207,7 @@ how would a temporary cache instance at a site be maintained?
 how does global inventory validate vs site?  how does site validate vs global (w.r.t. policy)?
 - get list of Artifact(s) from the site and compare with Artifact+SiteLocation
 - add missing Artifact(s)
-- add misssing SiteLocation(s)
+- add missing SiteLocation(s)
 - update mutable Artifact metadata (validate sees it before metadata-sync)
 - remove orphaned SiteLocation(s)
 - remove Artifact(s) with no SiteLocation??
@@ -237,15 +237,15 @@ should harvesting detect if site Artifact.lastModified stream is out of whack?
 # storage back end implementation notes
 The cadc-storage-adapter API places two requirements on the implementation:
 1. store and return (via iterator) the Artifact.uri, Artifact.contentChecksum, and Artifact.contentLength
-2. support ordered iteration (by storageID) *or* batched iteration (by storageBucket):  **preferrably both**
+2. support ordered iteration (by storageID) *or* batched iteration (by storageBucket):  **preferably both**
 
 |backend impl|ordered iterator|bucket iterator|random access|
 |------------|:--------------:|:-------------:|:-----------:|
 |opaque filesystem|N|Y|Y|
 |mountable filesystem (RO)|N|path-components|Y|
 |mountable filesystem|N|N*|Y|
-|Ceph-OS + rados|?|?|Y|
-|Ceph-OS + S3|?|Y|Y|
+|Ceph-OS + rados|?|N ({1})|Y|
+|Ceph-OS + S3|Y (UTF-8 Binary)|Y|Y|
 |AD|SQL order-by|archive|code on storage node|
 
 Note: for a write-mountable filesystem, simple operations in the filesystem (mv) can invalidate an arbitrary
@@ -254,3 +254,6 @@ of work to fix the storageID values. It is not feasible to avoid treating it as 
 DeletedArtifactEvent that gets propagated to all sites unless you trust the Artifact.contentChecksum to be a unique 
 and reliable identifier.
 
+{1}: Buckets are not a notion in `RADOS`.  They are part of the Object ID in the format 
+of `{bucket_marker}_{numeric_id}.{key_id}`.  The `bucket_marker` is looked up in the `default.rgw.meta` pool by name.  This
+is how the S3 endpoint is supported within Ceph.
