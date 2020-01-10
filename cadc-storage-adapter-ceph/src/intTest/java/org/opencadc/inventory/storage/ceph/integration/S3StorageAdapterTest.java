@@ -131,7 +131,7 @@ public class S3StorageAdapterTest {
      * Override the bucket to use by setting -Dbucket.name=mybucket in your test command.  Should have a
      * public-read-write ACL to make these tests easier to run.
      */
-    private static final String BUCKET_NAME = System.getProperty("bucket.name", DEFAULT_BUCKET_NAME);
+    private static final String BUCKET_NAME = System.getProperty("s3.bucket.name", DEFAULT_BUCKET_NAME);
 
     /**
      * Used to issue tests with the FITS Header jumping as it should remain untouched.  Has a public-read ACL.
@@ -182,7 +182,13 @@ public class S3StorageAdapterTest {
         LOGGER.debug(String.format("Listed %d items in %d milliseconds.", s3AdapterListObjectsOutput.size(),
                                    System.currentTimeMillis() - start));
 
-        Assert.assertEquals("Wrong list output.", utf8SortedItems, s3AdapterListObjectsOutput);
+        Assert.assertEquals("Wrong UTF-8 list output.", utf8SortedItems, s3AdapterListObjectsOutput);
+
+        final List<String> stringSortedItems = new ArrayList<>(s3ListOutputItems);
+
+        stringSortedItems.sort(Comparator.comparing(o -> o));
+
+        Assert.assertEquals("Wrong plain String list output.", stringSortedItems, s3AdapterListObjectsOutput);
     }
 
     @Test

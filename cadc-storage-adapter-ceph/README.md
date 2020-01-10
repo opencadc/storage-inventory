@@ -20,7 +20,7 @@ OS level packages are required.
 
 ### Environment
 
-Credentials and configuration are pulled from the `user.name` System Property value's `.aws` folder for S3 tests and from the `user.name` System 
+Credentials and configuration are pulled from the `user.name` System Property value's `.aws` folder for S3 tests and from the `rados.user.name` or `user.name` System 
 Property value's `.ceph` folder for RADOS tests.  The system administrator for the storage site will need to provide a configuration file that 
 can be read by the S3 and RADOS clients.
 
@@ -28,7 +28,7 @@ can be read by the S3 and RADOS clients.
 $ cat ~/.aws/config
 [default]
 access_key = FOO
-aws_access_key_id = BAR
+aws_secret_access_key = BAR
 region = us-east-1
 ```
 
@@ -47,23 +47,23 @@ To run the entire suite of integration tests against the currently deployed CEPH
 $ gradle -i clean intTest
 ```
 
-Set the user to connect with.  Defaults to `System.getProperty("user.name")`:
+Set the RADOS user to connect with.  Defaults to `System.getProperty("user.name")`:
 ```shell script
-# Will look in /home/myotheruser (/Users/myotheruser) for the .aws and/or .ceph folders.  In the case of RADOS, it will also use "myotheruser"
+# For RADOS tests, it will look in /home/myotheruser (/Users/myotheruser) for the .ceph folders and use the "myotheruser"
 # identity to connect with.
-$ gradle -i -Duser.name=myotheruser clean intTest
+$ gradle -i -Drados.user.name=myotheruser clean intTest
 ```
 
 Set the bucket use.  Defaults to `System.getProperty("user.name")`:
 ```shell script
 # Buckets are not supported in RADOS, so this only applies to S3.
-$ gradle -i -Dbucket.name=myotheruser clean intTest
+$ gradle -i -Ds3.bucket.name=myotherbucket clean intTest
 ```
 
 | System Property name | Purpose
 | :------------------- | :------- |
-| `user.name`          | User to connect with. |
-| `bucket.name`        | Bucket to perform actions in. |
+| `rados.user.name`    | User to connect with for RADOS tests. |
+| `s3.bucket.name`     | Bucket to perform S3 actions in. |
 
 
 ### RADOS
