@@ -9,6 +9,7 @@ package.
 ## Requirements
 * JDK 8.+
 * Gradle 5+
+  * See [Gradle Documentation](https://docs.gradle.org/current/userguide/java_library_plugin.html) for upcoming and current deprecations and making Gradle buildfiles more efficient.
 
 ### RADOS only
 OS level packages are required.
