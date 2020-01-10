@@ -17,7 +17,14 @@ version = '0.1.0'
 
 apply from: '../opencadc.gradle'
 
+// Confine Gradle 5 required fields to this project.  Later this can be moved into the opencadc.gradle.
+configurations {
+    intTestImplementation.extendsFrom testImplementation
+}
+
 dependencies {
+    testImplementation 'com.puppycrawl.tools:checkstyle:8.2'
+
     implementation 'log4j:log4j:[1.2,)'
     implementation 'org.opencadc:cadc-util:[1.2.25,)'
     implementation 'org.opencadc:cadc-storage-adapter:[0.1,)'
