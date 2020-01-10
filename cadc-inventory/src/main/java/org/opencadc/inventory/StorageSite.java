@@ -133,6 +133,26 @@ public class StorageSite extends Entity {
     }
 
     /**
+     * Change the resourceID of this site.
+     * 
+     * @param resourceID 
+     */
+    public void setResourceID(URI resourceID) {
+        InventoryUtil.assertNotNull(StorageSite.class, "resourceID", resourceID);
+        this.resourceID = resourceID;
+    }
+
+    /**
+     * Change the display name of this site.
+     * 
+     * @param name 
+     */
+    public void setName(String name) {
+        InventoryUtil.assertNotNull(StorageSite.class, "name", name);
+        this.name = name;
+    }
+
+    /**
      * Compares Site.resourceID values.
      * 
      * @param o object to compare to
