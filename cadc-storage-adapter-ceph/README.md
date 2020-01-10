@@ -1,4 +1,4 @@
-# CEPH Storage adapter (cadc-storage-adapter-ceph) 0.1.0
+# CEPH Storage adapter (cadc-storage-adapter-ceph) 0.2.0
 
 ## S3 and RADOS implementations
 The CEPH storage adapter supports various ways of communicating with a CEPH Cluster.  This adapter supports a partial (incomplete) [RADOS](https://docs.ceph.com/docs/master/rados/api/librados-intro/) 
