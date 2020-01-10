@@ -125,9 +125,13 @@ public class RadosStorageAdapterTest {
 
 
     @Test
-    @Ignore
     public void list() throws Exception {
+        /*
+         * The list-ceph.out file contains 2011 objects listed from the rados command line in whatever order it
+         * provided.  Read it back in here as a base to check list sorting.
+         */
         final File s3ListOutput = FileUtil.getFileFromResource("list-ceph.out", RadosStorageAdapterTest.class);
+
         final List<String> cephAdapterListObjectsOutput = new ArrayList<>();
         final List<String> radosListOutputItems = new ArrayList<>();
         final FileReader fileReader = new FileReader(s3ListOutput);
@@ -167,7 +171,7 @@ public class RadosStorageAdapterTest {
     public void get() throws Exception {
         final RadosStorageAdapter testSubject = new RadosStorageAdapter(USER_ID, CLUSTER_NAME);
 
-        final URI testURI = URI.create("site:jenkinsd/test-jcmt-file.fits");
+        final URI testURI = URI.create("cadc:TEST/test-jcmt-file.fits");
         final long expectedByteCount = 3144960L;
         final URI expectedChecksum = URI.create("md5:9307240a34ed65a0a252b0046b6e87be");
 
@@ -191,9 +195,8 @@ public class RadosStorageAdapterTest {
     }
 
     @Test
-    @Ignore
     public void jumpHDUs() throws Exception {
-        final String objectID = "618b3e21-6768-45ba-bcd8-c4b25fa43627.5596236.102_test-megaprime-rados.fits.fz";
+        final String objectID = "test-megaprime-rados.fits.fz";
         final Map<Integer, Long> hduByteOffsets = new HashMap<>();
         hduByteOffsets.put(0, 0L);
         hduByteOffsets.put(19, -1L);
@@ -239,9 +242,8 @@ public class RadosStorageAdapterTest {
     }
 
     @Test
-    @Ignore
     public void jumpHDUsReconnect() throws Exception {
-        final String objectID = "618b3e21-6768-45ba-bcd8-c4b25fa43627.5596236.102_test-megaprime-rados.fits.fz";
+        final String objectID = "test-megaprime-rados.fits.fz";
         final Map<Integer, Long> hduByteOffsets = new HashMap<>();
         hduByteOffsets.put(0, 0L);
         hduByteOffsets.put(19, -1L);
@@ -285,12 +287,11 @@ public class RadosStorageAdapterTest {
     }
 
     @Test
-    @Ignore
     public void getHeaders() throws Exception {
         final RadosStorageAdapter testSubject = new RadosStorageAdapter(USER_ID, CLUSTER_NAME);
         final String fileName = System.getProperty("file.name");
         final URI testURI = URI.create(
-                String.format("cadc:jenkinsd/%s", fileName == null ? "test-megaprime-rados.fits.fz" : fileName));
+                String.format("cadc:%s/%s", "TEST", fileName == null ? "test-megaprime-rados.fits.fz" : fileName));
 
         final ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
         final DigestOutputStream digestOutputStream =

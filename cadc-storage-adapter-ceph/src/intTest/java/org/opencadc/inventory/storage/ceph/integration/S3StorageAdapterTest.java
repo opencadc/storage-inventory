@@ -79,13 +79,18 @@ import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.storage.NewArtifact;
 import org.opencadc.inventory.storage.StorageMetadata;
 import org.opencadc.inventory.storage.s3.S3StorageAdapter;
+import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.core.sync.ResponseTransformer;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
+import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
+import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
+import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
 import ca.nrc.cadc.io.ByteCountOutputStream;
 import ca.nrc.cadc.util.FileUtil;
+import ca.nrc.cadc.util.StringUtil;
 
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
@@ -96,7 +101,9 @@ import java.io.FileReader;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.math.BigInteger;
+import java.net.HttpURLConnection;
 import java.net.URI;
+import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.security.DigestOutputStream;
 import java.security.MessageDigest;
@@ -117,19 +124,32 @@ public class S3StorageAdapterTest {
     private static final URI ENDPOINT = URI.create("http://dao-wkr-04.cadc.dao.nrc.ca:8080");
     private static final String REGION = Region.US_EAST_1.id();
     private static final String DIGEST_ALGORITHM = "MD5";
+    private static final String DEFAULT_BUCKET_NAME = "cadctest";
+    private static final String MEF_OBJECT_ID = "test-megaprime-s3.fits.fz";
 
     /**
-     * Override the bucket to use by setting -Dbucket.name=mybucket in your test command.
+     * Override the bucket to use by setting -Dbucket.name=mybucket in your test command.  Should have a
+     * public-read-write ACL to make these tests easier to run.
      */
-    private static final String BUCKET_NAME = System.getProperty("bucket.name", "cadctest");
+    private static final String BUCKET_NAME = System.getProperty("bucket.name", DEFAULT_BUCKET_NAME);
+
+    /**
+     * Used to issue tests with the FITS Header jumping as it should remain untouched.  Has a public-read ACL.
+     */
+    private static final String LIST_BUCKET_NAME = "cadctestlist";
 
 
     /**
      * The list-s3.out file contains the list of objects in S3 in UTF-8 binary order as it was taken from S3.
-     * @throws Exception    Any exceptions.
+     *
+     * @throws Exception Any exceptions.
      */
     @Test
     public void list() throws Exception {
+        /*
+         * The list-s3.out file contains 2011 objects listed from the aws command line in whatever order it
+         * provided.  Read it back in here as a base to check list sorting.
+         */
         final File s3ListOutput = FileUtil.getFileFromResource("list-s3.out", S3StorageAdapter.class);
         final List<String> s3AdapterListObjectsOutput = new ArrayList<>();
         final List<String> s3ListOutputItems = new ArrayList<>();
@@ -145,13 +165,14 @@ public class S3StorageAdapterTest {
 
         final List<String> utf8SortedItems = new ArrayList<>(s3ListOutputItems);
 
+        // Ensure sorted by UTF-8
         utf8SortedItems.sort(Comparator.comparing(o -> new String(o.getBytes(StandardCharsets.UTF_8),
                                                                   StandardCharsets.UTF_8)));
 
         final S3StorageAdapter testSubject = new S3StorageAdapter(ENDPOINT, REGION);
         final long start = System.currentTimeMillis();
 
-        for (final Iterator<StorageMetadata> storageMetadataIterator = testSubject.iterator(BUCKET_NAME);
+        for (final Iterator<StorageMetadata> storageMetadataIterator = testSubject.iterator(LIST_BUCKET_NAME);
              storageMetadataIterator.hasNext(); ) {
             s3AdapterListObjectsOutput.add(
                     storageMetadataIterator.next().getStorageLocation().getStorageID().getSchemeSpecificPart()
@@ -212,6 +233,51 @@ public class S3StorageAdapterTest {
         }
     }
 
+    private InputStream openStream(final URL sourceURL) throws Exception {
+        final HttpURLConnection sourceURLConnection = (HttpURLConnection) sourceURL.openConnection();
+        sourceURLConnection.setDoInput(true);
+        sourceURLConnection.setInstanceFollowRedirects(true);
+
+        final String location = sourceURLConnection.getHeaderField("Location");
+        if (StringUtil.hasText(location)) {
+            return openStream(new URL(location));
+        } else {
+            return sourceURLConnection.getInputStream();
+        }
+    }
+
+    private void ensureMEFTestFile() throws Exception {
+        final long expectedContentLength = 312151680L;
+        try (final S3Client s3Client = S3Client.builder()
+                                               .endpointOverride(ENDPOINT)
+                                               .region(Region.of(REGION))
+                                               .build()) {
+            try {
+                s3Client.headObject(HeadObjectRequest.builder().bucket(BUCKET_NAME).key(MEF_OBJECT_ID).build());
+                LOGGER.info(String.format("MEF test file %s/%s exists.", BUCKET_NAME, MEF_OBJECT_ID));
+            } catch (NoSuchKeyException e) {
+                LOGGER.info("*********");
+                LOGGER.info(String.format("MEF file (%s/%s) does not exist.  Uplaoding file from VOSpace...",
+                                          BUCKET_NAME, MEF_OBJECT_ID));
+                LOGGER.info("*********");
+
+                final URL sourceURL = new URL("https://www.cadc-ccda.hia-iha.nrc-cnrc.gc" +
+                                              ".ca/files/vault/CADCtest/Public/test-megaprime.fits.fz");
+
+
+                s3Client.putObject(PutObjectRequest.builder()
+                                                   .bucket(BUCKET_NAME)
+                                                   .key(MEF_OBJECT_ID)
+                                                   .build(),
+                                   RequestBody.fromInputStream(openStream(sourceURL), expectedContentLength));
+
+                LOGGER.info("*********");
+                LOGGER.info(String.format("MEF file (%s/%s) uploaded.", BUCKET_NAME, MEF_OBJECT_ID));
+                LOGGER.info("*********");
+            }
+        }
+    }
+
     @Test
     @Ignore
     public void get() throws Exception {
@@ -238,8 +304,7 @@ public class S3StorageAdapterTest {
     public void jumpHDUs() throws Exception {
         LOGGER.info("Jumping HDUS...");
         LOGGER.info("***");
-        final String objectID = "test-megaprime-s3.fits.fz";
-        final String bucket = System.getProperty("user.name");
+        ensureMEFTestFile();
         final Map<Integer, Long> hduByteOffsets = new HashMap<>();
         hduByteOffsets.put(0, 0L);
         hduByteOffsets.put(19, 148380480L);
@@ -252,7 +317,7 @@ public class S3StorageAdapterTest {
             for (final Map.Entry<Integer, Long> entry : hduByteOffsets.entrySet()) {
                 LOGGER.info(String.format("\nReading %d bytes at %d.\n", 2880, entry.getValue()));
                 final long start = System.currentTimeMillis();
-                s3Client.getObject(GetObjectRequest.builder().bucket(bucket).key(objectID)
+                s3Client.getObject(GetObjectRequest.builder().bucket(BUCKET_NAME).key(MEF_OBJECT_ID)
                                                    .range(String.format("bytes=%d-%d",
                                                                         entry.getValue(),
                                                                         entry.getValue() + 2880L))
@@ -271,8 +336,7 @@ public class S3StorageAdapterTest {
     public void jumpHDUsReconnect() throws Exception {
         LOGGER.info("Jumping HDUS with reconnect...");
         LOGGER.info("***");
-        final String objectID = "test-megaprime-s3.fits.fz";
-        final String bucket = System.getProperty("user.name");
+        ensureMEFTestFile();
         final Map<Integer, Long> hduByteOffsets = new HashMap<>();
         hduByteOffsets.put(0, 0L);
         hduByteOffsets.put(19, 148380480L);
@@ -285,7 +349,8 @@ public class S3StorageAdapterTest {
                                                    .region(Region.of(REGION))
                                                    .build();
             final long start = System.currentTimeMillis();
-            final byte[] bytes = innerS3Client.getObject(GetObjectRequest.builder().bucket(bucket).key(objectID)
+            final byte[] bytes = innerS3Client.getObject(GetObjectRequest.builder().bucket(BUCKET_NAME).key(
+                    MEF_OBJECT_ID)
                                                                          .range(String.format("bytes=%d-%d",
                                                                                               entry.getValue(),
                                                                                               entry.getValue() + 2880L))
@@ -306,10 +371,9 @@ public class S3StorageAdapterTest {
     public void getHeaders() throws Exception {
         LOGGER.info("Skip to headers...");
         LOGGER.info("***");
+        ensureMEFTestFile();
         final S3StorageAdapter testSubject = new S3StorageAdapter(ENDPOINT, REGION);
-        final String fileName = System.getProperty("file.name");
-        final URI testURI = URI.create(
-                String.format("cadc:jenkinsd/%s", fileName == null ? "test-megaprime-s3.fits.fz" : fileName));
+        final URI testURI = URI.create(String.format("cadc:%s/%s", BUCKET_NAME, MEF_OBJECT_ID));
 
         final ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
         final DigestOutputStream digestOutputStream = new DigestOutputStream(outputStream, MessageDigest

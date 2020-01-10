@@ -346,11 +346,13 @@ public class S3StorageAdapter implements StorageAdapter {
             metadata.put("uri", newArtifact.getArtifactURI().toASCIIString().trim());
 
             if (newArtifact.contentChecksum != null) {
+                final String md5SumValue = newArtifact.contentChecksum.getSchemeSpecificPart();
+
                 // Reconvert to Hex bytes before Base64 encoding it as per what S3 expects.
-                final byte[] value = HexUtil.toBytes(newArtifact.contentChecksum.getSchemeSpecificPart());
+                final byte[] value = HexUtil.toBytes(md5SumValue);
                 checksum = new String(Base64.getEncoder().encode(value));
                 putObjectRequestBuilder.contentMD5(checksum);
-                metadata.put("md5", newArtifact.contentChecksum.toString());
+                metadata.put("md5", md5SumValue);
             }
 
             if (newArtifact.contentLength != null) {
@@ -365,7 +367,7 @@ public class S3StorageAdapter implements StorageAdapter {
             return head(bucket, objectID);
         } catch (S3Exception e) {
             final AwsErrorDetails awsErrorDetails = e.awsErrorDetails();
-            if (awsErrorDetails != null) {
+            if ((awsErrorDetails != null) && StringUtil.hasLength(awsErrorDetails.errorCode())) {
                 final String errorCode = awsErrorDetails.errorCode();
                 if (errorCode.equals("InvalidDigest")) {
                     throw new IncorrectContentChecksumException(
