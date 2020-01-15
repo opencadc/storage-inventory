@@ -17,31 +17,22 @@ version = '0.1.0'
 
 apply from: '../opencadc.gradle'
 
-// Confine Gradle 5 required fields to this project.  Later this can be moved into the opencadc.gradle.
-configurations {
-    intTestImplementation.extendsFrom testImplementation
-}
-
 dependencies {
-    testImplementation 'com.puppycrawl.tools:checkstyle:8.2'
-
-    implementation 'log4j:log4j:[1.2,)'
-    implementation 'org.opencadc:cadc-util:[1.2.25,)'
-    implementation 'org.opencadc:cadc-storage-adapter:[0.1,)'
+    compile 'log4j:log4j:[1.2,)'
+    compile 'org.opencadc:cadc-util:[1.2.25,)'
+    compile 'org.opencadc:cadc-storage-adapter:[0.1,)'
 
     // Java FITS library.
-    implementation 'gov.nasa.gsfc.heasarc:nom-tam-fits:[1,2)'
+    compile 'gov.nasa.gsfc.heasarc:nom-tam-fits:[1,2)'
 
     // RADOS Java Library from Ceph
-    implementation 'com.ceph:rados:[0.5,)'
+    compile 'com.ceph:rados:[0.5,)'
 
     // Amazon S3 Java Library
-    // Requires Gradle 5 and up.
-    implementation platform('software.amazon.awssdk:bom:2.10.45')
-    implementation 'software.amazon.awssdk:s3'
+    compile 'software.amazon.awssdk:s3:2.10.48'
 
-    intTestImplementation platform('software.amazon.awssdk:bom:2.10.45')
-    intTestImplementation 'software.amazon.awssdk:s3'
+    intTestCompile 'software.amazon.awssdk:s3:2.10.48'
 
-    testImplementation 'junit:junit:[4.0,)'
+    testCompile 'junit:junit:[4.0,)'
+    testCompile 'com.puppycrawl.tools:checkstyle:8.2'
 }
