@@ -30,7 +30,10 @@ jobs:
       
     - name: build and test cadc-storage-adapter-fs
       run: cd cadc-storage-adapter-fs && gradle --info clean build javadoc checkstyleMain install
-      
+
+    - name: build and install latest rados-java
+      run: git clone https://github.com/ceph/rados-java && cd rados-java && mvn clean install -Dcom.ceph.rados.skipTests
+
     - name: build and test cadc-storage-adapter-ceph
       run: cd cadc-storage-adapter-ceph && gradle --info clean build javadoc checkstyleMain install
       
