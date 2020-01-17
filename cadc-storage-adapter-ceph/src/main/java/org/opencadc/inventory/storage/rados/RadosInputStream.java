@@ -71,10 +71,10 @@ package org.opencadc.inventory.storage.rados;
 
 import com.ceph.rados.IoCTX;
 import com.ceph.rados.Rados;
-import org.apache.log4j.Logger;
-
 import java.io.IOException;
 import java.io.InputStream;
+import org.apache.log4j.Logger;
+
 
 
 /**
@@ -130,10 +130,10 @@ public class RadosInputStream extends InputStream {
      * has been reached, the value <code>-1</code> is returned. This method
      * blocks until input data is available, the end of the stream is detected,
      * or an exception is thrown.
-     * <p> A subclass must provide an implementation of this method.
      *
-     * @return the next byte of data, or <code>-1</code> if the end of the
-     * stream is reached.
+     * <p>A subclass must provide an implementation of this method.
+     *
+     * @return the next byte of data, or <code>-1</code> if the end of the stream is reached.
      */
     @Override
     public int read() {
@@ -145,24 +145,29 @@ public class RadosInputStream extends InputStream {
      * an array of bytes.  An attempt is made to read as many as
      * <code>len</code> bytes, but a smaller number may be read.
      * The number of bytes actually read is returned as an integer.
-     * <p> This method blocks until input data is available, end of file is
+     *
+     * <p>This method blocks until input data is available, end of file is
      * detected, or an exception is thrown.
-     * <p> If <code>len</code> is zero, then no bytes are read and
+     *
+     * <p>If <code>len</code> is zero, then no bytes are read and
      * <code>0</code> is returned; otherwise, there is an attempt to read at
      * least one byte. If no byte is available because the stream is at end of
      * file, the value <code>-1</code> is returned; otherwise, at least one
      * byte is read and stored into <code>b</code>.
-     * <p> The first byte read is stored into element <code>b[off]</code>, the
+     *
+     * <p>The first byte read is stored into element <code>b[off]</code>, the
      * next one into <code>b[off+1]</code>, and so on. The number of bytes read
      * is, at most, equal to <code>len</code>. Let <i>k</i> be the number of
      * bytes actually read; these bytes will be stored in elements
      * <code>b[off]</code> through <code>b[off+</code><i>k</i><code>-1]</code>,
      * leaving elements <code>b[off+</code><i>k</i><code>]</code> through
      * <code>b[off+len-1]</code> unaffected.
-     * <p> In every case, elements <code>b[0]</code> through
+     *
+     * <p>In every case, elements <code>b[0]</code> through
      * <code>b[off]</code> and elements <code>b[off+len]</code> through
      * <code>b[b.length-1]</code> are unaffected.
-     * <p> The <code>read(b,</code> <code>off,</code> <code>len)</code> method
+     *
+     * <p>The <code>read(b,</code> <code>off,</code> <code>len)</code> method
      * for class <code>InputStream</code> simply calls the method
      * <code>read()</code> repeatedly. If the first such call results in an
      * <code>IOException</code>, that exception is returned from the call to
@@ -180,8 +185,7 @@ public class RadosInputStream extends InputStream {
      * @param off Ignored.
      * @param len the maximum number of bytes to read.
      * @return the total number of bytes read into the buffer, or
-     * <code>-1</code> if there is no more data because the end of
-     * the stream has been reached.
+     * <code>-1</code> if there is no more data because the end of the stream has been reached.
      *
      * @throws IOException               If the first byte cannot be read for any reason
      *                                   other than end of file, or if the input stream has been closed, or if

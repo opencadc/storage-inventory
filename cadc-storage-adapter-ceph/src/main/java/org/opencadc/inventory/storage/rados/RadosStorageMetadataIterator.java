@@ -69,10 +69,10 @@
 
 package org.opencadc.inventory.storage.rados;
 
-import org.opencadc.inventory.storage.StorageMetadata;
-
 import java.io.IOException;
 import java.util.Iterator;
+
+import org.opencadc.inventory.storage.StorageMetadata;
 
 
 public class RadosStorageMetadataIterator implements Iterator<StorageMetadata> {

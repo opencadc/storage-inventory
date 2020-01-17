@@ -69,6 +69,24 @@
 
 package org.opencadc.inventory.storage.s3;
 
+import ca.nrc.cadc.net.IncorrectContentChecksumException;
+import ca.nrc.cadc.net.IncorrectContentLengthException;
+import ca.nrc.cadc.net.ResourceAlreadyExistsException;
+import ca.nrc.cadc.net.ResourceNotFoundException;
+import ca.nrc.cadc.net.TransientException;
+import ca.nrc.cadc.util.HexUtil;
+import ca.nrc.cadc.util.StringUtil;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.URI;
+import java.util.Base64;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
 import nom.tam.fits.BasicHDU;
 import nom.tam.fits.Fits;
 import nom.tam.fits.FitsException;
@@ -78,18 +96,18 @@ import nom.tam.util.ArrayDataOutput;
 import nom.tam.util.BufferedDataOutputStream;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.InventoryUtil;
+import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.storage.NewArtifact;
 import org.opencadc.inventory.storage.ReadException;
+import org.opencadc.inventory.storage.StorageAdapter;
 import org.opencadc.inventory.storage.StorageEngageException;
+import org.opencadc.inventory.storage.StorageMetadata;
 import org.opencadc.inventory.storage.WriteException;
 import software.amazon.awssdk.awscore.exception.AwsErrorDetails;
 import software.amazon.awssdk.core.exception.SdkClientException;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
-import org.opencadc.inventory.StorageLocation;
-import org.opencadc.inventory.storage.StorageAdapter;
-import org.opencadc.inventory.storage.StorageMetadata;
 import software.amazon.awssdk.services.s3.model.BucketAlreadyExistsException;
 import software.amazon.awssdk.services.s3.model.BucketAlreadyOwnedByYouException;
 import software.amazon.awssdk.services.s3.model.CreateBucketRequest;
@@ -105,25 +123,6 @@ import software.amazon.awssdk.services.s3.model.NoSuchBucketException;
 import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.model.S3Exception;
-import ca.nrc.cadc.net.IncorrectContentChecksumException;
-import ca.nrc.cadc.net.IncorrectContentLengthException;
-import ca.nrc.cadc.net.ResourceAlreadyExistsException;
-import ca.nrc.cadc.net.ResourceNotFoundException;
-import ca.nrc.cadc.net.TransientException;
-import ca.nrc.cadc.util.HexUtil;
-import ca.nrc.cadc.util.StringUtil;
-
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.net.URI;
-import java.util.Base64;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
-import java.util.UUID;
 
 
 /**

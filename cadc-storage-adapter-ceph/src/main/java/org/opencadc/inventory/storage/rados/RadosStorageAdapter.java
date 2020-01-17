@@ -69,6 +69,12 @@
 
 package org.opencadc.inventory.storage.rados;
 
+import ca.nrc.cadc.io.ByteCountInputStream;
+import ca.nrc.cadc.net.IncorrectContentChecksumException;
+import ca.nrc.cadc.net.IncorrectContentLengthException;
+import ca.nrc.cadc.net.ResourceNotFoundException;
+import ca.nrc.cadc.net.TransientException;
+import ca.nrc.cadc.util.StringUtil;
 import com.ceph.rados.IoCTX;
 import com.ceph.rados.ListCtx;
 import com.ceph.rados.Rados;
@@ -77,6 +83,20 @@ import com.ceph.rados.exceptions.RadosNotFoundException;
 import com.ceph.rados.jna.RadosObjectInfo;
 import com.ceph.radosstriper.IoCTXStriper;
 import com.ceph.radosstriper.RadosStriper;
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.math.BigInteger;
+import java.net.URI;
+import java.security.DigestInputStream;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
 import nom.tam.fits.BasicHDU;
 import nom.tam.fits.Fits;
 import nom.tam.fits.FitsException;
@@ -94,27 +114,6 @@ import org.opencadc.inventory.storage.StorageAdapter;
 import org.opencadc.inventory.storage.StorageEngageException;
 import org.opencadc.inventory.storage.StorageMetadata;
 import org.opencadc.inventory.storage.WriteException;
-import ca.nrc.cadc.io.ByteCountInputStream;
-import ca.nrc.cadc.net.IncorrectContentChecksumException;
-import ca.nrc.cadc.net.IncorrectContentLengthException;
-import ca.nrc.cadc.net.ResourceNotFoundException;
-import ca.nrc.cadc.net.TransientException;
-import ca.nrc.cadc.util.StringUtil;
-
-import java.io.File;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.math.BigInteger;
-import java.net.URI;
-import java.security.DigestInputStream;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.util.Iterator;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
-import java.util.UUID;
 
 
 /**
@@ -214,17 +213,17 @@ public class RadosStorageAdapter implements StorageAdapter {
         }
     }
 
-    private IoCTXStriper contextConnectStriper(final String poolName) throws RadosException {
+    private IoCTX contextConnect(final String poolName) throws RadosException {
         try {
-            return radosStriperClient.ioCtxCreateStriper(contextConnect(poolName));
+            return contextConnect(radosClient, poolName);
         } catch (IOException e) {
             throw new RadosException(e.getMessage(), e);
         }
     }
 
-    private IoCTX contextConnect(final String poolName) throws RadosException {
+    private IoCTXStriper contextConnectStriper(final String poolName) throws RadosException {
         try {
-            return contextConnect(radosClient, poolName);
+            return radosStriperClient.ioCtxCreateStriper(contextConnect(poolName));
         } catch (IOException e) {
             throw new RadosException(e.getMessage(), e);
         }

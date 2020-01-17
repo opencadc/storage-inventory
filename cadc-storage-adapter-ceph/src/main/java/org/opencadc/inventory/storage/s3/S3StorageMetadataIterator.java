@@ -69,14 +69,15 @@
 
 package org.opencadc.inventory.storage.s3;
 
-import org.opencadc.inventory.storage.StorageMetadata;
-import software.amazon.awssdk.services.s3.model.ListObjectsResponse;
-import software.amazon.awssdk.services.s3.model.S3Object;
-
 import ca.nrc.cadc.util.StringUtil;
 
 import java.util.Collections;
 import java.util.Iterator;
+
+import org.opencadc.inventory.storage.StorageMetadata;
+
+import software.amazon.awssdk.services.s3.model.ListObjectsResponse;
+import software.amazon.awssdk.services.s3.model.S3Object;
 
 
 /**

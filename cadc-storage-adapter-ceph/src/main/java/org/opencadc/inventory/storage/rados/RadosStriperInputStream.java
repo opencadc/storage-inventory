@@ -74,9 +74,10 @@ import com.ceph.rados.exceptions.RadosException;
 import com.ceph.rados.exceptions.RadosNotFoundException;
 import com.ceph.radosstriper.IoCTXStriper;
 import com.ceph.radosstriper.RadosStriper;
-import org.apache.log4j.Logger;
 
 import java.io.IOException;
+
+import org.apache.log4j.Logger;
 
 
 /**
