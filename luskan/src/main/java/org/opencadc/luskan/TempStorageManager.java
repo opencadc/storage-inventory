@@ -74,12 +74,12 @@ import ca.nrc.cadc.dali.tables.TableWriter;
 import ca.nrc.cadc.reg.Standards;
 import ca.nrc.cadc.reg.client.RegistryClient;
 import ca.nrc.cadc.tap.ResultStore;
-import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.util.PropertiesReader;
 import ca.nrc.cadc.uws.Job;
 import ca.nrc.cadc.uws.server.RandomStringGenerator;
 import ca.nrc.cadc.uws.web.InlineContentException;
 import ca.nrc.cadc.uws.web.UWSInlineContentHandler;
+
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -88,17 +88,17 @@ import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URL;
 import java.sql.ResultSet;
-import java.util.Properties;
 
 import org.apache.log4j.Logger;
+
 
 /**
  * Basic temporary storage implementation for a tap service.
  *
  * @author pdowler, adapted by adriand
  */
-public class TempStorageManager implements ResultStore, UWSInlineContentHandler
-{
+public class TempStorageManager implements ResultStore, UWSInlineContentHandler {
+
     private static final Logger log = Logger.getLogger(TempStorageManager.class);
 
     private static final String CONFIG = TempStorageManager.class.getSimpleName() + ".properties";
@@ -112,10 +112,8 @@ public class TempStorageManager implements ResultStore, UWSInlineContentHandler
     private File baseDir;
     private String baseURL;
 
-    public TempStorageManager()
-    {
-        try
-        {
+    public TempStorageManager() {
+        try {
             PropertiesReader propReader = new PropertiesReader(CONFIG);
             this.baseDir = new File(propReader.getFirstPropertyValue(BASE_DIR_KEY));
 
@@ -126,9 +124,7 @@ public class TempStorageManager implements ResultStore, UWSInlineContentHandler
             URL serviceURL = regClient.getServiceURL(serviceURI, Standards.VOSI_AVAILABILITY, AuthMethod.ANON);
             // NOTE: "results" is used in the servlet mapping in web.xml
             this.baseURL = serviceURL.toString().replace("availability", "results");
-        }
-        catch(Exception ex)
-        {
+        } catch (Exception ex) {
             log.error("CONFIG: failed to load/read config from TempStorageManager.properties", ex);
             throw new RuntimeException("CONFIG: failed to load/read config from TempStorageManager.properties", ex);
         }
@@ -139,111 +135,101 @@ public class TempStorageManager implements ResultStore, UWSInlineContentHandler
     }
 
     // used by TempStorageGetAction
-    File getStoredFile(String filename)
-    {
+    File getStoredFile(String filename) {
         return getDestFile(filename);
     }
 
     // cadc-tap-server ResultStore implementation
     public URL put(ResultSet rs, TableWriter<ResultSet> writer)
-            throws IOException
-    {
+            throws IOException {
         return put(rs, writer, null);
     }
+
     public URL put(ResultSet rs, TableWriter<ResultSet> writer, Integer maxRows)
-            throws IOException
-    {
+            throws IOException {
         Long num = null;
-        if (maxRows != null)
+        if (maxRows != null) {
             num = new Long(maxRows);
+        }
 
         // TODO: get requested content-type from job and store it with file
         // so that TempStorageAction can set content-type header correctly
         File dest = getDestFile(filename);
         URL ret = getURL(filename);
         FileOutputStream ostream = null;
-        try
-        {
+        try {
             ostream = new FileOutputStream(dest);
             writer.write(rs, ostream, num);
-        }
-        finally
-        {
-            if (ostream != null)
+        } finally {
+            if (ostream != null) {
                 ostream.close();
+            }
         }
         return ret;
     }
 
-    public URL put(Throwable t, TableWriter writer) throws IOException
-    {
+    public URL put(Throwable t, TableWriter writer) throws IOException {
         // TODO: get requested content-type from job and store it with file
         // so that TempStorageAction can set content-type header correctly
         File dest = getDestFile(filename);
         URL ret = getURL(filename);
         FileOutputStream ostream = null;
-        try
-        {
+        try {
             ostream = new FileOutputStream(dest);
             writer.write(t, ostream);
-        }
-        finally
-        {
-            if (ostream != null)
+        } finally {
+            if (ostream != null) {
                 ostream.close();
+            }
         }
         return ret;
     }
 
-    public void setJob(Job job)
-    {
+    public void setJob(Job job) {
         this.job = job;
     }
 
-    public void setContentType(String contentType)
-    {
+    public void setContentType(String contentType) {
         this.contentType = contentType;
     }
 
-    public void setFilename(String filename)
-    {
+    public void setFilename(String filename) {
         this.filename = filename;
     }
 
-    private File getDestFile(String filename)
-    {
+    private File getDestFile(String filename) {
         if (!baseDir.exists()) {
             log.debug("create baseDir: " + baseDir);
             baseDir.mkdir();
         }
 
         File dir = baseDir;
-        if (!dir.exists())
+        if (!dir.exists()) {
             throw new RuntimeException(BASE_DIR_KEY + "=" + baseDir + " does not exist");
-        if (!dir.isDirectory())
+        }
+        if (!dir.isDirectory()) {
             throw new RuntimeException(BASE_DIR_KEY + "=" + baseDir + " is not a directory");
-        if (!dir.canWrite())
+        }
+        if (!dir.canWrite()) {
             throw new RuntimeException(BASE_DIR_KEY + "=" + baseDir + " is not writable");
+        }
 
         return new File(dir, filename);
     }
 
-    private URL getURL(String filename)
-    {
+    private URL getURL(String filename) {
         StringBuilder sb = new StringBuilder();
         sb.append(baseURL);
 
-        if ( !baseURL.endsWith("/") )
+        if (!baseURL.endsWith("/")) {
             sb.append("/");
+        }
 
         sb.append(filename);
         String s = sb.toString();
-        try
-        {
+        try {
             return new URL(s);
-        }
-        catch(MalformedURLException ex)
-        {
+        } catch (MalformedURLException ex) {
             throw new RuntimeException("failed to create URL from " + s, ex);
         }
     }
@@ -252,18 +238,17 @@ public class TempStorageManager implements ResultStore, UWSInlineContentHandler
 
     @Override
     public Content accept(String name, String contentType, InputStream inputStream)
-            throws InlineContentException, IOException
-    {
+            throws InlineContentException, IOException {
         // store the file in tmp storage
         log.debug("name: " + name);
         log.debug("Content-Type: " + contentType);
-        if (inputStream == null)
+        if (inputStream == null) {
             throw new IOException("InputStream cannot be null");
+        }
 
         String filename = name + "-" + getRandomString();
 
         File put = new File(baseDir + "/" + filename);
-        URL retURL = new URL(baseURL + "/" + filename);
 
         log.debug("put: " + put);
         log.debug("contentType: " + contentType);
@@ -271,22 +256,21 @@ public class TempStorageManager implements ResultStore, UWSInlineContentHandler
         FileOutputStream fos = new FileOutputStream(put);
         byte[] buf = new byte[16384];
         int num = inputStream.read(buf);
-        while (num > 0)
-        {
+        while (num > 0) {
             fos.write(buf, 0, num);
             num = inputStream.read(buf);
         }
         fos.flush();
         fos.close();
 
+        URL retURL = new URL(baseURL + "/" + filename);
         Content ret = new Content();
         ret.name = UWSInlineContentHandler.CONTENT_PARAM_REPLACE;
-        ret.value = new UWSInlineContentHandler.ParameterReplacement("param:"+name, retURL.toExternalForm());
+        ret.value = new UWSInlineContentHandler.ParameterReplacement("param:" + name, retURL.toExternalForm());
         return ret;
     }
 
-    private static String getRandomString()
-    {
+    private static String getRandomString() {
         return new RandomStringGenerator(16).getID();
     }
 }

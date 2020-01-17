@@ -68,9 +68,11 @@
 package org.opencadc.luskan;
 
 import ca.nrc.cadc.db.version.InitDatabase;
+
 import java.net.URL;
+import java.util.Arrays;
 import javax.sql.DataSource;
-import org.apache.log4j.Logger;
+
 
 /**
  * This class automates adding/updating the description of CAOM tables and views
@@ -84,38 +86,29 @@ import org.apache.log4j.Logger;
  * @author pdowler
  */
 public class InitLuskanSchemaContent extends InitDatabase {
-    private static final Logger log = Logger.getLogger(InitLuskanSchemaContent.class);
 
     public static final String MODEL_NAME = "luskan-schema";
     public static final String MODEL_VERSION = "0.5";
     public static final String PREV_MODEL_VERSION = "n/a";
 
     // the SQL is tightly coupled to cadc-tap-schema table names (for TAP-1.1)
-    static String[] CREATE_SQL = new String[] {
-            "inventory.tap_schema_content11.sql",
-    };
+    static String[] CREATE_SQL = new String[] {"inventory.tap_schema_content11.sql"};
 
     // upgrade is normally the same as create since SQL is idempotent
-    static String[] UPGRADE_SQL = new String[] {
-            "inventory.tap_schema_content11.sql"
-    };
+    static String[] UPGRADE_SQL = new String[] {"inventory.tap_schema_content11.sql"};
 
     /**
      * Constructor. The schema argument is used to query the ModelVersion table
      * as {schema}.ModelVersion.
      *
      * @param dataSource connection with write permission to tap_schema tables
-     * @param database database name (should be null if not needed in SQL)
-     * @param schema schema name (usually tap_schema)
+     * @param database   database name (should be null if not needed in SQL)
+     * @param schema     schema name (usually tap_schema)
      */
     public InitLuskanSchemaContent(DataSource dataSource, String database, String schema) {
         super(dataSource, database, schema, MODEL_NAME, MODEL_VERSION, PREV_MODEL_VERSION);
-        for (String s : CREATE_SQL) {
-            createSQL.add(s);
-        }
-        for (String s : UPGRADE_SQL) {
-            upgradeSQL.add(s);
-        }
+        createSQL.addAll(Arrays.asList(CREATE_SQL));
+        upgradeSQL.addAll(Arrays.asList(UPGRADE_SQL));
     }
 
     @Override

@@ -70,8 +70,6 @@ package org.opencadc.luskan.ws;
 import ca.nrc.cadc.auth.AuthMethod;
 import ca.nrc.cadc.db.DBUtil;
 import ca.nrc.cadc.reg.Standards;
-import ca.nrc.cadc.vosi.avail.CheckWebService;
-import org.opencadc.luskan.InitLuskanSchemaContent;
 import ca.nrc.cadc.reg.client.LocalAuthority;
 import ca.nrc.cadc.reg.client.RegistryClient;
 import ca.nrc.cadc.rest.RestAction;
@@ -82,12 +80,14 @@ import ca.nrc.cadc.vosi.AvailabilityStatus;
 import ca.nrc.cadc.vosi.avail.CheckDataSource;
 import ca.nrc.cadc.vosi.avail.CheckException;
 import ca.nrc.cadc.vosi.avail.CheckResource;
+import ca.nrc.cadc.vosi.avail.CheckWebService;
 
 import java.net.URI;
-import java.security.Principal;
-import javax.security.auth.x500.X500Principal;
 import javax.sql.DataSource;
 import org.apache.log4j.Logger;
+
+import org.opencadc.luskan.InitLuskanSchemaContent;
+
 
 /**
  *
