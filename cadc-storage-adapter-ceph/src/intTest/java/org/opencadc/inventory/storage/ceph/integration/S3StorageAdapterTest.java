@@ -252,6 +252,48 @@ public class S3StorageAdapterTest {
         }
     }
 
+
+    /**
+     * Exists to test what happens when the InputStream from Reading of a file breaks.
+     * @throws Exception    Any exception.
+     */
+    @Test
+    @Ignore
+    public void ensureFileStreamReadBreak() throws Exception {
+        final long expectedContentLength = 312151680L;
+        try (final S3Client s3Client = S3Client.builder()
+                                               .endpointOverride(ENDPOINT)
+                                               .region(Region.of(REGION))
+                                               .build()) {
+            try {
+                s3Client.headObject(HeadObjectRequest.builder().bucket(BUCKET_NAME).key(MEF_OBJECT_ID).build());
+                LOGGER.info(String.format("Test file %s/%s exists.", BUCKET_NAME, MEF_OBJECT_ID));
+            } catch (NoSuchKeyException e) {
+                LOGGER.info("*********");
+                LOGGER.info(String.format("Test file (%s/%s) does not exist.  Uploading file from VOSpace...",
+                                          BUCKET_NAME, MEF_OBJECT_ID));
+                LOGGER.info("*********");
+
+                final URL sourceURL = new URL("http://mach378.cadc.dao.nrc.ca:9000/test-megaprime.fits.fz");
+
+                //final URL sourceURL = new URL("https://www.cadc-ccda.hia-iha.nrc-cnrc.gc" +
+                //                              ".ca/files/vault/CADCtest/Public/test-megaprime.fits.fz");
+
+                try (final InputStream inputStream = openStream(sourceURL)) {
+                    s3Client.putObject(PutObjectRequest.builder()
+                                                       .bucket(BUCKET_NAME)
+                                                       .key(MEF_OBJECT_ID)
+                                                       .build(),
+                                       RequestBody.fromInputStream(inputStream, expectedContentLength));
+                }
+
+                LOGGER.info("*********");
+                LOGGER.info(String.format("Test file (%s/%s) uploaded.", BUCKET_NAME, MEF_OBJECT_ID));
+                LOGGER.info("*********");
+            }
+        }
+    }
+
     private void ensureMEFTestFile() throws Exception {
         final long expectedContentLength = 312151680L;
         try (final S3Client s3Client = S3Client.builder()
@@ -260,10 +302,10 @@ public class S3StorageAdapterTest {
                                                .build()) {
             try {
                 s3Client.headObject(HeadObjectRequest.builder().bucket(BUCKET_NAME).key(MEF_OBJECT_ID).build());
-                LOGGER.info(String.format("MEF test file %s/%s exists.", BUCKET_NAME, MEF_OBJECT_ID));
+                LOGGER.info(String.format("Test file %s/%s exists.", BUCKET_NAME, MEF_OBJECT_ID));
             } catch (NoSuchKeyException e) {
                 LOGGER.info("*********");
-                LOGGER.info(String.format("MEF file (%s/%s) does not exist.  Uplaoding file from VOSpace...",
+                LOGGER.info(String.format("Test file (%s/%s) does not exist.  Uploading file from VOSpace...",
                                           BUCKET_NAME, MEF_OBJECT_ID));
                 LOGGER.info("*********");
 
@@ -271,24 +313,25 @@ public class S3StorageAdapterTest {
                                               ".ca/files/vault/CADCtest/Public/test-megaprime.fits.fz");
 
 
-                s3Client.putObject(PutObjectRequest.builder()
-                                                   .bucket(BUCKET_NAME)
-                                                   .key(MEF_OBJECT_ID)
-                                                   .build(),
-                                   RequestBody.fromInputStream(openStream(sourceURL), expectedContentLength));
+                try (final InputStream inputStream = openStream(sourceURL)) {
+                    s3Client.putObject(PutObjectRequest.builder()
+                                                       .bucket(BUCKET_NAME)
+                                                       .key(MEF_OBJECT_ID)
+                                                       .build(),
+                                       RequestBody.fromInputStream(inputStream, expectedContentLength));
+                }
 
                 LOGGER.info("*********");
-                LOGGER.info(String.format("MEF file (%s/%s) uploaded.", BUCKET_NAME, MEF_OBJECT_ID));
+                LOGGER.info(String.format("Test file (%s/%s) uploaded.", BUCKET_NAME, MEF_OBJECT_ID));
                 LOGGER.info("*********");
             }
         }
     }
 
     @Test
-    @Ignore
     public void get() throws Exception {
         final S3StorageAdapter testSubject = new S3StorageAdapter(ENDPOINT, REGION);
-        final URI testURI = URI.create("cadc:jenkinsd/test-jcmt.fits");
+        final URI testURI = URI.create(String.format("cadc:%s/%s", "fed08", "03e6ab81-ea89-4098-8eae-1267bb52c50a"));
         final long expectedByteCount = 3144960L;
         final URI expectedChecksum = URI.create("md5:9307240a34ed65a0a252b0046b6e87be");
 
@@ -374,6 +417,7 @@ public class S3StorageAdapterTest {
     }
 
     @Test
+    @Ignore
     public void getHeaders() throws Exception {
         LOGGER.info("Skip to headers...");
         LOGGER.info("***");

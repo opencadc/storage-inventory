@@ -4,7 +4,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2019.                            (c) 2019.
+ *  (c) 2020.                            (c) 2020.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -85,6 +85,10 @@ import org.apache.log4j.Logger;
  * we need to use that as a data source to this Input Stream.
  * Note that the main read() method is not implemented here as it relies on the RADOS API to populate the underlying
  * buffer array, which relies on the buffer array being passed in.
+ *
+ * This implementation uses the RADOS Striper API to chunk up large files.  The default configuration of a Ceph cluster
+ * limits files to 128MB when using the basic RADOS API, so the Striper API will use the underlying striping logic to
+ * break up the file.
  * jenkinsd 2019.12.11
  */
 public class RadosStriperInputStream extends RadosInputStream {

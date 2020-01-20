@@ -4,7 +4,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2019.                            (c) 2019.
+ *  (c) 2020.                            (c) 2020.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -76,6 +76,7 @@ import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.util.HexUtil;
 import ca.nrc.cadc.util.StringUtil;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -87,6 +88,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+
 import nom.tam.fits.BasicHDU;
 import nom.tam.fits.Fits;
 import nom.tam.fits.FitsException;
@@ -133,6 +135,7 @@ public class S3StorageAdapter implements StorageAdapter {
     private static final Logger LOGGER = Logger.getLogger(S3StorageAdapter.class);
 
     private static final int BUFFER_SIZE_BYTES = 8192;
+    private static final String DEFAULT_CHECKSUM_ALGORITHM = "md5";
     private static final int DEFAULT_BUCKET_HASH_LENGTH = 5;
     static final String STORAGE_ID_URI_TEMPLATE = "%s:%s/%s";
 
@@ -169,15 +172,54 @@ public class S3StorageAdapter implements StorageAdapter {
         return UUID.randomUUID().toString();
     }
 
-    private void transferInputStreamTo(final InputStream inputStream, final OutputStream outputStream)
-            throws IOException {
-        final byte[] buffer = new byte[BUFFER_SIZE_BYTES];
-        int read;
-        while ((read = inputStream.read(buffer, 0, BUFFER_SIZE_BYTES)) >= 0) {
-            outputStream.write(buffer, 0, read);
+    /**
+     * Read a page of data into buffer.  Exists to properly distinguish exceptions.
+     *
+     * @param inputStream   Stream to read from.
+     * @param buffer        Buffer of data to read into.
+     * @return              int bytes read, or -1 when finished.
+     * @throws ReadException        For any reading I/O errors.
+     */
+    private int readNextPage(final InputStream inputStream, final byte[] buffer) throws ReadException {
+        try {
+            return inputStream.read(buffer, 0, BUFFER_SIZE_BYTES);
+        } catch (IOException e) {
+            throw new ReadException(e.getMessage(), e);
         }
     }
 
+    /**
+     * Write a page of data from a buffer into a stream.  Exists to properly distinguish exceptions.
+     *
+     * @param outputStream      The Stream to write to.
+     * @param buffer            The buffer of data to read from.
+     * @param length            The length of data to write.
+     * @throws WriteException   For any writing I/O errors.
+     */
+    private void writeNextPage(final OutputStream outputStream, final byte[] buffer, final int length)
+            throws WriteException {
+        try {
+            outputStream.write(buffer, 0, length);
+        } catch (IOException e) {
+            throw new WriteException(e.getMessage(), e);
+        }
+    }
+
+    private void transferInputStreamTo(final InputStream inputStream, final OutputStream outputStream)
+            throws ReadException, WriteException {
+        final byte[] buffer = new byte[BUFFER_SIZE_BYTES];
+        int read;
+        while ((read = readNextPage(inputStream, buffer)) >= 0) {
+            writeNextPage(outputStream, buffer, read);
+        }
+    }
+
+    /**
+     * Obtain the InputStream for the given object.  Tests can override this method.
+     *
+     * @param storageID     The Storage ID to GET.
+     * @return              InputStream to the object.
+     */
     InputStream toObjectInputStream(final URI storageID) {
         return s3Client.getObject(GetObjectRequest.builder()
                                                   .bucket(parseBucket(storageID))
@@ -192,17 +234,21 @@ public class S3StorageAdapter implements StorageAdapter {
      * @param dest            The destination stream.
      * @throws ResourceNotFoundException If the artifact could not be found.
      * @throws ReadException             If the storage system failed to stream.
+     * @throws WriteException            If writing failed.
      * @throws StorageEngageException    If the adapter failed to interact with storage.
      */
     @Override
     public void get(StorageLocation storageLocation, OutputStream dest)
-            throws ResourceNotFoundException, ReadException, StorageEngageException {
+            throws ResourceNotFoundException, ReadException, WriteException, StorageEngageException {
         try (final InputStream inputStream = toObjectInputStream(storageLocation.getStorageID())) {
             transferInputStreamTo(inputStream, dest);
         } catch (NoSuchKeyException e) {
             throw new ResourceNotFoundException(e.getMessage(), e);
         } catch (S3Exception | SdkClientException e) {
             throw new StorageEngageException(e.getMessage(), e);
+        } catch (ReadException | WriteException e) {
+            // Handle before the IOException below so it's not wrapped into that catch.
+            throw e;
         } catch (IOException e) {
             throw new ReadException(e.getMessage(), e);
         }
@@ -223,11 +269,12 @@ public class S3StorageAdapter implements StorageAdapter {
      * @param cutouts         Cutouts to be applied to the artifact
      * @throws ResourceNotFoundException If the artifact could not be found.
      * @throws ReadException             If the storage system failed to stream.
+     * @throws WriteException            If writing failed.
      * @throws StorageEngageException    If the adapter failed to interact with storage.
      */
     @Override
     public void get(StorageLocation storageLocation, OutputStream dest, Set<String> cutouts)
-            throws ResourceNotFoundException, ReadException, StorageEngageException {
+            throws ResourceNotFoundException, ReadException, WriteException, StorageEngageException {
         if ((cutouts == null) || cutouts.isEmpty()) {
             get(storageLocation, dest);
         } else {
@@ -273,15 +320,23 @@ public class S3StorageAdapter implements StorageAdapter {
         }
     }
 
-    void createBucket(final String bucket) throws ResourceAlreadyExistsException, IOException {
+    /**
+     * Create a new bucket in the system.
+     *
+     * @param bucket The bucket name.
+     * @throws ResourceAlreadyExistsException The bucket already exists.
+     * @throws SdkClientException             If any client side error occurs such as an IO related failure, failure
+     *                                        to get credentials, etc.
+     * @throws S3Exception                    Base class for all service exceptions. Unknown exceptions will be
+     *                                        thrown as an instance of this type.
+     */
+    void createBucket(final String bucket) throws ResourceAlreadyExistsException, SdkClientException, S3Exception {
         final CreateBucketRequest createBucketRequest = CreateBucketRequest.builder().bucket(bucket).build();
 
         try {
             s3Client.createBucket(createBucketRequest);
         } catch (BucketAlreadyExistsException | BucketAlreadyOwnedByYouException e) {
             throw new ResourceAlreadyExistsException(e.getMessage(), e);
-        } catch (SdkClientException | S3Exception e) {
-            throw new IOException(e.getMessage(), e);
         }
     }
 
@@ -293,9 +348,12 @@ public class S3StorageAdapter implements StorageAdapter {
      *
      * @throws ResourceAlreadyExistsException If the bucket needed to be created but already exists.  Should never
      *                                        really happen, but here for completeness.
-     * @throws IOException                    Any other I/O related errors.
+     * @throws SdkClientException             If any client side error occurs such as an IO related failure, failure
+     *                                        to get credentials, etc.
+     * @throws S3Exception                    Base class for all service exceptions. Unknown exceptions will be
+     *                                        thrown as an instance of this type.
      */
-    String ensureBucket(final String objectID) throws ResourceAlreadyExistsException, IOException {
+    String ensureBucket(final String objectID) throws ResourceAlreadyExistsException, SdkClientException, S3Exception {
         final String bucket = InventoryUtil.computeBucket(objectID, DEFAULT_BUCKET_HASH_LENGTH);
         final HeadBucketRequest headBucketRequest = HeadBucketRequest.builder().bucket(bucket).build();
 
@@ -307,6 +365,14 @@ public class S3StorageAdapter implements StorageAdapter {
         }
 
         return bucket;
+    }
+
+    void ensureChecksum(final URI artifactChecksumURI) throws UnsupportedOperationException {
+        if (!artifactChecksumURI.getScheme().equals(DEFAULT_CHECKSUM_ALGORITHM)) {
+            throw new UnsupportedOperationException(String.format("Only %s is supported, but found %s.",
+                                                                  DEFAULT_CHECKSUM_ALGORITHM,
+                                                                  artifactChecksumURI.getScheme()));
+        }
     }
 
 
@@ -323,9 +389,13 @@ public class S3StorageAdapter implements StorageAdapter {
      * @param source      The stream from which to read.
      * @return The storage metadata.
      *
-     * @throws ReadException          If the client failed to stream.
-     * @throws WriteException         If the storage system failed to stream.
-     * @throws StorageEngageException If the adapter failed to interact with storage.
+     * @throws IncorrectContentChecksumException If the checksum did not match what was written, or was not valid.
+     * @throws IncorrectContentLengthException   If the bytes read did not match the bytes set in the Content-Length
+     *                                           header.
+     * @throws ReadException                     If the client failed to read the stream.  This is not currently
+     *                                           detectable.
+     * @throws WriteException                    If the storage system failed to stream.
+     * @throws StorageEngageException            If the adapter failed to interact with storage.
      */
     @Override
     public StorageMetadata put(NewArtifact newArtifact, InputStream source)
@@ -344,19 +414,25 @@ public class S3StorageAdapter implements StorageAdapter {
             final Map<String, String> metadata = new HashMap<>();
             metadata.put("uri", newArtifact.getArtifactURI().toASCIIString().trim());
 
-            if (newArtifact.contentChecksum != null) {
-                final String md5SumValue = newArtifact.contentChecksum.getSchemeSpecificPart();
+            final URI newArtifactChecksum = newArtifact.contentChecksum;
+
+            if (newArtifactChecksum != null) {
+                ensureChecksum(newArtifactChecksum);
+                final String md5SumValue = newArtifactChecksum.getSchemeSpecificPart();
 
                 // Reconvert to Hex bytes before Base64 encoding it as per what S3 expects.
                 final byte[] value = HexUtil.toBytes(md5SumValue);
                 checksum = new String(Base64.getEncoder().encode(value));
                 putObjectRequestBuilder.contentMD5(checksum);
-                metadata.put("md5", md5SumValue);
+                metadata.put(DEFAULT_CHECKSUM_ALGORITHM, md5SumValue);
             }
 
-            if (newArtifact.contentLength != null) {
-                putObjectRequestBuilder.contentLength(newArtifact.contentLength);
-            }
+            /*
+            TODO: Is this necessary?  It's being sent with the RequestBody.fromInputStream() below already.  S3 will
+            TODO: throw an exception if it's missing.
+            TODO: jenkinsd 2020.01.20
+             */
+            putObjectRequestBuilder.contentLength(newArtifact.contentLength);
 
             putObjectRequestBuilder.metadata(metadata);
 
@@ -368,23 +444,55 @@ public class S3StorageAdapter implements StorageAdapter {
             final AwsErrorDetails awsErrorDetails = e.awsErrorDetails();
             if ((awsErrorDetails != null) && StringUtil.hasLength(awsErrorDetails.errorCode())) {
                 final String errorCode = awsErrorDetails.errorCode();
-                if (errorCode.equals("InvalidDigest")) {
-                    throw new IncorrectContentChecksumException(
-                            String.format("Checksums do not match.  Expected %s but got %s", checksum, ""));
-                } else if (errorCode.equals("IncompleteBody")) {
-                    throw new IncorrectContentLengthException(
-                            String.format("Content length does not match bytes written.  Expected %d bytes.",
-                                          newArtifact.contentLength));
-
-                } else {
-                    throw new WriteException(e.getMessage(), e);
+                switch (errorCode) {
+                    case "BadDigest": {
+                        throw new IncorrectContentChecksumException(
+                                String.format("Checksums do not match what was received.  Expected %s.", checksum));
+                    }
+                    case "IncompleteBody": {
+                        throw new IncorrectContentLengthException(
+                                String.format("Content length does not match bytes written.  Expected %d bytes.",
+                                              newArtifact.contentLength));
+                    }
+                    case "InternalError": {
+                        /*
+                        TODO: Documentation says to Retry the request in this case.  Throwing a StorageEngageException
+                        TODO: for now...
+                        TODO: jenkinsd 2020.01.20
+                         */
+                        throw new StorageEngageException("Unknown error from the server.");
+                    }
+                    case "InvalidDigest": {
+                        throw new IncorrectContentChecksumException(
+                                String.format("Checksum (%s) is invalid.", checksum));
+                    }
+                    case "MissingContentLength": {
+                        throw new IncorrectContentLengthException("Content length is missing but is mandatory.");
+                    }
+                    case "SlowDown":
+                    case "ServiceUnavailable": {
+                        throw new StorageEngageException(
+                                String.format("Volume is too great for service to handle.  Reduce traffic (%s).",
+                                              errorCode));
+                    }
+                    default: {
+                        throw new WriteException(String.format("Error Code: %s\nMessage from server: %s\n", errorCode,
+                                                               e.getMessage()), e);
+                    }
                 }
             } else {
                 throw new WriteException(e.getMessage(), e);
             }
-        } catch (IOException e) {
-            throw new StorageEngageException(e.getMessage(), e);
-        } catch (SdkClientException | ResourceAlreadyExistsException e) {
+        } catch (SdkClientException e) {
+            // Based on testing by reading from the stream of a URL, and killing the server part way through the
+            // read while doing a pubObject().  The SdkClientException is thrown in that case.
+            // jenkinsd 2020.01.20
+            if (e.getMessage().toLowerCase().contains("read")) {
+                throw new ReadException(e.getMessage(), e);
+            } else {
+                throw new WriteException(e.getMessage(), e);
+            }
+        } catch (ResourceAlreadyExistsException e) {
             throw new WriteException(e.getMessage(), e);
         }
     }

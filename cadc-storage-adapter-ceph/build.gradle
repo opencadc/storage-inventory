@@ -13,7 +13,7 @@ repositories {
 
 sourceCompatibility = 1.8
 group = 'org.opencadc'
-version = '0.1.0'
+version = '0.1'
 
 apply from: '../opencadc.gradle'
 
