@@ -85,8 +85,8 @@ import org.apache.log4j.Logger;
  * we need to use that as a data source to this Input Stream.
  * Note that the main read() method is not implemented here as it relies on the RADOS API to populate the underlying
  * buffer array, which relies on the buffer array being passed in.
- *
- * This implementation uses the RADOS Striper API to chunk up large files.  The default configuration of a Ceph cluster
+ * 
+ * <p>This implementation uses the RADOS Striper API to chunk up large files.  The default configuration of a Ceph cluster
  * limits files to 128MB when using the basic RADOS API, so the Striper API will use the underlying striping logic to
  * break up the file.
  * jenkinsd 2019.12.11
