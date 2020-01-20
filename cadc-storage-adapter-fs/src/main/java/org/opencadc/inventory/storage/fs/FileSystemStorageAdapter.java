@@ -355,14 +355,13 @@ public class FileSystemStorageAdapter implements StorageAdapter {
             log.debug("calculated md5sum: " + checksum);
             log.debug("calculated file size: " + length);
             
-            IncorrectContentChecksumException checksumException = null;
             boolean checksumProvided = newArtifact.contentChecksum != null && newArtifact.contentChecksum.getScheme().equals(MD5_CHECKSUM_SCHEME);
             // checksum comparison
             if (checksumProvided) {
                 String expectedMD5 = newArtifact.contentChecksum.getSchemeSpecificPart();
                 String actualMD5 = checksum.getSchemeSpecificPart();
                 if (!expectedMD5.equals(actualMD5)) {
-                    checksumException = new IncorrectContentChecksumException(
+                    throw new IncorrectContentChecksumException(
                         "expected md5 checksum [" + expectedMD5 + "] "
                         + "but calculated [" + actualMD5 + "]");
                 }
@@ -374,7 +373,7 @@ public class FileSystemStorageAdapter implements StorageAdapter {
             if (newArtifact.contentLength != null) {
                 Long expectedLength = newArtifact.contentLength;
                 if (!expectedLength.equals(length)) {
-                    if (checksumException == null && checksumProvided) {
+                    if (checksumProvided) {
                         // likely bug in the client, throw a 400 instead
                         throw new IllegalArgumentException("correct md5 checksum ["
                             + newArtifact.contentChecksum + "] but incorrect length ["
@@ -386,9 +385,6 @@ public class FileSystemStorageAdapter implements StorageAdapter {
                 }
             } else {
                 log.debug("No contentLength provided.");
-            }
-            if (checksumException != null) {
-                throw checksumException;
             }
             
             StorageMetadata metadata = new StorageMetadata(storageLocation, checksum, length);
