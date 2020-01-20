@@ -130,14 +130,14 @@ public class GetAction extends PermissionsAction {
             throw new IllegalArgumentException("invalid " + URI + " parameter, not a valid URI: " + uri);
         }
 
-        PermissionsConfig pConfig = new PermissionsConfig();
+        PermissionsConfig permissionsConfig = new PermissionsConfig();
         Grant grant = null;
         switch (operation) {
             case read:
-                grant = pConfig.getReadGrant(artifactURI);
+                grant = permissionsConfig.getReadGrant(artifactURI);
                 break;
             case write:
-                grant = pConfig.getWriteGrant(artifactURI);
+                grant = permissionsConfig.getWriteGrant(artifactURI);
                 break;
             default:
                 throw new IllegalStateException("unknown operation: " + operation);
