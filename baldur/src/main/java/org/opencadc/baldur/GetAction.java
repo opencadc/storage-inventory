@@ -69,28 +69,29 @@
 
 package org.opencadc.baldur;
 
-import ca.nrc.cadc.auth.AuthenticationUtil;
 import java.io.OutputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.security.AccessControlException;
-import java.util.Calendar;
 import java.util.Date;
-import javax.security.auth.Subject;
-import javax.servlet.ServletException;
+import java.util.List;
+
 import org.apache.log4j.Logger;
+import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.permissions.Grant;
-import org.opencadc.inventory.permissions.ReadGrant;
-import org.opencadc.inventory.permissions.WriteGrant;
 import org.opencadc.inventory.permissions.xml.GrantWriter;
 
+/**
+ * Class to handle the retrieving of read-only or read-write permissions
+ * for a given artifact.
+ * 
+ * @author jburke, majorb
+ */
 public class GetAction extends PermissionsAction {
+    
     private static final Logger log = Logger.getLogger(GetAction.class);
 
     private static final String OP = "OP";
     private static final String URI = "URI";
-    private static final String READ = "read";
-    private static final String WRITE = "write";
 
     public GetAction() {
         super();
@@ -100,76 +101,67 @@ public class GetAction extends PermissionsAction {
     public void doAction() throws Exception {
 
         // Check if the calling user is authorized to make the request.
-        Subject subject = AuthenticationUtil.getCurrentSubject();
-        log.debug(subject.toString());
-        if (!isAuthorized(subject)) {
-            throw new AccessControlException("User authorization failed.");
-        }
+        authorize();
         
         String op = syncInput.getParameter(OP);
-        if (op == null) {
-            throw new ServletException("missing required parameter: " + OP);
-        }
-        if (!op.equals(READ) && !op.equals(WRITE)) {
-            throw new ServletException("invalid " + OP + " parameter, must be " + READ  + " or " + WRITE);
-        }
-
         String uri = syncInput.getParameter(URI);
-        if (uri == null) {
-            throw new ServletException("missing required parameter: " + URI);
+        log.debug(OP + ": " + op);
+        log.debug(URI + ": " + uri);
+        
+        if (op == null) {
+            throw new IllegalArgumentException("missing required parameter, " + OP);
         }
-        java.net.URI artifactURI;
+        Operation operation = null;
+        try {
+            operation = Operation.valueOf(op);
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("invalid " + OP + " parameter, must be "
+                + Operation.read  + " or " + Operation.write);
+        }
+        if (uri == null) {
+            throw new IllegalArgumentException("missing required parameter, " + URI);
+        }
+        
+        URI artifactURI;
         try {
             artifactURI = new URI(uri);
+            InventoryUtil.validateArtifactURI(GetAction.class, artifactURI);
         } catch (URISyntaxException e) {
-            throw new ServletException(URI + " parameter is not a valid URI");
-        }
-        log.debug(OP + " = " + op);
-        log.debug(URI + " = " + artifactURI.toASCIIString());
-
-        Permissions permissions = getPermissions(artifactURI);
-        Date expiryDate = getExpiryDate(artifactURI);
-
-        Grant grant;
-        if (op.equals(READ)) {
-            grant = new ReadGrant(artifactURI, expiryDate, permissions.getIsAnonymous());
-            grant.getGroups().addAll(permissions.getReadOnlyGroups());
-        } else {
-            grant = new WriteGrant(artifactURI, expiryDate);
-            grant.getGroups().addAll(permissions.getReadWriteGroups());
+            throw new IllegalArgumentException("invalid " + URI + " parameter, not a valid URI: " + uri);
         }
 
-        OutputStream out = null;
-        try {
-            syncOutput.setHeader("Content-Type", PERMISSIONS_CONTENT_TYPE);
-            syncOutput.setCode(200);
-
-            out = syncOutput.getOutputStream();
-            GrantWriter writer = new GrantWriter();
-            writer.write(grant, out);
-            out.flush();
-        } finally {
-            if (out != null) {
-                try {
-                    out.close();
-                } catch (Exception ignore) {
-                    // ignore
-                }
-            }
+        PermissionsConfig pConfig = new PermissionsConfig();
+        Grant grant = null;
+        switch (operation) {
+            case read:
+                grant = pConfig.getReadGrant(artifactURI);
+                break;
+            case write:
+                grant = pConfig.getWriteGrant(artifactURI);
+                break;
+            default:
+                throw new IllegalStateException("unknown operation: " + operation);
         }
+
+        syncOutput.setHeader("Content-Type", "text/xml");
+        syncOutput.setCode(200);
+
+        OutputStream out = syncOutput.getOutputStream();
+        GrantWriter writer = new GrantWriter();
+        writer.write(grant, out);
+        out.flush();
+
     }
 
     /**
      * Calculate the expiry date of the grant for the given artifact URI.
-     * Arbitrarily set to a week from now.
      *
      * @param artifactURI The Artifact URI.
      * @return A Date.
      */
     private Date getExpiryDate(URI artifactURI) {
-        Calendar cal = Calendar.getInstance();
-        cal.add(Calendar.DAY_OF_YEAR, 7);
-        return cal.getTime();
+        // expires immediately
+        return new Date();
     }
 
 }

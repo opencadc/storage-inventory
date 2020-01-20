@@ -3,7 +3,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2019.                            (c) 2019.
+ *  (c) 2020.                            (c) 2020.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -62,38 +62,65 @@
  *  <http://www.gnu.org/licenses/>.      pas le cas, consultez :
  *                                       <http://www.gnu.org/licenses/>.
  *
- *  $Revision: 5 $
- *
  ************************************************************************
  */
 
 package org.opencadc.baldur;
 
-import java.util.List;
-import org.opencadc.gms.GroupURI;
+import ca.nrc.cadc.auth.AuthMethod;
+import ca.nrc.cadc.auth.AuthenticationUtil;
+import ca.nrc.cadc.auth.SSLUtil;
+import ca.nrc.cadc.reg.Standards;
+import ca.nrc.cadc.reg.client.RegistryClient;
+import ca.nrc.cadc.util.FileUtil;
+import ca.nrc.cadc.util.HexUtil;
+import ca.nrc.cadc.util.Log4jInit;
 
-public class Permissions {
+import java.io.ByteArrayInputStream;
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.URI;
+import java.net.URL;
+import java.security.DigestInputStream;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 
-    private boolean isAnonymous;
-    private List<GroupURI> readOnlyGroups;
-    private List<GroupURI> readWriteGroups;
+import javax.security.auth.Subject;
 
-    public Permissions(boolean isAnonymous, List<GroupURI> readOnlyGroups, List<GroupURI> readWriteGroups) {
-        this.isAnonymous = isAnonymous;
-        this.readOnlyGroups = readOnlyGroups;
-        this.readWriteGroups = readWriteGroups;
+import org.apache.log4j.Level;
+import org.apache.log4j.Logger;
+
+/**
+ * Abstract integration test class with general setup and test support.
+ * 
+ * @author majorb
+ */
+public abstract class BaldurTest {
+    
+    private static final Logger log = Logger.getLogger(BaldurTest.class);
+    public static final URI BALDUR_SERVICE_ID = URI.create("ivo://cadc.nrc.ca/baldur");
+    
+    protected URL certURL;
+    protected Subject anonSubject;
+    protected Subject noAuthSubject;
+    protected Subject authSubject;
+    
+    static {
+        Log4jInit.setLevel("org.opencadc.baldur", Level.INFO);
     }
-
-    public boolean getIsAnonymous() {
-        return this.isAnonymous;
+    
+    public BaldurTest() {
+        RegistryClient regClient = new RegistryClient();
+        certURL = regClient.getServiceURL(BALDUR_SERVICE_ID, Standards.SI_PERMISSIONS, AuthMethod.CERT);
+        log.info("certURL: " + certURL);
+        anonSubject = AuthenticationUtil.getAnonSubject();
+        File cert = FileUtil.getFileFromResource("baldur-test-1.pem", BaldurTest.class);
+        authSubject = SSLUtil.createSubject(cert);
+        log.info("authSubject: " + authSubject);
+        cert = FileUtil.getFileFromResource("baldur-test-2.pem", BaldurTest.class);
+        noAuthSubject = SSLUtil.createSubject(cert);
+        log.info("noAuthSubject: " + noAuthSubject);
     }
-
-    public  List<GroupURI> getReadOnlyGroups() {
-        return this.readOnlyGroups;
-    }
-
-    public  List<GroupURI> getReadWriteGroups() {
-        return this.readWriteGroups;
-    }
-
+    
 }

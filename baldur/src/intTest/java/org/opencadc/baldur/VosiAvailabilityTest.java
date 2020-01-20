@@ -90,6 +90,6 @@ public class VosiAvailabilityTest extends AvailabilityTest
 
     public VosiAvailabilityTest() 
     { 
-        super(Constants.PERMISSIONS_SERVICE_ID);
+        super(BaldurTest.BALDUR_SERVICE_ID);
     }
 }

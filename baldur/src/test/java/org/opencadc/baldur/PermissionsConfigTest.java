@@ -69,333 +69,233 @@
 
 package org.opencadc.baldur;
 
-import ca.nrc.cadc.util.FileUtil;
 import ca.nrc.cadc.util.Log4jInit;
-import java.io.File;
-import java.io.FileNotFoundException;
+import ca.nrc.cadc.util.PropertiesReader;
+
 import java.net.URI;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.regex.Pattern;
+
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.Test;
+import org.opencadc.baldur.PermissionsConfig.PermissionEntry;
 import org.opencadc.gms.GroupURI;
+import org.opencadc.inventory.permissions.ReadGrant;
+import org.opencadc.inventory.permissions.WriteGrant;
 
 
 public class PermissionsConfigTest {
     private static final Logger log = Logger.getLogger(PermissionsConfig.class);
 
     static {
-        Log4jInit.setLevel("org.opencadc.baldur", Level.INFO);
+        Log4jInit.setLevel("org.opencadc.baldur", Level.DEBUG);
     }
-
+    
     @Test
-    public void testLoadGroupURIS() throws Exception {
+    public void testSingleEntry() {
         try {
-            PermissionsConfig testSubject = getTestSubject(null);
-
-            // Should never be an empty group string..
-            List<GroupURI> groups = new ArrayList<GroupURI>();
-            StringBuilder sb = new StringBuilder();
-            String groupUris = "";
-            String accessType = "read-only";
-
-            testSubject.loadGroupURIS(groups, sb, groupUris, accessType);
-            Assert.assertTrue(sb.length() > 0);
-
-            // Invalid group uri
-            sb.setLength(0);
-            groupUris = "foo";
-
-            testSubject.loadGroupURIS(groups, sb, groupUris, accessType);
-            Assert.assertTrue(sb.length() > 0);
-
-            // Valid group uri
-            sb.setLength(0);
-            groupUris = "ivo://cadc.nrc.ca/gms?CFHT";
-
-            testSubject.loadGroupURIS(groups, sb, groupUris, accessType);
-            Assert.assertEquals(0, sb.length());
-
-            // Two Valid group uri's
-            sb.setLength(0);
-            groupUris = "ivo://cadc.nrc.ca/gms?CFHT,ivo://cadc.nrc.ca/gms?JCMT";
-
-            testSubject.loadGroupURIS(groups, sb, groupUris, accessType);
-            Assert.assertEquals(0, sb.length());
-
-            // One Valid group uri, one invalid
-            sb.setLength(0);
-            groupUris = "ivo://cadc.nrc.ca/gms?CFHT,ivo:cadc.nrc.ca/gms";
-
-            testSubject.loadGroupURIS(groups, sb, groupUris, accessType);
-            Assert.assertTrue(sb.length() > 0);
-
+            log.info("START - testSingleEntry");
+            
+            // test match
+            System.setProperty(PropertiesReader.CONFIG_DIR_SYSTEM_PROPERTY, "src/test/resources/testSingleEntry");
+            PermissionsConfig.clearCache();
+            PermissionsConfig config = new PermissionsConfig();
+            URI artifactURI = URI.create("cadc:TEST/file.fits");
+            
+            List<PermissionEntry> entries = config.getMatchingEntries(artifactURI);
+            Assert.assertNotNull(entries);
+            Assert.assertEquals(1, entries.size());
+            PermissionEntry entry = entries.get(0);
+            Assert.assertTrue(entry.anonRead);
+            Assert.assertEquals(2, entry.readOnlyGroups.size());
+            Assert.assertEquals(2, entry.readWriteGroups.size());
+            GroupURI readGroup1 = new GroupURI("ivo://cadc.nrc.ca/gms?group1");
+            GroupURI readGroup2 = new GroupURI("ivo://cadc.nrc.ca/gms?group2");
+            GroupURI writeGroup1 = new GroupURI("ivo://cadc.nrc.ca/gms?group3");
+            GroupURI writeGroup2 = new GroupURI("ivo://cadc.nrc.ca/gms?group4");
+            Assert.assertTrue(entry.readOnlyGroups.contains(readGroup1));
+            Assert.assertTrue(entry.readOnlyGroups.contains(readGroup2));
+            Assert.assertTrue(entry.readWriteGroups.contains(writeGroup1));
+            Assert.assertTrue(entry.readWriteGroups.contains(writeGroup2));
+            
+            ReadGrant readGrant = config.getReadGrant(artifactURI);
+            Assert.assertNotNull(readGrant);
+            Assert.assertTrue(readGrant.isAnonymousAccess());
+            Assert.assertEquals(2, readGrant.getGroups().size());
+            Assert.assertTrue(readGrant.getGroups().contains(readGroup1));
+            Assert.assertTrue(readGrant.getGroups().contains(readGroup2));
+            
+            WriteGrant writeGrant = config.getWriteGrant(artifactURI);
+            Assert.assertNotNull(writeGrant);
+            Assert.assertEquals(2, writeGrant.getGroups().size());
+            Assert.assertTrue(writeGrant.getGroups().contains(writeGroup1));
+            Assert.assertTrue(writeGrant.getGroups().contains(writeGroup2));
+            
+            // test no match
+            PermissionsConfig.clearCache();
+            config = new PermissionsConfig();
+            artifactURI = URI.create("cadc:NOMATCH/file.fits");
+            
+            entries = config.getMatchingEntries(artifactURI);
+            Assert.assertTrue(entries.isEmpty());
+            
         } catch (Exception unexpected) {
             log.error("unexpected exception", unexpected);
             Assert.fail("unexpected exception: " + unexpected);
+        } finally {
+            System.clearProperty(PropertiesReader.CONFIG_DIR_SYSTEM_PROPERTY);
+            log.info("END - testSingleEntry");
         }
     }
-
-    private void testParsePermissions(PermissionsConfig testSubject, String value) {
-        Permissions actual = testSubject.parsePermissions(value);
-        Assert.assertNotNull(actual);
-        Assert.assertFalse(actual.getIsAnonymous());
-        Assert.assertEquals(0, actual.getReadOnlyGroups().size());
-        Assert.assertEquals(0, actual.getReadWriteGroups().size());
-    }
+    
     @Test
-    public void testParsePermissions() throws Exception {
+    public void testMultipleMatches() {
         try {
-            String fooUri = "ivo://cadc.nrc.ca/gms?FOO";
-            String barUri = "ivo://cadc.nrc.ca/gms?BAR";
-            String bazUri = "ivo://cadc.nrc.ca/gms?BAZ";
-            String hamUri = "ivo://cadc.nrc.ca/gms?HAM";
-            String spamUri = "ivo://cadc.nrc.ca/gms?SPAM";
-            GroupURI fooURI = new GroupURI(fooUri);
-            GroupURI barURI = new GroupURI(barUri);
-            GroupURI bazURI = new GroupURI(bazUri);
-            GroupURI hamURI = new GroupURI(hamUri);
-            GroupURI spamURI = new GroupURI(spamUri);
-            String value;
-            Permissions actual;
-
-            PermissionsConfig testSubject = getTestSubject(null);
-
-            value = "";
-            testParsePermissions(testSubject, value);
-
-            value = "T foo ";
-            testParsePermissions(testSubject, value);
-
-            value = "Z foo://bar far://foo";
-            testParsePermissions(testSubject, value);
-
-            value = "T foo foo://bar";
-            testParsePermissions(testSubject, value);
-
-            value = "F foo://bar bar";
-            testParsePermissions(testSubject, value);
-
-            value = "T " + fooUri + " " + barUri;
-            actual = testSubject.parsePermissions(value);
-            Assert.assertNotNull(actual);
-            Assert.assertTrue(actual.getIsAnonymous());
-            Assert.assertEquals(fooURI, actual.getReadOnlyGroups().get(0));
-            Assert.assertEquals(barURI, actual.getReadWriteGroups().get(0));
-
-            value = "F " + fooUri + "," + barUri + "," + bazUri + " " + hamUri + "," + spamUri;
-            actual = testSubject.parsePermissions(value);
-            Assert.assertNotNull(actual);
-            Assert.assertFalse(actual.getIsAnonymous());
-            Assert.assertEquals(fooURI, actual.getReadOnlyGroups().get(0));
-            Assert.assertEquals(barURI, actual.getReadOnlyGroups().get(1));
-            Assert.assertEquals(bazURI, actual.getReadOnlyGroups().get(2));
-            Assert.assertEquals(hamURI, actual.getReadWriteGroups().get(0));
-            Assert.assertEquals(spamURI, actual.getReadWriteGroups().get(1));
-
+            log.info("START - testMultipleMatches");
+            System.setProperty(PropertiesReader.CONFIG_DIR_SYSTEM_PROPERTY, "src/test/resources/testMultipleMatches");
+            PermissionsConfig.clearCache();
+            PermissionsConfig config = new PermissionsConfig();
+            URI artifactURI = URI.create("TEST");
+            
+            List<PermissionEntry> entries = config.getMatchingEntries(artifactURI);
+            Assert.assertNotNull(entries);
+            Assert.assertEquals(2, entries.size());
+            
         } catch (Exception unexpected) {
             log.error("unexpected exception", unexpected);
             Assert.fail("unexpected exception: " + unexpected);
+        } finally {
+            System.clearProperty(PropertiesReader.CONFIG_DIR_SYSTEM_PROPERTY);
+            log.info("END - testMultipleMatches");
         }
     }
-
+    
     @Test
-    public void testLoadEmptyConfig() throws Exception {
+    public void testOverlappingPermissions() {
         try {
-            // Empty file path
+            log.info("START - testOverlappingPermissions");
+            System.setProperty(PropertiesReader.CONFIG_DIR_SYSTEM_PROPERTY, "src/test/resources/testOverlappingPermissions");
+            PermissionsConfig.clearCache();
+            PermissionsConfig config = new PermissionsConfig();
+            URI artifactURI = URI.create("TEST");
+            
+            List<PermissionEntry> entries = config.getMatchingEntries(artifactURI);
+            Assert.assertNotNull(entries);
+            Assert.assertEquals(2, entries.size());
+            
+            GroupURI readGroup1 = new GroupURI("ivo://cadc.nrc.ca/gms?group1");
+            GroupURI readGroup2 = new GroupURI("ivo://cadc.nrc.ca/gms?group3");
+            GroupURI writeGroup1 = new GroupURI("ivo://cadc.nrc.ca/gms?group2");
+            GroupURI writeGroup2 = new GroupURI("ivo://cadc.nrc.ca/gms?group4");
+            
+            ReadGrant readGrant = config.getReadGrant(artifactURI);
+            Assert.assertNotNull(readGrant);
+            Assert.assertTrue(readGrant.isAnonymousAccess());
+            Assert.assertEquals(2, readGrant.getGroups().size());
+            Assert.assertTrue(readGrant.getGroups().contains(readGroup1));
+            Assert.assertTrue(readGrant.getGroups().contains(readGroup2));
+            
+            WriteGrant writeGrant = config.getWriteGrant(artifactURI);
+            Assert.assertNotNull(writeGrant);
+            Assert.assertEquals(2, writeGrant.getGroups().size());
+            Assert.assertTrue(writeGrant.getGroups().contains(writeGroup1));
+            Assert.assertTrue(writeGrant.getGroups().contains(writeGroup2));
+            
+        } catch (Exception unexpected) {
+            log.error("unexpected exception", unexpected);
+            Assert.fail("unexpected exception: " + unexpected);
+        } finally {
+            System.clearProperty(PropertiesReader.CONFIG_DIR_SYSTEM_PROPERTY);
+            log.info("END - testOverlappingPermissions");
+        }
+    }
+    
+    @Test
+    public void testMissingConfig() {
+        try {
+            log.info("START - testMissingConfig");
+            System.setProperty(PropertiesReader.CONFIG_DIR_SYSTEM_PROPERTY, "src/test/resources/testMissingConfig");
             try {
-                PermissionsConfig actual = new PermissionsConfig(new File(""));
-                Assert.fail("Should throw FileNotFoundException");
-            } catch (Exception expected) {
-                Assert.assertTrue(expected instanceof  FileNotFoundException);
+                PermissionsConfig.clearCache();
+                new PermissionsConfig();
+                Assert.fail("should have received IllegalStateException");
+            } catch (IllegalStateException e) {
+                // expected
             }
-
-            // Empty properties file
-            File file = FileUtil.getFileFromResource("empty.properties", PermissionsConfigTest.class);
+        } catch (Exception unexpected) {
+            log.error("unexpected exception", unexpected);
+            Assert.fail("unexpected exception: " + unexpected);
+        } finally {
+            System.clearProperty(PropertiesReader.CONFIG_DIR_SYSTEM_PROPERTY);
+            log.info("END - testMissingConfig");
+        }
+    }
+    
+    @Test
+    public void testEmptyConfig() {
+        try {
+            log.info("START - testEmptyConfig");
+            System.setProperty(PropertiesReader.CONFIG_DIR_SYSTEM_PROPERTY, "src/test/resources/testEmptyConfig");
             try {
-                PermissionsConfig testSubject = new PermissionsConfig(file);
-                Permissions actual = testSubject.getPermissions(new URI("ad:CFHT/1234.fits"));
-                Assert.assertFalse(actual.getIsAnonymous());
-                Assert.assertTrue(actual.getReadOnlyGroups().isEmpty());
-                Assert.assertTrue(actual.getReadWriteGroups().isEmpty());
-            } catch (Exception e) {
-                Assert.fail("Should not throw Exception: " + e);
+                PermissionsConfig.clearCache();
+                new PermissionsConfig();
+                Assert.fail("should have received IllegalStateException");
+            } catch (IllegalStateException e) {
+                // expected
+                Assert.assertTrue(e.getMessage(), e.getMessage().toLowerCase().contains("no entries"));
             }
         } catch (Exception unexpected) {
             log.error("unexpected exception", unexpected);
             Assert.fail("unexpected exception: " + unexpected);
+        } finally {
+            System.clearProperty(PropertiesReader.CONFIG_DIR_SYSTEM_PROPERTY);
+            log.info("END - testEmptyConfig");
         }
     }
-
+    
     @Test
-    public void testGetPattern() throws Exception {
+    public void testDuplicateEntries() {
         try {
-            PermissionsConfig testSubject = getTestSubject(null);
-
-            // matches that fail
-            String configKey = "ivo:foo0/*";
-            String artifactUri = "ad:foo0/1234.fits";
-
-            Pattern pattern = testSubject.getPattern(configKey);
-            boolean matches = pattern.matcher(artifactUri).matches();
-            Assert.assertFalse(matches);
-
-            configKey = "ad:foo0/*";
-            artifactUri = "ad:foo1/1234.fits";
-
-            pattern = testSubject.getPattern(configKey);
-            matches = pattern.matcher(artifactUri).matches();
-            Assert.assertFalse(matches);
-
-            // matches that succeed
-            configKey = "ad:foo0/*";
-            artifactUri = "ad:foo0/a";
-
-            pattern = testSubject.getPattern(configKey);
-            matches = pattern.matcher(artifactUri).matches();
-            Assert.assertTrue(matches);
-
-            configKey = "ad:foo0/*";
-            artifactUri = "ad:foo0/1.fz";
-
-            pattern = testSubject.getPattern(configKey);
-            matches = pattern.matcher(artifactUri).matches();
-            Assert.assertTrue(matches);
-
-            configKey = "ad:foo0/*";
-            artifactUri = "ad:foo0/1234.fits";
-
-            pattern = testSubject.getPattern(configKey);
-            matches = pattern.matcher(artifactUri).matches();
-            Assert.assertTrue(matches);
-
-        } catch (Exception unexpected) {
-            log.error("unexpected exception", unexpected);
-            Assert.fail("unexpected exception: " + unexpected);
-        }
-    }
-
-    @Test
-    public void testLoadInvalidConfig() throws Exception {
-        try {
-            // Invalid properties file
-            File file = FileUtil.getFileFromResource("invalid.properties", PermissionsConfigTest.class);
-            PermissionsConfig testSubject = new PermissionsConfig(file);
-            Permissions actual;
-
-            // missing flag and groups
-            testInvalidConfig(testSubject, new URI("foo:bar0/1234.fits"));
-
-            // missing groups
-            testInvalidConfig(testSubject, new URI("foo:bar1/1234.fits"));
-
-            // missing read-write group
-            // foo:bar2/*=F ivo://cadc.nrc.ca/gms?BAR-RO-1
-            testInvalidConfig(testSubject, new URI("foo:bar2/1234.fits"));
-
-            // invalid read-write group
-            // foo:bar3/* = F ivo://cadc.nrc.ca/gms?BAR-RO-1 bar
-            testInvalidConfig(testSubject, new URI("foo:bar3/1234.fits"));
-
-            // invalid read-only group
-            // foo:bar4/*=T foo ivo://cadc.nrc.ca/gms?BAR-RW-1
-            testInvalidConfig(testSubject, new URI("foo:bar4/1234.fits"));
-
-            // invalid anonymous flag
-            // foo:bar5/* = Z ivo://cadc.nrc.ca/gms?BAR-RO-1 ivo://cadc.nrc.ca/gms?BAR-RW-1
-            testInvalidConfig(testSubject, new URI("foo:bar5/1234.fits"));
-
-            // invalid read-only group
-            // foo:bar6/*=F ivo://cadc.nrc.ca/gms?BAR-RO-1,foo ivo://cadc.nrc.ca/gms?BAR-RW-1
-            testInvalidConfig(testSubject, new URI("foo:bar6/1234.fits"));
-
-            // invalid read-write group
-            // foo:bar7/* = T ivo://cadc.nrc.ca/gms?BAR-RO-1 ivo://cadc.nrc.ca/gms?BAR-RW-1,bar
-            testInvalidConfig(testSubject, new URI("foo:bar7/1234.fits"));
-        } catch (Exception unexpected) {
-            log.error("unexpected exception", unexpected);
-            Assert.fail("unexpected exception: " + unexpected);
-        }
-    }
-
-    private void testInvalidConfig(PermissionsConfig testSubject, URI testUri) {
-        Permissions actual = testSubject.getPermissions(testUri);
-        Assert.assertNotNull(actual);
-        Assert.assertFalse(actual.getIsAnonymous());
-        Assert.assertEquals(0, actual.getReadOnlyGroups().size());
-        Assert.assertEquals(0, actual.getReadWriteGroups().size());
-    }
-
-    @Test
-    public void testLoadValidConfig() throws Exception {
-        try {
-            File file = FileUtil.getFileFromResource("valid.properties", PermissionsConfigTest.class);
-            PermissionsConfig testSubject = new PermissionsConfig(file);
-            Permissions actual;
-
-            // One group each
-            // foo:bar0/* = T ivo://cadc.nrc.ca/gms?BAR-RO-1     ivo://cadc.nrc.ca/gms?BAR-RW-1
-            actual = testSubject.getPermissions(new URI("foo:bar0/1234.fits"));
-            Assert.assertNotNull(actual);
-            Assert.assertTrue(actual.getIsAnonymous());
-            Assert.assertEquals(1, actual.getReadOnlyGroups().size());
-            Assert.assertEquals(1, actual.getReadWriteGroups().size());
-            Assert.assertTrue(actual.getReadOnlyGroups().contains(new GroupURI("ivo://cadc.nrc.ca/gms?BAR-RO-1")));
-            Assert.assertTrue(actual.getReadWriteGroups().contains(new GroupURI("ivo://cadc.nrc.ca/gms?BAR-RW-1")));
-
-            // Two read-only groups, one read-write group
-            // foo:bar1/* =F ivo://cadc.nrc.ca/gms?BAR-RO-1,ivo://cadc.nrc.ca/gms?BAR-RO-2 ivo://cadc.nrc.ca/gms?BAR-RW-1
-            actual = testSubject.getPermissions(new URI("foo:bar1/1234.fits"));
-            Assert.assertNotNull(actual);
-            Assert.assertFalse(actual.getIsAnonymous());
-            Assert.assertEquals(2, actual.getReadOnlyGroups().size());
-            Assert.assertEquals(1, actual.getReadWriteGroups().size());
-            Assert.assertTrue(actual.getReadOnlyGroups().contains(new GroupURI("ivo://cadc.nrc.ca/gms?BAR-RO-1")));
-            Assert.assertTrue(actual.getReadOnlyGroups().contains(new GroupURI("ivo://cadc.nrc.ca/gms?BAR-RO-2")));
-            Assert.assertTrue(actual.getReadWriteGroups().contains(new GroupURI("ivo://cadc.nrc.ca/gms?BAR-RW-1")));
-
-            // One read-only group, two read-write groups
-            // foo:bar2/* = T ivo://cadc.nrc.ca/gms?BAR-RO-1     ivo://cadc.nrc.ca/gms?BAR-RW-1,ivo://cadc.nrc.ca/gms?BAR-RW-2
-            actual = testSubject.getPermissions(new URI("foo:bar2/1234.fits"));
-            Assert.assertNotNull(actual);
-            Assert.assertTrue(actual.getIsAnonymous());
-            Assert.assertEquals(1, actual.getReadOnlyGroups().size());
-            Assert.assertEquals(2, actual.getReadWriteGroups().size());
-            Assert.assertTrue(actual.getReadOnlyGroups().contains(new GroupURI("ivo://cadc.nrc.ca/gms?BAR-RO-1")));
-            Assert.assertTrue(actual.getReadWriteGroups().contains(new GroupURI("ivo://cadc.nrc.ca/gms?BAR-RW-1")));
-            Assert.assertTrue(actual.getReadWriteGroups().contains(new GroupURI("ivo://cadc.nrc.ca/gms?BAR-RW-2")));
-
-            // Two read-only groups, two read-write groups
-            // foo:bar3/* =  F ivo://cadc.nrc.ca/gms?BAR-RO-1,ivo://cadc.nrc.ca/gms?BAR-RO-2  ivo://cadc.nrc.ca/gms?BAR-RW-1,ivo://cadc.nrc.ca/gms?BAR-RW-2
-            actual = testSubject.getPermissions(new URI("foo:bar3/1234.fits"));
-            Assert.assertNotNull(actual);
-            Assert.assertFalse(actual.getIsAnonymous());
-            Assert.assertEquals(2, actual.getReadOnlyGroups().size());
-            Assert.assertEquals(2, actual.getReadWriteGroups().size());
-            Assert.assertTrue(actual.getReadOnlyGroups().contains(new GroupURI("ivo://cadc.nrc.ca/gms?BAR-RO-1")));
-            Assert.assertTrue(actual.getReadOnlyGroups().contains(new GroupURI("ivo://cadc.nrc.ca/gms?BAR-RO-2")));
-            Assert.assertTrue(actual.getReadWriteGroups().contains(new GroupURI("ivo://cadc.nrc.ca/gms?BAR-RW-1")));
-            Assert.assertTrue(actual.getReadWriteGroups().contains(new GroupURI("ivo://cadc.nrc.ca/gms?BAR-RW-2")));
-        } catch (Exception unexpected) {
-            log.error("unexpected exception", unexpected);
-            Assert.fail("unexpected exception: " + unexpected);
-        }
-    }
-
-    private PermissionsConfig getTestSubject(File file) throws Exception{
-        return new PermissionsConfig(new File("/")) {
-            @Override
-            List<String> loadConfig(File propertiesfile) {
-                if (file == null) {
-                    return null;
-                } else {
-                    return this.loadConfig(file);
-                }
+            log.info("START - testDuplicateEntries");
+            System.setProperty(PropertiesReader.CONFIG_DIR_SYSTEM_PROPERTY, "src/test/resources/testDuplicateEntries");
+            try {
+                PermissionsConfig.clearCache();
+                new PermissionsConfig();
+                Assert.fail("should have received IllegalStateException");
+            } catch (IllegalStateException e) {
+                // expected
+                Assert.assertTrue(e.getMessage(), e.getMessage().toLowerCase().contains("duplicate"));
             }
-        };
+        } catch (Exception unexpected) {
+            log.error("unexpected exception", unexpected);
+            Assert.fail("unexpected exception: " + unexpected);
+        } finally {
+            System.clearProperty(PropertiesReader.CONFIG_DIR_SYSTEM_PROPERTY);
+            log.info("END - testDuplicateEntries");
+        }
+    }
+    
+    @Test
+    public void testDuplicatePermissions() {
+        try {
+            log.info("START - testDuplicatePermissions");
+            System.setProperty(PropertiesReader.CONFIG_DIR_SYSTEM_PROPERTY, "src/test/resources/testDuplicatePermissions");
+            try {
+                PermissionsConfig.clearCache();
+                new PermissionsConfig();
+                Assert.fail("should have received IllegalStateException");
+            } catch (IllegalStateException e) {
+                // expected
+                Assert.assertTrue(e.getMessage(), e.getMessage().toLowerCase().contains("too many"));
+            }
+        } catch (Exception unexpected) {
+            log.error("unexpected exception", unexpected);
+            Assert.fail("unexpected exception: " + unexpected);
+        } finally {
+            System.clearProperty(PropertiesReader.CONFIG_DIR_SYSTEM_PROPERTY);
+            log.info("END - testDuplicatePermissions");
+        }
     }
 
 }

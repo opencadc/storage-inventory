@@ -92,15 +92,14 @@ public class VosiCapabilitiesTest extends CapabilitiesTest {
     }
     
     public VosiCapabilitiesTest() {
-        super(Constants.PERMISSIONS_SERVICE_ID);
+        super(BaldurTest.BALDUR_SERVICE_ID);
     }
 
     @Override
     protected void validateContent(Capabilities caps) throws Exception {
         super.validateContent(caps);        
-        Capability stu = caps.findCapability(Standards.PROTO_TABLE_LOAD_SYNC);
-        Assert.assertNotNull("table-load-sync", stu);
-        Assert.assertNotNull("cert table-load-sync", stu.findInterface(Standards.SECURITY_METHOD_CERT, Standards.INTERFACE_PARAM_HTTP));
-        Assert.assertNotNull("cookie table-load-sync", stu.findInterface(Standards.SECURITY_METHOD_COOKIE, Standards.INTERFACE_PARAM_HTTP));
+        Capability cap = caps.findCapability(Standards.SI_PERMISSIONS);
+        Assert.assertNotNull("permissions", cap);
+        Assert.assertNotNull("cert table-load-sync", cap.findInterface(Standards.SECURITY_METHOD_CERT, Standards.INTERFACE_PARAM_HTTP));
     }
 }

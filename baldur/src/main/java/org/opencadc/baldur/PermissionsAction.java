@@ -3,7 +3,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2019.                            (c) 2019.
+ *  (c) 2020.                            (c) 2020.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -62,8 +62,6 @@
  *  <http://www.gnu.org/licenses/>.      pas le cas, consultez :
  *                                       <http://www.gnu.org/licenses/>.
  *
- *  : 5 $
- *
  ************************************************************************
  */
 
@@ -85,15 +83,23 @@ import javax.security.auth.Subject;
 import javax.security.auth.x500.X500Principal;
 import org.apache.log4j.Logger;
 
+/**
+ * Base class for permission actions.
+ * 
+ * @author jburke, majorb
+ *
+ */
 public abstract class PermissionsAction extends RestAction {
+    
     private static final Logger log = Logger.getLogger(PermissionsAction.class);
 
-    private static final String DEFAULT_CONFIG_DIR = System.getProperty("user.home") + "/config/";
-    private static final String USER_DNS_PROPERTY = "users";
-
-    protected static final String PERMISSIONS_AUTH_PROPERTIES = "permissionsAuthProperties";
-    protected static final String PERMISSIONS_CONFIG_PROPERTIES = "permissionsConfigProperties";
-    protected static final String PERMISSIONS_CONTENT_TYPE = "application/x-permissions+xml";
+    private static final String PERMISSIONS_AUTH_PROPERTIES = "baldur-permissions-auth.properties";
+    private static final String AUTH_USERS_PROPERTY = "users";
+    
+    public enum Operation {
+        read, 
+        write;
+    }
 
     public PermissionsAction() { }
 
@@ -101,140 +107,41 @@ public abstract class PermissionsAction extends RestAction {
     protected InlineContentHandler getInlineContentHandler() {
         return null;
     }
-
-    // TODO: add util methods in core to do user auth and group membership using a properties file.
-    // Most below copied from core:cadc-log logControlServlet
+    
     /**
-     * Check for proper group membership.
-     *
-     * @param subject The calling user Subject.
-     * @return true if the calling user is authorized to make the request, false otherwise.
+     * Check that the calling user is allowed to read permissions.
      */
-    protected boolean isAuthorized(Subject subject)
-        throws AccessControlException {
-        // Get the permissions properties if they exist.
-        String authPropertiesFilename = initParams.get(PERMISSIONS_AUTH_PROPERTIES);
-        if (authPropertiesFilename == null) {
-            throw new IllegalStateException(PERMISSIONS_AUTH_PROPERTIES + " not configured in web.xml");
-        }
-        PropertiesReader propertiesReader = getPropertiesReader(authPropertiesFilename);
-
-        // check if request user matches an authorized users
-        Set<Principal> authorizedUsers = getAuthorizedUserPrincipals(propertiesReader);
-        if (isAuthorizedUser(subject, authorizedUsers)) {
-            log.info(subject.getPrincipals(X500Principal.class) + " is an authorized user");
-            return true;
-        }
-        return false;
-    }
-
-    /**
-     * Get a File object for the given filename. The file is assumed to be in a directory name
-     * config with the users home directory.
-     *
-     * @param filename Name of the file.
-     * @return A File.
-     */
-    protected File getConfigFile(String filename) {
-        if (filename == null) {
-            throw new IllegalArgumentException("filename cannot be null.");
+    protected void authorize() throws AccessControlException {
+        
+        // TODO: Issue 41: https://github.com/opencadc/storage-inventory/issues/41
+        
+        Subject subject = AuthenticationUtil.getCurrentSubject();
+        if (subject == null || subject.getPrincipals().size() == 0) {
+            throw new AccessControlException("forbidden");
         }
 
-        String configDir = DEFAULT_CONFIG_DIR;
-        log.debug("Reading from config dir: " + configDir);
-
-        if (!configDir.endsWith("/")) {
-            configDir = configDir + "/";
+        PropertiesReader propertiesReader = new PropertiesReader(PERMISSIONS_AUTH_PROPERTIES);
+        Set<Principal> authPrincipals = new HashSet<Principal>();
+        List<String> properties = propertiesReader.getPropertyValues(AUTH_USERS_PROPERTY);
+        if (properties == null) {
+            throw new IllegalStateException("invalid properties file: " + PERMISSIONS_AUTH_PROPERTIES);
         }
-
-        String filepath = configDir + filename;
-        File file = new File(filepath);
-
-        if (!file.canRead()) {
-            log.warn("File at " + filepath + " does not exist or cannot read.");
+        for (String property : properties) {
+            log.debug("authorized dn: " + property);
+            authPrincipals.add(new X500Principal(property));
         }
-        return file;
-    }
-
-    /**
-     * Read the properties file and returns a PropertiesReader.
-     *
-     * @return A PropertiesReader, or null if the properties file does not
-     *          exist or can not be read.
-     */
-    protected PropertiesReader getPropertiesReader(String propertiesFilename) {
-        PropertiesReader reader = null;
-        if (propertiesFilename != null) {
-            reader = new PropertiesReader(propertiesFilename);
-            if (!reader.canRead()) {
-                reader = null;
-            }
-        }
-        return reader;
-    }
-
-    /**
-     * Get a Set of X500Principal's from the permissions properties. Return
-     * an empty set if the properties do not exist or can't be read.
-     *
-     * @return Set of authorized X500Principals, can be an empty Set if none configured.
-     */
-    Set<Principal> getAuthorizedUserPrincipals(PropertiesReader propertiesReader) {
-        Set<Principal> principals = new HashSet<Principal>();
-        if (propertiesReader != null) {
-            try {
-                List<String> properties = propertiesReader.getPropertyValues(USER_DNS_PROPERTY);
-                if (properties != null) {
-                    for (String property : properties) {
-                        if (!property.isEmpty()) {
-                            principals.add(new X500Principal(property));
-                        }
-                    }
-                }
-            } catch (IllegalArgumentException e) {
-                log.debug("No authorized users configured");
-            }
-        }
-        return principals;
-    }
-
-    /**
-     * Checks if the caller Principal matches an authorized Principal
-     * from the properties file.
-
-     * @return true if the calling user is an authorized user, false otherwise.
-     */
-    protected boolean isAuthorizedUser(Subject subject, Set<Principal> authorizedUsers) {
-        if (!authorizedUsers.isEmpty()) {
-            Set<X500Principal> principals = subject.getPrincipals(X500Principal.class);
-            for (Principal caller : principals) {
-                for (Principal authorizedUser : authorizedUsers) {
-                    if (AuthenticationUtil.equals(authorizedUser, caller)) {
-                        return true;
-                    }
+        
+        Set<X500Principal> principals = subject.getPrincipals(X500Principal.class);
+        for (Principal p : principals) {
+            log.debug("checking user dn " + p);
+            for (Principal authorizedUser : authPrincipals) {
+                if (AuthenticationUtil.equals(authorizedUser, p)) {
+                    return;
                 }
             }
-        } else {
-            log.debug("Authorized users not configured.");
         }
-        return false;
-    }
-
-    /**
-     * Get the permissions for the given Artifact URI.
-     *
-     * @param artifactURI The Artifact URI
-     * @return Permissions object
-     * @throws IOException for errors reading the permissions configuration file.
-     */
-    protected Permissions getPermissions(URI artifactURI) throws IOException {
-        String configPropertiesFilename = initParams.get(PERMISSIONS_CONFIG_PROPERTIES);
-        if (configPropertiesFilename == null) {
-            throw new IllegalStateException(PERMISSIONS_CONFIG_PROPERTIES + " not configured in web.xml");
-        }
-        File configFile = getConfigFile(configPropertiesFilename);
-        PermissionsConfig config = new PermissionsConfig(configFile);
-        return  config.getPermissions(artifactURI);
+        
+        throw new AccessControlException("forbidden");
     }
 
 }

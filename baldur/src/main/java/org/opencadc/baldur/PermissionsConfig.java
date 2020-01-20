@@ -69,6 +69,9 @@
 
 package org.opencadc.baldur;
 
+import ca.nrc.cadc.util.MultiValuedProperties;
+import ca.nrc.cadc.util.PropertiesReader;
+
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -76,159 +79,238 @@ import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Date;
 import java.util.List;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.apache.log4j.Logger;
 import org.opencadc.gms.GroupURI;
+import org.opencadc.inventory.InventoryUtil;
+import org.opencadc.inventory.permissions.Grant;
+import org.opencadc.inventory.permissions.ReadGrant;
+import org.opencadc.inventory.permissions.WriteGrant;
 
+/**
+ * Class that provides access to the permissions described
+ * in the permissions property file.
+ * 
+ * @author majorb
+ *
+ */
 public class PermissionsConfig {
+    
     private static final Logger log = Logger.getLogger(PermissionsConfig.class);
+    private static final String PERMISSIONS_CONFIG_PROPERTIES = "baldur-permissions-config.properties";
 
-    private List<String> config;
-
-    public PermissionsConfig(File propertiesFile)
-        throws IOException {
-        this.config = loadConfig(propertiesFile);
+    private static final String KEY_ENTRY = "entry";
+    private static final String KEY_ANON_READ = ".anon";
+    private static final String KEY_READONLY_GROUPS = ".readOnlyGroups";
+    private static final String KEY_READWRITE_GROUPS = ".readWriteGroups";
+    
+    private static List<PermissionEntry> entries = null;
+    
+    public PermissionsConfig() {
+        init();
     }
 
     /**
-     * Get the Permissions for the given Artifact URI. If permissions are not
-     * found for the given Artifact URI, returns an empty Permissions object
-     * with no permissions.
+     * Get the read grant for the given Artifact URI. 
      *
      * @param artifactURI The Artifact URI.
-     * @return A Permissions object.
+     * @return The read grant information object for the artifact URI.
      */
-    public Permissions getPermissions(URI artifactURI) {
-        if (artifactURI == null) {
-            throw new IllegalArgumentException("artifactURI is null");
-        }
-        Permissions permissions = null;
-
-        for (String line : getConfig()) {
-            String[] keyValues = line.split("=");
-            if (keyValues.length == 2) {
-                String key = keyValues[0].trim();
-                String value = keyValues[1].trim();
-                Pattern pattern = getPattern(key);
-                if (pattern.matcher(artifactURI.toASCIIString()).matches()) {
-                    permissions = parsePermissions(value);
-                    break;
+    public ReadGrant getReadGrant(URI artifactURI) {
+        InventoryUtil.assertNotNull(PermissionsConfig.class, "artifactURI", artifactURI);
+        boolean anonymousRead = false;
+        List<GroupURI> groups = new ArrayList<GroupURI>();
+        List<PermissionEntry> matchingEntries = getMatchingEntries(artifactURI);
+        log.debug("compiling read grant from " + matchingEntries.size() + " matching entries");
+        for (PermissionEntry next : matchingEntries) {
+            if (!anonymousRead) {
+                anonymousRead = next.anonRead;
+            }
+            for (GroupURI groupURI : next.readOnlyGroups) {
+                if (!groups.contains(groupURI)) {
+                    groups.add(groupURI);
                 }
-            } else {
-                log.error("invalid config entry, expected key = value: " + line);
             }
         }
-        if (permissions == null) {
-            permissions = new Permissions(false, new ArrayList<GroupURI>(), new ArrayList<GroupURI>());
+        ReadGrant readGrant = new ReadGrant(artifactURI, getExpiryDate(), anonymousRead);
+        readGrant.getGroups().addAll(groups);
+        return readGrant;
+    }
+    
+    /**
+     * Get the write grant for the given Artifact URI. 
+     *
+     * @param artifactURI The Artifact URI.
+     * @return The write grant information object for the artifact URI.
+     */
+    public WriteGrant getWriteGrant(URI artifactURI) {
+        InventoryUtil.assertNotNull(PermissionsConfig.class, "artifactURI", artifactURI);
+        List<GroupURI> groups = new ArrayList<GroupURI>();
+        List<PermissionEntry> matchingEntries = getMatchingEntries(artifactURI);
+        log.debug("compiling write grant from " + matchingEntries.size() + " matching entries");
+        for (PermissionEntry next : matchingEntries) {
+            for (GroupURI groupURI : next.readWriteGroups) {
+                if (!groups.contains(groupURI)) {
+                    groups.add(groupURI);
+                }
+            }
         }
-        return permissions;
+        WriteGrant writeGrant = new WriteGrant(artifactURI, getExpiryDate());
+        writeGrant.getGroups().addAll(groups);
+        return writeGrant;
     }
-
-    /**
-     * Reads the properties file and adds each line in the properties file as a String in a List.
-     *
-     * @param propertiesFile The properties file.
-     * @return A List of strings containing the properties.
-     * @throws IOException for errors reading the properties file.
-     */
-    List<String> loadConfig(File propertiesFile)
-        throws IOException {
-        if (!propertiesFile.exists()) {
-            throw new FileNotFoundException("File not found or cannot read: " + propertiesFile.getAbsolutePath());
+    
+    List<PermissionEntry> getMatchingEntries(URI artifactURI) {
+        List<PermissionEntry> list = new ArrayList<PermissionEntry>();
+        for (PermissionEntry next : entries) {
+            Matcher matcher = next.pattern.matcher(artifactURI.toString());
+            if (matcher.matches()) {
+                list.add(next);
+            }
         }
-        Stream<String> lines = Files.lines(Paths.get(propertiesFile.getAbsolutePath()));
-        return lines.filter(s -> !s.startsWith("#") && !s.isEmpty()).collect(Collectors.toList());
+        return list;
     }
 
     /**
-     * For the given value create a Pattern for matching against the permissions file.
-     *
-     * @param value
-     * @return regex pattern.
+     * Read the permissions config.
+     * 
+     * @return The (possibly) cached permissions.
      */
-    Pattern getPattern(String value) {
-        // ad:FOO/* -> ^ad:FOO\\/.*
-        StringBuilder sb = new StringBuilder();
-        sb.append("^");
-        sb.append(value.replace("/", "\\/").replace("*", ".*"));
-        return Pattern.compile(sb.toString());
+    private void init() {
+        if (entries == null) {
+            log.debug("initializing permissions config");
+            PropertiesReader pr = new PropertiesReader(PERMISSIONS_CONFIG_PROPERTIES);
+            MultiValuedProperties allProps = pr.getAllProperties();
+            if (allProps == null) {
+                throw new IllegalStateException("failed to read permissions config from " + PERMISSIONS_CONFIG_PROPERTIES);
+            }
+            List<String> entryConfig = allProps.getProperty(KEY_ENTRY);
+            if (entryConfig == null) {
+                throw new IllegalStateException("no entries found in " + PERMISSIONS_CONFIG_PROPERTIES);
+            }
+            log.debug("reading permissions config with " + entryConfig.size() + " entries.");
+            List<PermissionEntry> tmp = new ArrayList<PermissionEntry>();
+            PermissionEntry next = null;
+            String name = null;
+            Pattern pattern = null;
+            for (String entry : entryConfig) {
+                // entry has format:  entry = name pattern
+                log.debug("reading permission entry: " + entry);
+                String[] namePattern = entry.split(" ");
+                if (namePattern.length != 2) {
+                    throw new IllegalStateException("invalid config line in " + PERMISSIONS_CONFIG_PROPERTIES
+                        + ": " + entry);
+                }
+                name = namePattern[0];
+                // compile the pattern
+                try {
+                    pattern = Pattern.compile(namePattern[1]);
+                } catch (Exception e) {
+                    throw new IllegalStateException("invalid uri matching pattern in " + PERMISSIONS_CONFIG_PROPERTIES
+                        + ": " + namePattern[1] + "(" + e.getMessage() + ")");
+                }
+                next = new PermissionEntry(name, pattern);
+                if (tmp.contains(next)) {
+                    throw new IllegalStateException("duplicate entry name [" + name + "] in " + PERMISSIONS_CONFIG_PROPERTIES);
+                }
+                
+                // get other properties for this entry
+                List<String> anonRead = allProps.getProperty(next.name + KEY_ANON_READ);
+                if (anonRead != null && !anonRead.isEmpty()) {
+                    if (anonRead.size() > 1) {
+                        throw new IllegalStateException("too many entries for " + next.name + KEY_ANON_READ);
+                    }
+                    next.anonRead = Boolean.parseBoolean(anonRead.get(0));
+                }
+                List<String> readOnlyGroups = allProps.getProperty(next.name + KEY_READONLY_GROUPS);
+                initAddGroups(readOnlyGroups, next.readOnlyGroups, next.name + KEY_READONLY_GROUPS);
+                List<String> readWriteGroups = allProps.getProperty(next.name + KEY_READWRITE_GROUPS);
+                initAddGroups(readWriteGroups, next.readWriteGroups, next.name + KEY_READWRITE_GROUPS);
+                tmp.add(next);
+                log.debug("Added permission entry: " + next);
+            }
+            log.debug("permissions initialization complete.");
+            entries = tmp;
+        }
     }
-
+    
+    private void initAddGroups(List<String> configList, List<GroupURI> targetList, String key) {
+        if (configList != null && !configList.isEmpty()) {
+            if (configList.size() > 1) {
+                throw new IllegalStateException("too many entries for " + key);
+            }
+            String[] groups = configList.get(0).split(" ");
+            for (String group : groups) {
+                try {
+                    targetList.add(new GroupURI(group));
+                } catch (Exception e) {
+                    throw new IllegalStateException("failed reading group uri: " + group
+                        + "(" + e.getMessage() + ")");
+                }
+            }
+        }
+    }
+    
+    private Date getExpiryDate() {
+        // grants expire immediately
+        return new Date();
+    }
+    
     /**
-     * Parse the permissions string into a Permissions object. If the permissions string
-     * cannot be parsed, return an empty Permissions object with no permissions.
-     *
-     * @param value The string to parse.
-     * @return A Permissions object.
+     * This method can be used if the cache needs to be cleared so new 
+     * config can be read.  Since initialization is done on construction
+     * a new PermissionsConfig instance is needed after this method is
+     * called.
      */
-    Permissions parsePermissions(String value) {
-
-        StringBuilder message = new StringBuilder();
-        boolean isAnonymous = false;
+    static void clearCache() {
+        entries = null;
+    }
+    
+    class PermissionEntry {
+        private String name;
+        private Pattern pattern;
+        boolean anonRead = false;
         List<GroupURI> readOnlyGroups = new ArrayList<GroupURI>();
         List<GroupURI> readWriteGroups = new ArrayList<GroupURI>();
-
-        // Split the line into key value pair
-        String[] values = value.trim().split("\\s+");
-        if (values.length == 3) {
-            if (values[0].trim().matches("^(T|F)$")) {
-                isAnonymous = values[0].equals("T");
-            } else {
-                message.append("invalid anonymous flag ");
-                message.append(values[0]);
-                message.append(", expected T or n");
-            }
-            loadGroupURIS(readOnlyGroups, message, values[1].trim(), "read-only");
-            loadGroupURIS(readWriteGroups, message, values[2].trim(), "read-write");
-        } else {
-            message.append("expected 3 values, found ");
-            message.append(values.length);
-            message.append(": ");
-            message.append(value);
-            message.append("\n");
+        
+        PermissionEntry(String name, Pattern pattern) {
+            this.name = name;
+            this.pattern = pattern;
+        }
+        
+        public String getName() {
+            return name;
         }
 
-        if (message.length() > 0) {
-            isAnonymous = false;
-            readOnlyGroups.clear();
-            readWriteGroups.clear();
-            log.error(message.toString());
+        public Pattern getPattern() {
+            return pattern;
         }
-        return new Permissions(isAnonymous, readOnlyGroups, readWriteGroups);
-    }
 
-    /**
-     * Parses a string into GroupURI's and adds them to a list.
-     *
-     * @param groupURIS List of GroupURI's.
-     * @param message   StringBuilder to store errors encountered.
-     * @param value The string to parse for GroupURI's.
-     * @param groupType The type of group permissions.
-     */
-    void loadGroupURIS(List<GroupURI> groupURIS, StringBuilder message, String value,  String groupType) {
-        String[] groups = value.split(",");
-        for (String groupUri : groups) {
-            try {
-                groupURIS.add(new GroupURI(groupUri));
-            } catch (IllegalArgumentException e) {
-                message.append("invalid ");
-                message.append(groupType);
-                message.append(" group URI: ");
-                message.append(groupUri);
-                message.append("\n");
-            }
+        @Override
+        public boolean equals(Object o) {
+            return this.name.equals(((PermissionEntry) o).getName());
         }
-    }
-
-    /**
-     * Get the List of permissions. Useful for unit testing.
-     * @return the permissions as a List of String.
-     */
-    List<String> getConfig() {
-        return this.config;
+        
+        @Override
+        public String toString() {
+            StringBuilder sb = new StringBuilder("PermissionEntry=[");
+            sb.append("name=[").append(name).append("],");
+            sb.append("pattern=[").append(pattern).append("],");
+            sb.append("anonRead=[").append(anonRead).append("],");
+            sb.append("readOnlyGroups=[");
+            sb.append(Arrays.toString(readOnlyGroups.toArray()));
+            sb.append("],");
+            sb.append("readWriteGroups=[");
+            sb.append(Arrays.toString(readWriteGroups.toArray()));
+            sb.append("]");
+            return sb.toString();
+        }
     }
 
 }

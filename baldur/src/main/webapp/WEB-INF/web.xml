@@ -23,7 +23,9 @@
             <param-value>
                 org.opencadc.inventory.permissions
                 org.opencadc.baldur
+                ca.nrc.cadc.util
                 ca.nrc.cadc.rest
+                ca.nrc.cadc.vosi
             </param-value>
         </init-param>
         <load-on-startup>1</load-on-startup>
@@ -31,13 +33,13 @@
 
     <!-- VOSI availability -->
     <servlet>
-        <servlet-name>AvailabilityServlet</servlet-name>
-        <servlet-class>ca.nrc.cadc.vosi.AvailabilityServlet</servlet-class>
-        <init-param>
-            <param-name>ca.nrc.cadc.vosi.AvailabilityPlugin</param-name>
-            <param-value>org.opencadc.baldur.ServiceAvailability</param-value>
-        </init-param>
-        <load-on-startup>3</load-on-startup>
+      <servlet-name>AvailabilityServlet</servlet-name>
+      <servlet-class>ca.nrc.cadc.vosi.AvailabilityServlet</servlet-class>
+      <init-param>
+        <param-name>ca.nrc.cadc.vosi.AvailabilityPlugin</param-name>
+        <param-value>org.opencadc.baldur.ServiceAvailability</param-value>
+      </init-param>
+      <load-on-startup>5</load-on-startup>
     </servlet>
 
     <!-- VOSI capabilities -->
@@ -57,15 +59,7 @@
         <servlet-class>ca.nrc.cadc.rest.RestServlet</servlet-class>
         <init-param>
             <param-name>get</param-name>
-            <param-value>org.opencadc.inventory.permissions.GetAction</param-value>
-        </init-param>
-        <init-param>
-            <param-name>permissionsAuthProperties</param-name>
-            <param-value>baldur-permissions-auth.properties</param-value>
-        </init-param>
-        <init-param>
-            <param-name>permissionsConfigProperties</param-name>
-            <param-value>baldur-permissions-config.properties</param-value>
+            <param-value>org.opencadc.baldur.GetAction</param-value>
         </init-param>
         <load-on-startup>2</load-on-startup>
     </servlet>
@@ -93,7 +87,7 @@
     <!-- Permissions servlet endpoint -->
     <servlet-mapping>
         <servlet-name>PermissionsServlet</servlet-name>
-        <url-pattern>/permissions</url-pattern>
+        <url-pattern>/perms</url-pattern>
     </servlet-mapping>
 
     <welcome-file-list>
