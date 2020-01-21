@@ -1,4 +1,4 @@
-# CEPH Storage adapter (cadc-storage-adapter-ceph) 0.2.0
+# CEPH Storage adapter (cadc-storage-adapter-ceph) 0.1
 
 ## S3 and RADOS implementations
 The CEPH storage adapter supports various ways of communicating with a CEPH Cluster.  This adapter supports a partial (incomplete) [RADOS](https://docs.ceph.com/docs/master/rados/api/librados-intro/) 
@@ -8,7 +8,7 @@ package.
 
 ## Requirements
 * JDK 8.+
-* Gradle 5+
+* Gradle >= 4.6
   * See [Gradle Documentation](https://docs.gradle.org/current/userguide/java_library_plugin.html) for upcoming and current deprecations and making Gradle buildfiles more efficient.
 
 ### RADOS only
