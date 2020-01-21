@@ -136,8 +136,10 @@ public class S3StorageAdapter implements StorageAdapter {
 
     private static final int BUFFER_SIZE_BYTES = 8192;
     private static final String DEFAULT_CHECKSUM_ALGORITHM = "md5";
+    private static final String ARTIFACT_URI_KEY = "uri";
     private static final int DEFAULT_BUCKET_HASH_LENGTH = 5;
-    static final String STORAGE_ID_URI_TEMPLATE = "%s:%s/%s";
+    static final String STORAGE_ID_URI_TEMPLATE = "s3:%s";
+    static final String CHECKSUM_URI_TEMPLATE = "md5:%s";
 
 
     // S3Client is thread safe, and re-usability is encouraged.
@@ -162,23 +164,18 @@ public class S3StorageAdapter implements StorageAdapter {
         return pathItems[pathItems.length - 1];
     }
 
-    private String parseBucket(final URI storageID) {
-        final String path = storageID.getSchemeSpecificPart();
-        final String[] pathItems = path.split("/");
-        return pathItems[0];
-    }
-
-    String generateObjectID() {
-        return UUID.randomUUID().toString();
+    URI generateStorageID() {
+        return URI.create(String.format(S3StorageAdapter.STORAGE_ID_URI_TEMPLATE, UUID.randomUUID().toString()));
     }
 
     /**
      * Read a page of data into buffer.  Exists to properly distinguish exceptions.
      *
-     * @param inputStream   Stream to read from.
-     * @param buffer        Buffer of data to read into.
-     * @return              int bytes read, or -1 when finished.
-     * @throws ReadException        For any reading I/O errors.
+     * @param inputStream Stream to read from.
+     * @param buffer      Buffer of data to read into.
+     * @return int bytes read, or -1 when finished.
+     *
+     * @throws ReadException For any reading I/O errors.
      */
     private int readNextPage(final InputStream inputStream, final byte[] buffer) throws ReadException {
         try {
@@ -191,10 +188,10 @@ public class S3StorageAdapter implements StorageAdapter {
     /**
      * Write a page of data from a buffer into a stream.  Exists to properly distinguish exceptions.
      *
-     * @param outputStream      The Stream to write to.
-     * @param buffer            The buffer of data to read from.
-     * @param length            The length of data to write.
-     * @throws WriteException   For any writing I/O errors.
+     * @param outputStream The Stream to write to.
+     * @param buffer       The buffer of data to read from.
+     * @param length       The length of data to write.
+     * @throws WriteException For any writing I/O errors.
      */
     private void writeNextPage(final OutputStream outputStream, final byte[] buffer, final int length)
             throws WriteException {
@@ -217,14 +214,35 @@ public class S3StorageAdapter implements StorageAdapter {
     /**
      * Obtain the InputStream for the given object.  Tests can override this method.
      *
-     * @param storageID     The Storage ID to GET.
-     * @return              InputStream to the object.
+     * @param storageLocation The Storage Location of the desired object.
+     * @return InputStream to the object.
      */
-    InputStream toObjectInputStream(final URI storageID) {
+    InputStream toObjectInputStream(final StorageLocation storageLocation) {
         return s3Client.getObject(GetObjectRequest.builder()
-                                                  .bucket(parseBucket(storageID))
-                                                  .key(parseKey(storageID))
+                                                  .bucket(storageLocation.storageBucket)
+                                                  .key(parseKey(storageLocation.getStorageID()))
                                                   .build());
+    }
+
+    /**
+     * Reusable way to create a StorageMetadata object.
+     *
+     * @param storageID     The URI storage ID.
+     * @param bucket        The bucket name for later use.
+     * @param artifactURI   The Artifact URI as it is in the inventory system.
+     * @param md5           The MD5 URI.
+     * @param contentLength The content length in bytes.
+     * @return              StorageMetadata instance; never null.
+     */
+    StorageMetadata toStorageMetadata(final URI storageID, final String bucket, final URI artifactURI,
+                                              final URI md5, final long contentLength) {
+        final StorageLocation storageLocation = new StorageLocation(storageID);
+        storageLocation.storageBucket = bucket;
+
+        final StorageMetadata storageMetadata = new StorageMetadata(storageLocation, md5, contentLength);
+        storageMetadata.artifactURI = artifactURI;
+
+        return storageMetadata;
     }
 
     /**
@@ -240,7 +258,7 @@ public class S3StorageAdapter implements StorageAdapter {
     @Override
     public void get(StorageLocation storageLocation, OutputStream dest)
             throws ResourceNotFoundException, ReadException, WriteException, StorageEngageException {
-        try (final InputStream inputStream = toObjectInputStream(storageLocation.getStorageID())) {
+        try (final InputStream inputStream = toObjectInputStream(storageLocation)) {
             transferInputStreamTo(inputStream, dest);
         } catch (NoSuchKeyException e) {
             throw new ResourceNotFoundException(e.getMessage(), e);
@@ -279,7 +297,7 @@ public class S3StorageAdapter implements StorageAdapter {
             get(storageLocation, dest);
         } else {
             final long start = System.currentTimeMillis();
-            try (final InputStream inputStream = toObjectInputStream(storageLocation.getStorageID())) {
+            try (final InputStream inputStream = toObjectInputStream(storageLocation)) {
                 final Fits fitsFile = new Fits(inputStream);
                 final ArrayDataOutput dataOutput = new BufferedDataOutputStream(dest);
 
@@ -336,14 +354,15 @@ public class S3StorageAdapter implements StorageAdapter {
         try {
             s3Client.createBucket(createBucketRequest);
         } catch (BucketAlreadyExistsException | BucketAlreadyOwnedByYouException e) {
-            throw new ResourceAlreadyExistsException(e.getMessage(), e);
+            throw new ResourceAlreadyExistsException(String.format("Bucket with name %s already exists.\n%s\n",
+                                                                   bucket, e.getMessage()), e);
         }
     }
 
     /**
      * Ensure the bucket for the given Object ID exists and return it.
      *
-     * @param objectID The Object ID to ensure a bucket for.
+     * @param storageID The Storage ID to ensure a bucket for.
      * @return String name of the given Object's bucket.
      *
      * @throws ResourceAlreadyExistsException If the bucket needed to be created but already exists.  Should never
@@ -353,8 +372,8 @@ public class S3StorageAdapter implements StorageAdapter {
      * @throws S3Exception                    Base class for all service exceptions. Unknown exceptions will be
      *                                        thrown as an instance of this type.
      */
-    String ensureBucket(final String objectID) throws ResourceAlreadyExistsException, SdkClientException, S3Exception {
-        final String bucket = InventoryUtil.computeBucket(objectID, DEFAULT_BUCKET_HASH_LENGTH);
+    String ensureBucket(final URI storageID) throws ResourceAlreadyExistsException, SdkClientException, S3Exception {
+        final String bucket = InventoryUtil.computeBucket(storageID, DEFAULT_BUCKET_HASH_LENGTH);
         final HeadBucketRequest headBucketRequest = HeadBucketRequest.builder().bucket(bucket).build();
 
         try {
@@ -392,8 +411,7 @@ public class S3StorageAdapter implements StorageAdapter {
      * @throws IncorrectContentChecksumException If the checksum did not match what was written, or was not valid.
      * @throws IncorrectContentLengthException   If the bytes read did not match the bytes set in the Content-Length
      *                                           header.
-     * @throws ReadException                     If the client failed to read the stream.  This is not currently
-     *                                           detectable.
+     * @throws ReadException                     If the client failed to read the stream.
      * @throws WriteException                    If the storage system failed to stream.
      * @throws StorageEngageException            If the adapter failed to interact with storage.
      */
@@ -401,18 +419,20 @@ public class S3StorageAdapter implements StorageAdapter {
     public StorageMetadata put(NewArtifact newArtifact, InputStream source)
             throws IncorrectContentChecksumException, IncorrectContentLengthException, ReadException, WriteException,
                    StorageEngageException {
-        final String objectID = generateObjectID();
+        final URI storageID = generateStorageID();
+
         String checksum = "N/A";
 
         try {
-            final String bucket = ensureBucket(objectID);
+            final String bucket = ensureBucket(storageID);
 
             final PutObjectRequest.Builder putObjectRequestBuilder = PutObjectRequest.builder()
                                                                                      .bucket(bucket)
-                                                                                     .key(objectID);
+                                                                                     .key(storageID
+                                                                                                  .getSchemeSpecificPart());
 
             final Map<String, String> metadata = new HashMap<>();
-            metadata.put("uri", newArtifact.getArtifactURI().toASCIIString().trim());
+            metadata.put(ARTIFACT_URI_KEY, newArtifact.getArtifactURI().toASCIIString().trim());
 
             final URI newArtifactChecksum = newArtifact.contentChecksum;
 
@@ -434,12 +454,14 @@ public class S3StorageAdapter implements StorageAdapter {
              */
             putObjectRequestBuilder.contentLength(newArtifact.contentLength);
 
+            // Metadata are extended attributes.  So far this is "uri" and "md5".
             putObjectRequestBuilder.metadata(metadata);
 
             s3Client.putObject(putObjectRequestBuilder.build(), RequestBody.fromInputStream(source,
                                                                                             newArtifact.contentLength));
 
-            return head(bucket, objectID);
+            return toStorageMetadata(storageID, bucket, newArtifact.getArtifactURI(), newArtifactChecksum,
+                                     newArtifact.contentLength);
         } catch (S3Exception e) {
             final AwsErrorDetails awsErrorDetails = e.awsErrorDetails();
             if ((awsErrorDetails != null) && StringUtil.hasLength(awsErrorDetails.errorCode())) {
@@ -481,18 +503,23 @@ public class S3StorageAdapter implements StorageAdapter {
                     }
                 }
             } else {
-                throw new WriteException(e.getMessage(), e);
+                throw new WriteException(String.format("Unknown Internal Error:\nMessage from server: %s\n",
+                                                       e.getMessage()), e);
             }
         } catch (SdkClientException e) {
             // Based on testing by reading from the stream of a URL, and killing the server part way through the
             // read while doing a pubObject().  The SdkClientException is thrown in that case.
             // jenkinsd 2020.01.20
             if (e.getMessage().toLowerCase().contains("read")) {
-                throw new ReadException(e.getMessage(), e);
+                throw new ReadException(String.format("Error while reading from stream.\n%s\n.", e.getMessage()), e);
             } else {
-                throw new WriteException(e.getMessage(), e);
+                throw new WriteException(
+                        String.format("Unknown client side error:\nMessage from server: %s\n", e.getMessage()), e);
             }
         } catch (ResourceAlreadyExistsException e) {
+            // Message from ResourceAlreadyExistsException is descriptive.  It will only ever get here if the hashcode
+            // bucket already exists but we tried to create it anyway.  It should not happen.
+            // jenkinsd 2020.01.20
             throw new WriteException(e.getMessage(), e);
         }
     }
@@ -510,29 +537,17 @@ public class S3StorageAdapter implements StorageAdapter {
         final HeadObjectResponse headResponse = s3Client.headObject(StringUtil.hasLength(bucket)
                                                                     ? headBuilder.bucket(bucket).build()
                                                                     : headBuilder.build());
-        final String artifactURIMetadataValue = headResponse.metadata().get("uri");
-        final URI artifactURIAttributeValue = StringUtil.hasLength(artifactURIMetadataValue)
-                                              ? URI.create(artifactURIMetadataValue)
-                                              : null;
+        final Map<String, String> objectMetadata = headResponse.metadata();
+        final URI artifactURI = objectMetadata.containsKey(ARTIFACT_URI_KEY)
+                                ? URI.create(objectMetadata.get(ARTIFACT_URI_KEY)) : null;
 
-        final URI metadataArtifactURI = URI.create(String.format(S3StorageAdapter.STORAGE_ID_URI_TEMPLATE,
-                                                                 (artifactURIAttributeValue == null) ? "UNKNOWN"
-                                                                                                     :
-                                                                 artifactURIAttributeValue.getScheme(), bucket, key));
+        final URI storageID = URI.create(String.format(S3StorageAdapter.STORAGE_ID_URI_TEMPLATE, key));
 
-        final String md5ChecksumValue = headResponse.metadata().get("md5");
-        final URI md5 = URI.create(String.format("%s:%s", "md5", StringUtil.hasLength(md5ChecksumValue)
-                                                                 ? md5ChecksumValue
-                                                                 : headResponse.eTag().replaceAll("\"", "")));
+        // TODO: The MD5 value should always be present.  Do we need a null check here?
+        final URI md5 = URI.create(String.format(CHECKSUM_URI_TEMPLATE,
+                                                 objectMetadata.get(DEFAULT_CHECKSUM_ALGORITHM)));
 
-        final StorageLocation storageLocation = new StorageLocation(metadataArtifactURI);
-        // TODO: Does this need to be set?
-        storageLocation.storageBucket = bucket;
-
-        final StorageMetadata storageMetadata = new StorageMetadata(storageLocation, md5, headResponse.contentLength());
-        storageMetadata.artifactURI = artifactURIAttributeValue;
-
-        return storageMetadata;
+        return toStorageMetadata(storageID, bucket, artifactURI, md5, headResponse.contentLength());
     }
 
     /**
@@ -549,8 +564,8 @@ public class S3StorageAdapter implements StorageAdapter {
         final URI storageID = storageLocation.getStorageID();
         final DeleteObjectRequest.Builder deleteObjectRequestBuilder =
                 DeleteObjectRequest.builder()
-                                   .bucket(parseBucket(storageID))
-                                   .key(parseKey(storageID));
+                                   .bucket(storageLocation.storageBucket)
+                                   .key(storageID.getSchemeSpecificPart());
         try {
             final DeleteObjectResponse deleteObjectResponse = s3Client.deleteObject(deleteObjectRequestBuilder.build());
 

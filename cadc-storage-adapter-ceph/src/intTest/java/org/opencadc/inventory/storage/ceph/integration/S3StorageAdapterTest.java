@@ -174,9 +174,12 @@ public class S3StorageAdapterTest {
 
         for (final Iterator<StorageMetadata> storageMetadataIterator = testSubject.iterator(LIST_BUCKET_NAME);
              storageMetadataIterator.hasNext(); ) {
-            s3AdapterListObjectsOutput.add(
-                    storageMetadataIterator.next().getStorageLocation().getStorageID().getSchemeSpecificPart()
-                                           .split("/")[1]);
+            final StorageMetadata storageMetadata = storageMetadataIterator.next();
+            final URI artifactURI = storageMetadata.artifactURI;
+            s3AdapterListObjectsOutput.add((artifactURI != null)
+                                           ? artifactURI.toASCIIString()
+                                           : storageMetadata.getStorageLocation().getStorageID()
+                                                            .getSchemeSpecificPart());
             // Do nothing
         }
         LOGGER.debug(String.format("Listed %d items in %d milliseconds.", s3AdapterListObjectsOutput.size(),
@@ -255,7 +258,8 @@ public class S3StorageAdapterTest {
 
     /**
      * Exists to test what happens when the InputStream from Reading of a file breaks.
-     * @throws Exception    Any exception.
+     *
+     * @throws Exception Any exception.
      */
     @Test
     @Ignore
@@ -331,7 +335,7 @@ public class S3StorageAdapterTest {
     @Test
     public void get() throws Exception {
         final S3StorageAdapter testSubject = new S3StorageAdapter(ENDPOINT, REGION);
-        final URI testURI = URI.create(String.format("cadc:%s/%s", "fed08", "03e6ab81-ea89-4098-8eae-1267bb52c50a"));
+        final URI testURI = URI.create(String.format("s3:%s", "03e6ab81-ea89-4098-8eae-1267bb52c50a"));
         final long expectedByteCount = 3144960L;
         final URI expectedChecksum = URI.create("md5:9307240a34ed65a0a252b0046b6e87be");
 
@@ -341,7 +345,10 @@ public class S3StorageAdapterTest {
         final ByteCountOutputStream byteCountOutputStream = new ByteCountOutputStream(digestOutputStream);
         final MessageDigest messageDigest = digestOutputStream.getMessageDigest();
 
-        testSubject.get(new StorageLocation(testURI), byteCountOutputStream);
+        final StorageLocation storageLocation = new StorageLocation(testURI);
+        storageLocation.storageBucket = "fed08";
+
+        testSubject.get(storageLocation, byteCountOutputStream);
 
         Assert.assertEquals("Wrong byte count.", expectedByteCount, byteCountOutputStream.getByteCount());
         Assert.assertEquals("Wrong checksum.", expectedChecksum,

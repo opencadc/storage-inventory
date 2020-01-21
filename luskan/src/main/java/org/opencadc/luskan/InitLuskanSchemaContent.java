@@ -70,7 +70,6 @@ package org.opencadc.luskan;
 import ca.nrc.cadc.db.version.InitDatabase;
 
 import java.net.URL;
-import java.util.Arrays;
 import javax.sql.DataSource;
 
 
@@ -92,10 +91,14 @@ public class InitLuskanSchemaContent extends InitDatabase {
     public static final String PREV_MODEL_VERSION = "n/a";
 
     // the SQL is tightly coupled to cadc-tap-schema table names (for TAP-1.1)
-    static String[] CREATE_SQL = new String[] {"inventory.tap_schema_content11.sql"};
+    static String[] CREATE_SQL = new String[] {
+        "inventory.tap_schema_content11.sql"
+    };
 
     // upgrade is normally the same as create since SQL is idempotent
-    static String[] UPGRADE_SQL = new String[] {"inventory.tap_schema_content11.sql"};
+    static String[] UPGRADE_SQL = new String[] {
+        "inventory.tap_schema_content11.sql"
+    };
 
     /**
      * Constructor. The schema argument is used to query the ModelVersion table
@@ -107,8 +110,13 @@ public class InitLuskanSchemaContent extends InitDatabase {
      */
     public InitLuskanSchemaContent(DataSource dataSource, String database, String schema) {
         super(dataSource, database, schema, MODEL_NAME, MODEL_VERSION, PREV_MODEL_VERSION);
-        createSQL.addAll(Arrays.asList(CREATE_SQL));
-        upgradeSQL.addAll(Arrays.asList(UPGRADE_SQL));
+        for (String s : CREATE_SQL) {
+            createSQL.add(s);
+        }
+
+        for (String s : UPGRADE_SQL) {
+            upgradeSQL.add(s);
+        }
     }
 
     @Override

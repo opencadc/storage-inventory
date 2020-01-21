@@ -84,20 +84,24 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URI;
 
+import static org.opencadc.inventory.storage.s3.S3StorageAdapter.*;
+
 
 public class S3StorageAdapterTest {
+
+    static final String ARTIFACT_URI_TEMPLATE = "cadctest:%s/%s";
 
     @Test
     public void ensureBucketCreate() throws Exception {
         final TestS3Client testS3Client = new TestS3Client();
         final S3StorageAdapter testSubject = new S3StorageAdapter(testS3Client);
-        final String objectID = "myobjectkey";
+        final URI storageID = URI.create("test:myobjectkey");
 
         testS3Client.headBucketShouldFail = true;
 
-        final String bucket = testSubject.ensureBucket(objectID);
+        final String bucket = testSubject.ensureBucket(storageID);
 
-        Assert.assertEquals("Wrong bucket name.", InventoryUtil.computeBucket(objectID, 5), bucket);
+        Assert.assertEquals("Wrong bucket name.", InventoryUtil.computeBucket(storageID, 5), bucket);
         Assert.assertTrue("Head bucket should have been called.", testS3Client.headBucketCalled);
         Assert.assertTrue("Create bucket should have been called.", testS3Client.createBucketCalled);
     }
@@ -106,13 +110,13 @@ public class S3StorageAdapterTest {
     public void ensureBucketExists() throws Exception {
         final TestS3Client testS3Client = new TestS3Client();
         final S3StorageAdapter testSubject = new S3StorageAdapter(testS3Client);
-        final String objectID = "myobjectkey";
+        final URI storageID = URI.create("test:myobjectkey");
 
         testS3Client.headBucketShouldFail = false;
 
-        final String bucket = testSubject.ensureBucket(objectID);
+        final String bucket = testSubject.ensureBucket(storageID);
 
-        Assert.assertEquals("Wrong bucket name.", InventoryUtil.computeBucket(objectID, 5), bucket);
+        Assert.assertEquals("Wrong bucket name.", InventoryUtil.computeBucket(storageID, 5), bucket);
         Assert.assertTrue("Head bucket should have been called.", testS3Client.headBucketCalled);
         Assert.assertFalse("Create bucket should not have been called.", testS3Client.createBucketCalled);
     }
@@ -121,17 +125,17 @@ public class S3StorageAdapterTest {
     public void putObjectBucketCreate() throws Exception {
         final TestS3Client testS3Client = new TestS3Client();
         final String objectID = "newobjectkey";
-        final String generatedID = "mynewgeneratedkey";
-        final String expectedBucket = InventoryUtil.computeBucket(generatedID, 5);
+        final URI storageID = URI.create("test:mynewgeneratedkey");
+        final String expectedBucket = InventoryUtil.computeBucket(storageID, 5);
         final S3StorageAdapter testSubject = new S3StorageAdapter(testS3Client) {
             @Override
-            String generateObjectID() {
-                return generatedID;
+            URI generateStorageID() {
+                return storageID;
             }
         };
 
         final NewArtifact newArtifact = new NewArtifact(
-                URI.create(String.format(S3StorageAdapter.STORAGE_ID_URI_TEMPLATE, "cadc", "TEST", objectID)));
+                URI.create(String.format(ARTIFACT_URI_TEMPLATE, "TEST", objectID)));
         newArtifact.contentChecksum = URI.create("md5:878787");
         newArtifact.contentLength = 88L;
 
@@ -148,9 +152,9 @@ public class S3StorageAdapterTest {
         Assert.assertTrue("Put Object should have been called.", testS3Client.putObjectCalled);
         Assert.assertTrue("Head bucket should have been called.", testS3Client.headBucketCalled);
         Assert.assertTrue("Create bucket should have been called.", testS3Client.createBucketCalled);
-        Assert.assertTrue("Head object should have been called.", testS3Client.headObjectCalled);
+        Assert.assertFalse("Head object should not have been called.", testS3Client.headObjectCalled);
         Assert.assertEquals("Should have expected Storage ID.",
-                            String.format("cadc:%s/%s", expectedBucket, generatedID),
+                            storageID.toASCIIString(),
                             resultStorageMetadata.getStorageLocation().getStorageID().toASCIIString());
     }
 
@@ -158,17 +162,17 @@ public class S3StorageAdapterTest {
     public void putObjectBucketExists() throws Exception {
         final TestS3Client testS3Client = new TestS3Client();
         final String objectID = "newobjectkey";
-        final String generatedID = "mynewgeneratedkey";
-        final String expectedBucket = InventoryUtil.computeBucket(generatedID, 5);
+        final URI storageID = URI.create("test:mynewgeneratedkey");
+        final String expectedBucket = InventoryUtil.computeBucket(storageID, 5);
         final S3StorageAdapter testSubject = new S3StorageAdapter(testS3Client) {
             @Override
-            String generateObjectID() {
-                return generatedID;
+            URI generateStorageID() {
+                return storageID;
             }
         };
 
         final NewArtifact newArtifact = new NewArtifact(
-                URI.create(String.format(S3StorageAdapter.STORAGE_ID_URI_TEMPLATE, "cadc", "TEST", objectID)));
+                URI.create(String.format(ARTIFACT_URI_TEMPLATE, "TEST", objectID)));
         newArtifact.contentChecksum = URI.create("md5:878787");
         newArtifact.contentLength = 88L;
 
@@ -185,9 +189,9 @@ public class S3StorageAdapterTest {
         Assert.assertTrue("Put Object should have been called.", testS3Client.putObjectCalled);
         Assert.assertTrue("Head bucket should have been called.", testS3Client.headBucketCalled);
         Assert.assertFalse("Create bucket should not have been called.", testS3Client.createBucketCalled);
-        Assert.assertTrue("Head object should have been called.", testS3Client.headObjectCalled);
+        Assert.assertFalse("Head object should not have been called.", testS3Client.headObjectCalled);
         Assert.assertEquals("Should have expected Storage ID.",
-                            String.format("cadc:%s/%s", expectedBucket, generatedID),
+                            storageID.toASCIIString(),
                             resultStorageMetadata.getStorageLocation().getStorageID().toASCIIString());
     }
 
@@ -197,7 +201,7 @@ public class S3StorageAdapterTest {
         final String objectID = "getthiskey";
         final S3StorageAdapter testSubject = new S3StorageAdapter(testS3Client);
         final StorageLocation storageLocation = new StorageLocation(URI.create(
-                String.format(S3StorageAdapter.STORAGE_ID_URI_TEMPLATE, "cadc", "TEST", objectID)));
+                String.format(STORAGE_ID_URI_TEMPLATE, objectID)));
 
         final OutputStream outputStream = new ByteArrayOutputStream();
         testSubject.get(storageLocation, outputStream);
@@ -212,7 +216,7 @@ public class S3StorageAdapterTest {
         final String objectID = "getthiskey";
         final S3StorageAdapter testSubject = new S3StorageAdapter(testS3Client);
         final StorageLocation storageLocation = new StorageLocation(URI.create(
-                String.format(S3StorageAdapter.STORAGE_ID_URI_TEMPLATE, "cadc", "TEST", objectID)));
+                String.format(STORAGE_ID_URI_TEMPLATE, objectID)));
 
         testS3Client.getObjectShouldFailNotFound = true;
 
@@ -232,7 +236,7 @@ public class S3StorageAdapterTest {
         final String objectID = "deletethiskey";
         final S3StorageAdapter testSubject = new S3StorageAdapter(testS3Client);
         final StorageLocation storageLocation = new StorageLocation(URI.create(
-                String.format(S3StorageAdapter.STORAGE_ID_URI_TEMPLATE, "cadc", "TEST", objectID)));
+                String.format(STORAGE_ID_URI_TEMPLATE, objectID)));
 
         testSubject.delete(storageLocation);
 
@@ -245,7 +249,7 @@ public class S3StorageAdapterTest {
         final String objectID = "deletethiskey";
         final S3StorageAdapter testSubject = new S3StorageAdapter(testS3Client);
         final StorageLocation storageLocation = new StorageLocation(URI.create(
-                String.format(S3StorageAdapter.STORAGE_ID_URI_TEMPLATE, "cadc", "TEST", objectID)));
+                String.format(STORAGE_ID_URI_TEMPLATE, objectID)));
 
         testS3Client.deleteObjectShouldFailNotFound = true;
 

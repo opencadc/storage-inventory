@@ -83,6 +83,7 @@ import com.ceph.rados.exceptions.RadosNotFoundException;
 import com.ceph.rados.jna.RadosObjectInfo;
 import com.ceph.radosstriper.IoCTXStriper;
 import com.ceph.radosstriper.RadosStriper;
+
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -97,6 +98,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+
 import nom.tam.fits.BasicHDU;
 import nom.tam.fits.Fits;
 import nom.tam.fits.FitsException;
@@ -114,6 +116,7 @@ import org.opencadc.inventory.storage.StorageAdapter;
 import org.opencadc.inventory.storage.StorageEngageException;
 import org.opencadc.inventory.storage.StorageMetadata;
 import org.opencadc.inventory.storage.WriteException;
+import org.opencadc.inventory.storage.s3.S3StorageAdapter;
 
 
 /**
@@ -125,7 +128,8 @@ public class RadosStorageAdapter implements StorageAdapter {
 
     private static final String META_POOL_NAME = "default.rgw.meta";
     private static final String META_NAMESPACE = "root";
-    private static final String SOTRAGE_ID_URI_TEMPLATE = "%s:%s/%s";
+    static final String STORAGE_ID_URI_TEMPLATE = "rados:%s";
+    static final String CHECKSUM_URI_TEMPLATE = "md5:%s";
 
     private static final String DATA_POOL_NAME = "default.rgw.buckets.non-ec";
     private static final String BUCKET_NAME_LOOKUP = ".bucket.meta.%s";
@@ -145,8 +149,9 @@ public class RadosStorageAdapter implements StorageAdapter {
 
     /**
      * New RADOS adapter.
-     * @param userID        User ID to connect with.  This may be temporary until we have a dedicated account.
-     * @param clusterName   The cluster to connect to.
+     *
+     * @param userID      User ID to connect with.  This may be temporary until we have a dedicated account.
+     * @param clusterName The cluster to connect to.
      */
     public RadosStorageAdapter(final String userID, final String clusterName) {
         this.cephxID = String.format("client.%s", userID);
@@ -244,29 +249,30 @@ public class RadosStorageAdapter implements StorageAdapter {
         return pathItems[0];
     }
 
-    String generateObjectID() {
-        return UUID.randomUUID().toString();
+    URI generateStorageID() {
+        return URI.create(String.format(STORAGE_ID_URI_TEMPLATE, UUID.randomUUID().toString()));
     }
 
-    //String lookupBucketMarker(final StorageLocation storageLocation) throws IOException {
-    //    return lookupBucketMarker(parseBucket(storageLocation.getStorageID()));
-    //}
+    /**
+     * Reusable way to create a StorageMetadata object.
+     *
+     * @param storageID     The URI storage ID.
+     * @param bucket        The bucket name for later use.
+     * @param artifactURI   The Artifact URI as it is in the inventory system.
+     * @param md5           The MD5 URI.
+     * @param contentLength The content length in bytes.
+     * @return StorageMetadata instance; never null.
+     */
+    StorageMetadata toStorageMetadata(final URI storageID, final String bucket, final URI artifactURI,
+                                      final URI md5, final long contentLength) {
+        final StorageLocation storageLocation = new StorageLocation(storageID);
+        storageLocation.storageBucket = bucket;
 
-    //String lookupBucketMarker(final String bucket) throws IOException {
-    //    try (final IoCTX ioCTX = contextConnect(META_POOL_NAME)) {
-    //        ioCTX.setNamespace(META_NAMESPACE);
-    //        final String bucketKey = String.format(BUCKET_NAME_LOOKUP, bucket);
-    //        final String[] objects = ioCTX.listObjects();
-    //        for (final String s : objects) {
-    //            if (s.startsWith(bucketKey)) {
-    //                final String bucketMarker = s.split(":")[1];
-    //                LOGGER.debug(String.format("Found marker %s for bucket %s.", bucketMarker, bucket));
-    //                return bucketMarker;
-    //            }
-    //        }
-    //        throw new RadosException(String.format("No such bucket %s.", bucket));
-    //    }
-    //}
+        final StorageMetadata storageMetadata = new StorageMetadata(storageLocation, md5, contentLength);
+        storageMetadata.artifactURI = artifactURI;
+
+        return storageMetadata;
+    }
 
     @Override
     public void get(StorageLocation storageLocation, OutputStream outputStream) throws ResourceNotFoundException,
@@ -353,9 +359,11 @@ public class RadosStorageAdapter implements StorageAdapter {
             throws IncorrectContentChecksumException, IncorrectContentLengthException, WriteException,
                    StorageEngageException, TransientException {
         try {
-            final URI storageID = newArtifact.getArtifactURI();
-            final String objectID = generateObjectID();
-            final String bucket = InventoryUtil.computeBucket(objectID, DEFAULT_BUCKET_HASH_LENGTH);
+            final URI artifactURI = newArtifact.getArtifactURI();
+            final URI storageID = generateStorageID();
+            final String objectID = storageID.getSchemeSpecificPart();
+
+            //final String bucket = InventoryUtil.computeBucket(storageID, DEFAULT_BUCKET_HASH_LENGTH);
             final DigestInputStream digestInputStream = new DigestInputStream(inputStream, createDigester());
             final ByteCountInputStream byteCountInputStream = new ByteCountInputStream(digestInputStream);
 
@@ -386,13 +394,12 @@ public class RadosStorageAdapter implements StorageAdapter {
             }
 
             try (final IoCTX ioCTX = contextConnect(DATA_POOL_NAME)) {
-                ioCTX.setExtendedAttribute(objectID, "uri", newArtifact.getArtifactURI().toASCIIString().trim());
+                ioCTX.setExtendedAttribute(objectID, "uri",
+                                           newArtifact.getArtifactURI().toASCIIString().trim());
                 ioCTX.setExtendedAttribute(objectID, "md5", calculatedChecksum.toString());
             }
 
-            return new StorageMetadata(new StorageLocation(
-                    URI.create(String.format(SOTRAGE_ID_URI_TEMPLATE, storageID.getAuthority(), bucket, objectID))),
-                                       calculatedChecksum, calculatedContentLength);
+            return toStorageMetadata(storageID, null, artifactURI, expectedChecksum, expectedContentLength);
         } catch (RadosException e) {
             throw new StorageEngageException(e.getMessage(), e);
         } catch (IOException e) {
