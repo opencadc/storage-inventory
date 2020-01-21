@@ -158,12 +158,6 @@ public class S3StorageAdapter implements StorageAdapter {
     }
 
 
-    private String parseKey(final URI storageID) {
-        final String path = storageID.getSchemeSpecificPart();
-        final String[] pathItems = path.split("/");
-        return pathItems[pathItems.length - 1];
-    }
-
     URI generateStorageID() {
         return URI.create(String.format(S3StorageAdapter.STORAGE_ID_URI_TEMPLATE, UUID.randomUUID().toString()));
     }
@@ -220,7 +214,7 @@ public class S3StorageAdapter implements StorageAdapter {
     InputStream toObjectInputStream(final StorageLocation storageLocation) {
         return s3Client.getObject(GetObjectRequest.builder()
                                                   .bucket(storageLocation.storageBucket)
-                                                  .key(parseKey(storageLocation.getStorageID()))
+                                                  .key(storageLocation.getStorageID().getSchemeSpecificPart())
                                                   .build());
     }
 
@@ -232,10 +226,10 @@ public class S3StorageAdapter implements StorageAdapter {
      * @param artifactURI   The Artifact URI as it is in the inventory system.
      * @param md5           The MD5 URI.
      * @param contentLength The content length in bytes.
-     * @return              StorageMetadata instance; never null.
+     * @return StorageMetadata instance; never null.
      */
     StorageMetadata toStorageMetadata(final URI storageID, final String bucket, final URI artifactURI,
-                                              final URI md5, final long contentLength) {
+                                      final URI md5, final long contentLength) {
         final StorageLocation storageLocation = new StorageLocation(storageID);
         storageLocation.storageBucket = bucket;
 
