@@ -43,8 +43,8 @@ jobs:
     - name: java build -- minoc 
       run: cd minoc && gradle --info clean build javadoc checkstyleMain
       
-    - name: java build -- luskan
-      run: cd luskan && gradle --info clean build javadoc checkstyleMain
+#    - name: java build -- luskan
+#      run: cd luskan && gradle --info clean build javadoc checkstyleMain
       
     - name: java build -- raven
       run: cd raven && gradle --info clean build javadoc checkstyleMain
