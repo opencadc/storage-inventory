@@ -125,6 +125,7 @@ public class RadosStorageAdapterTest {
 
 
     @Test
+    @Ignore
     public void list() throws Exception {
         /*
          * The list-ceph.out file contains 2011 objects listed from the rados command line in whatever order it
@@ -198,6 +199,7 @@ public class RadosStorageAdapterTest {
     }
 
     @Test
+    @Ignore
     public void jumpHDUs() throws Exception {
         final String objectID = "test-megaprime-rados.fits.fz";
         final Map<Integer, Long> hduByteOffsets = new HashMap<>();
@@ -245,6 +247,7 @@ public class RadosStorageAdapterTest {
     }
 
     @Test
+    @Ignore
     public void jumpHDUsReconnect() throws Exception {
         final String objectID = "test-megaprime-rados.fits.fz";
         final Map<Integer, Long> hduByteOffsets = new HashMap<>();
@@ -290,6 +293,7 @@ public class RadosStorageAdapterTest {
     }
 
     @Test
+    @Ignore
     public void getHeaders() throws Exception {
         final RadosStorageAdapter testSubject = new RadosStorageAdapter(USER_ID, CLUSTER_NAME);
         final String fileName = System.getProperty("file.name");

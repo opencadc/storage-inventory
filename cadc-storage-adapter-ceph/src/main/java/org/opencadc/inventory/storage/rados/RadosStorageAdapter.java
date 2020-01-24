@@ -108,7 +108,6 @@ import nom.tam.util.ArrayDataOutput;
 import nom.tam.util.BufferedDataOutputStream;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
-import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.storage.NewArtifact;
 import org.opencadc.inventory.storage.ReadException;
@@ -116,7 +115,6 @@ import org.opencadc.inventory.storage.StorageAdapter;
 import org.opencadc.inventory.storage.StorageEngageException;
 import org.opencadc.inventory.storage.StorageMetadata;
 import org.opencadc.inventory.storage.WriteException;
-import org.opencadc.inventory.storage.s3.S3StorageAdapter;
 
 
 /**
@@ -234,19 +232,8 @@ public class RadosStorageAdapter implements StorageAdapter {
         }
     }
 
-    private String getObjectID(final StorageLocation storageLocation) throws IOException {
-        final URI storageID = storageLocation.getStorageID();
-        //final String bucketMarker = lookupBucketMarker(storageLocation);
-        final String path = storageID.getSchemeSpecificPart();
-        final String[] pathItems = path.split("/");
-        //return String.format(OBJECT_ID_LOOKUP, parseBucket(storageID), pathItems[pathItems.length - 1]);
-        return pathItems[pathItems.length - 1];
-    }
-
-    private String parseBucket(final URI storageID) {
-        final String path = storageID.getSchemeSpecificPart();
-        final String[] pathItems = path.split("/");
-        return pathItems[0];
+    private String getObjectID(final StorageLocation storageLocation) {
+        return storageLocation.getStorageID().getSchemeSpecificPart();
     }
 
     URI generateStorageID() {
@@ -257,16 +244,14 @@ public class RadosStorageAdapter implements StorageAdapter {
      * Reusable way to create a StorageMetadata object.
      *
      * @param storageID     The URI storage ID.
-     * @param bucket        The bucket name for later use.
      * @param artifactURI   The Artifact URI as it is in the inventory system.
      * @param md5           The MD5 URI.
      * @param contentLength The content length in bytes.
      * @return StorageMetadata instance; never null.
      */
-    StorageMetadata toStorageMetadata(final URI storageID, final String bucket, final URI artifactURI,
+    StorageMetadata toStorageMetadata(final URI storageID, final URI artifactURI,
                                       final URI md5, final long contentLength) {
         final StorageLocation storageLocation = new StorageLocation(storageID);
-        storageLocation.storageBucket = bucket;
 
         final StorageMetadata storageMetadata = new StorageMetadata(storageLocation, md5, contentLength);
         storageMetadata.artifactURI = artifactURI;
@@ -341,7 +326,7 @@ public class RadosStorageAdapter implements StorageAdapter {
         }
     }
 
-    void writeStream(final String objectID, final ByteCountInputStream byteCountInputStream) throws IOException {
+    void writeStream(final String objectID, final InputStream byteCountInputStream) throws IOException {
         final byte[] buffer = new byte[BUFFER_SIZE_BYTES];
 
         int bytesRead;
@@ -363,7 +348,6 @@ public class RadosStorageAdapter implements StorageAdapter {
             final URI storageID = generateStorageID();
             final String objectID = storageID.getSchemeSpecificPart();
 
-            //final String bucket = InventoryUtil.computeBucket(storageID, DEFAULT_BUCKET_HASH_LENGTH);
             final DigestInputStream digestInputStream = new DigestInputStream(inputStream, createDigester());
             final ByteCountInputStream byteCountInputStream = new ByteCountInputStream(digestInputStream);
 
@@ -399,7 +383,7 @@ public class RadosStorageAdapter implements StorageAdapter {
                 ioCTX.setExtendedAttribute(objectID, "md5", calculatedChecksum.toString());
             }
 
-            return toStorageMetadata(storageID, null, artifactURI, expectedChecksum, expectedContentLength);
+            return toStorageMetadata(storageID, artifactURI, calculatedChecksum, calculatedContentLength);
         } catch (RadosException e) {
             throw new StorageEngageException(e.getMessage(), e);
         } catch (IOException e) {
@@ -421,8 +405,6 @@ public class RadosStorageAdapter implements StorageAdapter {
     public void delete(StorageLocation storageLocation)
             throws ResourceNotFoundException, IOException, StorageEngageException, TransientException {
         try (final IoCTXStriper ioCTX = contextConnectStriper(DATA_POOL_NAME)) {
-            //final String objectID = String.format(OBJECT_ID_LOOKUP, lookupBucketMarker(storageLocation),
-            //                                      getObjectID(storageLocation));
             ioCTX.remove(getObjectID(storageLocation));
         } catch (RadosNotFoundException e) {
             throw new ResourceNotFoundException(e.getMessage(), e);

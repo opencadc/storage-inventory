@@ -199,16 +199,19 @@ public class S3StorageAdapterTest {
         final URI testURI = URI.create(String.format("cadc:%s/%s.fits", BUCKET_NAME, UUID.randomUUID().toString()));
         try {
             final S3StorageAdapter putTestSubject = new S3StorageAdapter(ENDPOINT, REGION);
-            final File file = FileUtil.getFileFromResource("test-jcmt.fits", S3StorageAdapterTest.class);
             final NewArtifact artifact = new NewArtifact(testURI);
 
             artifact.contentChecksum = URI.create("md5:9307240a34ed65a0a252b0046b6e87be");
-            artifact.contentLength = file.length();
+            artifact.contentLength = 312151680L;
 
-            final InputStream fileInputStream = new FileInputStream(file);
+            final URL sourceURL = new URL("https://www.cadc-ccda.hia-iha.nrc-cnrc.gc" +
+                                          ".ca/files/vault/CADCtest/Public/test-megaprime.fits.fz");
+            final InputStream inputStream = openStream(sourceURL);
 
-            final StorageMetadata storageMetadata = putTestSubject.put(artifact, fileInputStream);
-            fileInputStream.close();
+            LOGGER.info(String.format("PUTting file from %s.", sourceURL.toExternalForm()));
+            final StorageMetadata storageMetadata = putTestSubject.put(artifact, inputStream);
+
+            inputStream.close();
 
             final URI resultChecksum = storageMetadata.getContentChecksum();
             final long resultLength = storageMetadata.getContentLength();
@@ -257,7 +260,8 @@ public class S3StorageAdapterTest {
 
 
     /**
-     * Exists to test what happens when the InputStream from Reading of a file breaks.
+     * Exists to test what happens when the InputStream from Reading of a file breaks.  This was used to source a file
+     * from another host, and mid-read, killing the source host.
      *
      * @throws Exception Any exception.
      */
