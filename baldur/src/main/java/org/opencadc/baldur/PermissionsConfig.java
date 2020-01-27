@@ -69,29 +69,26 @@
 
 package org.opencadc.baldur;
 
+import ca.nrc.cadc.auth.AuthenticationUtil;
 import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.util.PropertiesReader;
 
-import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.IOException;
 import java.net.URI;
-import java.nio.file.Files;
-import java.nio.file.Paths;
+import java.security.AccessControlException;
+import java.security.Principal;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Date;
+import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
+
+import javax.security.auth.Subject;
+import javax.security.auth.x500.X500Principal;
+
 import org.apache.log4j.Logger;
 import org.opencadc.gms.GroupURI;
-import org.opencadc.inventory.InventoryUtil;
-import org.opencadc.inventory.permissions.Grant;
-import org.opencadc.inventory.permissions.ReadGrant;
-import org.opencadc.inventory.permissions.WriteGrant;
 
 /**
  * Class that provides access to the permissions described
@@ -103,78 +100,39 @@ import org.opencadc.inventory.permissions.WriteGrant;
 public class PermissionsConfig {
     
     private static final Logger log = Logger.getLogger(PermissionsConfig.class);
-    private static final String PERMISSIONS_CONFIG_PROPERTIES = "baldur-permissions-config.properties";
 
+    private static final String PERMISSIONS_PROPERTIES = "baldur.properties";
+    private static final String KEY_USERS = "users";
     private static final String KEY_ENTRY = "entry";
     private static final String KEY_ANON_READ = ".anon";
     private static final String KEY_READONLY_GROUPS = ".readOnlyGroups";
     private static final String KEY_READWRITE_GROUPS = ".readWriteGroups";
     
+    private static Set<Principal> authPrincipals = new HashSet<Principal>();
     private static List<PermissionEntry> entries = null;
     
-    public PermissionsConfig() {
+    PermissionsConfig() {
         init();
     }
-
-    /**
-     * Get the read grant for the given Artifact URI. 
-     *
-     * @param artifactURI The Artifact URI.
-     * @return The read grant information object for the artifact URI.
-     */
-    public ReadGrant getReadGrant(URI artifactURI) {
-        InventoryUtil.assertNotNull(PermissionsConfig.class, "artifactURI", artifactURI);
-        boolean anonymousRead = false;
-        List<GroupURI> groups = new ArrayList<GroupURI>();
-        List<PermissionEntry> matchingEntries = getMatchingEntries(artifactURI);
-        log.debug("compiling read grant from " + matchingEntries.size() + " matching entries");
-        for (PermissionEntry next : matchingEntries) {
-            if (!anonymousRead) {
-                anonymousRead = next.anonRead;
-            }
-            for (GroupURI groupURI : next.readOnlyGroups) {
-                if (!groups.contains(groupURI)) {
-                    groups.add(groupURI);
+    
+    void authorize() {
+        Subject subject = AuthenticationUtil.getCurrentSubject();
+        if (subject != null) {
+            Set<X500Principal> principals = subject.getPrincipals(X500Principal.class);
+            for (Principal p : principals) {
+                log.debug("checking user dn " + p);
+                for (Principal authorizedUser : authPrincipals) {
+                    if (AuthenticationUtil.equals(authorizedUser, p)) {
+                        return;
+                    }
                 }
             }
         }
-        ReadGrant readGrant = new ReadGrant(artifactURI, getExpiryDate(), anonymousRead);
-        readGrant.getGroups().addAll(groups);
-        return readGrant;
+        throw new AccessControlException("forbidden");
     }
     
-    /**
-     * Get the write grant for the given Artifact URI. 
-     *
-     * @param artifactURI The Artifact URI.
-     * @return The write grant information object for the artifact URI.
-     */
-    public WriteGrant getWriteGrant(URI artifactURI) {
-        InventoryUtil.assertNotNull(PermissionsConfig.class, "artifactURI", artifactURI);
-        List<GroupURI> groups = new ArrayList<GroupURI>();
-        List<PermissionEntry> matchingEntries = getMatchingEntries(artifactURI);
-        log.debug("compiling write grant from " + matchingEntries.size() + " matching entries");
-        for (PermissionEntry next : matchingEntries) {
-            for (GroupURI groupURI : next.readWriteGroups) {
-                if (!groups.contains(groupURI)) {
-                    groups.add(groupURI);
-                }
-            }
-        }
-        WriteGrant writeGrant = new WriteGrant(artifactURI, getExpiryDate());
-        writeGrant.getGroups().addAll(groups);
-        return writeGrant;
-    }
-    
-    List<PermissionEntry> getMatchingEntries(URI artifactURI) {
-        List<PermissionEntry> list = new ArrayList<PermissionEntry>();
-        for (PermissionEntry next : entries) {
-            Matcher matcher = next.pattern.matcher(artifactURI.toString());
-            if (matcher.matches()) {
-                list.add(next);
-            }
-        }
-        return list;
+    Iterator<PermissionEntry> getMatchingEntries(URI artifactURI) {
+        return new PermissionIterator(artifactURI);
     }
 
     /**
@@ -185,14 +143,30 @@ public class PermissionsConfig {
     private void init() {
         if (entries == null) {
             log.debug("initializing permissions config");
-            PropertiesReader pr = new PropertiesReader(PERMISSIONS_CONFIG_PROPERTIES);
+            PropertiesReader pr = new PropertiesReader(PERMISSIONS_PROPERTIES);
             MultiValuedProperties allProps = pr.getAllProperties();
             if (allProps == null) {
-                throw new IllegalStateException("failed to read permissions config from " + PERMISSIONS_CONFIG_PROPERTIES);
+                throw new IllegalStateException("failed to read permissions config from " + PERMISSIONS_PROPERTIES);
             }
+            
+            // get the authorized users
+            // (TODO: Issue 41: https://github.com/opencadc/storage-inventory/issues/41)
+            List<String> authUsersConfig = allProps.getProperty(KEY_USERS);
+            if (authUsersConfig == null) {
+                throw new IllegalStateException("missing configrations for key " + KEY_USERS + " in: " + PERMISSIONS_PROPERTIES);
+            }
+            for (String dn : authUsersConfig) {
+                log.debug("authorized dn: " + dn);
+                authPrincipals.add(new X500Principal(dn));
+            }
+            if (authPrincipals.size() == 0) {
+                throw new IllegalStateException("no values for key " + KEY_USERS + " in " + PERMISSIONS_PROPERTIES);
+            }
+            
+            // get the permission entries
             List<String> entryConfig = allProps.getProperty(KEY_ENTRY);
             if (entryConfig == null) {
-                throw new IllegalStateException("no entries found in " + PERMISSIONS_CONFIG_PROPERTIES);
+                throw new IllegalStateException("no entries found in " + PERMISSIONS_PROPERTIES);
             }
             log.debug("reading permissions config with " + entryConfig.size() + " entries.");
             List<PermissionEntry> tmp = new ArrayList<PermissionEntry>();
@@ -204,7 +178,7 @@ public class PermissionsConfig {
                 log.debug("reading permission entry: " + entry);
                 String[] namePattern = entry.split(" ");
                 if (namePattern.length != 2) {
-                    throw new IllegalStateException("invalid config line in " + PERMISSIONS_CONFIG_PROPERTIES
+                    throw new IllegalStateException("invalid config line in " + PERMISSIONS_PROPERTIES
                         + ": " + entry);
                 }
                 name = namePattern[0];
@@ -212,26 +186,26 @@ public class PermissionsConfig {
                 try {
                     pattern = Pattern.compile(namePattern[1]);
                 } catch (Exception e) {
-                    throw new IllegalStateException("invalid uri matching pattern in " + PERMISSIONS_CONFIG_PROPERTIES
+                    throw new IllegalStateException("invalid uri matching pattern in " + PERMISSIONS_PROPERTIES
                         + ": " + namePattern[1] + "(" + e.getMessage() + ")");
                 }
                 next = new PermissionEntry(name, pattern);
                 if (tmp.contains(next)) {
-                    throw new IllegalStateException("duplicate entry name [" + name + "] in " + PERMISSIONS_CONFIG_PROPERTIES);
+                    throw new IllegalStateException("duplicate entry name [" + name + "] in " + PERMISSIONS_PROPERTIES);
                 }
                 
                 // get other properties for this entry
-                List<String> anonRead = allProps.getProperty(next.name + KEY_ANON_READ);
+                List<String> anonRead = allProps.getProperty(next.getName() + KEY_ANON_READ);
                 if (anonRead != null && !anonRead.isEmpty()) {
                     if (anonRead.size() > 1) {
-                        throw new IllegalStateException("too many entries for " + next.name + KEY_ANON_READ);
+                        throw new IllegalStateException("too many entries for " + next.getName() + KEY_ANON_READ);
                     }
                     next.anonRead = Boolean.parseBoolean(anonRead.get(0));
                 }
-                List<String> readOnlyGroups = allProps.getProperty(next.name + KEY_READONLY_GROUPS);
-                initAddGroups(readOnlyGroups, next.readOnlyGroups, next.name + KEY_READONLY_GROUPS);
-                List<String> readWriteGroups = allProps.getProperty(next.name + KEY_READWRITE_GROUPS);
-                initAddGroups(readWriteGroups, next.readWriteGroups, next.name + KEY_READWRITE_GROUPS);
+                List<String> readOnlyGroups = allProps.getProperty(next.getName() + KEY_READONLY_GROUPS);
+                initAddGroups(readOnlyGroups, next.readOnlyGroups, next.getName() + KEY_READONLY_GROUPS);
+                List<String> readWriteGroups = allProps.getProperty(next.getName() + KEY_READWRITE_GROUPS);
+                initAddGroups(readWriteGroups, next.readWriteGroups, next.getName() + KEY_READWRITE_GROUPS);
                 tmp.add(next);
                 log.debug("Added permission entry: " + next);
             }
@@ -257,11 +231,6 @@ public class PermissionsConfig {
         }
     }
     
-    private Date getExpiryDate() {
-        // grants expire immediately
-        return new Date();
-    }
-    
     /**
      * This method can be used if the cache needs to be cleared so new 
      * config can be read.  Since initialization is done on construction
@@ -272,45 +241,49 @@ public class PermissionsConfig {
         entries = null;
     }
     
-    class PermissionEntry {
-        private String name;
-        private Pattern pattern;
-        boolean anonRead = false;
-        List<GroupURI> readOnlyGroups = new ArrayList<GroupURI>();
-        List<GroupURI> readWriteGroups = new ArrayList<GroupURI>();
+    /**
+     * Class that iterates over permission entries that match the
+     * given artifact URI.
+     */
+    class PermissionIterator implements Iterator<PermissionEntry> {
         
-        PermissionEntry(String name, Pattern pattern) {
-            this.name = name;
-            this.pattern = pattern;
-        }
+        URI artifactURI;
+        Iterator<PermissionEntry> entryIterator;
+        PermissionEntry next = null;
         
-        public String getName() {
-            return name;
-        }
-
-        public Pattern getPattern() {
-            return pattern;
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            return this.name.equals(((PermissionEntry) o).getName());
+        PermissionIterator(URI artifactURI) {
+            this.artifactURI = artifactURI;
+            entryIterator = entries.iterator();
+            advance();
         }
         
-        @Override
-        public String toString() {
-            StringBuilder sb = new StringBuilder("PermissionEntry=[");
-            sb.append("name=[").append(name).append("],");
-            sb.append("pattern=[").append(pattern).append("],");
-            sb.append("anonRead=[").append(anonRead).append("],");
-            sb.append("readOnlyGroups=[");
-            sb.append(Arrays.toString(readOnlyGroups.toArray()));
-            sb.append("],");
-            sb.append("readWriteGroups=[");
-            sb.append(Arrays.toString(readWriteGroups.toArray()));
-            sb.append("]");
-            return sb.toString();
+        private void advance() {
+            if (entryIterator.hasNext()) {
+                PermissionEntry nextEntry = entryIterator.next();
+                Matcher matcher = nextEntry.getPattern().matcher(artifactURI.toString());
+                if (matcher.matches()) {
+                    next = nextEntry;
+                } else {
+                    advance();
+                }
+            } else {
+                next = null;
+            }
         }
+        
+        public boolean hasNext() {
+            return next != null;
+        }
+        
+        public PermissionEntry next() {
+            if (next == null) {
+                throw new IllegalStateException("BUG: no more matching entries");
+            }
+            PermissionEntry ret = next;
+            advance();
+            return ret;
+        }
+        
     }
 
 }

@@ -69,15 +69,23 @@
 
 package org.opencadc.baldur;
 
+import ca.nrc.cadc.rest.InlineContentHandler;
+import ca.nrc.cadc.rest.RestAction;
+
 import java.io.OutputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.util.ArrayList;
 import java.util.Date;
+import java.util.Iterator;
 import java.util.List;
 
 import org.apache.log4j.Logger;
+import org.opencadc.gms.GroupURI;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.permissions.Grant;
+import org.opencadc.inventory.permissions.ReadGrant;
+import org.opencadc.inventory.permissions.WriteGrant;
 import org.opencadc.inventory.permissions.xml.GrantWriter;
 
 /**
@@ -86,22 +94,33 @@ import org.opencadc.inventory.permissions.xml.GrantWriter;
  * 
  * @author jburke, majorb
  */
-public class GetAction extends PermissionsAction {
+public class GetAction extends RestAction {
     
     private static final Logger log = Logger.getLogger(GetAction.class);
 
     private static final String OP = "OP";
     private static final String URI = "URI";
+    
+    public enum Operation {
+        read, 
+        write;
+    }
 
     public GetAction() {
         super();
+    }
+    
+    @Override
+    protected InlineContentHandler getInlineContentHandler() {
+        return null;
     }
 
     @Override
     public void doAction() throws Exception {
 
         // Check if the calling user is authorized to make the request.
-        authorize();
+        PermissionsConfig permissionsConfig = new PermissionsConfig();
+        permissionsConfig.authorize();
         
         String op = syncInput.getParameter(OP);
         String uri = syncInput.getParameter(URI);
@@ -130,14 +149,13 @@ public class GetAction extends PermissionsAction {
             throw new IllegalArgumentException("invalid " + URI + " parameter, not a valid URI: " + uri);
         }
 
-        PermissionsConfig permissionsConfig = new PermissionsConfig();
         Grant grant = null;
         switch (operation) {
             case read:
-                grant = permissionsConfig.getReadGrant(artifactURI);
+                grant = getReadGrant(permissionsConfig, artifactURI);
                 break;
             case write:
-                grant = permissionsConfig.getWriteGrant(artifactURI);
+                grant = getWriteGrant(permissionsConfig, artifactURI);
                 break;
             default:
                 throw new IllegalStateException("unknown operation: " + operation);
@@ -156,12 +174,68 @@ public class GetAction extends PermissionsAction {
     /**
      * Calculate the expiry date of the grant for the given artifact URI.
      *
-     * @param artifactURI The Artifact URI.
      * @return A Date.
      */
-    private Date getExpiryDate(URI artifactURI) {
+    private static Date getExpiryDate() {
         // expires immediately
         return new Date();
+    }
+    
+    /**
+     * Get the read grant for the given Artifact URI. 
+     *
+     * @param artifactURI The Artifact URI.
+     * @return The read grant information object for the artifact URI.
+     */
+    static ReadGrant getReadGrant(PermissionsConfig permissionsConfig, URI artifactURI) {
+        InventoryUtil.assertNotNull(PermissionsConfig.class, "artifactURI", artifactURI);
+        boolean anonymousRead = false;
+        List<GroupURI> groups = new ArrayList<GroupURI>();
+        Iterator<PermissionEntry> matchingEntries = permissionsConfig.getMatchingEntries(artifactURI);
+        PermissionEntry next = null;
+        log.debug("compiling read grant from matching entries");
+        while (matchingEntries.hasNext()) {
+            next = matchingEntries.next();
+            log.debug("matching entry: " + next);
+            if (!anonymousRead) {
+                anonymousRead = next.anonRead;
+            }
+            for (GroupURI groupURI : next.readOnlyGroups) {
+                if (!groups.contains(groupURI)) {
+                    groups.add(groupURI);
+                }
+            }
+        }
+        
+        ReadGrant readGrant = new ReadGrant(artifactURI, getExpiryDate(), anonymousRead);
+        readGrant.getGroups().addAll(groups);
+        return readGrant;
+    }
+    
+    /**
+     * Get the write grant for the given Artifact URI. 
+     *
+     * @param artifactURI The Artifact URI.
+     * @return The write grant information object for the artifact URI.
+     */
+    static WriteGrant getWriteGrant(PermissionsConfig permissionsConfig, URI artifactURI) {
+        InventoryUtil.assertNotNull(PermissionsConfig.class, "artifactURI", artifactURI);
+        List<GroupURI> groups = new ArrayList<GroupURI>();
+        Iterator<PermissionEntry> matchingEntries = permissionsConfig.getMatchingEntries(artifactURI);
+        PermissionEntry next = null;
+        log.debug("compiling write grant from matching entries");
+        while (matchingEntries.hasNext()) {
+            next = matchingEntries.next();
+            log.debug("matching entry: " + next);
+            for (GroupURI groupURI : next.readWriteGroups) {
+                if (!groups.contains(groupURI)) {
+                    groups.add(groupURI);
+                }
+            }
+        }
+        WriteGrant writeGrant = new WriteGrant(artifactURI, getExpiryDate());
+        writeGrant.getGroups().addAll(groups);
+        return writeGrant;
     }
 
 }

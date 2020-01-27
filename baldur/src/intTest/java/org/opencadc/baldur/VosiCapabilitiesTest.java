@@ -100,6 +100,6 @@ public class VosiCapabilitiesTest extends CapabilitiesTest {
         super.validateContent(caps);        
         Capability cap = caps.findCapability(Standards.SI_PERMISSIONS);
         Assert.assertNotNull("permissions", cap);
-        Assert.assertNotNull("cert table-load-sync", cap.findInterface(Standards.SECURITY_METHOD_CERT, Standards.INTERFACE_PARAM_HTTP));
+        Assert.assertNotNull("cert use in baldur", cap.findInterface(Standards.SECURITY_METHOD_CERT, Standards.INTERFACE_PARAM_HTTP));
     }
 }

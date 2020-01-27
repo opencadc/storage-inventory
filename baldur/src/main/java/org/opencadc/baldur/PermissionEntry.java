@@ -67,81 +67,61 @@
 
 package org.opencadc.baldur;
 
-import ca.nrc.cadc.auth.AuthenticationUtil;
-import ca.nrc.cadc.rest.InlineContentHandler;
-import ca.nrc.cadc.rest.RestAction;
-import ca.nrc.cadc.util.PropertiesReader;
-import java.io.File;
-import java.io.IOException;
-import java.net.URI;
-import java.security.AccessControlException;
-import java.security.Principal;
-import java.util.HashSet;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
-import java.util.Set;
-import javax.security.auth.Subject;
-import javax.security.auth.x500.X500Principal;
-import org.apache.log4j.Logger;
+import java.util.regex.Pattern;
+
+import org.opencadc.gms.GroupURI;
 
 /**
- * Base class for permission actions.
+ * Class to hold information for a single entry in baldur.properties
  * 
- * @author jburke, majorb
- *
+ * @author majorb
  */
-public abstract class PermissionsAction extends RestAction {
+class PermissionEntry {
     
-    private static final Logger log = Logger.getLogger(PermissionsAction.class);
-
-    private static final String PERMISSIONS_AUTH_PROPERTIES = "baldur-permissions-auth.properties";
-    private static final String AUTH_USERS_PROPERTY = "users";
-    
-    public enum Operation {
-        read, 
-        write;
-    }
-
-    public PermissionsAction() { }
-
-    @Override
-    protected InlineContentHandler getInlineContentHandler() {
-        return null;
-    }
+    private String name;
+    private Pattern pattern;
+    boolean anonRead = false;
+    List<GroupURI> readOnlyGroups = new ArrayList<GroupURI>();
+    List<GroupURI> readWriteGroups = new ArrayList<GroupURI>();
     
     /**
-     * Check that the calling user is allowed to read permissions.
+     * Constructor.
+     * @param name The name of the entry.
+     * @param pattern The regex pattern of the entry.
      */
-    protected void authorize() throws AccessControlException {
-        
-        // TODO: Issue 41: https://github.com/opencadc/storage-inventory/issues/41
-        
-        Subject subject = AuthenticationUtil.getCurrentSubject();
-        if (subject == null || subject.getPrincipals().size() == 0) {
-            throw new AccessControlException("forbidden");
-        }
-
-        PropertiesReader propertiesReader = new PropertiesReader(PERMISSIONS_AUTH_PROPERTIES);
-        Set<Principal> authPrincipals = new HashSet<Principal>();
-        List<String> properties = propertiesReader.getPropertyValues(AUTH_USERS_PROPERTY);
-        if (properties == null) {
-            throw new IllegalStateException("invalid properties file: " + PERMISSIONS_AUTH_PROPERTIES);
-        }
-        for (String property : properties) {
-            log.debug("authorized dn: " + property);
-            authPrincipals.add(new X500Principal(property));
-        }
-        
-        Set<X500Principal> principals = subject.getPrincipals(X500Principal.class);
-        for (Principal p : principals) {
-            log.debug("checking user dn " + p);
-            for (Principal authorizedUser : authPrincipals) {
-                if (AuthenticationUtil.equals(authorizedUser, p)) {
-                    return;
-                }
-            }
-        }
-        
-        throw new AccessControlException("forbidden");
+    PermissionEntry(String name, Pattern pattern) {
+        this.name = name;
+        this.pattern = pattern;
+    }
+    
+    String getName() {
+        return name;
     }
 
+    Pattern getPattern() {
+        return pattern;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        return this.name.equals(((PermissionEntry) o).getName());
+    }
+
+    @Override
+    public String toString() {
+        StringBuilder sb = new StringBuilder("PermissionEntry=[");
+        sb.append("name=[").append(name).append("],");
+        sb.append("pattern=[").append(pattern).append("],");
+        sb.append("anonRead=[").append(anonRead).append("],");
+        sb.append("readOnlyGroups=[");
+        sb.append(Arrays.toString(readOnlyGroups.toArray()));
+        sb.append("],");
+        sb.append("readWriteGroups=[");
+        sb.append(Arrays.toString(readWriteGroups.toArray()));
+        sb.append("]");
+        return sb.toString();
+    }
 }

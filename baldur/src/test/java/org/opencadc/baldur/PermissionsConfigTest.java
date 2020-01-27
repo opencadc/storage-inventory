@@ -73,13 +73,14 @@ import ca.nrc.cadc.util.Log4jInit;
 import ca.nrc.cadc.util.PropertiesReader;
 
 import java.net.URI;
+import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.Test;
-import org.opencadc.baldur.PermissionsConfig.PermissionEntry;
 import org.opencadc.gms.GroupURI;
 import org.opencadc.inventory.permissions.ReadGrant;
 import org.opencadc.inventory.permissions.WriteGrant;
@@ -103,7 +104,8 @@ public class PermissionsConfigTest {
             PermissionsConfig config = new PermissionsConfig();
             URI artifactURI = URI.create("cadc:TEST/file.fits");
             
-            List<PermissionEntry> entries = config.getMatchingEntries(artifactURI);
+            Iterator<PermissionEntry> entryIterator = config.getMatchingEntries(artifactURI);
+            List<PermissionEntry> entries = iteratorToList(entryIterator);
             Assert.assertNotNull(entries);
             Assert.assertEquals(1, entries.size());
             PermissionEntry entry = entries.get(0);
@@ -119,14 +121,14 @@ public class PermissionsConfigTest {
             Assert.assertTrue(entry.readWriteGroups.contains(writeGroup1));
             Assert.assertTrue(entry.readWriteGroups.contains(writeGroup2));
             
-            ReadGrant readGrant = config.getReadGrant(artifactURI);
+            ReadGrant readGrant = GetAction.getReadGrant(config, artifactURI);
             Assert.assertNotNull(readGrant);
             Assert.assertTrue(readGrant.isAnonymousAccess());
             Assert.assertEquals(2, readGrant.getGroups().size());
             Assert.assertTrue(readGrant.getGroups().contains(readGroup1));
             Assert.assertTrue(readGrant.getGroups().contains(readGroup2));
             
-            WriteGrant writeGrant = config.getWriteGrant(artifactURI);
+            WriteGrant writeGrant = GetAction.getWriteGrant(config, artifactURI);
             Assert.assertNotNull(writeGrant);
             Assert.assertEquals(2, writeGrant.getGroups().size());
             Assert.assertTrue(writeGrant.getGroups().contains(writeGroup1));
@@ -137,7 +139,8 @@ public class PermissionsConfigTest {
             config = new PermissionsConfig();
             artifactURI = URI.create("cadc:NOMATCH/file.fits");
             
-            entries = config.getMatchingEntries(artifactURI);
+            entryIterator = config.getMatchingEntries(artifactURI);
+            entries = iteratorToList(entryIterator);
             Assert.assertTrue(entries.isEmpty());
             
         } catch (Exception unexpected) {
@@ -158,7 +161,8 @@ public class PermissionsConfigTest {
             PermissionsConfig config = new PermissionsConfig();
             URI artifactURI = URI.create("TEST");
             
-            List<PermissionEntry> entries = config.getMatchingEntries(artifactURI);
+            Iterator<PermissionEntry> entryIterator = config.getMatchingEntries(artifactURI);
+            List<PermissionEntry> entries = iteratorToList(entryIterator);
             Assert.assertNotNull(entries);
             Assert.assertEquals(2, entries.size());
             
@@ -180,7 +184,8 @@ public class PermissionsConfigTest {
             PermissionsConfig config = new PermissionsConfig();
             URI artifactURI = URI.create("TEST");
             
-            List<PermissionEntry> entries = config.getMatchingEntries(artifactURI);
+            Iterator<PermissionEntry> entryIterator = config.getMatchingEntries(artifactURI);
+            List<PermissionEntry> entries = iteratorToList(entryIterator);
             Assert.assertNotNull(entries);
             Assert.assertEquals(2, entries.size());
             
@@ -189,14 +194,14 @@ public class PermissionsConfigTest {
             GroupURI writeGroup1 = new GroupURI("ivo://cadc.nrc.ca/gms?group2");
             GroupURI writeGroup2 = new GroupURI("ivo://cadc.nrc.ca/gms?group4");
             
-            ReadGrant readGrant = config.getReadGrant(artifactURI);
+            ReadGrant readGrant = GetAction.getReadGrant(config, artifactURI);
             Assert.assertNotNull(readGrant);
             Assert.assertTrue(readGrant.isAnonymousAccess());
             Assert.assertEquals(2, readGrant.getGroups().size());
             Assert.assertTrue(readGrant.getGroups().contains(readGroup1));
             Assert.assertTrue(readGrant.getGroups().contains(readGroup2));
             
-            WriteGrant writeGrant = config.getWriteGrant(artifactURI);
+            WriteGrant writeGrant = GetAction.getWriteGrant(config, artifactURI);
             Assert.assertNotNull(writeGrant);
             Assert.assertEquals(2, writeGrant.getGroups().size());
             Assert.assertTrue(writeGrant.getGroups().contains(writeGroup1));
@@ -243,7 +248,7 @@ public class PermissionsConfigTest {
                 Assert.fail("should have received IllegalStateException");
             } catch (IllegalStateException e) {
                 // expected
-                Assert.assertTrue(e.getMessage(), e.getMessage().toLowerCase().contains("no entries"));
+                Assert.assertTrue(e.getMessage(), e.getMessage().toLowerCase().contains("baldur.properties"));
             }
         } catch (Exception unexpected) {
             log.error("unexpected exception", unexpected);
@@ -296,6 +301,12 @@ public class PermissionsConfigTest {
             System.clearProperty(PropertiesReader.CONFIG_DIR_SYSTEM_PROPERTY);
             log.info("END - testDuplicatePermissions");
         }
+    }
+    
+    private List<PermissionEntry> iteratorToList(Iterator<PermissionEntry> it) {
+        List<PermissionEntry> list = new ArrayList<PermissionEntry>();
+        it.forEachRemaining(list::add);
+        return list;
     }
 
 }

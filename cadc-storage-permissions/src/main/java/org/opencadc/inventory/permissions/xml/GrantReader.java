@@ -77,6 +77,7 @@ import java.io.InputStreamReader;
 import java.io.Reader;
 import java.io.StringReader;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.text.DateFormat;
 import java.text.ParseException;
 import java.util.Date;
@@ -158,7 +159,7 @@ public class GrantReader {
         }
         try {
             return new URI(value);
-        } catch (Exception ex) {
+        } catch (URISyntaxException ex) {
             throw new IllegalArgumentException("invalid " + name + " element: " + value + ", expected: valid URI");
         }
     }
