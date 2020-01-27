@@ -141,7 +141,7 @@ public class S3StorageAdapter implements StorageAdapter {
     private static final int BUFFER_SIZE_BYTES = 8192;
     private static final String DEFAULT_CHECKSUM_ALGORITHM = "md5";
     private static final String ARTIFACT_URI_KEY = "uri";
-    private static final String DEFAULT_BUCKET_HASH_LENGTH = "3";
+    private static final String DEFAULT_BUCKET_HASH_LENGTH = "5";
     static final String STORAGE_ID_URI_TEMPLATE = "s3:%s";
     static final String CHECKSUM_URI_TEMPLATE = "md5:%s";
 
