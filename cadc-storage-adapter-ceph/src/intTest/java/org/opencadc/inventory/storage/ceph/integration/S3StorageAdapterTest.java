@@ -69,25 +69,6 @@
 
 package org.opencadc.inventory.storage.ceph.integration;
 
-import nom.tam.fits.BasicHDU;
-import nom.tam.fits.Fits;
-import org.apache.log4j.Logger;
-import org.junit.Ignore;
-import org.junit.Test;
-import org.junit.Assert;
-import org.opencadc.inventory.StorageLocation;
-import org.opencadc.inventory.storage.NewArtifact;
-import org.opencadc.inventory.storage.StorageMetadata;
-import org.opencadc.inventory.storage.s3.S3StorageAdapter;
-import software.amazon.awssdk.core.sync.RequestBody;
-import software.amazon.awssdk.core.sync.ResponseTransformer;
-import software.amazon.awssdk.regions.Region;
-import software.amazon.awssdk.services.s3.S3Client;
-import software.amazon.awssdk.services.s3.model.GetObjectRequest;
-import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
-import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
-import software.amazon.awssdk.services.s3.model.PutObjectRequest;
-
 import ca.nrc.cadc.io.ByteCountOutputStream;
 import ca.nrc.cadc.util.FileUtil;
 import ca.nrc.cadc.util.StringUtil;
@@ -96,7 +77,6 @@ import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileReader;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -116,6 +96,25 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+
+import nom.tam.fits.BasicHDU;
+import nom.tam.fits.Fits;
+import org.apache.log4j.Logger;
+import org.junit.Assert;
+import org.junit.Ignore;
+import org.junit.Test;
+import org.opencadc.inventory.StorageLocation;
+import org.opencadc.inventory.storage.NewArtifact;
+import org.opencadc.inventory.storage.StorageMetadata;
+import org.opencadc.inventory.storage.s3.S3StorageAdapter;
+import software.amazon.awssdk.core.sync.RequestBody;
+import software.amazon.awssdk.core.sync.ResponseTransformer;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.GetObjectRequest;
+import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
+import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
+import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
 
 public class S3StorageAdapterTest {

@@ -75,6 +75,7 @@ import ca.nrc.cadc.net.ResourceAlreadyExistsException;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.util.HexUtil;
+import ca.nrc.cadc.util.PropertiesReader;
 import ca.nrc.cadc.util.StringUtil;
 
 import java.io.IOException;
@@ -134,10 +135,13 @@ public class S3StorageAdapter implements StorageAdapter {
 
     private static final Logger LOGGER = Logger.getLogger(S3StorageAdapter.class);
 
+    public static final String CONFIG_FILE = "cadc-storage-adapter-ceph.properties";
+    public static final String CONFIG_PROPERTY_BUCKETDEPTH = "bucketLength";
+
     private static final int BUFFER_SIZE_BYTES = 8192;
     private static final String DEFAULT_CHECKSUM_ALGORITHM = "md5";
     private static final String ARTIFACT_URI_KEY = "uri";
-    private static final int DEFAULT_BUCKET_HASH_LENGTH = 5;
+    private static final String DEFAULT_BUCKET_HASH_LENGTH = "3";
     static final String STORAGE_ID_URI_TEMPLATE = "s3:%s";
     static final String CHECKSUM_URI_TEMPLATE = "md5:%s";
 
@@ -160,6 +164,17 @@ public class S3StorageAdapter implements StorageAdapter {
 
     URI generateStorageID() {
         return URI.create(String.format(S3StorageAdapter.STORAGE_ID_URI_TEMPLATE, UUID.randomUUID().toString()));
+    }
+
+    /**
+     * Obtain the configured bucket name length.
+     * @return  Integer bucket length.  Never null.
+     */
+    private int getBucketNameLength() {
+        final PropertiesReader pr = new PropertiesReader(CONFIG_FILE);
+        final Optional<String> optionalBucketLength =
+                Optional.ofNullable(pr.getFirstPropertyValue(CONFIG_PROPERTY_BUCKETDEPTH));
+        return Integer.parseInt(optionalBucketLength.orElse(DEFAULT_BUCKET_HASH_LENGTH));
     }
 
     /**
@@ -367,7 +382,7 @@ public class S3StorageAdapter implements StorageAdapter {
      *                                        thrown as an instance of this type.
      */
     String ensureBucket(final URI storageID) throws ResourceAlreadyExistsException, SdkClientException, S3Exception {
-        final String bucket = InventoryUtil.computeBucket(storageID, DEFAULT_BUCKET_HASH_LENGTH);
+        final String bucket = InventoryUtil.computeBucket(storageID, getBucketNameLength());
         final HeadBucketRequest headBucketRequest = HeadBucketRequest.builder().bucket(bucket).build();
 
         try {
@@ -420,10 +435,10 @@ public class S3StorageAdapter implements StorageAdapter {
         try {
             final String bucket = ensureBucket(storageID);
 
-            final PutObjectRequest.Builder putObjectRequestBuilder = PutObjectRequest.builder()
-                                                                                     .bucket(bucket)
-                                                                                     .key(storageID
-                                                                                                  .getSchemeSpecificPart());
+            final PutObjectRequest.Builder putObjectRequestBuilder =
+                    PutObjectRequest.builder()
+                                    .bucket(bucket)
+                                    .key(storageID.getSchemeSpecificPart());
 
             final Map<String, String> metadata = new HashMap<>();
             metadata.put(ARTIFACT_URI_KEY, newArtifact.getArtifactURI().toASCIIString().trim());

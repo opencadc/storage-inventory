@@ -11,6 +11,20 @@ package.
 * Gradle >= 4.6
   * See [Gradle Documentation](https://docs.gradle.org/current/userguide/java_library_plugin.html) for upcoming and current deprecations and making Gradle buildfiles more efficient.
 
+## Deployment
+The `minoc` service is required for a complete service.  This library is imported by `minoc` as needed.
+
+Ensure there is a `cadc-storage-adapter-ceph.properties` file available to the `minoc` service as well in the predefined configuration location.
+
+### The `cadc-storage-adapter-ceph.properties` file
+
+This contains configuration for connection and tuning items.
+
+| Property name  | Purpose |
+| -------------- | ------- |
+| `bucketLength` | {`integer`} (S3 only) Length of the computed bucket name   |
+
+
 ### RADOS only
 OS level packages are required.
 * librados-dev
