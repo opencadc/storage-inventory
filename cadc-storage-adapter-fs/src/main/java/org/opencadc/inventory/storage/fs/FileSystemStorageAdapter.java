@@ -91,6 +91,8 @@ import java.security.DigestOutputStream;
 import java.security.MessageDigest;
 import java.util.Iterator;
 import java.util.Set;
+import java.util.SortedSet;
+import java.util.TreeSet;
 import java.util.UUID;
 
 import org.apache.log4j.Logger;
@@ -450,7 +452,7 @@ public class FileSystemStorageAdapter implements StorageAdapter {
      * @throws TransientException If an unexpected, temporary exception occurred. 
      */
     public Iterator<StorageMetadata> iterator()
-        throws ReadException, WriteException, StorageEngageException, TransientException {
+        throws StorageEngageException, TransientException {
         throw new UnsupportedOperationException("sorted iteration not supported");
     }
     
@@ -465,7 +467,7 @@ public class FileSystemStorageAdapter implements StorageAdapter {
      * @throws TransientException If an unexpected, temporary exception occurred. 
      */
     public Iterator<StorageMetadata> iterator(String storageBucket)
-        throws ReadException, WriteException, StorageEngageException, TransientException {
+        throws StorageEngageException, TransientException {
         throw new UnsupportedOperationException("sorted iteration not supported");
     }
     
@@ -479,8 +481,8 @@ public class FileSystemStorageAdapter implements StorageAdapter {
      * @throws StorageEngageException If the adapter failed to interact with storage.
      * @throws TransientException If an unexpected, temporary exception occurred. 
      */
-    public Iterator<StorageMetadata> unsortedIterator(String storageBucket)
-        throws ReadException, WriteException, StorageEngageException, TransientException {
+    public SortedSet<StorageMetadata> list(String storageBucket)
+        throws StorageEngageException, TransientException {
         StringBuilder path = new StringBuilder();
         int bucketDepth = 0;
         String fixedParentDir = null;
@@ -524,13 +526,14 @@ public class FileSystemStorageAdapter implements StorageAdapter {
             if (!Files.exists(bucketPath) || !Files.isDirectory(bucketPath)) {
                 throw new IllegalArgumentException("Invalid bucket: " + storageBucket);
             }
-            Iterator<StorageMetadata> iterator = null;
-            try {
-                iterator = new FileSystemIterator(bucketPath, bucketDepth, fixedParentDir);
-            } catch (IOException e) {
-                throw new StorageEngageException("failed to obtain iterator", e);
+            Iterator<StorageMetadata> iter = new FileSystemIterator(bucketPath, bucketDepth, fixedParentDir);
+            SortedSet<StorageMetadata> ret = new TreeSet<>();
+            while (iter.hasNext()) {
+                ret.add(iter.next());
             }
-            return iterator;
+            return ret;
+        } catch (IOException e) {
+            throw new StorageEngageException("failed to obtain iterator", e);
         } catch (InvalidPathException e) {
             throw new IllegalArgumentException("Invalid bucket: " + storageBucket);
         }   

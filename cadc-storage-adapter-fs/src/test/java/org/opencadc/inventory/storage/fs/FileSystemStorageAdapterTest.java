@@ -87,6 +87,8 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 
+import java.util.SortedSet;
+import static java.util.Spliterators.iterator;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
@@ -190,16 +192,16 @@ public class FileSystemStorageAdapterTest {
     }
     
     @Test
-    public void testUnsortedIteratorURIMode() {
-        this.testUnsortedIterator(BucketMode.URI);
+    public void testList_URIMode() {
+        this.testList(BucketMode.URI);
     }
     
     @Test
-    public void testUnsortedIteratorURIBucketMode() {
-        this.testUnsortedIterator(BucketMode.URIBUCKET);
+    public void testList_URIBucketMode() {
+        this.testList(BucketMode.URIBUCKET);
     }
     
-    private void testUnsortedIterator(BucketMode bucketMode) {
+    private void testList(BucketMode bucketMode) {
         try {
             
             log.info("testUnsortedIterator(" + bucketMode + ") - start");
@@ -245,7 +247,8 @@ public class FileSystemStorageAdapterTest {
                 log.debug("added " + meta.getStorageLocation().getStorageID());
             }
             
-            Iterator<StorageMetadata> iterator = fs.unsortedIterator("");
+            SortedSet<StorageMetadata> result = fs.list("");
+            Iterator<StorageMetadata> iterator = result.iterator();
             List<URI> visitedStorageIDs = new ArrayList<URI>();
             StorageMetadata next = null;
             URI nextStorageID = null;
@@ -327,7 +330,8 @@ public class FileSystemStorageAdapterTest {
                 log.debug("added " + meta.getStorageLocation().getStorageID());
             }
             
-            Iterator<StorageMetadata> iterator = fs.unsortedIterator("test:dir1");
+            SortedSet<StorageMetadata> result = fs.list("test:dir1");
+            Iterator<StorageMetadata> iterator = result.iterator();
             List<URI> visitedStorageIDs = new ArrayList<URI>();
             StorageMetadata next = null;
             URI nextStorageID = null;
