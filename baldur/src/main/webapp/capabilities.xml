@@ -23,7 +23,7 @@
         </interface>
     </capability>
 
-    <capability standardID="vos://cadc.nrc.ca~vospace/CADC/std/inventory/#permissions-1.0">
+    <capability standardID="http://www.opencadc.org/std/storage#permissions-1.0">
         <interface xsi:type="vs:ParamHTTP" role="std">
             <accessURL use="base">https://replace.com/baldur/perms</accessURL>
             <securityMethod standardID="ivo://ivoa.net/sso#tls-with-certificate" />
