@@ -168,9 +168,11 @@ public class GetPermissionsTest extends BaldurTest {
                     ReadGrant readGrant = (ReadGrant) grant;
                     Assert.assertEquals(artifactURI, readGrant.getArtifactURI());
                     Assert.assertTrue("isAnon=" + readGrant.isAnonymousAccess(), readGrant.isAnonymousAccess());
-                    Assert.assertEquals(1, readGrant.getGroups().size());
+                    Assert.assertEquals(2, readGrant.getGroups().size());
                     GroupURI readGroup = new GroupURI("ivo://cadc.nrc.ca/gms?TestRead");
-                    Assert.assertEquals(readGroup, readGrant.getGroups().get(0));
+                    GroupURI readWriteGroup = new GroupURI("ivo://cadc.nrc.ca/gms?TestWrite");
+                    Assert.assertTrue(readGrant.getGroups().contains(readGroup));
+                    Assert.assertTrue(readGrant.getGroups().contains(readWriteGroup));
                     
                     return null;
                 }
@@ -202,8 +204,8 @@ public class GetPermissionsTest extends BaldurTest {
                     WriteGrant writeGrant = (WriteGrant) grant;
                     Assert.assertEquals(artifactURI, writeGrant.getArtifactURI());
                     Assert.assertEquals(1, writeGrant.getGroups().size());
-                    GroupURI writeGroup = new GroupURI("ivo://cadc.nrc.ca/gms?TestWrite");
-                    Assert.assertEquals(writeGroup, writeGrant.getGroups().get(0));
+                    GroupURI readWriteGroup = new GroupURI("ivo://cadc.nrc.ca/gms?TestWrite");
+                    Assert.assertEquals(readWriteGroup, writeGrant.getGroups().get(0));
                     
                     return null;
                 }

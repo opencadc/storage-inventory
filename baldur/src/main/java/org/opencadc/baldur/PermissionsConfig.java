@@ -80,6 +80,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.NoSuchElementException;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -115,20 +116,8 @@ public class PermissionsConfig {
         init();
     }
     
-    void authorize() {
-        Subject subject = AuthenticationUtil.getCurrentSubject();
-        if (subject != null) {
-            Set<X500Principal> principals = subject.getPrincipals(X500Principal.class);
-            for (Principal p : principals) {
-                log.debug("checking user dn " + p);
-                for (Principal authorizedUser : authPrincipals) {
-                    if (AuthenticationUtil.equals(authorizedUser, p)) {
-                        return;
-                    }
-                }
-            }
-        }
-        throw new AccessControlException("forbidden");
+    Set<Principal> getAuthorizedPrincipals() {
+        return authPrincipals;
     }
     
     Iterator<PermissionEntry> getMatchingEntries(URI artifactURI) {
@@ -277,7 +266,7 @@ public class PermissionsConfig {
         
         public PermissionEntry next() {
             if (next == null) {
-                throw new IllegalStateException("BUG: no more matching entries");
+                throw new NoSuchElementException("no more matching entries");
             }
             PermissionEntry ret = next;
             advance();

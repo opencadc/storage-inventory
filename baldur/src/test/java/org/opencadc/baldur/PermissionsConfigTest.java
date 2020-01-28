@@ -114,25 +114,27 @@ public class PermissionsConfigTest {
             Assert.assertEquals(2, entry.readWriteGroups.size());
             GroupURI readGroup1 = new GroupURI("ivo://cadc.nrc.ca/gms?group1");
             GroupURI readGroup2 = new GroupURI("ivo://cadc.nrc.ca/gms?group2");
-            GroupURI writeGroup1 = new GroupURI("ivo://cadc.nrc.ca/gms?group3");
-            GroupURI writeGroup2 = new GroupURI("ivo://cadc.nrc.ca/gms?group4");
+            GroupURI readWriteGroup1 = new GroupURI("ivo://cadc.nrc.ca/gms?group3");
+            GroupURI readWriteGroup2 = new GroupURI("ivo://cadc.nrc.ca/gms?group4");
             Assert.assertTrue(entry.readOnlyGroups.contains(readGroup1));
             Assert.assertTrue(entry.readOnlyGroups.contains(readGroup2));
-            Assert.assertTrue(entry.readWriteGroups.contains(writeGroup1));
-            Assert.assertTrue(entry.readWriteGroups.contains(writeGroup2));
+            Assert.assertTrue(entry.readWriteGroups.contains(readWriteGroup1));
+            Assert.assertTrue(entry.readWriteGroups.contains(readWriteGroup2));
             
             ReadGrant readGrant = GetAction.getReadGrant(config, artifactURI);
             Assert.assertNotNull(readGrant);
             Assert.assertTrue(readGrant.isAnonymousAccess());
-            Assert.assertEquals(2, readGrant.getGroups().size());
+            Assert.assertEquals(4, readGrant.getGroups().size());
             Assert.assertTrue(readGrant.getGroups().contains(readGroup1));
             Assert.assertTrue(readGrant.getGroups().contains(readGroup2));
+            Assert.assertTrue(readGrant.getGroups().contains(readWriteGroup1));
+            Assert.assertTrue(readGrant.getGroups().contains(readWriteGroup2));
             
             WriteGrant writeGrant = GetAction.getWriteGrant(config, artifactURI);
             Assert.assertNotNull(writeGrant);
             Assert.assertEquals(2, writeGrant.getGroups().size());
-            Assert.assertTrue(writeGrant.getGroups().contains(writeGroup1));
-            Assert.assertTrue(writeGrant.getGroups().contains(writeGroup2));
+            Assert.assertTrue(writeGrant.getGroups().contains(readWriteGroup1));
+            Assert.assertTrue(writeGrant.getGroups().contains(readWriteGroup2));
             
             // test no match
             PermissionsConfig.clearCache();
@@ -191,21 +193,23 @@ public class PermissionsConfigTest {
             
             GroupURI readGroup1 = new GroupURI("ivo://cadc.nrc.ca/gms?group1");
             GroupURI readGroup2 = new GroupURI("ivo://cadc.nrc.ca/gms?group3");
-            GroupURI writeGroup1 = new GroupURI("ivo://cadc.nrc.ca/gms?group2");
-            GroupURI writeGroup2 = new GroupURI("ivo://cadc.nrc.ca/gms?group4");
+            GroupURI readWriteGroup1 = new GroupURI("ivo://cadc.nrc.ca/gms?group2");
+            GroupURI readWriteGroup2 = new GroupURI("ivo://cadc.nrc.ca/gms?group4");
             
             ReadGrant readGrant = GetAction.getReadGrant(config, artifactURI);
             Assert.assertNotNull(readGrant);
             Assert.assertTrue(readGrant.isAnonymousAccess());
-            Assert.assertEquals(2, readGrant.getGroups().size());
+            Assert.assertEquals(4, readGrant.getGroups().size());
             Assert.assertTrue(readGrant.getGroups().contains(readGroup1));
             Assert.assertTrue(readGrant.getGroups().contains(readGroup2));
+            Assert.assertTrue(readGrant.getGroups().contains(readWriteGroup1));
+            Assert.assertTrue(readGrant.getGroups().contains(readWriteGroup2));
             
             WriteGrant writeGrant = GetAction.getWriteGrant(config, artifactURI);
             Assert.assertNotNull(writeGrant);
             Assert.assertEquals(2, writeGrant.getGroups().size());
-            Assert.assertTrue(writeGrant.getGroups().contains(writeGroup1));
-            Assert.assertTrue(writeGrant.getGroups().contains(writeGroup2));
+            Assert.assertTrue(writeGrant.getGroups().contains(readWriteGroup1));
+            Assert.assertTrue(writeGrant.getGroups().contains(readWriteGroup2));
             
         } catch (Exception unexpected) {
             log.error("unexpected exception", unexpected);

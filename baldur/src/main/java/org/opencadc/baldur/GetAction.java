@@ -69,16 +69,23 @@
 
 package org.opencadc.baldur;
 
+import ca.nrc.cadc.auth.AuthenticationUtil;
 import ca.nrc.cadc.rest.InlineContentHandler;
 import ca.nrc.cadc.rest.RestAction;
 
 import java.io.OutputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.security.AccessControlException;
+import java.security.Principal;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Set;
+
+import javax.security.auth.Subject;
+import javax.security.auth.x500.X500Principal;
 
 import org.apache.log4j.Logger;
 import org.opencadc.gms.GroupURI;
@@ -120,7 +127,7 @@ public class GetAction extends RestAction {
 
         // Check if the calling user is authorized to make the request.
         PermissionsConfig permissionsConfig = new PermissionsConfig();
-        permissionsConfig.authorize();
+        authorize(permissionsConfig);
         
         String op = syncInput.getParameter(OP);
         String uri = syncInput.getParameter(URI);
@@ -181,6 +188,22 @@ public class GetAction extends RestAction {
         return new Date();
     }
     
+    void authorize(PermissionsConfig permissionsConfig) {
+        Subject subject = AuthenticationUtil.getCurrentSubject();
+        if (subject != null) {
+            Set<X500Principal> principals = subject.getPrincipals(X500Principal.class);
+            for (Principal p : principals) {
+                log.debug("checking user dn " + p);
+                for (Principal authorizedUser : permissionsConfig.getAuthorizedPrincipals()) {
+                    if (AuthenticationUtil.equals(authorizedUser, p)) {
+                        return;
+                    }
+                }
+            }
+        }
+        throw new AccessControlException("forbidden");
+    }
+    
     /**
      * Get the read grant for the given Artifact URI. 
      *
@@ -201,6 +224,11 @@ public class GetAction extends RestAction {
                 anonymousRead = next.anonRead;
             }
             for (GroupURI groupURI : next.readOnlyGroups) {
+                if (!groups.contains(groupURI)) {
+                    groups.add(groupURI);
+                }
+            }
+            for (GroupURI groupURI : next.readWriteGroups) {
                 if (!groups.contains(groupURI)) {
                     groups.add(groupURI);
                 }
