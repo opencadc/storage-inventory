@@ -1,7 +1,7 @@
 swagger: '2.0'
 info:
   version: '0.1'
-  title: Storage permissions service (baldur)
+  title: Artifact permissions (baldur)
   description: 'Storage Inventory Permissions API.<br/><br/>Clients may authenticate to this service by using a client certificate over SSL.'
 basePath: '/baldur'
 
