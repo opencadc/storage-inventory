@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2019.                            (c) 2019.
+*  (c) 2020.                            (c) 2020.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -67,91 +67,87 @@
 
 package org.opencadc.inventory;
 
+import ca.nrc.cadc.util.Log4jInit;
 import java.net.URI;
-import java.util.Objects;
+import java.util.Iterator;
+import java.util.SortedSet;
+import java.util.TreeSet;
+import org.apache.log4j.Level;
+import org.apache.log4j.Logger;
+import org.junit.Assert;
+import org.junit.Test;
 
 /**
- * Reference to an object in a backend storage system. This class holds the internal
- * identifier for interacting with the back end storage system. 
- * 
+ *
  * @author pdowler
  */
-public class StorageLocation implements Comparable<StorageLocation> {
-    private final URI storageID;
-    public String storageBucket;
-    
-    /**
-     * Constructor with storage bucket null.
-     * 
-     * @param storageID internal storage identifier
-     */
-    public StorageLocation(URI storageID) {
-        InventoryUtil.assertNotNull(StorageLocation.class, "storageID", storageID);
-        this.storageID = storageID;
-    }
+public class StorageLocationTest {
+    private static final Logger log = Logger.getLogger(StorageLocationTest.class);
 
-    /**
-     * @return internal storage identifier
-     */
-    public URI getStorageID() {
-        return storageID;
+    static {
+        Log4jInit.setLevel("org.opencadc.si", Level.INFO);
     }
     
+    public StorageLocationTest() { 
+    }
     
-    @Override
-    public String toString() {
-        StringBuilder sb = new StringBuilder();
-        sb.append(this.getClass().getSimpleName());
-        sb.append("[");
-        if (storageBucket != null) {
-            sb.append(storageBucket).append(",");
+    /*
+    @Test
+    public void testTemplate() {
+        try {
+            
+        } catch (Exception unexpected) {
+            log.error("unexpected exception", unexpected);
+            Assert.fail("unexpected exception: " + unexpected);
         }
-        sb.append(storageID);
-        sb.append("]");
-        return sb.toString();
     }
-
-    @Override
-    public boolean equals(Object o) {
-        if (o == null) {
-            return false;
+    */
+    
+    @Test
+    public void testConstructor() {
+        try {
+            StorageLocation s = new StorageLocation(URI.create("foo:bar"));
+            log.info("created: " + s);
+            
+            try {
+                StorageLocation e = new StorageLocation(null);
+                Assert.fail("created: " + e);
+            } catch (IllegalArgumentException expected) {
+                log.info("caught expected: " + expected);
+            }
+        } catch (Exception unexpected) {
+            log.error("unexpected exception", unexpected);
+            Assert.fail("unexpected exception: " + unexpected);
         }
-        StorageLocation s = (StorageLocation) o;
-        return storageID.compareTo(s.storageID) == 0;
     }
-
-    @Override
-    public int hashCode() {
-        int hash = 3;
-        hash = 79 * hash + Objects.hashCode(this.storageID);
-        hash = 79 * hash + Objects.hashCode(this.storageBucket);
-        return hash;
-    }
-
-    /**
-     * Fully ordered implementation. Instances are ordered by storageBucket and if storageBucket is
-     * equal then by storageID. Two null storageBucket(s) are treated as equals and a single null
-     * storageBucket is sorted after a non-null storageBucket.
-     * 
-     * @param rhs location to pare to
-     * @return -1|0|1 
-     */
-    @Override
-    public int compareTo(StorageLocation rhs) {
-        if (storageBucket == null && rhs.storageBucket != null) {
-            return 1;
+    
+    @Test
+    public void testComparable() {
+        try {
+            final StorageLocation s1 = new StorageLocation(URI.create("foo:123"));
+            final StorageLocation s2 = new StorageLocation(URI.create("foo:345"));
+            final StorageLocation s3 = new StorageLocation(URI.create("foo:234"));
+            final StorageLocation s4 = new StorageLocation(URI.create("foo:345"));
+            s4.storageBucket = "a";
+            final StorageLocation s5 = new StorageLocation(URI.create("foo:345"));
+            s5.storageBucket = "b";
+            
+            // correct order is: s4 s5 s1 s3 s2
+            SortedSet<StorageLocation> set = new TreeSet<StorageLocation>();
+            set.add(s1);
+            set.add(s2);
+            set.add(s3);
+            set.add(s4);
+            set.add(s5);
+            Iterator<StorageLocation> i = set.iterator();
+            Assert.assertEquals(s4, i.next());
+            Assert.assertEquals(s5, i.next());
+            Assert.assertEquals(s1, i.next());
+            Assert.assertEquals(s3, i.next());
+            Assert.assertEquals(s2, i.next());
+        } catch (Exception unexpected) {
+            log.error("unexpected exception", unexpected);
+            Assert.fail("unexpected exception: " + unexpected);
         }
-        if (storageBucket != null && rhs.storageBucket == null) {
-            return -1;
-        }
-        int ret = 0;
-        if (storageBucket != null && rhs.storageBucket != null) {
-            ret = this.storageBucket.compareTo(rhs.storageBucket);
-        }
-        
-        if (ret != 0) {
-            return ret;
-        }
-        return this.storageID.compareTo(rhs.storageID);
     }
 }

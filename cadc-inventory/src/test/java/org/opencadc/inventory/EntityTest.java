@@ -91,10 +91,17 @@ public class EntityTest {
     public EntityTest() { 
     }
     
+    /*
     @Test
     public void testTemplate() {
-        //Assert.fail("not implemented");
+        try {
+            
+        } catch (Exception unexpected) {
+            log.error("unexpected exception", unexpected);
+            Assert.fail("unexpected exception: " + unexpected);
+        }
     }
+    */
     
     @Test
     public void testArtifact() {
