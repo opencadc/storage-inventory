@@ -133,8 +133,8 @@ public class StorageLocation implements Comparable<StorageLocation> {
      * equal then by storageID. Two null storageBucket(s) are treated as equals and a single null
      * storageBucket is sorted after a non-null storageBucket.
      * 
-     * @param rhs
-     * @return 
+     * @param rhs location to pare to
+     * @return -1|0|1 
      */
     @Override
     public int compareTo(StorageLocation rhs) {

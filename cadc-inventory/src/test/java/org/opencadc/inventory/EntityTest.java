@@ -91,7 +91,8 @@ public class EntityTest {
     public EntityTest() { 
     }
     
-    //@Test
+    /*
+    @Test
     public void testTemplate() {
         try {
             
@@ -100,6 +101,7 @@ public class EntityTest {
             Assert.fail("unexpected exception: " + unexpected);
         }
     }
+    */
     
     @Test
     public void testArtifact() {

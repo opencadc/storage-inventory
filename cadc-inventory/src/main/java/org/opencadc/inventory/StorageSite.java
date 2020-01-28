@@ -68,6 +68,7 @@
 package org.opencadc.inventory;
 
 import java.net.URI;
+import java.util.Objects;
 import java.util.UUID;
 import org.apache.log4j.Logger;
 
@@ -117,7 +118,8 @@ public class StorageSite extends Entity {
 
     /**
      * Get the resourceID (service identifier) for this site.
-     * @return resourceID
+     * 
+     * @return resourceID identifier for the files service at the site
      */
     public URI getResourceID() {
         return resourceID;
@@ -135,7 +137,7 @@ public class StorageSite extends Entity {
     /**
      * Change the resourceID of this site.
      * 
-     * @param resourceID 
+     * @param resourceID identifier for the files service at the site
      */
     public void setResourceID(URI resourceID) {
         InventoryUtil.assertNotNull(StorageSite.class, "resourceID", resourceID);
@@ -145,7 +147,7 @@ public class StorageSite extends Entity {
     /**
      * Change the display name of this site.
      * 
-     * @param name 
+     * @param name display name for this site
      */
     public void setName(String name) {
         InventoryUtil.assertNotNull(StorageSite.class, "name", name);
@@ -165,6 +167,13 @@ public class StorageSite extends Entity {
         }
         StorageSite f = (StorageSite) o;
         return resourceID.equals(f.resourceID);
+    }
+
+    @Override
+    public int hashCode() {
+        int hash = 7;
+        hash = 43 * hash + Objects.hashCode(this.resourceID);
+        return hash;
     }
     
     @Override

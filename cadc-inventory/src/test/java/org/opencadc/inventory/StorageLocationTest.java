@@ -91,7 +91,8 @@ public class StorageLocationTest {
     public StorageLocationTest() { 
     }
     
-    //@Test
+    /*
+    @Test
     public void testTemplate() {
         try {
             
@@ -100,6 +101,7 @@ public class StorageLocationTest {
             Assert.fail("unexpected exception: " + unexpected);
         }
     }
+    */
     
     @Test
     public void testConstructor() {
@@ -122,12 +124,12 @@ public class StorageLocationTest {
     @Test
     public void testComparable() {
         try {
-            StorageLocation s1 = new StorageLocation(URI.create("foo:123"));
-            StorageLocation s2 = new StorageLocation(URI.create("foo:345"));
-            StorageLocation s3 = new StorageLocation(URI.create("foo:234"));
-            StorageLocation s4 = new StorageLocation(URI.create("foo:345"));
+            final StorageLocation s1 = new StorageLocation(URI.create("foo:123"));
+            final StorageLocation s2 = new StorageLocation(URI.create("foo:345"));
+            final StorageLocation s3 = new StorageLocation(URI.create("foo:234"));
+            final StorageLocation s4 = new StorageLocation(URI.create("foo:345"));
             s4.storageBucket = "a";
-            StorageLocation s5 = new StorageLocation(URI.create("foo:345"));
+            final StorageLocation s5 = new StorageLocation(URI.create("foo:345"));
             s5.storageBucket = "b";
             
             // correct order is: s4 s5 s1 s3 s2

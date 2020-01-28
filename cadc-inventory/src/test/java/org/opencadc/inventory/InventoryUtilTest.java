@@ -89,6 +89,18 @@ public class InventoryUtilTest {
     public InventoryUtilTest() { 
     }
     
+    /*
+    @Test
+    public void testTemplate() {
+        try {
+            
+        } catch (Exception unexpected) {
+            log.error("unexpected exception", unexpected);
+            Assert.fail("unexpected exception: " + unexpected);
+        }
+    }
+    */
+
     @Test
     public void testValidateArtifactURI() {
         try {
