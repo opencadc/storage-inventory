@@ -70,7 +70,7 @@
 package org.opencadc.inventory.storage;
 
 import java.net.URI;
-
+import java.util.Objects;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.StorageLocation;
 
@@ -80,7 +80,7 @@ import org.opencadc.inventory.StorageLocation;
  * @author majorb
  *
  */
-public class StorageMetadata {
+public class StorageMetadata implements Comparable<StorageMetadata> {
 
     private final StorageLocation storageLocation;
     private final URI contentChecksum;
@@ -108,6 +108,7 @@ public class StorageMetadata {
         return contentLength;
     }
     
+    @Override
     public boolean equals(Object o) {
         if (o == null || !(o instanceof StorageMetadata)) {
             return false;
@@ -116,4 +117,15 @@ public class StorageMetadata {
         return this.storageLocation.equals(other.storageLocation);
     }
 
+    @Override
+    public int hashCode() {
+        return storageLocation.hashCode();
+    }
+
+    @Override
+    public int compareTo(StorageMetadata rhs) {
+        return storageLocation.compareTo(rhs.storageLocation);
+    }
+
+    
 }

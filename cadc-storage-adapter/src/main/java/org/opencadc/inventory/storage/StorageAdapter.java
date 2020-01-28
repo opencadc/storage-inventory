@@ -3,7 +3,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2019.                            (c) 2019.
+ *  (c) 2020.                            (c) 2020.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -73,13 +73,12 @@ import ca.nrc.cadc.net.IncorrectContentChecksumException;
 import ca.nrc.cadc.net.IncorrectContentLengthException;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.Iterator;
 import java.util.Set;
-
+import java.util.SortedSet;
 import org.opencadc.inventory.StorageLocation;
 
 /**
@@ -110,7 +109,7 @@ public interface StorageAdapter {
      * 
      * @param storageLocation The storage location containing storageID and storageBucket.
      * @param dest The destination stream.
-     * @param cutouts Cutouts to be applied to the artifact
+     * @param operations operations to be applied to the artifact
      * 
      * @throws ResourceNotFoundException If the artifact could not be found.
      * @throws ReadException If the storage system failed to stream.
@@ -118,11 +117,16 @@ public interface StorageAdapter {
      * @throws StorageEngageException If the adapter failed to interact with storage.
      * @throws TransientException If an unexpected, temporary exception occurred. 
      */
-    public void get(StorageLocation storageLocation, OutputStream dest, Set<String> cutouts)
+    public void get(StorageLocation storageLocation, OutputStream dest, Set<String> operations)
         throws ResourceNotFoundException, ReadException, WriteException, StorageEngageException, TransientException;
     
     /**
-     * Write an artifact to storage.
+     * Write an artifact to storage. The returned storage location will be used for future get and 
+     * delete calls. If the storage implementation overwrites a previously used StorageLocation, it must
+     * perform an atomic replace and leave the previously stored bytes in tact if the put fails. The storage
+     * implementation may always write to a new storage location (e.g. generated unique storageID); in this case,
+     * the caller is responsible for keeping track of and cleaning up previously stored objects (the previous 
+     * StorageLocation of an Artifact). 
      * The value of storageBucket in the returned StorageMetadata and StorageLocation can be used to
      * retrieve batches of artifacts in some of the iterator signatures defined in this interface.
      * Batches of artifacts can be listed by bucket in two of the iterator methods in this interface.
@@ -163,38 +167,40 @@ public interface StorageAdapter {
      * Iterator of items ordered by their storageIDs.
      * @return An iterator over an ordered list of items in storage.
      * 
-     * @throws ReadException If the storage system failed to stream.
-     * @throws WriteException If the client failed to stream.
      * @throws StorageEngageException If the adapter failed to interact with storage.
      * @throws TransientException If an unexpected, temporary exception occurred. 
      */
     public Iterator<StorageMetadata> iterator()
-        throws ReadException, WriteException, StorageEngageException, TransientException;
+        throws StorageEngageException, TransientException;
     
     /**
      * Iterator of items ordered by their storageIDs in the given bucket.
      * @param storageBucket Only iterate over items in this bucket.
      * @return An iterator over an ordered list of items in this storage bucket.
      * 
-     * @throws ReadException If the storage system failed to stream.
-     * @throws WriteException If the client failed to stream.
      * @throws StorageEngageException If the adapter failed to interact with storage.
      * @throws TransientException If an unexpected, temporary exception occurred. 
      */
     public Iterator<StorageMetadata> iterator(String storageBucket)
-        throws ReadException, WriteException, StorageEngageException, TransientException;
+        throws StorageEngageException, TransientException;
     
     /**
-     * An unordered iterator of items in the given bucket.
-     * @param storageBucket Only iterate over items in this bucket.
+     * Get a set of  of items in the given bucket.
+     * @param storageBucket the bucket to list
      * @return An iterator over an ordered list of items in this storage bucket.
      * 
-     * @throws ReadException If the storage system failed to stream.
-     * @throws WriteException If the client failed to stream.
      * @throws StorageEngageException If the adapter failed to interact with storage.
      * @throws TransientException If an unexpected, temporary exception occurred. 
      */
-    public Iterator<StorageMetadata> unsortedIterator(String storageBucket)
-        throws ReadException, WriteException, StorageEngageException, TransientException;
+    public SortedSet<StorageMetadata> list(String storageBucket)
+        throws StorageEngageException, TransientException;
     
+    // for a symbolic bucket scheme (eg AD or human-usable filesystem):
+    //public String[] getStorageBucketDelimiters();
+    // public int getMaxDepth();
+    //public SortedSet<String> getBuckets(int len);
+    
+    // for a programmatic prefixable bucket scheme:
+    // char set specified as lower case hex [0-9a-f]
+    //public int getMaxBucketLength();
 }
