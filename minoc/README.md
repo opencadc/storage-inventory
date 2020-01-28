@@ -13,6 +13,7 @@ docker run -it minoc:latest /bin/bash
 ```
 
 ## running it
+Note: if using the cadc-storage-adapter-fs implementation, the file system root needs to be mapped to an external volume in the docker run command described below. 
 ```
 docker run -d --volume=/path/to/external/config:/config:ro --volume=/path/to/external/logs:/logs:rw --name minoc minoc:latest
 ```

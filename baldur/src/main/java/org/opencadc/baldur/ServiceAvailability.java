@@ -89,7 +89,7 @@ public class ServiceAvailability implements AvailabilityPlugin {
 
     @Override
     public boolean heartbeat() {
-        throw new RuntimeException("Not yet implemented");
+        return true;
     }
 
     public AvailabilityStatus getStatus() {

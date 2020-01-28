@@ -36,7 +36,7 @@ jobs:
 
     - name: build and test cadc-storage-adapter-ceph
       run: test -d cadc-storage-adapter-ceph && cd cadc-storage-adapter-ceph && gradle --info clean build javadoc checkstyleMain install
-      
+
     - name: build and test cadc-storage-permissions
       run: cd cadc-storage-permissions && gradle --info clean build javadoc checkstyleMain install
 

@@ -3,7 +3,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2019.                            (c) 2019.
+ *  (c) 2020.                            (c) 2020.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -62,31 +62,66 @@
  *  <http://www.gnu.org/licenses/>.      pas le cas, consultez :
  *                                       <http://www.gnu.org/licenses/>.
  *
- *  $Revision: 5 $
- *
  ************************************************************************
  */
 
-package org.opencadc.inventory.permissions;
+package org.opencadc.baldur;
 
-import java.net.URI;
-import java.util.Date;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.regex.Pattern;
+
+import org.opencadc.gms.GroupURI;
 
 /**
- * Holds grant information about an artifact.
+ * Class to hold information for a single entry in baldur.properties
  * 
  * @author majorb
- *
  */
-public class WriteGrant extends Grant {
-
+class PermissionEntry {
+    
+    private String name;
+    private Pattern pattern;
+    boolean anonRead = false;
+    List<GroupURI> readOnlyGroups = new ArrayList<GroupURI>();
+    List<GroupURI> readWriteGroups = new ArrayList<GroupURI>();
+    
     /**
-     * Construct a write grant for the given artifactURI.
-     * @param artifactURI The applicable targetURI.
-     * @param expiryDate The expiry date of the grant.
+     * Constructor.
+     * @param name The name of the entry.
+     * @param pattern The regex pattern of the entry.
      */
-    public WriteGrant(URI artifactURI, Date expiryDate) {
-        super(artifactURI, expiryDate);
+    PermissionEntry(String name, Pattern pattern) {
+        this.name = name;
+        this.pattern = pattern;
+    }
+    
+    String getName() {
+        return name;
     }
 
+    Pattern getPattern() {
+        return pattern;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        return this.name.equals(((PermissionEntry) o).getName());
+    }
+
+    @Override
+    public String toString() {
+        StringBuilder sb = new StringBuilder("PermissionEntry=[");
+        sb.append("name=[").append(name).append("],");
+        sb.append("pattern=[").append(pattern).append("],");
+        sb.append("anonRead=[").append(anonRead).append("],");
+        sb.append("readOnlyGroups=[");
+        sb.append(Arrays.toString(readOnlyGroups.toArray()));
+        sb.append("],");
+        sb.append("readWriteGroups=[");
+        sb.append(Arrays.toString(readWriteGroups.toArray()));
+        sb.append("]");
+        return sb.toString();
+    }
 }
