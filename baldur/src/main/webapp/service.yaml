@@ -1,7 +1,7 @@
 swagger: '2.0'
 info:
   version: '0.1'
-  title: Storage permissions service (baldur)
+  title: Artifact permissions (baldur)
   description: 'Storage Inventory Permissions API.<br/><br/>Clients may authenticate to this service by using a client certificate over SSL.'
 basePath: '/baldur'
 
@@ -39,8 +39,6 @@ paths:
           description: If the client does not provide credentials and anonymous access is disallowed.
         '403':
           description: If the client does not have permission.
-        '404':
-          description: If the artifact could not be found.
         '500':
           description: Internal error
         '503':

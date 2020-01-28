@@ -3,7 +3,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2019.                            (c) 2019.
+ *  (c) 2020.                            (c) 2020.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -62,31 +62,65 @@
  *  <http://www.gnu.org/licenses/>.      pas le cas, consultez :
  *                                       <http://www.gnu.org/licenses/>.
  *
- *  $Revision: 5 $
- *
  ************************************************************************
  */
 
-package org.opencadc.inventory.permissions;
+package org.opencadc.baldur;
 
+import ca.nrc.cadc.auth.AuthMethod;
+import ca.nrc.cadc.auth.AuthenticationUtil;
+import ca.nrc.cadc.auth.SSLUtil;
+import ca.nrc.cadc.reg.Standards;
+import ca.nrc.cadc.reg.client.RegistryClient;
+import ca.nrc.cadc.util.FileUtil;
+import ca.nrc.cadc.util.HexUtil;
+import ca.nrc.cadc.util.Log4jInit;
+
+import java.io.ByteArrayInputStream;
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
 import java.net.URI;
-import java.util.Date;
+import java.net.URL;
+import java.security.DigestInputStream;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+
+import javax.security.auth.Subject;
+
+import org.apache.log4j.Level;
+import org.apache.log4j.Logger;
 
 /**
- * Holds grant information about an artifact.
+ * Abstract integration test class with general setup and test support.
  * 
  * @author majorb
- *
  */
-public class WriteGrant extends Grant {
-
-    /**
-     * Construct a write grant for the given artifactURI.
-     * @param artifactURI The applicable targetURI.
-     * @param expiryDate The expiry date of the grant.
-     */
-    public WriteGrant(URI artifactURI, Date expiryDate) {
-        super(artifactURI, expiryDate);
+public abstract class BaldurTest {
+    
+    private static final Logger log = Logger.getLogger(BaldurTest.class);
+    public static final URI BALDUR_SERVICE_ID = URI.create("ivo://cadc.nrc.ca/baldur");
+    
+    protected URL certURL;
+    protected Subject anonSubject;
+    protected Subject noAuthSubject;
+    protected Subject authSubject;
+    
+    static {
+        Log4jInit.setLevel("org.opencadc.baldur", Level.INFO);
     }
-
+    
+    public BaldurTest() {
+        RegistryClient regClient = new RegistryClient();
+        certURL = regClient.getServiceURL(BALDUR_SERVICE_ID, Standards.SI_PERMISSIONS, AuthMethod.CERT);
+        log.info("certURL: " + certURL);
+        anonSubject = AuthenticationUtil.getAnonSubject();
+        File cert = FileUtil.getFileFromResource("baldur-test-1.pem", BaldurTest.class);
+        authSubject = SSLUtil.createSubject(cert);
+        log.info("authSubject: " + authSubject);
+        cert = FileUtil.getFileFromResource("baldur-test-2.pem", BaldurTest.class);
+        noAuthSubject = SSLUtil.createSubject(cert);
+        log.info("noAuthSubject: " + noAuthSubject);
+    }
+    
 }

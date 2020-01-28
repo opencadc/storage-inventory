@@ -22,7 +22,7 @@ public class TokenUtilTest {
     private static final Logger log = Logger.getLogger(TokenUtilTest.class);
 
     static {
-        Log4jInit.setLevel("org.opencadc.minoc", Level.DEBUG);
+        Log4jInit.setLevel("org.opencadc.inventory.permissions", Level.DEBUG);
     }
     
     static File pubFile, privFile;
