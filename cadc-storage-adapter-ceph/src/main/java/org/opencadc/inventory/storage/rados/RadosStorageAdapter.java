@@ -97,6 +97,8 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.SortedSet;
+import java.util.TreeSet;
 import java.util.UUID;
 
 import nom.tam.fits.BasicHDU;
@@ -501,13 +503,11 @@ public class RadosStorageAdapter implements StorageAdapter {
      *
      * @return An iterator over an ordered list of items in storage.
      *
-     * @throws ReadException          If the storage system failed to stream.
-     * @throws WriteException         If the client failed to stream.
      * @throws StorageEngageException If the adapter failed to interact with storage.
      * @throws TransientException     If an unexpected, temporary exception occurred.
      */
     public Iterator<StorageMetadata> iterator()
-            throws ReadException, WriteException, StorageEngageException, TransientException {
+            throws StorageEngageException, TransientException {
         return iterator(null);
     }
 
@@ -517,13 +517,11 @@ public class RadosStorageAdapter implements StorageAdapter {
      * @param storageBucket Only iterate over items in this bucket.
      * @return An iterator over an ordered list of items in this storage bucket.
      *
-     * @throws ReadException          If the storage system failed to stream.
-     * @throws WriteException         If the client failed to stream.
      * @throws StorageEngageException If the adapter failed to interact with storage.
      * @throws TransientException     If an unexpected, temporary exception occurred.
      */
     public Iterator<StorageMetadata> iterator(String storageBucket)
-            throws ReadException, WriteException, StorageEngageException, TransientException {
+            throws StorageEngageException, TransientException {
         try {
             return new RadosStorageMetadataIterator(this, storageBucket);
         } catch (IOException e) {
@@ -532,19 +530,22 @@ public class RadosStorageAdapter implements StorageAdapter {
     }
 
     /**
-     * An unordered iterator of items in the given bucket.
+     * Get set of items in the given bucket.
      *
      * @param storageBucket Only iterate over items in this bucket.
      * @return An iterator over an ordered list of items in this storage bucket.
      *
-     * @throws ReadException          If the storage system failed to stream.
-     * @throws WriteException         If the client failed to stream.
      * @throws StorageEngageException If the adapter failed to interact with storage.
      * @throws TransientException     If an unexpected, temporary exception occurred.
      */
-    public Iterator<StorageMetadata> unsortedIterator(String storageBucket)
-            throws ReadException, WriteException, StorageEngageException, TransientException {
-        return iterator(storageBucket);
+    public SortedSet<StorageMetadata> list(String storageBucket)
+            throws StorageEngageException, TransientException {
+        SortedSet<StorageMetadata> ret = new TreeSet<StorageMetadata>();
+        Iterator<StorageMetadata> i = iterator(storageBucket);
+        while (i.hasNext()) {
+            ret.add(i.next());
+        }
+        return ret;
     }
 
     private InputStream createStriperInputStream(final String objectID) throws IOException {
