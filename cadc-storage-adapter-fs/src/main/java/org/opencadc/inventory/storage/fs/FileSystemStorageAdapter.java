@@ -245,6 +245,7 @@ public class FileSystemStorageAdapter implements StorageAdapter {
      * @throws StorageEngageException If the adapter failed to interact with storage.
      * @throws TransientException If an unexpected, temporary exception occurred. 
      */
+    @Override
     public void get(StorageLocation storageLocation, OutputStream dest)
         throws ResourceNotFoundException, ReadException, WriteException, StorageEngageException, TransientException {
         InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "storageLocation", storageLocation);
@@ -280,6 +281,7 @@ public class FileSystemStorageAdapter implements StorageAdapter {
      * @throws StorageEngageException If the adapter failed to interact with storage.
      * @throws TransientException If an unexpected, temporary exception occurred. 
      */
+    @Override
     public void get(StorageLocation storageLocation, OutputStream dest, Set<String> cutouts)
         throws ResourceNotFoundException, ReadException, WriteException, StorageEngageException, TransientException {
         throw new UnsupportedOperationException("cutouts not supported");
@@ -305,6 +307,7 @@ public class FileSystemStorageAdapter implements StorageAdapter {
      * @throws StorageEngageException If the adapter failed to interact with storage.
      * @throws TransientException If an unexpected, temporary exception occurred.
      */
+    @Override
     public StorageMetadata put(NewArtifact newArtifact, InputStream source)
         throws IncorrectContentChecksumException, IncorrectContentLengthException, ReadException, WriteException,
             StorageEngageException, TransientException {
@@ -435,6 +438,7 @@ public class FileSystemStorageAdapter implements StorageAdapter {
      * @throws StorageEngageException If the adapter failed to interact with storage.
      * @throws TransientException If an unexpected, temporary exception occurred. 
      */
+    @Override
     public void delete(StorageLocation storageLocation)
         throws ResourceNotFoundException, IOException, StorageEngageException, TransientException {
         InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "storageLocation", storageLocation);
@@ -446,11 +450,10 @@ public class FileSystemStorageAdapter implements StorageAdapter {
      * Iterator of items ordered by their storageIDs.
      * @return An iterator over an ordered list of items in storage.
      * 
-     * @throws ReadException If the storage system failed to stream.
-     * @throws WriteException If the client failed to stream.
      * @throws StorageEngageException If the adapter failed to interact with storage.
      * @throws TransientException If an unexpected, temporary exception occurred. 
      */
+    @Override
     public Iterator<StorageMetadata> iterator()
         throws StorageEngageException, TransientException {
         throw new UnsupportedOperationException("sorted iteration not supported");
@@ -461,11 +464,10 @@ public class FileSystemStorageAdapter implements StorageAdapter {
      * @param storageBucket Only iterate over items in this bucket.
      * @return An iterator over an ordered list of items in this storage bucket.
      * 
-     * @throws ReadException If the storage system failed to stream.
-     * @throws WriteException If the client failed to stream.
      * @throws StorageEngageException If the adapter failed to interact with storage.
      * @throws TransientException If an unexpected, temporary exception occurred. 
      */
+    @Override
     public Iterator<StorageMetadata> iterator(String storageBucket)
         throws StorageEngageException, TransientException {
         throw new UnsupportedOperationException("sorted iteration not supported");
@@ -476,8 +478,6 @@ public class FileSystemStorageAdapter implements StorageAdapter {
      * @param storageBucket Only iterate over items in this bucket.
      * @return An iterator over an ordered list of items in this storage bucket.
      * 
-     * @throws ReadException If the storage system failed to stream.
-     * @throws WriteException If the client failed to stream.
      * @throws StorageEngageException If the adapter failed to interact with storage.
      * @throws TransientException If an unexpected, temporary exception occurred. 
      */
