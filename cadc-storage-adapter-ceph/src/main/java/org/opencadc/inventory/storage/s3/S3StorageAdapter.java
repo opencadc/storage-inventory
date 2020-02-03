@@ -66,6 +66,7 @@
  *
  ************************************************************************
  */
+
 package org.opencadc.inventory.storage.s3;
 
 import ca.nrc.cadc.net.IncorrectContentChecksumException;
@@ -76,7 +77,6 @@ import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.util.HexUtil;
 import ca.nrc.cadc.util.PropertiesReader;
 import ca.nrc.cadc.util.StringUtil;
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -90,7 +90,6 @@ import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.UUID;
-
 import nom.tam.fits.BasicHDU;
 import nom.tam.fits.Fits;
 import nom.tam.fits.FitsException;
@@ -350,10 +349,8 @@ public class S3StorageAdapter implements StorageAdapter {
      *
      * @param bucket The bucket name.
      * @throws ResourceAlreadyExistsException The bucket already exists.
-     * @throws SdkClientException If any client side error occurs such as an IO related failure, failure
-     * to get credentials, etc.
-     * @throws S3Exception Base class for all service exceptions. Unknown exceptions will be
-     * thrown as an instance of this type.
+     * @throws SdkClientException If any client side error occurs such as an IO related failure, failure to get credentials, etc.
+     * @throws S3Exception Base class for all service exceptions. Unknown exceptions will be thrown as an instance of this type.
      */
     void createBucket(final String bucket) throws ResourceAlreadyExistsException, SdkClientException, S3Exception {
         final CreateBucketRequest createBucketRequest = CreateBucketRequest.builder().bucket(bucket).build();
@@ -372,12 +369,9 @@ public class S3StorageAdapter implements StorageAdapter {
      * @param storageID The Storage ID to ensure a bucket for.
      * @return String name of the given Object's bucket.
      *
-     * @throws ResourceAlreadyExistsException If the bucket needed to be created but already exists. Should never
-     * really happen, but here for completeness.
-     * @throws SdkClientException If any client side error occurs such as an IO related failure, failure
-     * to get credentials, etc.
-     * @throws S3Exception Base class for all service exceptions. Unknown exceptions will be
-     * thrown as an instance of this type.
+     * @throws ResourceAlreadyExistsException If the bucket needed to be created but already exists
+     * @throws SdkClientException If any client side error occurs such as an IO related failure, failure to get credentials, etc.
+     * @throws S3Exception Base class for all service exceptions. Unknown exceptions will be thrown as an instance of this type.
      */
     String ensureBucket(final URI storageID) throws ResourceAlreadyExistsException, SdkClientException, S3Exception {
         final String bucket = InventoryUtil.computeBucket(storageID, getBucketNameLength());
@@ -409,14 +403,12 @@ public class S3StorageAdapter implements StorageAdapter {
      * If storageBucket is null then the caller will not be able perform bucket-based batch
      * validation through the iterator methods.
      *
-     * @param newArtifact The holds information about the incoming artifact. If the contentChecksum
-     * and contentLength are set, they will be used to validate the bytes received.
-     * @param source The stream from which to read.
-     * @return The storage metadata.
+     * @param newArtifact known information about the incoming artifact
+     * @param source stream from which to read
+     * @return storage metadata after write
      *
-     * @throws IncorrectContentChecksumException If the checksum did not match what was written, or was not valid.
-     * @throws IncorrectContentLengthException If the bytes read did not match the bytes set in the Content-Length
-     * header.
+     * @throws IncorrectContentChecksumException checksum of the data stream did not match the value in newArtifact
+     * @throws IncorrectContentLengthException number bytes read did not match the value in newArtifact
      * @throws ReadException If the client failed to read the stream.
      * @throws WriteException If the storage system failed to stream.
      * @throws StorageEngageException If the adapter failed to interact with storage.
