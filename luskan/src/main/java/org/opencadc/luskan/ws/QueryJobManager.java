@@ -68,28 +68,28 @@
 package org.opencadc.luskan.ws;
 
 import ca.nrc.cadc.auth.X500IdentityManager;
-import org.opencadc.luskan.QueryRunnerImpl;
 import ca.nrc.cadc.uws.server.JobExecutor;
 import ca.nrc.cadc.uws.server.JobPersistence;
 import ca.nrc.cadc.uws.server.SimpleJobManager;
 import ca.nrc.cadc.uws.server.ThreadPoolExecutor;
 import ca.nrc.cadc.uws.server.impl.PostgresJobPersistence;
+
 import org.apache.log4j.Logger;
+import org.opencadc.luskan.QueryRunnerImpl;
+
 
 /**
- *
  * @author pdowler
  */
-public class QueryJobManager extends SimpleJobManager
-{
+public class QueryJobManager extends SimpleJobManager {
+
     private static final Logger log = Logger.getLogger(QueryJobManager.class);
 
-    private static final Long MAX_EXEC_DURATION = new Long(4*3600L);    // 4 hours to dump a catalog to vpsace
-    private static final Long MAX_DESTRUCTION = new Long(7*24*60*60); // 1 week
-    private static final Long MAX_QUOTE = new Long(24*3600L);         // 24 hours since we have a threadpool with queued jobs
+    private static final Long MAX_EXEC_DURATION = 4 * 3600L;    // 4 hours to dump a catalog to vpsace
+    private static final Long MAX_DESTRUCTION = 7 * 24 * 60 * 60L; // 1 week
+    private static final Long MAX_QUOTE = 24 * 3600L; // 24 hours since we have a threadpool with queued jobs
 
-    public QueryJobManager()
-    {
+    public QueryJobManager() {
         super();
         // persist UWS jobs to PostgreSQL.
         JobPersistence jobPersist = new PostgresJobPersistence(new X500IdentityManager());

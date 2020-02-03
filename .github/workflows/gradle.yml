@@ -31,9 +31,12 @@ jobs:
     - name: build and test cadc-storage-adapter-fs
       run: cd cadc-storage-adapter-fs && gradle --info clean build javadoc checkstyleMain install
 
-#    - name: build and test cadc-storage-adapter-ceph
-#      run: test -d cadc-storage-adapter-ceph && cd cadc-storage-adapter-ceph && gradle --info clean build javadoc checkstyleMain install
-      
+    - name: build and install latest rados-java
+      run: git clone https://github.com/ceph/rados-java && cd rados-java && mvn clean install -Dcom.ceph.rados.skipTests
+
+    - name: build and test cadc-storage-adapter-ceph
+      run: test -d cadc-storage-adapter-ceph && cd cadc-storage-adapter-ceph && gradle --info clean build javadoc checkstyleMain install
+
     - name: build and test cadc-storage-permissions
       run: cd cadc-storage-permissions && gradle --info clean build javadoc checkstyleMain install
 
@@ -43,8 +46,8 @@ jobs:
     - name: java build -- minoc 
       run: cd minoc && gradle --info clean build javadoc checkstyleMain
       
-#    - name: java build -- luskan
-#      run: cd luskan && gradle --info clean build javadoc checkstyleMain
+    - name: java build -- luskan
+      run: cd luskan && gradle --info clean build javadoc checkstyleMain
       
     - name: java build -- raven
       run: cd raven && gradle --info clean build javadoc checkstyleMain
@@ -58,4 +61,3 @@ jobs:
 #      run: cd luskan && docker build . --file Dockerfile --tag luskan:$(date +%s)
 #    - name: docker build -- raven
 #      run: cd raven && docker build . --file Dockerfile --tag luskan:$(date +%s)
-

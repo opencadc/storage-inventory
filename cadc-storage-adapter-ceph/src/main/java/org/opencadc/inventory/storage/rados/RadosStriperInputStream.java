@@ -1,9 +1,10 @@
+
 /*
  ************************************************************************
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2019.                            (c) 2019.
+ *  (c) 2020.                            (c) 2020.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -62,65 +63,67 @@
  *  <http://www.gnu.org/licenses/>.      pas le cas, consultez :
  *                                       <http://www.gnu.org/licenses/>.
  *
+ *
  ************************************************************************
  */
 
-package org.opencadc.luskan;
+package org.opencadc.inventory.storage.rados;
 
-import ca.nrc.cadc.db.version.InitDatabase;
+import com.ceph.rados.IoCTX;
+import com.ceph.rados.exceptions.RadosException;
+import com.ceph.rados.exceptions.RadosNotFoundException;
+import com.ceph.radosstriper.IoCTXStriper;
+import com.ceph.radosstriper.RadosStriper;
 
-import java.net.URL;
-import javax.sql.DataSource;
+import java.io.IOException;
+
+import org.apache.log4j.Logger;
 
 
 /**
- * This class automates adding/updating the description of CAOM tables and views
- * in the tap_schema. This class assumes that it can re-use the tap_schema.ModelVersion
- * table (usually created by InitDatabaseTS in cadc-tap-schema library) and does
- * not try to create it.  The init includes base CAOM tables and IVOA views (ObsCore++),
- * but <em>does not include</em> aggregate (simple or materialised) views. The service
- * operator must create simple views manually or implement a mechanism to create and
- * update materialised views periodically.
+ * Creates an InputStream for the underlying IO Context from RADOS.  Since RADOS wants to only write out Byte Arrays,
+ * we need to use that as a data source to this Input Stream.
+ * Note that the main read() method is not implemented here as it relies on the RADOS API to populate the underlying
+ * buffer array, which relies on the buffer array being passed in.
  *
- * @author pdowler
+ * <p>This implementation uses the RADOS Striper API to chunk up large files.  The default configuration of a Ceph cluster
+ * limits files to 128MB when using the basic RADOS API, so the Striper API will use the underlying striping logic to
+ * break up the file.
+ * jenkinsd 2019.12.11
  */
-public class InitLuskanSchemaContent extends InitDatabase {
+public class RadosStriperInputStream extends RadosInputStream {
 
-    public static final String MODEL_NAME = "luskan-schema";
-    public static final String MODEL_VERSION = "0.5";
-    public static final String PREV_MODEL_VERSION = "n/a";
+    private static final Logger LOGGER = Logger.getLogger(RadosStriperInputStream.class);
 
-    // the SQL is tightly coupled to cadc-tap-schema table names (for TAP-1.1)
-    static String[] CREATE_SQL = new String[] {
-        "inventory.tap_schema_content11.sql"
-    };
-
-    // upgrade is normally the same as create since SQL is idempotent
-    static String[] UPGRADE_SQL = new String[] {
-        "inventory.tap_schema_content11.sql"
-    };
-
-    /**
-     * Constructor. The schema argument is used to query the ModelVersion table
-     * as {schema}.ModelVersion.
-     *
-     * @param dataSource connection with write permission to tap_schema tables
-     * @param database   database name (should be null if not needed in SQL)
-     * @param schema     schema name (usually tap_schema)
-     */
-    public InitLuskanSchemaContent(DataSource dataSource, String database, String schema) {
-        super(dataSource, database, schema, MODEL_NAME, MODEL_VERSION, PREV_MODEL_VERSION);
-        for (String s : CREATE_SQL) {
-            createSQL.add(s);
-        }
-
-        for (String s : UPGRADE_SQL) {
-            upgradeSQL.add(s);
-        }
+    public RadosStriperInputStream(final RadosStriper rados, final String objectID) {
+        super(rados, objectID);
     }
 
+    /**
+     * Read bytes from the RADOS back end.
+     *
+     * @param ioCTX The IO Context connection.
+     * @param b     The byte array to read into.
+     * @param len   The amount of bytes to read.
+     * @return Count of bytes read.
+     *
+     * @throws IOException For any backend reading.
+     */
     @Override
-    protected URL findSQL(String fname) {
-        return InitLuskanSchemaContent.class.getClassLoader().getResource("sql/" + fname);
+    int readRadosBytes(IoCTX ioCTX, byte[] b, int len) throws IOException {
+        try (final IoCTXStriper ioCTXStriper = ((RadosStriper) rados).ioCtxCreateStriper(ioCTX)) {
+            return ioCTXStriper.read(objectID, len, position, b);
+        } catch (Exception e) {
+            if (e instanceof RadosNotFoundException) {
+                throw (RadosNotFoundException) e;
+            } else if (e instanceof RadosException) {
+                throw (RadosException) e;
+            } else if (e instanceof IOException) {
+                throw (IOException) e;
+            } else {
+                LOGGER.warn("Unable to close the IO RADOS Context.", e);
+                return -1;
+            }
+        }
     }
 }
