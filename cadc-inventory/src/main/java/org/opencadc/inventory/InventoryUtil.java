@@ -89,10 +89,10 @@ public abstract class InventoryUtil {
     }
     
     /**
-     * Compute a short code based on the argument URI. The returned code is a hex
-     * string of the specified length generated from the URI.
-     * 
-     * @param uri the input URI
+     * Compute a short code based on the URI argument. The returned code is a hex
+     * string of the specified length generated from the given URI.
+     *
+     * @param uri the URI to compute from
      * @param length length of hex string
      * @return short code
      */

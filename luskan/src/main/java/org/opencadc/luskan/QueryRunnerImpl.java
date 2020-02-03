@@ -69,10 +69,13 @@
 
 package org.opencadc.luskan;
 
-import ca.nrc.cadc.tap.QueryRunner;
 import ca.nrc.cadc.db.DBUtil;
+import ca.nrc.cadc.tap.QueryRunner;
+
 import javax.sql.DataSource;
+
 import org.apache.log4j.Logger;
+
 
 /**
  *

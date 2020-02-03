@@ -1,9 +1,10 @@
+
 /*
  ************************************************************************
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2019.                            (c) 2019.
+ *  (c) 2020.                            (c) 2020.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -62,65 +63,99 @@
  *  <http://www.gnu.org/licenses/>.      pas le cas, consultez :
  *                                       <http://www.gnu.org/licenses/>.
  *
+ *
  ************************************************************************
  */
 
-package org.opencadc.luskan;
+package org.opencadc.inventory.storage.s3;
 
-import ca.nrc.cadc.db.version.InitDatabase;
+import ca.nrc.cadc.util.StringUtil;
 
-import java.net.URL;
-import javax.sql.DataSource;
+import java.util.Collections;
+import java.util.Iterator;
+
+import org.opencadc.inventory.storage.StorageMetadata;
+
+import software.amazon.awssdk.services.s3.model.ListObjectsResponse;
+import software.amazon.awssdk.services.s3.model.S3Object;
 
 
 /**
- * This class automates adding/updating the description of CAOM tables and views
- * in the tap_schema. This class assumes that it can re-use the tap_schema.ModelVersion
- * table (usually created by InitDatabaseTS in cadc-tap-schema library) and does
- * not try to create it.  The init includes base CAOM tables and IVOA views (ObsCore++),
- * but <em>does not include</em> aggregate (simple or materialised) views. The service
- * operator must create simple views manually or implement a mechanism to create and
- * update materialised views periodically.
- *
- * @author pdowler
+ * Main Iterator over StorageMetadata objects.  This will use the S3 Storage Adapter to obtain the metadata via a head
+ * call, and to obtain the next page of data via a listObjects call.
  */
-public class InitLuskanSchemaContent extends InitDatabase {
-
-    public static final String MODEL_NAME = "luskan-schema";
-    public static final String MODEL_VERSION = "0.5";
-    public static final String PREV_MODEL_VERSION = "n/a";
-
-    // the SQL is tightly coupled to cadc-tap-schema table names (for TAP-1.1)
-    static String[] CREATE_SQL = new String[] {
-        "inventory.tap_schema_content11.sql"
-    };
-
-    // upgrade is normally the same as create since SQL is idempotent
-    static String[] UPGRADE_SQL = new String[] {
-        "inventory.tap_schema_content11.sql"
-    };
+public class S3StorageMetadataIterator implements Iterator<StorageMetadata> {
 
     /**
-     * Constructor. The schema argument is used to query the ModelVersion table
-     * as {schema}.ModelVersion.
-     *
-     * @param dataSource connection with write permission to tap_schema tables
-     * @param database   database name (should be null if not needed in SQL)
-     * @param schema     schema name (usually tap_schema)
+     * The Storage Adapter to interact with the S3 server.
      */
-    public InitLuskanSchemaContent(DataSource dataSource, String database, String schema) {
-        super(dataSource, database, schema, MODEL_NAME, MODEL_VERSION, PREV_MODEL_VERSION);
-        for (String s : CREATE_SQL) {
-            createSQL.add(s);
-        }
+    private final S3StorageAdapter storageAdapter;
 
-        for (String s : UPGRADE_SQL) {
-            upgradeSQL.add(s);
-        }
+    /**
+     * The bucket to look into.  Mandatory.
+     */
+    private final String bucket;
+
+    /**
+     * Current page of S3Objects.
+     */
+    private Iterator<S3Object> currIterator;
+
+    /**
+     * S3 Key of where to start listing the next page of objects.  Will be null for the first call.
+     */
+    private String nextMarkerKey;
+
+    /**
+     * Keep a count.  Not currently used, but could be useful.
+     */
+    private int count;
+
+
+    public S3StorageMetadataIterator(final S3StorageAdapter storageAdapter, final String bucket) {
+        this.storageAdapter = storageAdapter;
+        this.bucket = bucket;
     }
 
+
+    /**
+     * Returns {@code true} if the iteration has more elements.
+     * (In other words, returns {@code true} if {@link #next} would
+     * return an element rather than throwing an exception.)
+     *
+     * @return {@code true} if the iteration has more elements
+     */
     @Override
-    protected URL findSQL(String fname) {
-        return InitLuskanSchemaContent.class.getClassLoader().getResource("sql/" + fname);
+    public boolean hasNext() {
+        if (currIterator == null || (!currIterator.hasNext() && StringUtil.hasLength(nextMarkerKey))) {
+            final ListObjectsResponse listObjectsResponse = storageAdapter.listObjects(bucket, nextMarkerKey);
+            if (listObjectsResponse.hasContents()) {
+                currIterator = listObjectsResponse.contents().iterator();
+                nextMarkerKey = listObjectsResponse.nextMarker();
+            } else {
+                currIterator = Collections.emptyIterator();
+            }
+        }
+
+        return currIterator.hasNext();
+    }
+
+    /**
+     * Returns the next element in the iteration.
+     *
+     * @return the next element in the iteration
+     *
+     * @throws java.util.NoSuchElementException if the iteration has no more elements
+     */
+    @Override
+    public StorageMetadata next() {
+        final StorageMetadata storageMetadata = storageAdapter.head(bucket, currIterator.next().key());
+        count++;
+
+        return storageMetadata;
+    }
+
+    public int getCount() {
+        return count;
     }
 }

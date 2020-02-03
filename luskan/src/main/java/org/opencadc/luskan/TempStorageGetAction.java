@@ -67,46 +67,41 @@
 
 package org.opencadc.luskan;
 
-
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.rest.InlineContentHandler;
 import ca.nrc.cadc.rest.RestAction;
+
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
-import org.apache.log4j.Logger;
+
 
 /**
- *
  * @author pdowler
  */
-public class TempStorageGetAction extends RestAction
-{
-    private static final Logger log = Logger.getLogger(TempStorageGetAction.class);
+public class TempStorageGetAction extends RestAction {
 
-    public TempStorageGetAction() { }
+    public TempStorageGetAction() {
+    }
 
     @Override
-    protected InlineContentHandler getInlineContentHandler()
-    {
+    protected InlineContentHandler getInlineContentHandler() {
         return null;
     }
 
     @Override
-    public void doAction()
-            throws Exception
-    {
+    public void doAction() throws Exception {
         String filename = syncInput.getPath();
         TempStorageManager sm = new TempStorageManager();
         File f = sm.getStoredFile(filename);
-        if (!f.exists())
+        if (!f.exists()) {
             throw new ResourceNotFoundException("not found: " + filename);
+        }
 
         InputStream fis = null;
         OutputStream ostream = null;
-        try
-        {
+        try {
             //TODO: TempStorageManager has to store the requested content-type somewhere
             //syncOutput.setHeader("Content-Type", contentType);
             syncOutput.setHeader("Content-Length", f.length());
@@ -116,21 +111,26 @@ public class TempStorageGetAction extends RestAction
             ostream = syncOutput.getOutputStream();
             byte[] buf = new byte[16384];
             int num = fis.read(buf);
-            while (num > 0)
-            {
+            while (num > 0) {
                 ostream.write(buf, 0, num);
                 num = fis.read(buf);
             }
             ostream.flush();
-        }
-        finally
-        {
-            if (fis != null)
-                try { fis.close(); }
-                catch(Exception ignore) { }
-            if (ostream != null)
-                try { ostream.close(); }
-                catch(Exception ignore) { }
+        } finally {
+            if (fis != null) {
+                try {
+                    fis.close();
+                } catch (Exception ignore) {
+                    // Do nothing
+                }
+            }
+            if (ostream != null) {
+                try {
+                    ostream.close();
+                } catch (Exception ignore) {
+                    // Do nothing
+                }
+            }
         }
     }
 }
