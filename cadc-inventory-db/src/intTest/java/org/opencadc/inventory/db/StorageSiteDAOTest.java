@@ -84,7 +84,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.StorageSite;
-import org.opencadc.inventory.version.InitDatabase;
+import org.opencadc.inventory.db.version.InitDatabase;
 
 /**
  *

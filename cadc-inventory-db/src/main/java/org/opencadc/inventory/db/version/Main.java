@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2020.                            (c) 2020.
+*  (c) 2020.                            (c) 2030.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -65,52 +65,93 @@
 ************************************************************************
 */
 
-package org.opencadc.inventory.version;
+package org.opencadc.inventory.db.version;
 
-import java.net.URL;
+import ca.nrc.cadc.db.ConnectionConfig;
+import ca.nrc.cadc.db.DBConfig;
+import ca.nrc.cadc.db.DBUtil;
+import ca.nrc.cadc.util.ArgumentMap;
+import ca.nrc.cadc.util.Log4jInit;
+import java.io.IOException;
+import java.util.List;
 import javax.sql.DataSource;
+import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 
 /**
- *
+ * Place holder for manual call to force InitDatase.
+ * 
  * @author pdowler
  */
-public class InitDatabase extends ca.nrc.cadc.db.version.InitDatabase {
-    private static final Logger log = Logger.getLogger(InitDatabase.class);
-    
-    public static final String MODEL_NAME = "storage-inventory";
-    public static final String MODEL_VERSION = "0.6";
-    public static final String PREV_MODEL_VERSION = "0.5";
-    //public static final String PREV_MODEL_VERSION = "DO-NOT_UPGRADE-BY-ACCIDENT";
+public class Main implements Runnable {
+    private static final Logger log = Logger.getLogger(Main.class);
 
-    static String[] CREATE_SQL = new String[] {
-        "inventory.ModelVersion.sql",
-        "inventory.Artifact.sql",
-        "inventory.StorageSite.sql",
-        "inventory.ObsoleteStorageLocation.sql",
-        "inventory.DeletedArtifactEvent.sql",
-        "inventory.DeletedStorageLocationEvent.sql",
-        "inventory.permissions.sql"
-    };
-    
-    static String[] UPGRADE_SQL = new String[] {
-        "inventory.ObsoleteStorageLocation.sql",
-        "inventory.permissions.sql"
-    };
-    
-    public InitDatabase(DataSource ds, String database, String schema) { 
-        super(ds, database, schema, MODEL_NAME, MODEL_VERSION, PREV_MODEL_VERSION);
-        for (String s : CREATE_SQL) {
-            createSQL.add(s);
-        }
-        for (String s : UPGRADE_SQL) {
-            upgradeSQL.add(s);
+    public static void main(String[] args) {
+        try {
+            ArgumentMap am = new ArgumentMap(args);
+            Log4jInit.setLevel("ca.nrc.cadc", Level.WARN);
+            Log4jInit.setLevel("org.opencadc", Level.WARN);
+            if (am.isSet("d") || am.isSet("debug")) {
+                Log4jInit.setLevel("org.opencadc.inventory", Level.DEBUG);
+            } else if (am.isSet("v") || am.isSet("verbose")) {
+                Log4jInit.setLevel("org.opencadc.inventory", Level.INFO);
+            }
+
+            if (am.isSet("h") || am.isSet("help")) {
+                usage();
+                return;
+            }
+            
+            List<String> ss = am.getPositionalArgs();
+            if (ss.size() != 3) {
+                log.error("missing required commandline args");
+                usage();
+                System.exit(1);
+            }
+            
+            Main m = new Main(ss.get(0), ss.get(1), ss.get(2));
+            m.run();
+            
+        } catch (Throwable unexpected) {
+            log.error("unexpected error", unexpected);
+            System.exit(2);
         }
     }
-
-    @Override
-    protected URL findSQL(String fname) {
-        // SQL files are stored inside the jar file
-        return InitDatabase.class.getClassLoader().getResource(fname);
+    
+    private static void usage() {
+        System.out.println("usage: cadc-inventory-db [-v|--verbose|-d|--debug] <server> <database> <schema>");
+    }
+    
+    private final String server;
+    private final String database;
+    private final String schema;
+    
+    private Main(String server, String database, String schema) {
+        this.server = server;
+        this.database = database;
+        this.schema = schema;
+    }
+    
+    public void run() {
+        try {
+            DBConfig dbrc = new DBConfig();
+            ConnectionConfig cc = dbrc.getConnectionConfig(server, database);
+            String driver = cc.getDriver();
+            if (driver == null) {
+                throw new RuntimeException("failed to find JDBC driver for " + server + "," + database);
+            }
+            DataSource ds = DBUtil.getDataSource(cc);
+            log.info("target: " + server + " " + database + " " + schema);
+            
+            InitDatabase init = new InitDatabase(ds, database, schema);
+            boolean result = init.doInit();
+            if (result) {
+                log.info("init: complete");
+            } else {
+                log.info("init: no-op");
+            }
+        } catch (IOException ex) {
+            throw new RuntimeException("failed to read connection info from $HOME/.dbrc", ex);
+        }
     }
 }

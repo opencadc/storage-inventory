@@ -83,7 +83,7 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.opencadc.inventory.StorageLocation;
-import org.opencadc.inventory.version.InitDatabase;
+import org.opencadc.inventory.db.version.InitDatabase;
 
 /**
  *

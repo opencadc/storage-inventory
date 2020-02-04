@@ -68,24 +68,16 @@
 package org.opencadc.raven;
 
 import ca.nrc.cadc.auth.AuthMethod;
-import ca.nrc.cadc.db.DBUtil;
 import ca.nrc.cadc.reg.Standards;
 import ca.nrc.cadc.reg.client.LocalAuthority;
 import ca.nrc.cadc.reg.client.RegistryClient;
-import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.vosi.AvailabilityPlugin;
 import ca.nrc.cadc.vosi.AvailabilityStatus;
 import ca.nrc.cadc.vosi.avail.CheckException;
 import ca.nrc.cadc.vosi.avail.CheckResource;
 import ca.nrc.cadc.vosi.avail.CheckWebService;
-
 import java.net.URI;
-import java.util.Map;
-
-import javax.sql.DataSource;
-
 import org.apache.log4j.Logger;
-import org.opencadc.inventory.version.InitDatabase;
 
 /**
  * This class performs the work of determining if the executing locate

@@ -84,7 +84,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.opencadc.inventory.DeletedArtifactEvent;
 import org.opencadc.inventory.DeletedStorageLocationEvent;
-import org.opencadc.inventory.version.InitDatabase;
+import org.opencadc.inventory.db.version.InitDatabase;
 
 /**
  *

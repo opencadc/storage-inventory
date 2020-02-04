@@ -87,7 +87,7 @@ import java.util.Set;
 import javax.sql.DataSource;
 
 import org.apache.log4j.Logger;
-import org.opencadc.inventory.version.InitDatabase;
+import org.opencadc.inventory.db.version.InitDatabase;
 
 /**
  * This class performs the work of determining if the executing artifact

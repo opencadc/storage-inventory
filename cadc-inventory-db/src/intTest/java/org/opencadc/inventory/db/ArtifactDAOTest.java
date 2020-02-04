@@ -86,7 +86,7 @@ import org.junit.Test;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.SiteLocation;
 import org.opencadc.inventory.StorageLocation;
-import org.opencadc.inventory.version.InitDatabase;
+import org.opencadc.inventory.db.version.InitDatabase;
 
 /**
  *
