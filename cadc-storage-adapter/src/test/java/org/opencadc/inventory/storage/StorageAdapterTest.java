@@ -68,38 +68,34 @@
 package org.opencadc.inventory.storage;
 
 import ca.nrc.cadc.util.Log4jInit;
-
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.net.URI;
-import java.util.Date;
-
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.Test;
-import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.StorageLocation;
 
 /**
  * Class to test the i/o functionality of the StorageClient.
- * 
+ *
  * @author majorb
  */
 public class StorageAdapterTest {
-    
+
     private static final Logger log = Logger.getLogger(StorageAdapterTest.class);
 
     static {
         Log4jInit.setLevel("org.opencadc.inventory", Level.DEBUG);
     }
-    
+
     @Test
     public void testPutGet() {
         try {
-            StorageAdapter client = new TestStorageAdapter();
-            
+            final StorageAdapter client = new TestStorageAdapter();
+
             URI artifactURI = URI.create("cadc:test/path");
             NewArtifact newArtifact = new NewArtifact(artifactURI);
             newArtifact.contentChecksum = TestStorageAdapter.contentChecksum;
@@ -111,36 +107,35 @@ public class StorageAdapterTest {
             Assert.assertEquals("contentChecksum", TestStorageAdapter.contentChecksum, putMetadata.getContentChecksum());
             Assert.assertEquals("contentLength", TestStorageAdapter.contentLength, putMetadata.getContentLength());
             URI storageID = putMetadata.getStorageLocation().getStorageID();
-            
+
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             StorageLocation storageLocation = new StorageLocation(storageID);
             client.get(storageLocation, out);
             Assert.assertEquals("data", new String(TestStorageAdapter.data), new String(out.toByteArray()));
-            
+
         } catch (Exception unexpected) {
             log.error("unexpected exception", unexpected);
             Assert.fail("unexpected exception: " + unexpected);
-        } finally {
         }
     }
-    
+
     @Test
     public void testInputStreamError() {
-        
+
         try {
-            
-            int[] failPoints = new int[] {
+
+            int[] failPoints = new int[]{
                 0,
                 1,
                 2
             };
-            
+
             for (int failPoint : failPoints) {
-            
+
                 log.info("Testing input stream error with fail on write number " + failPoint);
-                
+
                 StorageAdapter client = new TestStorageAdapter();
-                
+
                 ErrorInputStream in = new ErrorInputStream(TestStorageAdapter.data, failPoint);
                 URI artifactURI = URI.create("cadc:test/path");
                 NewArtifact newArtifact = new NewArtifact(artifactURI);
@@ -152,35 +147,34 @@ public class StorageAdapterTest {
                     Assert.fail("Should have received exception on get");
                 } catch (Exception e) {
                     // expected
-                    Assert.assertTrue("error type", e instanceof ReadException); 
+                    Assert.assertTrue("error type", e instanceof ReadException);
                 }
-                
+
             }
-            
+
         } catch (Exception unexpected) {
             log.error("unexpected exception", unexpected);
             Assert.fail("unexpected exception: " + unexpected);
-        } finally {
         }
     }
-    
+
     @Test
     public void testOutputStreamError() {
-        
+
         try {
-            
-            int[] failPoints = new int[] {
+
+            int[] failPoints = new int[]{
                 0,
                 1,
                 2
             };
-            
+
             for (int failPoint : failPoints) {
-            
+
                 log.info("Testing output stream error with fail on read number " + failPoint);
-                
+
                 StorageAdapter client = new TestStorageAdapter();
-                
+
                 ByteArrayOutputStream out = new ErrorOutputStream(failPoint);
                 try {
                     StorageLocation storageLocation = new StorageLocation(TestStorageAdapter.storageID);
@@ -190,24 +184,25 @@ public class StorageAdapterTest {
                     // expected
                     Assert.assertTrue("error type", e instanceof WriteException);
                 }
-                
+
             }
-            
+
         } catch (Exception unexpected) {
             log.error("unexpected exception", unexpected);
             Assert.fail("unexpected exception: " + unexpected);
-        } finally {
         }
     }
-    
+
     private class ErrorInputStream extends ByteArrayInputStream {
+
         int failPoint;
         int count = 0;
+
         ErrorInputStream(byte[] data, int failPoint) {
             super(data);
             this.failPoint = failPoint;
         }
-        
+
         @Override
         public int read(byte[] buf) throws IOException {
             if (failPoint == count) {
@@ -216,18 +211,18 @@ public class StorageAdapterTest {
             count++;
             return super.read(buf);
         }
-        
+
     }
-    
+
     private class ErrorOutputStream extends ByteArrayOutputStream {
-        
+
         int failPoint;
         int count = 0;
-        
+
         ErrorOutputStream(int failPoint) {
             this.failPoint = failPoint;
         }
-        
+
         @Override
         public void write(byte[] buf, int off, int len) {
             if (failPoint == count) {

@@ -91,6 +91,8 @@ import java.security.DigestOutputStream;
 import java.security.MessageDigest;
 import java.util.Iterator;
 import java.util.Set;
+import java.util.SortedSet;
+import java.util.TreeSet;
 import java.util.UUID;
 
 import org.apache.log4j.Logger;
@@ -243,6 +245,7 @@ public class FileSystemStorageAdapter implements StorageAdapter {
      * @throws StorageEngageException If the adapter failed to interact with storage.
      * @throws TransientException If an unexpected, temporary exception occurred. 
      */
+    @Override
     public void get(StorageLocation storageLocation, OutputStream dest)
         throws ResourceNotFoundException, ReadException, WriteException, StorageEngageException, TransientException {
         InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "storageLocation", storageLocation);
@@ -278,6 +281,7 @@ public class FileSystemStorageAdapter implements StorageAdapter {
      * @throws StorageEngageException If the adapter failed to interact with storage.
      * @throws TransientException If an unexpected, temporary exception occurred. 
      */
+    @Override
     public void get(StorageLocation storageLocation, OutputStream dest, Set<String> cutouts)
         throws ResourceNotFoundException, ReadException, WriteException, StorageEngageException, TransientException {
         throw new UnsupportedOperationException("cutouts not supported");
@@ -303,6 +307,7 @@ public class FileSystemStorageAdapter implements StorageAdapter {
      * @throws StorageEngageException If the adapter failed to interact with storage.
      * @throws TransientException If an unexpected, temporary exception occurred.
      */
+    @Override
     public StorageMetadata put(NewArtifact newArtifact, InputStream source)
         throws IncorrectContentChecksumException, IncorrectContentLengthException, ReadException, WriteException,
             StorageEngageException, TransientException {
@@ -433,6 +438,7 @@ public class FileSystemStorageAdapter implements StorageAdapter {
      * @throws StorageEngageException If the adapter failed to interact with storage.
      * @throws TransientException If an unexpected, temporary exception occurred. 
      */
+    @Override
     public void delete(StorageLocation storageLocation)
         throws ResourceNotFoundException, IOException, StorageEngageException, TransientException {
         InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "storageLocation", storageLocation);
@@ -444,13 +450,12 @@ public class FileSystemStorageAdapter implements StorageAdapter {
      * Iterator of items ordered by their storageIDs.
      * @return An iterator over an ordered list of items in storage.
      * 
-     * @throws ReadException If the storage system failed to stream.
-     * @throws WriteException If the client failed to stream.
      * @throws StorageEngageException If the adapter failed to interact with storage.
      * @throws TransientException If an unexpected, temporary exception occurred. 
      */
+    @Override
     public Iterator<StorageMetadata> iterator()
-        throws ReadException, WriteException, StorageEngageException, TransientException {
+        throws StorageEngageException, TransientException {
         throw new UnsupportedOperationException("sorted iteration not supported");
     }
     
@@ -459,13 +464,12 @@ public class FileSystemStorageAdapter implements StorageAdapter {
      * @param storageBucket Only iterate over items in this bucket.
      * @return An iterator over an ordered list of items in this storage bucket.
      * 
-     * @throws ReadException If the storage system failed to stream.
-     * @throws WriteException If the client failed to stream.
      * @throws StorageEngageException If the adapter failed to interact with storage.
      * @throws TransientException If an unexpected, temporary exception occurred. 
      */
+    @Override
     public Iterator<StorageMetadata> iterator(String storageBucket)
-        throws ReadException, WriteException, StorageEngageException, TransientException {
+        throws StorageEngageException, TransientException {
         throw new UnsupportedOperationException("sorted iteration not supported");
     }
     
@@ -474,13 +478,11 @@ public class FileSystemStorageAdapter implements StorageAdapter {
      * @param storageBucket Only iterate over items in this bucket.
      * @return An iterator over an ordered list of items in this storage bucket.
      * 
-     * @throws ReadException If the storage system failed to stream.
-     * @throws WriteException If the client failed to stream.
      * @throws StorageEngageException If the adapter failed to interact with storage.
      * @throws TransientException If an unexpected, temporary exception occurred. 
      */
-    public Iterator<StorageMetadata> unsortedIterator(String storageBucket)
-        throws ReadException, WriteException, StorageEngageException, TransientException {
+    public SortedSet<StorageMetadata> list(String storageBucket)
+        throws StorageEngageException, TransientException {
         StringBuilder path = new StringBuilder();
         int bucketDepth = 0;
         String fixedParentDir = null;
@@ -524,13 +526,14 @@ public class FileSystemStorageAdapter implements StorageAdapter {
             if (!Files.exists(bucketPath) || !Files.isDirectory(bucketPath)) {
                 throw new IllegalArgumentException("Invalid bucket: " + storageBucket);
             }
-            Iterator<StorageMetadata> iterator = null;
-            try {
-                iterator = new FileSystemIterator(bucketPath, bucketDepth, fixedParentDir);
-            } catch (IOException e) {
-                throw new StorageEngageException("failed to obtain iterator", e);
+            Iterator<StorageMetadata> iter = new FileSystemIterator(bucketPath, bucketDepth, fixedParentDir);
+            SortedSet<StorageMetadata> ret = new TreeSet<>();
+            while (iter.hasNext()) {
+                ret.add(iter.next());
             }
-            return iterator;
+            return ret;
+        } catch (IOException e) {
+            throw new StorageEngageException("failed to obtain iterator", e);
         } catch (InvalidPathException e) {
             throw new IllegalArgumentException("Invalid bucket: " + storageBucket);
         }   

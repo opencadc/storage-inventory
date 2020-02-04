@@ -68,7 +68,6 @@
 package org.opencadc.inventory.storage;
 
 import java.net.URI;
-
 import org.opencadc.inventory.InventoryUtil;
 
 /**
@@ -78,7 +77,8 @@ import org.opencadc.inventory.InventoryUtil;
  */
 public class NewArtifact {
     
-    private URI artifactURI;
+    private final URI artifactURI;
+    
     public URI contentChecksum;
     public Long contentLength;
     

@@ -79,7 +79,9 @@ import org.apache.log4j.Logger;
  * This class performs two threaded IO through a queue of bytes.
  * 
  * @author majorb
+ * @deprecated this class will be moved to cadc-util at some point
  */
+@Deprecated
 public class ThreadedIO {
     
     private static Logger log = Logger.getLogger(ThreadedIO.class);

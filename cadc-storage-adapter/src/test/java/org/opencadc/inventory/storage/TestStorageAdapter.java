@@ -3,7 +3,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2019.                            (c) 2019.
+ *  (c) 2020.                            (c) 2020.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -64,6 +64,7 @@
  *
  ************************************************************************
  */
+
 package org.opencadc.inventory.storage;
 
 import ca.nrc.cadc.net.IncorrectContentChecksumException;
@@ -71,7 +72,6 @@ import ca.nrc.cadc.net.IncorrectContentLengthException;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.util.HexUtil;
-
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -81,25 +81,26 @@ import java.net.URI;
 import java.security.MessageDigest;
 import java.util.Iterator;
 import java.util.Set;
-
+import java.util.SortedSet;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.StorageLocation;
 
 /**
  * This storage adapter implementation is fixed on a set of existing data
  * and metadata defined in the static attributes of this class.
- * 
+ *
  * @author majorb
  */
 public class TestStorageAdapter implements StorageAdapter {
-    
+
     private static final Logger log = Logger.getLogger(TestStorageAdapter.class);
-    
+
     static final String dataString = "abcdefghijklmnopqrstuvwxyz";
     static final byte[] data = dataString.getBytes();
     static final URI storageID = URI.create("test:path/file");
     static final Long contentLength = new Long(data.length);
     static URI contentChecksum;
+
     static {
         try {
             MessageDigest md = MessageDigest.getInstance("MD5");
@@ -110,25 +111,26 @@ public class TestStorageAdapter implements StorageAdapter {
             throw new RuntimeException(e);
         }
     }
+
     static int BUF_SIZE = 6;
-    
+
     public TestStorageAdapter() {
     }
 
     public void get(StorageLocation storageLocation, OutputStream dest)
-        throws ResourceNotFoundException, ReadException, WriteException, StorageEngageException, TransientException {
+            throws ResourceNotFoundException, ReadException, WriteException, StorageEngageException, TransientException {
         InputStream source = new ByteArrayInputStream(data);
         ThreadedIO io = new ThreadedIO(BUF_SIZE, 3);
         io.ioLoop(dest, source);
     }
 
     public void get(StorageLocation storageLocation, OutputStream dest, Set<String> cutouts)
-        throws ResourceNotFoundException, ReadException, WriteException, StorageEngageException, TransientException {
+            throws ResourceNotFoundException, ReadException, WriteException, StorageEngageException, TransientException {
         throw new UnsupportedOperationException();
     }
 
     public StorageMetadata put(NewArtifact newArtifact, InputStream source)
-        throws IncorrectContentChecksumException, IncorrectContentLengthException, ReadException,
+            throws IncorrectContentChecksumException, IncorrectContentLengthException, ReadException,
             WriteException, StorageEngageException, TransientException {
         ByteArrayOutputStream dest = new ByteArrayOutputStream();
         ThreadedIO io = new ThreadedIO(BUF_SIZE, 3);
@@ -136,7 +138,7 @@ public class TestStorageAdapter implements StorageAdapter {
 
         byte[] newData = dest.toByteArray();
         log.info("received data: " + new String(newData));
-        
+
         URI newContentChecksum = null;
         try {
             MessageDigest md = MessageDigest.getInstance("MD5");
@@ -148,37 +150,37 @@ public class TestStorageAdapter implements StorageAdapter {
         }
         long newContentLength = newData.length;
         if (!newContentChecksum.equals(contentChecksum)) {
-            throw new IncorrectContentChecksumException("checksum: " +
-                newContentChecksum + " does not equal " + contentChecksum);
+            throw new IncorrectContentChecksumException("checksum: "
+                    + newContentChecksum + " does not equal " + contentChecksum);
         }
         if (newContentLength != contentLength) {
-            throw new IncorrectContentLengthException("length: " +
-                newContentLength + " does not equal " + contentLength);
+            throw new IncorrectContentLengthException("length: "
+                    + newContentLength + " does not equal " + contentLength);
         }
-        
+
         StorageLocation storageLocation = new StorageLocation(storageID);
         StorageMetadata storageMetadata = new StorageMetadata(storageLocation, contentChecksum, contentLength);
         storageMetadata.artifactURI = newArtifact.getArtifactURI();
         return storageMetadata;
     }
-        
+
     public void delete(StorageLocation storageLocation)
-        throws ResourceNotFoundException, IOException, StorageEngageException, TransientException {
+            throws ResourceNotFoundException, IOException, StorageEngageException, TransientException {
         throw new UnsupportedOperationException();
     }
 
     public Iterator<StorageMetadata> iterator()
-        throws ReadException, WriteException, StorageEngageException, TransientException {
+            throws StorageEngageException, TransientException {
         throw new UnsupportedOperationException();
     }
 
     public Iterator<StorageMetadata> iterator(String storageBucket)
-        throws ReadException, WriteException, StorageEngageException, TransientException {
+            throws StorageEngageException, TransientException {
         throw new UnsupportedOperationException();
     }
 
-    public Iterator<StorageMetadata> unsortedIterator(String storageBucket)
-        throws ReadException, WriteException, StorageEngageException, TransientException {
+    public SortedSet<StorageMetadata> list(String storageBucket)
+            throws StorageEngageException, TransientException {
         throw new UnsupportedOperationException();
     }
 
