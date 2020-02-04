@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2019.                            (c) 2019.
+*  (c) 2020.                            (c) 2020.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -67,56 +67,72 @@
 
 package org.opencadc.inventory.db;
 
-import java.net.URI;
+import java.util.Objects;
 import java.util.UUID;
 import org.apache.log4j.Logger;
-import org.opencadc.inventory.Artifact;
-import org.springframework.jdbc.core.JdbcTemplate;
+import org.opencadc.inventory.Entity;
+import org.opencadc.inventory.InventoryUtil;
+import org.opencadc.inventory.StorageLocation;
 
 /**
- *
+ * Track local storage locations that are no longer referenced by inventory.
+ * 
  * @author pdowler
  */
-public class ArtifactDAO extends AbstractDAO<Artifact> {
-    private static final Logger log = Logger.getLogger(ArtifactDAO.class);
+public class ObsoleteStorageLocation extends Entity implements Comparable<ObsoleteStorageLocation> {
+    private static final Logger log = Logger.getLogger(ObsoleteStorageLocation.class);
 
-    public ArtifactDAO() {
+    private final StorageLocation location;
+    
+    public ObsoleteStorageLocation(StorageLocation location) {
         super();
+        InventoryUtil.assertNotNull(ObsoleteStorageLocation.class, "location", location);
+        this.location = location;
+    }
+    
+    // package access: reconstruct an instance from serialised state.
+    ObsoleteStorageLocation(UUID id, StorageLocation location) {
+        super(id);
+        InventoryUtil.assertNotNull(ObsoleteStorageLocation.class, "location", location);
+        this.location = location;
     }
 
-    public ArtifactDAO(AbstractDAO dao) {
-        super(dao);
+    public StorageLocation getLocation() {
+        return location;
     }
-    
-    public Artifact get(UUID id) {
-        return super.get(Artifact.class, id);
-    }
-    
-    public Artifact get(URI uri) {
-        if (uri == null) {
-            throw new IllegalArgumentException("uri cannot be null");
-        }
-        checkInit();
-        log.debug("GET: " + uri);
-        long t = System.currentTimeMillis();
 
-        try {
-            JdbcTemplate jdbc = new JdbcTemplate(dataSource);
-            
-            SQLGenerator.ArtifactGet get = ( SQLGenerator.ArtifactGet) gen.getEntityGet(Artifact.class);
-            get.setURI(uri);
-            Artifact a = get.execute(jdbc);
-            return a;
-        } finally {
-            long dt = System.currentTimeMillis() - t;
-            log.debug("GET: " + uri + " " + dt + "ms");
+    @Override
+    public boolean equals(Object o) {
+        if (o == null) {
+            return false;
         }
+        ObsoleteStorageLocation rhs = (ObsoleteStorageLocation) o;
+        return location.equals(rhs.location);
+    }
+
+    @Override
+    public int hashCode() {
+        int hash = 3;
+        hash = 13 * hash + Objects.hashCode(this.location);
+        return hash;
+    }
+
+    @Override
+    public int compareTo(ObsoleteStorageLocation rhs) {
+        return location.compareTo(rhs.location);
     }
     
-    // delete an artifact, all SiteLocation(s), and StorageLocation
-    // caller must also fire an appropriate event via DeletedEventDAO in same txn
-    // unless performing this delete in reaction to such an event
-    public void delete(UUID id) {
-        super.delete(Artifact.class, id);
+    @Override
+    public String toString() {
+        StringBuilder sb = new StringBuilder();
+        sb.append(this.getClass().getSimpleName());
+        sb.append("[");
+        if (location.storageBucket != null) {
+            sb.append(location.storageBucket).append(",");
+        }
+        sb.append(location.getStorageID());
+        sb.append("]");
+        return sb.toString();
     }
+    
 }

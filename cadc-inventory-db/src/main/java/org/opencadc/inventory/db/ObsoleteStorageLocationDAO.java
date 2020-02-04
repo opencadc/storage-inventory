@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2019.                            (c) 2019.
+*  (c) 2020.                            (c) 2020.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -67,56 +67,54 @@
 
 package org.opencadc.inventory.db;
 
-import java.net.URI;
 import java.util.UUID;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
+import org.opencadc.inventory.StorageLocation;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
- *
+ * Store ObsoleteStorageLocation in database.
+ * 
  * @author pdowler
  */
-public class ArtifactDAO extends AbstractDAO<Artifact> {
-    private static final Logger log = Logger.getLogger(ArtifactDAO.class);
+public class ObsoleteStorageLocationDAO extends AbstractDAO<ObsoleteStorageLocation> {
+    private static final Logger log = Logger.getLogger(ObsoleteStorageLocationDAO.class);
 
-    public ArtifactDAO() {
+    public ObsoleteStorageLocationDAO() {
         super();
     }
-
-    public ArtifactDAO(AbstractDAO dao) {
-        super(dao);
+    
+    public ObsoleteStorageLocationDAO(AbstractDAO src) {
+        super(src);
     }
     
-    public Artifact get(UUID id) {
-        return super.get(Artifact.class, id);
+    public ObsoleteStorageLocation get(UUID id) {
+        return super.get(ObsoleteStorageLocation.class, id);
     }
     
-    public Artifact get(URI uri) {
-        if (uri == null) {
-            throw new IllegalArgumentException("uri cannot be null");
+    public ObsoleteStorageLocation get(StorageLocation loc) {
+        if (loc == null) {
+            throw new IllegalArgumentException("location cannot be null");
         }
         checkInit();
-        log.debug("GET: " + uri);
+        log.debug("GET: " + loc);
         long t = System.currentTimeMillis();
 
         try {
             JdbcTemplate jdbc = new JdbcTemplate(dataSource);
             
-            SQLGenerator.ArtifactGet get = ( SQLGenerator.ArtifactGet) gen.getEntityGet(Artifact.class);
-            get.setURI(uri);
-            Artifact a = get.execute(jdbc);
-            return a;
+            SQLGenerator.ObsoleteStorageLocationGet get = ( SQLGenerator.ObsoleteStorageLocationGet) gen.getEntityGet(ObsoleteStorageLocation.class);
+            get.setLocation(loc);
+            ObsoleteStorageLocation o = get.execute(jdbc);
+            return o;
         } finally {
             long dt = System.currentTimeMillis() - t;
-            log.debug("GET: " + uri + " " + dt + "ms");
+            log.debug("GET: " + loc + " " + dt + "ms");
         }
     }
-    
-    // delete an artifact, all SiteLocation(s), and StorageLocation
-    // caller must also fire an appropriate event via DeletedEventDAO in same txn
-    // unless performing this delete in reaction to such an event
+
     public void delete(UUID id) {
-        super.delete(Artifact.class, id);
+        super.delete(ObsoleteStorageLocation.class, id);
     }
 }

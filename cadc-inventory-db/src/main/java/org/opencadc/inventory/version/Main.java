@@ -65,58 +65,17 @@
 ************************************************************************
 */
 
-package org.opencadc.inventory.db;
+package org.opencadc.inventory.version;
 
-import java.net.URI;
-import java.util.UUID;
 import org.apache.log4j.Logger;
-import org.opencadc.inventory.Artifact;
-import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
  *
  * @author pdowler
  */
-public class ArtifactDAO extends AbstractDAO<Artifact> {
-    private static final Logger log = Logger.getLogger(ArtifactDAO.class);
+public class Main {
+    private static final Logger log = Logger.getLogger(Main.class);
 
-    public ArtifactDAO() {
-        super();
-    }
-
-    public ArtifactDAO(AbstractDAO dao) {
-        super(dao);
-    }
-    
-    public Artifact get(UUID id) {
-        return super.get(Artifact.class, id);
-    }
-    
-    public Artifact get(URI uri) {
-        if (uri == null) {
-            throw new IllegalArgumentException("uri cannot be null");
-        }
-        checkInit();
-        log.debug("GET: " + uri);
-        long t = System.currentTimeMillis();
-
-        try {
-            JdbcTemplate jdbc = new JdbcTemplate(dataSource);
-            
-            SQLGenerator.ArtifactGet get = ( SQLGenerator.ArtifactGet) gen.getEntityGet(Artifact.class);
-            get.setURI(uri);
-            Artifact a = get.execute(jdbc);
-            return a;
-        } finally {
-            long dt = System.currentTimeMillis() - t;
-            log.debug("GET: " + uri + " " + dt + "ms");
-        }
-    }
-    
-    // delete an artifact, all SiteLocation(s), and StorageLocation
-    // caller must also fire an appropriate event via DeletedEventDAO in same txn
-    // unless performing this delete in reaction to such an event
-    public void delete(UUID id) {
-        super.delete(Artifact.class, id);
+    public Main() { 
     }
 }
