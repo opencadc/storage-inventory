@@ -68,12 +68,14 @@
 package org.opencadc.minoc;
 
 import ca.nrc.cadc.db.TransactionManager;
-
+import ca.nrc.cadc.net.ResourceNotFoundException;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.DeletedArtifactEvent;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.DeletedEventDAO;
+import org.opencadc.inventory.db.ObsoleteStorageLocation;
+import org.opencadc.inventory.db.ObsoleteStorageLocationDAO;
 import org.opencadc.inventory.permissions.WriteGrant;
 
 /**
@@ -101,31 +103,51 @@ public class DeleteAction extends ArtifactAction {
         initAndAuthorize(WriteGrant.class);
         
         ArtifactDAO artifactDAO = getArtifactDAO();
-        Artifact artifact = getArtifact(artifactURI, artifactDAO);
-        DeletedEventDAO deletedEventDAO = getDeletedEventDAO(artifactDAO);
+        Artifact existing = artifactDAO.get(artifactURI);
+        if (existing == null) {
+            throw new ResourceNotFoundException("not found: " + artifactURI);
+        }
+        
+        DeletedEventDAO eventDAO = new DeletedEventDAO(artifactDAO);
         TransactionManager txnMgr = artifactDAO.getTransactionManager();
+        
         try {
+            log.debug("starting transaction");
             txnMgr.startTransaction();
-            DeletedArtifactEvent deletedArtifact = new DeletedArtifactEvent(artifact.getID());
-            artifactDAO.delete(artifact.getID());
-            deletedEventDAO.put(deletedArtifact);
-            log.debug("deleting from storage...");
-            getStorageAdapter().delete(artifact.storageLocation);
-            log.debug("deletedfrom storage");
+            log.debug("start txn: OK");
+            
+            DeletedArtifactEvent deletedArtifact = new DeletedArtifactEvent(existing.getID());
+            artifactDAO.delete(existing.getID());
+            eventDAO.put(deletedArtifact);
+            ObsoleteStorageLocation dsl = null;
+            ObsoleteStorageLocationDAO locDAO = new ObsoleteStorageLocationDAO(artifactDAO);
+            if (existing.storageLocation != null) {
+                dsl = new ObsoleteStorageLocation(existing.storageLocation);
+                locDAO.put(dsl);
+            }
+            
+            log.debug("committing transaction");
             txnMgr.commitTransaction();
-        } catch (Throwable t) {
-            String msg = "failed to delete artifact";
-            log.error(msg, t);
-            throw t;
+            log.debug("commit txn: OK");
+            
+            // this block could be passed off to a thread so request completes
+            if (dsl != null) {
+                log.debug("deleting from storage...");
+                getStorageAdapter().delete(existing.storageLocation);
+                log.debug("delete from storage: OK");
+                // obsolete tracker record no longer needed
+                locDAO.delete(dsl.getID());
+            }
+        } catch (Exception e) {
+            log.error("failed to delete " + artifactURI, e);
+            txnMgr.rollbackTransaction();
+            log.debug("rollback txn: OK");
+            throw e;
         } finally {
             if (txnMgr.isOpen()) {
-                try {
-                    log.debug("rolling back transaction...");
-                    txnMgr.rollbackTransaction();
-                    log.error("rollback successful");
-                } catch (Exception e) {
-                    log.error("failed to rollback transaction", e);
-                }
+                log.error("BUG - open transaction in finally");
+                txnMgr.rollbackTransaction();
+                log.error("rollback txn: OK");
             }
         }
     }

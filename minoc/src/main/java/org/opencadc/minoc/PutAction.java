@@ -83,6 +83,8 @@ import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.DeletedArtifactEvent;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.DeletedEventDAO;
+import org.opencadc.inventory.db.ObsoleteStorageLocation;
+import org.opencadc.inventory.db.ObsoleteStorageLocationDAO;
 import org.opencadc.inventory.permissions.WriteGrant;
 import org.opencadc.inventory.storage.NewArtifact;
 import org.opencadc.inventory.storage.ReadException;
@@ -188,36 +190,60 @@ public class PutAction extends ArtifactAction {
         artifact.storageLocation = artifactMetadata.getStorageLocation();
         
         ArtifactDAO artifactDAO = getArtifactDAO();
+        ObsoleteStorageLocationDAO locDAO = new ObsoleteStorageLocationDAO(artifactDAO);
         Artifact existing = artifactDAO.get(artifactURI);
-        if (existing == null) {
-            artifactDAO.put(artifact);
-            log.debug("put artifact in database: " + artifactURI);
-        } else {
-            DeletedEventDAO deletedEventDAO = getDeletedEventDAO(artifactDAO);
-            TransactionManager txnMgr = artifactDAO.getTransactionManager();
-            try {
-                txnMgr.startTransaction();
+        
+        TransactionManager txnMgr = artifactDAO.getTransactionManager();
+            
+        try {
+            log.debug("starting transaction");
+            txnMgr.startTransaction();
+            log.debug("start txn: OK");
+            
+            ObsoleteStorageLocation dsl = null;
+            if (existing == null) {
+                artifactDAO.put(artifact);
+                dsl = locDAO.get(artifact.storageLocation);
+                if (dsl != null) {
+                    // no longer obsolete
+                    locDAO.delete(dsl.getID());
+                }
+                log.debug("put artifact in database: " + artifactURI);
+            } else {
+                DeletedEventDAO eventDAO = new DeletedEventDAO(artifactDAO);
                 DeletedArtifactEvent deletedArtifact = new DeletedArtifactEvent(existing.getID());
                 artifactDAO.delete(existing.getID());
                 artifactDAO.put(artifact);
-                deletedEventDAO.put(deletedArtifact);
-                txnMgr.commitTransaction();
-                log.debug("replaced artifact in database: " + deletedArtifact.getID()
-                    + " with " + artifact.getID());
-            } catch (Throwable t) {
-                String msg = "failed to replace inventory artifact";
-                log.error(msg, t);
-                throw t;
-            } finally {
-                if (txnMgr.isOpen()) {
-                    try {
-                        log.debug("rolling back transaction...");
-                        txnMgr.rollbackTransaction();
-                        log.error("rollback successful");
-                    } catch (Exception e) {
-                        log.error("failed to rollback transaction", e);
-                    }
+                eventDAO.put(deletedArtifact);
+                
+                if (!artifact.storageLocation.equals(existing.storageLocation)) {
+                    dsl = new ObsoleteStorageLocation(existing.storageLocation);
+                    locDAO.put(dsl);
                 }
+                log.debug("put artifact in database: " + artifactURI);
+            }
+            log.debug("committing transaction");
+            txnMgr.commitTransaction();
+            log.debug("commit txn: OK");
+            
+            // this block could be passed off to a thread so request completes??
+            if (existing != null && dsl != null) {
+                log.debug("deleting from storage...");
+                getStorageAdapter().delete(existing.storageLocation);
+                log.debug("delete from storage: OK");
+                // obsolete tracker record no longer needed
+                locDAO.delete(dsl.getID());
+            }
+        } catch (Exception e) {
+            log.error("failed to persist " + artifactURI, e);
+            txnMgr.rollbackTransaction();
+            log.debug("rollback txn: OK");
+            throw e;
+        } finally {
+            if (txnMgr.isOpen()) {
+                log.error("BUG - open transaction in finally");
+                txnMgr.rollbackTransaction();
+                log.error("rollback txn: OK");
             }
         }
         

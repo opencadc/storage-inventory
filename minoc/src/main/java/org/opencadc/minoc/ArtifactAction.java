@@ -325,7 +325,7 @@ public abstract class ArtifactAction extends RestAction {
     /**
      * Create a valid artifact uri.
      * @param uri The input string.
-     * @return The artifact uri objecdt.
+     * @return The artifact uri object.
      */
     private URI createArtifactURI(String uri) {
         try {
@@ -369,10 +369,6 @@ public abstract class ArtifactAction extends RestAction {
         ArtifactDAO dao = new ArtifactDAO();
         dao.setConfig(getDaoConfig(props));
         return dao;
-    }
-    
-    protected DeletedEventDAO getDeletedEventDAO(ArtifactDAO src) {
-        return new DeletedEventDAO(src);
     }
     
     protected List<String> getReadGrantServices(MultiValuedProperties props) {
