@@ -200,14 +200,16 @@ public class PutAction extends ArtifactAction {
             txnMgr.startTransaction();
             log.debug("start txn: OK");
             
-            ObsoleteStorageLocation dsl = null;
+            ObsoleteStorageLocation prevOSL = locDAO.get(artifact.storageLocation);
+            if (prevOSL != null) {
+                // no longer obsolete
+                locDAO.delete(prevOSL.getID());
+                prevOSL = null;
+            }
+            
+            ObsoleteStorageLocation newOSL = null;
             if (existing == null) {
                 artifactDAO.put(artifact);
-                dsl = locDAO.get(artifact.storageLocation);
-                if (dsl != null) {
-                    // no longer obsolete
-                    locDAO.delete(dsl.getID());
-                }
                 log.debug("put artifact in database: " + artifactURI);
             } else {
                 DeletedEventDAO eventDAO = new DeletedEventDAO(artifactDAO);
@@ -217,22 +219,23 @@ public class PutAction extends ArtifactAction {
                 eventDAO.put(deletedArtifact);
                 
                 if (!artifact.storageLocation.equals(existing.storageLocation)) {
-                    dsl = new ObsoleteStorageLocation(existing.storageLocation);
-                    locDAO.put(dsl);
+                    newOSL = new ObsoleteStorageLocation(existing.storageLocation);
+                    locDAO.put(newOSL);
                 }
                 log.debug("put artifact in database: " + artifactURI);
             }
+            
             log.debug("committing transaction");
             txnMgr.commitTransaction();
             log.debug("commit txn: OK");
             
             // this block could be passed off to a thread so request completes??
-            if (existing != null && dsl != null) {
+            if (newOSL != null) {
                 log.debug("deleting from storage...");
-                getStorageAdapter().delete(existing.storageLocation);
+                getStorageAdapter().delete(newOSL.getLocation());
                 log.debug("delete from storage: OK");
                 // obsolete tracker record no longer needed
-                locDAO.delete(dsl.getID());
+                locDAO.delete(newOSL.getID());
             }
         } catch (Exception e) {
             log.error("failed to persist " + artifactURI, e);
