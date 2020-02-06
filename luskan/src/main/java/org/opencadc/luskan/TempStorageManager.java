@@ -101,42 +101,46 @@ public class TempStorageManager implements ResultStore, UWSInlineContentHandler 
 
     private static final Logger log = Logger.getLogger(TempStorageManager.class);
 
-    private static final String CONFIG = TempStorageManager.class.getSimpleName() + ".properties";
-    private static final String BASE_DIR_KEY = TempStorageManager.class.getName() + ".baseStorageDir";
-    private static final String URI_KEY = "serviceURI";
+    private static final String URI_KEY = TempStorageManager.class.getPackage().getName() + ".resourceID";
+    
+    private final File resultsDir;
+    private String baseResultsURL;
 
-    private Job job;
-    private String contentType;
+    //private Job job;
     private String filename;
-
-    private File baseDir;
-    private String baseURL;
 
     public TempStorageManager() {
         try {
-            PropertiesReader propReader = new PropertiesReader(CONFIG);
-            this.baseDir = new File(propReader.getFirstPropertyValue(BASE_DIR_KEY));
-
-            String uriString = propReader.getFirstPropertyValue(URI_KEY);
-            log.debug("baseStorageDir:" + this.baseDir + ", service URI: " + uriString);
-            URI serviceURI = new URI(uriString);
+            String baseDir = System.getProperty("java.io.tmpdir");
+            if (baseDir == null) {
+                baseDir = System.getProperty("usr.home");
+            }
+            if (baseDir != null) {
+                this.resultsDir = new File(baseDir, "luskan-results");
+            } else {
+                // current working dir
+                this.resultsDir = new File("luskan-results");
+            }
+            resultsDir.mkdirs();
+            log.info("resultsDir: " + resultsDir.getCanonicalPath());
+            
+            String uriString = System.getProperty(URI_KEY);
+            log.info("system property: " + URI_KEY + " = " + uriString);
+            URI luskan = new URI(uriString);
             RegistryClient regClient = new RegistryClient();
-            URL serviceURL = regClient.getServiceURL(serviceURI, Standards.VOSI_AVAILABILITY, AuthMethod.ANON);
+            URL serviceURL = regClient.getServiceURL(luskan, Standards.TAP_10, AuthMethod.CERT);
             // NOTE: "results" is used in the servlet mapping in web.xml
-            this.baseURL = serviceURL.toString().replace("availability", "results");
+            this.baseResultsURL = serviceURL.toExternalForm() + "/results";
+            log.info("resultsURL: " + baseResultsURL);
         } catch (Exception ex) {
-            log.error("CONFIG: failed to load/read config from TempStorageManager.properties", ex);
-            throw new RuntimeException("CONFIG: failed to load/read config from TempStorageManager.properties", ex);
-        }
-        if (baseDir == null) {
-            log.error("CONFIG: incomplete: baseDir=" + baseDir);
-            throw new RuntimeException("CONFIG incomplete: baseDir=" + baseDir);
+            log.error("CONFIG: failed to load/read config from system properties", ex);
+            throw new RuntimeException("CONFIG: failed to load/read config from system properties", ex);
         }
     }
 
     // used by TempStorageGetAction
     File getStoredFile(String filename) {
-        return getDestFile(filename);
+        return new File(resultsDir, filename);
     }
 
     // cadc-tap-server ResultStore implementation
@@ -152,76 +156,54 @@ public class TempStorageManager implements ResultStore, UWSInlineContentHandler 
             num = new Long(maxRows);
         }
 
-        // TODO: get requested content-type from job and store it with file
-        // so that TempStorageAction can set content-type header correctly
-        File dest = getDestFile(filename);
-        URL ret = getURL(filename);
-        FileOutputStream ostream = null;
-        try {
-            ostream = new FileOutputStream(dest);
+        File dest = getDestFile();
+        URL ret = getURL();
+        try (FileOutputStream ostream = new FileOutputStream(dest)) {
             writer.write(rs, ostream, num);
-        } finally {
-            if (ostream != null) {
-                ostream.close();
-            }
         }
+        // TODO: store requested content-type with file so that 
+        // TempStorageGetAction can set content-type header correctly
         return ret;
     }
 
     public URL put(Throwable t, TableWriter writer) throws IOException {
-        // TODO: get requested content-type from job and store it with file
-        // so that TempStorageAction can set content-type header correctly
-        File dest = getDestFile(filename);
-        URL ret = getURL(filename);
-        FileOutputStream ostream = null;
-        try {
-            ostream = new FileOutputStream(dest);
+        File dest = getDestFile();
+        URL ret = getURL();
+        try (FileOutputStream ostream = new FileOutputStream(dest)) {
             writer.write(t, ostream);
-        } finally {
-            if (ostream != null) {
-                ostream.close();
-            }
         }
+        // TODO: store requested content-type with file so that 
+        // TempStorageGetAction can set content-type header correctly
         return ret;
     }
 
+    @Override
     public void setJob(Job job) {
-        this.job = job;
+        // unused
     }
 
+    @Override
     public void setContentType(String contentType) {
-        this.contentType = contentType;
+        // TODO: store and set xattr on the result file once written?
     }
 
+    @Override
     public void setFilename(String filename) {
         this.filename = filename;
     }
 
-    private File getDestFile(String filename) {
-        if (!baseDir.exists()) {
-            log.debug("create baseDir: " + baseDir);
-            baseDir.mkdir();
+    private File getDestFile() {
+        if (!resultsDir.exists()) {
+            resultsDir.mkdirs();
         }
-
-        File dir = baseDir;
-        if (!dir.exists()) {
-            throw new RuntimeException(BASE_DIR_KEY + "=" + baseDir + " does not exist");
-        }
-        if (!dir.isDirectory()) {
-            throw new RuntimeException(BASE_DIR_KEY + "=" + baseDir + " is not a directory");
-        }
-        if (!dir.canWrite()) {
-            throw new RuntimeException(BASE_DIR_KEY + "=" + baseDir + " is not writable");
-        }
-
-        return new File(dir, filename);
+        return new File(resultsDir, filename);
     }
 
-    private URL getURL(String filename) {
+    private URL getURL() {
         StringBuilder sb = new StringBuilder();
-        sb.append(baseURL);
+        sb.append(baseResultsURL);
 
-        if (!baseURL.endsWith("/")) {
+        if (!baseResultsURL.endsWith("/")) {
             sb.append("/");
         }
 
@@ -248,7 +230,7 @@ public class TempStorageManager implements ResultStore, UWSInlineContentHandler 
 
         String filename = name + "-" + getRandomString();
 
-        File put = new File(baseDir + "/" + filename);
+        File put = new File(resultsDir, filename);
 
         log.debug("put: " + put);
         log.debug("contentType: " + contentType);
@@ -263,7 +245,7 @@ public class TempStorageManager implements ResultStore, UWSInlineContentHandler 
         fos.flush();
         fos.close();
 
-        URL retURL = new URL(baseURL + "/" + filename);
+        URL retURL = new URL(baseResultsURL + "/" + filename);
         Content ret = new Content();
         ret.name = UWSInlineContentHandler.CONTENT_PARAM_REPLACE;
         ret.value = new UWSInlineContentHandler.ParameterReplacement("param:" + name, retURL.toExternalForm());
