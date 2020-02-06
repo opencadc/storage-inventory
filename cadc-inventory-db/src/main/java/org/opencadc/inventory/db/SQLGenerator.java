@@ -272,8 +272,11 @@ public class SQLGenerator {
         }
         
         @Override
-        public void execute(JdbcTemplate jdbc) {
-            jdbc.update(this);
+        public void execute(JdbcTemplate jdbc) throws EntityNotFoundException {
+            int n = jdbc.update(this);
+            if (n == 0) {
+                throw new EntityNotFoundException("not found: " + id);
+            }
         }
         
         @Override

@@ -233,8 +233,9 @@ class AbstractDAO<T extends Entity> {
      * Acquire a write lock on the existing entity. This is used as the first action
      * in a transaction in order to avoid race conditions and deadlocks.
      * @param val entity value to lock
+     * @throws EntityNotFoundException if the specified entity does not exist
      */
-    public void lock(T val) {
+    public void lock(T val) throws EntityNotFoundException {
         if (val == null) {
             throw new IllegalArgumentException("entity cannot be null");
         }

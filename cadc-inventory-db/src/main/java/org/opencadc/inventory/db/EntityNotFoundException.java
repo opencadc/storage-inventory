@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2019.                            (c) 2019.
+*  (c) 2020.                            (c) 2020.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -67,19 +67,20 @@
 
 package org.opencadc.inventory.db;
 
-import java.util.UUID;
-import org.opencadc.inventory.Entity;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.core.PreparedStatementCreator;
+import org.apache.log4j.Logger;
 
 /**
  *
  * @author pdowler
- * @param <T> entity subclass
  */
-interface EntityLock<T extends Entity> extends PreparedStatementCreator {
+public class EntityNotFoundException extends Exception {
+    private static final Logger log = Logger.getLogger(EntityNotFoundException.class);
 
-    void execute(JdbcTemplate jdbc) throws EntityNotFoundException;
-    
-    void setID(UUID id);
+    public EntityNotFoundException() {
+        super();
+    }
+
+    public EntityNotFoundException(String msg) {
+        super(msg);
+    }
 }
