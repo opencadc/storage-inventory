@@ -74,6 +74,7 @@ import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.DeletedArtifactEvent;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.DeletedEventDAO;
+import org.opencadc.inventory.db.EntityNotFoundException;
 import org.opencadc.inventory.db.ObsoleteStorageLocation;
 import org.opencadc.inventory.db.ObsoleteStorageLocationDAO;
 import org.opencadc.inventory.permissions.WriteGrant;
@@ -115,6 +116,21 @@ public class DeleteAction extends ArtifactAction {
             log.debug("starting transaction");
             txnMgr.startTransaction();
             log.debug("start txn: OK");
+            
+            boolean locked = false;
+            while (existing != null && !locked) {
+                try { 
+                    artifactDAO.lock(existing);
+                    locked = true;
+                } catch (EntityNotFoundException ex) {
+                    // entity deleted
+                    existing = artifactDAO.get(artifactURI);
+                }
+            }
+            if (existing == null) {
+                // artifact deleted while trying to get a lock
+                throw new ResourceNotFoundException("not found: " + artifactURI);
+            }
             
             DeletedArtifactEvent deletedArtifact = new DeletedArtifactEvent(existing.getID());
             artifactDAO.delete(existing.getID());

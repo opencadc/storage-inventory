@@ -83,6 +83,7 @@ import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.DeletedArtifactEvent;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.DeletedEventDAO;
+import org.opencadc.inventory.db.EntityNotFoundException;
 import org.opencadc.inventory.db.ObsoleteStorageLocation;
 import org.opencadc.inventory.db.ObsoleteStorageLocationDAO;
 import org.opencadc.inventory.permissions.WriteGrant;
@@ -194,35 +195,45 @@ public class PutAction extends ArtifactAction {
         Artifact existing = artifactDAO.get(artifactURI);
         
         TransactionManager txnMgr = artifactDAO.getTransactionManager();
-            
         try {
             log.debug("starting transaction");
             txnMgr.startTransaction();
             log.debug("start txn: OK");
             
+            boolean locked = false;
+            while (existing != null && !locked) {
+                try { 
+                    artifactDAO.lock(existing);
+                    locked = true;
+                } catch (EntityNotFoundException ex) {
+                    // entity deleted
+                    existing = artifactDAO.get(artifactURI);
+                }
+            }
+            
             ObsoleteStorageLocation prevOSL = locDAO.get(artifact.storageLocation);
             if (prevOSL != null) {
                 // no longer obsolete
                 locDAO.delete(prevOSL.getID());
-                prevOSL = null;
             }
             
             ObsoleteStorageLocation newOSL = null;
-            if (existing == null) {
-                artifactDAO.put(artifact);
-                log.debug("put artifact in database: " + artifactURI);
-            } else {
+            if (existing != null) {
                 DeletedEventDAO eventDAO = new DeletedEventDAO(artifactDAO);
                 DeletedArtifactEvent deletedArtifact = new DeletedArtifactEvent(existing.getID());
                 artifactDAO.delete(existing.getID());
-                artifactDAO.put(artifact);
                 eventDAO.put(deletedArtifact);
-                
+            }
+            
+            artifactDAO.put(artifact);
+            log.debug("put artifact in database: " + artifactURI);
+            
+            if (existing != null) {
                 if (!artifact.storageLocation.equals(existing.storageLocation)) {
                     newOSL = new ObsoleteStorageLocation(existing.storageLocation);
                     locDAO.put(newOSL);
+                    log.debug("marked obsolete: " + existing.storageLocation);
                 }
-                log.debug("put artifact in database: " + artifactURI);
             }
             
             log.debug("committing transaction");
