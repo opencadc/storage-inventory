@@ -34,6 +34,7 @@ A minoc.properties file in /config is required to run this service.  The followi
 ```
 # The storage adapter to use for storage.
 # Consult the storage adapter instructions for adapter-specific configuration
+#org.opencadc.inventory.storage.StorageAdapter={fully-qualified-classname of implementation}
 org.opencadc.inventory.storage.StorageAdapter=org.opencadc.inventory.storage.fs.FileSystemStorageAdapter
 
 # The SQL generator implementation (default shown)
@@ -42,10 +43,12 @@ org.opencadc.inventory.storage.StorageAdapter=org.opencadc.inventory.storage.fs.
 # The schema to use
 org.opencadc.inventory.db.schema=inventory
 
-# The identity of a permissions service(s) providing read permissions. There may be multiple instances of this key/value pair.
+# The identity of a permissions service(s) providing read permissions. 
+# - multiple values are supported: service will query all of them
 #org.opencadc.inventory.permissions.ReadGrant.resource=ivo://{authority}/{name}
 
-# The identity of a permissions system providing write permissions. There may be multiple instances of this key/value pair.
+# The identity of a permissions system providing write permissions. 
+# - multiple values are supported: service will query all of them 
 #org.opencadc.inventory.permissions.WriteGrant.resourceID=ivo://{authority}/{name}
 ```
 
@@ -62,5 +65,8 @@ docker run -it minoc:latest /bin/bash
 
 ## running it
 ```
-docker run -d --user tomcat:tomcat --volume=/path/to/external/config:/config:ro --volume=/path/to/external/logs:/logs:rw --name minoc minoc:latest
+docker run -d --user tomcat:tomcat --volume=/path/to/external/config:/config:ro --name minoc minoc:latest
 ```
+Note: If you use cadc-storage-adapter-fs you probably also want to volume mount an external directory 
+read-write to store files.
+
