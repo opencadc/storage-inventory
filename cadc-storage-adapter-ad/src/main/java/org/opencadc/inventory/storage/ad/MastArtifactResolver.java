@@ -69,37 +69,80 @@
 
 package org.opencadc.inventory.storage.ad;
 
-import ca.nrc.cadc.util.Log4jInit;
+import ca.nrc.cadc.net.StorageResolver;
 
-import org.apache.log4j.Level;
+import java.net.URI;
+import java.net.URL;
+
 import org.apache.log4j.Logger;
-import org.junit.Assert;
-import org.junit.BeforeClass;
-import org.junit.Test;
 
 /**
- * Test suite for AdStorageAdapter
- * 
- * @author jeevesh
+ * Fork of MastResolver from caom2-artifact-resolver library. Maintained so the original can be modified
+ * in future to point to a different storage location, while the AdStorageAdapter can maintain reference
+ * to the original storage location.
  *
+ * This class can convert a MAST URI into a URL.
+ *
+ * @author jeevesh
  */
-public class AdStorageAdapterTest {
+public class MastArtifactResolver implements StorageResolver {
 
-    private static final Logger log = Logger.getLogger(AdStorageAdapterTest.class);
+    public static final String SCHEME = "mast";
+    private static final String MAST_BASE_ARTIFACT_URL = "https://mastpartners.stsci.edu/portal/Download/file/";
+    // TODO:
+    // temporary base url to JWST testing, remove after testing has completed
+    private static final String JWST_ARCHIVE = "JWST";
+    private static final String JWST_TEST_BASE_ARTIFACT_URL = "https://pwjwdmsauiweb.stsci.edu/portal/Download/file/";
 
-    static {
-        Log4jInit.setLevel("org.opencadc.inventory", Level.DEBUG);
+    public MastArtifactResolver() {
     }
 
-    @BeforeClass
-    public static void setup() {
+    /**
+     * Returns the scheme for the storage resolver.
+     *
+     * @return a String representing the schema.
+     */
+    @Override
+    public String getScheme() {
+        return SCHEME;
     }
 
-    @Test
-    public void testGet() {
+    /**
+     * Convert the specified URI to one or more URL(s).
+     *
+     * @param uri the URI to convert
+     * @return a URL to the identified resource
+     * @throws IllegalArgumentException if the scheme is not equal to the value from getScheme()
+     *                                  the uri is malformed such that a URL cannot be generated, or the uri is null
+     */
+    @Override
+    public URL toURL(URI uri) {
+        ResolverUtil.validate(uri, SCHEME);
+        String sourceURL = MAST_BASE_ARTIFACT_URL;
+        // TODO:
+        // Temporary code to use the JWST test server.
+        // Remove when the JWST production server is used.
+        if (isJWST(uri)) {
+            sourceURL = JWST_TEST_BASE_ARTIFACT_URL;
+        }
+        return ResolverUtil.createURLFromPath(uri, sourceURL);
     }
 
-    @Test
-    public void testIterator() {
+    // TODO:
+    // Temporary method to use the JWST test server. 
+    // Remove when the JWST production server is used.
+    private boolean isJWST(URI uri) {
+        boolean isJWST = false;
+        
+        String schemeSpecificPart = uri.getSchemeSpecificPart();
+        if (schemeSpecificPart.length() > 0) {
+            String archive = schemeSpecificPart.split("/")[0];
+            if (JWST_ARCHIVE.equalsIgnoreCase(archive)) {
+                isJWST = true;
+            }
+        }
+        
+        return isJWST;
     }
 }
+
