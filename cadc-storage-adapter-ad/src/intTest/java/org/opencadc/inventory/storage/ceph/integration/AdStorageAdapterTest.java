@@ -91,39 +91,6 @@ public class AdStorageAdapterTest {
 
     private static final Logger LOGGER = Logger.getLogger(AdStorageAdapterTest.class);
     private static final String DIGEST_ALGORITHM = "MD5";
-//    private static final URI ENDPOINT = URI.create("http://dao-wkr-04.cadc.dao.nrc.ca:8080");
-//    private static final String REGION = Region.US_EAST_1.id();
-//    private static final String DIGEST_ALGORITHM = "MD5";
-//    private static final String DEFAULT_BUCKET_NAME = "cadctest";
-//    private static final String MEF_OBJECT_ID = "test-megaprime-s3.fits.fz";
-
-    /**
-     * Override the bucket to use by setting -Dbucket.name=mybucket in your test command.  Should have a
-     * public-read-write ACL to make these tests easier to run.
-     */
-//    private static final String BUCKET_NAME = System.getProperty("s3.bucket.name", DEFAULT_BUCKET_NAME);
-
-    /**
-     * Used to issue tests with the FITS Header jumping as it should remain untouched.  Has a public-read ACL.
-     */
-//    private static final String LIST_BUCKET_NAME = "cadctestlist";
-
-
-//    private InputStream openStream(final URL sourceURL) throws Exception {
-//        final HttpURLConnection sourceURLConnection = (HttpURLConnection) sourceURL.openConnection();
-//        sourceURLConnection.setDoInput(true);
-//        sourceURLConnection.setInstanceFollowRedirects(true);
-//
-//        final String location = sourceURLConnection.getHeaderField("Location");
-//        if (StringUtil.hasText(location)) {
-//            return openStream(new URL(location));
-//        } else {
-//            return sourceURLConnection.getInputStream();
-//        }
-//    }
-//
-
-
 
     @Test
     public void get() throws Exception {
