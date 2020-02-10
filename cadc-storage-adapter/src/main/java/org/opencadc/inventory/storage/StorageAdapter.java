@@ -69,6 +69,8 @@
 
 package org.opencadc.inventory.storage;
 
+import ca.nrc.cadc.io.ReadException;
+import ca.nrc.cadc.io.WriteException;
 import ca.nrc.cadc.net.IncorrectContentChecksumException;
 import ca.nrc.cadc.net.IncorrectContentLengthException;
 import ca.nrc.cadc.net.ResourceNotFoundException;
