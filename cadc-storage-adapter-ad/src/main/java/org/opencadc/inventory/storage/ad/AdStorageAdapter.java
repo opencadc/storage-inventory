@@ -72,7 +72,8 @@ package org.opencadc.inventory.storage.ad;
 import ca.nrc.cadc.auth.AuthMethod;
 import ca.nrc.cadc.auth.AuthenticationUtil;
 import ca.nrc.cadc.io.ReadException;
-import ca.nrc.cadc.io.ThreadedIO;
+import ca.nrc.cadc.io.WriteException;
+
 import ca.nrc.cadc.net.HttpDownload;
 import ca.nrc.cadc.net.IncorrectContentChecksumException;
 import ca.nrc.cadc.net.IncorrectContentLengthException;
@@ -83,7 +84,6 @@ import ca.nrc.cadc.reg.Capability;
 import ca.nrc.cadc.reg.Interface;
 import ca.nrc.cadc.reg.Standards;
 import ca.nrc.cadc.reg.client.RegistryClient;
-import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -97,15 +97,11 @@ import java.util.SortedSet;
 
 import javax.security.auth.Subject;
 import org.apache.log4j.Logger;
-import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.storage.NewArtifact;
-//import ca.nrc.cadc.io.ReadException;
 import org.opencadc.inventory.storage.StorageAdapter;
 import org.opencadc.inventory.storage.StorageEngageException;
 import org.opencadc.inventory.storage.StorageMetadata;
-
-import ca.nrc.cadc.io.WriteException;
 
 /**
  * The interface to storage implementations.
@@ -142,13 +138,17 @@ public class AdStorageAdapter implements StorageAdapter {
         // ResourceNotFoundException thrown here?
         // what about invalid URI? (MalformedURIException)
         URL sourceURL = this.toURL(storageLocation.getStorageID());
-        System.out.println("sourceURL" + sourceURL.toString());
+        System.out.println("sourceURL: " + sourceURL.toString());
 
         // Use HttpDownload to call this URL
         // ResourceNotFoundException, StorageEngageException needs to be thrown here
         ByteArrayOutputStream source = new ByteArrayOutputStream();
-        HttpDownload get = new HttpDownload(sourceURL, source);
-        get.run();
+        try {
+            HttpDownload get = new HttpDownload(sourceURL, source);
+            get.run();
+        } catch (Exception e) {
+            throw new ReadException(e.getMessage());
+        }
 
     }
 
@@ -239,11 +239,11 @@ public class AdStorageAdapter implements StorageAdapter {
      * @throws TransientException If an unexpected, temporary exception occurred. 
      */
     // TODO: implement this
-    // Q: will there need to be an AdIterator class, similar to what was implemented for file system storage adapter?
     public Iterator<StorageMetadata> iterator(String storageBucket)
         throws StorageEngageException, TransientException {
         throw new UnsupportedOperationException("not supported");
     }
+
     /**
      * Get a set of  of items in the given bucket.
      * @param storageBucket the bucket to list
@@ -256,27 +256,13 @@ public class AdStorageAdapter implements StorageAdapter {
         throws StorageEngageException, TransientException {
         throw new UnsupportedOperationException("not supported");
     }
-    
-    // for a symbolic bucket scheme (eg AD or human-usable filesystem):
-    //public String[] getStorageBucketDelimiters();
-    // public int getMaxDepth();
-    //public SortedSet<String> getBuckets(int len);
-    
-    // for a programmatic prefixable bucket scheme:
-    // char set specified as lower case hex [0-9a-f]
-    //public int getMaxBucketLength();
 
-
-    //    public static final String SCHEME = "mast";
-//    private static final Logger log = Logger.getLogger(AdArtifactResolver.class);
-//    private static final URI DATA_RESOURCE_ID = URI.create("ivo://cadc.nrc.ca/data");
-//    private String baseDataURL;
-
-    public URL toURL(URI uri) {
-        //        if (!SCHEME.equals(uri.getScheme())) {
-        //            throw new IllegalArgumentException("invalid scheme in " + uri);
-        //        }
-
+    /**
+     * Produce a data web service URL from the URI provided.
+     * @param uri
+     * @return
+     */
+    private URL toURL(URI uri) {
         try {
             Subject subject = AuthenticationUtil.getCurrentSubject();
             AuthMethod authMethod = AuthenticationUtil.getAuthMethodFromCredentials(subject);
@@ -301,6 +287,5 @@ public class AdStorageAdapter implements StorageAdapter {
             throw new RuntimeException(message, t);
         }
     }
-
 
 }
