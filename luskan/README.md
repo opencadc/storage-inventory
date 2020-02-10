@@ -55,5 +55,5 @@ docker run -it luskan:latest /bin/bash
 
 ## running it
 ```
-docker run -d --user tomcat:tomcat --volume=/path/to/external/config:/config:ro --name luskan luskan:latest
+docker run --user tomcat:tomcat --volume=/path/to/external/config:/config:ro --name luskan luskan:latest
 ```

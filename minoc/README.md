@@ -65,7 +65,7 @@ docker run -it minoc:latest /bin/bash
 
 ## running it
 ```
-docker run -d --user tomcat:tomcat --volume=/path/to/external/config:/config:ro --name minoc minoc:latest
+docker run --user tomcat:tomcat --volume=/path/to/external/config:/config:ro --name minoc minoc:latest
 ```
 Note: If you use cadc-storage-adapter-fs you probably also want to volume mount an external directory 
 read-write to store files.
