@@ -3,7 +3,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2019.                            (c) 2019.
+ *  (c) 2020.                            (c) 2020.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -68,6 +68,7 @@
 package org.opencadc.minoc;
 
 import ca.nrc.cadc.db.TransactionManager;
+import ca.nrc.cadc.io.ReadException;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.rest.InlineContentException;
 import ca.nrc.cadc.rest.InlineContentHandler;
@@ -85,7 +86,6 @@ import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.DeletedEventDAO;
 import org.opencadc.inventory.permissions.WriteGrant;
 import org.opencadc.inventory.storage.NewArtifact;
-import org.opencadc.inventory.storage.ReadException;
 import org.opencadc.inventory.storage.StorageMetadata;
 
 /**
