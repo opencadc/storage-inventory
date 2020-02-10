@@ -70,6 +70,8 @@
 package org.opencadc.inventory.storage.rados;
 
 import ca.nrc.cadc.io.ByteCountInputStream;
+import ca.nrc.cadc.io.ReadException;
+import ca.nrc.cadc.io.WriteException;
 import ca.nrc.cadc.net.IncorrectContentChecksumException;
 import ca.nrc.cadc.net.IncorrectContentLengthException;
 import ca.nrc.cadc.net.ResourceNotFoundException;
@@ -112,11 +114,9 @@ import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.storage.NewArtifact;
-import org.opencadc.inventory.storage.ReadException;
 import org.opencadc.inventory.storage.StorageAdapter;
 import org.opencadc.inventory.storage.StorageEngageException;
 import org.opencadc.inventory.storage.StorageMetadata;
-import org.opencadc.inventory.storage.WriteException;
 
 
 /**
