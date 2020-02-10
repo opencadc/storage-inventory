@@ -3,7 +3,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2019.                            (c) 2019.
+ *  (c) 2020.                            (c) 2020.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -67,6 +67,9 @@
 
 package org.opencadc.inventory.storage.fs;
 
+import ca.nrc.cadc.io.ReadException;
+import ca.nrc.cadc.io.ThreadedIO;
+import ca.nrc.cadc.io.WriteException;
 import ca.nrc.cadc.net.IncorrectContentChecksumException;
 import ca.nrc.cadc.net.IncorrectContentLengthException;
 import ca.nrc.cadc.net.ResourceNotFoundException;
@@ -99,12 +102,9 @@ import org.apache.log4j.Logger;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.storage.NewArtifact;
-import org.opencadc.inventory.storage.ReadException;
 import org.opencadc.inventory.storage.StorageAdapter;
 import org.opencadc.inventory.storage.StorageEngageException;
 import org.opencadc.inventory.storage.StorageMetadata;
-import org.opencadc.inventory.storage.ThreadedIO;
-import org.opencadc.inventory.storage.WriteException;
 
 /**
  * An implementation of the storage adapter interface on a file system.
