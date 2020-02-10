@@ -69,27 +69,43 @@
 
 package org.opencadc.inventory.storage.ad;
 
+import ca.nrc.cadc.auth.AuthMethod;
+import ca.nrc.cadc.auth.AuthenticationUtil;
+import ca.nrc.cadc.io.ReadException;
+import ca.nrc.cadc.io.ThreadedIO;
+import ca.nrc.cadc.net.HttpDownload;
 import ca.nrc.cadc.net.IncorrectContentChecksumException;
 import ca.nrc.cadc.net.IncorrectContentLengthException;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
+import ca.nrc.cadc.reg.Capabilities;
+import ca.nrc.cadc.reg.Capability;
+import ca.nrc.cadc.reg.Interface;
+import ca.nrc.cadc.reg.Standards;
+import ca.nrc.cadc.reg.client.RegistryClient;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.MalformedURLException;
+import java.net.URI;
+import java.net.URL;
 import java.util.Iterator;
 import java.util.Set;
 import java.util.SortedSet;
 
+import javax.security.auth.Subject;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.storage.NewArtifact;
-import org.opencadc.inventory.storage.ReadException;
+//import ca.nrc.cadc.io.ReadException;
 import org.opencadc.inventory.storage.StorageAdapter;
 import org.opencadc.inventory.storage.StorageEngageException;
 import org.opencadc.inventory.storage.StorageMetadata;
-import org.opencadc.inventory.storage.ThreadedIO;
-import org.opencadc.inventory.storage.WriteException;
+
+import ca.nrc.cadc.io.WriteException;
 
 /**
  * The interface to storage implementations.
@@ -100,6 +116,7 @@ import org.opencadc.inventory.storage.WriteException;
 public class AdStorageAdapter implements StorageAdapter {
 
     private static final Logger log = Logger.getLogger(AdStorageAdapter.class);
+    private static final URI DATA_RESOURCE_ID = URI.create("ivo://cadc.nrc.ca/data");
 
     /**
      * Construct an AdStorageAdapter with the config stored in the
@@ -121,7 +138,18 @@ public class AdStorageAdapter implements StorageAdapter {
      */
     public void get(StorageLocation storageLocation, OutputStream dest)
         throws ResourceNotFoundException, ReadException, WriteException, StorageEngageException, TransientException {
-        throw new UnsupportedOperationException("not supported");
+
+        // ResourceNotFoundException thrown here?
+        // what about invalid URI? (MalformedURIException)
+        URL sourceURL = this.toURL(storageLocation.getStorageID());
+        System.out.println("sourceURL" + sourceURL.toString());
+
+        // Use HttpDownload to call this URL
+        // ResourceNotFoundException, StorageEngageException needs to be thrown here
+        ByteArrayOutputStream source = new ByteArrayOutputStream();
+        HttpDownload get = new HttpDownload(sourceURL, source);
+        get.run();
+
     }
 
     
@@ -210,6 +238,8 @@ public class AdStorageAdapter implements StorageAdapter {
      * @throws StorageEngageException If the adapter failed to interact with storage.
      * @throws TransientException If an unexpected, temporary exception occurred. 
      */
+    // TODO: implement this
+    // Q: will there need to be an AdIterator class, similar to what was implemented for file system storage adapter?
     public Iterator<StorageMetadata> iterator(String storageBucket)
         throws StorageEngageException, TransientException {
         throw new UnsupportedOperationException("not supported");
@@ -235,4 +265,42 @@ public class AdStorageAdapter implements StorageAdapter {
     // for a programmatic prefixable bucket scheme:
     // char set specified as lower case hex [0-9a-f]
     //public int getMaxBucketLength();
+
+
+    //    public static final String SCHEME = "mast";
+//    private static final Logger log = Logger.getLogger(AdArtifactResolver.class);
+//    private static final URI DATA_RESOURCE_ID = URI.create("ivo://cadc.nrc.ca/data");
+//    private String baseDataURL;
+
+    public URL toURL(URI uri) {
+        //        if (!SCHEME.equals(uri.getScheme())) {
+        //            throw new IllegalArgumentException("invalid scheme in " + uri);
+        //        }
+
+        try {
+            Subject subject = AuthenticationUtil.getCurrentSubject();
+            AuthMethod authMethod = AuthenticationUtil.getAuthMethodFromCredentials(subject);
+            if (authMethod == null) {
+                authMethod = AuthMethod.ANON;
+            }
+            RegistryClient rc = new RegistryClient();
+            Capabilities caps = rc.getCapabilities(DATA_RESOURCE_ID);
+            Capability dataCap = caps.findCapability(Standards.DATA_10);
+            Interface ifc = dataCap.findInterface(authMethod);
+            if (ifc == null) {
+                throw new IllegalArgumentException("No interface for auth method " + authMethod);
+            }
+            String baseDataURL = ifc.getAccessURL().getURL().toString();
+            URL url = new URL(baseDataURL + "/" + uri.getSchemeSpecificPart());
+            log.debug(uri + " --> " + url);
+            return url;
+        } catch (MalformedURLException ex) {
+            throw new RuntimeException("BUG", ex);
+        } catch (Throwable t) {
+            String message = "Failed to convert to data URL";
+            throw new RuntimeException(message, t);
+        }
+    }
+
+
 }
