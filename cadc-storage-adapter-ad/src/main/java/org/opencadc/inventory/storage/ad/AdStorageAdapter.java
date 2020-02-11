@@ -88,9 +88,11 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URL;
+import java.security.AccessControlException;
 import java.util.Iterator;
 import java.util.Set;
 import java.util.SortedSet;
@@ -113,6 +115,7 @@ public class AdStorageAdapter implements StorageAdapter {
 
     private static final Logger log = Logger.getLogger(AdStorageAdapter.class);
     private static final URI DATA_RESOURCE_ID = URI.create("ivo://cadc.nrc.ca/data");
+    private static final String UNABLE_TO_GET = "Unable to get from source: ";
 
     /**
      * Construct an AdStorageAdapter with the config stored in the
@@ -135,21 +138,37 @@ public class AdStorageAdapter implements StorageAdapter {
     public void get(StorageLocation storageLocation, OutputStream dest)
         throws ResourceNotFoundException, ReadException, WriteException, StorageEngageException, TransientException {
 
-        // ResourceNotFoundException thrown here?
-        // what about invalid URI? (MalformedURIException)
         URL sourceURL = this.toURL(storageLocation.getStorageID());
-        System.out.println("sourceURL: " + sourceURL.toString());
+        log.debug("sourceURL: " + sourceURL.toString());
 
-        // Use HttpDownload to call this URL
-        // ResourceNotFoundException, StorageEngageException needs to be thrown here
         ByteArrayOutputStream source = new ByteArrayOutputStream();
-        try {
-            HttpDownload get = new HttpDownload(sourceURL, source);
-            get.run();
-        } catch (Exception e) {
-            throw new ReadException(e.getMessage());
-        }
+        HttpDownload get = new HttpDownload(sourceURL, source);
+        get.run();
 
+        int retVal = get.getResponseCode();
+        log.debug("HttpDownload return value: " + retVal);
+        if (retVal != HttpURLConnection.HTTP_OK) {
+            Throwable downloadThrowable = get.getThrowable();
+            String throwableMsg = "";
+            if (downloadThrowable != null) {
+                throwableMsg = downloadThrowable.getMessage();
+            }
+            if (retVal == HttpURLConnection.HTTP_FORBIDDEN) {
+                // 403
+                throw new AccessControlException(UNABLE_TO_GET + throwableMsg);
+            } else if (retVal == HttpURLConnection.HTTP_NOT_FOUND) {
+                // 404
+                throw new ResourceNotFoundException(UNABLE_TO_GET +  throwableMsg);
+            } else if (retVal == HttpURLConnection.HTTP_UNAVAILABLE) {
+                // 503
+                throw new TransientException(UNABLE_TO_GET + throwableMsg);
+            } else {
+                throw new StorageEngageException(UNABLE_TO_GET + throwableMsg);
+                // After HttpTransfer getThrowable is updated to return storage-inventory
+                // exceptions (ReadException, WriteException, StorageEngageException etc.)
+                // this section will be updated to handle them properly.
+            }
+        }
     }
 
     

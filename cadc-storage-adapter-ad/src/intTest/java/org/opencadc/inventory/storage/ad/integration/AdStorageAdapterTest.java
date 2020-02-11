@@ -70,36 +70,31 @@
 package org.opencadc.inventory.storage.ad.integration;
 
 import ca.nrc.cadc.io.ByteCountOutputStream;
-
+import ca.nrc.cadc.net.ResourceNotFoundException;
 import java.io.ByteArrayOutputStream;
-
 import java.io.OutputStream;
-
 import java.math.BigInteger;
 import java.net.URI;
-
 import java.security.DigestOutputStream;
 import java.security.MessageDigest;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.Test;
 import org.opencadc.inventory.StorageLocation;
-
+import org.opencadc.inventory.storage.StorageEngageException;
 import org.opencadc.inventory.storage.ad.AdStorageAdapter;
 
 public class AdStorageAdapterTest {
 
-    private static final Logger LOGGER = Logger.getLogger(AdStorageAdapterTest.class);
+    private static final Logger log = Logger.getLogger(AdStorageAdapterTest.class);
     private static final String DIGEST_ALGORITHM = "MD5";
 
     @Test
-    public void get() throws Exception {
+    public void testGetValid() throws Exception {
         final AdStorageAdapter testSubject = new AdStorageAdapter();
         final URI testIrisUri = URI.create("ad:IRIS/I429B4H0.fits");
-        final URI testGeminiUri = URI.create("gemini:GEM/N20191217S0157_th.jpg");
-        //        final URI testMastUri = URI.create("ad:IRIS/I429B4H0.fits");
-        //
-        // The md5 metaChecksum from the Artifact
+
+        // IRIS
         final URI expectedIrisChecksum = URI.create("md5:d41d8cd98f00b204e9800998ecf8427e");
         try {
             final OutputStream outputStream = new ByteArrayOutputStream();
@@ -121,8 +116,9 @@ public class AdStorageAdapterTest {
             Assert.fail("Unexpected exception");
         }
 
-        final URI testAlmaUri = URI.create("alma:ALMA/A001_X1320_X9a/2017.A.00056.S_uid___A001_X1320_X9a_auxiliary.tar");
-        final URI expectedAlmaChecksum = URI.create("md5:d41d8cd98f00b204e9800998ecf8427e");
+        // GEMINI
+        final URI testGeminiUri = URI.create("gemini:GEM/S20191208S0019.jpg");
+        final URI expectedGeminiChecksum = URI.create("md5:d41d8cd98f00b204e9800998ecf8427e");
         try {
             final OutputStream outputStream = new ByteArrayOutputStream();
             final DigestOutputStream digestOutputStream = new DigestOutputStream(outputStream, MessageDigest
@@ -130,12 +126,12 @@ public class AdStorageAdapterTest {
             final ByteCountOutputStream byteCountOutputStream = new ByteCountOutputStream(digestOutputStream);
             final MessageDigest messageDigest = digestOutputStream.getMessageDigest();
 
-            final StorageLocation storageLocation = new StorageLocation(testAlmaUri);
+            final StorageLocation storageLocation = new StorageLocation(testGeminiUri);
             storageLocation.storageBucket = "ad";
 
             testSubject.get(storageLocation, byteCountOutputStream);
 
-            Assert.assertEquals("Wrong checksum.", expectedAlmaChecksum,
+            Assert.assertEquals("Wrong checksum.", expectedGeminiChecksum,
                 URI.create(String.format("%s:%s", messageDigest.getAlgorithm().toLowerCase(),
                     new BigInteger(1, messageDigest.digest()).toString(16))));
 
@@ -143,6 +139,68 @@ public class AdStorageAdapterTest {
             Assert.fail("Unexpected exception");
         }
 
+        // ALMA
+        // Thows a 501 'not implemented' against production
+        //        final URI testAlmaUri = URI.create("alma:ALMA/A001_X1320_X9a/2017.A.00056.S_uid___A001_X1320_X9a_auxiliary.tar");
+        //        final URI expectedAlmaChecksum = URI.create("md5:d41d8cd98f00b204e9800998ecf8427e");
+        //        try {
+        //            final OutputStream outputStream = new ByteArrayOutputStream();
+        //            final DigestOutputStream digestOutputStream = new DigestOutputStream(outputStream, MessageDigest
+        //                .getInstance(AdStorageAdapterTest.DIGEST_ALGORITHM));
+        //            final ByteCountOutputStream byteCountOutputStream = new ByteCountOutputStream(digestOutputStream);
+        //            final MessageDigest messageDigest = digestOutputStream.getMessageDigest();
+        //
+        //            final StorageLocation storageLocation = new StorageLocation(testAlmaUri);
+        //            storageLocation.storageBucket = "ad";
+        //
+        //            testSubject.get(storageLocation, byteCountOutputStream);
+        //
+        //            Assert.assertEquals("Wrong checksum.", expectedAlmaChecksum,
+        //                URI.create(String.format("%s:%s", messageDigest.getAlgorithm().toLowerCase(),
+        //                    new BigInteger(1, messageDigest.digest()).toString(16))));
+        //
+        //        } catch (Exception unexpected) {
+        //            Assert.fail("Unexpected exception: " + unexpected.toString());
+        //        }
+
     }
 
+    @Test
+    public void testGetInvalid() throws Exception {
+        final AdStorageAdapter testSubject = new AdStorageAdapter();
+        final URI invalidIrisUri = URI.create("ad:IRIS/BAD_FILE.fits");
+
+        try {
+            final OutputStream outputStream = new ByteArrayOutputStream();
+            final StorageLocation storageLocation = new StorageLocation(invalidIrisUri);
+            storageLocation.storageBucket = "ad";
+            testSubject.get(storageLocation, outputStream);
+            Assert.fail("ResourceNotFoundException expected");
+        } catch (ResourceNotFoundException rnfe) {
+            // expected
+        } catch (Exception unexpected) {
+            Assert.fail("Unexpected exception: " + unexpected.getMessage());
+        }
+
+
+        // NOT IMPLEMENTED
+        final URI testAlmaUri = URI.create("notImplemented:NOTIMPLEMENTED/A001_X1320_X9a/2017.A.00056.S_uid___A001_X1320_X9a_auxiliary.tar");
+        try {
+            final OutputStream outputStream = new ByteArrayOutputStream();
+            final StorageLocation storageLocation = new StorageLocation(testAlmaUri);
+            storageLocation.storageBucket = "ad";
+
+            testSubject.get(storageLocation, outputStream);
+            Assert.fail("StorageEngageException expected");
+        } catch (StorageEngageException see) {
+            // expected
+        } catch (Exception unexpected) {
+            Assert.fail("Unexpected exception: " + unexpected.toString());
+        }
+
+
+    }
+
+    // TODO: failure tests where no permission
+    // TODO: failure where Read and/or WriteException are triggered
 }
