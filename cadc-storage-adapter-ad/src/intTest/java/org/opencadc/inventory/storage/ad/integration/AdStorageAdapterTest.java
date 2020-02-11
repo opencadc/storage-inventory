@@ -139,8 +139,9 @@ public class AdStorageAdapterTest {
             Assert.fail("Unexpected exception");
         }
 
-        // ALMA
-        // Thows a 501 'not implemented' against production
+        // ALMA:  should have a test for this in the long run. Currenty path elements in ALMA URIs
+        // aren't supported by the data web service, so calls using them throw a 501. Exluded from
+        // valid test suite for now.
         //        final URI testAlmaUri = URI.create("alma:ALMA/A001_X1320_X9a/2017.A.00056.S_uid___A001_X1320_X9a_auxiliary.tar");
         //        final URI expectedAlmaChecksum = URI.create("md5:d41d8cd98f00b204e9800998ecf8427e");
         //        try {
@@ -162,14 +163,14 @@ public class AdStorageAdapterTest {
         //        } catch (Exception unexpected) {
         //            Assert.fail("Unexpected exception: " + unexpected.toString());
         //        }
-
     }
 
     @Test
     public void testGetInvalid() throws Exception {
         final AdStorageAdapter testSubject = new AdStorageAdapter();
-        final URI invalidIrisUri = URI.create("ad:IRIS/BAD_FILE.fits");
 
+        // Invalid file in valid archive
+        final URI invalidIrisUri = URI.create("ad:IRIS/BAD_FILE.fits");
         try {
             final OutputStream outputStream = new ByteArrayOutputStream();
             final StorageLocation storageLocation = new StorageLocation(invalidIrisUri);
@@ -183,8 +184,8 @@ public class AdStorageAdapterTest {
         }
 
 
-        // NOT IMPLEMENTED
-        final URI testAlmaUri = URI.create("notImplemented:NOTIMPLEMENTED/A001_X1320_X9a/2017.A.00056.S_uid___A001_X1320_X9a_auxiliary.tar");
+        // BAD ARCHIVE - throws a 500
+        final URI testAlmaUri = URI.create("badArchive:BADARCHIVE/A.00056.S_uid___A001_X1320_X9a_auxiliary.tar");
         try {
             final OutputStream outputStream = new ByteArrayOutputStream();
             final StorageLocation storageLocation = new StorageLocation(testAlmaUri);
@@ -194,6 +195,7 @@ public class AdStorageAdapterTest {
             Assert.fail("StorageEngageException expected");
         } catch (StorageEngageException see) {
             // expected
+            System.out.println("expected exception: " + see.getMessage());
         } catch (Exception unexpected) {
             Assert.fail("Unexpected exception: " + unexpected.toString());
         }
