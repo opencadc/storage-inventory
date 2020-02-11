@@ -100,7 +100,7 @@ public class AdStorageAdapterTest {
         //        final URI testMastUri = URI.create("ad:IRIS/I429B4H0.fits");
         //
         // The md5 metaChecksum from the Artifact
-        final URI expectedIrisChecksum = URI.create("md5:1dbdd1039cbeabf20db1bf12058e806b");
+        final URI expectedIrisChecksum = URI.create("md5:d41d8cd98f00b204e9800998ecf8427e");
         try {
             final OutputStream outputStream = new ByteArrayOutputStream();
             final DigestOutputStream digestOutputStream = new DigestOutputStream(outputStream, MessageDigest
@@ -122,7 +122,7 @@ public class AdStorageAdapterTest {
         }
 
         final URI testAlmaUri = URI.create("alma:ALMA/A001_X1320_X9a/2017.A.00056.S_uid___A001_X1320_X9a_auxiliary.tar");
-        final URI expectedAlmaChecksum = URI.create("md5:0c30a59f16db691c404b60e62fcb7665");
+        final URI expectedAlmaChecksum = URI.create("md5:d41d8cd98f00b204e9800998ecf8427e");
         try {
             final OutputStream outputStream = new ByteArrayOutputStream();
             final DigestOutputStream digestOutputStream = new DigestOutputStream(outputStream, MessageDigest
