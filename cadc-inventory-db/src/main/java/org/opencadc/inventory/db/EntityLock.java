@@ -79,7 +79,7 @@ import org.springframework.jdbc.core.PreparedStatementCreator;
  */
 interface EntityLock<T extends Entity> extends PreparedStatementCreator {
 
-    void execute(JdbcTemplate jdbc);
+    void execute(JdbcTemplate jdbc) throws EntityNotFoundException;
     
     void setID(UUID id);
 }

@@ -67,7 +67,6 @@
 
 package org.opencadc.inventory.db;
 
-import ca.nrc.cadc.db.TransactionManager;
 import java.net.URI;
 import java.util.UUID;
 import org.apache.log4j.Logger;
@@ -90,35 +89,27 @@ public class ArtifactDAO extends AbstractDAO<Artifact> {
     }
     
     public Artifact get(UUID id) {
-        if (id == null) {
-            throw new IllegalArgumentException("id cannot be null");
-        }
-        return get(id, null);
+        return super.get(Artifact.class, id);
     }
     
     public Artifact get(URI uri) {
         if (uri == null) {
             throw new IllegalArgumentException("uri cannot be null");
         }
-        return get(null, uri);
-    }
-    
-    private Artifact get(UUID id, URI uri) {
         checkInit();
-        String str = (id != null ? id.toString() : uri.toASCIIString());
-        log.debug("GET: " + str);
+        log.debug("GET: " + uri);
         long t = System.currentTimeMillis();
 
         try {
             JdbcTemplate jdbc = new JdbcTemplate(dataSource);
-            EntityGet get = gen.getEntityGet(Artifact.class);
-            get.setID(id);
+            
+            SQLGenerator.ArtifactGet get = ( SQLGenerator.ArtifactGet) gen.getEntityGet(Artifact.class);
             get.setURI(uri);
-            Artifact a = (Artifact) get.execute(jdbc);
+            Artifact a = get.execute(jdbc);
             return a;
         } finally {
             long dt = System.currentTimeMillis() - t;
-            log.debug("GET: " + str + " " + dt + "ms");
+            log.debug("GET: " + uri + " " + dt + "ms");
         }
     }
     

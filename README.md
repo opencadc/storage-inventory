@@ -17,3 +17,6 @@ This is an implementation of an IVOA TAP-1.1 service that enables querying the s
 
 # minoc
 This is an implementation of a file service that supports HEAD, GET, PUT, POST, DELETE operations on the inventory.
+
+# raven
+This is an implementation of the global locator service that supports transfer negotiation.

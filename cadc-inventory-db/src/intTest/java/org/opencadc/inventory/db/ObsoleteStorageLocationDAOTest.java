@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2019.                            (c) 2019.
+*  (c) 2020                            (c) 2020.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -82,35 +82,39 @@ import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
-import org.opencadc.inventory.DeletedArtifactEvent;
-import org.opencadc.inventory.DeletedStorageLocationEvent;
+import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.db.version.InitDatabase;
 
 /**
  *
  * @author pdowler
  */
-public class DeletedEventDAOTest {
-    private static final Logger log = Logger.getLogger(DeletedEventDAOTest.class);
+public class ObsoleteStorageLocationDAOTest {
+    private static final Logger log = Logger.getLogger(ObsoleteStorageLocationDAOTest.class);
 
     static {
         Log4jInit.setLevel("org.opencadc.inventory", Level.DEBUG);
-        Log4jInit.setLevel("ca.nrc.cadc.db.version", Level.DEBUG);
+        Log4jInit.setLevel("ca.nrc.cadc.db", Level.DEBUG);
     }
     
-    DeletedEventDAO dao = new DeletedEventDAO();
+    ObsoleteStorageLocationDAO dao = new ObsoleteStorageLocationDAO();
     
-    public DeletedEventDAOTest() throws Exception {
-        DBConfig dbrc = new DBConfig();
-        ConnectionConfig cc = dbrc.getConnectionConfig(TestUtil.SERVER, TestUtil.DATABASE);
-        DBUtil.createJNDIDataSource("jdbc/DeletedEventDAOTest", cc);
-        
-        Map<String,Object> config = new TreeMap<String,Object>();
-        config.put(SQLGenerator.class.getName(), SQLGenerator.class);
-        config.put("jndiDataSourceName", "jdbc/DeletedEventDAOTest");
-        config.put("database", TestUtil.DATABASE);
-        config.put("schema", TestUtil.SCHEMA);
-        dao.setConfig(config);
+    public ObsoleteStorageLocationDAOTest() throws Exception {
+        try {
+            DBConfig dbrc = new DBConfig();
+            ConnectionConfig cc = dbrc.getConnectionConfig(TestUtil.SERVER, TestUtil.DATABASE);
+            DBUtil.createJNDIDataSource("jdbc/ArtifactDAOTest", cc);
+
+            Map<String,Object> config = new TreeMap<String,Object>();
+            config.put(SQLGenerator.class.getName(), SQLGenerator.class);
+            config.put("jndiDataSourceName", "jdbc/ArtifactDAOTest");
+            config.put("database", TestUtil.DATABASE);
+            config.put("schema", TestUtil.SCHEMA);
+            dao.setConfig(config);
+        } catch (Exception ex) {
+            log.error("setup failed", ex);
+            throw ex;
+        }
     }
     
     @Before
@@ -125,21 +129,22 @@ public class DeletedEventDAOTest {
         log.info("clearing old content...");
         SQLGenerator gen = dao.getSQLGenerator();
         DataSource ds = dao.getDataSource();
-        for (Class c : new Class[] { DeletedArtifactEvent.class, DeletedStorageLocationEvent.class }) {
-            String sql = "delete from " + gen.getTable(c);
-            log.info("pre-test cleanup: " + sql);
-            ds.getConnection().createStatement().execute(sql);
-        }
+        String sql = "delete from " + gen.getTable(ObsoleteStorageLocation.class);
+        log.info("pre-test cleanup: " + sql);
+        ds.getConnection().createStatement().execute(sql);
         log.info("clearing old content... OK");
     }
     
     @Test
-    public void testPutGetDeletedArtifactEvent() {
+    public void testGetPutDelete() {
         try {
-            DeletedArtifactEvent expected = new DeletedArtifactEvent(UUID.randomUUID());
+            ObsoleteStorageLocation expected = new ObsoleteStorageLocation(
+                new StorageLocation(URI.create("uuid:" + UUID.randomUUID()))
+            );
             log.info("expected: " + expected);
             
-            DeletedArtifactEvent notFound = (DeletedArtifactEvent) dao.get(DeletedArtifactEvent.class, expected.getID());
+            
+            ObsoleteStorageLocation notFound = dao.get(ObsoleteStorageLocation.class, expected.getID());
             Assert.assertNull(notFound);
             
             dao.put(expected);
@@ -152,10 +157,17 @@ public class DeletedEventDAOTest {
             Assert.assertEquals("put metachecksum", mcs0, expected.getMetaChecksum());
             
             // get by ID
-            DeletedArtifactEvent fid = (DeletedArtifactEvent) dao.get(DeletedArtifactEvent.class, expected.getID());
-            Assert.assertNotNull(fid);
+            ObsoleteStorageLocation fid = dao.get(expected.getID());
+            Assert.assertNotNull("find by uuid", fid);
+            Assert.assertEquals(expected.getLastModified(), fid.getLastModified());
+            Assert.assertEquals(expected.getMetaChecksum(), fid.getMetaChecksum());
+            URI mcs1 = fid.computeMetaChecksum(MessageDigest.getInstance("MD5"));
+            Assert.assertEquals("round trip metachecksum", expected.getMetaChecksum(), mcs1);
             
-            // no delete
+            dao.delete(expected.getID());
+            ObsoleteStorageLocation deleted = dao.get(expected.getID());
+            Assert.assertNull(deleted);
+            
         } catch (Exception unexpected) {
             log.error("unexpected exception", unexpected);
             Assert.fail("unexpected exception: " + unexpected);
@@ -163,28 +175,30 @@ public class DeletedEventDAOTest {
     }
     
     @Test
-    public void testPutGetDeletedStorageLocationEvent() {
+    public void testGetByLocation() {
         try {
-            DeletedStorageLocationEvent expected = new DeletedStorageLocationEvent(UUID.randomUUID());
+            ObsoleteStorageLocation expected = new ObsoleteStorageLocation(
+                new StorageLocation(URI.create("uuid:" + UUID.randomUUID()))
+            );
             log.info("expected: " + expected);
-            
-            DeletedStorageLocationEvent notFound = (DeletedStorageLocationEvent) dao.get(DeletedStorageLocationEvent.class, expected.getID());
-            Assert.assertNull(notFound);
             
             dao.put(expected);
             
-            // persistence assigns entity state before put
-            Assert.assertNotNull(expected.getLastModified());
-            Assert.assertNotNull(expected.getMetaChecksum());
-            
-            URI mcs0 = expected.computeMetaChecksum(MessageDigest.getInstance("MD5"));
-            Assert.assertEquals("put metachecksum", mcs0, expected.getMetaChecksum());
-            
             // get by ID
-            DeletedStorageLocationEvent fid = (DeletedStorageLocationEvent) dao.get(DeletedStorageLocationEvent.class, expected.getID());
-            Assert.assertNotNull(fid);
+            ObsoleteStorageLocation fid = dao.get(expected.getID());
+            Assert.assertNotNull("find by uuid", fid);
             
-            // no delete
+            // get by location
+            StorageLocation loc = new StorageLocation(expected.getLocation().getStorageID());
+            loc.storageBucket = expected.getLocation().storageBucket;
+            ObsoleteStorageLocation gloc = dao.get(expected.getLocation());
+            Assert.assertNotNull("find by location", gloc);
+            Assert.assertEquals(expected.getLocation(), gloc.getLocation());
+            
+            dao.delete(expected.getID());
+            ObsoleteStorageLocation deleted = dao.get(expected.getID());
+            Assert.assertNull(deleted);
+            
         } catch (Exception unexpected) {
             log.error("unexpected exception", unexpected);
             Assert.fail("unexpected exception: " + unexpected);
@@ -192,29 +206,28 @@ public class DeletedEventDAOTest {
     }
     
     @Test
-    public void testCopyConstructor() {
+    public void testGetByLocationFull() {
         try {
-            DeletedArtifactEvent expected = new DeletedArtifactEvent(UUID.randomUUID());
-            log.info("expected: " + expected);
+            StorageLocation loc = new StorageLocation(URI.create("uuid:" + UUID.randomUUID()));
+            loc.storageBucket = "flibble";
             
-            DeletedArtifactEvent notFound = (DeletedArtifactEvent) dao.get(DeletedArtifactEvent.class, expected.getID());
-            Assert.assertNull(notFound);
+            ObsoleteStorageLocation expected = new ObsoleteStorageLocation(loc);
+            log.info("expected: " + expected);
             
             dao.put(expected);
             
-            // persistence assigns entity state before put
-            Assert.assertNotNull(expected.getLastModified());
-            Assert.assertNotNull(expected.getMetaChecksum());
+            // get by location
+            StorageLocation arg = new StorageLocation(expected.getLocation().getStorageID());
+            arg.storageBucket = expected.getLocation().storageBucket;
             
-            URI mcs0 = expected.computeMetaChecksum(MessageDigest.getInstance("MD5"));
-            Assert.assertEquals("put metachecksum", mcs0, expected.getMetaChecksum());
+            ObsoleteStorageLocation gloc = dao.get(arg);
+            Assert.assertNotNull("find by location", gloc);
+            Assert.assertEquals(expected.getLocation(), gloc.getLocation());
             
-            // get by ID
-            DeletedEventDAO cp = new DeletedEventDAO(dao);
-            DeletedArtifactEvent fid = (DeletedArtifactEvent) cp.get(DeletedArtifactEvent.class, expected.getID());
-            Assert.assertNotNull(fid);
+            dao.delete(expected.getID());
+            ObsoleteStorageLocation deleted = dao.get(expected.getID());
+            Assert.assertNull(deleted);
             
-            // no delete
         } catch (Exception unexpected) {
             log.error("unexpected exception", unexpected);
             Assert.fail("unexpected exception: " + unexpected);

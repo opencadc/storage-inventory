@@ -67,7 +67,6 @@
 
 package org.opencadc.inventory.db;
 
-import java.net.URI;
 import java.util.UUID;
 import org.opencadc.inventory.Entity;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -83,6 +82,4 @@ interface EntityGet<T extends Entity> extends PreparedStatementCreator {
     T execute(JdbcTemplate jdbc);
     
     void setID(UUID id);
-    
-    void setURI(URI uri);
 }

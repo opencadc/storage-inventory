@@ -177,11 +177,11 @@ public abstract class ArtifactAction extends RestAction {
             // HACK: already did the init
             return;
         }
-        List<String> rids = props.getProperty(RESOURCE_ID_KEY);
-        if (rids.size() != 1) {
-            throw new IllegalStateException("CONFIG: found " + rids.size() + " values for " + RESOURCE_ID_KEY + " in config; expected 1");
+        
+        String rid = System.getProperty(RESOURCE_ID_KEY);
+        if (rid == null) {
+            throw new IllegalStateException("missing system property: " + RESOURCE_ID_KEY);
         }
-        String rid = rids.get(0);
         try {
             URI resourceID = new URI(rid);
             StorageSiteDAO ssdao = new StorageSiteDAO();
@@ -325,7 +325,7 @@ public abstract class ArtifactAction extends RestAction {
     /**
      * Create a valid artifact uri.
      * @param uri The input string.
-     * @return The artifact uri objecdt.
+     * @return The artifact uri object.
      */
     private URI createArtifactURI(String uri) {
         try {
@@ -371,12 +371,8 @@ public abstract class ArtifactAction extends RestAction {
         return dao;
     }
     
-    protected DeletedEventDAO getDeletedEventDAO(ArtifactDAO src) {
-        return new DeletedEventDAO(src);
-    }
-    
     protected List<String> getReadGrantServices(MultiValuedProperties props) {
-        String key = ReadGrant.class.getName() + ".serviceID";
+        String key = ReadGrant.class.getName() + ".resourceID";
         List<String> values = props.getProperty(key);
         if (values == null) {
             return Collections.emptyList();
@@ -385,7 +381,7 @@ public abstract class ArtifactAction extends RestAction {
     }
     
     protected List<String> getWriteGrantServices(MultiValuedProperties props) {
-        String key = WriteGrant.class.getName() + ".serviceID";
+        String key = WriteGrant.class.getName() + ".resourceID";
         List<String> values = props.getProperty(key);
         if (values == null) {
             return Collections.emptyList();
