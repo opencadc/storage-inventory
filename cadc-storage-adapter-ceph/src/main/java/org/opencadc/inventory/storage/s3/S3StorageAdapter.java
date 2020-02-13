@@ -171,8 +171,8 @@ public class S3StorageAdapter implements StorageAdapter {
      * Static name space that is prepended to all generated buckets.
      * @param pre 
      */
-    public void setBucketNamespace(String bns) {
-        this.bucketNamespace = bns;
+    public void setBucketNamespace(String pre) {
+        this.bucketNamespace = pre;
     }
     
     URI generateStorageID() {
@@ -191,34 +191,6 @@ public class S3StorageAdapter implements StorageAdapter {
         return Integer.parseInt(optionalBucketLength.orElse(DEFAULT_BUCKET_HASH_LENGTH));
     }
 
-    /*
-    private int readNextPage(final InputStream inputStream, final byte[] buffer) throws ReadException {
-        try {
-            return inputStream.read(buffer, 0, BUFFER_SIZE_BYTES);
-        } catch (IOException e) {
-            throw new ReadException(e.getMessage(), e);
-        }
-    }
-
-    private void writeNextPage(final OutputStream outputStream, final byte[] buffer, final int length)
-            throws WriteException {
-        try {
-            outputStream.write(buffer, 0, length);
-        } catch (IOException e) {
-            throw new WriteException(e.getMessage(), e);
-        }
-    }
-
-    private void transferInputStreamTo(final InputStream inputStream, final OutputStream outputStream)
-            throws ReadException, WriteException {
-        final byte[] buffer = new byte[BUFFER_SIZE_BYTES];
-        int read;
-        while ((read = readNextPage(inputStream, buffer)) >= 0) {
-            writeNextPage(outputStream, buffer, read);
-        }
-    }
-    */
-    
     String toInternalBucket(String bucket) {
         String ret = bucket;
         if (bucketNamespace != null) {
