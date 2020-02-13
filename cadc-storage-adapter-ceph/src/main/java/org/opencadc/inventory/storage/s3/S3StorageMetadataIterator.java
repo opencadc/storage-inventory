@@ -69,13 +69,11 @@
 
 package org.opencadc.inventory.storage.s3;
 
-import ca.nrc.cadc.util.StringUtil;
-
-import java.util.Collections;
 import java.util.Iterator;
-
+import java.util.NoSuchElementException;
+import org.apache.log4j.Logger;
 import org.opencadc.inventory.storage.StorageMetadata;
-
+import software.amazon.awssdk.core.SdkField;
 import software.amazon.awssdk.services.s3.model.ListObjectsResponse;
 import software.amazon.awssdk.services.s3.model.S3Object;
 
@@ -85,36 +83,26 @@ import software.amazon.awssdk.services.s3.model.S3Object;
  * call, and to obtain the next page of data via a listObjects call.
  */
 public class S3StorageMetadataIterator implements Iterator<StorageMetadata> {
-
-    /**
-     * The Storage Adapter to interact with the S3 server.
-     */
+    private static final Logger log = Logger.getLogger(S3StorageMetadataIterator.class);
+    
     private final S3StorageAdapter storageAdapter;
 
-    /**
-     * The bucket to look into.  Mandatory.
-     */
-    private final String bucket;
+    private Iterator<String> bucketIterator;
+    private String currentBucket;
+    
+    private Iterator<S3Object> objectIterator;
 
-    /**
-     * Current page of S3Objects.
-     */
-    private Iterator<S3Object> currIterator;
-
-    /**
-     * S3 Key of where to start listing the next page of objects.  Will be null for the first call.
-     */
+    //S3 Key of where to start listing the next page of objects.  Will be null for the first call.
     private String nextMarkerKey;
 
-    /**
-     * Keep a count.  Not currently used, but could be useful.
-     */
-    private int count;
-
-
-    public S3StorageMetadataIterator(final S3StorageAdapter storageAdapter, final String bucket) {
+    public S3StorageMetadataIterator(S3StorageAdapter storageAdapter, String bucketPrefix) {
         this.storageAdapter = storageAdapter;
-        this.bucket = bucket;
+        this.bucketIterator = storageAdapter.bucketIterator(bucketPrefix);
+        if (bucketIterator.hasNext()) {
+            this.currentBucket = bucketIterator.next();
+        } else {
+            bucketIterator = null; // no matching buckets
+        }
     }
 
 
@@ -127,17 +115,41 @@ public class S3StorageMetadataIterator implements Iterator<StorageMetadata> {
      */
     @Override
     public boolean hasNext() {
-        if (currIterator == null || (!currIterator.hasNext() && StringUtil.hasLength(nextMarkerKey))) {
-            final ListObjectsResponse listObjectsResponse = storageAdapter.listObjects(bucket, nextMarkerKey);
-            if (listObjectsResponse.hasContents()) {
-                currIterator = listObjectsResponse.contents().iterator();
-                nextMarkerKey = listObjectsResponse.nextMarker();
+        //log.debug("hasNext: " + currentBucket + "," + (objectIterator != null) + "," + (objectIterator != null && objectIterator.hasNext()));
+        if (bucketIterator == null) {
+            return false;
+        }
+        if (objectIterator == null || (!objectIterator.hasNext())) { 
+            //log.debug("get batch in bucket: " + currentBucket);
+            if (objectIterator == null || nextMarkerKey != null) {
+                // multi-batch bucket
+                ListObjectsResponse listObjectsResponse = storageAdapter.listObjects(currentBucket, nextMarkerKey);
+                //log.debug("bucket: " + currentBucket + " " + listObjectsResponse.contents().size() + "/" + listObjectsResponse.nextMarker());
+                if (listObjectsResponse.hasContents()) {
+                    objectIterator = listObjectsResponse.contents().iterator();
+                    nextMarkerKey = listObjectsResponse.nextMarker();
+                } else {
+                    objectIterator = null;
+                    nextMarkerKey = null;
+                }
             } else {
-                currIterator = Collections.emptyIterator();
+                // finished single batch bucket
+                objectIterator = null;
             }
         }
-
-        return currIterator.hasNext();
+        if (objectIterator == null) {
+            if (bucketIterator.hasNext()) {
+                currentBucket = bucketIterator.next();
+                //log.debug("next bucket: " + currentBucket);
+                return hasNext();
+            } else {
+                //log.debug("next bucket: null");
+                bucketIterator = null; // done
+                return false;
+            }
+        }
+        
+        return objectIterator.hasNext();
     }
 
     /**
@@ -149,13 +161,15 @@ public class S3StorageMetadataIterator implements Iterator<StorageMetadata> {
      */
     @Override
     public StorageMetadata next() {
-        final StorageMetadata storageMetadata = storageAdapter.head(bucket, currIterator.next().key());
-        count++;
-
+        if (objectIterator == null || !objectIterator.hasNext()) {
+            throw new NoSuchElementException();
+        }
+        S3Object o = objectIterator.next();
+        //log.debug("next: " + o);
+        // the S3Object contains almost all the metadata needed so could avoid the HEAD request
+        // ETag has correct MD5 value for small objects but not verified for larger 
+        // missing a way to restore the artifact URI
+        final StorageMetadata storageMetadata = storageAdapter.head(currentBucket, o.key());
         return storageMetadata;
-    }
-
-    public int getCount() {
-        return count;
     }
 }

@@ -4,7 +4,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2019.                            (c) 2019.
+ *  (c) 2020.                            (c) 2020.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -70,17 +70,19 @@
 package org.opencadc.inventory.storage.ceph.integration;
 
 import ca.nrc.cadc.io.ByteCountOutputStream;
+import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.util.FileUtil;
+import ca.nrc.cadc.util.HexUtil;
+import ca.nrc.cadc.util.Log4jInit;
 import ca.nrc.cadc.util.StringUtil;
 
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileReader;
 import java.io.InputStream;
-import java.io.OutputStream;
-import java.math.BigInteger;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.URL;
@@ -94,13 +96,17 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.Set;
-import java.util.UUID;
 
+import java.util.SortedSet;
+import java.util.TreeSet;
 import nom.tam.fits.BasicHDU;
 import nom.tam.fits.Fits;
+import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
+import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Test;
 import org.opencadc.inventory.StorageLocation;
@@ -118,190 +124,255 @@ import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
 
 public class S3StorageAdapterTest {
-
     private static final Logger LOGGER = Logger.getLogger(S3StorageAdapterTest.class);
+    
     private static final URI ENDPOINT = URI.create("http://dao-wkr-04.cadc.dao.nrc.ca:8080");
     private static final String REGION = Region.US_EAST_1.id();
-    private static final String DIGEST_ALGORITHM = "MD5";
-    private static final String DEFAULT_BUCKET_NAME = "cadctest";
-    private static final String MEF_OBJECT_ID = "test-megaprime-s3.fits.fz";
+    
+    //private static final String DIGEST_ALGORITHM = "MD5";
+    //private static final String DEFAULT_BUCKET_NAME = "cadctest";
+    //private static final String MEF_OBJECT_ID = "test-megaprime-s3.fits.fz";
 
-    /**
-     * Override the bucket to use by setting -Dbucket.name=mybucket in your test command.  Should have a
-     * public-read-write ACL to make these tests easier to run.
-     */
-    private static final String BUCKET_NAME = System.getProperty("s3.bucket.name", DEFAULT_BUCKET_NAME);
-
-    /**
-     * Used to issue tests with the FITS Header jumping as it should remain untouched.  Has a public-read ACL.
-     */
-    private static final String LIST_BUCKET_NAME = "cadctestlist";
-
-
-    /**
-     * The list-s3.out file contains the list of objects in S3 in UTF-8 binary order as it was taken from S3.
-     *
-     * @throws Exception Any exceptions.
-     */
-    @Test
-    public void list() throws Exception {
-        /*
-         * The list-s3.out file contains 2011 objects listed from the aws command line in whatever order it
-         * provided.  Read it back in here as a base to check list sorting.
-         */
-        final File s3ListOutput = FileUtil.getFileFromResource("list-s3.out", S3StorageAdapter.class);
-        final List<String> s3AdapterListObjectsOutput = new ArrayList<>();
-        final List<String> s3ListOutputItems = new ArrayList<>();
-        final FileReader fileReader = new FileReader(s3ListOutput);
-        final BufferedReader bufferedReader = new BufferedReader(fileReader);
-
-        String line;
-        while ((line = bufferedReader.readLine()) != null) {
-            s3ListOutputItems.add(line);
-        }
-
-        bufferedReader.close();
-
-        final List<String> utf8SortedItems = new ArrayList<>(s3ListOutputItems);
-
-        // Ensure sorted by UTF-8
-        utf8SortedItems.sort(Comparator.comparing(o -> new String(o.getBytes(StandardCharsets.UTF_8),
-                                                                  StandardCharsets.UTF_8)));
-
-        final S3StorageAdapter testSubject = new S3StorageAdapter(ENDPOINT, REGION);
-        final long start = System.currentTimeMillis();
-
-        for (final Iterator<StorageMetadata> storageMetadataIterator = testSubject.iterator(LIST_BUCKET_NAME);
-             storageMetadataIterator.hasNext(); ) {
-            final StorageMetadata storageMetadata = storageMetadataIterator.next();
-            final URI artifactURI = storageMetadata.artifactURI;
-            s3AdapterListObjectsOutput.add((artifactURI != null)
-                                           ? artifactURI.toASCIIString()
-                                           : storageMetadata.getStorageLocation().getStorageID()
-                                                            .getSchemeSpecificPart());
-            // Do nothing
-        }
-        LOGGER.debug(String.format("Listed %d items in %d milliseconds.", s3AdapterListObjectsOutput.size(),
-                                   System.currentTimeMillis() - start));
-
-        Assert.assertEquals("Wrong UTF-8 list output.", utf8SortedItems, s3AdapterListObjectsOutput);
-
-        final List<String> stringSortedItems = new ArrayList<>(s3ListOutputItems);
-
-        stringSortedItems.sort(Comparator.comparing(o -> o));
-
-        Assert.assertEquals("Wrong plain String list output.", stringSortedItems, s3AdapterListObjectsOutput);
+    static {
+        Log4jInit.setLevel("org.opencadc.inventory", Level.INFO);
+    }
+    
+    // namepsace to isolate developers who share an object store
+    private final String devBucketNamespace = System.getProperty("user.name") + "-test";
+    private final S3StorageAdapter adapter;
+    
+    public S3StorageAdapterTest() {
+        this.adapter = new S3StorageAdapter(ENDPOINT, REGION);
+        adapter.setBucketNamespace(devBucketNamespace);
     }
 
+    @Before
+    public void cleanup() throws Exception {
+        Iterator<String> bi = adapter.bucketIterator(null);
+        while (bi.hasNext()) {
+            String bucket = bi.next();
+            LOGGER.info("cleanup: " + bucket);
+            Iterator<StorageMetadata> smi = adapter.iterator(bucket);
+            while (smi.hasNext()) {
+                StorageLocation loc = smi.next().getStorageLocation();
+                adapter.delete(loc);
+                LOGGER.info("deleted: " + loc);
+            }
+            adapter.deleteBucket(bucket);
+            LOGGER.info("deleted: " + bucket);
+        }
+    }
+    
     @Test
-    public void put() throws Exception {
-        final URI testURI = URI.create(String.format("cadc:%s/%s.fits", BUCKET_NAME, UUID.randomUUID().toString()));
+    public void testNoOp() {
+        
+    }
+    
+    @Test
+    public void testPutGetDelete() {
+        URI artifactURI = URI.create("cadc:TEST/testPutGetDelete");
+        
         try {
-            final S3StorageAdapter putTestSubject = new S3StorageAdapter(ENDPOINT, REGION);
-            final NewArtifact artifact = new NewArtifact(testURI);
+            MessageDigest md = MessageDigest.getInstance("MD5");
+            Random rnd = new Random();
+            byte[] data = new byte[1024];
+            rnd.nextBytes(data);
+            
+            NewArtifact na = new NewArtifact(artifactURI);
+            md.update(data);
+            URI expectedChecksum = URI.create("md5:" + HexUtil.toHex(md.digest()));
+            na.contentChecksum = expectedChecksum;
+            na.contentLength = (long) data.length;
+            LOGGER.debug("testPutGetDelete random data: " + data.length + " " + expectedChecksum);
+            
+            LOGGER.debug("testPutGetDelete put: " + artifactURI);
+            StorageMetadata sm = adapter.put(na, new ByteArrayInputStream(data));
+            LOGGER.debug("testPutGetDelete put: " + artifactURI + " to " + sm.getStorageLocation());
+            
+            LOGGER.debug("testPutGetDelete get: " + artifactURI);
+            ByteArrayOutputStream bos = new ByteArrayOutputStream();
+            adapter.get(sm.getStorageLocation(), bos);
+            md.reset();
+            byte[] actual = bos.toByteArray();
+            md.update(actual);
+            URI actualChecksum = URI.create("md5:" + HexUtil.toHex(md.digest()));
+            LOGGER.debug("testPutGetDelete get: " + artifactURI + " " + actual.length + " " + actualChecksum);
+            Assert.assertEquals("length", (long) na.contentLength, actual.length);
+            Assert.assertEquals("checksum", na.contentChecksum, actualChecksum);
 
-            artifact.contentChecksum = URI.create("md5:9307240a34ed65a0a252b0046b6e87be");
-            artifact.contentLength = 312151680L;
-
-            final URL sourceURL = new URL("https://www.cadc-ccda.hia-iha.nrc-cnrc.gc" +
-                                          ".ca/files/vault/CADCtest/Public/test-megaprime.fits.fz");
-            final InputStream inputStream = openStream(sourceURL);
-
-            LOGGER.info(String.format("PUTting file from %s.", sourceURL.toExternalForm()));
-            final StorageMetadata storageMetadata = putTestSubject.put(artifact, inputStream);
-
-            inputStream.close();
-
-            final URI resultChecksum = storageMetadata.getContentChecksum();
-            final long resultLength = storageMetadata.getContentLength();
-
-            Assert.assertEquals("Checksum does not match.", artifact.contentChecksum, resultChecksum);
-            Assert.assertEquals("Lengths do not match.", artifact.contentLength.longValue(), resultLength);
-
-            // Get it out again.
-            final S3StorageAdapter getTestSubject = new S3StorageAdapter(ENDPOINT, REGION);
-
-            final OutputStream outputStream = new ByteArrayOutputStream();
-            final DigestOutputStream digestOutputStream = new DigestOutputStream(outputStream,
-                                                                                 MessageDigest.getInstance(
-                                                                                         S3StorageAdapterTest.DIGEST_ALGORITHM));
-            final ByteCountOutputStream byteCountOutputStream = new ByteCountOutputStream(digestOutputStream);
-            final MessageDigest messageDigest = digestOutputStream.getMessageDigest();
-
-            getTestSubject.get(storageMetadata.getStorageLocation(), byteCountOutputStream);
-            Assert.assertEquals("Retrieved file is not the same.", artifact.contentLength.longValue(),
-                                byteCountOutputStream.getByteCount());
-            Assert.assertEquals("Wrong checksum.", artifact.contentChecksum,
-                                URI.create(String.format("%s:%s", messageDigest.getAlgorithm().toLowerCase(),
-                                                         new BigInteger(1, messageDigest.digest()).toString(16))));
-        } finally {
-            final S3StorageAdapter deleteTestSubject = new S3StorageAdapter(ENDPOINT, REGION);
-            try {
-                deleteTestSubject.delete(new StorageLocation(testURI));
-            } catch (Exception e) {
-                // Oh well.
-            }
+            LOGGER.debug("testPutGetDelete delete: " + sm.getStorageLocation());
+            adapter.delete(sm.getStorageLocation());
+            Assert.assertTrue("deleted", !adapter.exists(sm.getStorageLocation()));
+            LOGGER.debug("testPutGetDelete deleted: " + sm.getStorageLocation());
+            
+            
+        } catch (Exception ex) {
+            LOGGER.error("unexpected exception", ex);
+            Assert.fail("unexpected exception: " + ex);
         }
     }
-
-    private InputStream openStream(final URL sourceURL) throws Exception {
-        final HttpURLConnection sourceURLConnection = (HttpURLConnection) sourceURL.openConnection();
-        sourceURLConnection.setDoInput(true);
-        sourceURLConnection.setInstanceFollowRedirects(true);
-
-        final String location = sourceURLConnection.getHeaderField("Location");
-        if (StringUtil.hasText(location)) {
-            return openStream(new URL(location));
-        } else {
-            return sourceURLConnection.getInputStream();
-        }
-    }
-
-
-    /**
-     * Exists to test what happens when the InputStream from Reading of a file breaks.  This was used to source a file
-     * from another host, and mid-read, killing the source host.
-     *
-     * @throws Exception Any exception.
-     */
+    
     @Test
-    @Ignore
-    public void ensureFileStreamReadBreak() throws Exception {
-        final long expectedContentLength = 312151680L;
-        try (final S3Client s3Client = S3Client.builder()
-                                               .endpointOverride(ENDPOINT)
-                                               .region(Region.of(REGION))
-                                               .build()) {
-            try {
-                s3Client.headObject(HeadObjectRequest.builder().bucket(BUCKET_NAME).key(MEF_OBJECT_ID).build());
-                LOGGER.info(String.format("Test file %s/%s exists.", BUCKET_NAME, MEF_OBJECT_ID));
-            } catch (NoSuchKeyException e) {
-                LOGGER.info("*********");
-                LOGGER.info(String.format("Test file (%s/%s) does not exist.  Uploading file from VOSpace...",
-                                          BUCKET_NAME, MEF_OBJECT_ID));
-                LOGGER.info("*********");
+    public void testPutGetDeleteMinimal() {
+        URI artifactURI = URI.create("cadc:TEST/testPutGetDelete");
+        
+        try {
+            Random rnd = new Random();
+            byte[] data = new byte[1024];
+            rnd.nextBytes(data);
+            
+            NewArtifact na = new NewArtifact(artifactURI);
+            MessageDigest md = MessageDigest.getInstance("MD5");
+            md.update(data);
+            URI expectedChecksum = URI.create("md5:" + HexUtil.toHex(md.digest()));
+            //na.contentChecksum = expectedChecksum;
+            
+            //na.contentLength = null;                  // NullPointerException unboxing
+            //na.contentLength = -1L;                     // IllegalStateException: Content length must be greater than or equal to zero
+            //na.contentLength = 0L;                    // Error Code: XAmzContentSHA256Mismatch
+            na.contentLength = (long) data.length;    // OK  
+            //na.contentLength = (long) data.length - 1;  // Error Code: XAmzContentSHA256Mismatch
+            //na.contentLength = (long) data.length + 1;  // hangs for ~2 min, Error while reading from stream.
+            //na.contentLength = Long.MAX_VALUE;        // Error Code: SignatureDoesNotMatch
+            LOGGER.debug("testPutGetDeleteMinimal random data: " + data.length + " " + expectedChecksum);
+            
+            LOGGER.debug("testPutGetDeleteMinimal put: " + artifactURI);
+            StorageMetadata sm = adapter.put(na, new ByteArrayInputStream(data));
+            LOGGER.debug("testPutGetDeleteMinimal put: " + artifactURI + " to " + sm.getStorageLocation());
+            
+            LOGGER.debug("testPutGetDeleteMinimal get: " + artifactURI);
+            ByteArrayOutputStream bos = new ByteArrayOutputStream();
+            adapter.get(sm.getStorageLocation(), bos);
+            byte[] actual = bos.toByteArray();
+            md.update(actual);
+            URI actualChecksum = URI.create("md5:" + HexUtil.toHex(md.digest()));
+            LOGGER.debug("testPutGetDeleteMinimal get: " + artifactURI + " " + actual.length + " " + actualChecksum);
+            Assert.assertEquals("length", (long) na.contentLength, actual.length);
+            Assert.assertEquals("checksum", expectedChecksum, actualChecksum);
 
-                final URL sourceURL = new URL("http://mach378.cadc.dao.nrc.ca:9000/test-megaprime.fits.fz");
-
-                //final URL sourceURL = new URL("https://www.cadc-ccda.hia-iha.nrc-cnrc.gc" +
-                //                              ".ca/files/vault/CADCtest/Public/test-megaprime.fits.fz");
-
-                try (final InputStream inputStream = openStream(sourceURL)) {
-                    s3Client.putObject(PutObjectRequest.builder()
-                                                       .bucket(BUCKET_NAME)
-                                                       .key(MEF_OBJECT_ID)
-                                                       .build(),
-                                       RequestBody.fromInputStream(inputStream, expectedContentLength));
-                }
-
-                LOGGER.info("*********");
-                LOGGER.info(String.format("Test file (%s/%s) uploaded.", BUCKET_NAME, MEF_OBJECT_ID));
-                LOGGER.info("*********");
-            }
+            LOGGER.debug("testPutGetDeleteMinimal delete: " + sm.getStorageLocation());
+            adapter.delete(sm.getStorageLocation());
+            Assert.assertTrue("deleted", !adapter.exists(sm.getStorageLocation()));
+            LOGGER.debug("testPutGetDeleteMinimal deleted: " + sm.getStorageLocation());
+            
+            
+        } catch (Exception ex) {
+            LOGGER.error("unexpected exception", ex);
+            Assert.fail("unexpected exception: " + ex);
         }
     }
-
+    
+    @Test
+    public void testNotExists() {
+        try {
+            // neither bucket nor key exist
+            StorageLocation doesNotExist = new StorageLocation(URI.create("foo:does-not-exist"));
+            doesNotExist.storageBucket = devBucketNamespace;
+            
+            ByteArrayOutputStream bos = new ByteArrayOutputStream();
+            try { 
+                adapter.get(doesNotExist, bos);
+                Assert.fail("get: " + doesNotExist + " returned " + bos.size() + " bytes");
+            } catch (ResourceNotFoundException expected) {
+                LOGGER.debug("caught expected: " + expected);
+                Assert.assertTrue(expected.getMessage().startsWith("not found: bucket"));
+            }
+            
+            // make sure bucket exists
+            URI artifactURI = URI.create("cadc:TEST/testPutGetDelete");
+            Random rnd = new Random();
+            byte[] data = new byte[1024];
+            rnd.nextBytes(data);
+            
+            MessageDigest md = MessageDigest.getInstance("MD5");
+            NewArtifact na = new NewArtifact(artifactURI);
+            md.update(data);
+            na.contentChecksum = URI.create("md5:" + HexUtil.toHex(md.digest()));
+            na.contentLength = (long) data.length;
+            StorageMetadata sm = adapter.put(na, new ByteArrayInputStream(data));
+            LOGGER.debug("testPutGetDelete put: " + artifactURI + " to " + sm.getStorageLocation());
+            
+            doesNotExist.storageBucket = sm.getStorageLocation().storageBucket; // existing bucket
+            bos.reset();
+            try { 
+                adapter.get(doesNotExist, bos);
+                Assert.fail("get: " + doesNotExist + " returned " + bos.size() + " bytes");
+            } catch (ResourceNotFoundException expected) {
+                LOGGER.debug("caught expected: " + expected);
+                Assert.assertTrue(expected.getMessage().startsWith("not found: key"));
+            }
+            
+        } catch (Exception ex) {
+            LOGGER.error("unexpected exception", ex);
+            Assert.fail("unexpected exception: " + ex);
+        }
+    }
+    
+    @Test
+    public void testIterator() {
+        
+        try {
+            MessageDigest md = MessageDigest.getInstance("MD5");
+            Random rnd = new Random();
+            byte[] data = new byte[1024];
+            
+            SortedSet<StorageMetadata> expected = new TreeSet<>();
+            for (int i = 0; i < 10; i++) {
+                URI artifactURI = URI.create("cadc:TEST/testPutGetDelete");
+                rnd.nextBytes(data);
+                NewArtifact na = new NewArtifact(artifactURI);
+                md.update(data);
+                na.contentChecksum = URI.create("md5:" + HexUtil.toHex(md.digest()));
+                na.contentLength = (long) data.length;
+                StorageMetadata sm = adapter.put(na, new ByteArrayInputStream(data));
+                LOGGER.debug("testList put: " + artifactURI + " to " + sm.getStorageLocation());
+                expected.add(sm);
+            }
+            
+            // full iterator
+            List<StorageMetadata> actual = new ArrayList<>();
+            Iterator<StorageMetadata> iter = adapter.iterator();
+            while (iter.hasNext()) {
+                StorageMetadata sm = iter.next();
+                LOGGER.info("found: " + sm.getStorageLocation() + " " + sm.getContentLength() + " " + sm.getContentChecksum());
+                actual.add(sm);
+            }
+            
+            Assert.assertEquals("iterator.size", expected.size(), actual.size());
+            Iterator<StorageMetadata> ei = expected.iterator();
+            Iterator<StorageMetadata> ai = actual.iterator();
+            while (ei.hasNext()) {
+                StorageMetadata em = ei.next();
+                StorageMetadata am = ai.next();
+                LOGGER.debug("order: " + em.getStorageLocation() + " vs" + am.getStorageLocation());
+                Assert.assertEquals("correct order", em, am);
+                Assert.assertEquals("length", em.getContentLength(), am.getContentLength());
+                Assert.assertEquals("checksum", em.getContentChecksum(), am.getContentChecksum());
+            }
+            
+            // bucket prefix iterator
+            int found = 0;
+            for (byte b = 0; b < 16; b++) {
+                String s = HexUtil.toHex(b).substring(1);
+                LOGGER.info("bucket prefix: " + s);
+                Iterator<StorageMetadata> i = adapter.iterator(s);
+                while (i.hasNext()) {
+                    StorageMetadata sm = i.next();
+                    Assert.assertTrue("prefix match", sm.getStorageLocation().storageBucket.startsWith(s));
+                    found++;
+                }
+            }
+            Assert.assertEquals("found with bucketPrefix", expected.size(), found);
+            
+        } catch (Exception ex) {
+            LOGGER.error("unexpected exception", ex);
+            Assert.fail("unexpected exception: " + ex);
+        }
+    }
+    
     private void ensureMEFTestFile() throws Exception {
+        throw new UnsupportedOperationException("not implemented");
+        /*
         final long expectedContentLength = 312151680L;
         try (final S3Client s3Client = S3Client.builder()
                                                .endpointOverride(ENDPOINT)
@@ -333,111 +404,19 @@ public class S3StorageAdapterTest {
                 LOGGER.info("*********");
             }
         }
+        */
     }
-
-    @Test
-    public void get() throws Exception {
-        final S3StorageAdapter testSubject = new S3StorageAdapter(ENDPOINT, REGION);
-        final URI testURI = URI.create(String.format("s3:%s", "03e6ab81-ea89-4098-8eae-1267bb52c50a"));
-        final long expectedByteCount = 3144960L;
-        final URI expectedChecksum = URI.create("md5:9307240a34ed65a0a252b0046b6e87be");
-
-        final OutputStream outputStream = new ByteArrayOutputStream();
-        final DigestOutputStream digestOutputStream = new DigestOutputStream(outputStream, MessageDigest
-                .getInstance(S3StorageAdapterTest.DIGEST_ALGORITHM));
-        final ByteCountOutputStream byteCountOutputStream = new ByteCountOutputStream(digestOutputStream);
-        final MessageDigest messageDigest = digestOutputStream.getMessageDigest();
-
-        final StorageLocation storageLocation = new StorageLocation(testURI);
-        storageLocation.storageBucket = "fed08";
-
-        testSubject.get(storageLocation, byteCountOutputStream);
-
-        Assert.assertEquals("Wrong byte count.", expectedByteCount, byteCountOutputStream.getByteCount());
-        Assert.assertEquals("Wrong checksum.", expectedChecksum,
-                            URI.create(String.format("%s:%s", messageDigest.getAlgorithm().toLowerCase(),
-                                                     new BigInteger(1, messageDigest.digest()).toString(16))));
-    }
-
-    @Test
-    public void jumpHDUs() throws Exception {
-        LOGGER.info("Jumping HDUS...");
-        LOGGER.info("***");
-        ensureMEFTestFile();
-        final Map<Integer, Long> hduByteOffsets = new HashMap<>();
-        hduByteOffsets.put(0, 0L);
-        hduByteOffsets.put(19, 148380480L);
-        hduByteOffsets.put(40, 312117120L);
-
-        try (S3Client s3Client = S3Client.builder()
-                                         .endpointOverride(ENDPOINT)
-                                         .region(Region.of(REGION))
-                                         .build()) {
-            for (final Map.Entry<Integer, Long> entry : hduByteOffsets.entrySet()) {
-                LOGGER.info(String.format("\nReading %d bytes at %d.\n", 2880, entry.getValue()));
-                final long start = System.currentTimeMillis();
-                s3Client.getObject(GetObjectRequest.builder().bucket(BUCKET_NAME).key(MEF_OBJECT_ID)
-                                                   .range(String.format("bytes=%d-%d",
-                                                                        entry.getValue(),
-                                                                        entry.getValue() + 2880L))
-                                                   .build(),
-                                   ResponseTransformer.toBytes());
-                final long readTime = System.currentTimeMillis() - start;
-                LOGGER.info(String.format("\nRead time for HDU %d is %d.\n", entry.getKey(), readTime));
-            }
-        }
-
-        LOGGER.info("***");
-        LOGGER.info("Jumping HDUS done.");
-    }
-
-    @Test
-    public void jumpHDUsReconnect() throws Exception {
-        LOGGER.info("Jumping HDUS with reconnect...");
-        LOGGER.info("***");
-        ensureMEFTestFile();
-        final Map<Integer, Long> hduByteOffsets = new HashMap<>();
-        hduByteOffsets.put(0, 0L);
-        hduByteOffsets.put(19, 148380480L);
-        hduByteOffsets.put(40, 312117120L);
-
-        for (final Map.Entry<Integer, Long> entry : hduByteOffsets.entrySet()) {
-            LOGGER.info(String.format("\nReading %d bytes at %d.\n", 2880, entry.getValue()));
-            final S3Client innerS3Client = S3Client.builder()
-                                                   .endpointOverride(ENDPOINT)
-                                                   .region(Region.of(REGION))
-                                                   .build();
-            final long start = System.currentTimeMillis();
-            final byte[] bytes = innerS3Client.getObject(GetObjectRequest.builder().bucket(BUCKET_NAME).key(
-                    MEF_OBJECT_ID)
-                                                                         .range(String.format("bytes=%d-%d",
-                                                                                              entry.getValue(),
-                                                                                              entry.getValue() + 2880L))
-                                                                         .build(),
-                                                         ResponseTransformer.toBytes()).asByteArray();
-            final long readTime = System.currentTimeMillis() - start;
-            innerS3Client.close();
-            LOGGER.info(
-                    String.format("\nReading %d bytes for HDU %d is %d with reconnect.\n", bytes.length, entry.getKey(),
-                                  readTime));
-        }
-
-        LOGGER.info("Jumping HDUS with reconnect done.");
-        LOGGER.info("***");
-    }
-
-    @Test
-    @Ignore
+    
+    //@Test
     public void getHeaders() throws Exception {
         LOGGER.info("Skip to headers...");
         LOGGER.info("***");
         ensureMEFTestFile();
         final S3StorageAdapter testSubject = new S3StorageAdapter(ENDPOINT, REGION);
-        final URI testURI = URI.create(String.format("cadc:%s/%s", BUCKET_NAME, MEF_OBJECT_ID));
+        final URI testURI = URI.create("cadc:TEST/getHeaders");
 
         final ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-        final DigestOutputStream digestOutputStream = new DigestOutputStream(outputStream, MessageDigest
-                .getInstance(S3StorageAdapterTest.DIGEST_ALGORITHM));
+        final DigestOutputStream digestOutputStream = new DigestOutputStream(outputStream, MessageDigest.getInstance("MD5"));
         final ByteCountOutputStream byteCountOutputStream = new ByteCountOutputStream(digestOutputStream);
 
         final Set<String> cutouts = new HashSet<>();
@@ -449,17 +428,15 @@ public class S3StorageAdapterTest {
         LOGGER.info("Skip to headers done.");
     }
 
-    @Test
-    @Ignore("Not currently supported.")
+    //@Test
     public void getCutouts() throws Exception {
         final S3StorageAdapter testSubject = new S3StorageAdapter(ENDPOINT, REGION);
-        final URI testURI = URI.create("cadc:jenkinsd/test-hst-mef.fits");
-        final long expectedByteCount = 159944L;
-        final URI expectedChecksum = URI.create("md5:7c6372a8d20da28b54b6b50ce36f9195");
+        final URI testURI = URI.create("cadc:TEST/getCutouts");
+        //final long expectedByteCount = 159944L;
+        //final URI expectedChecksum = URI.create("md5:7c6372a8d20da28b54b6b50ce36f9195");
 
         final ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-        final DigestOutputStream digestOutputStream = new DigestOutputStream(outputStream, MessageDigest
-                .getInstance(S3StorageAdapterTest.DIGEST_ALGORITHM));
+        final DigestOutputStream digestOutputStream = new DigestOutputStream(outputStream, MessageDigest.getInstance("MD5"));
         final ByteCountOutputStream byteCountOutputStream = new ByteCountOutputStream(digestOutputStream);
         final MessageDigest messageDigest = digestOutputStream.getMessageDigest();
 
