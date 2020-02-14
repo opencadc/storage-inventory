@@ -67,38 +67,23 @@
  ************************************************************************
  */
 
-package org.opencadc.inventory.storage.ceph.integration;
+package org.opencadc.inventory.storage.s3;
 
 import ca.nrc.cadc.io.ByteCountOutputStream;
 import ca.nrc.cadc.net.ResourceNotFoundException;
-import ca.nrc.cadc.util.FileUtil;
 import ca.nrc.cadc.util.HexUtil;
 import ca.nrc.cadc.util.Log4jInit;
-import ca.nrc.cadc.util.StringUtil;
-
-import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileReader;
-import java.io.InputStream;
-import java.net.HttpURLConnection;
 import java.net.URI;
-import java.net.URL;
-import java.nio.charset.StandardCharsets;
 import java.security.DigestOutputStream;
 import java.security.MessageDigest;
 import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
 import java.util.Random;
 import java.util.Set;
-
 import java.util.SortedSet;
 import java.util.TreeSet;
 import nom.tam.fits.BasicHDU;
@@ -107,34 +92,26 @@ import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.storage.NewArtifact;
 import org.opencadc.inventory.storage.StorageMetadata;
-import org.opencadc.inventory.storage.s3.S3StorageAdapter;
-import software.amazon.awssdk.core.sync.RequestBody;
-import software.amazon.awssdk.core.sync.ResponseTransformer;
 import software.amazon.awssdk.regions.Region;
-import software.amazon.awssdk.services.s3.S3Client;
-import software.amazon.awssdk.services.s3.model.GetObjectRequest;
-import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
-import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
-import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
-
+/**
+ * Test the S3StorageAdapter against a real S3 API endpoint.
+ * 
+ * @author pdowler
+ */
 public class S3StorageAdapterTest {
     private static final Logger LOGGER = Logger.getLogger(S3StorageAdapterTest.class);
     
     private static final URI ENDPOINT = URI.create("http://dao-wkr-04.cadc.dao.nrc.ca:8080");
-    private static final String REGION = Region.US_EAST_1.id();
+    private static final Region REGION = Region.US_EAST_1;
+    private static final int STORAGE_BUCKET_LENGTH = 3;
     
-    //private static final String DIGEST_ALGORITHM = "MD5";
-    //private static final String DEFAULT_BUCKET_NAME = "cadctest";
-    //private static final String MEF_OBJECT_ID = "test-megaprime-s3.fits.fz";
-
     static {
-        Log4jInit.setLevel("org.opencadc.inventory", Level.INFO);
+        Log4jInit.setLevel("org.opencadc.inventory", Level.DEBUG);
     }
     
     // namepsace to isolate developers who share an object store
@@ -142,7 +119,7 @@ public class S3StorageAdapterTest {
     private final S3StorageAdapter adapter;
     
     public S3StorageAdapterTest() {
-        this.adapter = new S3StorageAdapter(ENDPOINT, REGION);
+        this.adapter = new S3StorageAdapter(ENDPOINT, REGION, STORAGE_BUCKET_LENGTH);
         adapter.setBucketNamespace(devBucketNamespace);
     }
 
@@ -317,8 +294,8 @@ public class S3StorageAdapterTest {
             byte[] data = new byte[1024];
             
             SortedSet<StorageMetadata> expected = new TreeSet<>();
-            for (int i = 0; i < 10; i++) {
-                URI artifactURI = URI.create("cadc:TEST/testPutGetDelete");
+            for (int i = 0; i < 3; i++) {
+                URI artifactURI = URI.create("cadc:TEST/testIterator-" + i);
                 rnd.nextBytes(data);
                 NewArtifact na = new NewArtifact(artifactURI);
                 md.update(data);
@@ -344,8 +321,8 @@ public class S3StorageAdapterTest {
             while (ei.hasNext()) {
                 StorageMetadata em = ei.next();
                 StorageMetadata am = ai.next();
-                LOGGER.debug("order: " + em.getStorageLocation() + " vs" + am.getStorageLocation());
-                Assert.assertEquals("correct order", em, am);
+                LOGGER.debug("compare: " + em.getStorageLocation() + " vs " + am.getStorageLocation());
+                Assert.assertEquals("order", em, am);
                 Assert.assertEquals("length", em.getContentLength(), am.getContentLength());
                 Assert.assertEquals("checksum", em.getContentChecksum(), am.getContentChecksum());
             }
@@ -412,7 +389,6 @@ public class S3StorageAdapterTest {
         LOGGER.info("Skip to headers...");
         LOGGER.info("***");
         ensureMEFTestFile();
-        final S3StorageAdapter testSubject = new S3StorageAdapter(ENDPOINT, REGION);
         final URI testURI = URI.create("cadc:TEST/getHeaders");
 
         final ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
@@ -422,7 +398,7 @@ public class S3StorageAdapterTest {
         final Set<String> cutouts = new HashSet<>();
         cutouts.add("fhead");
 
-        testSubject.get(new StorageLocation(testURI), byteCountOutputStream, cutouts);
+        adapter.get(new StorageLocation(testURI), byteCountOutputStream, cutouts);
         byteCountOutputStream.close();
         LOGGER.info("***");
         LOGGER.info("Skip to headers done.");
@@ -430,7 +406,6 @@ public class S3StorageAdapterTest {
 
     //@Test
     public void getCutouts() throws Exception {
-        final S3StorageAdapter testSubject = new S3StorageAdapter(ENDPOINT, REGION);
         final URI testURI = URI.create("cadc:TEST/getCutouts");
         //final long expectedByteCount = 159944L;
         //final URI expectedChecksum = URI.create("md5:7c6372a8d20da28b54b6b50ce36f9195");
@@ -446,7 +421,7 @@ public class S3StorageAdapterTest {
         //cutouts.add("[106][8:32,88:112]");
         //cutouts.add("[126]");
 
-        testSubject.get(new StorageLocation(testURI), byteCountOutputStream, cutouts);
+        adapter.get(new StorageLocation(testURI), byteCountOutputStream, cutouts);
         byteCountOutputStream.close();
 
         //Assert.assertEquals("Wrong byte count.", expectedByteCount, byteCountOutputStream.getByteCount());

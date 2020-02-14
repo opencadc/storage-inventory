@@ -116,6 +116,7 @@ import software.amazon.awssdk.core.exception.SdkClientException;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.S3ClientBuilder;
 import software.amazon.awssdk.services.s3.model.Bucket;
 import software.amazon.awssdk.services.s3.model.BucketAlreadyExistsException;
 import software.amazon.awssdk.services.s3.model.BucketAlreadyOwnedByYouException;
@@ -142,33 +143,36 @@ public class S3StorageAdapter implements StorageAdapter {
     private static final Logger LOGGER = Logger.getLogger(S3StorageAdapter.class);
 
     public static final String CONFIG_FILE = "cadc-storage-adapter-ceph.properties";
-    public static final String CONFIG_PROPERTY_BUCKETDEPTH = "bucketLength";
 
     private static final int BUFFER_SIZE_BYTES = 8192;
     private static final String DEFAULT_CHECKSUM_ALGORITHM = "md5";
+    private static final String CHECKSUM_KEY = "checksum";
     private static final String ARTIFACT_URI_KEY = "uri";
-    private static final String DEFAULT_BUCKET_HASH_LENGTH = "5";
-    static final String STORAGE_ID_URI_TEMPLATE = "s3:%s";
-    static final String CHECKSUM_URI_TEMPLATE = "md5:%s";
 
     // S3Client is thread safe, and re-usability is encouraged.
     private final S3Client s3Client;
+    private int storageBucketLength;
     
+    // used for developer isolation only
     private String bucketNamespace;
-
-    public S3StorageAdapter(final URI endpoint, final String regionName) {
-        this(S3Client.builder()
-                .endpointOverride(endpoint)
-                .region(Region.of(regionName))
-                .build());
+    
+    public S3StorageAdapter() {
+        throw new UnsupportedOperationException("configure from " + CONFIG_FILE);
     }
 
-    S3StorageAdapter(final S3Client s3Client) {
-        this.s3Client = s3Client;
+    // test ctor to not need config in known location
+    S3StorageAdapter(URI endpoint, Region region, int storageBucketLength) {
+        S3ClientBuilder s3b = S3Client.builder();
+        s3b.endpointOverride(endpoint);
+        s3b.region(region);
+        this.s3Client = s3b.build();
+        this.storageBucketLength = storageBucketLength;
     }
 
     /**
-     * Static name space that is prepended to all generated buckets.
+     * Static name space that is prepended to all generated buckets. This is intended
+     * to partition developers using a shared S3 back end.
+     * 
      * @param pre 
      */
     public void setBucketNamespace(String pre) {
@@ -176,19 +180,7 @@ public class S3StorageAdapter implements StorageAdapter {
     }
     
     URI generateStorageID() {
-        return URI.create(String.format(S3StorageAdapter.STORAGE_ID_URI_TEMPLATE, UUID.randomUUID().toString()));
-    }
-
-    /**
-     * Obtain the configured bucket name length.
-     *
-     * @return Integer bucket length. Never null.
-     */
-    private int getBucketNameLength() {
-        final PropertiesReader pr = new PropertiesReader(CONFIG_FILE);
-        final Optional<String> optionalBucketLength
-                = Optional.ofNullable(pr.getFirstPropertyValue(CONFIG_PROPERTY_BUCKETDEPTH));
-        return Integer.parseInt(optionalBucketLength.orElse(DEFAULT_BUCKET_HASH_LENGTH));
+        return URI.create("uuid:" +  UUID.randomUUID().toString());
     }
 
     String toInternalBucket(String bucket) {
@@ -216,7 +208,7 @@ public class S3StorageAdapter implements StorageAdapter {
     InputStream toObjectInputStream(final StorageLocation storageLocation) {
         return s3Client.getObject(GetObjectRequest.builder()
                 .bucket(toInternalBucket(storageLocation.storageBucket))
-                .key(storageLocation.getStorageID().getSchemeSpecificPart())
+                .key(storageLocation.getStorageID().toASCIIString())
                 .build());
     }
 
@@ -378,7 +370,7 @@ public class S3StorageAdapter implements StorageAdapter {
      * @throws S3Exception Base class for all service exceptions. Unknown exceptions will be thrown as an instance of this type.
      */
     String ensureBucket(final URI storageID) throws ResourceAlreadyExistsException, SdkClientException, S3Exception {
-        String bucket = InventoryUtil.computeBucket(storageID, getBucketNameLength());
+        String bucket = InventoryUtil.computeBucket(storageID, storageBucketLength);
         HeadBucketRequest headBucketRequest = HeadBucketRequest.builder().bucket(toInternalBucket(bucket)).build();
 
         try {
@@ -432,21 +424,20 @@ public class S3StorageAdapter implements StorageAdapter {
             final PutObjectRequest.Builder putObjectRequestBuilder
                     = PutObjectRequest.builder()
                     .bucket(toInternalBucket(bucket))
-                    .key(storageID.getSchemeSpecificPart());
+                    .key(storageID.toASCIIString());
 
             final Map<String, String> metadata = new HashMap<>();
             metadata.put(ARTIFACT_URI_KEY, newArtifact.getArtifactURI().toASCIIString().trim());
 
-            URI newArtifactChecksum = newArtifact.contentChecksum;
-            if (newArtifactChecksum != null) {
-                ensureChecksum(newArtifactChecksum);
-                final String md5SumValue = newArtifactChecksum.getSchemeSpecificPart();
+            if (newArtifact.contentChecksum != null) {
+                ensureChecksum(newArtifact.contentChecksum);
+                final String md5SumValue = newArtifact.contentChecksum.getSchemeSpecificPart();
 
                 // Reconvert to Hex bytes before Base64 encoding it as per what S3 expects.
                 final byte[] value = HexUtil.toBytes(md5SumValue);
                 checksum = new String(Base64.getEncoder().encode(value));
                 putObjectRequestBuilder.contentMD5(checksum);
-                metadata.put(DEFAULT_CHECKSUM_ALGORITHM, md5SumValue);
+                metadata.put(CHECKSUM_KEY, newArtifact.contentChecksum.toASCIIString());
             } else { 
                 try {
                     MessageDigest md = MessageDigest.getInstance(DEFAULT_CHECKSUM_ALGORITHM);
@@ -470,13 +461,14 @@ public class S3StorageAdapter implements StorageAdapter {
             s3Client.putObject(putObjectRequestBuilder.build(), RequestBody.fromInputStream(source,
                     newArtifact.contentLength));
             
+            URI contentChecksum = newArtifact.contentChecksum;
             if (source instanceof DigestInputStream) {
+                // newArtifact.contentChecksum was null
                 DigestInputStream dis = (DigestInputStream) source;
                 MessageDigest md = dis.getMessageDigest();
-                newArtifactChecksum = URI.create(DEFAULT_CHECKSUM_ALGORITHM + ":" + HexUtil.toHex(md.digest()));
+                contentChecksum = URI.create(DEFAULT_CHECKSUM_ALGORITHM + ":" + HexUtil.toHex(md.digest()));
             }
-            return toStorageMetadata(storageID, bucket, newArtifact.getArtifactURI(), newArtifactChecksum,
-                    newArtifact.contentLength);
+            return toStorageMetadata(storageID, bucket, newArtifact.getArtifactURI(), contentChecksum, newArtifact.contentLength);
         } catch (S3Exception e) {
             final AwsErrorDetails awsErrorDetails = e.awsErrorDetails();
             if ((awsErrorDetails != null) && StringUtil.hasLength(awsErrorDetails.errorCode())) {
@@ -563,14 +555,17 @@ public class S3StorageAdapter implements StorageAdapter {
                 ? headBuilder.bucket(toInternalBucket(bucket)).build()
                 : headBuilder.build());
         final Map<String, String> objectMetadata = headResponse.metadata();
+        LOGGER.debug("object: " + bucket + " " + key);
+        for (Map.Entry<String,String> me : objectMetadata.entrySet()) {
+            LOGGER.debug("meta: " + me.getKey() + " = " + me.getValue());
+        }
         final URI artifactURI = objectMetadata.containsKey(ARTIFACT_URI_KEY)
                 ? URI.create(objectMetadata.get(ARTIFACT_URI_KEY)) : null;
 
-        final URI storageID = URI.create(String.format(S3StorageAdapter.STORAGE_ID_URI_TEMPLATE, key));
+        final URI storageID = URI.create(key);
 
-        // TODO: The MD5 value should always be present.  Do we need a null check here?
-        final URI md5 = URI.create(String.format(CHECKSUM_URI_TEMPLATE,
-                objectMetadata.get(DEFAULT_CHECKSUM_ALGORITHM)));
+        // TODO: The MD5 value must always be present.  Do we need a null check here?
+        final URI md5 = URI.create(objectMetadata.get(CHECKSUM_KEY));
 
         return toStorageMetadata(storageID, bucket, artifactURI, md5, headResponse.contentLength());
     }
@@ -592,9 +587,8 @@ public class S3StorageAdapter implements StorageAdapter {
             final DeleteObjectRequest.Builder deleteObjectRequestBuilder
                 = DeleteObjectRequest.builder()
                 .bucket(toInternalBucket(storageLocation.storageBucket))
-                .key(storageLocation.getStorageID().getSchemeSpecificPart());
+                .key(storageLocation.getStorageID().toASCIIString());
             final DeleteObjectResponse deleteObjectResponse = s3Client.deleteObject(deleteObjectRequestBuilder.build());
-
         } catch (NoSuchKeyException e) {
             throw new ResourceNotFoundException(e.getMessage(), e);
         } catch (S3Exception e) {

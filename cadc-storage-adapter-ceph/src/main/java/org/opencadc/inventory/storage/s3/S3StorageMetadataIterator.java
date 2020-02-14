@@ -73,7 +73,6 @@ import java.util.Iterator;
 import java.util.NoSuchElementException;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.storage.StorageMetadata;
-import software.amazon.awssdk.core.SdkField;
 import software.amazon.awssdk.services.s3.model.ListObjectsResponse;
 import software.amazon.awssdk.services.s3.model.S3Object;
 
