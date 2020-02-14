@@ -3,7 +3,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2019.                            (c) 2019.
+ *  (c) 2020.                            (c) 2020.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -212,16 +212,16 @@ class AbstractDAO<T extends Entity> {
         
     }
     
-    protected Entity get(Class entityClass, UUID id) {
+    protected T get(Class entityClass, UUID id) {
         checkInit();
         log.debug("GET: " + id);
         long t = System.currentTimeMillis();
 
         try {
             JdbcTemplate jdbc = new JdbcTemplate(dataSource);
-            EntityGet get = gen.getEntityGet(entityClass);
+            EntityGet<T> get = (EntityGet<T>) gen.getEntityGet(entityClass);
             get.setID(id);
-            Entity e = (Entity) get.execute(jdbc);
+            T e = (T) get.execute(jdbc);
             return e;
         } finally {
             long dt = System.currentTimeMillis() - t;
@@ -233,8 +233,9 @@ class AbstractDAO<T extends Entity> {
      * Acquire a write lock on the existing entity. This is used as the first action
      * in a transaction in order to avoid race conditions and deadlocks.
      * @param val entity value to lock
+     * @throws EntityNotFoundException if the specified entity does not exist
      */
-    public void lock(T val) {
+    public void lock(T val) throws EntityNotFoundException {
         if (val == null) {
             throw new IllegalArgumentException("entity cannot be null");
         }
@@ -314,10 +315,6 @@ class AbstractDAO<T extends Entity> {
      */
     protected boolean updateEntity(Entity entity, Entity cur, Date now) {
         log.debug("updateEntity: " + entity);
-        // UUID generated in Entity constructor
-        //if (entity.getID() == null) {
-        //    InventoryUtil.assignID(entity, UUID.randomUUID());
-        //}
 
         digest.reset(); // just in case
         InventoryUtil.assignMetaChecksum(entity, entity.computeMetaChecksum(digest));

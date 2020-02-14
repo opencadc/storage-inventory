@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2019.                            (c) 2019.
+*  (c) 2020.                            (c) 2030.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -63,126 +63,95 @@
 *                                       <http://www.gnu.org/licenses/>.
 *
 ************************************************************************
- */
+*/
 
-package org.opencadc.minoc;
+package org.opencadc.inventory.db.version;
 
-import ca.nrc.cadc.auth.AuthMethod;
+import ca.nrc.cadc.db.ConnectionConfig;
+import ca.nrc.cadc.db.DBConfig;
 import ca.nrc.cadc.db.DBUtil;
-import ca.nrc.cadc.reg.Standards;
-import ca.nrc.cadc.reg.client.LocalAuthority;
-import ca.nrc.cadc.reg.client.RegistryClient;
-import ca.nrc.cadc.util.MultiValuedProperties;
-import ca.nrc.cadc.vosi.AvailabilityPlugin;
-import ca.nrc.cadc.vosi.AvailabilityStatus;
-import ca.nrc.cadc.vosi.avail.CheckException;
-import ca.nrc.cadc.vosi.avail.CheckResource;
-import ca.nrc.cadc.vosi.avail.CheckWebService;
-
-import java.net.URI;
-import java.util.Map;
-import java.util.Properties;
-import java.util.Set;
-
+import ca.nrc.cadc.util.ArgumentMap;
+import ca.nrc.cadc.util.Log4jInit;
+import java.io.IOException;
+import java.util.List;
 import javax.sql.DataSource;
-
+import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
-import org.opencadc.inventory.db.version.InitDatabase;
 
 /**
- * This class performs the work of determining if the executing artifact
- * service is operating as expected.
+ * Place holder for manual call to force InitDatase.
  * 
- * @author majorb
+ * @author pdowler
  */
-public class ServiceAvailability implements AvailabilityPlugin {
+public class Main implements Runnable {
+    private static final Logger log = Logger.getLogger(Main.class);
 
-    private static final Logger log = Logger.getLogger(ServiceAvailability.class);
-
-    /**
-     * Default, no-arg constructor.
-     */
-    public ServiceAvailability() {
-    }
-
-    /**
-     * Sets the name of the application.
-     */
-    @Override
-    public void setAppName(String string) {
-        //no-op
-    }
-
-    /**
-     * Performs a simple check for the availability of the object.
-     * @return true always
-     */
-    @Override
-    public boolean heartbeat() {
-        return true;
-    }
-
-    /**
-     * Do a comprehensive check of the service and it's dependencies.
-     * @return Information of the availability check.
-     */
-    @Override
-    public AvailabilityStatus getStatus() {
-        boolean isGood = true;
-        String note = "service is accepting requests";
-        
+    public static void main(String[] args) {
         try {
-            
-            log.info("init database...");
-            DataSource ds = DBUtil.findJNDIDataSource(ArtifactAction.JNDI_DATASOURCE);
-            MultiValuedProperties props = ArtifactAction.readConfig();
-            Map<String, Object> config = ArtifactAction.getDaoConfig(props);
-            InitDatabase init = new InitDatabase(ds, (String) config.get("database"), (String) config.get("schema"));
-            init.doInit();
-            log.info("init database... OK");
+            ArgumentMap am = new ArgumentMap(args);
+            Log4jInit.setLevel("ca.nrc.cadc", Level.WARN);
+            Log4jInit.setLevel("org.opencadc", Level.WARN);
+            if (am.isSet("d") || am.isSet("debug")) {
+                Log4jInit.setLevel("org.opencadc.inventory", Level.DEBUG);
+            } else if (am.isSet("v") || am.isSet("verbose")) {
+                Log4jInit.setLevel("org.opencadc.inventory", Level.INFO);
+            }
 
-            // check other services we depend on
-            RegistryClient reg = new RegistryClient();
-            String url;
-            CheckResource checkResource;
+            if (am.isSet("h") || am.isSet("help")) {
+                usage();
+                return;
+            }
             
-            LocalAuthority localAuthority = new LocalAuthority();
-
-            URI credURI = localAuthority.getServiceURI(Standards.CRED_PROXY_10.toString());
-            url = reg.getServiceURL(credURI, Standards.VOSI_AVAILABILITY, AuthMethod.ANON).toExternalForm();
-            checkResource = new CheckWebService(url);
-            checkResource.check();
-
-            URI usersURI = localAuthority.getServiceURI(Standards.UMS_USERS_01.toString());
-            url = reg.getServiceURL(usersURI, Standards.VOSI_AVAILABILITY, AuthMethod.ANON).toExternalForm();
-            checkResource = new CheckWebService(url);
-            checkResource.check();
+            List<String> ss = am.getPositionalArgs();
+            if (ss.size() != 3) {
+                log.error("missing required commandline args");
+                usage();
+                System.exit(1);
+            }
             
-            URI groupsURI = localAuthority.getServiceURI(Standards.GMS_SEARCH_01.toString());
-            url = reg.getServiceURL(groupsURI, Standards.VOSI_AVAILABILITY, AuthMethod.ANON).toExternalForm();
-            checkResource = new CheckWebService(url);
-            checkResource.check();
+            Main m = new Main(ss.get(0), ss.get(1), ss.get(2));
+            m.run();
             
-        } catch (CheckException ce) {
-            // tests determined that the resource is not working
-            isGood = false;
-            note = ce.getMessage();
-        } catch (Throwable t) {
-            // the test itself failed
-            log.debug("failure", t);
-            isGood = false;
-            note = "test failed, reason: " + t;
+        } catch (Throwable unexpected) {
+            log.error("unexpected error", unexpected);
+            System.exit(2);
         }
-
-        return new AvailabilityStatus(isGood, null, null, null, note);
     }
-
-    /**
-     * Sets the state of the service.
-     */
-    @Override
-    public void setState(String state) {
-        // ignore
+    
+    private static void usage() {
+        System.out.println("usage: cadc-inventory-db [-v|--verbose|-d|--debug] <server> <database> <schema>");
     }
-
+    
+    private final String server;
+    private final String database;
+    private final String schema;
+    
+    private Main(String server, String database, String schema) {
+        this.server = server;
+        this.database = database;
+        this.schema = schema;
+    }
+    
+    public void run() {
+        try {
+            DBConfig dbrc = new DBConfig();
+            ConnectionConfig cc = dbrc.getConnectionConfig(server, database);
+            String driver = cc.getDriver();
+            if (driver == null) {
+                throw new RuntimeException("failed to find JDBC driver for " + server + "," + database);
+            }
+            DataSource ds = DBUtil.getDataSource(cc);
+            log.info("target: " + server + " " + database + " " + schema);
+            
+            InitDatabase init = new InitDatabase(ds, database, schema);
+            boolean result = init.doInit();
+            if (result) {
+                log.info("init: complete");
+            } else {
+                log.info("init: no-op");
+            }
+        } catch (IOException ex) {
+            throw new RuntimeException("failed to read connection info from $HOME/.dbrc", ex);
+        }
+    }
 }

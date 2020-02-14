@@ -125,10 +125,10 @@ public interface StorageAdapter {
     /**
      * Write an artifact to storage. The returned storage location will be used for future get and 
      * delete calls. If the storage implementation overwrites a previously used StorageLocation, it must
-     * perform an atomic replace and leave the previously stored bytes in tact if the put fails. The storage
-     * implementation may always write to a new storage location (e.g. generated unique storageID); in this case,
-     * the caller is responsible for keeping track of and cleaning up previously stored objects (the previous 
-     * StorageLocation of an Artifact). 
+     * perform an atomic replace and leave the previously stored bytes intact if the put fails. The storage
+     * implementation may be designed to always write to a new storage location (e.g. generated unique storageID);
+     *  in this case, the caller is responsible for keeping track of and cleaning up previously stored objects
+     * (the previous StorageLocation of an Artifact). 
      * The value of storageBucket in the returned StorageMetadata and StorageLocation can be used to
      * retrieve batches of artifacts in some of the iterator signatures defined in this interface.
      * Batches of artifacts can be listed by bucket in two of the iterator methods in this interface.

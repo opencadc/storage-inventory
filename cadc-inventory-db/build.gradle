@@ -4,6 +4,7 @@ plugins {
     id 'maven-publish'
     id 'com.jfrog.bintray' version '1.8.4'
     id 'checkstyle'
+    id 'application'
 }
 
 repositories {
@@ -17,7 +18,9 @@ sourceCompatibility = 1.8
 
 group = 'org.opencadc'
 
-version = '0.5'
+version = '0.6'
+
+mainClassName = 'org.opencadc.inventory.db.version.Main'
 
 dependencies {
     compile 'log4j:log4j:[1.2,)'
@@ -25,5 +28,6 @@ dependencies {
 
     testCompile 'junit:junit:[4.0,)'
     
+    runtime 'org.postgresql:postgresql:[42.2.8,)'
     intTestRuntime 'org.postgresql:postgresql:[42.2.8,)'
 }

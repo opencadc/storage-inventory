@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2019.                            (c) 2019.
+*  (c) 2020.                            (c) 2020.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -63,126 +63,54 @@
 *                                       <http://www.gnu.org/licenses/>.
 *
 ************************************************************************
- */
+*/
 
-package org.opencadc.minoc;
+package org.opencadc.inventory.db.version;
 
-import ca.nrc.cadc.auth.AuthMethod;
-import ca.nrc.cadc.db.DBUtil;
-import ca.nrc.cadc.reg.Standards;
-import ca.nrc.cadc.reg.client.LocalAuthority;
-import ca.nrc.cadc.reg.client.RegistryClient;
-import ca.nrc.cadc.util.MultiValuedProperties;
-import ca.nrc.cadc.vosi.AvailabilityPlugin;
-import ca.nrc.cadc.vosi.AvailabilityStatus;
-import ca.nrc.cadc.vosi.avail.CheckException;
-import ca.nrc.cadc.vosi.avail.CheckResource;
-import ca.nrc.cadc.vosi.avail.CheckWebService;
-
-import java.net.URI;
-import java.util.Map;
-import java.util.Properties;
-import java.util.Set;
-
+import java.net.URL;
 import javax.sql.DataSource;
-
 import org.apache.log4j.Logger;
-import org.opencadc.inventory.db.version.InitDatabase;
 
 /**
- * This class performs the work of determining if the executing artifact
- * service is operating as expected.
- * 
- * @author majorb
+ *
+ * @author pdowler
  */
-public class ServiceAvailability implements AvailabilityPlugin {
+public class InitDatabase extends ca.nrc.cadc.db.version.InitDatabase {
+    private static final Logger log = Logger.getLogger(InitDatabase.class);
+    
+    public static final String MODEL_NAME = "storage-inventory";
+    public static final String MODEL_VERSION = "0.6";
+    public static final String PREV_MODEL_VERSION = "0.5";
+    //public static final String PREV_MODEL_VERSION = "DO-NOT_UPGRADE-BY-ACCIDENT";
 
-    private static final Logger log = Logger.getLogger(ServiceAvailability.class);
-
-    /**
-     * Default, no-arg constructor.
-     */
-    public ServiceAvailability() {
-    }
-
-    /**
-     * Sets the name of the application.
-     */
-    @Override
-    public void setAppName(String string) {
-        //no-op
-    }
-
-    /**
-     * Performs a simple check for the availability of the object.
-     * @return true always
-     */
-    @Override
-    public boolean heartbeat() {
-        return true;
-    }
-
-    /**
-     * Do a comprehensive check of the service and it's dependencies.
-     * @return Information of the availability check.
-     */
-    @Override
-    public AvailabilityStatus getStatus() {
-        boolean isGood = true;
-        String note = "service is accepting requests";
-        
-        try {
-            
-            log.info("init database...");
-            DataSource ds = DBUtil.findJNDIDataSource(ArtifactAction.JNDI_DATASOURCE);
-            MultiValuedProperties props = ArtifactAction.readConfig();
-            Map<String, Object> config = ArtifactAction.getDaoConfig(props);
-            InitDatabase init = new InitDatabase(ds, (String) config.get("database"), (String) config.get("schema"));
-            init.doInit();
-            log.info("init database... OK");
-
-            // check other services we depend on
-            RegistryClient reg = new RegistryClient();
-            String url;
-            CheckResource checkResource;
-            
-            LocalAuthority localAuthority = new LocalAuthority();
-
-            URI credURI = localAuthority.getServiceURI(Standards.CRED_PROXY_10.toString());
-            url = reg.getServiceURL(credURI, Standards.VOSI_AVAILABILITY, AuthMethod.ANON).toExternalForm();
-            checkResource = new CheckWebService(url);
-            checkResource.check();
-
-            URI usersURI = localAuthority.getServiceURI(Standards.UMS_USERS_01.toString());
-            url = reg.getServiceURL(usersURI, Standards.VOSI_AVAILABILITY, AuthMethod.ANON).toExternalForm();
-            checkResource = new CheckWebService(url);
-            checkResource.check();
-            
-            URI groupsURI = localAuthority.getServiceURI(Standards.GMS_SEARCH_01.toString());
-            url = reg.getServiceURL(groupsURI, Standards.VOSI_AVAILABILITY, AuthMethod.ANON).toExternalForm();
-            checkResource = new CheckWebService(url);
-            checkResource.check();
-            
-        } catch (CheckException ce) {
-            // tests determined that the resource is not working
-            isGood = false;
-            note = ce.getMessage();
-        } catch (Throwable t) {
-            // the test itself failed
-            log.debug("failure", t);
-            isGood = false;
-            note = "test failed, reason: " + t;
+    static String[] CREATE_SQL = new String[] {
+        "inventory.ModelVersion.sql",
+        "inventory.Artifact.sql",
+        "inventory.StorageSite.sql",
+        "inventory.ObsoleteStorageLocation.sql",
+        "inventory.DeletedArtifactEvent.sql",
+        "inventory.DeletedStorageLocationEvent.sql",
+        "inventory.permissions.sql"
+    };
+    
+    static String[] UPGRADE_SQL = new String[] {
+        "inventory.ObsoleteStorageLocation.sql",
+        "inventory.permissions.sql"
+    };
+    
+    public InitDatabase(DataSource ds, String database, String schema) { 
+        super(ds, database, schema, MODEL_NAME, MODEL_VERSION, PREV_MODEL_VERSION);
+        for (String s : CREATE_SQL) {
+            createSQL.add(s);
         }
-
-        return new AvailabilityStatus(isGood, null, null, null, note);
+        for (String s : UPGRADE_SQL) {
+            upgradeSQL.add(s);
+        }
     }
 
-    /**
-     * Sets the state of the service.
-     */
     @Override
-    public void setState(String state) {
-        // ignore
+    protected URL findSQL(String fname) {
+        // SQL files are stored inside the jar file
+        return InitDatabase.class.getClassLoader().getResource(fname);
     }
-
 }

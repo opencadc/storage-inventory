@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2019.                            (c) 2019.
+*  (c) 2020.                            (c) 2020.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -135,6 +135,7 @@ public class SQLGenerator {
         this.tableMap.put(StorageSite.class, pref + StorageSite.class.getSimpleName());
         this.tableMap.put(DeletedArtifactEvent.class, pref + DeletedArtifactEvent.class.getSimpleName());
         this.tableMap.put(DeletedStorageLocationEvent.class, pref + DeletedStorageLocationEvent.class.getSimpleName());
+        this.tableMap.put(ObsoleteStorageLocation.class, pref + ObsoleteStorageLocation.class.getSimpleName());
         
         String[] cols = new String[] {
             "uri", // first column is logical key
@@ -166,6 +167,15 @@ public class SQLGenerator {
         this.columnMap.put(DeletedArtifactEvent.class, cols);
         this.columnMap.put(DeletedStorageLocationEvent.class, cols);
         this.columnMap.put(Entity.class, cols); // skeleton
+        
+        cols = new String[] {
+            "location_storageID",
+            "location_storageBucket",
+            "lastModified",
+            "metaChecksum",
+            "id" // last column is always PK
+        };
+        this.columnMap.put(ObsoleteStorageLocation.class, cols);
     }
     
     private static class ClassComp implements Comparator<Class> {
@@ -186,7 +196,7 @@ public class SQLGenerator {
         return tableMap.get(c);
     }
     
-    public EntityGet getEntityGet(Class c) {
+    public EntityGet<? extends Entity> getEntityGet(Class c) {
         if (Artifact.class.equals(c)) {
             return new ArtifactGet();
         }
@@ -198,6 +208,9 @@ public class SQLGenerator {
         }
         if (DeletedStorageLocationEvent.class.equals(c)) {
             return new DeletedStorageLocationEventGet();
+        }
+        if (ObsoleteStorageLocation.class.equals(c)) {
+            return new ObsoleteStorageLocationGet();
         }
         throw new UnsupportedOperationException("entity-get: " + c.getName());
     }
@@ -234,6 +247,9 @@ public class SQLGenerator {
         if (DeletedStorageLocationEvent.class.equals(c)) {
             return new DeletedEventPut(update);
         }
+        if (ObsoleteStorageLocation.class.equals(c)) {
+            return new ObsoleteStorageLocationPut(update);
+        }
         throw new UnsupportedOperationException("entity-put: " + c.getName());
     }
     
@@ -256,8 +272,11 @@ public class SQLGenerator {
         }
         
         @Override
-        public void execute(JdbcTemplate jdbc) {
-            jdbc.update(this);
+        public void execute(JdbcTemplate jdbc) throws EntityNotFoundException {
+            int n = jdbc.update(this);
+            if (n == 0) {
+                throw new EntityNotFoundException("not found: " + id);
+            }
         }
         
         @Override
@@ -284,11 +303,6 @@ public class SQLGenerator {
         @Override
         public void setID(UUID id) {
             this.id = id;
-        }
-
-        @Override
-        public void setURI(URI uri) {
-            throw new UnsupportedOperationException();
         }
 
         @Override
@@ -332,7 +346,63 @@ public class SQLGenerator {
         }
     }
     
-    private class ArtifactGet implements EntityGet<Artifact> {
+    // used directly in ObsoleteStorageLocationDAO
+    class ObsoleteStorageLocationGet implements EntityGet<ObsoleteStorageLocation> {
+        private UUID id;
+        private StorageLocation loc;
+       
+        @Override
+        public void setID(UUID id) {
+            this.id = id;
+        }
+
+        public void setLocation(StorageLocation loc) {
+            this.loc = loc;
+        }
+        
+        @Override
+        public ObsoleteStorageLocation execute(JdbcTemplate jdbc) {
+            return (ObsoleteStorageLocation) jdbc.query(this, new ObsoleteStorageLocationExtractor());
+        }
+        
+        @Override
+        public PreparedStatement createPreparedStatement(Connection conn) throws SQLException {
+            if (id == null && loc == null) {
+                throw new IllegalStateException("BUG: execute called with no value for ID or StorageLocation"); 
+            }
+            
+            StringBuilder sb = getSelectFromSQL(ObsoleteStorageLocation.class, false);
+            sb.append(" WHERE ");
+            if (id != null) {
+                String col = getKeyColumn(ObsoleteStorageLocation.class, true);
+                sb.append(col).append(" = ?");
+            } else {
+                String[] cols = columnMap.get(ObsoleteStorageLocation.class);
+                sb.append(cols[0]).append(" = ?");
+                sb.append(" AND ");
+                if (loc.storageBucket != null) {
+                    sb.append(cols[1]).append(" = ?");
+                } else {
+                    sb.append(cols[1]).append(" IS NULL");
+                }
+            }
+            String sql = sb.toString();
+            log.debug("DeletedStorageLocationGet: " + sql);
+            PreparedStatement prep = conn.prepareStatement(sql);
+            if (id != null) {
+                prep.setObject(1, id);
+            } else {
+                prep.setString(1, loc.getStorageID().toASCIIString());
+                if (loc.storageBucket != null) {
+                    prep.setString(2, loc.storageBucket);
+                }
+            }
+            return prep;
+        }
+    }
+    
+    // used directly in ArtifactDAO
+    class ArtifactGet implements EntityGet<Artifact> {
         private UUID id;
         private URI uri;
 
@@ -341,7 +411,6 @@ public class SQLGenerator {
             this.id = id;
         }
 
-        @Override
         public void setURI(URI uri) {
             this.uri = uri;
         }
@@ -384,11 +453,6 @@ public class SQLGenerator {
         }
 
         @Override
-        public void setURI(URI uri) {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
         public StorageSite execute(JdbcTemplate jdbc) {
             return (StorageSite) jdbc.query(this, new StorageSiteExtractor());
         }
@@ -401,17 +465,12 @@ public class SQLGenerator {
                 String col = getKeyColumn(StorageSite.class, true);
                 sb.append(col).append(" = ?");
             } else {
-                String col = getKeyColumn(StorageSite.class, false);
-                sb.append(col).append(" = ?");
+                throw new IllegalStateException("primary key is null");
             }
             String sql = sb.toString();
             log.debug("StorageSiteGet: " + sql);
             PreparedStatement prep = conn.prepareStatement(sql);
-            if (id != null) {
-                prep.setObject(1, id);
-            } else {
-                prep.setString(1, uri.toASCIIString());
-            }
+            prep.setObject(1, id);
             return prep;
         }
     }
@@ -541,6 +600,54 @@ public class SQLGenerator {
             int col = 1;
             prep.setString(col++, value.getResourceID().toASCIIString());
             prep.setString(col++, value.getName());
+            
+            prep.setTimestamp(col++, new Timestamp(value.getLastModified().getTime()), utc);
+            prep.setString(col++, value.getMetaChecksum().toASCIIString());
+            prep.setObject(col++, value.getID());
+            
+            return prep;
+        }
+        
+    }
+    
+    private class ObsoleteStorageLocationPut implements EntityPut<ObsoleteStorageLocation> {
+        private final Calendar utc = Calendar.getInstance(DateUtil.UTC);
+        private final boolean update;
+        private ObsoleteStorageLocation value;
+        
+        ObsoleteStorageLocationPut(boolean update) {
+            this.update = update;
+        }
+
+        @Override
+        public void setValue(ObsoleteStorageLocation value) {
+            this.value = value;
+        }
+        
+        @Override
+        public void execute(JdbcTemplate jdbc) {
+            jdbc.update(this);
+        }
+        
+        @Override
+        public PreparedStatement createPreparedStatement(Connection conn) throws SQLException {
+            String sql = null;
+            if (update) {
+                sql = getUpdateSQL(ObsoleteStorageLocation.class);
+                       
+            } else {
+                sql = getInsertSQL(ObsoleteStorageLocation.class);
+            }
+            log.debug("ArtifactPut: " + sql);
+            PreparedStatement prep = conn.prepareStatement(sql);
+            int col = 1;
+            
+            prep.setString(col++, value.getLocation().getStorageID().toASCIIString());
+            if (value.getLocation().storageBucket != null) {
+                safeSetString(prep, col++, value.getLocation().storageBucket);
+            } else {
+                safeSetString(prep, col++, null);
+            }
             
             prep.setTimestamp(col++, new Timestamp(value.getLastModified().getTime()), utc);
             prep.setString(col++, value.getMetaChecksum().toASCIIString());
@@ -776,7 +883,6 @@ public class SQLGenerator {
                     a.siteLocations.add(new SiteLocation(s));
                 }
             }
-            log.debug("ArtifactExtractor: " + storLoc + " " + storBucket);
             if (storLoc != null) {
                 a.storageLocation = new StorageLocation(storLoc);
                 a.storageLocation.storageBucket = storBucket;
@@ -784,6 +890,31 @@ public class SQLGenerator {
             InventoryUtil.assignLastModified(a, lastModified);
             InventoryUtil.assignMetaChecksum(a, metaChecksum);
             return a;
+        }
+    }
+    
+    private class ObsoleteStorageLocationExtractor implements ResultSetExtractor {
+
+        final Calendar utc = Calendar.getInstance(DateUtil.UTC);
+        
+        @Override
+        public Object extractData(ResultSet rs) throws SQLException, DataAccessException {
+            if (!rs.next()) {
+                return null;
+            }
+            int col = 1;
+            final URI storLoc = Util.getURI(rs, col++);
+            final String storBucket = rs.getString(col++);
+            final Date lastModified = Util.getDate(rs, col++, utc);
+            final URI metaChecksum = Util.getURI(rs, col++);
+            final UUID id = Util.getUUID(rs, col++);
+            
+            StorageLocation s = new StorageLocation(storLoc);
+            s.storageBucket = storBucket;
+            Entity ret = new ObsoleteStorageLocation(id, s);
+            InventoryUtil.assignLastModified(ret, lastModified);
+            InventoryUtil.assignMetaChecksum(ret, metaChecksum);
+            return ret;
         }
     }
     
@@ -851,6 +982,7 @@ public class SQLGenerator {
                 return null;
             }
             int col = 1;
+            
             final Date lastModified = Util.getDate(rs, col++, utc);
             final URI metaChecksum = Util.getURI(rs, col++);
             final UUID id = Util.getUUID(rs, col++);
