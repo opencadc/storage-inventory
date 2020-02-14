@@ -117,7 +117,7 @@ public class StorageLocation implements Comparable<StorageLocation> {
             return false;
         }
         StorageLocation s = (StorageLocation) o;
-        return storageID.compareTo(s.storageID) == 0;
+        return this.compareTo(s) == 0;
     }
 
     @Override
