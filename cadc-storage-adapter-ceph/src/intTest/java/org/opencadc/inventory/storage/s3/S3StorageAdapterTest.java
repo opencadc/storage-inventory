@@ -294,7 +294,7 @@ public class S3StorageAdapterTest {
             byte[] data = new byte[1024];
             
             SortedSet<StorageMetadata> expected = new TreeSet<>();
-            for (int i = 0; i < 3; i++) {
+            for (int i = 0; i < 10; i++) {
                 URI artifactURI = URI.create("cadc:TEST/testIterator-" + i);
                 rnd.nextBytes(data);
                 NewArtifact na = new NewArtifact(artifactURI);
@@ -327,15 +327,41 @@ public class S3StorageAdapterTest {
                 Assert.assertEquals("checksum", em.getContentChecksum(), am.getContentChecksum());
             }
             
-            // bucket prefix iterator
+        } catch (Exception ex) {
+            LOGGER.error("unexpected exception", ex);
+            Assert.fail("unexpected exception: " + ex);
+        }
+    }
+    
+    @Test
+    public void testIteratorBucketPrefix() {
+        
+        try {
+            MessageDigest md = MessageDigest.getInstance("MD5");
+            Random rnd = new Random();
+            byte[] data = new byte[1024];
+            
+            SortedSet<StorageMetadata> expected = new TreeSet<>();
+            for (int i = 0; i < 10; i++) {
+                URI artifactURI = URI.create("cadc:TEST/testIteratorBucketPrefix-" + i);
+                rnd.nextBytes(data);
+                NewArtifact na = new NewArtifact(artifactURI);
+                md.update(data);
+                na.contentChecksum = URI.create("md5:" + HexUtil.toHex(md.digest()));
+                na.contentLength = (long) data.length;
+                StorageMetadata sm = adapter.put(na, new ByteArrayInputStream(data));
+                LOGGER.debug("testList put: " + artifactURI + " to " + sm.getStorageLocation());
+                expected.add(sm);
+            }
+            
             int found = 0;
             for (byte b = 0; b < 16; b++) {
-                String s = HexUtil.toHex(b).substring(1);
-                LOGGER.info("bucket prefix: " + s);
-                Iterator<StorageMetadata> i = adapter.iterator(s);
+                String bpre = HexUtil.toHex(b).substring(1);
+                LOGGER.info("bucket prefix: " + bpre);
+                Iterator<StorageMetadata> i = adapter.iterator(bpre);
                 while (i.hasNext()) {
                     StorageMetadata sm = i.next();
-                    Assert.assertTrue("prefix match", sm.getStorageLocation().storageBucket.startsWith(s));
+                    Assert.assertTrue("prefix match", sm.getStorageLocation().storageBucket.startsWith(bpre));
                     found++;
                 }
             }
