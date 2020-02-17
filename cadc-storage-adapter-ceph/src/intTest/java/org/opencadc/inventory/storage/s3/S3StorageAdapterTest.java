@@ -373,6 +373,88 @@ public class S3StorageAdapterTest {
         }
     }
     
+    @Test
+    public void testList() {
+        
+        try {
+            MessageDigest md = MessageDigest.getInstance("MD5");
+            Random rnd = new Random();
+            byte[] data = new byte[1024];
+            
+            SortedSet<StorageMetadata> expected = new TreeSet<>();
+            for (int i = 0; i < 10; i++) {
+                URI artifactURI = URI.create("cadc:TEST/testList-" + i);
+                rnd.nextBytes(data);
+                NewArtifact na = new NewArtifact(artifactURI);
+                md.update(data);
+                na.contentChecksum = URI.create("md5:" + HexUtil.toHex(md.digest()));
+                na.contentLength = (long) data.length;
+                StorageMetadata sm = adapter.put(na, new ByteArrayInputStream(data));
+                LOGGER.debug("testList put: " + artifactURI + " to " + sm.getStorageLocation());
+                expected.add(sm);
+            }
+
+            Set<StorageMetadata> actual = adapter.list(null);
+            
+            Assert.assertEquals("list.size", expected.size(), actual.size());
+            Iterator<StorageMetadata> ei = expected.iterator();
+            Iterator<StorageMetadata> ai = actual.iterator();
+            while (ei.hasNext()) {
+                StorageMetadata em = ei.next();
+                StorageMetadata am = ai.next();
+                LOGGER.debug("compare: " + em.getStorageLocation() + " vs " + am.getStorageLocation());
+                Assert.assertEquals("order", em, am);
+                Assert.assertEquals("length", em.getContentLength(), am.getContentLength());
+                Assert.assertEquals("checksum", em.getContentChecksum(), am.getContentChecksum());
+            }
+            
+        } catch (Exception ex) {
+            LOGGER.error("unexpected exception", ex);
+            Assert.fail("unexpected exception: " + ex);
+        }
+    }
+    
+    @Test
+    public void testListBucketPrefix() {
+        
+        try {
+            MessageDigest md = MessageDigest.getInstance("MD5");
+            Random rnd = new Random();
+            byte[] data = new byte[1024];
+            
+            SortedSet<StorageMetadata> expected = new TreeSet<>();
+            for (int i = 0; i < 10; i++) {
+                URI artifactURI = URI.create("cadc:TEST/testListBucketPrefix-" + i);
+                rnd.nextBytes(data);
+                NewArtifact na = new NewArtifact(artifactURI);
+                md.update(data);
+                na.contentChecksum = URI.create("md5:" + HexUtil.toHex(md.digest()));
+                na.contentLength = (long) data.length;
+                StorageMetadata sm = adapter.put(na, new ByteArrayInputStream(data));
+                LOGGER.debug("testList put: " + artifactURI + " to " + sm.getStorageLocation());
+                expected.add(sm);
+            }
+            
+            int found = 0;
+            for (byte b = 0; b < 16; b++) {
+                String bpre = HexUtil.toHex(b).substring(1);
+                LOGGER.info("bucket prefix: " + bpre);
+                Set<StorageMetadata> bset = adapter.list(bpre);
+                Iterator<StorageMetadata> i = bset.iterator();
+                while (i.hasNext()) {
+                    StorageMetadata sm = i.next();
+                    Assert.assertTrue("prefix match", sm.getStorageLocation().storageBucket.startsWith(bpre));
+                    found++;
+                }
+            }
+            Assert.assertEquals("found with bucketPrefix", expected.size(), found);
+            
+        } catch (Exception ex) {
+            LOGGER.error("unexpected exception", ex);
+            Assert.fail("unexpected exception: " + ex);
+        }
+    }
+    
     private void ensureMEFTestFile() throws Exception {
         throw new UnsupportedOperationException("not implemented");
         /*
