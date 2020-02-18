@@ -31,8 +31,5 @@ dependencies {
     // Amazon S3 Java Library
     compile 'software.amazon.awssdk:s3:2.10.49'
 
-    intTestCompile 'software.amazon.awssdk:s3:2.10.49'
-
     testCompile 'junit:junit:[4.0,)'
-    testCompile 'com.puppycrawl.tools:checkstyle:8.2'
 }

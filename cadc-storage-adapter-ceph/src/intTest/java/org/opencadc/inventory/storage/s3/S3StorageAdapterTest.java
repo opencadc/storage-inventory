@@ -96,7 +96,6 @@ import org.junit.Test;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.storage.NewArtifact;
 import org.opencadc.inventory.storage.StorageMetadata;
-import software.amazon.awssdk.regions.Region;
 
 /**
  * Test the S3StorageAdapter against a real S3 API endpoint.
@@ -105,10 +104,6 @@ import software.amazon.awssdk.regions.Region;
  */
 public class S3StorageAdapterTest {
     private static final Logger LOGGER = Logger.getLogger(S3StorageAdapterTest.class);
-    
-    private static final URI ENDPOINT = URI.create("http://dao-wkr-04.cadc.dao.nrc.ca:8080");
-    private static final Region REGION = Region.US_EAST_1;
-    private static final int STORAGE_BUCKET_LENGTH = 3;
     
     static {
         Log4jInit.setLevel("org.opencadc.inventory", Level.DEBUG);
@@ -119,7 +114,7 @@ public class S3StorageAdapterTest {
     private final S3StorageAdapter adapter;
     
     public S3StorageAdapterTest() {
-        this.adapter = new S3StorageAdapter(ENDPOINT, REGION, STORAGE_BUCKET_LENGTH);
+        this.adapter = new S3StorageAdapter();
         adapter.setBucketNamespace(devBucketNamespace);
     }
 

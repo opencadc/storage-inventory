@@ -77,8 +77,9 @@ import ca.nrc.cadc.net.ResourceAlreadyExistsException;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.util.HexUtil;
-import ca.nrc.cadc.util.PropertiesReader;
 import ca.nrc.cadc.util.StringUtil;
+import java.io.File;
+import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -93,6 +94,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Properties;
 import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
@@ -111,6 +113,8 @@ import org.opencadc.inventory.storage.NewArtifact;
 import org.opencadc.inventory.storage.StorageAdapter;
 import org.opencadc.inventory.storage.StorageEngageException;
 import org.opencadc.inventory.storage.StorageMetadata;
+import software.amazon.awssdk.auth.credentials.AwsCredentials;
+import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
 import software.amazon.awssdk.awscore.exception.AwsErrorDetails;
 import software.amazon.awssdk.core.exception.SdkClientException;
 import software.amazon.awssdk.core.sync.RequestBody;
@@ -128,6 +132,7 @@ import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.HeadBucketRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectResponse;
+import software.amazon.awssdk.services.s3.model.ListBucketsResponse;
 import software.amazon.awssdk.services.s3.model.ListObjectsRequest;
 import software.amazon.awssdk.services.s3.model.ListObjectsResponse;
 import software.amazon.awssdk.services.s3.model.NoSuchBucketException;
@@ -142,33 +147,135 @@ public class S3StorageAdapter implements StorageAdapter {
 
     private static final Logger LOGGER = Logger.getLogger(S3StorageAdapter.class);
 
-    public static final String CONFIG_FILE = "cadc-storage-adapter-ceph.properties";
-
+    private static final Region REGION = Region.of("default");
+    
     private static final int BUFFER_SIZE_BYTES = 8192;
     private static final String DEFAULT_CHECKSUM_ALGORITHM = "md5";
     private static final String CHECKSUM_KEY = "checksum";
     private static final String ARTIFACT_URI_KEY = "uri";
 
-    // S3Client is thread safe, and re-usability is encouraged.
-    private final S3Client s3Client;
+    private final URI s3Endpoint;
     private int storageBucketLength;
+    private final S3Client s3Client; // S3Client is thread safe
+    
     
     // used for developer isolation only
     private String bucketNamespace;
     
     public S3StorageAdapter() {
-        throw new UnsupportedOperationException("configure from " + CONFIG_FILE);
+        try {
+            String suri = System.getProperty("org.opencadc.inventory.storage.s3.S3StorageAdapter.endpoint");
+            String sbl = System.getProperty("org.opencadc.inventory.storage.s3.S3StorageAdapter.bucketLength");
+            String accessKey = System.getProperty("aws.accessKeyId");
+            String secretKey = System.getProperty("aws.secretAccessKey");
+            if (suri == null || sbl == null || accessKey == null || secretKey == null) {
+                StringBuilder sb = new StringBuilder();
+                sb.append("incomplete config: ");
+                sb.append("\n\torg.opencadc.inventory.storage.s3.S3StorageAdapter.endpoint: ");
+                if (suri == null) {
+                    sb.append("MISSING");
+                } else {
+                    sb.append("OK");
+                }
+                
+                sb.append("\n\torg.opencadc.inventory.storage.s3.S3StorageAdapter.bucketLength: ");
+                if (sbl == null) {
+                    sb.append("MISSING");
+                } else {
+                    sb.append("OK");
+                }
+                
+                sb.append("\n\taws.accessKeyId: ");
+                if (accessKey == null) {
+                    sb.append("MISSING");
+                } else {
+                    sb.append("OK");
+                }
+                
+                sb.append("\n\taws.secretAccessKey: ");
+                if (secretKey == null) {
+                    sb.append("MISSING");
+                } else {
+                    sb.append("OK");
+                }
+                throw new IllegalStateException(sb.toString());
+            }
+           
+            this.s3Endpoint = new URI(suri);
+            this.storageBucketLength = Integer.parseInt(sbl);
+
+            S3ClientBuilder s3b = S3Client.builder();
+            /*
+            // since we checked the standard system properties above this is not strictly necessary
+            s3b.credentialsProvider(new AwsCredentialsProvider() {
+                @Override
+                public AwsCredentials resolveCredentials() {
+                    return new AwsCredentials() {
+                        @Override
+                        public String accessKeyId() {
+                            return accessKey;
+                        }
+
+                        @Override
+                        public String secretAccessKey() {
+                            return secretKey;
+                        }
+                    };
+                }
+            });
+            */
+            s3b.endpointOverride(s3Endpoint);
+            s3b.region(REGION);
+            this.s3Client = s3b.build();
+            
+            checkConfig();
+        } catch (Exception fatal) {
+            throw new RuntimeException("invalid config", fatal);
+        }
     }
 
     // test ctor to not need config in known location
-    S3StorageAdapter(URI endpoint, Region region, int storageBucketLength) {
-        S3ClientBuilder s3b = S3Client.builder();
-        s3b.endpointOverride(endpoint);
-        s3b.region(region);
-        this.s3Client = s3b.build();
-        this.storageBucketLength = storageBucketLength;
+    // usage: -Daws.accessKeyId=  -Daws.secretAccessKey=
+    S3StorageAdapter(URI endpoint, int storageBucketLength) {
+        try {
+            String accessKey = System.getProperty("aws.accessKeyId");
+            String secretKey = System.getProperty("aws.secretAccessKey");
+            if (accessKey == null || secretKey == null) {
+                StringBuilder sb = new StringBuilder();
+                sb.append("incomplete config:");
+                sb.append("\n\taws.accessKeyId: ");
+                if (accessKey == null) {
+                    sb.append("MISSING");
+                } else {
+                    sb.append("OK");
+                }
+                
+                sb.append("\n\taws.secretAccessKey: ");
+                if (secretKey == null) {
+                    sb.append("MISSING");
+                } else {
+                    sb.append("OK");
+                }
+                throw new IllegalStateException(sb.toString());
+            }
+            this.s3Endpoint = endpoint;
+            S3ClientBuilder s3b = S3Client.builder();
+            s3b.endpointOverride(endpoint);
+            s3b.region(REGION);
+            this.s3Client = s3b.build();
+            this.storageBucketLength = storageBucketLength;
+            
+            checkConfig();
+        } catch (Exception fail) {
+            throw new RuntimeException("INIT FAILED", fail);
+        }
     }
 
+    private void checkConfig() {
+        ListBucketsResponse resp = s3Client.listBuckets();
+        LOGGER.info("checkConfig: bucket owner is " + resp.owner());
+    }
+    
     /**
      * Static name space that is prepended to all generated buckets. This is intended
      * to partition developers using a shared S3 back end.
