@@ -94,15 +94,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
-import nom.tam.fits.BasicHDU;
-import nom.tam.fits.Fits;
-import nom.tam.fits.FitsException;
-import nom.tam.fits.Header;
-import nom.tam.fits.HeaderCard;
-import nom.tam.util.ArrayDataOutput;
-import nom.tam.util.BufferedDataOutputStream;
 import org.apache.log4j.Logger;
-import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.storage.NewArtifact;
 import org.opencadc.inventory.storage.StorageAdapter;
@@ -119,7 +111,6 @@ import software.amazon.awssdk.services.s3.model.BucketAlreadyOwnedByYouException
 import software.amazon.awssdk.services.s3.model.CreateBucketRequest;
 import software.amazon.awssdk.services.s3.model.DeleteBucketRequest;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
-import software.amazon.awssdk.services.s3.model.DeleteObjectResponse;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.HeadBucketRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
@@ -270,11 +261,24 @@ abstract class S3StorageAdapter implements StorageAdapter {
         LOGGER.debug("checkConfig: bucket owner is " + resp.owner());
     }
     
+    static class InternalBucket {
+        String name;
+        
+        InternalBucket(String name) {
+            this.name = name; 
+        }
+
+        @Override
+        public String toString() {
+            return "InternalBucket[" + name + "]";
+        }
+    }
+    
     protected abstract StorageLocation generateStorageLocation();
 
-    protected abstract String toInternalBucket(String bucket);
+    protected abstract InternalBucket toInternalBucket(StorageLocation loc);
     
-    protected abstract String toExternalBucket(String bucket, String key);
+    protected abstract StorageLocation toExternal(InternalBucket bucket, String key);
     
     /**
      * Obtain the InputStream for the given object. Tests can override this method.
@@ -284,7 +288,7 @@ abstract class S3StorageAdapter implements StorageAdapter {
      */
     InputStream toObjectInputStream(final StorageLocation storageLocation) {
         return s3client.getObject(GetObjectRequest.builder()
-                .bucket(toInternalBucket(storageLocation.storageBucket))
+                .bucket(toInternalBucket(storageLocation).name)
                 .key(storageLocation.getStorageID().toASCIIString())
                 .build());
     }
@@ -404,8 +408,9 @@ abstract class S3StorageAdapter implements StorageAdapter {
         */
     }
 
-    void createBucket(String bucket) throws ResourceAlreadyExistsException, SdkClientException, S3Exception {
-        final CreateBucketRequest createBucketRequest = CreateBucketRequest.builder().bucket(toInternalBucket(bucket)).build();
+    // internal bucket management used for init, dynamic buckets, and intTest cleanup
+    void createBucket(InternalBucket bucket) throws ResourceAlreadyExistsException, SdkClientException, S3Exception {
+        final CreateBucketRequest createBucketRequest = CreateBucketRequest.builder().bucket(bucket.name).build();
 
         try {
             s3client.createBucket(createBucketRequest);
@@ -415,16 +420,6 @@ abstract class S3StorageAdapter implements StorageAdapter {
         }
     }
     
-    // uses by intTest
-    void deleteBucket(String bucket) throws ResourceNotFoundException {
-        final DeleteBucketRequest deleteBucketRequest = DeleteBucketRequest.builder().bucket(toInternalBucket(bucket)).build();
-        try {
-            s3client.deleteBucket(deleteBucketRequest);
-        } catch (NoSuchBucketException e) {
-            throw new ResourceNotFoundException("not found bucket " + bucket);
-        }
-    }
-
     /**
      * Ensure the bucket for the given Object ID exists and return it.
      *
@@ -435,12 +430,21 @@ abstract class S3StorageAdapter implements StorageAdapter {
      * @throws SdkClientException If any client side error occurs such as an IO related failure, failure to get credentials, etc.
      * @throws S3Exception Base class for all service exceptions. Unknown exceptions will be thrown as an instance of this type.
      */
-    void ensureBucket(String storageBucket) throws ResourceAlreadyExistsException, SdkClientException, S3Exception {
-        HeadBucketRequest headBucketRequest = HeadBucketRequest.builder().bucket(toInternalBucket(storageBucket)).build();
+    void ensureBucket(InternalBucket bucket) throws ResourceAlreadyExistsException, SdkClientException, S3Exception {
+        HeadBucketRequest headBucketRequest = HeadBucketRequest.builder().bucket(bucket.name).build();
         try {
             s3client.headBucket(headBucketRequest);
         } catch (NoSuchBucketException e) {
-            createBucket(storageBucket);
+            createBucket(bucket);
+        }
+    }
+    
+    void deleteBucket(InternalBucket bucket) throws ResourceNotFoundException {
+        final DeleteBucketRequest deleteBucketRequest = DeleteBucketRequest.builder().bucket(bucket.name).build();
+        try {
+            s3client.deleteBucket(deleteBucketRequest);
+        } catch (NoSuchBucketException e) {
+            throw new ResourceNotFoundException("not found bucket " + bucket);
         }
     }
 
@@ -481,12 +485,12 @@ abstract class S3StorageAdapter implements StorageAdapter {
         String checksum = "N/A";
 
         try {
-            
-            ensureBucket(loc.storageBucket);
+            InternalBucket b = toInternalBucket(loc);
+            ensureBucket(b);
 
             final PutObjectRequest.Builder putObjectRequestBuilder
                     = PutObjectRequest.builder()
-                    .bucket(toInternalBucket(loc.storageBucket))
+                    .bucket(b.name)
                     .key(loc.getStorageID().toASCIIString());
 
             final Map<String, String> metadata = new HashMap<>();
@@ -597,7 +601,7 @@ abstract class S3StorageAdapter implements StorageAdapter {
     // used by intTest
     public boolean exists(StorageLocation loc) {
         try {
-            head(loc.storageBucket, loc.getStorageID().toASCIIString());
+            head(toInternalBucket(loc), loc.getStorageID().toASCIIString());
         } catch (NoSuchBucketException | NoSuchKeyException e) {
             return false;
         }
@@ -612,11 +616,9 @@ abstract class S3StorageAdapter implements StorageAdapter {
      * @param key The key to look for.
      * @return StorageMetadata instance. Never null
      */
-    StorageMetadata head(final String bucket, final String key) {
+    StorageMetadata head(InternalBucket bucket, final String key) {
         HeadObjectRequest.Builder headBuilder = HeadObjectRequest.builder().key(key);
-        HeadObjectResponse headResponse = s3client.headObject(StringUtil.hasLength(bucket)
-                ? headBuilder.bucket(toInternalBucket(bucket)).build()
-                : headBuilder.build());
+        HeadObjectResponse headResponse = s3client.headObject(headBuilder.bucket(bucket.name).build());
         Map<String, String> objectMetadata = headResponse.metadata();
         LOGGER.debug("object: " + bucket + " " + key);
         for (Map.Entry<String,String> me : objectMetadata.entrySet()) {
@@ -625,9 +627,7 @@ abstract class S3StorageAdapter implements StorageAdapter {
         URI artifactURI = objectMetadata.containsKey(ARTIFACT_URI_KEY)
                 ? URI.create(objectMetadata.get(ARTIFACT_URI_KEY)) : null;
 
-        URI storageID = URI.create(key);
-        StorageLocation loc = new StorageLocation(storageID);
-        loc.storageBucket = toExternalBucket(bucket, key);
+        StorageLocation loc = toExternal(bucket, key);
 
         // TODO: The MD5 value must always be present.  Do we need a null check here?
         final URI md5 = URI.create(objectMetadata.get(CHECKSUM_KEY));
@@ -651,9 +651,9 @@ abstract class S3StorageAdapter implements StorageAdapter {
         try {
             final DeleteObjectRequest.Builder deleteObjectRequestBuilder
                 = DeleteObjectRequest.builder()
-                .bucket(toInternalBucket(storageLocation.storageBucket))
+                .bucket(toInternalBucket(storageLocation).name)
                 .key(storageLocation.getStorageID().toASCIIString());
-            final DeleteObjectResponse deleteObjectResponse = s3client.deleteObject(deleteObjectRequestBuilder.build());
+            s3client.deleteObject(deleteObjectRequestBuilder.build());
         } catch (NoSuchKeyException e) {
             throw new ResourceNotFoundException(e.getMessage(), e);
         } catch (S3Exception e) {
@@ -673,11 +673,11 @@ abstract class S3StorageAdapter implements StorageAdapter {
      * @param nextMarkerKey The optional key from which to start listing the next page of objects.
      * @return ListObjectsResponse instance.
      */
-    ListObjectsResponse listObjects(final String storageBucket, final String nextMarkerKey) {
-        LOGGER.debug("listObjects: " + storageBucket + " marker: " + nextMarkerKey);
+    ListObjectsResponse listObjects(InternalBucket bucket, final String nextMarkerKey) {
+        LOGGER.debug("listObjects: " + bucket + " marker: " + nextMarkerKey);
         final ListObjectsRequest.Builder listBuilder = ListObjectsRequest.builder();
         
-        listBuilder.bucket(toInternalBucket(storageBucket));
+        listBuilder.bucket(bucket.name);
         if (nextMarkerKey != null) {
             listBuilder.marker(nextMarkerKey);
         }
@@ -698,7 +698,7 @@ abstract class S3StorageAdapter implements StorageAdapter {
      */
     public SortedSet<StorageMetadata> list(String storageBucket)
             throws StorageEngageException, TransientException {
-        SortedSet<StorageMetadata> ret = new TreeSet<StorageMetadata>();
+        SortedSet<StorageMetadata> ret = new TreeSet<>();
         Iterator<StorageMetadata> i = iterator(storageBucket);
         while (i.hasNext()) {
             ret.add(i.next());

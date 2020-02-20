@@ -86,19 +86,20 @@ public class S3StorageAdapterMBTest extends S3StorageAdapterTest {
     @Override
     public void cleanup() throws Exception {
         log.info("cleanup: ");
+        
+        Iterator<StorageMetadata> mbi = adapter.iterator();
+        while (mbi.hasNext()) {
+            StorageLocation loc = mbi.next().getStorageLocation();
+            adapter.delete(loc);
+            log.info("\tcleanup: deleted " + loc);
+        }
+    
         S3StorageAdapterMB amb = (S3StorageAdapterMB) adapter;
-        Iterator<String> bi = amb.bucketIterator(null);
+        Iterator<S3StorageAdapter.InternalBucket> bi = amb.bucketIterator(null);
         while (bi.hasNext()) {
-            String bucket = bi.next();
-            log.info("bucket: " + bucket);
-            Iterator<StorageMetadata> mbi = adapter.iterator(bucket);
-            while (mbi.hasNext()) {
-                StorageLocation loc = mbi.next().getStorageLocation();
-                adapter.delete(loc);
-                log.info("\tdeleted: " + loc);
-            }
-            adapter.deleteBucket(bucket);
-            log.info("\tdeleted: " + bucket);
+            S3StorageAdapter.InternalBucket bucket = bi.next();
+            amb.deleteBucket(bucket);
+            log.info("\tcleanup: deleted " + bucket);
         }
     }
     

@@ -92,7 +92,6 @@ import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.After;
 import org.junit.Assert;
-import org.junit.Before;
 import org.junit.Test;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.storage.NewArtifact;
@@ -120,7 +119,7 @@ abstract class S3StorageAdapterTest {
     @After 
     public abstract void cleanup() throws Exception;
     
-    //@Test
+    @Test
     public void testNoOp() {
     }
     

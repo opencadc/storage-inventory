@@ -68,6 +68,7 @@
 
 package org.opencadc.inventory.storage.s3;
 
+import ca.nrc.cadc.net.ResourceNotFoundException;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -78,6 +79,8 @@ import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.storage.StorageMetadata;
 import software.amazon.awssdk.services.s3.model.Bucket;
+import software.amazon.awssdk.services.s3.model.DeleteBucketRequest;
+import software.amazon.awssdk.services.s3.model.NoSuchBucketException;
 
 /**
  * Implementation of a Storage Adapter using the Amazon S3 API. This implementation
@@ -89,7 +92,7 @@ public class S3StorageAdapterMB extends S3StorageAdapter {
 
     private static final Logger LOGGER = Logger.getLogger(S3StorageAdapterMB.class);
     
-    private final String KEY_SCHEME = "mb";
+    private static final String KEY_SCHEME = "mb";
 
     public S3StorageAdapterMB() {
         super();
@@ -111,22 +114,31 @@ public class S3StorageAdapterMB extends S3StorageAdapter {
         return ret;
     }
 
-    @Override
-    protected String toInternalBucket(String bucket) {
+    
+    private String toInternalBucket(String bucket) {
         return s3bucket + "-" + bucket;
     }
-    
+
     @Override
-    protected String toExternalBucket(String bucket, String key) {
-        // map S3 bucket name to external StorageLocation.storageBucket
-        // ignore key
-        LOGGER.debug("toExternal: " + bucket);
-        int i = bucket.lastIndexOf("-");
-        
-        return bucket.substring(s3bucket.length() + 1);
+    protected InternalBucket toInternalBucket(StorageLocation loc) {
+        return  new InternalBucket(toInternalBucket(loc.storageBucket));
     }
     
-    private boolean isInternalBucket(String bucket) {
+    @Override
+    protected StorageLocation toExternal(InternalBucket bucket, String key) {
+        // map S3 bucket name to external StorageLocation.storageBucket
+        // ignore key
+        //LOGGER.warn("toExternal: " + bucket);
+        if (!isInternalBucket(bucket)) {
+            throw new IllegalStateException("invalid bucket: " + bucket.name);
+        }
+        StorageLocation ret = new StorageLocation(URI.create(key));
+        ret.storageBucket = bucket.name.substring(s3bucket.length() + 1);
+        return ret;
+    }
+    
+    private boolean isInternalBucket(InternalBucket ib) {
+        String bucket = ib.name;
         return (bucket.length() == s3bucket.length() + storageBucketLength + 1)
             && bucket.startsWith(s3bucket + "-");
     }
@@ -152,18 +164,21 @@ public class S3StorageAdapterMB extends S3StorageAdapter {
         return new S3StorageMetadataIteratorMB(this, bucketPrefix);
     }
     
-    // utility to iterate over S3 buckets that match the specified prefix
-    Iterator<String> bucketIterator(String bucketPrefix) {
+    // iterate over S3 buckets that match the specified prefix
+    Iterator<InternalBucket> bucketIterator(String bucketPrefix) {
         return new BucketIterator(bucketPrefix);
     }
     
-    private class BucketIterator implements Iterator<String> {
+    private class BucketIterator implements Iterator<InternalBucket> {
         
-        final String bucketPrefix;
-        Iterator<String> iter;
+        String internalBucketPrefix;
+        Iterator<InternalBucket> iter;
         
         BucketIterator(String bucketPrefix) {
-            this.bucketPrefix = bucketPrefix;
+            this.internalBucketPrefix = s3bucket + "-";
+            if (bucketPrefix != null) {
+                this.internalBucketPrefix += bucketPrefix;
+            }
             init();
         }
         
@@ -173,25 +188,27 @@ public class S3StorageAdapterMB extends S3StorageAdapter {
         }
 
         @Override
-        public String next() {
+        public InternalBucket next() {
             return iter.next();
         }
-    
         
         private void init() {
             List<Bucket> buckets = s3client.listBuckets().buckets();
             Iterator<Bucket> i = buckets.iterator();
-            List<String> keep = new ArrayList<>();
+            List<InternalBucket> keep = new ArrayList<>();
             while (i.hasNext()) {
                 Bucket b = i.next();
-                if (isInternalBucket(b.name())) {
-                    String bname = toExternalBucket(b.name(), null);
-                    if (bucketPrefix == null || bname.startsWith(bucketPrefix)) {
-                        keep.add(bname);
+                InternalBucket ib = new InternalBucket(b.name());
+                if (isInternalBucket(ib)) {
+                    LOGGER.warn("BucketIterator: " + ib);
+                    if (internalBucketPrefix == null || ib.name.startsWith(internalBucketPrefix)) {
+                        keep.add(ib);
                     }
-                } // else: some other bucket with same owner
+                } else {
+                    //LOGGER.warn("BucketIterator: skip " + b.name());
+                }
             }
-            LOGGER.debug("BucketIterator: " + bucketPrefix + " " + keep.size());
+            //LOGGER.warn("BucketIterator: " + bucketPrefix + " " + keep.size());
             this.iter = keep.iterator();
         }
     }

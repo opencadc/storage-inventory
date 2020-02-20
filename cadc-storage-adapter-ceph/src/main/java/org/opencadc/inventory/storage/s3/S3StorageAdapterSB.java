@@ -101,9 +101,11 @@ public class S3StorageAdapterSB extends S3StorageAdapter {
     private static final Logger LOGGER = Logger.getLogger(S3StorageAdapterSB.class);
 
     private static final String KEY_SCHEME = "sb";
+    private final InternalBucket is3bucket;
     
     public S3StorageAdapterSB() {
         super();
+        this.is3bucket = new InternalBucket(s3bucket);
         try {
             initBucket();
         } catch (ResourceAlreadyExistsException ex) {
@@ -114,6 +116,7 @@ public class S3StorageAdapterSB extends S3StorageAdapter {
     // ctor for unit tests that do not connect to S3 backend
     S3StorageAdapterSB(String s3bucket, int storageBucketLength) {
         super(s3bucket, storageBucketLength);
+        this.is3bucket = new InternalBucket(s3bucket);
     }
     
     // S3 bucket and key strategy:
@@ -131,33 +134,31 @@ public class S3StorageAdapterSB extends S3StorageAdapter {
     }
     
     @Override
-    protected String toInternalBucket(String bucket) {
-        return s3bucket;
+    protected InternalBucket toInternalBucket(StorageLocation loc) {
+        return is3bucket;
     }
     
+    
     @Override
-    protected String toExternalBucket(String bucket, String key) {
+    protected StorageLocation toExternal(InternalBucket bucket, String key) {
         // ignore bucket
         // extract scheme from the key
         String[] parts = key.split(":");
         if (parts.length != 3 || !KEY_SCHEME.equals(parts[0])) {
             throw new IllegalStateException("invalid object key: " + key + " from bucket: " + bucket);
         }
-        return parts[1]; 
+        StorageLocation ret = new StorageLocation(URI.create(key));
+        ret.storageBucket = parts[1];
+        return ret;
     }
 
     @Override
-    void ensureBucket(String storageBucket) throws ResourceAlreadyExistsException, SdkClientException, S3Exception {
+    void ensureBucket(InternalBucket ib) throws ResourceAlreadyExistsException, SdkClientException, S3Exception {
         // no -op
     }
 
-    @Override
-    void deleteBucket(String ignore) throws ResourceNotFoundException {
-        super.deleteBucket(null);
-    }
-    
-    String getDataBucket() {
-        return s3bucket;
+    InternalBucket getDataBucket() {
+        return is3bucket;
     }
     
     void initBucket() throws ResourceAlreadyExistsException, SdkClientException, S3Exception {
@@ -180,11 +181,11 @@ public class S3StorageAdapterSB extends S3StorageAdapter {
         }
     }
     
-    // list objects methdo with prefix pattern
-    ListObjectsResponse listObjects(String storageBucket, String nextMarkerKey, String prefix) {
-        LOGGER.debug("listObjects: " + storageBucket + " prefix: " + prefix + " marker: " + nextMarkerKey);
+    // list objects method with prefix pattern
+    ListObjectsResponse listObjects(InternalBucket bucket, String nextMarkerKey, String prefix) {
+        LOGGER.debug("listObjects: " + bucket.name + " prefix: " + prefix + " marker: " + nextMarkerKey);
         final ListObjectsRequest.Builder listBuilder = ListObjectsRequest.builder();
-        listBuilder.bucket(toInternalBucket(storageBucket));
+        listBuilder.bucket(bucket.name);
         if (nextMarkerKey != null) {
             listBuilder.marker(nextMarkerKey);
         }
@@ -237,8 +238,8 @@ public class S3StorageAdapterSB extends S3StorageAdapter {
             //}
             
             if (objectIterator == null || (!objectIterator.hasNext() && nextMarkerKey != null)) {
-                ListObjectsResponse listObjectsResponse = listObjects(s3bucket, nextMarkerKey, bucketPrefix);
-                LOGGER.debug("StorageMetadataIterator bucket: " + s3bucket + " size: " + listObjectsResponse.contents().size() 
+                ListObjectsResponse listObjectsResponse = listObjects(is3bucket, nextMarkerKey, bucketPrefix);
+                LOGGER.debug("StorageMetadataIterator bucket: " + is3bucket.name + " size: " + listObjectsResponse.contents().size() 
                         + " marker: " + listObjectsResponse.nextMarker());
                 if (listObjectsResponse.hasContents()) {
                     objectIterator = listObjectsResponse.contents().iterator();
@@ -275,7 +276,7 @@ public class S3StorageAdapterSB extends S3StorageAdapter {
             // the S3Object contains almost all the metadata needed so could avoid the HEAD request
             // ETag has correct MD5 value for small objects but not verified for larger 
             // missing a way to restore the artifact URI
-            return head(s3bucket, o.key());
+            return head(is3bucket, o.key());
         }
     }
 }

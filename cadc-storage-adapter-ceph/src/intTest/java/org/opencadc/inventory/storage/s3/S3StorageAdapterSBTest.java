@@ -94,7 +94,7 @@ public class S3StorageAdapterSBTest extends S3StorageAdapterTest {
         }
         
         S3StorageAdapterSB asb = (S3StorageAdapterSB) adapter;
-        asb.deleteBucket(null);
+        asb.deleteBucket(asb.getDataBucket());
         log.info("deleted: " + asb.getDataBucket());
     }
 }

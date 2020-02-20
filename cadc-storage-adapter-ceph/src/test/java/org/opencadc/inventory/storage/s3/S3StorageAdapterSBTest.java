@@ -68,7 +68,6 @@
 package org.opencadc.inventory.storage.s3;
 
 import ca.nrc.cadc.util.Log4jInit;
-import java.net.URI;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
@@ -103,16 +102,11 @@ public class S3StorageAdapterSBTest {
     
     @Test
     public void testBucketeering() throws Exception {
-        StorageLocation expected = adapter.generateStorageLocation();
-        log.info("testBucketeering created: " + expected);
+        StorageLocation loc = adapter.generateStorageLocation();
+        log.info("testBucketeering created: " + loc);
         
-        String ibucket = adapter.toInternalBucket(expected.storageBucket);
-        String ebucket = adapter.toExternalBucket(ibucket, expected.getStorageID().toASCIIString());
-        
-        StorageLocation actual = new StorageLocation(expected.getStorageID());
-        actual.storageBucket = ebucket;
-        
-        log.info("testBucketeering compare:\n" + expected + "\n" + actual);
-        Assert.assertEquals(expected, actual);
+        S3StorageAdapter.InternalBucket ibucket = adapter.toInternalBucket(loc);
+        StorageLocation actual = adapter.toExternal(ibucket, loc.getStorageID().toASCIIString());
+        Assert.assertEquals(loc, actual);
     }
 }

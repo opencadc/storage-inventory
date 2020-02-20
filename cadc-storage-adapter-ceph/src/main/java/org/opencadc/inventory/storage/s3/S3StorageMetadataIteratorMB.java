@@ -72,7 +72,6 @@ import java.util.Iterator;
 import java.util.NoSuchElementException;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.storage.StorageMetadata;
-import software.amazon.awssdk.services.s3.model.Bucket;
 import software.amazon.awssdk.services.s3.model.ListObjectsResponse;
 import software.amazon.awssdk.services.s3.model.S3Object;
 
@@ -86,8 +85,8 @@ public class S3StorageMetadataIteratorMB implements Iterator<StorageMetadata> {
     
     private final S3StorageAdapterMB storageAdapter;
 
-    private Iterator<String> bucketIterator;
-    private String currentBucket;
+    private Iterator<S3StorageAdapter.InternalBucket> bucketIterator;
+    private S3StorageAdapter.InternalBucket currentBucket;
     
     private Iterator<S3Object> objectIterator;
 
