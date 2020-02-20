@@ -355,6 +355,8 @@ abstract class S3StorageAdapter implements StorageAdapter {
     @Override
     public void get(StorageLocation storageLocation, OutputStream dest, Set<String> cutouts)
             throws ResourceNotFoundException, ReadException, WriteException, StorageEngageException {
+        throw new UnsupportedOperationException("preflight data operations not implemented");
+        /*
         if ((cutouts == null) || cutouts.isEmpty()) {
             get(storageLocation, dest);
             return;
@@ -399,6 +401,7 @@ abstract class S3StorageAdapter implements StorageAdapter {
             }
             LOGGER.debug(String.format("Read and wrote HDUs in %d milliseconds.", System.currentTimeMillis() - start));
         }
+        */
     }
 
     void createBucket(String bucket) throws ResourceAlreadyExistsException, SdkClientException, S3Exception {
