@@ -1,4 +1,3 @@
-
 /*
  ************************************************************************
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
@@ -69,106 +68,131 @@
 
 package org.opencadc.inventory.storage.s3;
 
+import java.net.URI;
+import java.util.ArrayList;
 import java.util.Iterator;
-import java.util.NoSuchElementException;
+import java.util.List;
+import java.util.UUID;
 import org.apache.log4j.Logger;
+import org.opencadc.inventory.InventoryUtil;
+import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.storage.StorageMetadata;
-import software.amazon.awssdk.services.s3.model.ListObjectsResponse;
-import software.amazon.awssdk.services.s3.model.S3Object;
-
+import software.amazon.awssdk.services.s3.model.Bucket;
 
 /**
- * Main Iterator over StorageMetadata objects.  This will use the S3 Storage Adapter to obtain the metadata via a head
- * call, and to obtain the next page of data via a listObjects call.
+ * Implementation of a Storage Adapter using the Amazon S3 API. This implementation
+ * puts objects into multiple generated S3 buckets that ~matches the StorageLocation.storageBucket
+ * value.  Keys are also randomly generated (UUID) strings and are never re-used.
+ * 
  */
-public class S3StorageMetadataIterator implements Iterator<StorageMetadata> {
-    private static final Logger log = Logger.getLogger(S3StorageMetadataIterator.class);
+public class S3StorageAdapterMB extends S3StorageAdapter {
+
+    private static final Logger LOGGER = Logger.getLogger(S3StorageAdapterMB.class);
     
-    private final S3StorageAdapter storageAdapter;
+    private final String KEY_SCHEME = "mb";
 
-    private Iterator<String> bucketIterator;
-    private String currentBucket;
-    
-    private Iterator<S3Object> objectIterator;
-
-    //S3 Key of where to start listing the next page of objects.  Will be null for the first call.
-    private String nextMarkerKey;
-
-    public S3StorageMetadataIterator(S3StorageAdapter storageAdapter, String bucketPrefix) {
-        this.storageAdapter = storageAdapter;
-        this.bucketIterator = storageAdapter.bucketIterator(bucketPrefix);
-        if (bucketIterator.hasNext()) {
-            this.currentBucket = bucketIterator.next();
-        } else {
-            bucketIterator = null; // no matching buckets
-        }
+    public S3StorageAdapterMB() {
+        super();
     }
 
+    // ctor for unit tests that do not connect to S3 backend
+    public S3StorageAdapterMB(String s3bucket, int storageBucketLength) {
+        super(s3bucket, storageBucketLength);
+    }
 
+    // bucket and key strategy: 
+    // S3 buckets use bucket name + randomly generated StorageLocation.storageBucket
+    // randomly generated S3 keys
+    
+    @Override
+    protected StorageLocation generateStorageLocation() {
+        StorageLocation ret = new StorageLocation(URI.create(KEY_SCHEME + ":" + UUID.randomUUID().toString()));
+        ret.storageBucket = InventoryUtil.computeBucket(ret.getStorageID(), storageBucketLength);
+        return ret;
+    }
+
+    @Override
+    protected String toInternalBucket(String bucket) {
+        return s3bucket + "-" + bucket;
+    }
+    
+    @Override
+    protected String toExternalBucket(String bucket, String key) {
+        // map S3 bucket name to external StorageLocation.storageBucket
+        // ignore key
+        LOGGER.debug("toExternal: " + bucket);
+        int i = bucket.lastIndexOf("-");
+        
+        return bucket.substring(s3bucket.length() + 1);
+    }
+    
+    private boolean isInternalBucket(String bucket) {
+        return (bucket.length() == s3bucket.length() + storageBucketLength + 1)
+            && bucket.startsWith(s3bucket + "-");
+    }
+    
     /**
-     * Returns {@code true} if the iteration has more elements.
-     * (In other words, returns {@code true} if {@link #next} would
-     * return an element rather than throwing an exception.)
+     * Iterator of items ordered by storage locations.
      *
-     * @return {@code true} if the iteration has more elements
+     * @return iterator ordered by storage locations
      */
     @Override
-    public boolean hasNext() {
-        //log.debug("hasNext: " + currentBucket + "," + (objectIterator != null) + "," + (objectIterator != null && objectIterator.hasNext()));
-        if (bucketIterator == null) {
-            return false;
-        }
-        if (objectIterator == null || (!objectIterator.hasNext())) { 
-            //log.debug("get batch in bucket: " + currentBucket);
-            if (objectIterator == null || nextMarkerKey != null) {
-                // multi-batch bucket
-                ListObjectsResponse listObjectsResponse = storageAdapter.listObjects(currentBucket, nextMarkerKey);
-                //log.debug("bucket: " + currentBucket + " " + listObjectsResponse.contents().size() + "/" + listObjectsResponse.nextMarker());
-                if (listObjectsResponse.hasContents()) {
-                    objectIterator = listObjectsResponse.contents().iterator();
-                    nextMarkerKey = listObjectsResponse.nextMarker();
-                } else {
-                    objectIterator = null;
-                    nextMarkerKey = null;
-                }
-            } else {
-                // finished single batch bucket
-                objectIterator = null;
-            }
-        }
-        if (objectIterator == null) {
-            if (bucketIterator.hasNext()) {
-                currentBucket = bucketIterator.next();
-                //log.debug("next bucket: " + currentBucket);
-                return hasNext();
-            } else {
-                //log.debug("next bucket: null");
-                bucketIterator = null; // done
-                return false;
-            }
+    public Iterator<StorageMetadata> iterator() {
+        return new S3StorageMetadataIteratorMB(this, null);
+    }
+
+    /**
+     * Iterator of items ordered by storage locations in matching bucket(s).
+     *
+     * @param bucketPrefix bucket constraint
+     * @return iterator ordered by storage locations
+     */
+    @Override
+    public Iterator<StorageMetadata> iterator(String bucketPrefix) {
+        return new S3StorageMetadataIteratorMB(this, bucketPrefix);
+    }
+    
+    // utility to iterate over S3 buckets that match the specified prefix
+    Iterator<String> bucketIterator(String bucketPrefix) {
+        return new BucketIterator(bucketPrefix);
+    }
+    
+    private class BucketIterator implements Iterator<String> {
+        
+        final String bucketPrefix;
+        Iterator<String> iter;
+        
+        BucketIterator(String bucketPrefix) {
+            this.bucketPrefix = bucketPrefix;
+            init();
         }
         
-        return objectIterator.hasNext();
-    }
-
-    /**
-     * Returns the next element in the iteration.
-     *
-     * @return the next element in the iteration
-     *
-     * @throws java.util.NoSuchElementException if the iteration has no more elements
-     */
-    @Override
-    public StorageMetadata next() {
-        if (objectIterator == null || !objectIterator.hasNext()) {
-            throw new NoSuchElementException();
+        @Override
+        public boolean hasNext() {
+            return iter.hasNext();
         }
-        S3Object o = objectIterator.next();
-        //log.debug("next: " + o);
-        // the S3Object contains almost all the metadata needed so could avoid the HEAD request
-        // ETag has correct MD5 value for small objects but not verified for larger 
-        // missing a way to restore the artifact URI
-        final StorageMetadata storageMetadata = storageAdapter.head(currentBucket, o.key());
-        return storageMetadata;
+
+        @Override
+        public String next() {
+            return iter.next();
+        }
+    
+        
+        private void init() {
+            List<Bucket> buckets = s3client.listBuckets().buckets();
+            Iterator<Bucket> i = buckets.iterator();
+            List<String> keep = new ArrayList<>();
+            while (i.hasNext()) {
+                Bucket b = i.next();
+                if (isInternalBucket(b.name())) {
+                    String bname = toExternalBucket(b.name(), null);
+                    if (bucketPrefix == null || bname.startsWith(bucketPrefix)) {
+                        keep.add(bname);
+                    }
+                } // else: some other bucket with same owner
+            }
+            LOGGER.debug("BucketIterator: " + bucketPrefix + " " + keep.size());
+            this.iter = keep.iterator();
+        }
     }
 }

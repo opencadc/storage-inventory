@@ -90,6 +90,7 @@ import nom.tam.fits.BasicHDU;
 import nom.tam.fits.Fits;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
+import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
@@ -102,42 +103,25 @@ import org.opencadc.inventory.storage.StorageMetadata;
  * 
  * @author pdowler
  */
-public class S3StorageAdapterTest {
+abstract class S3StorageAdapterTest {
     private static final Logger LOGGER = Logger.getLogger(S3StorageAdapterTest.class);
     
     static {
-        Log4jInit.setLevel("org.opencadc.inventory", Level.DEBUG);
+        Log4jInit.setLevel("org.opencadc.inventory", Level.INFO);
     }
     
-    // namepsace to isolate developers who share an object store
-    private final String devBucketNamespace = System.getProperty("user.name") + "-test";
-    private final S3StorageAdapter adapter;
+    protected final S3StorageAdapter adapter;
     
-    public S3StorageAdapterTest() {
-        this.adapter = new S3StorageAdapter();
-        adapter.setBucketNamespace(devBucketNamespace);
+    protected S3StorageAdapterTest(S3StorageAdapter impl) {
+        this.adapter = impl;
     }
 
-    @Before
-    public void cleanup() throws Exception {
-        Iterator<String> bi = adapter.bucketIterator(null);
-        while (bi.hasNext()) {
-            String bucket = bi.next();
-            LOGGER.info("cleanup: " + bucket);
-            Iterator<StorageMetadata> smi = adapter.iterator(bucket);
-            while (smi.hasNext()) {
-                StorageLocation loc = smi.next().getStorageLocation();
-                adapter.delete(loc);
-                LOGGER.info("deleted: " + loc);
-            }
-            adapter.deleteBucket(bucket);
-            LOGGER.info("deleted: " + bucket);
-        }
-    }
+    //@Before
+    @After 
+    public abstract void cleanup() throws Exception;
     
-    @Test
+    //@Test
     public void testNoOp() {
-        
     }
     
     @Test
@@ -159,7 +143,7 @@ public class S3StorageAdapterTest {
             
             LOGGER.debug("testPutGetDelete put: " + artifactURI);
             StorageMetadata sm = adapter.put(na, new ByteArrayInputStream(data));
-            LOGGER.debug("testPutGetDelete put: " + artifactURI + " to " + sm.getStorageLocation());
+            LOGGER.info("testPutGetDelete put: " + artifactURI + " to " + sm.getStorageLocation());
             
             LOGGER.debug("testPutGetDelete get: " + artifactURI);
             ByteArrayOutputStream bos = new ByteArrayOutputStream();
@@ -168,16 +152,14 @@ public class S3StorageAdapterTest {
             byte[] actual = bos.toByteArray();
             md.update(actual);
             URI actualChecksum = URI.create("md5:" + HexUtil.toHex(md.digest()));
-            LOGGER.debug("testPutGetDelete get: " + artifactURI + " " + actual.length + " " + actualChecksum);
+            LOGGER.info("testPutGetDelete get: " + artifactURI + " " + actual.length + " " + actualChecksum);
             Assert.assertEquals("length", (long) na.contentLength, actual.length);
             Assert.assertEquals("checksum", na.contentChecksum, actualChecksum);
 
             LOGGER.debug("testPutGetDelete delete: " + sm.getStorageLocation());
             adapter.delete(sm.getStorageLocation());
             Assert.assertTrue("deleted", !adapter.exists(sm.getStorageLocation()));
-            LOGGER.debug("testPutGetDelete deleted: " + sm.getStorageLocation());
-            
-            
+            LOGGER.info("testPutGetDelete deleted: " + sm.getStorageLocation());
         } catch (Exception ex) {
             LOGGER.error("unexpected exception", ex);
             Assert.fail("unexpected exception: " + ex);
@@ -210,7 +192,7 @@ public class S3StorageAdapterTest {
             
             LOGGER.debug("testPutGetDeleteMinimal put: " + artifactURI);
             StorageMetadata sm = adapter.put(na, new ByteArrayInputStream(data));
-            LOGGER.debug("testPutGetDeleteMinimal put: " + artifactURI + " to " + sm.getStorageLocation());
+            LOGGER.info("testPutGetDeleteMinimal put: " + artifactURI + " to " + sm.getStorageLocation());
             
             LOGGER.debug("testPutGetDeleteMinimal get: " + artifactURI);
             ByteArrayOutputStream bos = new ByteArrayOutputStream();
@@ -218,14 +200,14 @@ public class S3StorageAdapterTest {
             byte[] actual = bos.toByteArray();
             md.update(actual);
             URI actualChecksum = URI.create("md5:" + HexUtil.toHex(md.digest()));
-            LOGGER.debug("testPutGetDeleteMinimal get: " + artifactURI + " " + actual.length + " " + actualChecksum);
+            LOGGER.info("testPutGetDeleteMinimal get: " + artifactURI + " " + actual.length + " " + actualChecksum);
             Assert.assertEquals("length", (long) na.contentLength, actual.length);
             Assert.assertEquals("checksum", expectedChecksum, actualChecksum);
 
             LOGGER.debug("testPutGetDeleteMinimal delete: " + sm.getStorageLocation());
             adapter.delete(sm.getStorageLocation());
             Assert.assertTrue("deleted", !adapter.exists(sm.getStorageLocation()));
-            LOGGER.debug("testPutGetDeleteMinimal deleted: " + sm.getStorageLocation());
+            LOGGER.info("testPutGetDeleteMinimal deleted: " + sm.getStorageLocation());
             
             
         } catch (Exception ex) {
@@ -239,7 +221,7 @@ public class S3StorageAdapterTest {
         try {
             // neither bucket nor key exist
             StorageLocation doesNotExist = new StorageLocation(URI.create("foo:does-not-exist"));
-            doesNotExist.storageBucket = devBucketNamespace;
+            doesNotExist.storageBucket = "non-existent-bucket";
             
             ByteArrayOutputStream bos = new ByteArrayOutputStream();
             try { 
@@ -247,11 +229,11 @@ public class S3StorageAdapterTest {
                 Assert.fail("get: " + doesNotExist + " returned " + bos.size() + " bytes");
             } catch (ResourceNotFoundException expected) {
                 LOGGER.debug("caught expected: " + expected);
-                Assert.assertTrue(expected.getMessage().startsWith("not found: bucket"));
+                Assert.assertTrue(expected.getMessage().startsWith("not found: "));
             }
             
             // make sure bucket exists
-            URI artifactURI = URI.create("cadc:TEST/testPutGetDelete");
+            URI artifactURI = URI.create("cadc:TEST/testNotExists");
             Random rnd = new Random();
             byte[] data = new byte[1024];
             rnd.nextBytes(data);
@@ -262,7 +244,7 @@ public class S3StorageAdapterTest {
             na.contentChecksum = URI.create("md5:" + HexUtil.toHex(md.digest()));
             na.contentLength = (long) data.length;
             StorageMetadata sm = adapter.put(na, new ByteArrayInputStream(data));
-            LOGGER.debug("testPutGetDelete put: " + artifactURI + " to " + sm.getStorageLocation());
+            LOGGER.info("testPutGetDelete put: " + artifactURI + " to " + sm.getStorageLocation());
             
             doesNotExist.storageBucket = sm.getStorageLocation().storageBucket; // existing bucket
             bos.reset();
@@ -271,9 +253,10 @@ public class S3StorageAdapterTest {
                 Assert.fail("get: " + doesNotExist + " returned " + bos.size() + " bytes");
             } catch (ResourceNotFoundException expected) {
                 LOGGER.debug("caught expected: " + expected);
-                Assert.assertTrue(expected.getMessage().startsWith("not found: key"));
+                Assert.assertTrue(expected.getMessage().startsWith("not found: "));
             }
             
+            adapter.delete(sm.getStorageLocation());
         } catch (Exception ex) {
             LOGGER.error("unexpected exception", ex);
             Assert.fail("unexpected exception: " + ex);
@@ -300,13 +283,14 @@ public class S3StorageAdapterTest {
                 LOGGER.debug("testList put: " + artifactURI + " to " + sm.getStorageLocation());
                 expected.add(sm);
             }
+            LOGGER.info("testIterator created: " + expected.size());
             
             // full iterator
             List<StorageMetadata> actual = new ArrayList<>();
             Iterator<StorageMetadata> iter = adapter.iterator();
             while (iter.hasNext()) {
                 StorageMetadata sm = iter.next();
-                LOGGER.info("found: " + sm.getStorageLocation() + " " + sm.getContentLength() + " " + sm.getContentChecksum());
+                LOGGER.debug("found: " + sm.getStorageLocation() + " " + sm.getContentLength() + " " + sm.getContentChecksum());
                 actual.add(sm);
             }
             
@@ -322,6 +306,7 @@ public class S3StorageAdapterTest {
                 Assert.assertEquals("checksum", em.getContentChecksum(), am.getContentChecksum());
             }
             
+            // rely on cleanup()
         } catch (Exception ex) {
             LOGGER.error("unexpected exception", ex);
             Assert.fail("unexpected exception: " + ex);
@@ -348,11 +333,12 @@ public class S3StorageAdapterTest {
                 LOGGER.debug("testList put: " + artifactURI + " to " + sm.getStorageLocation());
                 expected.add(sm);
             }
+            LOGGER.info("testIteratorBucketPrefix created: " + expected.size());
             
             int found = 0;
             for (byte b = 0; b < 16; b++) {
                 String bpre = HexUtil.toHex(b).substring(1);
-                LOGGER.info("bucket prefix: " + bpre);
+                LOGGER.debug("bucket prefix: " + bpre);
                 Iterator<StorageMetadata> i = adapter.iterator(bpre);
                 while (i.hasNext()) {
                     StorageMetadata sm = i.next();
@@ -388,7 +374,8 @@ public class S3StorageAdapterTest {
                 LOGGER.debug("testList put: " + artifactURI + " to " + sm.getStorageLocation());
                 expected.add(sm);
             }
-
+            LOGGER.info("testList created: " + expected.size());
+            
             Set<StorageMetadata> actual = adapter.list(null);
             
             Assert.assertEquals("list.size", expected.size(), actual.size());
@@ -429,6 +416,7 @@ public class S3StorageAdapterTest {
                 LOGGER.debug("testList put: " + artifactURI + " to " + sm.getStorageLocation());
                 expected.add(sm);
             }
+            LOGGER.info("testListBucketPrefix created: " + expected.size());
             
             int found = 0;
             for (byte b = 0; b < 16; b++) {
@@ -487,7 +475,7 @@ public class S3StorageAdapterTest {
         */
     }
     
-    //@Test
+    ////@Test
     public void getHeaders() throws Exception {
         LOGGER.info("Skip to headers...");
         LOGGER.info("***");
@@ -507,7 +495,7 @@ public class S3StorageAdapterTest {
         LOGGER.info("Skip to headers done.");
     }
 
-    //@Test
+    ////@Test
     public void getCutouts() throws Exception {
         final URI testURI = URI.create("cadc:TEST/getCutouts");
         //final long expectedByteCount = 159944L;
