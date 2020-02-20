@@ -1,9 +1,9 @@
-# CEPH Storage adapter (cadc-storage-adapter-ceph) 0.2
+# CEPH Storage adapter 
 
 The CEPH storage adapter supports various ways of communicating with a CEPH Cluster. 
 
-(incomplete) [RADOS](https://docs.ceph.com/docs/master/rados/api/librados-intro/) implementation
-(nearly complete) [S3](https://docs.aws.amazon.com/sdk-for-java/v2/developer-guide/welcome.html) implementation
+* (incomplete) [RADOS](https://docs.ceph.com/docs/master/rados/api/librados-intro/) implementation
+* (nearly complete) [S3](https://docs.aws.amazon.com/sdk-for-java/v2/developer-guide/welcome.html) implementation
 
 ## configuration
 
