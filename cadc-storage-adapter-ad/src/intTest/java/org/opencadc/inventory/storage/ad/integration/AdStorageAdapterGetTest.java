@@ -84,9 +84,9 @@ import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.storage.StorageEngageException;
 import org.opencadc.inventory.storage.ad.AdStorageAdapter;
 
-public class AdStorageAdapterTest {
+public class AdStorageAdapterGetTest {
 
-    private static final Logger log = Logger.getLogger(AdStorageAdapterTest.class);
+    private static final Logger log = Logger.getLogger(AdStorageAdapterGetTest.class);
     private static final String DIGEST_ALGORITHM = "MD5";
 
     @Test
@@ -99,7 +99,7 @@ public class AdStorageAdapterTest {
         try {
             final OutputStream outputStream = new ByteArrayOutputStream();
             final DigestOutputStream digestOutputStream = new DigestOutputStream(outputStream, MessageDigest
-                .getInstance(AdStorageAdapterTest.DIGEST_ALGORITHM));
+                .getInstance(AdStorageAdapterGetTest.DIGEST_ALGORITHM));
             final ByteCountOutputStream byteCountOutputStream = new ByteCountOutputStream(digestOutputStream);
             final MessageDigest messageDigest = digestOutputStream.getMessageDigest();
 
@@ -122,7 +122,7 @@ public class AdStorageAdapterTest {
         try {
             final OutputStream outputStream = new ByteArrayOutputStream();
             final DigestOutputStream digestOutputStream = new DigestOutputStream(outputStream, MessageDigest
-                .getInstance(AdStorageAdapterTest.DIGEST_ALGORITHM));
+                .getInstance(AdStorageAdapterGetTest.DIGEST_ALGORITHM));
             final ByteCountOutputStream byteCountOutputStream = new ByteCountOutputStream(digestOutputStream);
             final MessageDigest messageDigest = digestOutputStream.getMessageDigest();
 

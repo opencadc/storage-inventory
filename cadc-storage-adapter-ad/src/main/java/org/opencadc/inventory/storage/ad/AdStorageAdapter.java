@@ -71,12 +71,15 @@ package org.opencadc.inventory.storage.ad;
 
 import ca.nrc.cadc.auth.AuthMethod;
 import ca.nrc.cadc.auth.AuthenticationUtil;
+import ca.nrc.cadc.io.ByteLimitExceededException;
 import ca.nrc.cadc.io.ReadException;
 import ca.nrc.cadc.io.WriteException;
 
+import ca.nrc.cadc.net.ExpectationFailedException;
 import ca.nrc.cadc.net.HttpDownload;
 import ca.nrc.cadc.net.IncorrectContentChecksumException;
 import ca.nrc.cadc.net.IncorrectContentLengthException;
+import ca.nrc.cadc.net.ResourceAlreadyExistsException;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.reg.Capabilities;
@@ -104,6 +107,7 @@ import org.opencadc.inventory.storage.NewArtifact;
 import org.opencadc.inventory.storage.StorageAdapter;
 import org.opencadc.inventory.storage.StorageEngageException;
 import org.opencadc.inventory.storage.StorageMetadata;
+import org.opencadc.tap.TapClient;
 
 /**
  * The interface to storage implementations.
@@ -141,8 +145,7 @@ public class AdStorageAdapter implements StorageAdapter {
         URL sourceURL = this.toURL(storageLocation.getStorageID());
         log.debug("sourceURL: " + sourceURL.toString());
 
-        ByteArrayOutputStream source = new ByteArrayOutputStream();
-        HttpDownload get = new HttpDownload(sourceURL, source);
+        HttpDownload get = new HttpDownload(sourceURL, dest);
         get.run();
 
         int retVal = get.getResponseCode();
@@ -257,10 +260,35 @@ public class AdStorageAdapter implements StorageAdapter {
      * @throws StorageEngageException If the adapter failed to interact with storage.
      * @throws TransientException If an unexpected, temporary exception occurred. 
      */
-    // TODO: implement this
     public Iterator<StorageMetadata> iterator(String storageBucket)
         throws StorageEngageException, TransientException {
-        throw new UnsupportedOperationException("not supported");
+
+        // set up TapClient<StorageMetadata>
+        // create a TapRowMapper<StorageMetadata> extension to map SQL data return to StorageMetadata
+        // Q: what order is the data returning in from the tap query?
+
+        TapClient tc = null;
+        try {
+            tc = new TapClient(URI.create("ivo://cadc.nrc.ca/argus"));
+        } catch (ResourceNotFoundException rnfe) {
+            throw new StorageEngageException("Unable to connect to tap client: " + rnfe.getMessage());
+        }
+
+        AdStorageMetadataRowMapper rowMapper = new AdStorageMetadataRowMapper();
+        Iterator<StorageMetadata> storageMetadataIterator = null;
+
+        try {
+            storageMetadataIterator = tc.execute(String.format(rowMapper.query, storageBucket), rowMapper);
+        } catch (Exception e ) {
+            // TODO: there's a raft of errors that are issued from the execute:
+            // do they need separating out
+            // This try/catch is separate from the one above because
+            // tc.execute and TapClient constructor both throw a ResourceNotFoundException,
+            // but for different reasons.
+            log.error("error executing TapClient query");
+            throw new TransientException(e.getMessage());
+        }
+        return storageMetadataIterator;
     }
 
     /**
