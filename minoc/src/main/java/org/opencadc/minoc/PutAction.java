@@ -70,6 +70,7 @@ package org.opencadc.minoc;
 import ca.nrc.cadc.db.TransactionManager;
 import ca.nrc.cadc.io.ReadException;
 import ca.nrc.cadc.net.ResourceNotFoundException;
+import ca.nrc.cadc.profiler.Profiler;
 import ca.nrc.cadc.rest.InlineContentException;
 import ca.nrc.cadc.rest.InlineContentHandler;
 
@@ -164,14 +165,19 @@ public class PutAction extends ArtifactAction {
         NewArtifact newArtifact = new NewArtifact(artifactURI);
         newArtifact.contentChecksum = contentMD5;
         newArtifact.contentLength = contentLength;
-        
+
+        final Profiler putProfiler = new Profiler(PutAction.class);
+
         InputStream in = (InputStream) syncInput.getContent(INLINE_CONTENT_TAG);
-        
+
+        putProfiler.checkpoint("getContent(inputstream)");
+
         StorageMetadata artifactMetadata = null;
         
         log.debug("writing new artifact to storage...");
         try {
             artifactMetadata = getStorageAdapter().put(newArtifact, in);
+            putProfiler.checkpoint("getStorageAdapter().put() success.");
         } catch (ReadException e) {
             // error on client read
             String msg = "read input error";
@@ -179,6 +185,7 @@ public class PutAction extends ArtifactAction {
             if (e.getMessage() != null) {
                 msg += ": " + e.getMessage();
             }
+            putProfiler.checkpoint(String.format("getStorageAdapter().put() failure \n%s.", msg));
             throw new IllegalArgumentException(msg, e);
         }
         log.debug("wrote new artifact to storage");
@@ -189,10 +196,12 @@ public class PutAction extends ArtifactAction {
         artifact.contentEncoding = encodingHeader;
         artifact.contentType = typeHeader;
         artifact.storageLocation = artifactMetadata.getStorageLocation();
-        
+
+        final Profiler databaseProfiler = new Profiler(PutAction.class);
         ArtifactDAO artifactDAO = getArtifactDAO();
         ObsoleteStorageLocationDAO locDAO = new ObsoleteStorageLocationDAO(artifactDAO);
         Artifact existing = artifactDAO.get(artifactURI);
+        databaseProfiler.checkpoint(String.format("artifactDAO.get(%s)", artifactURI));
         
         TransactionManager txnMgr = artifactDAO.getTransactionManager();
         try {
@@ -210,11 +219,15 @@ public class PutAction extends ArtifactAction {
                     existing = artifactDAO.get(artifactURI);
                 }
             }
-            
+
+            databaseProfiler.checkpoint(String.format("artifactDAO lock and artifactDAO.get(%s)", artifactURI));
+
             ObsoleteStorageLocation prevOSL = locDAO.get(artifact.storageLocation);
             if (prevOSL != null) {
                 // no longer obsolete
                 locDAO.delete(prevOSL.getID());
+
+                databaseProfiler.checkpoint(String.format("locDAO.delete(%s)", prevOSL.getID()));
             }
             
             ObsoleteStorageLocation newOSL = null;
@@ -223,30 +236,37 @@ public class PutAction extends ArtifactAction {
                 DeletedArtifactEvent deletedArtifact = new DeletedArtifactEvent(existing.getID());
                 artifactDAO.delete(existing.getID());
                 eventDAO.put(deletedArtifact);
+                databaseProfiler.checkpoint(String.format("artifactDAO.delete(%s) and eventDAO.put(%s)",
+                                                          existing.getID(), deletedArtifact.getID()));
             }
             
             artifactDAO.put(artifact);
+            databaseProfiler.checkpoint(String.format("artifactDAO.put(%s)", artifact.getID()));
             log.debug("put artifact in database: " + artifactURI);
             
             if (existing != null) {
                 if (!artifact.storageLocation.equals(existing.storageLocation)) {
                     newOSL = new ObsoleteStorageLocation(existing.storageLocation);
                     locDAO.put(newOSL);
+                    databaseProfiler.checkpoint(String.format("locDAO.put(%s)", newOSL.getID()));
                     log.debug("marked obsolete: " + existing.storageLocation);
                 }
             }
             
             log.debug("committing transaction");
             txnMgr.commitTransaction();
+            databaseProfiler.checkpoint("commit transaction");
             log.debug("commit txn: OK");
             
             // this block could be passed off to a thread so request completes??
             if (newOSL != null) {
                 log.debug("deleting from storage...");
                 getStorageAdapter().delete(newOSL.getLocation());
+                databaseProfiler.checkpoint(String.format("getStorageAdapter().delete(%s)", newOSL.getLocation()));
                 log.debug("delete from storage: OK");
                 // obsolete tracker record no longer needed
                 locDAO.delete(newOSL.getID());
+                databaseProfiler.checkpoint(String.format("locDAO.delete(%s)", newOSL.getID()));
             }
         } catch (Exception e) {
             log.error("failed to persist " + artifactURI, e);
