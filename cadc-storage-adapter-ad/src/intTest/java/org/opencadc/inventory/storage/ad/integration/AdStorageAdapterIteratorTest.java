@@ -1,4 +1,3 @@
-
 /*
  ************************************************************************
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
@@ -69,53 +68,99 @@
 
 package org.opencadc.inventory.storage.ad.integration;
 
-import ca.nrc.cadc.io.ByteCountOutputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.OutputStream;
-import java.math.BigInteger;
-import java.net.URI;
-import java.security.DigestOutputStream;
-import java.security.MessageDigest;
+import ca.nrc.cadc.auth.SSLUtil;
+import ca.nrc.cadc.util.FileUtil;
+import ca.nrc.cadc.util.Log4jInit;
+import java.io.File;
+import java.security.PrivilegedExceptionAction;
 import java.util.Iterator;
+import javax.security.auth.Subject;
+import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
+import org.junit.Before;
 import org.junit.Test;
-import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.storage.StorageMetadata;
 import org.opencadc.inventory.storage.ad.AdStorageAdapter;
 
 public class AdStorageAdapterIteratorTest {
 
     private static final Logger log = Logger.getLogger(AdStorageAdapterIteratorTest.class);
-    private static final String DIGEST_ALGORITHM = "MD5";
+
+    static {
+        Log4jInit.setLevel("org.opencadc.inventory.storage", Level.DEBUG);
+    }
+
+    private static Subject testSubject;
+
+    @Before
+    public void initSSL() {
+        // This file should be a copy of or pointer to an individual's cadcproxy.pem file
+        String certFilename = System.getProperty("user.name") + ".pem";
+        File pem = FileUtil.getFileFromResource(certFilename, AdStorageAdapterIteratorTest.class);
+        testSubject = SSLUtil.createSubject(pem);
+    }
 
     @Test
     public void testGetIterator() throws Exception {
-        final AdStorageAdapter adStorageAdapter = new AdStorageAdapter();
+        Subject.doAs(testSubject, new PrivilegedExceptionAction<Object>() {
+            public Object run() throws Exception {
+                final AdStorageAdapter adStorageAdapter = new AdStorageAdapter();
+                String archiveName = "IRIS";
 
-        // IRIS
-        final String archiveName = "IRIS";
+                try {
+                    Iterator<StorageMetadata> storageMetaIterator = adStorageAdapter.iterator(archiveName);
+                    int archiveSize = 0;
 
-        try {
-            // Do this with a personal cert file (see ams integration tests for setup)
-            // inside a Subject.doAs
+                    while (storageMetaIterator.hasNext()) {
+                        StorageMetadata curMeta = storageMetaIterator.next();
+                        log.info(archiveSize + ") " + curMeta.artifactURI + ": " + curMeta.contentEncoding + ": ");
+                        archiveSize++;
+                    }
+                    Assert.assertTrue( "archive size is zero.", archiveSize > 0);
+                } catch (Exception unexpected) {
+                    Assert.fail("unexpected exception: " + unexpected.getMessage());
+                }
 
-            Iterator<StorageMetadata> storageMetaIterator = adStorageAdapter.iterator(archiveName);
+                // query should come back with 0
+                archiveName = "NOT_IN_ARCHIVE";
+                try {
+                    Iterator<StorageMetadata> storageMetaIterator = adStorageAdapter.iterator(archiveName);
+                    int archiveSize = 0;
+                    while (storageMetaIterator.hasNext()) {
+                        StorageMetadata curMeta = storageMetaIterator.next();
+                        archiveSize++;
+                    }
+                    Assert.assertTrue( "archive size is not zero.", archiveSize == 0);
+                } catch (IllegalArgumentException expected) {
+                    log.info("expected error");
+                } catch (Exception unexpected) {
+                    Assert.fail("unexpected exception: " + unexpected.getMessage());
+                }
 
-            int archiveSize = 0;
-
-            while (storageMetaIterator.hasNext()) {
-                archiveSize++;
+                return null;
             }
-
-            // How to do this in a way that's not just plain breakable?
-            Assert.assertEquals("Wrong archive size.", 1771, archiveSize);
-
-        } catch (Exception unexpected) {
-            Assert.fail("Unexpected exception");
-        }
-
+        });
     }
 
 
+    @Test
+    public void testGetIteratorInvalidArchive() throws Exception {
+        Subject.doAs(testSubject, new PrivilegedExceptionAction<Object>() {
+            public Object run() throws Exception {
+                final AdStorageAdapter adStorageAdapter = new AdStorageAdapter();
+                String archiveName = "";
+
+                try {
+                    Iterator<StorageMetadata> storageMetaIterator = adStorageAdapter.iterator(archiveName);
+                    Assert.fail("iterator call should have failed but did not.");
+                } catch (IllegalArgumentException expected) {
+                    log.info("expected error");
+                } catch (Exception unexpected) {
+                    Assert.fail("unexpected exception: " + unexpected.getMessage());
+                }
+                return null;
+            }
+        });
+    }
 }

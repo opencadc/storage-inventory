@@ -71,15 +71,12 @@ package org.opencadc.inventory.storage.ad;
 
 import ca.nrc.cadc.auth.AuthMethod;
 import ca.nrc.cadc.auth.AuthenticationUtil;
-import ca.nrc.cadc.io.ByteLimitExceededException;
 import ca.nrc.cadc.io.ReadException;
 import ca.nrc.cadc.io.WriteException;
 
-import ca.nrc.cadc.net.ExpectationFailedException;
 import ca.nrc.cadc.net.HttpDownload;
 import ca.nrc.cadc.net.IncorrectContentChecksumException;
 import ca.nrc.cadc.net.IncorrectContentLengthException;
-import ca.nrc.cadc.net.ResourceAlreadyExistsException;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.reg.Capabilities;
@@ -87,7 +84,6 @@ import ca.nrc.cadc.reg.Capability;
 import ca.nrc.cadc.reg.Interface;
 import ca.nrc.cadc.reg.Standards;
 import ca.nrc.cadc.reg.client.RegistryClient;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -102,6 +98,7 @@ import java.util.SortedSet;
 
 import javax.security.auth.Subject;
 import org.apache.log4j.Logger;
+import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.storage.NewArtifact;
 import org.opencadc.inventory.storage.StorageAdapter;
@@ -120,6 +117,7 @@ public class AdStorageAdapter implements StorageAdapter {
     private static final Logger log = Logger.getLogger(AdStorageAdapter.class);
     private static final URI DATA_RESOURCE_ID = URI.create("ivo://cadc.nrc.ca/data");
     private static final String UNABLE_TO_GET = "Unable to get from source: ";
+    private static final String TAP_SERVICE_URI = "ivo://cadc.nrc.ca/ad";
 
     /**
      * Construct an AdStorageAdapter with the config stored in the
@@ -262,29 +260,24 @@ public class AdStorageAdapter implements StorageAdapter {
      */
     public Iterator<StorageMetadata> iterator(String storageBucket)
         throws StorageEngageException, TransientException {
+        InventoryUtil.assertNotNull(AdStorageQueryUtil.class, "storageBucket", storageBucket);
+        if (storageBucket.length() == 0) {
+            throw new IllegalArgumentException("Archive name must be specified");
+        }
 
-        // set up TapClient<StorageMetadata>
-        // create a TapRowMapper<StorageMetadata> extension to map SQL data return to StorageMetadata
-        // Q: what order is the data returning in from the tap query?
-
+        log.debug("storage bucket: " + storageBucket);
         TapClient tc = null;
         try {
-            tc = new TapClient(URI.create("ivo://cadc.nrc.ca/argus"));
+            tc = new TapClient(URI.create(TAP_SERVICE_URI));
         } catch (ResourceNotFoundException rnfe) {
             throw new StorageEngageException("Unable to connect to tap client: " + rnfe.getMessage());
         }
-
-        AdStorageMetadataRowMapper rowMapper = new AdStorageMetadataRowMapper();
+        AdStorageQueryUtil adQuery = new AdStorageQueryUtil(storageBucket);
         Iterator<StorageMetadata> storageMetadataIterator = null;
 
         try {
-            storageMetadataIterator = tc.execute(String.format(rowMapper.query, storageBucket), rowMapper);
+            storageMetadataIterator = tc.execute(adQuery.getQuery(), adQuery.getRowMapper());
         } catch (Exception e ) {
-            // TODO: there's a raft of errors that are issued from the execute:
-            // do they need separating out
-            // This try/catch is separate from the one above because
-            // tc.execute and TapClient constructor both throw a ResourceNotFoundException,
-            // but for different reasons.
             log.error("error executing TapClient query");
             throw new TransientException(e.getMessage());
         }

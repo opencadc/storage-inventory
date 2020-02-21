@@ -85,7 +85,6 @@ import org.opencadc.inventory.storage.StorageEngageException;
 import org.opencadc.inventory.storage.ad.AdStorageAdapter;
 
 public class AdStorageAdapterGetTest {
-
     private static final Logger log = Logger.getLogger(AdStorageAdapterGetTest.class);
     private static final String DIGEST_ALGORITHM = "MD5";
 
@@ -95,7 +94,7 @@ public class AdStorageAdapterGetTest {
         final URI testIrisUri = URI.create("ad:IRIS/I429B4H0.fits");
 
         // IRIS
-        final URI expectedIrisChecksum = URI.create("md5:d41d8cd98f00b204e9800998ecf8427e");
+        final URI expectedIrisChecksum = URI.create("md5:e3922d47243563529f387ebdf00b66da");
         try {
             final OutputStream outputStream = new ByteArrayOutputStream();
             final DigestOutputStream digestOutputStream = new DigestOutputStream(outputStream, MessageDigest
@@ -118,7 +117,7 @@ public class AdStorageAdapterGetTest {
 
         // GEMINI
         final URI testGeminiUri = URI.create("gemini:GEM/S20191208S0019.jpg");
-        final URI expectedGeminiChecksum = URI.create("md5:d41d8cd98f00b204e9800998ecf8427e");
+        final URI expectedGeminiChecksum = URI.create("md5:160e3957f7b4b48be1f19a4a9a036179");
         try {
             final OutputStream outputStream = new ByteArrayOutputStream();
             final DigestOutputStream digestOutputStream = new DigestOutputStream(outputStream, MessageDigest
