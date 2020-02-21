@@ -92,6 +92,7 @@ import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.After;
 import org.junit.Assert;
+import org.junit.Before;
 import org.junit.Test;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.storage.NewArtifact;
@@ -119,7 +120,7 @@ abstract class S3StorageAdapterTest {
     @After 
     public abstract void cleanup() throws Exception;
     
-    @Test
+    //@Test
     public void testNoOp() {
     }
     
@@ -276,10 +277,13 @@ abstract class S3StorageAdapterTest {
                 rnd.nextBytes(data);
                 NewArtifact na = new NewArtifact(artifactURI);
                 md.update(data);
+                // contentChecksum currently required for round-trip
                 na.contentChecksum = URI.create("md5:" + HexUtil.toHex(md.digest()));
                 na.contentLength = (long) data.length;
                 StorageMetadata sm = adapter.put(na, new ByteArrayInputStream(data));
-                LOGGER.debug("testList put: " + artifactURI + " to " + sm.getStorageLocation());
+                Assert.assertNotNull(sm.artifactURI);
+                //Assert.assertNotNull(sm.contentLastModified);
+                LOGGER.debug("testIterator put: " + artifactURI + " to " + sm.getStorageLocation());
                 expected.add(sm);
             }
             LOGGER.info("testIterator created: " + expected.size());
@@ -303,6 +307,12 @@ abstract class S3StorageAdapterTest {
                 Assert.assertEquals("order", em, am);
                 Assert.assertEquals("length", em.getContentLength(), am.getContentLength());
                 Assert.assertEquals("checksum", em.getContentChecksum(), am.getContentChecksum());
+                
+                Assert.assertNotNull("artifactUIRI", am.artifactURI);
+                Assert.assertEquals("artifactURI", em.artifactURI, am.artifactURI);
+                
+                Assert.assertNotNull("contentLastModified", am.contentLastModified);
+                //Assert.assertEquals("contentLastModified", em.contentLastModified, am.contentLastModified);
             }
             
             // rely on cleanup()
@@ -395,7 +405,7 @@ abstract class S3StorageAdapterTest {
         }
     }
     
-    @Test
+    //@Test
     public void testListBucketPrefix() {
         
         try {
@@ -474,7 +484,7 @@ abstract class S3StorageAdapterTest {
         */
     }
     
-    ////@Test
+    //////@Test
     public void getHeaders() throws Exception {
         LOGGER.info("Skip to headers...");
         LOGGER.info("***");
@@ -494,7 +504,7 @@ abstract class S3StorageAdapterTest {
         LOGGER.info("Skip to headers done.");
     }
 
-    ////@Test
+    //////@Test
     public void getCutouts() throws Exception {
         final URI testURI = URI.create("cadc:TEST/getCutouts");
         //final long expectedByteCount = 159944L;

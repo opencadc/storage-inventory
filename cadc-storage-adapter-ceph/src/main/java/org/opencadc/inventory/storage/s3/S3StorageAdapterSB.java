@@ -273,10 +273,17 @@ public class S3StorageAdapterSB extends S3StorageAdapter {
             }
             S3Object o = objectIterator.next();
             LOGGER.debug("next: " + o);
-            // the S3Object contains almost all the metadata needed so could avoid the HEAD request
-            // ETag has correct MD5 value for small objects but not verified for larger 
-            // missing a way to restore the artifact URI
-            return head(is3bucket, o.key());
+            final StorageMetadata storageMetadata = head(is3bucket, o.key());
+        
+            // etag is am md5 for small objects and ceph cluster circa Q1 2020
+            //String etag = o.eTag().replaceAll("\"", "");
+            //URI s3checksum = URI.create("md5:" + etag);
+            //if (!storageMetadata.getContentChecksum().equals(s3checksum)) {
+            //    throw new IllegalStateException("checksum mismatch (uri attribute vs S3 etag): " 
+            //        + storageMetadata.getContentChecksum() + " != " + s3checksum);
+            //}
+        
+            return storageMetadata;
         }
     }
 }

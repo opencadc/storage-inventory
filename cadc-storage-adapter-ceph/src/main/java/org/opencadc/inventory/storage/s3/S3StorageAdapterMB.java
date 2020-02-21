@@ -200,7 +200,7 @@ public class S3StorageAdapterMB extends S3StorageAdapter {
                 Bucket b = i.next();
                 InternalBucket ib = new InternalBucket(b.name());
                 if (isInternalBucket(ib)) {
-                    LOGGER.warn("BucketIterator: " + ib);
+                    //LOGGER.warn("BucketIterator: " + ib);
                     if (internalBucketPrefix == null || ib.name.startsWith(internalBucketPrefix)) {
                         keep.add(ib);
                     }
