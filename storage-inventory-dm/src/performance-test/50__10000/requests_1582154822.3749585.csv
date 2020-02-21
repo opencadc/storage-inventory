@@ -1,3 +1,0 @@
-"Type","Name","# requests","# failures","Median response time","Average response time","Min response time","Max response time","Average Content Size","Requests/s","Requests Failed/s","50%","66%","75%","80%","90%","95%","98%","99%","99.9%","99.99%","99.999","100%"
-"vcp","upload_1024",10032,0,1600,1743,882,5575,1024,21.04,0.00,1600,1800,1900,2000,2200,2400,2900,3700,5200,5400,5600,5600
-"None","Aggregated",10032,0,1600,1743,882,5575,1024,21.04,0.00,1600,1800,1900,2000,2200,2400,2900,3700,5200,5400,5600,5600
