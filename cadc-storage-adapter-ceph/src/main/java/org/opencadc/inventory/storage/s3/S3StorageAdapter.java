@@ -97,6 +97,7 @@ import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import org.apache.log4j.Logger;
+import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.storage.NewArtifact;
 import org.opencadc.inventory.storage.StorageAdapter;
@@ -483,7 +484,12 @@ abstract class S3StorageAdapter implements StorageAdapter {
     public StorageMetadata put(NewArtifact newArtifact, InputStream source)
             throws IncorrectContentChecksumException, IncorrectContentLengthException, ReadException, WriteException,
             StorageEngageException {
+        InventoryUtil.assertNotNull(S3StorageAdapter.class, "newArtifact", newArtifact);
         LOGGER.debug("put: " + newArtifact);
+        
+        if (newArtifact.contentChecksum == null || newArtifact.contentLength == null) {
+            throw new UnsupportedOperationException("put requires contentChecksum and contentLength");
+        }
         
         final StorageLocation loc = generateStorageLocation();
 
@@ -511,6 +517,7 @@ abstract class S3StorageAdapter implements StorageAdapter {
                 checksum = new String(Base64.getEncoder().encode(value));
                 putObjectRequestBuilder.contentMD5(checksum);
             } else { 
+                // exception thrown above makes this not reachable (see TODO below)
                 try {
                     MessageDigest md = MessageDigest.getInstance(DEFAULT_CHECKSUM_ALGORITHM);
                     DigestInputStream dis = new DigestInputStream(source, md);
@@ -520,16 +527,8 @@ abstract class S3StorageAdapter implements StorageAdapter {
                 }
             }
 
-            /*
-            TODO: Is this necessary?  It's being sent with the RequestBody.fromInputStream() below already.  S3 will
-            TODO: throw an exception if it's missing.
-            TODO: jenkinsd 2020.01.20
-             */
             putObjectRequestBuilder.contentLength(newArtifact.contentLength);
-
-            // store extended attributes
             putObjectRequestBuilder.metadata(metadata);
-
             PutObjectResponse putResponse = s3client.putObject(putObjectRequestBuilder.build(), RequestBody.fromInputStream(source, newArtifact.contentLength));
             
             URI s3checksum = URI.create("md5:" + putResponse.eTag().replaceAll("\"", ""));

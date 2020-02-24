@@ -166,7 +166,7 @@ abstract class S3StorageAdapterTest {
         }
     }
     
-    @Test
+    //@Test
     public void testPutGetDeleteMinimal() {
         URI artifactURI = URI.create("cadc:TEST/testPutGetDelete");
         
