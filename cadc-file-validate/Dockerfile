@@ -1,4 +1,4 @@
-FROM openjdk:8-slim
+FROM cadc-java:8
 
 ARG APP_VERSION=0.1
 
