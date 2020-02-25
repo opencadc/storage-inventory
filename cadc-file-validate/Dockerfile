@@ -8,4 +8,4 @@ RUN tar xvf cadc-file-validate-${APP_VERSION}.tar \
     && cp -a cadc-file-validate-${APP_VERSION}/* /usr/local/ \
     && rm -rf cadc-file-validate-${APP_VERSION}*
 
-ENTRYPOINT ["/usr/local/bin/cadc-file-validate"]
+CMD ["/usr/local/bin/cadc-file-validate"]
