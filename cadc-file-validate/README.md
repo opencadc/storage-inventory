@@ -50,6 +50,8 @@ org.opencadc.inventory.db.schema=inventory
 
 
 ## Building it
+This Docker image relies on the [Base Java Docker image](https://github.com/opencadc/docker-base/tree/master/cadc-java) built as an image called `cadc-java:8`.
+
 ```
 gradle -i clean build
 docker build -t opencadc/cadc-file-validate -f Dockerfile .
