@@ -70,6 +70,7 @@ package org.opencadc.minoc;
 import ca.nrc.cadc.db.TransactionManager;
 import ca.nrc.cadc.io.ReadException;
 import ca.nrc.cadc.net.ResourceNotFoundException;
+import ca.nrc.cadc.profiler.Profiler;
 import ca.nrc.cadc.rest.InlineContentException;
 import ca.nrc.cadc.rest.InlineContentHandler;
 
@@ -89,6 +90,7 @@ import org.opencadc.inventory.db.ObsoleteStorageLocation;
 import org.opencadc.inventory.db.ObsoleteStorageLocationDAO;
 import org.opencadc.inventory.permissions.WriteGrant;
 import org.opencadc.inventory.storage.NewArtifact;
+import org.opencadc.inventory.storage.StorageAdapter;
 import org.opencadc.inventory.storage.StorageMetadata;
 
 /**
@@ -164,14 +166,21 @@ public class PutAction extends ArtifactAction {
         NewArtifact newArtifact = new NewArtifact(artifactURI);
         newArtifact.contentChecksum = contentMD5;
         newArtifact.contentLength = contentLength;
-        
+
+        final Profiler profiler = new Profiler(PutAction.class);
+
         InputStream in = (InputStream) syncInput.getContent(INLINE_CONTENT_TAG);
-        
+
+        profiler.checkpoint("content.init");
+
         StorageMetadata artifactMetadata = null;
         
         log.debug("writing new artifact to storage...");
         try {
-            artifactMetadata = getStorageAdapter().put(newArtifact, in);
+            StorageAdapter storageAdapter = getStorageAdapter();
+            profiler.checkpoint("storageAdapter.init");
+            artifactMetadata = storageAdapter.put(newArtifact, in);
+            profiler.checkpoint("storageAdapter.put.ok");
         } catch (ReadException e) {
             // error on client read
             String msg = "read input error";
@@ -179,6 +188,7 @@ public class PutAction extends ArtifactAction {
             if (e.getMessage() != null) {
                 msg += ": " + e.getMessage();
             }
+            profiler.checkpoint("storageAdapter.put.fail");
             throw new IllegalArgumentException(msg, e);
         }
         log.debug("wrote new artifact to storage");
@@ -189,10 +199,12 @@ public class PutAction extends ArtifactAction {
         artifact.contentEncoding = encodingHeader;
         artifact.contentType = typeHeader;
         artifact.storageLocation = artifactMetadata.getStorageLocation();
-        
+
         ArtifactDAO artifactDAO = getArtifactDAO();
+        profiler.checkpoint("artifactDAO.init");
         ObsoleteStorageLocationDAO locDAO = new ObsoleteStorageLocationDAO(artifactDAO);
         Artifact existing = artifactDAO.get(artifactURI);
+        profiler.checkpoint("artifactDAO.get.ok");
         
         TransactionManager txnMgr = artifactDAO.getTransactionManager();
         try {
@@ -204,17 +216,21 @@ public class PutAction extends ArtifactAction {
             while (existing != null && !locked) {
                 try { 
                     artifactDAO.lock(existing);
+                    profiler.checkpoint("artifactDAO.lock.ok");
                     locked = true;
                 } catch (EntityNotFoundException ex) {
+                    profiler.checkpoint("artifactDAO.lock.fail");
                     // entity deleted
                     existing = artifactDAO.get(artifactURI);
+                    profiler.checkpoint("artifactDAO.get.ok");
                 }
             }
-            
+
             ObsoleteStorageLocation prevOSL = locDAO.get(artifact.storageLocation);
             if (prevOSL != null) {
                 // no longer obsolete
                 locDAO.delete(prevOSL.getID());
+                profiler.checkpoint("locDAO.delete.ok");
             }
             
             ObsoleteStorageLocation newOSL = null;
@@ -222,31 +238,40 @@ public class PutAction extends ArtifactAction {
                 DeletedEventDAO eventDAO = new DeletedEventDAO(artifactDAO);
                 DeletedArtifactEvent deletedArtifact = new DeletedArtifactEvent(existing.getID());
                 artifactDAO.delete(existing.getID());
+                profiler.checkpoint("artifactDAO.delete.ok");
                 eventDAO.put(deletedArtifact);
+                profiler.checkpoint("eventDAO.put.ok");
             }
             
             artifactDAO.put(artifact);
+            profiler.checkpoint("artifactDAO.put.ok");
             log.debug("put artifact in database: " + artifactURI);
             
             if (existing != null) {
                 if (!artifact.storageLocation.equals(existing.storageLocation)) {
                     newOSL = new ObsoleteStorageLocation(existing.storageLocation);
                     locDAO.put(newOSL);
+                    profiler.checkpoint("locDAO.put.ok");
                     log.debug("marked obsolete: " + existing.storageLocation);
                 }
             }
             
             log.debug("committing transaction");
             txnMgr.commitTransaction();
+            profiler.checkpoint("transaction.commit.ok");
             log.debug("commit txn: OK");
             
             // this block could be passed off to a thread so request completes??
             if (newOSL != null) {
                 log.debug("deleting from storage...");
-                getStorageAdapter().delete(newOSL.getLocation());
+                StorageAdapter storageAdapter = getStorageAdapter();
+                profiler.checkpoint("storageAdapter.init");
+                storageAdapter.delete(newOSL.getLocation());
+                profiler.checkpoint("storageAdapter.delete.ok");
                 log.debug("delete from storage: OK");
                 // obsolete tracker record no longer needed
                 locDAO.delete(newOSL.getID());
+                profiler.checkpoint("locDAO.delete.ok");
             }
         } catch (Exception e) {
             log.error("failed to persist " + artifactURI, e);
