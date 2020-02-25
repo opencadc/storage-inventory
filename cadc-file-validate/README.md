@@ -64,7 +64,7 @@ docker run -t opencadc/cadc-file-validate:latest
 
 ### With usage
 ```
-docker run -t opencadc/cadc-file-validate:latest -h
+docker run -t opencadc/cadc-file-validate:latest cadc-file-validate -h
 ```
 
 
