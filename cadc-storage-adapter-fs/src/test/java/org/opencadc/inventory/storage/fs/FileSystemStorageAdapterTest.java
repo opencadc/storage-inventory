@@ -97,6 +97,7 @@ import org.junit.Test;
 import org.opencadc.inventory.storage.NewArtifact;
 import org.opencadc.inventory.storage.StorageMetadata;
 import org.opencadc.inventory.storage.fs.FileSystemStorageAdapter.BucketMode;
+import static java.util.Spliterators.iterator;
 
 /**
  * @author majorb
@@ -112,7 +113,7 @@ public class FileSystemStorageAdapterTest {
     private static final byte[] data = dataString.getBytes();
 
     static {
-        Log4jInit.setLevel("org.opencadc.inventory", Level.DEBUG);
+        Log4jInit.setLevel("org.opencadc.inventory", Level.INFO);
     }
     
     @BeforeClass
@@ -191,12 +192,12 @@ public class FileSystemStorageAdapterTest {
         }
     }
     
-    @Test
+    //@Test
     public void testList_URIMode() {
         this.testList(BucketMode.URI);
     }
     
-    @Test
+    //@Test
     public void testList_URIBucketMode() {
         this.testList(BucketMode.URIBUCKET);
     }
@@ -227,7 +228,7 @@ public class FileSystemStorageAdapterTest {
                 "test:dir1/dir3/dir4/file7",
                 "test:dir1/dir3/file8",
                 "test:dir1/file9",
-                "test:dir1/dir4/file10",
+                "test:dir1/dir5/file10",
                 "test:dir5/file11",
                 "test:dir5/dir6/dir7/dir8/file12",
             };
@@ -244,37 +245,46 @@ public class FileSystemStorageAdapterTest {
 
                 StorageMetadata meta = fs.put(newArtifact, source);
                 storageMetadataList.add(meta);
-                log.debug("added " + meta.getStorageLocation().getStorageID());
+                log.info("added " + meta.getStorageLocation());
             }
             
-            SortedSet<StorageMetadata> result = fs.list("");
-            Iterator<StorageMetadata> iterator = result.iterator();
-            List<URI> visitedStorageIDs = new ArrayList<URI>();
-            StorageMetadata next = null;
-            URI nextStorageID = null;
-            StorageMetadata orig = null;
-            int count = 0;
-            while (iterator.hasNext()) {
-                next = iterator.next();
-                nextStorageID = next.getStorageLocation().getStorageID();
-                int index = storageMetadataList.indexOf(next);
-                if (index < 0) {
-                    Assert.fail("encounted unknown file: " + nextStorageID);
-                } else {
-                    orig = storageMetadataList.get(index);
-                }
-                if (visitedStorageIDs.contains(nextStorageID)) {
-                    Assert.fail("already visited file: " + nextStorageID);
-                }
-                Assert.assertEquals("checksum", checksum, next.getContentChecksum());
-                Assert.assertEquals("length", new Long(length), next.getContentLength());
-                Assert.assertEquals("artifactURI", orig.artifactURI, next.artifactURI);
-                visitedStorageIDs.add(nextStorageID);
-                count++;
-            }
-            
-            Assert.assertEquals("file count", storageMetadataList.size(), count);
+            // list all
+            {
+                SortedSet<StorageMetadata> result = fs.list("");
+                Assert.assertEquals("file count", storageMetadataList.size(), result.size());
+                Iterator<StorageMetadata> iterator = result.iterator();
+                int a = 0;
+                while (iterator.hasNext()) {
+                    StorageMetadata expected = storageMetadataList.get(a++);
+                    StorageMetadata actual = iterator.next();
+                    Assert.assertEquals("order", expected.getStorageLocation(), actual.getStorageLocation());
 
+                    Assert.assertEquals("checksum", checksum, actual.getContentChecksum());
+                    Assert.assertEquals("length", new Long(length), actual.getContentLength());
+                    Assert.assertNotNull("artifactURI", actual.artifactURI.toASCIIString());
+                    Assert.assertEquals("artifactURI", files[a], actual.artifactURI.toASCIIString());
+                }
+            }
+            
+            // list subset
+            {
+                SortedSet<StorageMetadata> result3 = fs.list("test:dir1/dir3");  // 3 in the middle (5-7)
+                Iterator<StorageMetadata> iterator3 = result3.iterator();
+                int a = 5; // start at 5
+                int count = 0;
+                while (iterator3.hasNext()) {
+                    StorageMetadata expected = storageMetadataList.get(a++);
+                    StorageMetadata actual = iterator3.next();
+                    Assert.assertEquals("order", expected.getStorageLocation(), actual.getStorageLocation());
+
+                    Assert.assertEquals("checksum", checksum, actual.getContentChecksum());
+                    Assert.assertEquals("length", new Long(length), actual.getContentLength());
+                    Assert.assertNotNull("artifactURI", actual.artifactURI.toASCIIString());
+                    Assert.assertEquals("artifactURI", files[a], actual.artifactURI.toASCIIString());
+                    count++;
+                }
+                Assert.assertEquals("file count", 3, count);
+            }
         } catch (Exception unexpected) {
             log.error("unexpected exception", unexpected);
             Assert.fail("unexpected exception: " + unexpected);
@@ -283,8 +293,8 @@ public class FileSystemStorageAdapterTest {
         }
     }
     
-    @Test
-    public void testIterateSubsetURIMode() {
+    //@Test
+    public void testIterateURI() {
         try {
             
             log.info("testIterateSubsetURIMode - start");
@@ -310,50 +320,63 @@ public class FileSystemStorageAdapterTest {
                 "test:dir1/dir3/dir4/file7",
                 "test:dir1/dir3/file8",
                 "test:dir1/file9",
-                "test:dir1/dir4/file10",
+                "test:dir1/dir5/file10",
                 "test:dir5/file11",
                 "test:dir5/dir6/dir7/dir8/file12",
             };
             
-            List<URI> storageIDs = new ArrayList<URI>();
-            
+            List<StorageMetadata> storageMetadataList = new ArrayList<StorageMetadata>();
             for (String file : files) {
                 URI uri = URI.create(file);
                 NewArtifact newArtifact = new NewArtifact(uri);
                 newArtifact.contentChecksum = checksum;
                 newArtifact.contentLength = length;
-
-                ByteArrayInputStream source = new ByteArrayInputStream(data);
                 
+                ByteArrayInputStream source = new ByteArrayInputStream(data);
+
                 StorageMetadata meta = fs.put(newArtifact, source);
-                storageIDs.add(meta.getStorageLocation().getStorageID());
-                log.debug("added " + meta.getStorageLocation().getStorageID());
+                storageMetadataList.add(meta);
+                log.info("added " + meta.getStorageLocation());
             }
             
-            SortedSet<StorageMetadata> result = fs.list("test:dir1");
-            Iterator<StorageMetadata> iterator = result.iterator();
-            List<URI> visitedStorageIDs = new ArrayList<URI>();
-            StorageMetadata next = null;
-            URI nextStorageID = null;
-            int count = 0;
-            while (iterator.hasNext()) {
-                next = iterator.next();
-                nextStorageID = next.getStorageLocation().getStorageID();
-                log.debug("Next in iterator: " + nextStorageID);
-                if (!storageIDs.contains(nextStorageID)) {
-                    Assert.fail("encounted unknown file: " + nextStorageID);
+            // iterate from start
+            {
+                Iterator<StorageMetadata> iterator = fs.iterator("test:dir1"); // the first n-2
+                int a = 0;
+                int count = 0;
+                while (iterator.hasNext()) {
+                    StorageMetadata expected = storageMetadataList.get(a++);
+                    StorageMetadata actual = iterator.next();
+                    Assert.assertEquals("order", expected.getStorageLocation(), actual.getStorageLocation());
+
+                    Assert.assertEquals("checksum", checksum, actual.getContentChecksum());
+                    Assert.assertEquals("length", new Long(length), actual.getContentLength());
+                    Assert.assertNotNull("artifactURI", actual.artifactURI.toASCIIString());
+                    Assert.assertEquals("artifactURI", files[a], actual.artifactURI.toASCIIString());
+                    count++;
                 }
-                if (visitedStorageIDs.contains(nextStorageID)) {
-                    Assert.fail("already visited file: " + nextStorageID);
-                }
-                Assert.assertEquals("checksum", checksum, next.getContentChecksum());
-                Assert.assertEquals("length", new Long(length), next.getContentLength());
-                visitedStorageIDs.add(nextStorageID);
-                count++;
+                // take the two non 'dir1' buckets out of the expected list
+                Assert.assertEquals("file count", storageMetadataList.size() - 2, count);
             }
             
-            // take the two non 'dir1' buckets out of the expected list
-            Assert.assertEquals("file count", storageIDs.size() - 2, count);
+            // iterate in middle
+            {
+                Iterator<StorageMetadata> iterator3 = fs.iterator("test:dir1/dir3"); // 3 in the middle (5-7)
+                int a = 5; // start at 5
+                int count = 0;
+                while (iterator3.hasNext()) {
+                    StorageMetadata expected = storageMetadataList.get(a++);
+                    StorageMetadata actual = iterator3.next();
+                    Assert.assertEquals("order", expected.getStorageLocation(), actual.getStorageLocation());
+
+                    Assert.assertEquals("checksum", checksum, actual.getContentChecksum());
+                    Assert.assertEquals("length", new Long(length), actual.getContentLength());
+                    Assert.assertNotNull("artifactURI", actual.artifactURI.toASCIIString());
+                    Assert.assertEquals("artifactURI", files[a], actual.artifactURI.toASCIIString());
+                    count++;
+                }
+                Assert.assertEquals("file count", 3, count);
+            }
 
         } catch (Exception unexpected) {
             log.error("unexpected exception", unexpected);
