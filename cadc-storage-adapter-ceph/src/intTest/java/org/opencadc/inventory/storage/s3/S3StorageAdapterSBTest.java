@@ -85,6 +85,7 @@ public class S3StorageAdapterSBTest extends S3StorageAdapterTest {
     
     @Override
     public void cleanup() throws Exception {
+        final long t1 = System.currentTimeMillis();
         log.info("cleanup: ");
         Iterator<StorageMetadata> sbi = adapter.iterator();
         while (sbi.hasNext()) {
@@ -95,6 +96,8 @@ public class S3StorageAdapterSBTest extends S3StorageAdapterTest {
         
         S3StorageAdapterSB asb = (S3StorageAdapterSB) adapter;
         asb.deleteBucket(asb.getDataBucket());
-        log.info("deleted: " + asb.getDataBucket());
+        long dt = System.currentTimeMillis() - t1;
+        log.info("deleted: " + asb.getDataBucket() + " " + dt + "ms");
+        
     }
 }

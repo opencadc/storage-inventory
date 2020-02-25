@@ -85,6 +85,7 @@ public class S3StorageAdapterMBTest extends S3StorageAdapterTest {
 
     @Override
     public void cleanup() throws Exception {
+        final long t1 = System.currentTimeMillis();
         log.info("cleanup: ");
         
         Iterator<StorageMetadata> mbi = adapter.iterator();
@@ -96,11 +97,15 @@ public class S3StorageAdapterMBTest extends S3StorageAdapterTest {
     
         S3StorageAdapterMB amb = (S3StorageAdapterMB) adapter;
         Iterator<S3StorageAdapter.InternalBucket> bi = amb.bucketIterator(null);
+        int num = 0;
         while (bi.hasNext()) {
             S3StorageAdapter.InternalBucket bucket = bi.next();
             amb.deleteBucket(bucket);
             log.info("\tcleanup: deleted " + bucket);
+            num++;
         }
+        long dt = System.currentTimeMillis() - t1;
+        log.info("deleted: " + num + " buckets " + dt + "ms");
     }
     
     

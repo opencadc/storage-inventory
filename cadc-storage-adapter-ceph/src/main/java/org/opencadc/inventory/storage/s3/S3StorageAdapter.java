@@ -68,6 +68,7 @@
 
 package org.opencadc.inventory.storage.s3;
 
+import ca.nrc.cadc.io.ByteLimitExceededException;
 import ca.nrc.cadc.io.ReadException;
 import ca.nrc.cadc.io.ThreadedIO;
 import ca.nrc.cadc.io.WriteException;
@@ -482,7 +483,9 @@ abstract class S3StorageAdapter implements StorageAdapter {
      */
     @Override
     public StorageMetadata put(NewArtifact newArtifact, InputStream source)
-            throws IncorrectContentChecksumException, IncorrectContentLengthException, ReadException, WriteException,
+            throws ByteLimitExceededException, 
+            IncorrectContentChecksumException, IncorrectContentLengthException, 
+            ReadException, WriteException,
             StorageEngageException {
         InventoryUtil.assertNotNull(S3StorageAdapter.class, "newArtifact", newArtifact);
         LOGGER.debug("put: " + newArtifact);
@@ -567,6 +570,10 @@ abstract class S3StorageAdapter implements StorageAdapter {
                         throw new IncorrectContentLengthException(
                                 String.format("Content length does not match bytes written.  Expected %d bytes.",
                                         newArtifact.contentLength));
+                    }
+                    case "EntityTooLarge": {
+                        throw new ByteLimitExceededException("content length too large for single upload stream",
+                                newArtifact.contentLength);
                     }
                     case "InternalError": {
                         /*
