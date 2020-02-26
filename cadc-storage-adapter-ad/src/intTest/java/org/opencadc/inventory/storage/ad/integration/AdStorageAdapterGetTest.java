@@ -1,4 +1,3 @@
-
 /*
  ************************************************************************
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
@@ -137,31 +136,6 @@ public class AdStorageAdapterGetTest {
         } catch (Exception unexpected) {
             Assert.fail("Unexpected exception");
         }
-
-        // ALMA:  should have a test for this in the long run. Currenty path elements in ALMA URIs
-        // aren't supported by the data web service, so calls using them throw a 501. Exluded from
-        // valid test suite for now.
-        //        final URI testAlmaUri = URI.create("alma:ALMA/A001_X1320_X9a/2017.A.00056.S_uid___A001_X1320_X9a_auxiliary.tar");
-        //        final URI expectedAlmaChecksum = URI.create("md5:d41d8cd98f00b204e9800998ecf8427e");
-        //        try {
-        //            final OutputStream outputStream = new ByteArrayOutputStream();
-        //            final DigestOutputStream digestOutputStream = new DigestOutputStream(outputStream, MessageDigest
-        //                .getInstance(AdStorageAdapterTest.DIGEST_ALGORITHM));
-        //            final ByteCountOutputStream byteCountOutputStream = new ByteCountOutputStream(digestOutputStream);
-        //            final MessageDigest messageDigest = digestOutputStream.getMessageDigest();
-        //
-        //            final StorageLocation storageLocation = new StorageLocation(testAlmaUri);
-        //            storageLocation.storageBucket = "ad";
-        //
-        //            testSubject.get(storageLocation, byteCountOutputStream);
-        //
-        //            Assert.assertEquals("Wrong checksum.", expectedAlmaChecksum,
-        //                URI.create(String.format("%s:%s", messageDigest.getAlgorithm().toLowerCase(),
-        //                    new BigInteger(1, messageDigest.digest()).toString(16))));
-        //
-        //        } catch (Exception unexpected) {
-        //            Assert.fail("Unexpected exception: " + unexpected.toString());
-        //        }
     }
 
     @Test
@@ -182,7 +156,6 @@ public class AdStorageAdapterGetTest {
             Assert.fail("Unexpected exception: " + unexpected.getMessage());
         }
 
-
         // BAD ARCHIVE - throws a 500
         final URI testAlmaUri = URI.create("badArchive:BADARCHIVE/A.00056.S_uid___A001_X1320_X9a_auxiliary.tar");
         try {
@@ -198,10 +171,6 @@ public class AdStorageAdapterGetTest {
         } catch (Exception unexpected) {
             Assert.fail("Unexpected exception: " + unexpected.toString());
         }
-
-
     }
 
-    // TODO: failure tests where no permission
-    // TODO: failure where Read and/or WriteException are triggered
 }
