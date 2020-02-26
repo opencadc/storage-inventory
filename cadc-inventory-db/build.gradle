@@ -24,7 +24,7 @@ mainClassName = 'org.opencadc.inventory.db.version.Main'
 
 dependencies {
     compile 'log4j:log4j:[1.2,)'
-    compile 'org.opencadc:cadc-inventory:[0.5,)'
+    compile 'org.opencadc:cadc-inventory:[0.7,)'
 
     testCompile 'junit:junit:[4.0,)'
     
