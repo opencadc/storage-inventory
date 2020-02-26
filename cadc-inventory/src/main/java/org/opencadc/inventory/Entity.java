@@ -91,6 +91,7 @@ import org.apache.log4j.Logger;
 public abstract class Entity {
     private static final Logger log = Logger.getLogger(Entity.class);
 
+    private static final String PKG = Entity.class.getPackage().getName();
     private static final boolean MCS_DEBUG = false;
     
     private UUID id;
@@ -186,7 +187,12 @@ public abstract class Entity {
                 f.setAccessible(true);
                 Object fo = f.get(o);
                 if (fo != null) {
-                    digest.update(primitiveValueToBytes(fo, cf, digest.getAlgorithm()));
+                    Class ac = fo.getClass();
+                    if (isLocalClass(ac)) {
+                        calcMetaChecksum(ac, fo, digest);
+                    } else {
+                        digest.update(primitiveValueToBytes(fo, cf, digest.getAlgorithm()));
+                    }
                 } else if (MCS_DEBUG) {
                     log.debug("skip null: " + cf);
                 }
@@ -195,6 +201,14 @@ public abstract class Entity {
         } catch (IllegalAccessException bug) {
             throw new RuntimeException("Unable to calculate metaChecksum for class " + c.getName(), bug);
         }
+    }
+    
+    private boolean isLocalClass(Class c) {
+        if (c.isPrimitive() || c.isArray()) {
+            return false;
+        }
+        String pname = c.getPackage().getName();
+        return pname.startsWith(PKG);
     }
     
     private SortedSet<Field> getStateFields(Class c)

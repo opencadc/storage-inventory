@@ -1,85 +1,38 @@
-# CEPH Storage adapter (cadc-storage-adapter-ceph) 0.1
+# CEPH Storage adapter 
 
-## S3 and RADOS implementations
-The CEPH storage adapter supports various ways of communicating with a CEPH Cluster.  This adapter supports a partial (incomplete) [RADOS](https://docs.ceph.com/docs/master/rados/api/librados-intro/) 
-implementation in the [org.opencadc.inventory.storage.rados](tree/master/cadc-storage-adapter-ceph/src/main/java/org/opencadc/inventory/storage/rados) package, and a full
-implementation of [S3](https://docs.aws.amazon.com/sdk-for-java/v2/developer-guide/welcome.html) using the S3 JDK Version 2 in the [org.opencadc.inventory.storage.s3](tree/master/cadc-storage-adapter-ceph/src/main/java/org/opencadc/inventory/storage/s3)
-package.
+The CEPH storage adapter supports various ways of communicating with a CEPH Cluster. 
 
-## Requirements
-* JDK 8.+
-* Gradle >= 4.6
-  * See [Gradle Documentation](https://docs.gradle.org/current/userguide/java_library_plugin.html) for upcoming and current deprecations and making Gradle buildfiles more efficient.
+* (incomplete) [RADOS](https://docs.ceph.com/docs/master/rados/api/librados-intro/) implementation
+* (nearly complete) [S3](https://docs.aws.amazon.com/sdk-for-java/v2/developer-guide/welcome.html) implementation
 
-## Deployment
-The `minoc` service is required for a complete service.  This library is imported by `minoc` as needed.
+## configuration
 
-Ensure there is a `cadc-storage-adapter-ceph.properties` file available to the `minoc` service as well in the predefined configuration location.
-
-### The `cadc-storage-adapter-ceph.properties` file
-
-This contains configuration for connection and tuning items.
-
-| Property name  | Purpose |
-| -------------- | ------- |
-| `bucketLength` | {`integer`} (S3 only) Length of the computed bucket name   |
-
-
-### RADOS only
-OS level packages are required.
-* librados-dev
-* libradosstriper-dev
-
-
-## Integration tests
-
-### Environment
-
-Credentials and configuration are pulled from the `user.name` System Property value's `.aws` folder for S3 tests and from the `rados.user.name` or `user.name` System 
-Property value's `.ceph` folder for RADOS tests.  The system administrator for the storage site will need to provide a configuration file that 
-can be read by the S3 and RADOS clients.
-
-```shell script
-$ cat ~/.aws/config
-[default]
-access_key = FOO
-aws_secret_access_key = BAR
-region = us-east-1
+### catalina.properties
 ```
-
-```shell script
-$ cat ~/.ceph/config
-[global]
-mon_host = mycephhost.com
-keyring = /home/user/.ceph/keyring
-client_mount_timeout = 5
+org.opencadc.inventory.storage.s3.S3StorageAdapter.endpoint = {S3 REST API endpoint}
+org.opencadc.inventory.storage.s3.S3StorageAdapter.s3bucket = {S3 bucket name or prefix}
+org.opencadc.inventory.storage.s3.S3StorageAdapter.bucketLength = {length of the StorageLocation.storageBucket value}
+aws.accessKeyId = {S3 accessId}
+aws.secretAccessKey = {S3 secret access key}
 ```
+The StorageLocation.storageBucket string is used to organise stored objects so that subsets (batches) can be listed for validation; the S3StorageAdapter computes a random hex string of this length so for length n there will be 16^n buckets.
 
-### Execution
+The same set of properties can be used to configure both S3StorageAdapter implementations: 
+* the S3StorageAdapterSB will create/use a single S3 bucket named {s3bucket} directly
+* the S3StorageAdapterMB will create/use up to 16^n S3 buckets with {s3bucket] as the prefix
+
+Clients using the StorageAdapter API will see no difference in behaviour. However: scalability and performance tests 
+will be used to determine if/when each implementation makes sense.
+
+### Test S3 
+
+Developers running the S3 integration tests must  provide values for the above Java system properties. Developers that are
+using a shared S3 backend should chose an s3bucket value that will never collide with other users of the system (e.g. {username}-test). 
 
 To run the entire suite of integration tests against the currently deployed CEPH system, just run:
-```shell script
-$ gradle -i clean intTest
+```
+gradle {configure with java system props} intTest
 ```
 
-Set the RADOS user to connect with.  Defaults to `System.getProperty("user.name")`:
-```shell script
-# For RADOS tests, it will look in /home/myotheruser (/Users/myotheruser) for the .ceph folders and use the "myotheruser"
-# identity to connect with.
-$ gradle -i -Drados.user.name=myotheruser clean intTest
-```
-
-Set the bucket use.  Defaults to `System.getProperty("user.name")`:
-```shell script
-# Buckets are not supported in RADOS, so this only applies to S3.
-$ gradle -i -Ds3.bucket.name=myotherbucket clean intTest
-```
-
-| System Property name | Purpose
-| :------------------- | :------- |
-| `rados.user.name`    | User to connect with for RADOS tests. |
-| `s3.bucket.name`     | Bucket to perform S3 actions in. |
-
-
-### RADOS
-The RADOS integration tests are ignored (skipped) for the time being to avoid having to install the OS level RADOS packages if one simply wants to run the S3 tests.
+### Test RADOS
+The RADOS integration tests are currently limited and disabled (skipped) because they require native packages provided by the operating system (librados and libradosstriper). 

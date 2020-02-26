@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2019.                            (c) 2019.
+*  (c) 2020.                            (c) 2020.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -65,93 +65,48 @@
 ************************************************************************
 */
 
-package org.opencadc.inventory;
+package org.opencadc.inventory.storage.s3;
 
-import java.net.URI;
-import java.util.Objects;
+import java.util.Iterator;
+import org.apache.log4j.Logger;
+import org.opencadc.inventory.StorageLocation;
+import org.opencadc.inventory.storage.StorageMetadata;
 
 /**
- * Reference to an object in a backend storage system. This class holds the internal
- * identifier for interacting with the back end storage system. 
- * 
+ *
  * @author pdowler
  */
-public class StorageLocation implements Comparable<StorageLocation> {
-    private final URI storageID;
-    public String storageBucket;
-    
-    /**
-     * Constructor with storage bucket null.
-     * 
-     * @param storageID internal storage identifier
-     */
-    public StorageLocation(URI storageID) {
-        InventoryUtil.assertNotNull(StorageLocation.class, "storageID", storageID);
-        this.storageID = storageID;
-    }
+public class S3StorageAdapterMBTest extends S3StorageAdapterTest {
+    private static final Logger log = Logger.getLogger(S3StorageAdapterMBTest.class);
 
-    /**
-     * @return internal storage identifier
-     */
-    public URI getStorageID() {
-        return storageID;
-    }
-    
-    
-    @Override
-    public String toString() {
-        StringBuilder sb = new StringBuilder();
-        sb.append(this.getClass().getSimpleName());
-        sb.append("[");
-        if (storageBucket != null) {
-            sb.append(storageBucket).append(",");
-        }
-        sb.append(storageID);
-        sb.append("]");
-        return sb.toString();
+    public S3StorageAdapterMBTest() {
+        super(new S3StorageAdapterMB());
     }
 
     @Override
-    public boolean equals(Object o) {
-        if (o == null) {
-            return false;
-        }
-        StorageLocation s = (StorageLocation) o;
-        return this.compareTo(s) == 0;
-    }
-
-    @Override
-    public int hashCode() {
-        int hash = 3;
-        hash = 79 * hash + Objects.hashCode(this.storageID);
-        hash = 79 * hash + Objects.hashCode(this.storageBucket);
-        return hash;
-    }
-
-    /**
-     * Fully ordered implementation. Instances are ordered by storageBucket and if storageBucket is
-     * equal then by storageID. Two null storageBucket(s) are treated as equals and a single null
-     * storageBucket is sorted after a non-null storageBucket.
-     * 
-     * @param rhs location to pare to
-     * @return -1|0|1 
-     */
-    @Override
-    public int compareTo(StorageLocation rhs) {
-        if (storageBucket == null && rhs.storageBucket != null) {
-            return 1;
-        }
-        if (storageBucket != null && rhs.storageBucket == null) {
-            return -1;
-        }
-        int ret = 0;
-        if (storageBucket != null && rhs.storageBucket != null) {
-            ret = this.storageBucket.compareTo(rhs.storageBucket);
-        }
+    public void cleanup() throws Exception {
+        final long t1 = System.currentTimeMillis();
+        log.info("cleanup: ");
         
-        if (ret != 0) {
-            return ret;
+        Iterator<StorageMetadata> mbi = adapter.iterator();
+        while (mbi.hasNext()) {
+            StorageLocation loc = mbi.next().getStorageLocation();
+            adapter.delete(loc);
+            log.info("\tcleanup: deleted " + loc);
         }
-        return this.storageID.compareTo(rhs.storageID);
+    
+        S3StorageAdapterMB amb = (S3StorageAdapterMB) adapter;
+        Iterator<S3StorageAdapter.InternalBucket> bi = amb.bucketIterator(null);
+        int num = 0;
+        while (bi.hasNext()) {
+            S3StorageAdapter.InternalBucket bucket = bi.next();
+            amb.deleteBucket(bucket);
+            log.info("\tcleanup: deleted " + bucket);
+            num++;
+        }
+        long dt = System.currentTimeMillis() - t1;
+        log.info("deleted: " + num + " buckets " + dt + "ms");
     }
+    
+    
 }

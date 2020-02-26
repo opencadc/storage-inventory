@@ -101,4 +101,9 @@ public class NewArtifact {
         return artifactURI;
     }
 
+    @Override
+    public String toString() {
+        return "NewArtifact[" + artifactURI + " " + contentChecksum + " " + contentLength + ']';
+    }
+
 }
