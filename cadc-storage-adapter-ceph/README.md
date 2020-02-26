@@ -8,6 +8,8 @@ The CEPH storage adapter supports various ways of communicating with a CEPH Clus
 ## configuration
 
 ### Java System properties
+This library is configured via Java system properties. The method of passing the property values to the JVM depends
+on the execution environment. All properties are required.
 ```
 org.opencadc.inventory.storage.s3.S3StorageAdapter.endpoint = {S3 REST API endpoint}
 org.opencadc.inventory.storage.s3.S3StorageAdapter.s3bucket = {S3 bucket name or prefix}
@@ -18,7 +20,7 @@ aws.secretAccessKey = {S3 secret access key}
 The StorageLocation.storageBucket string is used to organise stored objects so that subsets (batches) can be listed for validation; the S3StorageAdapter computes a random hex string of this length so for length `n` there will be `16^n` buckets.
 
 The same set of properties can be used to configure both S3StorageAdapter implementations: 
-* the S3StorageAdapterSB will create/use a single S3 bucket named {s3bucket} directly
+* the S3StorageAdapterSB will create/use a single S3 bucket named {s3bucket} directly and use the {storageBucket} as a key prefix
 * the S3StorageAdapterMB will create/use up to `16^n` S3 buckets with {s3bucket] as the prefix
 
 Clients using the StorageAdapter API will see no difference in behaviour. However: scalability and performance tests 
