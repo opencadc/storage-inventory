@@ -192,6 +192,8 @@ public class FileSystemIterator implements Iterator<StorageMetadata> {
         }
         URI storageID = URI.create(next.pathAndFileName);
         StorageLocation storageLocation = new StorageLocation(storageID);
+        // TODO: restore bucket consistent with put() return value
+        //storageLocation.storageBucket = ??; 
         try {
             URI checksum = createMD5Checksum(next.path);
             long length = Files.size(next.path);

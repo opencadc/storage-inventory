@@ -70,7 +70,7 @@
 package org.opencadc.inventory.storage;
 
 import java.net.URI;
-import java.util.Objects;
+import java.util.Date;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.StorageLocation;
 
@@ -85,7 +85,12 @@ public class StorageMetadata implements Comparable<StorageMetadata> {
     private final StorageLocation storageLocation;
     private final URI contentChecksum;
     private final Long contentLength;
+    
     public URI artifactURI;
+    public Date contentLastModified;
+
+    public String contentEncoding;
+    public String contentType;
     
     public StorageMetadata(StorageLocation storageLocation, URI contentChecksum, Long contentLength) {
         InventoryUtil.assertNotNull(StorageMetadata.class, "storageLocation", storageLocation);

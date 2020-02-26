@@ -69,6 +69,7 @@
 
 package org.opencadc.inventory.storage;
 
+import ca.nrc.cadc.io.ByteLimitExceededException;
 import ca.nrc.cadc.io.ReadException;
 import ca.nrc.cadc.io.WriteException;
 import ca.nrc.cadc.net.IncorrectContentChecksumException;
@@ -139,7 +140,7 @@ public interface StorageAdapter {
      *     and contentLength are set, they will be used to validate the bytes received.
      * @param source The stream from which to read.
      * @return The storage metadata.
-     * 
+     * @throws ca.nrc.cadc.io.ByteLimitExceededException if content length exceeds internal limit
      * @throws IncorrectContentChecksumException If the calculated checksum does not the expected
      *     checksum as described in newArtifact.
      * @throws IncorrectContentLengthException If the calculated length does not the expected
@@ -150,7 +151,7 @@ public interface StorageAdapter {
      * @throws TransientException If an unexpected, temporary exception occurred.
      */
     public StorageMetadata put(NewArtifact newArtifact, InputStream source)
-        throws IncorrectContentChecksumException, IncorrectContentLengthException, ReadException,
+        throws ByteLimitExceededException, IncorrectContentChecksumException, IncorrectContentLengthException, ReadException,
             WriteException, StorageEngageException, TransientException;
         
     /**
