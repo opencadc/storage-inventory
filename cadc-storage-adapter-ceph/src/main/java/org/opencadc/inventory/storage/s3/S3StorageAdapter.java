@@ -68,6 +68,7 @@
 
 package org.opencadc.inventory.storage.s3;
 
+import ca.nrc.cadc.io.ByteLimitExceededException;
 import ca.nrc.cadc.io.ReadException;
 import ca.nrc.cadc.io.ThreadedIO;
 import ca.nrc.cadc.io.WriteException;
@@ -85,8 +86,10 @@ import java.net.URI;
 import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -95,6 +98,7 @@ import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import org.apache.log4j.Logger;
+import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.storage.NewArtifact;
 import org.opencadc.inventory.storage.StorageAdapter;
@@ -121,6 +125,7 @@ import software.amazon.awssdk.services.s3.model.ListObjectsResponse;
 import software.amazon.awssdk.services.s3.model.NoSuchBucketException;
 import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+import software.amazon.awssdk.services.s3.model.PutObjectResponse;
 import software.amazon.awssdk.services.s3.model.S3Exception;
 
 /**
@@ -303,9 +308,11 @@ abstract class S3StorageAdapter implements StorageAdapter {
      * @param contentLength The content length in bytes.
      * @return StorageMetadata instance; never null.
      */
-    StorageMetadata toStorageMetadata(StorageLocation loc, URI md5, long contentLength, final URI artifactURI) {
+    StorageMetadata toStorageMetadata(StorageLocation loc, URI md5, long contentLength, 
+            final URI artifactURI, Date lastModified) {
         StorageMetadata storageMetadata = new StorageMetadata(loc, md5, contentLength);
         storageMetadata.artifactURI = artifactURI;
+        storageMetadata.contentLastModified = lastModified;
         return storageMetadata;
     }
 
@@ -476,9 +483,16 @@ abstract class S3StorageAdapter implements StorageAdapter {
      */
     @Override
     public StorageMetadata put(NewArtifact newArtifact, InputStream source)
-            throws IncorrectContentChecksumException, IncorrectContentLengthException, ReadException, WriteException,
+            throws ByteLimitExceededException, 
+            IncorrectContentChecksumException, IncorrectContentLengthException, 
+            ReadException, WriteException,
             StorageEngageException {
+        InventoryUtil.assertNotNull(S3StorageAdapter.class, "newArtifact", newArtifact);
         LOGGER.debug("put: " + newArtifact);
+        
+        if (newArtifact.contentChecksum == null || newArtifact.contentLength == null) {
+            throw new UnsupportedOperationException("put requires contentChecksum and contentLength");
+        }
         
         final StorageLocation loc = generateStorageLocation();
 
@@ -497,15 +511,16 @@ abstract class S3StorageAdapter implements StorageAdapter {
             metadata.put(ARTIFACT_URI_KEY, newArtifact.getArtifactURI().toASCIIString().trim());
 
             if (newArtifact.contentChecksum != null) {
+                metadata.put(CHECKSUM_KEY, newArtifact.contentChecksum.toASCIIString());
+                
                 ensureChecksum(newArtifact.contentChecksum);
                 final String md5SumValue = newArtifact.contentChecksum.getSchemeSpecificPart();
-
                 // Reconvert to Hex bytes before Base64 encoding it as per what S3 expects.
                 final byte[] value = HexUtil.toBytes(md5SumValue);
                 checksum = new String(Base64.getEncoder().encode(value));
                 putObjectRequestBuilder.contentMD5(checksum);
-                metadata.put(CHECKSUM_KEY, newArtifact.contentChecksum.toASCIIString());
             } else { 
+                // exception thrown above makes this not reachable (see TODO below)
                 try {
                     MessageDigest md = MessageDigest.getInstance(DEFAULT_CHECKSUM_ALGORITHM);
                     DigestInputStream dis = new DigestInputStream(source, md);
@@ -515,18 +530,11 @@ abstract class S3StorageAdapter implements StorageAdapter {
                 }
             }
 
-            /*
-            TODO: Is this necessary?  It's being sent with the RequestBody.fromInputStream() below already.  S3 will
-            TODO: throw an exception if it's missing.
-            TODO: jenkinsd 2020.01.20
-             */
             putObjectRequestBuilder.contentLength(newArtifact.contentLength);
-
-            // Metadata are extended attributes.  So far this is "uri" and "md5".
             putObjectRequestBuilder.metadata(metadata);
-
-            s3client.putObject(putObjectRequestBuilder.build(), RequestBody.fromInputStream(source,
-                    newArtifact.contentLength));
+            PutObjectResponse putResponse = s3client.putObject(putObjectRequestBuilder.build(), RequestBody.fromInputStream(source, newArtifact.contentLength));
+            
+            URI s3checksum = URI.create("md5:" + putResponse.eTag().replaceAll("\"", ""));
             
             URI contentChecksum = newArtifact.contentChecksum;
             if (source instanceof DigestInputStream) {
@@ -534,8 +542,21 @@ abstract class S3StorageAdapter implements StorageAdapter {
                 DigestInputStream dis = (DigestInputStream) source;
                 MessageDigest md = dis.getMessageDigest();
                 contentChecksum = URI.create(DEFAULT_CHECKSUM_ALGORITHM + ":" + HexUtil.toHex(md.digest()));
+                if (!contentChecksum.equals(s3checksum)) {
+                    throw new RuntimeException("checksum mismatch (S3StorageAdapter vs S3): " + contentChecksum + " != " + s3checksum);
+                }
             }
-            return toStorageMetadata(loc, contentChecksum, newArtifact.contentLength, newArtifact.getArtifactURI());
+            if (newArtifact.contentChecksum != null && !newArtifact.contentChecksum.equals(s3checksum)) {
+                throw new RuntimeException("checksum mismatch (client vs S3) undetected: " + newArtifact.contentChecksum + " != " + s3checksum);
+            }
+            if (newArtifact.contentChecksum == null) {
+                // TODO: update the object with metadata we did not know up-front?
+                // TODO: get the S3Object or GetObjectResponse and see if the etag is an MD5 checksum?
+            }
+            
+            // TODO: head request to get the lastModified?
+            Date lastModified = null;
+            return toStorageMetadata(loc, contentChecksum, newArtifact.contentLength, newArtifact.getArtifactURI(), lastModified);
         } catch (S3Exception e) {
             final AwsErrorDetails awsErrorDetails = e.awsErrorDetails();
             if ((awsErrorDetails != null) && StringUtil.hasLength(awsErrorDetails.errorCode())) {
@@ -549,6 +570,10 @@ abstract class S3StorageAdapter implements StorageAdapter {
                         throw new IncorrectContentLengthException(
                                 String.format("Content length does not match bytes written.  Expected %d bytes.",
                                         newArtifact.contentLength));
+                    }
+                    case "EntityTooLarge": {
+                        throw new ByteLimitExceededException("content length too large for single upload stream",
+                                newArtifact.contentLength);
                     }
                     case "InternalError": {
                         /*
@@ -616,9 +641,10 @@ abstract class S3StorageAdapter implements StorageAdapter {
      * @param key The key to look for.
      * @return StorageMetadata instance. Never null
      */
-    StorageMetadata head(InternalBucket bucket, final String key) {
+    StorageMetadata head(InternalBucket bucket, String key) {
         HeadObjectRequest.Builder headBuilder = HeadObjectRequest.builder().key(key);
         HeadObjectResponse headResponse = s3client.headObject(headBuilder.bucket(bucket.name).build());
+
         Map<String, String> objectMetadata = headResponse.metadata();
         LOGGER.debug("object: " + bucket + " " + key);
         for (Map.Entry<String,String> me : objectMetadata.entrySet()) {
@@ -629,10 +655,12 @@ abstract class S3StorageAdapter implements StorageAdapter {
 
         StorageLocation loc = toExternal(bucket, key);
 
-        // TODO: The MD5 value must always be present.  Do we need a null check here?
-        final URI md5 = URI.create(objectMetadata.get(CHECKSUM_KEY));
+        URI md5 = URI.create(objectMetadata.get(CHECKSUM_KEY));
+        //URI md5 = URI.create("md5:unknown");
 
-        return toStorageMetadata(loc, md5, headResponse.contentLength(), artifactURI);
+        Instant t = headResponse.lastModified();
+        Date lastModified = new Date(1000 * t.getEpochSecond() + t.getNano() / 1000000);
+        return toStorageMetadata(loc, md5, headResponse.contentLength(), artifactURI, lastModified);
     }
 
     /**
@@ -649,7 +677,7 @@ abstract class S3StorageAdapter implements StorageAdapter {
         LOGGER.debug("delete: " + storageLocation);
         
         try {
-            final DeleteObjectRequest.Builder deleteObjectRequestBuilder
+            final DeleteObjectRequest.Builder deleteObjectRequestBuilder 
                 = DeleteObjectRequest.builder()
                 .bucket(toInternalBucket(storageLocation).name)
                 .key(storageLocation.getStorageID().toASCIIString());

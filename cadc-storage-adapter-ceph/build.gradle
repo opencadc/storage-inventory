@@ -20,7 +20,7 @@ apply from: '../opencadc.gradle'
 dependencies {
     compile 'log4j:log4j:[1.2,)'
     compile 'org.opencadc:cadc-util:[1.2.31,)'
-    compile 'org.opencadc:cadc-storage-adapter:[0.3,)'
+    compile 'org.opencadc:cadc-storage-adapter:[0.4,)'
 
     // Java FITS library.
     compile 'gov.nasa.gsfc.heasarc:nom-tam-fits:[1,2)'
