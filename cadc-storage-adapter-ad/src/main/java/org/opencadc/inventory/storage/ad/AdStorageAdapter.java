@@ -172,7 +172,6 @@ public class AdStorageAdapter implements StorageAdapter {
         }
     }
 
-    
     /**
      * Get from storage the artifact identified by storageLocation.
      * 
