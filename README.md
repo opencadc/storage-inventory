@@ -5,8 +5,10 @@ Storage Inventory components
 
 This is the storage inventory data model and architecture documentation.
 
-# cadc-*
+# cadc-file-validate
+Application to periodically verify the contents of the Storage Inventory database against what is actually in storage.
 
+# cadc-*
 These are libraries used in multiple services.
 
 # baldur

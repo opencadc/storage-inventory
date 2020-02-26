@@ -68,6 +68,7 @@
 
 package org.opencadc.inventory.validate;
 
+import ca.nrc.cadc.util.Log4jInit;
 
 import java.io.FileNotFoundException;
 import java.io.FileReader;
@@ -75,6 +76,7 @@ import java.io.IOException;
 import java.io.Reader;
 import java.util.Properties;
 
+import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 
 
@@ -84,25 +86,24 @@ import org.apache.log4j.Logger;
 public class Main {
 
     private static final Logger LOGGER = Logger.getLogger(Main.class);
-    private static final String CONFIGURATION_FILE_LOCATION = System.getProperty("user.home")
-                                                              + "/config/cadc-file-validate.properties";
+    private static final String CONFIGURATION_FILE_LOCATION = "/config/cadc-file-validate.properties";
 
     public static void main(final String[] args) {
-        final Properties properties = Main.getConfiguration();
+        Main.configure();
 
-        // TODO
-        // TODO: Validate properties and initialize the business logic.
-        // TODO
 
-        System.setProperties(properties);
     }
 
-    private static Properties getConfiguration() {
+    /**
+     * Read in the configuration file and load it into the System properties.
+     */
+    private static void configure() {
         final Properties properties = new Properties();
 
         try {
             final Reader configFileReader = new FileReader(CONFIGURATION_FILE_LOCATION);
             properties.load(configFileReader);
+            System.setProperties(properties);
         } catch (FileNotFoundException e) {
             LOGGER.fatal(
                     String.format("Unable to locate configuration file.  Expected it to be at %s.",
@@ -112,7 +113,5 @@ public class Main {
             LOGGER.fatal(String.format("Unable to read file located at %s.", CONFIGURATION_FILE_LOCATION));
             System.exit(2);
         }
-
-        return properties;
     }
 }

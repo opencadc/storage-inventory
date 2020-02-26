@@ -1,4 +1,4 @@
-FROM cadc-java:8
+FROM cadc-java
 
 ARG APP_VERSION=0.1
 
