@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2019.                            (c) 2019.
+*  (c) 2020.                            (c) 2020.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -67,129 +67,26 @@
 
 package org.opencadc.inventory;
 
-import java.net.URI;
-import java.util.Objects;
-import java.util.UUID;
+import java.util.Comparator;
 import org.apache.log4j.Logger;
 
 /**
- * Entity describing a storage site. Each storage site will have one instance of this
- * and global inventory will harvest those and thus have a small set of sites it knows
- * about. While global will bootstrap using a registry (search), it will track info 
- * gathered from the sites themselves via this class.
+ * Comparator that orders artifacts by StorageLocation. The compare method will throw 
+ * a NullPointerExcpetion if either artifact does not have a StorageLocation.
  * 
  * @author pdowler
  */
-public class StorageSite extends Entity implements Comparable<StorageSite> {
-    private static final Logger log = Logger.getLogger(StorageSite.class);
+public class StoredArtifactComparator implements Comparator<Artifact> {
+    private static final Logger log = Logger.getLogger(StoredArtifactComparator.class);
 
-    private URI resourceID;
-    private String name;
-    
-    /**
-     * Create a new StorageSite.
-     * 
-     * @param resourceID IVOA resourceID
-     * @param name display name
-     */
-    public StorageSite(URI resourceID, String name) {
-        super();
-        init(resourceID, name);
-    }
-    
-    /**
-     * Reconstruct a storage site from serialized state.
-     * 
-     * @param id entity ID
-     * @param resourceID IVOA resourceID
-     * @param name display name
-     */
-    public StorageSite(UUID id, URI resourceID, String name) {
-        super(id);
-        init(resourceID, name);
-    }
-    
-    private void init(URI resourceID, String name) {
-        InventoryUtil.assertNotNull(StorageSite.class, "resourceID", resourceID);
-        InventoryUtil.assertNotNull(StorageSite.class, "name", name);
-        this.resourceID = resourceID;
-        this.name = name;
+    public StoredArtifactComparator() { 
     }
 
-    /**
-     * Get the resourceID (service identifier) for this site.
-     * 
-     * @return resourceID identifier for the files service at the site
-     */
-    public URI getResourceID() {
-        return resourceID;
-    }
-
-    /**
-     * Get the display name of this site.
-     * 
-     * @return display name
-     */
-    public String getName() {
-        return name;
-    }
-
-    /**
-     * Change the resourceID of this site.
-     * 
-     * @param resourceID identifier for the files service at the site
-     */
-    public void setResourceID(URI resourceID) {
-        InventoryUtil.assertNotNull(StorageSite.class, "resourceID", resourceID);
-        this.resourceID = resourceID;
-    }
-
-    /**
-     * Change the display name of this site.
-     * 
-     * @param name display name for this site
-     */
-    public void setName(String name) {
-        InventoryUtil.assertNotNull(StorageSite.class, "name", name);
-        this.name = name;
-    }
-
-    /**
-     * Compares Site.resourceID values.
-     * 
-     * @param o object to compare to
-     * @return true if the object is a StorageSite with the same resourceID, otherwise false
-     */
     @Override
-    public boolean equals(Object o) {
-        if (o == null) {
-            return false;
+    public int compare(Artifact lhs, Artifact rhs) {
+        if (lhs == null || rhs == null) {
+            throw new NullPointerException("invalid use: StorageLocation must be set");
         }
-        StorageSite f = (StorageSite) o;
-        return this.compareTo(f) == 0;
+        return lhs.storageLocation.compareTo(rhs.storageLocation);
     }
-
-    @Override
-    public int hashCode() {
-        int hash = 7;
-        hash = 43 * hash + Objects.hashCode(this.resourceID);
-        return hash;
-    }
-    
-    @Override
-    public String toString() {
-        StringBuilder sb = new StringBuilder(super.toString());
-        sb.append("[");
-        sb.append(resourceID).append(",");
-        sb.append(name);
-        sb.append("]");
-        return sb.toString();
-    }
-
-    @Override
-    public int compareTo(StorageSite t) {
-        return resourceID.compareTo(t.resourceID);
-    }
-    
-    
 }
