@@ -262,8 +262,8 @@ public class AdStorageAdapter implements StorageAdapter {
     public Iterator<StorageMetadata> iterator(String storageBucket)
         throws StorageEngageException, TransientException {
         InventoryUtil.assertNotNull(AdStorageQueryUtil.class, "storageBucket", storageBucket);
-        if (StringUtil.hasLength(storageBucket)) {
-            throw new IllegalArgumentException("Archive name must be specified");
+        if (!StringUtil.hasLength(storageBucket)) {
+            throw new IllegalArgumentException("Archive name must be specified: " + storageBucket);
         }
 
         log.debug("storage bucket: " + storageBucket);
