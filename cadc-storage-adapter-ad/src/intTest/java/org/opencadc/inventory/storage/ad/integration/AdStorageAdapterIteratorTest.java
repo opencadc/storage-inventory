@@ -143,7 +143,6 @@ public class AdStorageAdapterIteratorTest {
         });
     }
 
-
     @Test
     public void testGetIteratorInvalidArchive() throws Exception {
         Subject.doAs(testSubject, new PrivilegedExceptionAction<Object>() {
