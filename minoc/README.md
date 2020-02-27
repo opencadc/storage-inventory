@@ -35,7 +35,7 @@ A minoc.properties file in /config is required to run this service.  The followi
 # The storage adapter to use for storage.
 # Consult the storage adapter instructions for adapter-specific configuration
 #org.opencadc.inventory.storage.StorageAdapter={fully-qualified-classname of implementation}
-org.opencadc.inventory.storage.StorageAdapter=org.opencadc.inventory.storage.fs.FileSystemStorageAdapter
+org.opencadc.inventory.storage.StorageAdapter={storage adapter class}
 
 # The SQL generator implementation (default shown)
 #org.opencadc.inventory.db.SQLGenerator=org.opencadc.inventory.db.SQLGenerator
@@ -52,6 +52,11 @@ org.opencadc.inventory.db.schema=inventory
 #org.opencadc.inventory.permissions.WriteGrant.resourceID=ivo://{authority}/{name}
 ```
 
+## configuring the storage adapter class
+
+Refer to documentation for the storage adapter named in minoc.properties in the 
+'org.opencadc.inventory.storage.StorageAdapater' entry for any configuration required.
+
 ## building it
 ```
 gradle clean build
@@ -67,6 +72,4 @@ docker run -it minoc:latest /bin/bash
 ```
 docker run --user tomcat:tomcat --volume=/path/to/external/config:/config:ro --name minoc minoc:latest
 ```
-Note: If you use cadc-storage-adapter-fs you probably also want to volume mount an external directory 
-read-write to store files.
 
