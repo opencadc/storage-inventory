@@ -22,3 +22,6 @@ create unique index uri_index on <schema>.Artifact(uri);
 create index bucket_index on <schema>.Artifact(uriBucket);
 
 create index a_modified_index on <schema>.Artifact(lastModified);
+
+create unique index storage_index on <schema>.Artifact(storageLocation_storageBucket,storageLocation_storageID)
+    where storageLocation_storageID is not null;

@@ -67,7 +67,7 @@
 
 package org.opencadc.inventory.db;
 
-import java.util.List;
+import java.util.Set;
 import org.opencadc.inventory.Entity;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.PreparedStatementCreator;
@@ -78,6 +78,5 @@ import org.springframework.jdbc.core.PreparedStatementCreator;
  * @param <T> entity subclass
  */
 interface EntityList<T extends Entity> extends PreparedStatementCreator {
-    
-    List<T> query(JdbcTemplate jdbc); 
+    Set<T> query(JdbcTemplate jdbc); 
 }
