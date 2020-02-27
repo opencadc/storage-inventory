@@ -72,8 +72,8 @@ import java.lang.reflect.Field;
 import java.net.URI;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.Collection;
 import java.util.Date;
-import java.util.List;
 import java.util.UUID;
 import org.apache.log4j.Logger;
 
@@ -164,7 +164,7 @@ public abstract class InventoryUtil {
      * @param sites list of known sites
      * @return matching site or null if not found
      */
-    public static StorageSite findSite(UUID id, List<StorageSite> sites) {
+    public static StorageSite findSite(UUID id, Collection<StorageSite> sites) {
         for (StorageSite s : sites) {
             if (s.getID().equals(id)) {
                 return s;
@@ -180,7 +180,7 @@ public abstract class InventoryUtil {
      * @param sites list of known sites
      * @return matching site or null if not found
      */
-    public static StorageSite findSite(URI resourceID, List<StorageSite> sites) {
+    public static StorageSite findSite(URI resourceID, Collection<StorageSite> sites) {
         for (StorageSite s : sites) {
             if (s.getResourceID().equals(resourceID)) {
                 return s;
