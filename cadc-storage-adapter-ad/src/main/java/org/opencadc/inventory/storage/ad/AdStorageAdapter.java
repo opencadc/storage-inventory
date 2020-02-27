@@ -84,6 +84,7 @@ import ca.nrc.cadc.reg.Capability;
 import ca.nrc.cadc.reg.Interface;
 import ca.nrc.cadc.reg.Standards;
 import ca.nrc.cadc.reg.client.RegistryClient;
+import ca.nrc.cadc.util.StringUtil;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -98,7 +99,6 @@ import java.util.SortedSet;
 
 import javax.security.auth.Subject;
 
-import ca.nrc.cadc.util.StringUtil;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.StorageLocation;
@@ -278,7 +278,7 @@ public class AdStorageAdapter implements StorageAdapter {
 
         try {
             storageMetadataIterator = tc.execute(adQuery.getQuery(), adQuery.getRowMapper());
-        } catch (Exception e ) {
+        } catch (Exception e) {
             log.error("error executing TapClient query");
             throw new TransientException(e.getMessage());
         }

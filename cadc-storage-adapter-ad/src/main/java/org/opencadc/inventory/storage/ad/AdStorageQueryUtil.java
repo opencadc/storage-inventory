@@ -117,12 +117,16 @@ public class AdStorageQueryUtil {
             String storageBucket = (String) i.next();
 
             // convert to URI: archive_files.uri
-            URI storageID = null; // (URI) i.next();
+            URI storageID = null;
             try {
                 storageID = new URI((String) i.next());
             } catch (URISyntaxException u) {
                 throw new IllegalArgumentException("artifact uri error: " + u.getMessage());
             }
+
+            // Set up StorageLocation object first
+            StorageLocation sl = new StorageLocation(storageID);
+            sl.storageBucket = storageBucket;
 
             // archive_files.contentMD5
             URI contentChecksum = null;
@@ -134,37 +138,31 @@ public class AdStorageQueryUtil {
 
             // archive_files.fileSize
             Long contentLength = (Long) i.next();
-
             if (contentLength == null) {
                 throw new IllegalArgumentException("content length error (null): " + storageID.toString());
             }
 
-            // archive_files.contentEncoding
-            String contentEncoding = (String) i.next();
-
-            // archive_files.contentType
-            String contentType = (String) i.next();
-
-            // archive_files.ingestDate
-            Date contentLastModified = (Date) i.next();
-
-            // Set up StorageLocation object first
-            StorageLocation sl = new StorageLocation(storageID);
-            sl.storageBucket = storageBucket;
-
             // Build StorageMetadata object - this will throw errors if anything that should be set isn't
             StorageMetadata ret = new StorageMetadata(sl, contentChecksum, contentLength);
-
             if (ret == null) {
                 throw new IllegalArgumentException("oops");
             }
+
             ret.artifactURI = storageID;
-            log.debug("StorageMetadata artifactURI: " + ret.artifactURI.toString());
 
             // Set optional values into ret at this point - allowed to be null
+            // archive_files.contentEncoding
+            String contentEncoding = (String) i.next();
             ret.contentEncoding = contentEncoding;
+
+            // archive_files.contentType
+            String contentType = (String) i.next();
             ret.contentType = contentType;
+
+            // archive_files.ingestDate
+            Date contentLastModified = (Date) i.next();
             ret.contentLastModified = contentLastModified;
+            log.debug("StorageMetadata artifactURI: " + ret.artifactURI.toString());
 
             return ret;
         }
