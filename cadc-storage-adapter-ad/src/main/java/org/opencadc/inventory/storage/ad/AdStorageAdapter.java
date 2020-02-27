@@ -97,6 +97,8 @@ import java.util.Set;
 import java.util.SortedSet;
 
 import javax.security.auth.Subject;
+
+import ca.nrc.cadc.util.StringUtil;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.StorageLocation;
@@ -260,7 +262,7 @@ public class AdStorageAdapter implements StorageAdapter {
     public Iterator<StorageMetadata> iterator(String storageBucket)
         throws StorageEngageException, TransientException {
         InventoryUtil.assertNotNull(AdStorageQueryUtil.class, "storageBucket", storageBucket);
-        if (storageBucket.length() == 0) {
+        if (StringUtil.hasLength(storageBucket)) {
             throw new IllegalArgumentException("Archive name must be specified");
         }
 
