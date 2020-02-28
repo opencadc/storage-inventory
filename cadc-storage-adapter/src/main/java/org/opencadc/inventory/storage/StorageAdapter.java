@@ -167,7 +167,8 @@ public interface StorageAdapter {
         throws ResourceNotFoundException, IOException, StorageEngageException, TransientException;
     
     /**
-     * Iterator of items ordered by their storageIDs.
+     * Iterator of items ordered by StorageLocation.
+     * 
      * @return An iterator over an ordered list of items in storage.
      * 
      * @throws StorageEngageException If the adapter failed to interact with storage.
@@ -177,25 +178,27 @@ public interface StorageAdapter {
         throws StorageEngageException, TransientException;
     
     /**
-     * Iterator of items ordered by their storageIDs in the given bucket.
-     * @param storageBucket Only iterate over items in this bucket.
-     * @return An iterator over an ordered list of items in this storage bucket.
+     * Iterate over StorageMetadata ordered by their StorageLocation.
+     * 
+     * @param storageBucketPrefix null, partial, or complete storageBucket string
+     * @return iterator over StorageMetadata sorted by StorageLocation
      * 
      * @throws StorageEngageException If the adapter failed to interact with storage.
      * @throws TransientException If an unexpected, temporary exception occurred. 
      */
-    public Iterator<StorageMetadata> iterator(String storageBucket)
+    public Iterator<StorageMetadata> iterator(String storageBucketPrefix)
         throws StorageEngageException, TransientException;
     
     /**
-     * Get a set of  of items in the given bucket.
-     * @param storageBucket the bucket to list
-     * @return An iterator over an ordered list of items in this storage bucket.
+     * Get the set of StorageMetadata in StorageLocation order.
+     * 
+     * @param storageBucketPrefix null, partial, or complete storageBucket string
+     * @return set of StorageMetadata sorted by StorageLocation
      * 
      * @throws StorageEngageException If the adapter failed to interact with storage.
      * @throws TransientException If an unexpected, temporary exception occurred. 
      */
-    public SortedSet<StorageMetadata> list(String storageBucket)
+    public SortedSet<StorageMetadata> list(String storageBucketPrefix)
         throws StorageEngageException, TransientException;
     
     // for a symbolic bucket scheme (eg AD or human-usable filesystem):
