@@ -1,4 +1,4 @@
-# cadc-file-validate 0.1
+# tantar v0.1
 
 Process to ensure validity of the information stored in the Inventory Database and what is served from a Storage Adapter.  
 
@@ -7,24 +7,23 @@ the storage system.
 
 ## Configuration
 
-A file called `cadc-file-validate.properties` should be available from the `/config` directory.  All properties in the file are loaded and set
+A file called `tantar.properties` should be available from the `/config` directory.  All properties in the file are loaded and set
 as System properties.
 
-### Sample configuration (`cadc-file-validate.properties`)
+### Template configuration (`tantar.properties`)
 
 ```
 #######
 ## Common settings
 #######
 org.opencadc.inventory.logging = INFO
-org.opencadc.inventory.validate.logging = INFO
+org.opencadc.inventory.{name}.logging = INFO
 
 #######
 ## Validator settings
 #######
-# Used to set the bucket range to validate
-org.opencadc.inventory.validate.bucket.start = {bucket-range-start}
-org.opencadc.inventory.validate.bucket.end = {bucket-range-end}
+# Used to set the bucket to validate
+org.opencadc.inventory.validate.bucket = {bucketname}
 
 #######
 ## Storage Inventory settings
@@ -33,10 +32,10 @@ org.opencadc.inventory.validate.bucket.end = {bucket-range-end}
 #org.opencadc.inventory.db.SQLGenerator=org.opencadc.inventory.db.SQLGenerator
 
 # The database settings for the Inventory database.
-org.opencadc.inventory.db.schema=inventory
-org.opencadc.inventory.db.username=pguser
-org.opencadc.inventory.db.password=pgpass
-org.opencadc.inventory.db.url=jdbc:postgresql://myhost/mydb
+org.opencadc.inventory.db.schema={schema}
+org.opencadc.inventory.db.username={dbuser}
+org.opencadc.inventory.db.password={dbpassword}
+org.opencadc.inventory.db.url={jdbcurl}
 
 #######
 ## Storage Adapter specific settings
@@ -45,7 +44,6 @@ org.opencadc.inventory.db.url=jdbc:postgresql://myhost/mydb
 # Consult the storage adapter instructions for adapter-specific configuration.  The library MUST be
 # accessible from this application's classpath.
 #org.opencadc.inventory.storage.StorageAdapter={fully-qualified-classname of implementation}
-org.opencadc.inventory.storage.StorageAdapter=org.opencadc.inventory.storage.fs.FileSystemStorageAdapter
 ```
 
 
@@ -54,15 +52,21 @@ This Docker image relies on the [Base Java Docker image](https://github.com/open
 
 ```
 gradle -i clean build
-docker build -t opencadc/cadc-file-validate -f Dockerfile .
+docker build -t opencadc/tantar -f Dockerfile .
 ```
 
 ## Checking it
 ```
-docker run -t opencadc/cadc-file-validate:latest
+docker run -t opencadc/tantar:latest
 ```
 
 ## Running it
+Running as the `nobody` user is recommended:
 ```
-docker run -r -v /path/to/external/config:/config:ro --name validate opencadc/cadc-file-validate:latest
+docker run -r --user nobody:nobody -v /path/to/external/config:/config:ro --name validate opencadc/tantar:latest
+```
+
+Or as root:
+```
+docker run -r -v /path/to/external/config:/config:ro --name validate opencadc/tantar:latest
 ```
