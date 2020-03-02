@@ -186,7 +186,7 @@ public abstract class ArtifactAction extends RestAction {
             URI resourceID = new URI(rid);
             StorageSiteDAO ssdao = new StorageSiteDAO();
             ssdao.setConfig(getDaoConfig(props));
-            List<StorageSite> curlist = ssdao.list();
+            Set<StorageSite> curlist = ssdao.list();
             if (curlist.size() > 1) {
                 throw new IllegalStateException("found: " + curlist.size() + " StorageSite(s) in database; expected 0 or 1");
             }
@@ -200,11 +200,14 @@ public abstract class ArtifactAction extends RestAction {
             if (curlist.isEmpty()) {
                 StorageSite self = new StorageSite(resourceID, name);
                 ssdao.put(self);
-            } else {
-                StorageSite cur = curlist.get(0);
+            } else if (curlist.size() == 1) {
+                
+                StorageSite cur = curlist.iterator().next();
                 cur.setResourceID(resourceID);
                 cur.setName(name);
                 ssdao.put(cur);
+            } else {
+                throw new IllegalStateException("BUG: found " + curlist.size() + " StorageSite entries");
             }
             log.info("initStorageSite: " + resourceID + " " + name);
             SELF_RESOURCE_ID = resourceID;

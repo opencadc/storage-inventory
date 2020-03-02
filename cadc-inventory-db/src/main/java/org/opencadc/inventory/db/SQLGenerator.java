@@ -78,10 +78,14 @@ import java.sql.Types;
 import java.util.Calendar;
 import java.util.Comparator;
 import java.util.Date;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
+import java.util.TreeSet;
 import java.util.UUID;
+import javax.sql.DataSource;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.DeletedArtifactEvent;
@@ -213,6 +217,13 @@ public class SQLGenerator {
             return new ObsoleteStorageLocationGet();
         }
         throw new UnsupportedOperationException("entity-get: " + c.getName());
+    }
+    
+    public EntityIterator getEntityIterator(Class c) {
+        if (Artifact.class.equals(c)) {
+            return new ArtifactIterator();
+        }
+        throw new UnsupportedOperationException("entity-list: " + c.getName());
     }
     
     public EntityList getEntityList(Class c) {
@@ -443,6 +454,47 @@ public class SQLGenerator {
         }
     }
     
+    class ArtifactIterator implements EntityIterator<Artifact> {
+
+        private String prefix;
+
+        public void setPrefix(String prefix) {
+            this.prefix = prefix;
+        }
+        
+        @Override
+        public Iterator<Artifact> query(DataSource ds) {
+            
+            StringBuilder sb = getSelectFromSQL(Artifact.class, false);
+            sb.append(" WHERE ");
+            if (prefix != null) {
+                sb.append("storageLocation_storageBucket LIKE ? AND");
+            }
+            sb.append(" storageLocation_storageID IS NOT NULL");
+            // NOTE: StorageLocation.compare() specifies the correct order
+            // null storageBucket to come after non-null
+            // postgresql: the default order is equivalent to explicitly specifying ASC NULLS LAST
+            // default behaviour may not be db-agnostic
+            sb.append(" ORDER BY storageLocation_storageBucket, storageLocation_storageID");
+            String sql = sb.toString();
+            log.debug("ArtifactGet: " + sql);
+            
+            try {
+                Connection con = ds.getConnection();
+                PreparedStatement ps = con.prepareStatement(sql);
+                if (prefix != null) {
+                    ps.setString(1, prefix);
+                }
+                ResultSet rs = ps.executeQuery();
+                
+                return new ArtifactResultSetIterator(rs);
+            } catch (SQLException ex) {
+                throw new RuntimeException("BUG: artifact list query failed", ex);
+            }
+        }
+        
+    }
+    
     private class StorageSiteGet implements EntityGet<StorageSite> {
         private UUID id;
         private URI uri;
@@ -478,8 +530,11 @@ public class SQLGenerator {
     private class StorageSiteList implements EntityList<StorageSite> {
 
         @Override
-        public List<StorageSite> query(JdbcTemplate jdbc) {
-            return (List<StorageSite>) jdbc.query(this, new StorageSiteRowMapper());
+        public Set<StorageSite> query(JdbcTemplate jdbc) {
+            List<StorageSite> sites = (List<StorageSite>) jdbc.query(this, new StorageSiteRowMapper());
+            Set<StorageSite> ret = new TreeSet<>();
+            ret.addAll(sites);
+            return ret;
         }
 
         @Override
@@ -850,47 +905,80 @@ public class SQLGenerator {
         }
     }
     
+    // conveneience to extract one artifact from single row result set
     private class ArtifactExtractor implements ResultSetExtractor {
 
         final Calendar utc = Calendar.getInstance(DateUtil.UTC);
         
         @Override
-        public Object extractData(ResultSet rs) throws SQLException, DataAccessException {
+        public Object extractData(ResultSet rs) throws SQLException {
             if (!rs.next()) {
                 return null;
             }
+            return mapRowToArtifact(rs, utc);
             
-            int col = 1;
-            final URI uri = Util.getURI(rs, col++);
-            col++; // uriBucket
-            final URI contentChecksum = Util.getURI(rs, col++);
-            final Date contentLastModified = Util.getDate(rs, col++, utc);
-            final Long contentLength = Util.getLong(rs, col++);
-            final String contentType = rs.getString(col++);
-            final String contentEncoding = rs.getString(col++);
-            final UUID[] siteLocs = Util.getUUIDArray(rs, col++);
-            final URI storLoc = Util.getURI(rs, col++);
-            final String storBucket = rs.getString(col++);
-            final Date lastModified = Util.getDate(rs, col++, utc);
-            final URI metaChecksum = Util.getURI(rs, col++);
-            final UUID id = Util.getUUID(rs, col++);
-            
-            Artifact a = new Artifact(id, uri, contentChecksum, contentLastModified, contentLength);
-            a.contentType = contentType;
-            a.contentEncoding = contentEncoding;
-            if (siteLocs != null && siteLocs.length > 0) {
-                for (UUID s: siteLocs) {
-                    a.siteLocations.add(new SiteLocation(s));
-                }
-            }
-            if (storLoc != null) {
-                a.storageLocation = new StorageLocation(storLoc);
-                a.storageLocation.storageBucket = storBucket;
-            }
-            InventoryUtil.assignLastModified(a, lastModified);
-            InventoryUtil.assignMetaChecksum(a, metaChecksum);
-            return a;
         }
+    }
+    
+    private class ArtifactResultSetIterator implements Iterator<Artifact> {
+        final Calendar utc = Calendar.getInstance(DateUtil.UTC);
+        private final ResultSet rs;
+        boolean hasRow;
+        
+        ArtifactResultSetIterator(ResultSet rs) throws SQLException {
+            this.rs = rs;
+            hasRow = rs.next();
+        }
+
+        @Override
+        public boolean hasNext() {
+            return hasRow;
+        }
+
+        @Override
+        public Artifact next() {
+            try {
+                Artifact ret = mapRowToArtifact(rs, utc);
+                hasRow = rs.next();
+                return ret;
+            } catch (SQLException ex) {
+                throw new RuntimeException("BUG: artifact list query failed while iterating", ex);
+            }
+            
+        }
+    }
+    
+    private Artifact mapRowToArtifact(ResultSet rs, Calendar utc) throws SQLException {
+        int col = 1;
+        final URI uri = Util.getURI(rs, col++);
+        col++; // uriBucket
+        final URI contentChecksum = Util.getURI(rs, col++);
+        final Date contentLastModified = Util.getDate(rs, col++, utc);
+        final Long contentLength = Util.getLong(rs, col++);
+        final String contentType = rs.getString(col++);
+        final String contentEncoding = rs.getString(col++);
+        final UUID[] siteLocs = Util.getUUIDArray(rs, col++);
+        final URI storLoc = Util.getURI(rs, col++);
+        final String storBucket = rs.getString(col++);
+        final Date lastModified = Util.getDate(rs, col++, utc);
+        final URI metaChecksum = Util.getURI(rs, col++);
+        final UUID id = Util.getUUID(rs, col++);
+
+        Artifact a = new Artifact(id, uri, contentChecksum, contentLastModified, contentLength);
+        a.contentType = contentType;
+        a.contentEncoding = contentEncoding;
+        if (siteLocs != null && siteLocs.length > 0) {
+            for (UUID s: siteLocs) {
+                a.siteLocations.add(new SiteLocation(s));
+            }
+        }
+        if (storLoc != null) {
+            a.storageLocation = new StorageLocation(storLoc);
+            a.storageLocation.storageBucket = storBucket;
+        }
+        InventoryUtil.assignLastModified(a, lastModified);
+        InventoryUtil.assignMetaChecksum(a, metaChecksum);
+        return a;
     }
     
     private class ObsoleteStorageLocationExtractor implements ResultSetExtractor {
