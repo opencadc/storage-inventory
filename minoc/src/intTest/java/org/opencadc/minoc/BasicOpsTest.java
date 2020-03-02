@@ -123,15 +123,9 @@ public class BasicOpsTest extends MinocTest {
                     // put
                     InputStream in = new ByteArrayInputStream(data.getBytes());
                     HttpUpload put = new HttpUpload(in, artifactURL);
-//                    conn.setRequestProperty("Content-Length", len);
-//                    log.debug("POST Content-Length: " + len);
                     put.setRequestProperty("Content-Type", type);
                     put.setRequestProperty("Content-Encoding", encoding);
-//                    log.debug("POST Content-Type: " + input.getContentType());
 
-
-//                    put.setContentEncoding(encoding);
-//                    put.setContentType(type);
                     put.run();
                     Assert.assertNull(put.getThrowable());
                     
@@ -271,8 +265,6 @@ public class BasicOpsTest extends MinocTest {
                     HttpUpload put = new HttpUpload(in, artifactURL);
                     put.setRequestProperty("Content-Type", type);
                     put.setRequestProperty("Content-Encoding", encoding);
-//                    put.setContentEncodingg(encoding);
-//                    put.setContentType(type);
                     put.run();
                     Assert.assertEquals("should be 400, bad request", 400, put.getResponseCode());
                     
