@@ -22,8 +22,8 @@ org.opencadc.inventory.{name}.logging = INFO
 #######
 ## Validator settings
 #######
-# Used to set the bucket to validate
-org.opencadc.inventory.validate.bucket = {bucketname}
+# Used to set the bucket to tantar
+org.opencadc.tantar.bucket = {bucketname}
 
 #######
 ## Storage Inventory settings
@@ -63,10 +63,10 @@ docker run -t opencadc/tantar:latest
 ## Running it
 Running as the `nobody` user is recommended:
 ```
-docker run -r --user nobody:nobody -v /path/to/external/config:/config:ro --name validate opencadc/tantar:latest
+docker run -r --user nobody:nobody -v /path/to/external/config:/config:ro --name tantar opencadc/tantar:latest
 ```
 
 Or as root:
 ```
-docker run -r -v /path/to/external/config:/config:ro --name validate opencadc/tantar:latest
+docker run -r -v /path/to/external/config:/config:ro --name tantar opencadc/tantar:latest
 ```
