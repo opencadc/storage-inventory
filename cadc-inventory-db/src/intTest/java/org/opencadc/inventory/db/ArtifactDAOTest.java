@@ -74,8 +74,11 @@ import ca.nrc.cadc.util.Log4jInit;
 import java.net.URI;
 import java.security.MessageDigest;
 import java.util.Date;
+import java.util.Iterator;
 import java.util.Map;
+import java.util.SortedSet;
 import java.util.TreeMap;
+import java.util.TreeSet;
 import java.util.UUID;
 import javax.sql.DataSource;
 import org.apache.log4j.Level;
@@ -84,8 +87,10 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.opencadc.inventory.Artifact;
+import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.SiteLocation;
 import org.opencadc.inventory.StorageLocation;
+import org.opencadc.inventory.StoredArtifactComparator;
 import org.opencadc.inventory.db.version.InitDatabase;
 
 /**
@@ -96,8 +101,8 @@ public class ArtifactDAOTest {
     private static final Logger log = Logger.getLogger(ArtifactDAOTest.class);
 
     static {
-        Log4jInit.setLevel("org.opencadc.inventory", Level.DEBUG);
-        Log4jInit.setLevel("ca.nrc.cadc.db", Level.DEBUG);
+        Log4jInit.setLevel("org.opencadc.inventory", Level.INFO);
+        Log4jInit.setLevel("ca.nrc.cadc.db", Level.INFO);
     }
     
     ArtifactDAO dao = new ArtifactDAO();
@@ -121,9 +126,7 @@ public class ArtifactDAOTest {
     }
     
     @Before
-    public void setup()
-        throws Exception
-    {
+    public void init_cleanup() throws Exception {
         log.info("init database...");
         InitDatabase init = new InitDatabase(dao.getDataSource(), TestUtil.DATABASE, TestUtil.SCHEMA);
         init.doInit();
@@ -366,6 +369,90 @@ public class ArtifactDAOTest {
             dao.delete(expected.getID());
             Artifact deleted = dao.get(expected.getID());
             Assert.assertNull(deleted);
+            
+        } catch (Exception unexpected) {
+            log.error("unexpected exception", unexpected);
+            Assert.fail("unexpected exception: " + unexpected);
+        }
+    }
+    
+    @Test
+    public void testEmptyIterator() {
+        try {
+            for (int i = 0; i < 10; i++) {
+                Artifact a = new Artifact(
+                        URI.create("cadc:ARCHIVE/filename" + i),
+                        URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"),
+                        new Date(),
+                        new Long(666L));
+                a.contentType = "application/octet-stream";
+                a.contentEncoding = "gzip";
+                // no storage location
+                dao.put(a);
+                log.info("expected: " + a);
+            }
+            
+            Iterator<Artifact> iter = dao.iterator(null);
+            Assert.assertFalse("no results", iter.hasNext());
+            
+        } catch (Exception unexpected) {
+            log.error("unexpected exception", unexpected);
+            Assert.fail("unexpected exception: " + unexpected);
+        }
+    }
+    
+    @Test
+    public void testIterator() {
+        try {
+            SortedSet<Artifact> eset = new TreeSet<>(new StoredArtifactComparator());
+            for (int i = 0; i < 10; i++) {
+                Artifact a = new Artifact(
+                        URI.create("cadc:ARCHIVE/filename" + i),
+                        URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"),
+                        new Date(),
+                        new Long(666L));
+                a.contentType = "application/octet-stream";
+                a.contentEncoding = "gzip";
+                a.storageLocation = new StorageLocation(URI.create("foo:" + UUID.randomUUID()));
+                a.storageLocation.storageBucket = InventoryUtil.computeBucket(a.storageLocation.getStorageID(), 3);
+                dao.put(a);
+                log.info("expected: " + a);
+                eset.add(a);
+            }
+            // add some artifacts without the optional bucket to check database vs comparator ordering
+            for (int i = 10; i < 15; i++) {
+                Artifact a = new Artifact(
+                        URI.create("cadc:ARCHIVE/filename" + i),
+                        URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"),
+                        new Date(),
+                        new Long(666L));
+                a.contentType = "application/octet-stream";
+                a.contentEncoding = "gzip";
+                a.storageLocation = new StorageLocation(URI.create("foo:" + UUID.randomUUID()));
+                // no bucket
+                dao.put(a);
+                log.info("expected: " + a);
+                eset.add(a);
+            }
+            
+            Iterator<Artifact> iter = dao.iterator(null);
+            Iterator<Artifact> ei = eset.iterator();
+            int count = 0;
+            while (ei.hasNext()) {
+                Artifact expected = ei.next();
+                Artifact actual = iter.next();
+                log.info("compare: " + expected.getURI() + " vs " + actual.getURI() + "\n\t"
+                        + expected.storageLocation + " vs " + actual.storageLocation);
+                Assert.assertEquals("order", expected.storageLocation, actual.storageLocation);
+                count++;
+                Assert.assertEquals(expected.getID(), actual.getID());
+                Assert.assertEquals(expected.getURI(), actual.getURI());
+                Assert.assertEquals(expected.getLastModified(), actual.getLastModified());
+                Assert.assertEquals(expected.getMetaChecksum(), actual.getMetaChecksum());
+                URI mcs2 = actual.computeMetaChecksum(MessageDigest.getInstance("MD5"));
+                Assert.assertEquals("round trip metachecksum", expected.getMetaChecksum(), mcs2);
+            }
+            Assert.assertEquals("count", eset.size(), count);
             
         } catch (Exception unexpected) {
             log.error("unexpected exception", unexpected);

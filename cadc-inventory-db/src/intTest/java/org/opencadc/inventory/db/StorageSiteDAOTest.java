@@ -73,8 +73,8 @@ import ca.nrc.cadc.db.DBUtil;
 import ca.nrc.cadc.util.Log4jInit;
 import java.net.URI;
 import java.security.MessageDigest;
-import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
 import javax.sql.DataSource;
 import org.apache.log4j.Level;
@@ -213,7 +213,7 @@ public class StorageSiteDAOTest {
             StorageSite s3 = new StorageSite(URI.create("ivo://cadc.nrc.ca/site3"), "Site-3");
             StorageSite s4 = new StorageSite(URI.create("ivo://cadc.nrc.ca/site4"), "Site-4");
             
-            List<StorageSite> sites = dao.list();
+            Set<StorageSite> sites = dao.list();
             Assert.assertNotNull(sites);
             Assert.assertTrue("empty", sites.isEmpty());
             
