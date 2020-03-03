@@ -67,7 +67,7 @@
 
 package org.opencadc.inventory.db;
 
-import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.StorageSite;
@@ -92,7 +92,7 @@ public class StorageSiteDAO extends AbstractDAO {
         return (StorageSite) super.get(StorageSite.class, id);
     }
     
-    public List<StorageSite> list() {
+    public Set<StorageSite> list() {
         checkInit();
         log.debug("LIST");
         long t = System.currentTimeMillis();
@@ -100,7 +100,7 @@ public class StorageSiteDAO extends AbstractDAO {
         try {
             JdbcTemplate jdbc = new JdbcTemplate(dataSource);
             EntityList get = gen.getEntityList(StorageSite.class);
-            List<StorageSite> result = get.query(jdbc);
+            Set<StorageSite> result = get.query(jdbc);
             return result;
         } finally {
             long dt = System.currentTimeMillis() - t;

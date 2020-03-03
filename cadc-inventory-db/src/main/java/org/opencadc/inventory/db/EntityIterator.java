@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2019.                            (c) 2019.
+*  (c) 2020.                            (c) 2020.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -67,82 +67,14 @@
 
 package org.opencadc.inventory.db;
 
-import java.net.URI;
-import java.util.Comparator;
 import java.util.Iterator;
-import java.util.SortedSet;
-import java.util.TreeSet;
-import java.util.UUID;
-import org.apache.log4j.Logger;
-import org.opencadc.inventory.Artifact;
-import org.springframework.jdbc.core.JdbcTemplate;
+import javax.sql.DataSource;
 
 /**
  *
  * @author pdowler
+ * @param <T> entity subclass
  */
-public class ArtifactDAO extends AbstractDAO<Artifact> {
-    private static final Logger log = Logger.getLogger(ArtifactDAO.class);
-
-    public ArtifactDAO() {
-        super();
-    }
-
-    public ArtifactDAO(AbstractDAO dao) {
-        super(dao);
-    }
-    
-    public Artifact get(UUID id) {
-        return super.get(Artifact.class, id);
-    }
-    
-    public Artifact get(URI uri) {
-        if (uri == null) {
-            throw new IllegalArgumentException("uri cannot be null");
-        }
-        checkInit();
-        log.debug("get: " + uri);
-        long t = System.currentTimeMillis();
-
-        try {
-            JdbcTemplate jdbc = new JdbcTemplate(dataSource);
-            
-            SQLGenerator.ArtifactGet get = (SQLGenerator.ArtifactGet) gen.getEntityGet(Artifact.class);
-            get.setURI(uri);
-            Artifact a = get.execute(jdbc);
-            return a;
-        } finally {
-            long dt = System.currentTimeMillis() - t;
-            log.debug("get: " + uri + " " + dt + "ms");
-        }
-    }
-    
-    // delete an artifact, all SiteLocation(s), and StorageLocation
-    // caller must also fire an appropriate event via DeletedEventDAO in same txn
-    // unless performing this delete in reaction to such an event
-    public void delete(UUID id) {
-        super.delete(Artifact.class, id);
-    }
-    
-    /**
-     * Iterate over Artifacts in StorageLocation order. This only shows artifacts with
-     * a storageLocation value.
-     * 
-     * @param storageBucketPrefix null, partial, or complete storageBucket string
-     * @return iterator over artifacts sorted by StorageLocation
-     */
-    public Iterator<Artifact> iterator(String storageBucketPrefix) {
-        checkInit();
-        log.debug("iterator: " + storageBucketPrefix);
-        long t = System.currentTimeMillis();
-
-        try {
-            SQLGenerator.ArtifactIterator iter = (SQLGenerator.ArtifactIterator) gen.getEntityIterator(Artifact.class);
-            iter.setPrefix(storageBucketPrefix);
-            return iter.query(dataSource);
-        } finally {
-            long dt = System.currentTimeMillis() - t;
-            log.debug("iterator: " + storageBucketPrefix + " " + dt + "ms");
-        }
-    }
+public interface EntityIterator<T>  {
+    Iterator<T> query(DataSource ds);
 }

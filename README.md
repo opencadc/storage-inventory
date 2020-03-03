@@ -21,4 +21,4 @@ This is an implementation of a file service that supports HEAD, GET, PUT, POST, 
 This is an implementation of the global locator service that supports transfer negotiation.
 
 # tantar
-Internal process to periodically verify the contents of the Storage Inventory database against what is actually in storage.
+This is an implementation of the file-validate process that compares the inventory database against a back end storage at a storage site.
