@@ -14,6 +14,12 @@ org.opencadc.tantar.logging = {info|debug}
 # set the bucket  or bucket prefix that tantar will validate
 org.opencadc.tantar.bucket = {bucketname}
 
+# set the policy to resolve conflicts of files
+org.opencadc.tantar.resolutionPolicy = {STORAGE_IS_ALWAYS_RIGHT|INVENTORY_IS_ALWAYS_RIGHT}
+
+# set whether to report all activity or to perform any actions required.
+org.opencadc.tantar.reportOnly = {true|false}
+
 ## inventory database settings
 org.opencadc.inventory.db.SQLGenerator=org.opencadc.inventory.db.SQLGenerator
 org.opencadc.tantar.schema={schema}

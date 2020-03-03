@@ -71,20 +71,17 @@ package org.opencadc.tantar;
 
 
 import org.apache.log4j.Logger;
-import ca.nrc.cadc.log.WebServiceLogInfo;
 
 
 public class Reporter {
     private final Logger logger;
-    private final WebServiceLogInfo logInfo;
 
-    public Reporter(final Logger logger, final WebServiceLogInfo logInfo) {
+    public Reporter(final Logger logger) {
         this.logger = logger;
-        this.logInfo = logInfo;
     }
 
     public void start() {
-        logger.info(logInfo.start());
+        logger.info("START");
     }
 
     public void report(final String message) {
@@ -92,6 +89,6 @@ public class Reporter {
     }
 
     public void end() {
-        logger.info(logInfo.end());
+        logger.info("END");
     }
 }

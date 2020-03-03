@@ -75,7 +75,6 @@ import ca.nrc.cadc.db.DBUtil;
 import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.util.StringUtil;
 
-import java.io.PrintStream;
 import java.lang.reflect.InvocationTargetException;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -101,8 +100,10 @@ import org.opencadc.tantar.policy.ResolutionPolicyFactory;
 public class BucketValidator implements Runnable {
 
     private static final String JNDI_ARTIFACT_DATASOURCE_NAME = "jdbc/inventory";
-    private static final String BUCKET_KEY = "org.opencadc.tantar.bucket";
-    private static final String POLICY_KEY = "org.opencadc.tantar.policy";
+    private static final String CONFIG_KEY_PREFIX = "org.opencadc.tantar";
+    private static final String BUCKET_KEY = String.format("%s.bucket", CONFIG_KEY_PREFIX);
+    private static final String RESOLUTION_POLICY_KEY = String.format("%s.resolutionPolicy", CONFIG_KEY_PREFIX);
+    private static final String REPORT_ONLY_KEY = String.format("%s.reportOnly", CONFIG_KEY_PREFIX);
     private static final String SQL_GEN_KEY = SQLGenerator.class.getName();
     private static final String SCHEMA_KEY = SQLGenerator.class.getPackage().getName() + ".schema";
     private static final String STORAGE_ADAPTOR_CLASS = System.getProperty(StorageAdapter.class.getCanonicalName());
@@ -118,8 +119,8 @@ public class BucketValidator implements Runnable {
     private final BucketIteratorComparator bucketIteratorComparator;
 
 
-    private BucketValidator(final String bucket, final StorageAdapter storageAdapter,
-                            final BucketIteratorComparator bucketIteratorComparator) {
+    BucketValidator(final String bucket, final StorageAdapter storageAdapter,
+                    final BucketIteratorComparator bucketIteratorComparator) {
         this.bucket = bucket;
         this.storageAdapter = storageAdapter;
         this.bucketIteratorComparator = bucketIteratorComparator;
@@ -145,15 +146,19 @@ public class BucketValidator implements Runnable {
                                                              BUCKET_KEY));
         }
 
-        final String policy = System.getProperty(POLICY_KEY);
+        final String policy = System.getProperty(RESOLUTION_POLICY_KEY);
         if (!StringUtil.hasLength(policy)) {
             throw new IllegalArgumentException(String.format("Policy is mandatory.  Please set the %s property.",
-                                                             POLICY_KEY));
+                                                             RESOLUTION_POLICY_KEY));
         }
 
-        return new BucketValidator(bucket, storageAdapter,
-                                   new BucketIteratorComparator(ResolutionPolicyFactory.createPolicy(policy),
-                                                                reporter));
+        final boolean reportOnlyFlag = Boolean.parseBoolean(
+                System.getProperty(REPORT_ONLY_KEY, Boolean.FALSE.toString()));
+
+        final ResolutionPolicy resolutionPolicy = ResolutionPolicyFactory.createPolicy(policy, reporter,
+                                                                                       reportOnlyFlag);
+
+        return new BucketValidator(bucket, storageAdapter, new BucketIteratorComparator(resolutionPolicy));
     }
 
     /**
@@ -169,32 +174,26 @@ public class BucketValidator implements Runnable {
      */
     @Override
     public void run() {
-        if (StringUtil.hasLength(bucket)) {
-            try {
-                validate(bucket);
-            } catch (TransientException e) {
-                throw new IllegalStateException("The Storage Adapter is not available.  Try again later.", e);
-            } catch (StorageEngageException e) {
-                throw new IllegalStateException("The back end storage is not available.", e);
-            }
-        } else {
-            throw new IllegalStateException(
-                    String.format("Configuration for Bucket name specified by %s is required.", BUCKET_KEY));
+        try {
+            validate();
+        } catch (TransientException e) {
+            throw new IllegalStateException("The Storage Adapter is not available.  Try again later.", e);
+        } catch (StorageEngageException e) {
+            throw new IllegalStateException("The back end storage is not available.", e);
         }
     }
 
-    Iterator<StorageMetadata> iterateStorage(final String bucket) throws TransientException, StorageEngageException {
+    Iterator<StorageMetadata> iterateStorage() throws TransientException, StorageEngageException {
         return storageAdapter.iterator(bucket);
     }
 
-    Iterator<Artifact> iterateInventory(final String bucket) {
-        // return getArtifactDAO().iterate(bucket)
-        return null;
+    Iterator<Artifact> iterateInventory() {
+        return getArtifactDAO().iterator(bucket);
     }
 
-    void validate(final String bucket) throws TransientException, StorageEngageException {
-        final Iterator<StorageMetadata> storageMetadataIterator = iterateStorage(bucket);
-        final Iterator<Artifact> inventoryIterator = iterateInventory(bucket);
+    void validate() throws TransientException, StorageEngageException {
+        final Iterator<StorageMetadata> storageMetadataIterator = iterateStorage();
+        final Iterator<Artifact> inventoryIterator = iterateInventory();
 
         this.bucketIteratorComparator.compare(inventoryIterator, storageMetadataIterator);
 

@@ -70,125 +70,336 @@
 package org.opencadc.tantar;
 
 import java.io.ByteArrayOutputStream;
-import java.io.PrintStream;
+import java.io.OutputStream;
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
 
+import org.apache.log4j.Level;
+import org.apache.log4j.Logger;
+import org.apache.log4j.SimpleLayout;
+import org.apache.log4j.WriterAppender;
 import org.junit.Test;
 import org.junit.Assert;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.storage.StorageMetadata;
+import org.opencadc.tantar.policy.ResolutionPolicyFactory;
+import org.opencadc.tantar.policy.ResolutionPolicyStrategy;
+import ca.nrc.cadc.util.Log4jInit;
 
 
 public class BucketValidatorTest {
 
-    @Test
-    public void validateGood() throws Exception {
-        final ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
-        final PrintStream printStream = new PrintStream(byteArrayOutputStream);
-
-        final List<Artifact> testArtifactList = new ArrayList<>();
-        testArtifactList.add(
-                new Artifact(URI.create("cadc:TESTBUCKET/myfile88.fits"), URI.create("md5:8899"), new Date(), 88L));
-        testArtifactList.add(
-                new Artifact(URI.create("cadc:TESTBUCKET/myfile99.fits"), URI.create("md5:9900"), new Date(), 99L));
-        testArtifactList.add(
-                new Artifact(URI.create("cadc:TESTBUCKET/myfile100.fits"), URI.create("md5:10001"), new Date(), 100L));
-
-        final List<StorageMetadata> testStorageMetadataList = new ArrayList<>();
-        final StorageMetadata storageMetadata1 =
-                new StorageMetadata(new StorageLocation(URI.create("cadc:TESTBUCKET/myfile88.fits")),
-                                    URI.create("md5:8899"), 88L);
-        storageMetadata1.artifactURI = URI.create("cadc:TESTBUCKET/myfile88.fits");
-        testStorageMetadataList.add(storageMetadata1);
-
-        final StorageMetadata storageMetadata2 =
-                new StorageMetadata(new StorageLocation(URI.create("cadc:TESTBUCKET/myfile99.fits")),
-                                    URI.create("md5:9900"), 99L);
-        storageMetadata2.artifactURI = URI.create("cadc:TESTBUCKET/myfile99.fits");
-        testStorageMetadataList.add(storageMetadata2);
-
-        final StorageMetadata storageMetadata3 =
-                new StorageMetadata(new StorageLocation(URI.create("cadc:TESTBUCKET/myfile100.fits")),
-                                    URI.create("md5:10001"), 100L);
-        storageMetadata3.artifactURI = URI.create("cadc:TESTBUCKET/myfile100.fits");
-        testStorageMetadataList.add(storageMetadata3);
-
-        final BucketValidator testSubject = new BucketValidator(null, printStream) {
-            @Override
-            Iterator<StorageMetadata> iterateStorage(String bucket) {
-                return testStorageMetadataList.iterator();
-            }
-
-            @Override
-            Iterator<Artifact> iterateInventory(String bucket) {
-                return testArtifactList.iterator();
-            }
-        };
-
-        testSubject.validate("TESTBUCKET");
-
-        final byte[] resultArray = byteArrayOutputStream.toByteArray();
-        Assert.assertArrayEquals(String.format("Report should be empty but was %s.", new String(resultArray)),
-                                 new byte[0], resultArray);
+    static {
+        Log4jInit.setLevel("org.opencadc.tantar", Level.DEBUG);
     }
 
+    /**
+     * Ensure the INVENTORY_IS_ALWAYS_RIGHT policy will maintain the integrity of the Inventory (Artifacts) over that
+     * of the Storage Adapter (StorageMetadata).
+     *
+     * @throws Exception For anything unexpected.
+     */
     @Test
-    public void validateBad() throws Exception {
+    public void validateInventoryIsAlwaysRight() throws Exception {
         final ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
-        final PrintStream printStream = new PrintStream(byteArrayOutputStream);
 
+        final Reporter reporter = new Reporter(getTestLogger(byteArrayOutputStream));
+
+        // **** Create the Inventory content.
         final List<Artifact> testArtifactList = new ArrayList<>();
-        testArtifactList.add(
-                new Artifact(URI.create("cadc:TESTBUCKET/myfile88.fits"), URI.create("md5:8899"), new Date(), 88L));
-        testArtifactList.add(
-                new Artifact(URI.create("cadc:TESTBUCKET/myfile99.fits"), URI.create("md5:99001"), new Date(), 99L));
-        testArtifactList.add(
-                new Artifact(URI.create("cadc:TESTBUCKET/myfile100.fits"), URI.create("md5:10001"), new Date(), 100L));
+        final Artifact artifactOne =
+                new Artifact(URI.create("cadc:TESTBUCKET/myfile88.fits"), URI.create("md5:8899"), new Date(), 88L);
+        artifactOne.storageLocation = new StorageLocation(URI.create("ad:123456"));
+        testArtifactList.add(artifactOne);
 
+        final Artifact artifactTwo =
+                new Artifact(URI.create("cadc:TESTBUCKET/myfile99.fits"), URI.create("md5:9900"), new Date(), 99L);
+        artifactTwo.storageLocation = new StorageLocation(URI.create("ceph:7890AB"));
+        testArtifactList.add(artifactTwo);
+
+        final Artifact artifactThree =
+                new Artifact(URI.create("cadc:TESTBUCKET/myfile100.fits"), URI.create("md5:10001"), new Date(),
+                             100L);
+        artifactThree.storageLocation = new StorageLocation(URI.create("s3:CDEF00"));
+        testArtifactList.add(artifactThree);
+
+        testArtifactList.sort(Comparator.comparing(o -> o.storageLocation));
+        // **** End Create the Storage Adapter content.
+
+        // **** Create the Storage Adapter content.
         final List<StorageMetadata> testStorageMetadataList = new ArrayList<>();
-        final StorageMetadata storageMetadata1 =
-                new StorageMetadata(new StorageLocation(URI.create("cadc:TESTBUCKET/myfile88.fits")),
-                                    URI.create("md5:8899"), 88L);
-        storageMetadata1.artifactURI = URI.create("cadc:TESTBUCKET/myfile88.fits");
-        testStorageMetadataList.add(storageMetadata1);
+        testStorageMetadataList.add(new StorageMetadata(new StorageLocation(URI.create("ad:123456")),
+                                                        URI.create("md5:8899"), 88L));
+        testStorageMetadataList.get(0).contentLastModified = artifactOne.getLastModified();
 
-        final StorageMetadata storageMetadata2 =
-                new StorageMetadata(new StorageLocation(URI.create("cadc:TESTBUCKET/myfile99.fits")),
-                                    URI.create("md5:9900"), 99L);
-        storageMetadata2.artifactURI = URI.create("cadc:TESTBUCKET/myfile99.fits");
-        testStorageMetadataList.add(storageMetadata2);
+        testStorageMetadataList.add(new StorageMetadata(new StorageLocation(URI.create("ceph:78787878")),
+                                                        URI.create("md5:0055998"), 99L));
 
-        final StorageMetadata storageMetadata3 =
-                new StorageMetadata(new StorageLocation(URI.create("cadc:TESTBUCKET/myfile100.fits")),
-                                    URI.create("md5:10001"), 100L);
-        storageMetadata3.artifactURI = URI.create("cadc:TESTBUCKET/myfile100.fits");
-        testStorageMetadataList.add(storageMetadata3);
+        testStorageMetadataList.add(
+                new StorageMetadata(new StorageLocation(URI.create("s3:CDEF00")),
+                                    URI.create("md5:2222"), 100L));
+        testStorageMetadataList.sort(Comparator.comparing(StorageMetadata::getStorageLocation));
+        // **** End Create the Storage Adapter content.
 
-        final BucketValidator testSubject = new BucketValidator(null, printStream) {
-            @Override
-            Iterator<StorageMetadata> iterateStorage(String bucket) {
-                return testStorageMetadataList.iterator();
-            }
+        final BucketValidator testSubject =
+                new BucketValidator("TESTBUCKET", null,
+                                    new BucketIteratorComparator(
+                                            ResolutionPolicyFactory.createPolicy(
+                                                    ResolutionPolicyStrategy.INVENTORY_IS_ALWAYS_RIGHT.name(),
+                                                    reporter, true))) {
+                    @Override
+                    Iterator<StorageMetadata> iterateStorage() {
+                        return testStorageMetadataList.iterator();
+                    }
 
-            @Override
-            Iterator<Artifact> iterateInventory(String bucket) {
-                return testArtifactList.iterator();
-            }
-        };
+                    @Override
+                    Iterator<Artifact> iterateInventory() {
+                        return testArtifactList.iterator();
+                    }
+                };
 
-        testSubject.validate("TESTBUCKET");
+        testSubject.validate();
 
-        final byte[] resultArray = byteArrayOutputStream.toByteArray();
-        final String expectedMessage = "Content checksum for cadc:TESTBUCKET/myfile99.fits is different.\n\n"
-                                       + "Storage Metadata Checksum: md5:9900\n"
-                                       + "Iventory Checksum: md5:99001\n\n";
-        Assert.assertEquals(String.format("Report should be \n\n%s\n but was \n\n%s\n.", expectedMessage,
-                                          new String(resultArray)),
-                            expectedMessage, new String(resultArray));
+        /*
+        The two iterators only share a single file, which is located at ad:123456.  As a result, it should be left
+        alone.
+         */
+
+        final List<String> outputLines =
+                Arrays.asList(new String(byteArrayOutputStream.toByteArray()).split("\n"));
+        System.out.println(String.format("Message lines are \n\n%s\n\n", outputLines));
+        assertListContainsMessage(outputLines,
+                                  "Removing Unknown File StorageLocation[ceph:78787878] as per policy.");
+        assertListContainsMessage(outputLines,
+                                  "Retrieving File StorageLocation[ceph:7890AB] as per policy.");
+        assertListContainsMessage(outputLines,
+                                  "Replacing File StorageLocation[s3:CDEF00] as per policy.");
+        assertListContainsMessage(outputLines, "Artifact StorageLocation[ad:123456] is valid as per policy.");
+    }
+
+    /**
+     * Ensure the INVENTORY_IS_ALWAYS_RIGHT policy will maintain the integrity of the Inventory (Artifacts) over that
+     * of the Storage Adapter (StorageMetadata).
+     *
+     * @throws Exception For anything unexpected.
+     */
+    @Test
+    public void validateInventoryIsAlwaysRightEmptyStorage() throws Exception {
+        final ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+
+        final Reporter reporter = new Reporter(getTestLogger(byteArrayOutputStream));
+
+        // **** Create the Inventory content.
+        final List<Artifact> testArtifactList = new ArrayList<>();
+        final Artifact artifactOne =
+                new Artifact(URI.create("cadc:TESTBUCKET/myfile88.fits"), URI.create("md5:8899"), new Date(), 88L);
+        artifactOne.storageLocation = new StorageLocation(URI.create("ad:123456"));
+        testArtifactList.add(artifactOne);
+
+        final Artifact artifactTwo =
+                new Artifact(URI.create("cadc:TESTBUCKET/myfile99.fits"), URI.create("md5:9900"), new Date(), 99L);
+        artifactTwo.storageLocation = new StorageLocation(URI.create("ceph:7890AB"));
+        testArtifactList.add(artifactTwo);
+
+        final Artifact artifactThree =
+                new Artifact(URI.create("cadc:TESTBUCKET/myfile100.fits"), URI.create("md5:10001"), new Date(),
+                             100L);
+        artifactThree.storageLocation = new StorageLocation(URI.create("s3:CDEF00"));
+        testArtifactList.add(artifactThree);
+
+        testArtifactList.sort(Comparator.comparing(o -> o.storageLocation));
+        // **** End Create the Storage Adapter content.
+
+        final BucketValidator testSubject =
+                new BucketValidator("TESTBUCKET", null,
+                                    new BucketIteratorComparator(
+                                            ResolutionPolicyFactory.createPolicy(
+                                                    ResolutionPolicyStrategy.INVENTORY_IS_ALWAYS_RIGHT.name(),
+                                                    reporter, true))) {
+                    @Override
+                    Iterator<StorageMetadata> iterateStorage() {
+                        return Collections.emptyIterator();
+                    }
+
+                    @Override
+                    Iterator<Artifact> iterateInventory() {
+                        return testArtifactList.iterator();
+                    }
+                };
+
+        testSubject.validate();
+
+        final List<String> outputLines =
+                Arrays.asList(new String(byteArrayOutputStream.toByteArray()).split("\n"));
+        System.out.println(String.format("Message lines are \n\n%s\n\n", outputLines));
+        assertListContainsMessage(outputLines,
+                                  "Retrieving File StorageLocation[ad:123456] as per policy.");
+        assertListContainsMessage(outputLines,
+                                  "Retrieving File StorageLocation[ceph:7890AB] as per policy.");
+        assertListContainsMessage(outputLines,
+                                  "Retrieving File StorageLocation[s3:CDEF00] as per policy.");
+    }
+
+    /**
+     * Ensure the STORAGE_IS_ALWAYS_RIGHT policy will maintain the integrity of the Storage Adapter (StorageMetadata)
+     * over that of the Inventory (Artifact).
+     *
+     * @throws Exception For anything unexpected.
+     */
+    @Test
+    public void validateStorageIsAlwaysRight() throws Exception {
+        final ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+
+        final Reporter reporter = new Reporter(getTestLogger(byteArrayOutputStream));
+
+        // **** Create the Inventory content.
+        final List<Artifact> testArtifactList = new ArrayList<>();
+        final Artifact artifactOne =
+                new Artifact(URI.create("cadc:TESTBUCKET/myfile88.fits"), URI.create("md5:8899"), new Date(), 88L);
+        artifactOne.storageLocation = new StorageLocation(URI.create("ad:123456"));
+        testArtifactList.add(artifactOne);
+
+        final Artifact artifactTwo =
+                new Artifact(URI.create("cadc:TESTBUCKET/myfile99.fits"), URI.create("md5:9900"), new Date(), 99L);
+        artifactTwo.storageLocation = new StorageLocation(URI.create("ceph:7890AB"));
+        testArtifactList.add(artifactTwo);
+
+        final Artifact artifactThree =
+                new Artifact(URI.create("cadc:TESTBUCKET/myfile100.fits"), URI.create("md5:10001"), new Date(),
+                             100L);
+        artifactThree.storageLocation = new StorageLocation(URI.create("s3:CDEF00"));
+        testArtifactList.add(artifactThree);
+
+        testArtifactList.sort(Comparator.comparing(o -> o.storageLocation));
+        // **** End Create the Storage Adapter content.
+
+        // **** Create the Storage Adapter content.
+        final List<StorageMetadata> testStorageMetadataList = new ArrayList<>();
+        testStorageMetadataList.add(new StorageMetadata(new StorageLocation(URI.create("ad:123456")),
+                                                        URI.create("md5:8899"), 88L));
+        testStorageMetadataList.get(0).contentLastModified = artifactOne.getLastModified();
+
+        testStorageMetadataList.add(new StorageMetadata(new StorageLocation(URI.create("ceph:78787878")),
+                                                        URI.create("md5:0055998"), 99L));
+
+        testStorageMetadataList.add(
+                new StorageMetadata(new StorageLocation(URI.create("s3:CDEF00")),
+                                    URI.create("md5:2222"), 100L));
+        testStorageMetadataList.sort(Comparator.comparing(StorageMetadata::getStorageLocation));
+        // **** End Create the Storage Adapter content.
+
+        final BucketValidator testSubject =
+                new BucketValidator("TESTBUCKET", null,
+                                    new BucketIteratorComparator(
+                                            ResolutionPolicyFactory.createPolicy(
+                                                    ResolutionPolicyStrategy.STORAGE_IS_ALWAYS_RIGHT.name(),
+                                                    reporter, true))) {
+                    @Override
+                    Iterator<StorageMetadata> iterateStorage() {
+                        return testStorageMetadataList.iterator();
+                    }
+
+                    @Override
+                    Iterator<Artifact> iterateInventory() {
+                        return testArtifactList.iterator();
+                    }
+                };
+
+        testSubject.validate();
+
+        /*
+        The two iterators only share a single file, which is located at ad:123456.  As a result, it should be left
+        alone.
+         */
+
+        final List<String> outputLines =
+                Arrays.asList(new String(byteArrayOutputStream.toByteArray()).split("\n"));
+        System.out.println(String.format("Message lines are \n\n%s\n\n", outputLines));
+        assertListContainsMessage(outputLines,
+                                  "Adding Artifact StorageLocation[ceph:78787878] as per policy.");
+        assertListContainsMessage(outputLines,
+                                  "Removing Unknown Artifact StorageLocation[ceph:7890AB] as per policy.");
+        assertListContainsMessage(outputLines,
+                                  "Replacing Artifact StorageLocation[s3:CDEF00] as per policy.");
+        assertListContainsMessage(outputLines, "Storage Metadata StorageLocation[ad:123456] is valid as per policy.");
+    }
+
+    /**
+     * Ensure the STORAGE_IS_ALWAYS_RIGHT policy will maintain the integrity of the Storage Adapter (StorageMetadata)
+     * over that of the Inventory (Artifact).  This will use an empty inventory to simulate a first run.
+     *
+     * @throws Exception For anything unexpected.
+     */
+    @Test
+    public void validateStorageIsAlwaysRightEmptyInventory() throws Exception {
+        final ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+
+        final Reporter reporter = new Reporter(getTestLogger(byteArrayOutputStream));
+
+        // **** Create the Storage Adapter content.
+        final List<StorageMetadata> testStorageMetadataList = new ArrayList<>();
+        testStorageMetadataList.add(new StorageMetadata(new StorageLocation(URI.create("ad:123456")),
+                                                        URI.create("md5:8899"), 88L));
+
+        testStorageMetadataList.add(new StorageMetadata(new StorageLocation(URI.create("ad:78787878")),
+                                                        URI.create("md5:0055998"), 99L));
+
+        testStorageMetadataList.add(
+                new StorageMetadata(new StorageLocation(URI.create("ad:CDEF00")),
+                                    URI.create("md5:2222"), 100L));
+        testStorageMetadataList.sort(Comparator.comparing(StorageMetadata::getStorageLocation));
+        // **** End Create the Storage Adapter content.
+
+        final BucketValidator testSubject =
+                new BucketValidator("TESTBUCKET", null,
+                                    new BucketIteratorComparator(
+                                            ResolutionPolicyFactory.createPolicy(
+                                                    ResolutionPolicyStrategy.STORAGE_IS_ALWAYS_RIGHT.name(),
+                                                    reporter, true))) {
+                    @Override
+                    Iterator<StorageMetadata> iterateStorage() {
+                        return testStorageMetadataList.iterator();
+                    }
+
+                    @Override
+                    Iterator<Artifact> iterateInventory() {
+                        return Collections.emptyIterator();
+                    }
+                };
+
+        testSubject.validate();
+
+        final List<String> outputLines =
+                Arrays.asList(new String(byteArrayOutputStream.toByteArray()).split("\n"));
+        System.out.println(String.format("Message lines are \n\n%s\n\n", outputLines));
+        assertListContainsMessage(outputLines,
+                                  "Adding Artifact StorageLocation[ad:123456] as per policy.");
+        assertListContainsMessage(outputLines,
+                                  "Adding Artifact StorageLocation[ad:78787878] as per policy.");
+        assertListContainsMessage(outputLines,
+                                  "Adding Artifact StorageLocation[ad:CDEF00] as per policy.");
+    }
+
+    private void assertListContainsMessage(final List<String> outputLines, final String message) {
+        Assert.assertTrue(String.format("Output does not contain %s", message),
+                          outputLines.stream().anyMatch(s -> s.contains(message)));
+    }
+
+    private Logger getTestLogger(final OutputStream outputStream) {
+        final Logger logger = Logger.getLogger(BucketValidatorTest.class);
+        final WriterAppender testAppender = new WriterAppender(new SimpleLayout(), outputStream);
+        testAppender.setName("Test Writer Appender");
+
+        logger.removeAllAppenders();
+        logger.addAppender(testAppender);
+
+        return logger;
     }
 }

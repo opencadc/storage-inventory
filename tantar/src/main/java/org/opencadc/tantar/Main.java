@@ -68,7 +68,6 @@
 
 package org.opencadc.tantar;
 
-import ca.nrc.cadc.log.WebServiceLogInfo;
 import ca.nrc.cadc.util.Log4jInit;
 
 import java.io.FileNotFoundException;
@@ -88,7 +87,7 @@ public class Main {
 
     private static final Logger LOGGER = Logger.getLogger(Main.class);
     private static final String CONFIGURATION_FILE_LOCATION = "/config/tantar.properties";
-    private static final Reporter REPORTER = new Reporter(LOGGER, new WebServiceLogInfo() {});
+    private static final Reporter REPORTER = new Reporter(LOGGER);
 
     public static void main(final String[] args) {
         Main.REPORTER.start();

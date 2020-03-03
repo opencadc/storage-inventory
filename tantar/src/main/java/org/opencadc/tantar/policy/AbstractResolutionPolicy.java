@@ -71,53 +71,10 @@ package org.opencadc.tantar.policy;
 
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.storage.StorageMetadata;
-import org.opencadc.tantar.Reporter;
 
 
-public class StorageIsAlwaysRight extends AbstractResolutionPolicy implements ResolutionPolicy {
-
-    private final Reporter reporter;
-    private final boolean reportOnlyFlag;
-
-    public StorageIsAlwaysRight(final Reporter reporter, final boolean reportOnlyFlag) {
-        this.reporter = reporter;
-        this.reportOnlyFlag = reportOnlyFlag;
-    }
-
-    /**
-     * Use the logic of this Policy to correct a conflict caused by the two given items.  One of the arguments can
-     * be null, but not both.
-     *
-     * @param artifact        The Artifact to use in deciding.
-     * @param storageMetadata The StorageMetadata to use in deciding.
-     */
-    @Override
-    public void resolve(final Artifact artifact, final StorageMetadata storageMetadata) {
-        if (artifact == null) {
-            // The Inventory has a file that does not exist in storage.  WTF?
-            reporter.report(String.format("Adding Artifact %s as per policy.", storageMetadata.getStorageLocation()));
-
-            if (!reportOnlyFlag) {
-                // Add the Artifact to inventory.
-            }
-        } else if (storageMetadata == null) {
-            reporter.report(String.format("Removing Unknown Artifact %s as per policy.", artifact.storageLocation));
-            if (!reportOnlyFlag) {
-                // Remove the Artifact.
-            }
-        } else {
-            // Check metadata for discrepancies.
-            if (!haveTheSameMetadata(artifact, storageMetadata)) {
-                // Then prefer the Storage Metadata.
-                reporter.report(String.format("Replacing Artifact %s as per policy.", artifact.storageLocation));
-
-                if (!reportOnlyFlag) {
-                    // Replace the Artifact.
-                }
-            } else {
-                reporter.report(String.format("Storage Metadata %s is valid as per policy.",
-                                              storageMetadata.getStorageLocation()));
-            }
-        }
+public abstract class AbstractResolutionPolicy {
+    protected final boolean haveTheSameMetadata(final Artifact artifact, final StorageMetadata storageMetadata) {
+        return PolicyMetadata.fromArtifact(artifact).equals(PolicyMetadata.fromStorageMetadata(storageMetadata));
     }
 }

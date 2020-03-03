@@ -83,15 +83,19 @@ public class BucketIteratorComparator {
     private static final Logger LOGGER = Logger.getLogger(BucketIteratorComparator.class);
 
     private final ResolutionPolicy resolutionPolicy;
-    private final Reporter reporter;
 
 
-    public BucketIteratorComparator(final ResolutionPolicy resolutionPolicy, final Reporter reporter) {
+    public BucketIteratorComparator(final ResolutionPolicy resolutionPolicy) {
         this.resolutionPolicy = resolutionPolicy;
-        this.reporter = reporter;
     }
 
 
+    /**
+     * Main method to compare two iterators.
+     *
+     * @param artifactIterator        To iterate items from the Storage Inventory (database entries).
+     * @param storageMetadataIterator To iterate items from the Storage Adapter (files).
+     */
     public void compare(final Iterator<Artifact> artifactIterator,
                         final Iterator<StorageMetadata> storageMetadataIterator) {
         LOGGER.debug("START comparing iterators.");
@@ -105,36 +109,36 @@ public class BucketIteratorComparator {
             final StorageMetadata storageMetadata =
                     (unresolvedStorageMetadata == null) ? storageMetadataIterator.next() : unresolvedStorageMetadata;
 
-            LOGGER.debug(String.format("Comparing Storage Location %s with %s", artifact.storageLocation,
-                                       storageMetadata.getStorageLocation()));
-            switch (artifact.storageLocation.compareTo(storageMetadata.getStorageLocation())) {
-                case 0:
-                    // Same storage location.  Test the metadata.
-                    unresolvedArtifact = null;
-                    unresolvedStorageMetadata = null;
-                    reporter.report(String.format("Comparing inventory with storage system for location %s.",
-                                                  artifact.storageLocation));
-                    resolutionPolicy.resolve(artifact, storageMetadata);
-                    break;
+            LOGGER.debug(String.format("Comparing Inventory Storage Location %s with Storage Adapter Location %s",
+                                       artifact.storageLocation, storageMetadata.getStorageLocation()));
+            final int comparison = artifact.storageLocation.compareTo(storageMetadata.getStorageLocation());
 
-                case 1:
-                    // Exists in Storage but not in inventory.
-                    unresolvedArtifact = artifact;
-                    unresolvedStorageMetadata = null;
-                    reporter.report(String.format("Location %s exists in Storage only.  Resolving...",
-                                                  artifact.storageLocation));
-                    resolutionPolicy.resolve(null, storageMetadata);
-                    break;
-
-                default:
-                    // Exists in Inventory but not in Storage.
-                    unresolvedArtifact = null;
-                    unresolvedStorageMetadata = storageMetadata;
-                    reporter.report(String.format("Location %s exists in Inventory only.  Resolving...",
-                                                  artifact.storageLocation));
-                    resolutionPolicy.resolve(artifact, null);
-                    break;
+            if (comparison == 0) {
+                // Same storage location.  Test the metadata.
+                unresolvedArtifact = null;
+                unresolvedStorageMetadata = null;
+                resolutionPolicy.resolve(artifact, storageMetadata);
+            } else if (comparison > 0) {
+                // Exists in Storage but not in inventory.
+                unresolvedArtifact = artifact;
+                unresolvedStorageMetadata = null;
+                resolutionPolicy.resolve(null, storageMetadata);
+            } else {
+                // Exists in Inventory but not in Storage.
+                unresolvedArtifact = null;
+                unresolvedStorageMetadata = storageMetadata;
+                resolutionPolicy.resolve(artifact, null);
             }
+        }
+
+        // Perform some mop up.  These will take effect when one of the iterators is empty.
+
+        while (artifactIterator.hasNext()) {
+            resolutionPolicy.resolve(artifactIterator.next(), null);
+        }
+
+        while (storageMetadataIterator.hasNext()) {
+            resolutionPolicy.resolve(null, storageMetadataIterator.next());
         }
 
         LOGGER.debug("END comparing iterators.");

@@ -71,9 +71,18 @@ package org.opencadc.tantar.policy;
 
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.storage.StorageMetadata;
+import org.opencadc.tantar.Reporter;
 
 
-public class InventoryIsAlwaysRight implements ResolutionPolicy {
+public class InventoryIsAlwaysRight extends AbstractResolutionPolicy implements ResolutionPolicy {
+
+    private final Reporter reporter;
+    private final boolean reportOnlyFlag;
+
+    public InventoryIsAlwaysRight(final Reporter reporter, final boolean reportOnlyFlag) {
+        this.reporter = reporter;
+        this.reportOnlyFlag = reportOnlyFlag;
+    }
 
     /**
      * Use the logic of this Policy to correct a conflict caused by the two given items.  One of the arguments can
@@ -84,6 +93,32 @@ public class InventoryIsAlwaysRight implements ResolutionPolicy {
      */
     @Override
     public void resolve(Artifact artifact, StorageMetadata storageMetadata) {
+        if (storageMetadata == null) {
+            // The Inventory has a file that does not exist in storage.  WTF?
+            reporter.report(String.format("Retrieving File %s as per policy.", artifact.storageLocation));
 
+            if (!reportOnlyFlag) {
+                // go get the file.
+            }
+        } else if (artifact == null) {
+            reporter.report(String.format("Removing Unknown File %s as per policy.",
+                                          storageMetadata.getStorageLocation()));
+            if (!reportOnlyFlag) {
+                // delete the file.
+            }
+        } else {
+            // Check metadata for discrepancies.
+            if (!haveTheSameMetadata(artifact, storageMetadata)) {
+                // Then prefer the Artifact.
+                reporter.report(String.format("Replacing File %s as per policy.",
+                                              storageMetadata.getStorageLocation()));
+
+                if (!reportOnlyFlag) {
+                    // remove the storage metadata file.
+                }
+            } else {
+                reporter.report(String.format("Artifact %s is valid as per policy.", artifact.storageLocation));
+            }
+        }
     }
 }

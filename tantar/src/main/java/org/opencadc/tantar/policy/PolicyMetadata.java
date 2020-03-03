@@ -69,55 +69,64 @@
 
 package org.opencadc.tantar.policy;
 
+import java.net.URI;
+import java.util.Date;
+import java.util.Objects;
+
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.storage.StorageMetadata;
-import org.opencadc.tantar.Reporter;
 
 
-public class StorageIsAlwaysRight extends AbstractResolutionPolicy implements ResolutionPolicy {
+/**
+ * Simple encompassing class to house the metadata to be compared when enforcing a policy for an existing Storage
+ * Location.
+ */
+public class PolicyMetadata {
 
-    private final Reporter reporter;
-    private final boolean reportOnlyFlag;
+    private final URI contentChecksum;
+    private final Date contentLastModified;
+    private final Long contentLength;
+    public final String contentType;
+    public final String contentEncoding;
 
-    public StorageIsAlwaysRight(final Reporter reporter, final boolean reportOnlyFlag) {
-        this.reporter = reporter;
-        this.reportOnlyFlag = reportOnlyFlag;
+    PolicyMetadata(URI contentChecksum, Date contentLastModified, Long contentLength, String contentType,
+                   String contentEncoding) {
+        this.contentChecksum = contentChecksum;
+        this.contentLastModified = contentLastModified;
+        this.contentLength = contentLength;
+        this.contentType = contentType;
+        this.contentEncoding = contentEncoding;
     }
 
-    /**
-     * Use the logic of this Policy to correct a conflict caused by the two given items.  One of the arguments can
-     * be null, but not both.
-     *
-     * @param artifact        The Artifact to use in deciding.
-     * @param storageMetadata The StorageMetadata to use in deciding.
-     */
+    static PolicyMetadata fromArtifact(final Artifact artifact) {
+        return new PolicyMetadata(artifact.getContentChecksum(), artifact.getLastModified(),
+                                  artifact.getContentLength(), artifact.contentType, artifact.contentEncoding);
+    }
+
+    static PolicyMetadata fromStorageMetadata(final StorageMetadata storageMetadata) {
+        return new PolicyMetadata(storageMetadata.getContentChecksum(), storageMetadata.contentLastModified,
+                                  storageMetadata.getContentLength(), storageMetadata.contentType,
+                                  storageMetadata.contentEncoding);
+    }
+
     @Override
-    public void resolve(final Artifact artifact, final StorageMetadata storageMetadata) {
-        if (artifact == null) {
-            // The Inventory has a file that does not exist in storage.  WTF?
-            reporter.report(String.format("Adding Artifact %s as per policy.", storageMetadata.getStorageLocation()));
-
-            if (!reportOnlyFlag) {
-                // Add the Artifact to inventory.
-            }
-        } else if (storageMetadata == null) {
-            reporter.report(String.format("Removing Unknown Artifact %s as per policy.", artifact.storageLocation));
-            if (!reportOnlyFlag) {
-                // Remove the Artifact.
-            }
-        } else {
-            // Check metadata for discrepancies.
-            if (!haveTheSameMetadata(artifact, storageMetadata)) {
-                // Then prefer the Storage Metadata.
-                reporter.report(String.format("Replacing Artifact %s as per policy.", artifact.storageLocation));
-
-                if (!reportOnlyFlag) {
-                    // Replace the Artifact.
-                }
-            } else {
-                reporter.report(String.format("Storage Metadata %s is valid as per policy.",
-                                              storageMetadata.getStorageLocation()));
-            }
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        } else if (o == null || getClass() != o.getClass()) {
+            return false;
         }
+
+        final PolicyMetadata that = (PolicyMetadata) o;
+        return Objects.equals(contentChecksum, that.contentChecksum)
+               && Objects.equals(contentLastModified, that.contentLastModified)
+               && Objects.equals(contentLength, that.contentLength)
+               && Objects.equals(contentType, that.contentType)
+               && Objects.equals(contentEncoding, that.contentEncoding);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(contentChecksum, contentLastModified, contentLength, contentType, contentEncoding);
     }
 }

@@ -69,18 +69,15 @@
 
 package org.opencadc.tantar.policy;
 
-import ca.nrc.cadc.util.StringUtil;
 
 import java.lang.reflect.InvocationTargetException;
 import java.util.HashMap;
 import java.util.Map;
 
-import org.apache.log4j.Logger;
+import org.opencadc.tantar.Reporter;
 
 
 public class ResolutionPolicyFactory {
-
-    private static final Logger LOGGER = Logger.getLogger(ResolutionPolicyFactory.class);
 
     private static final Map<ResolutionPolicyStrategy, Class<? extends ResolutionPolicy>> POLICY_DICTIONARY =
             new HashMap<>();
@@ -90,20 +87,16 @@ public class ResolutionPolicyFactory {
         POLICY_DICTIONARY.put(ResolutionPolicyStrategy.INVENTORY_IS_ALWAYS_RIGHT, InventoryIsAlwaysRight.class);
     }
 
-    public static ResolutionPolicy createPolicy(final String configuredPolicy) {
-        if (StringUtil.hasLength(configuredPolicy)) {
-            try {
-                final ResolutionPolicyStrategy strategy = ResolutionPolicyStrategy.valueOf(
-                        configuredPolicy.toUpperCase());
-                return POLICY_DICTIONARY.get(strategy).getDeclaredConstructor().newInstance();
-            } catch (NoSuchMethodException | InstantiationException | IllegalAccessException
-                    | InvocationTargetException e) {
-                throw new IllegalStateException(String.format("Failed to load policy class: %s", configuredPolicy), e);
-            } catch (IllegalArgumentException e) {
-                LOGGER.warn(String.format("Configured policy %s is not supported.  Ignoring.", configuredPolicy));
-            }
-        } else {
-            LOGGER.warn("No policy set.  Any conflicts will be reported and ignored.");
+    public static ResolutionPolicy createPolicy(final String configuredPolicy, final Reporter reporter,
+                                                final boolean reportOnlyFlag) {
+        try {
+            final ResolutionPolicyStrategy strategy = ResolutionPolicyStrategy.valueOf(
+                    configuredPolicy.toUpperCase());
+            return POLICY_DICTIONARY.get(strategy).getDeclaredConstructor(Reporter.class, boolean.class).newInstance(
+                    reporter, reportOnlyFlag);
+        } catch (NoSuchMethodException | InstantiationException | IllegalAccessException
+                | InvocationTargetException e) {
+            throw new IllegalStateException(String.format("Failed to load policy class: %s", configuredPolicy), e);
         }
     }
 }
