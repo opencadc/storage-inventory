@@ -1,9 +1,10 @@
-# file-validate process (tantar)
+# Storage Inventoty file-validate process (tantar)
 
 Process to ensure validity of the information stored in the inventory database and back end storage at a storage site is
 correct. This process is intended to be run periodically at a storage site to keep the site in a valid state.
 
 ## configuration
+See the [cadc-java](https://github.com/opencadc/docker-base/tree/master/cadc-java) image docs for general config requirements.
 
 A file called `tantar.properties` must be made available via the `/config` directory.  All properties in the file are loaded and set as Java system properties.
 
@@ -16,7 +17,7 @@ org.opencadc.tantar.bucket = {bucketname}
 
 ## inventory database settings
 org.opencadc.inventory.db.SQLGenerator=org.opencadc.inventory.db.SQLGenerator
-org.opencadc.tantar.schema={schema}
+org.opencadc.inventory.db.schema={schema}
 org.opencadc.tantar.username={dbuser}
 org.opencadc.tantar.password={dbpassword}
 org.opencadc.tantar.url=jdbc:postgresql://{server}/{database}
