@@ -1,4 +1,4 @@
-# Storage permissions service (baldur)
+# Storage Inventory permissions service (baldur)
 
 ## configuration
 See the <a href="https://github.com/opencadc/docker-base/tree/master/cadc-tomcat">cadc-tomcat</a> image docs 
