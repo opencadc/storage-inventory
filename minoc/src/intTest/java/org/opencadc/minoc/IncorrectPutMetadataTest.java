@@ -68,6 +68,7 @@
 package org.opencadc.minoc;
 
 import ca.nrc.cadc.net.HttpDownload;
+import ca.nrc.cadc.net.HttpTransfer;
 import ca.nrc.cadc.net.HttpUpload;
 import ca.nrc.cadc.util.Log4jInit;
 
@@ -119,8 +120,8 @@ public class IncorrectPutMetadataTest extends MinocTest {
                     // put file
                     InputStream in = new ByteArrayInputStream(bytes);
                     HttpUpload put = new HttpUpload(in, artifactURL);
-                    put.setRequestProperty("Content-MD5", computeMD5(incorrectData.getBytes()));
-                    put.setRequestProperty("Content-Length", Long.toString((long) bytes.length));
+                    put.setRequestProperty(HttpTransfer.CONTENT_MD5, computeMD5(incorrectData.getBytes()));
+                    put.setRequestProperty(HttpTransfer.CONTENT_LENGTH, Long.toString((long) bytes.length));
                     put.run();
                     Assert.assertNotNull(put.getThrowable());
                     Assert.assertEquals("should be 412, precondition failed", 412, put.getResponseCode());
@@ -150,7 +151,7 @@ public class IncorrectPutMetadataTest extends MinocTest {
                     // put file
                     InputStream in = new ByteArrayInputStream(bytes);
                     HttpUpload put = new HttpUpload(in, artifactURL);
-                    put.setRequestProperty("Content-Length", Long.toString((long) bytes.length + 1L));
+                    put.setRequestProperty(HttpTransfer.CONTENT_LENGTH, Long.toString((long) bytes.length + 1L));
                     put.run();
                     Assert.assertNotNull(put.getThrowable());
                     Assert.assertEquals("should be 412, precondition failed", 412, put.getResponseCode());
@@ -180,7 +181,7 @@ public class IncorrectPutMetadataTest extends MinocTest {
                     // put file
                     InputStream in = new ByteArrayInputStream(bytes);
                     HttpUpload put = new HttpUpload(in, artifactURL);
-                    put.setRequestProperty("Content-Length", Long.toString((long) bytes.length + 1L));
+                    put.setRequestProperty(HttpTransfer.CONTENT_LENGTH, Long.toString((long) bytes.length + 1L));
                     put.run();
                     Assert.assertNotNull(put.getThrowable());
                     Assert.assertEquals("should be 412, precondition failed", 412, put.getResponseCode());
@@ -210,8 +211,8 @@ public class IncorrectPutMetadataTest extends MinocTest {
                     // put file
                     InputStream in = new ByteArrayInputStream(bytes);
                     HttpUpload put = new HttpUpload(in, artifactURL);
-                    put.setRequestProperty("Content-MD5", computeMD5(bytes));
-                    put.setRequestProperty("Content-Length", Long.toString((long) bytes.length - 1L));
+                    put.setRequestProperty(HttpTransfer.CONTENT_MD5, computeMD5(bytes));
+                    put.setRequestProperty(HttpTransfer.CONTENT_LENGTH, Long.toString((long) bytes.length - 1L));
                     put.run();
                     Assert.assertNotNull(put.getThrowable());
                     Assert.assertEquals("should be 400, precondition failed", 400, put.getResponseCode());
@@ -241,8 +242,8 @@ public class IncorrectPutMetadataTest extends MinocTest {
                     // put file
                     InputStream in = new ByteArrayInputStream(bytes);
                     HttpUpload put = new HttpUpload(in, artifactURL);
-                    put.setRequestProperty("Content-MD5", computeMD5(bytes));
-                    put.setRequestProperty("Content-Length", Long.toString((long) bytes.length));
+                    put.setRequestProperty(HttpTransfer.CONTENT_MD5, computeMD5(bytes));
+                    put.setRequestProperty(HttpTransfer.CONTENT_LENGTH, Long.toString((long) bytes.length));
 
                     put.run();
                     Assert.assertNull(put.getThrowable());

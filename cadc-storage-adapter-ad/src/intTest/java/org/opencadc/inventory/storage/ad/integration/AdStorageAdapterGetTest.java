@@ -117,6 +117,7 @@ public class AdStorageAdapterGetTest {
                     new BigInteger(1, messageDigest.digest()).toString(16))));
 
         } catch (Exception unexpected) {
+            log.error("unexpected exception", unexpected);
             Assert.fail("Unexpected exception");
         }
 
@@ -140,6 +141,7 @@ public class AdStorageAdapterGetTest {
                     new BigInteger(1, messageDigest.digest()).toString(16))));
 
         } catch (Exception unexpected) {
+            log.error("unexpected exception", unexpected);
             Assert.fail("Unexpected exception");
         }
     }

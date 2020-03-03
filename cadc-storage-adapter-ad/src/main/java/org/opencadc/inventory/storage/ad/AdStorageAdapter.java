@@ -253,7 +253,7 @@ public class AdStorageAdapter implements StorageAdapter {
      */
     public Iterator<StorageMetadata> iterator(String storageBucket)
         throws StorageEngageException, TransientException {
-        InventoryUtil.assertNotNull(AdStorageQueryUtil.class, "storageBucket", storageBucket);
+        InventoryUtil.assertNotNull(AdStorageQuery.class, "storageBucket", storageBucket);
         if (!StringUtil.hasLength(storageBucket)) {
             throw new IllegalArgumentException("Archive name must be specified: " + storageBucket);
         }
@@ -265,7 +265,7 @@ public class AdStorageAdapter implements StorageAdapter {
         } catch (ResourceNotFoundException rnfe) {
             throw new StorageEngageException("Unable to connect to tap client: " + rnfe.getMessage());
         }
-        AdStorageQueryUtil adQuery = new AdStorageQueryUtil(storageBucket);
+        AdStorageQuery adQuery = new AdStorageQuery(storageBucket);
         Iterator<StorageMetadata> storageMetadataIterator = null;
 
         try {

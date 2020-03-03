@@ -72,7 +72,6 @@ import ca.nrc.cadc.util.Log4jInit;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
-import java.io.FileNotFoundException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URI;
@@ -82,7 +81,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
-import javax.annotation.Resource;
 import javax.security.auth.Subject;
 
 import org.apache.log4j.Level;
@@ -123,8 +121,8 @@ public class BasicOpsTest extends MinocTest {
                     // put
                     InputStream in = new ByteArrayInputStream(data.getBytes());
                     HttpUpload put = new HttpUpload(in, artifactURL);
-                    put.setRequestProperty("Content-Type", type);
-                    put.setRequestProperty("Content-Encoding", encoding);
+                    put.setRequestProperty(HttpTransfer.CONTENT_TYPE, type);
+                    put.setRequestProperty(HttpTransfer.CONTENT_ENCODING, encoding);
 
                     put.run();
                     Assert.assertNull(put.getThrowable());
@@ -263,8 +261,8 @@ public class BasicOpsTest extends MinocTest {
                     // put
                     InputStream in = new ByteArrayInputStream(data.getBytes());
                     HttpUpload put = new HttpUpload(in, artifactURL);
-                    put.setRequestProperty("Content-Type", type);
-                    put.setRequestProperty("Content-Encoding", encoding);
+                    put.setRequestProperty(HttpTransfer.CONTENT_TYPE, type);
+                    put.setRequestProperty(HttpTransfer.CONTENT_ENCODING, encoding);
                     put.run();
                     Assert.assertEquals("should be 400, bad request", 400, put.getResponseCode());
                     

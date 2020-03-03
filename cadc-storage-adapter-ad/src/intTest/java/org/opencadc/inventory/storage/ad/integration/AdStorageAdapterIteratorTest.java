@@ -119,6 +119,7 @@ public class AdStorageAdapterIteratorTest {
                     }
                     Assert.assertTrue( "archive size is zero.", archiveSize > 0);
                 } catch (Exception unexpected) {
+                    log.error("unexpected exception", unexpected);
                     Assert.fail("unexpected exception: " + unexpected.getMessage());
                 }
 
@@ -127,14 +128,11 @@ public class AdStorageAdapterIteratorTest {
                 try {
                     Iterator<StorageMetadata> storageMetaIterator = adStorageAdapter.iterator(archiveName);
                     int archiveSize = 0;
-                    while (storageMetaIterator.hasNext()) {
-                        StorageMetadata curMeta = storageMetaIterator.next();
-                        archiveSize++;
-                    }
-                    Assert.assertTrue( "archive size is not zero.", archiveSize == 0);
+                    Assert.assertTrue("iterator is not empty.", storageMetaIterator.hasNext() == false);
                 } catch (IllegalArgumentException expected) {
-                    log.info("expected error");
+                    log.info("expected error", expected);
                 } catch (Exception unexpected) {
+                    log.error("unexpected exception", unexpected);
                     Assert.fail("unexpected exception: " + unexpected.getMessage());
                 }
 
@@ -154,8 +152,9 @@ public class AdStorageAdapterIteratorTest {
                     Iterator<StorageMetadata> storageMetaIterator = adStorageAdapter.iterator(archiveName);
                     Assert.fail("iterator call should have failed but did not.");
                 } catch (IllegalArgumentException expected) {
-                    log.info("expected error");
+                    log.info("expected error", expected);
                 } catch (Exception unexpected) {
+                    log.error("unexpected exception", unexpected);
                     Assert.fail("unexpected exception: " + unexpected.getMessage());
                 }
                 return null;

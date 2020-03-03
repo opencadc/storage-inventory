@@ -85,8 +85,8 @@ import org.opencadc.tap.TapRowMapper;
  * Provide query and RowMapper instance for grabbing data from ad.
  * RowMapper maps from ad's archive_files table to a StorageMetadata object.
  */
-public class AdStorageQueryUtil {
-    private static final Logger log = Logger.getLogger(AdStorageQueryUtil.class);
+public class AdStorageQuery {
+    private static final Logger log = Logger.getLogger(AdStorageQuery.class);
     // Query to use that will pull data in the order required by the mapRow function
     private String queryTemplate = "select archiveName, uri, contentMD5, fileSize,contentEncoding, contentType, ingestDate"
             + " from archive_files where archiveName='%s'";
@@ -95,8 +95,8 @@ public class AdStorageQueryUtil {
 
     private static String MD5_ENCODING_SCHEME = "md5:";
 
-    AdStorageQueryUtil(String storageBucket) {
-        InventoryUtil.assertNotNull(AdStorageQueryUtil.class, "storageBucket", storageBucket);
+    AdStorageQuery(String storageBucket) {
+        InventoryUtil.assertNotNull(AdStorageQuery.class, "storageBucket", storageBucket);
         setQuery(storageBucket);
     }
 
