@@ -102,7 +102,7 @@ public class AdStorageAdapterGetTest {
             final MessageDigest messageDigest = digestOutputStream.getMessageDigest();
 
             final StorageLocation storageLocation = new StorageLocation(testIrisUri);
-            storageLocation.storageBucket = "ad";
+            storageLocation.storageBucket = "IRIS";
 
             testSubject.get(storageLocation, byteCountOutputStream);
 
@@ -125,7 +125,7 @@ public class AdStorageAdapterGetTest {
             final MessageDigest messageDigest = digestOutputStream.getMessageDigest();
 
             final StorageLocation storageLocation = new StorageLocation(testGeminiUri);
-            storageLocation.storageBucket = "ad";
+            storageLocation.storageBucket = "GEM";
 
             testSubject.get(storageLocation, byteCountOutputStream);
 
@@ -139,7 +139,7 @@ public class AdStorageAdapterGetTest {
     }
 
     @Test
-    public void testGetInvalid() throws Exception {
+    public void testGetInvalidFile() throws Exception {
         final AdStorageAdapter testSubject = new AdStorageAdapter();
 
         // Invalid file in valid archive
@@ -147,7 +147,7 @@ public class AdStorageAdapterGetTest {
         try {
             final OutputStream outputStream = new ByteArrayOutputStream();
             final StorageLocation storageLocation = new StorageLocation(invalidIrisUri);
-            storageLocation.storageBucket = "ad";
+            storageLocation.storageBucket = "IRIS";
             testSubject.get(storageLocation, outputStream);
             Assert.fail("ResourceNotFoundException expected");
         } catch (ResourceNotFoundException rnfe) {
@@ -155,13 +155,18 @@ public class AdStorageAdapterGetTest {
         } catch (Exception unexpected) {
             Assert.fail("Unexpected exception: " + unexpected.getMessage());
         }
+    }
+
+    @Test
+    public void testGetInvalidBucket() throws Exception {
+        final AdStorageAdapter testSubject = new AdStorageAdapter();
 
         // BAD ARCHIVE - throws a 500
-        final URI testAlmaUri = URI.create("badArchive:BADARCHIVE/A.00056.S_uid___A001_X1320_X9a_auxiliary.tar");
+        final URI testAlmaUri = URI.create("ad:BAD/S20191208S0019.jpg");
         try {
             final OutputStream outputStream = new ByteArrayOutputStream();
             final StorageLocation storageLocation = new StorageLocation(testAlmaUri);
-            storageLocation.storageBucket = "ad";
+            storageLocation.storageBucket = "BAD";
 
             testSubject.get(storageLocation, outputStream);
             Assert.fail("StorageEngageException expected");
@@ -172,5 +177,4 @@ public class AdStorageAdapterGetTest {
             Assert.fail("Unexpected exception: " + unexpected.toString());
         }
     }
-
 }
