@@ -71,12 +71,15 @@ package org.opencadc.inventory.storage.ad;
 
 import ca.nrc.cadc.auth.AuthMethod;
 import ca.nrc.cadc.auth.AuthenticationUtil;
+import ca.nrc.cadc.io.ByteLimitExceededException;
 import ca.nrc.cadc.io.ReadException;
+import ca.nrc.cadc.io.ThreadedIO;
 import ca.nrc.cadc.io.WriteException;
 
-import ca.nrc.cadc.net.HttpDownload;
+import ca.nrc.cadc.net.HttpGet;
 import ca.nrc.cadc.net.IncorrectContentChecksumException;
 import ca.nrc.cadc.net.IncorrectContentLengthException;
+import ca.nrc.cadc.net.ResourceAlreadyExistsException;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.reg.Capabilities;
@@ -88,11 +91,11 @@ import ca.nrc.cadc.util.StringUtil;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.net.HttpURLConnection;
+
 import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URL;
-import java.security.AccessControlException;
+
 import java.util.Iterator;
 import java.util.Set;
 import java.util.SortedSet;
@@ -118,7 +121,6 @@ public class AdStorageAdapter implements StorageAdapter {
 
     private static final Logger log = Logger.getLogger(AdStorageAdapter.class);
     private static final URI DATA_RESOURCE_ID = URI.create("ivo://cadc.nrc.ca/data");
-    private static final String UNABLE_TO_GET = "Unable to get from source: ";
     private static final String TAP_SERVICE_URI = "ivo://cadc.nrc.ca/ad";
 
     /**
@@ -145,32 +147,22 @@ public class AdStorageAdapter implements StorageAdapter {
         URL sourceURL = this.toURL(storageLocation.getStorageID());
         log.debug("sourceURL: " + sourceURL.toString());
 
-        HttpDownload get = new HttpDownload(sourceURL, dest);
-        get.run();
+        try {
+            boolean followRedirects = true;
 
-        int retVal = get.getResponseCode();
-        log.debug("HttpDownload return value: " + retVal);
-        if (retVal != HttpURLConnection.HTTP_OK) {
-            Throwable downloadThrowable = get.getThrowable();
-            String throwableMsg = "";
-            if (downloadThrowable != null) {
-                throwableMsg = downloadThrowable.getMessage();
-            }
-            if (retVal == HttpURLConnection.HTTP_FORBIDDEN) {
-                // 403
-                throw new AccessControlException(UNABLE_TO_GET + throwableMsg);
-            } else if (retVal == HttpURLConnection.HTTP_NOT_FOUND) {
-                // 404
-                throw new ResourceNotFoundException(UNABLE_TO_GET +  throwableMsg);
-            } else if (retVal == HttpURLConnection.HTTP_UNAVAILABLE) {
-                // 503
-                throw new TransientException(UNABLE_TO_GET + throwableMsg);
-            } else {
-                throw new StorageEngageException(UNABLE_TO_GET + throwableMsg);
-                // After HttpTransfer getThrowable is updated to return storage-inventory
-                // exceptions (ReadException, WriteException, StorageEngageException etc.)
-                // this section will be updated to handle them properly.
-            }
+            HttpGet get = new HttpGet(sourceURL, followRedirects);
+
+            get.prepare();
+            get.run();
+
+            ThreadedIO tio = new ThreadedIO();
+            tio.ioLoop(dest, get.getInputStream());
+
+        } catch (ByteLimitExceededException | ResourceAlreadyExistsException unexpected) {
+            log.debug("error type: " + unexpected.getClass());
+            throw new RuntimeException(unexpected.getMessage());
+        } catch (InterruptedException | IOException ie) {
+            throw new TransientException(ie.getMessage());
         }
     }
 

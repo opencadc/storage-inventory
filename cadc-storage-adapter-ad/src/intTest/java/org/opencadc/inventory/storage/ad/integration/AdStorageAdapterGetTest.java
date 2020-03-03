@@ -70,25 +70,31 @@ package org.opencadc.inventory.storage.ad.integration;
 
 import ca.nrc.cadc.io.ByteCountOutputStream;
 import ca.nrc.cadc.net.ResourceNotFoundException;
+import ca.nrc.cadc.util.Log4jInit;
 import java.io.ByteArrayOutputStream;
 import java.io.OutputStream;
 import java.math.BigInteger;
 import java.net.URI;
 import java.security.DigestOutputStream;
 import java.security.MessageDigest;
+import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.Test;
 import org.opencadc.inventory.StorageLocation;
-import org.opencadc.inventory.storage.StorageEngageException;
 import org.opencadc.inventory.storage.ad.AdStorageAdapter;
+
 
 public class AdStorageAdapterGetTest {
     private static final Logger log = Logger.getLogger(AdStorageAdapterGetTest.class);
     private static final String DIGEST_ALGORITHM = "MD5";
 
+    static {
+        Log4jInit.setLevel("ca.nrc.cadc.net", Level.DEBUG);
+    }
+
     @Test
-    public void testGetValid() throws Exception {
+    public void testGetValid() {
         final AdStorageAdapter testSubject = new AdStorageAdapter();
         final URI testIrisUri = URI.create("ad:IRIS/I429B4H0.fits");
 
@@ -139,7 +145,7 @@ public class AdStorageAdapterGetTest {
     }
 
     @Test
-    public void testGetInvalidFile() throws Exception {
+    public void testGetInvalidFile() {
         final AdStorageAdapter testSubject = new AdStorageAdapter();
 
         // Invalid file in valid archive
@@ -158,10 +164,10 @@ public class AdStorageAdapterGetTest {
     }
 
     @Test
-    public void testGetInvalidBucket() throws Exception {
+    public void testGetInvalidBucket() {
         final AdStorageAdapter testSubject = new AdStorageAdapter();
 
-        // BAD ARCHIVE - throws a 500
+        // BAD ARCHIVE (bucket) - throws a 500
         final URI testAlmaUri = URI.create("ad:BAD/S20191208S0019.jpg");
         try {
             final OutputStream outputStream = new ByteArrayOutputStream();
@@ -170,9 +176,9 @@ public class AdStorageAdapterGetTest {
 
             testSubject.get(storageLocation, outputStream);
             Assert.fail("StorageEngageException expected");
-        } catch (StorageEngageException see) {
+        } catch (RuntimeException re) {
             // expected
-            System.out.println("expected exception: " + see.getMessage());
+            System.out.println("expected exception: " + re.getMessage());
         } catch (Exception unexpected) {
             Assert.fail("Unexpected exception: " + unexpected.toString());
         }
