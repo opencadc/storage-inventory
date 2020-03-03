@@ -90,7 +90,7 @@ public class AdStorageAdapterGetTest {
     private static final String DIGEST_ALGORITHM = "MD5";
 
     static {
-        Log4jInit.setLevel("ca.nrc.cadc.net", Level.DEBUG);
+        Log4jInit.setLevel("ca.nrc.cadc.net", Level.INFO);
     }
 
     @Test
@@ -141,46 +141,6 @@ public class AdStorageAdapterGetTest {
 
         } catch (Exception unexpected) {
             Assert.fail("Unexpected exception");
-        }
-    }
-
-    @Test
-    public void testGetInvalidFile() {
-        final AdStorageAdapter testSubject = new AdStorageAdapter();
-
-        // Invalid file in valid archive
-        final URI invalidIrisUri = URI.create("ad:IRIS/BAD_FILE.fits");
-        try {
-            final OutputStream outputStream = new ByteArrayOutputStream();
-            final StorageLocation storageLocation = new StorageLocation(invalidIrisUri);
-            storageLocation.storageBucket = "IRIS";
-            testSubject.get(storageLocation, outputStream);
-            Assert.fail("ResourceNotFoundException expected");
-        } catch (ResourceNotFoundException rnfe) {
-            // expected
-        } catch (Exception unexpected) {
-            Assert.fail("Unexpected exception: " + unexpected.getMessage());
-        }
-    }
-
-    @Test
-    public void testGetInvalidBucket() {
-        final AdStorageAdapter testSubject = new AdStorageAdapter();
-
-        // BAD ARCHIVE (bucket) - throws a 500
-        final URI testAlmaUri = URI.create("ad:BAD/S20191208S0019.jpg");
-        try {
-            final OutputStream outputStream = new ByteArrayOutputStream();
-            final StorageLocation storageLocation = new StorageLocation(testAlmaUri);
-            storageLocation.storageBucket = "BAD";
-
-            testSubject.get(storageLocation, outputStream);
-            Assert.fail("StorageEngageException expected");
-        } catch (RuntimeException re) {
-            // expected
-            System.out.println("expected exception: " + re.getMessage());
-        } catch (Exception unexpected) {
-            Assert.fail("Unexpected exception: " + unexpected.toString());
         }
     }
 }
