@@ -1,7 +1,7 @@
 # Storage Inventory file service (minoc)
 
 ## configuration
-See the <a href="https://github.com/opencadc/docker-base/tree/master/cadc-tomcat">cadc-tomcat</a> image docs 
+See the [cadc-java](https://github.com/opencadc/docker-base/tree/master/cadc-java) image docs 
 for expected deployment and general config requirements.
 
 ### catalina.properties
@@ -17,8 +17,14 @@ minoc.invadm.url=jdbc:postgresql://{server}/{database}
 # service identity
 org.opencadc.minoc.resourceID=ivo://{authority}/{name}
 ```
+Additional java system properties may be required by the storage adapter implementation.
 
 ### LocalAuthority.properties
+The LocalAuthority.properties file specifies which local service is authoritative for various site-wide functions. The keys
+are standardID values for the functions and the values are resouceID values for the service that implements that standard 
+feature.
+
+Example:
 ```
 ivo://ivoa.net/std/GMS#search-0.1 = ivo://cadc.nrc.ca/gms           
 ivo://ivoa.net/std/UMS#users-0.1 = ivo://cadc.nrc.ca/gms    
@@ -32,30 +38,18 @@ ivo://ivoa.net/std/CDP#proxy-1.0 = ivo://cadc.nrc.ca/cred
 A minoc.properties file in /config is required to run this service.  The following keys (with example values) are needed:
 
 ```
-# The storage adapter to use for storage.
-# Consult the storage adapter instructions for adapter-specific configuration
-#org.opencadc.inventory.storage.StorageAdapter={fully-qualified-classname of implementation}
-org.opencadc.inventory.storage.StorageAdapter={storage adapter class}
+# inventory database settings
+org.opencadc.inventory.db.SQLGenerator=org.opencadc.inventory.db.SQLGenerator
+org.opencadc.inventory.db.schema={schema}
 
-# The SQL generator implementation (default shown)
-#org.opencadc.inventory.db.SQLGenerator=org.opencadc.inventory.db.SQLGenerator
-
-# The schema to use
-org.opencadc.inventory.db.schema=inventory
-
-# The identity of a permissions service(s) providing read permissions. 
-# - multiple values are supported: service will query all of them
-#org.opencadc.inventory.permissions.ReadGrant.resource=ivo://{authority}/{name}
-
-# The identity of a permissions system providing write permissions. 
-# - multiple values are supported: service will query all of them 
-#org.opencadc.inventory.permissions.WriteGrant.resourceID=ivo://{authority}/{name}
+# permission granting service settings
+org.opencadc.inventory.permissions.ReadGrant.resourceID=ivo://{authority}/{name}
+org.opencadc.inventory.permissions.WriteGrant.resourceID=ivo://{authority}/{name}
 ```
+Multiple values of the permission granting service resourceID(s) may be provided. All services will be consulted but a single
+positive result is sufficient to grant permission for an action.
 
-## configuring the storage adapter class
-
-Refer to documentation for the storage adapter named in minoc.properties in the 
-'org.opencadc.inventory.storage.StorageAdapater' entry for any configuration required.
+Additional configuration may be required by the storage adapter implementation.
 
 ## building it
 ```

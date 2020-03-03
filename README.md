@@ -6,7 +6,6 @@ Storage Inventory components
 This is the storage inventory data model and architecture documentation.
 
 # cadc-*
-
 These are libraries used in multiple services.
 
 # baldur
@@ -20,3 +19,6 @@ This is an implementation of a file service that supports HEAD, GET, PUT, POST, 
 
 # raven
 This is an implementation of the global locator service that supports transfer negotiation.
+
+# tantar
+This is an implementation of the file-validate process that compares the inventory database against a back end storage at a storage site.

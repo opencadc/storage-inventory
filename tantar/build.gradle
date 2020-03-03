@@ -1,0 +1,31 @@
+plugins {
+    id 'java'
+    id 'maven'
+    id 'application'
+    id 'checkstyle'
+}
+
+repositories {
+    jcenter()
+    mavenLocal()
+}
+
+sourceCompatibility = 1.8
+
+group = 'org.opencadc'
+
+version = '0.1'
+
+dependencies {
+    compile 'log4j:log4j:[1.2,)'
+    compile 'org.opencadc:cadc-storage-adapter:[0.3,1.0)'
+    compile 'org.opencadc:cadc-util:[1.2,2.0)'
+    compile 'org.opencadc:cadc-inventory-db:[0.6,1.0)'
+
+    testCompile 'junit:junit:[4.12,5.0)'
+}
+
+mainClassName = 'org.opencadc.inventory.validate.Main'
+
+apply from: '../opencadc.gradle'
+
