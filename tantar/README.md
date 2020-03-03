@@ -1,72 +1,46 @@
-# tantar v0.1
+# file-validate process (tantar)
 
-Process to ensure validity of the information stored in the Inventory Database and what is served from a Storage Adapter.  
+Process to ensure validity of the information stored in the inventory database and back end storage at a storage site is
+correct. This process is intended to be run periodically at a storage site to keep the site in a valid state.
 
-This is intended to run periodically at any site to determine what changes, if any, are to be made to either the Storage Inventory database, or
-the storage system.
+## configuration
 
-## Configuration
+A file called `tantar.properties` must be made available via the `/config` directory.  All properties in the file are loaded and set as Java system properties.
 
-A file called `tantar.properties` should be available from the `/config` directory.  All properties in the file are loaded and set
-as System properties.
-
-### Template configuration (`tantar.properties`)
-
+### tantar.properties
 ```
-#######
-## Common settings
-#######
-org.opencadc.inventory.logging = INFO
-org.opencadc.inventory.{name}.logging = INFO
+org.opencadc.tantar.logging = {info|debug}
 
-#######
-## Validator settings
-#######
-# Used to set the bucket to tantar
+# set the bucket  or bucket prefix that tantar will validate
 org.opencadc.tantar.bucket = {bucketname}
 
-#######
-## Storage Inventory settings
-#######
-# The SQL generator implementation (default shown)
-#org.opencadc.inventory.db.SQLGenerator=org.opencadc.inventory.db.SQLGenerator
+## inventory database settings
+org.opencadc.inventory.db.SQLGenerator=org.opencadc.inventory.db.SQLGenerator
+org.opencadc.tantar.schema={schema}
+org.opencadc.tantar.username={dbuser}
+org.opencadc.tantar.password={dbpassword}
+org.opencadc.tantar.url=jdbc:postgresql://{server}/{database}
 
-# The database settings for the Inventory database.
-org.opencadc.inventory.db.schema={schema}
-org.opencadc.inventory.db.username={dbuser}
-org.opencadc.inventory.db.password={dbpassword}
-org.opencadc.inventory.db.url={jdbcurl}
-
-#######
-## Storage Adapter specific settings
-#######
-# The storage adapter to use for storage.
-# Consult the storage adapter instructions for adapter-specific configuration.  The library MUST be
-# accessible from this application's classpath.
-#org.opencadc.inventory.storage.StorageAdapter={fully-qualified-classname of implementation}
+## storage adapter settings
+org.opencadc.inventory.storage.StorageAdapter={fully-qualified-classname of implementation}
 ```
+Additional java system properties and/or configuration files may be requires to configure the storage adapter.
 
-
-## Building it
-This Docker image relies on the [Base Java Docker image](https://github.com/opencadc/docker-base/tree/master/cadc-java) built as an image called `cadc-java`.
+## building it
+This Docker image relies on the [Base Java Docker image](https://github.com/opencadc/docker-base/tree/master/cadc-java) built as an image called `cadc-java:latest`.
 
 ```
 gradle -i clean build
-docker build -t opencadc/tantar -f Dockerfile .
+docker build -t tantar -f Dockerfile .
 ```
 
-## Checking it
+## checking it
 ```
-docker run -t opencadc/tantar:latest
-```
-
-## Running it
-Running as the `nobody` user is recommended:
-```
-docker run -r --user nobody:nobody -v /path/to/external/config:/config:ro --name tantar opencadc/tantar:latest
+docker run -t tantar:latest /bin/bash
 ```
 
-Or as root:
+## running it
 ```
-docker run -r -v /path/to/external/config:/config:ro --name tantar opencadc/tantar:latest
+docker run -r --user nobody:nobody -v /path/to/external/config:/config:ro --name tantar tantar:latest
 ```
+
