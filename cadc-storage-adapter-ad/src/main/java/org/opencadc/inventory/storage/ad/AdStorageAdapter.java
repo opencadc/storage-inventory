@@ -149,12 +149,8 @@ public class AdStorageAdapter implements StorageAdapter {
 
         try {
             boolean followRedirects = true;
-
             HttpGet get = new HttpGet(sourceURL, followRedirects);
-
             get.prepare();
-            get.run();
-
             ThreadedIO tio = new ThreadedIO();
             tio.ioLoop(dest, get.getInputStream());
 
