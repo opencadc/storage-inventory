@@ -67,15 +67,11 @@
 
 package org.opencadc.minoc;
 
-import ca.nrc.cadc.net.HttpDelete;
-import ca.nrc.cadc.net.HttpDownload;
-import ca.nrc.cadc.net.HttpPost;
-import ca.nrc.cadc.net.HttpUpload;
+import ca.nrc.cadc.net.*;
 import ca.nrc.cadc.util.Log4jInit;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
-import java.io.FileNotFoundException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URI;
@@ -115,7 +111,7 @@ public class BasicOpsTest extends MinocTest {
             
             Subject.doAs(userSubject, new PrivilegedExceptionAction<Object>() {
                 public Object run() throws Exception {
-                    
+
                     String data = "abcdefghijklmnopqrstuvwxyz";
                     URI artifactURI = URI.create("cadc:TEST/file.fits");
                     URL artifactURL = new URL(anonURL + "/" + artifactURI.toString());
@@ -125,8 +121,9 @@ public class BasicOpsTest extends MinocTest {
                     // put
                     InputStream in = new ByteArrayInputStream(data.getBytes());
                     HttpUpload put = new HttpUpload(in, artifactURL);
-                    put.setContentEncoding(encoding);
-                    put.setContentType(type);
+                    put.setRequestProperty(HttpTransfer.CONTENT_TYPE, type);
+                    put.setRequestProperty(HttpTransfer.CONTENT_ENCODING, encoding);
+
                     put.run();
                     Assert.assertNull(put.getThrowable());
                     
@@ -179,7 +176,7 @@ public class BasicOpsTest extends MinocTest {
                     get.run();
                     Throwable throwable = get.getThrowable();
                     Assert.assertNotNull(throwable);
-                    Assert.assertTrue(throwable instanceof FileNotFoundException);
+                    Assert.assertTrue(throwable instanceof ResourceNotFoundException);
                     
                     return null;
                 }
@@ -208,7 +205,7 @@ public class BasicOpsTest extends MinocTest {
                     get.run();
                     Assert.assertNotNull(get.getThrowable());
                     Assert.assertEquals("should be 404, not found", 404, get.getResponseCode());
-                    Assert.assertTrue(get.getThrowable() instanceof FileNotFoundException);
+                    Assert.assertTrue(get.getThrowable() instanceof ResourceNotFoundException);
                 
                     return null;
                 }
@@ -235,7 +232,8 @@ public class BasicOpsTest extends MinocTest {
                     delete.run();
                     Assert.assertNotNull(delete.getThrowable());
                     Assert.assertEquals("should be 404, not found", 404, delete.getResponseCode());
-                    Assert.assertTrue(delete.getThrowable() instanceof FileNotFoundException);
+                    System.out.println(delete.getThrowable());
+                    Assert.assertTrue(delete.getThrowable() instanceof ResourceNotFoundException);
                 
                     return null;
                 }
@@ -263,8 +261,8 @@ public class BasicOpsTest extends MinocTest {
                     // put
                     InputStream in = new ByteArrayInputStream(data.getBytes());
                     HttpUpload put = new HttpUpload(in, artifactURL);
-                    put.setContentEncoding(encoding);
-                    put.setContentType(type);
+                    put.setRequestProperty(HttpTransfer.CONTENT_TYPE, type);
+                    put.setRequestProperty(HttpTransfer.CONTENT_ENCODING, encoding);
                     put.run();
                     Assert.assertEquals("should be 400, bad request", 400, put.getResponseCode());
                     
