@@ -26,7 +26,7 @@ dependencies {
     testCompile 'junit:junit:[4.12,5.0)'
 }
 
-mainClassName = 'org.opencadc.inventory.validate.Main'
+mainClassName = 'org.opencadc.tantar.Main'
 
 apply from: '../opencadc.gradle'
 
