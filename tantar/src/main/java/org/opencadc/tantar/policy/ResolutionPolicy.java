@@ -2,6 +2,7 @@ package org.opencadc.tantar.policy;
 
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.storage.StorageMetadata;
+import org.opencadc.tantar.ValidateEventListener;
 
 
 /*
@@ -76,8 +77,22 @@ public interface ResolutionPolicy {
     /**
      * Use the logic of this Policy to correct a conflict caused by the two given items.  One of the arguments can
      * be null, but not both.
-     * @param artifact              The Artifact to use in deciding.
-     * @param storageMetadata       The StorageMetadata to use in deciding.
+     *
+     * @param artifact        The Artifact to use in deciding.
+     * @param storageMetadata The StorageMetadata to use in deciding.
+     * @throws Exception For any unknown issues with taking action.
      */
-    void resolve(final Artifact artifact, final StorageMetadata storageMetadata);
+    void resolve(final Artifact artifact, final StorageMetadata storageMetadata) throws Exception;
+
+    /**
+     * Add a listener for the various actions the policy will dictate.
+     *
+     * @param listener Listener instance.  Never null.
+     */
+    void subscribe(final ValidateEventListener listener);
+
+    /**
+     * Remove the current listener.
+     */
+    void unsubscribe();
 }

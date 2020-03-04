@@ -150,10 +150,9 @@ public class BucketValidatorTest {
 
         final BucketValidator testSubject =
                 new BucketValidator("TESTBUCKET", null,
-                                    new BucketIteratorDeterminer(
-                                            ResolutionPolicyFactory.createPolicy(
-                                                    ResolutionPolicyStrategy.INVENTORY_IS_ALWAYS_RIGHT.name(),
-                                                    reporter, true))) {
+                                    ResolutionPolicyFactory.createPolicy(
+                                            ResolutionPolicyStrategy.INVENTORY_IS_ALWAYS_RIGHT.name(),
+                                            reporter, true)) {
                     @Override
                     Iterator<StorageMetadata> iterateStorage() {
                         return testStorageMetadataList.iterator();
@@ -219,10 +218,9 @@ public class BucketValidatorTest {
 
         final BucketValidator testSubject =
                 new BucketValidator("TESTBUCKET", null,
-                                    new BucketIteratorDeterminer(
-                                            ResolutionPolicyFactory.createPolicy(
-                                                    ResolutionPolicyStrategy.INVENTORY_IS_ALWAYS_RIGHT.name(),
-                                                    reporter, true))) {
+                                    ResolutionPolicyFactory.createPolicy(
+                                            ResolutionPolicyStrategy.INVENTORY_IS_ALWAYS_RIGHT.name(),
+                                            reporter, true)) {
                     @Override
                     Iterator<StorageMetadata> iterateStorage() {
                         return Collections.emptyIterator();
@@ -297,10 +295,9 @@ public class BucketValidatorTest {
 
         final BucketValidator testSubject =
                 new BucketValidator("TESTBUCKET", null,
-                                    new BucketIteratorDeterminer(
-                                            ResolutionPolicyFactory.createPolicy(
-                                                    ResolutionPolicyStrategy.STORAGE_IS_ALWAYS_RIGHT.name(),
-                                                    reporter, true))) {
+                                    ResolutionPolicyFactory.createPolicy(
+                                            ResolutionPolicyStrategy.STORAGE_IS_ALWAYS_RIGHT.name(),
+                                            reporter, true)) {
                     @Override
                     Iterator<StorageMetadata> iterateStorage() {
                         return testStorageMetadataList.iterator();
@@ -359,10 +356,9 @@ public class BucketValidatorTest {
 
         final BucketValidator testSubject =
                 new BucketValidator("TESTBUCKET", null,
-                                    new BucketIteratorDeterminer(
-                                            ResolutionPolicyFactory.createPolicy(
-                                                    ResolutionPolicyStrategy.STORAGE_IS_ALWAYS_RIGHT.name(),
-                                                    reporter, true))) {
+                                    ResolutionPolicyFactory.createPolicy(
+                                            ResolutionPolicyStrategy.STORAGE_IS_ALWAYS_RIGHT.name(),
+                                            reporter, true)) {
                     @Override
                     Iterator<StorageMetadata> iterateStorage() {
                         return testStorageMetadataList.iterator();

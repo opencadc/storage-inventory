@@ -1,3 +1,10 @@
+package org.opencadc.tantar;
+
+import org.opencadc.inventory.Artifact;
+import org.opencadc.inventory.storage.StorageMetadata;
+
+import java.util.EventListener;
+
 
 /*
  ************************************************************************
@@ -66,81 +73,9 @@
  *
  ************************************************************************
  */
-
-package org.opencadc.tantar;
-
-
-import java.util.Iterator;
-
-import org.apache.log4j.Logger;
-import org.opencadc.inventory.Artifact;
-import org.opencadc.inventory.storage.StorageMetadata;
-import org.opencadc.tantar.policy.ResolutionPolicy;
-
-
-public class BucketIteratorDeterminer {
-
-    private static final Logger LOGGER = Logger.getLogger(BucketIteratorDeterminer.class);
-
-    private final ResolutionPolicy resolutionPolicy;
-
-
-    public BucketIteratorDeterminer(final ResolutionPolicy resolutionPolicy) {
-        this.resolutionPolicy = resolutionPolicy;
-    }
-
-
-    /**
-     * Main method to decide how to deal with two iterators.
-     *
-     * @param artifactIterator        To iterate items from the Storage Inventory (database entries).
-     * @param storageMetadataIterator To iterate items from the Storage Adapter (files).
-     */
-    public void determine(final Iterator<Artifact> artifactIterator,
-                          final Iterator<StorageMetadata> storageMetadataIterator) {
-        LOGGER.debug("START comparing iterators.");
-
-        Artifact unresolvedArtifact = null;
-        StorageMetadata unresolvedStorageMetadata = null;
-
-        while ((artifactIterator.hasNext() || unresolvedArtifact != null)
-               && (storageMetadataIterator.hasNext() || unresolvedStorageMetadata != null)) {
-            final Artifact artifact = (unresolvedArtifact == null) ? artifactIterator.next() : unresolvedArtifact;
-            final StorageMetadata storageMetadata =
-                    (unresolvedStorageMetadata == null) ? storageMetadataIterator.next() : unresolvedStorageMetadata;
-
-            LOGGER.debug(String.format("Comparing Inventory Storage Location %s with Storage Adapter Location %s",
-                                       artifact.storageLocation, storageMetadata.getStorageLocation()));
-            final int comparison = artifact.storageLocation.compareTo(storageMetadata.getStorageLocation());
-
-            if (comparison == 0) {
-                // Same storage location.  Test the metadata.
-                unresolvedArtifact = null;
-                unresolvedStorageMetadata = null;
-                resolutionPolicy.resolve(artifact, storageMetadata);
-            } else if (comparison > 0) {
-                // Exists in Storage but not in inventory.
-                unresolvedArtifact = artifact;
-                unresolvedStorageMetadata = null;
-                resolutionPolicy.resolve(null, storageMetadata);
-            } else {
-                // Exists in Inventory but not in Storage.
-                unresolvedArtifact = null;
-                unresolvedStorageMetadata = storageMetadata;
-                resolutionPolicy.resolve(artifact, null);
-            }
-        }
-
-        // Perform some mop up.  These will take effect when one of the iterators is empty.
-
-        while (artifactIterator.hasNext()) {
-            resolutionPolicy.resolve(artifactIterator.next(), null);
-        }
-
-        while (storageMetadataIterator.hasNext()) {
-            resolutionPolicy.resolve(null, storageMetadataIterator.next());
-        }
-
-        LOGGER.debug("END comparing iterators.");
-    }
+public interface ValidateEventListener extends EventListener {
+    void retrieveFile(final Artifact artifact) throws Exception;
+    void deleteFile(final StorageMetadata storageMetadata) throws Exception;
+    void addArtifact(final StorageMetadata storageMetadata) throws Exception;
+    void deleteArtifact(final Artifact artifact) throws Exception;
 }

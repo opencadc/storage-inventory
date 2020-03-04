@@ -69,19 +69,19 @@
 
 package org.opencadc.tantar.policy;
 
+
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.storage.StorageMetadata;
 import org.opencadc.tantar.Reporter;
 
 
-public class InventoryIsAlwaysRight extends AbstractResolutionPolicy implements ResolutionPolicy {
+public class InventoryIsAlwaysRight extends AbstractResolutionPolicy {
 
     private final Reporter reporter;
-    private final boolean reportOnlyFlag;
 
-    public InventoryIsAlwaysRight(final Reporter reporter, final boolean reportOnlyFlag) {
+    public InventoryIsAlwaysRight(final Reporter reporter, final Boolean reportOnlyFlag) {
+        super(reportOnlyFlag);
         this.reporter = reporter;
-        this.reportOnlyFlag = reportOnlyFlag;
     }
 
     /**
@@ -92,29 +92,33 @@ public class InventoryIsAlwaysRight extends AbstractResolutionPolicy implements 
      * @param storageMetadata The StorageMetadata to use in deciding.
      */
     @Override
-    public void resolve(Artifact artifact, StorageMetadata storageMetadata) {
+    public void resolve(Artifact artifact, StorageMetadata storageMetadata) throws Exception {
         if (storageMetadata == null) {
-            // The Inventory has a file that does not exist in storage.  WTF?
+            // Scenario when an Entity exists in the inventory database but the file is not in Storage.  This can
+            // happen in the case where all files are managed by the inventory but an intervention outside of the
+            // Storage Inventory caused a file to disappear.  The file may not have been fully uploaded to begin with
+            // either.
             reporter.report(String.format("Retrieving File %s as per policy.", artifact.storageLocation));
 
-            if (!reportOnlyFlag) {
-                // go get the file.
+            if (canTakeAction()) {
+                validateEventListener.retrieveFile(artifact);
             }
         } else if (artifact == null) {
             reporter.report(String.format("Removing Unknown File %s as per policy.",
                                           storageMetadata.getStorageLocation()));
-            if (!reportOnlyFlag) {
-                // delete the file.
+            if (canTakeAction()) {
+                validateEventListener.deleteFile(storageMetadata);
             }
         } else {
             // Check metadata for discrepancies.
-            if (!haveTheSameMetadata(artifact, storageMetadata)) {
+            if (haveDifferentMetadata(artifact, storageMetadata)) {
                 // Then prefer the Artifact.
                 reporter.report(String.format("Replacing File %s as per policy.",
                                               storageMetadata.getStorageLocation()));
 
-                if (!reportOnlyFlag) {
-                    // remove the storage metadata file.
+                if (canTakeAction()) {
+                    validateEventListener.deleteFile(storageMetadata);
+                    validateEventListener.retrieveFile(artifact);
                 }
             } else {
                 reporter.report(String.format("Artifact %s is valid as per policy.", artifact.storageLocation));

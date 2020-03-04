@@ -71,10 +71,48 @@ package org.opencadc.tantar.policy;
 
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.storage.StorageMetadata;
+import org.opencadc.tantar.ValidateEventListener;
 
 
-public abstract class AbstractResolutionPolicy {
-    protected final boolean haveTheSameMetadata(final Artifact artifact, final StorageMetadata storageMetadata) {
-        return PolicyMetadata.fromArtifact(artifact).equals(PolicyMetadata.fromStorageMetadata(storageMetadata));
+public abstract class AbstractResolutionPolicy implements ResolutionPolicy {
+    protected ValidateEventListener validateEventListener;
+
+    private final boolean reportOnlyFlag;
+
+    AbstractResolutionPolicy(final Boolean reportOnlyFlag) {
+        this.reportOnlyFlag = reportOnlyFlag;
+    }
+
+
+    protected final boolean haveDifferentMetadata(final Artifact artifact, final StorageMetadata storageMetadata) {
+        return !PolicyMetadata.fromArtifact(artifact).equals(PolicyMetadata.fromStorageMetadata(storageMetadata));
+    }
+
+    protected boolean canTakeAction() {
+        return !reportOnlyFlag;
+    }
+
+    /**
+     * Add a listener for the various actions the policy will dictate.
+     *
+     * @param listener Listener instance.  Never null.
+     */
+    @Override
+    public void subscribe(final ValidateEventListener listener) {
+        if (listener == null) {
+            throw new IllegalArgumentException("Cannot subscribe with a null listener.");
+        } else if (validateEventListener != null) {
+            throw new IllegalStateException("There is already a listener in place.  Unsubscribe first.");
+        } else {
+            this.validateEventListener = listener;
+        }
+    }
+
+    /**
+     * Remove the current listener.
+     */
+    @Override
+    public void unsubscribe() {
+        this.validateEventListener = null;
     }
 }

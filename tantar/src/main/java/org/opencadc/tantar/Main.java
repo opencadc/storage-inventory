@@ -96,11 +96,15 @@ public class Main {
 
         try {
             final BucketValidator bucketValidator = BucketValidator.create(Main.REPORTER);
-            bucketValidator.run();
+            bucketValidator.validate();
         } catch (IllegalStateException e) {
             // IllegalStateExceptions are thrown for missing but required configuration.
             LOGGER.fatal(e.getMessage());
             System.exit(3);
+        } catch (Exception e) {
+            // Used to catch everything else, such as a RuntimeException when a file cannot be obtained and put.
+            LOGGER.fatal(e.getMessage());
+            System.exit(4);
         } finally {
             Main.REPORTER.end();
         }

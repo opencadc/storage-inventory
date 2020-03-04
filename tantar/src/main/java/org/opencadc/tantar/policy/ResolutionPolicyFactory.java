@@ -74,8 +74,6 @@ import java.lang.reflect.InvocationTargetException;
 import java.util.HashMap;
 import java.util.Map;
 
-import org.opencadc.tantar.Reporter;
-
 
 public class ResolutionPolicyFactory {
 
@@ -87,13 +85,16 @@ public class ResolutionPolicyFactory {
         POLICY_DICTIONARY.put(ResolutionPolicyStrategy.INVENTORY_IS_ALWAYS_RIGHT, InventoryIsAlwaysRight.class);
     }
 
-    public static ResolutionPolicy createPolicy(final String configuredPolicy, final Reporter reporter,
-                                                final boolean reportOnlyFlag) {
+    public static ResolutionPolicy createPolicy(final String configuredPolicy, final Object... args) {
         try {
+            final Class<?>[] argClasses = new Class<?>[args.length];
+            for (int i = 0; i < args.length; i++) {
+                argClasses[i] = args[i].getClass();
+            }
+
             final ResolutionPolicyStrategy strategy = ResolutionPolicyStrategy.valueOf(
                     configuredPolicy.toUpperCase());
-            return POLICY_DICTIONARY.get(strategy).getDeclaredConstructor(Reporter.class, boolean.class).newInstance(
-                    reporter, reportOnlyFlag);
+            return POLICY_DICTIONARY.get(strategy).getDeclaredConstructor(argClasses).newInstance(args);
         } catch (NoSuchMethodException | InstantiationException | IllegalAccessException
                 | InvocationTargetException e) {
             throw new IllegalStateException(String.format("Failed to load policy class: %s", configuredPolicy), e);

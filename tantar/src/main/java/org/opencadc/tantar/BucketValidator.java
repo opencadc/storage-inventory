@@ -69,12 +69,13 @@
 
 package org.opencadc.tantar;
 
-
 import ca.nrc.cadc.db.ConnectionConfig;
 import ca.nrc.cadc.db.DBUtil;
 import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.util.StringUtil;
 
+import java.io.PipedInputStream;
+import java.io.PipedOutputStream;
 import java.lang.reflect.InvocationTargetException;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -82,9 +83,11 @@ import java.util.Map;
 import java.util.Properties;
 import javax.naming.NamingException;
 
+import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.SQLGenerator;
+import org.opencadc.inventory.storage.NewArtifact;
 import org.opencadc.inventory.storage.StorageAdapter;
 import org.opencadc.inventory.storage.StorageEngageException;
 import org.opencadc.inventory.storage.StorageMetadata;
@@ -97,7 +100,9 @@ import org.opencadc.tantar.policy.ResolutionPolicyFactory;
  * Policies for conflicts, meaning situations where there is a discrepancy between what the Storage Adaptor relays
  * what is currently stored and what the Storage Inventory declares, are set at the properties level.
  */
-public class BucketValidator implements Runnable {
+public class BucketValidator implements ValidateEventListener {
+
+    private static final Logger LOGGER = Logger.getLogger(BucketValidator.class);
 
     private static final String JNDI_ARTIFACT_DATASOURCE_NAME = "jdbc/inventory";
     private static final String CONFIG_KEY_PREFIX = "org.opencadc.tantar";
@@ -116,14 +121,18 @@ public class BucketValidator implements Runnable {
 
     private final String bucket;
     private final StorageAdapter storageAdapter;
-    private final BucketIteratorDeterminer bucketIteratorDeterminer;
+    private final ResolutionPolicy resolutionPolicy;
+
+    // The ArtifactDAO can be set later to allow lazy loading.
+    private ArtifactDAO artifactDAO;
 
 
-    BucketValidator(final String bucket, final StorageAdapter storageAdapter,
-                    final BucketIteratorDeterminer bucketIteratorDeterminer) {
+    BucketValidator(final String bucket, final StorageAdapter storageAdapter, final ResolutionPolicy resolutionPolicy) {
         this.bucket = bucket;
         this.storageAdapter = storageAdapter;
-        this.bucketIteratorDeterminer = bucketIteratorDeterminer;
+        this.resolutionPolicy = resolutionPolicy;
+
+        this.resolutionPolicy.subscribe(this);
     }
 
     /**
@@ -164,36 +173,123 @@ public class BucketValidator implements Runnable {
         final ResolutionPolicy resolutionPolicy = ResolutionPolicyFactory.createPolicy(policy, reporter,
                                                                                        reportOnlyFlag);
 
-        return new BucketValidator(bucket, storageAdapter, new BucketIteratorDeterminer(resolutionPolicy));
+        return new BucketValidator(bucket, storageAdapter, resolutionPolicy);
     }
 
     /**
-     * When an object implementing interface <code>Runnable</code> is used
-     * to create a thread, starting the thread causes the object's
-     * <code>run</code> method to be called in that separately executing
-     * thread.
-     * <p>
-     * The general contract of the method <code>run</code> is that it may
-     * take any action whatsoever.
+     * Main functionality.  This will obtain the iterators necessary to validate, and delegate to the Policy to take
+     * action and/or report.
      *
-     * @see Thread#run()
+     * @throws Exception     Pass up any errors to the caller, which is most likely the Main.
      */
-    @Override
-    public void run() {
-        try {
-            validate();
-        } catch (TransientException e) {
-            throw new IllegalStateException("The Storage Adapter is not available.  Try again later.", e);
-        } catch (StorageEngageException e) {
-            throw new IllegalStateException("The back end storage is not available.", e);
-        }
-    }
-
-    void validate() throws TransientException, StorageEngageException {
+    void validate() throws Exception {
         final Iterator<StorageMetadata> storageMetadataIterator = iterateStorage();
         final Iterator<Artifact> inventoryIterator = iterateInventory();
 
-        this.bucketIteratorDeterminer.determine(inventoryIterator, storageMetadataIterator);
+        LOGGER.debug("START validating iterators.");
+
+        Artifact unresolvedArtifact = null;
+        StorageMetadata unresolvedStorageMetadata = null;
+
+        while ((inventoryIterator.hasNext() || unresolvedArtifact != null)
+               && (storageMetadataIterator.hasNext() || unresolvedStorageMetadata != null)) {
+            final Artifact artifact = (unresolvedArtifact == null) ? inventoryIterator.next() : unresolvedArtifact;
+            final StorageMetadata storageMetadata =
+                    (unresolvedStorageMetadata == null) ? storageMetadataIterator.next() : unresolvedStorageMetadata;
+
+            LOGGER.debug(String.format("Comparing Inventory Storage Location %s with Storage Adapter Location %s",
+                                       artifact.storageLocation, storageMetadata.getStorageLocation()));
+            final int comparison = artifact.storageLocation.compareTo(storageMetadata.getStorageLocation());
+
+            if (comparison == 0) {
+                // Same storage location.  Test the metadata.
+                unresolvedArtifact = null;
+                unresolvedStorageMetadata = null;
+                resolutionPolicy.resolve(artifact, storageMetadata);
+            } else if (comparison > 0) {
+                // Exists in Storage but not in inventory.
+                unresolvedArtifact = artifact;
+                unresolvedStorageMetadata = null;
+                resolutionPolicy.resolve(null, storageMetadata);
+            } else {
+                // Exists in Inventory but not in Storage.
+                unresolvedArtifact = null;
+                unresolvedStorageMetadata = storageMetadata;
+                resolutionPolicy.resolve(artifact, null);
+            }
+        }
+
+        // *** Perform some mop up.  These loops will take effect when one of the iterators is empty but the other is
+        // not, like in the case of a fresh load from another site.
+        while (inventoryIterator.hasNext()) {
+            resolutionPolicy.resolve(inventoryIterator.next(), null);
+        }
+
+        while (storageMetadataIterator.hasNext()) {
+            resolutionPolicy.resolve(null, storageMetadataIterator.next());
+        }
+
+        LOGGER.debug("END validating iterators.");
+    }
+
+    /**
+     * Obtain a file from its Storage Location as deemed by the Artifact.  This is used by the Policy when the
+     * Artifact is determined to be accurate.
+     * <p />
+     * A RuntimeException is thrown for any issues that occur within the Threads.
+     *
+     * @param artifact The base artifact.  This MUST have a Storage Location.
+     * @throws Exception Anything IO/Thread related.
+     */
+    @Override
+    public void retrieveFile(final Artifact artifact) throws Exception {
+        try (final PipedInputStream pipedInputStream = new PipedInputStream();
+             final PipedOutputStream pipedOutputStream = new PipedOutputStream(pipedInputStream)) {
+            final Thread writeThread = new Thread(() -> {
+                try {
+                    storageAdapter.put(new NewArtifact(artifact.getURI()), pipedInputStream);
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
+            });
+
+            final Thread readThread = new Thread(() -> {
+                try {
+                    storageAdapter.get(artifact.storageLocation, pipedOutputStream);
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
+            });
+
+            readThread.start();
+            writeThread.start();
+
+            readThread.join();
+            writeThread.join();
+        }
+    }
+
+    /**
+     * Remove a file based on the determination of the Policy.
+     *
+     * @param storageMetadata   The StorageMetadata containing a Storage Location to remove.
+     * @throws Exception    Covering numerous exceptions from the StorageAdapter.
+     */
+    @Override
+    public void deleteFile(final StorageMetadata storageMetadata) throws Exception {
+        storageAdapter.delete(storageMetadata.getStorageLocation());
+    }
+
+    @Override
+    public void addArtifact(StorageMetadata storageMetadata) {
+        getArtifactDAO().put(new Artifact(storageMetadata.artifactURI, storageMetadata.getContentChecksum(),
+                                          storageMetadata.contentLastModified, storageMetadata.getContentLength()),
+                             true);
+    }
+
+    @Override
+    public void deleteArtifact(Artifact artifact) {
+        getArtifactDAO().delete(artifact.getID());
     }
 
     /**
@@ -230,9 +326,12 @@ public class BucketValidator implements Runnable {
      * @return An Artifact DAO instance.
      */
     ArtifactDAO getArtifactDAO() {
-        final ArtifactDAO dao = new ArtifactDAO();
-        dao.setConfig(getDAOConfig());
-        return dao;
+        if (artifactDAO == null) {
+            artifactDAO = new ArtifactDAO();
+            artifactDAO.setConfig(getDAOConfig());
+        }
+
+        return artifactDAO;
     }
 
     /**
