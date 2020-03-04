@@ -4,7 +4,7 @@ This service allows queries to the metadata of the Storage Inventory using
 IVOA <a href="http://www.ivoa.net/documents/TAP/20190927/">TAP-1.1</a> web service API.
 
 ## configuration
-See the <a href="https://github.com/opencadc/docker-base/tree/master/cadc-tomcat">cadc-tomcat</a> image docs 
+See the [cadc-java](https://github.com/opencadc/docker-base/tree/master/cadc-java) image docs 
 for expected deployment and common config requirements.
 
 This service instance is expected to have a database backend to store the TAP metadata and which also includes the 
@@ -33,6 +33,11 @@ org.opencadc.luskan.resourceID=ivo://{authority}/{name}
 ```
 
 ### LocalAuthority.properties
+The LocalAuthority.properties file specifies which local service is authoritative for various site-wide functions. The keys
+are standardID values for the functions and the values are resouceID values for the service that implements that standard 
+feature.
+
+Example:
 ```
 ivo://ivoa.net/std/GMS#search-0.1 = ivo://cadc.nrc.ca/gms           
 ivo://ivoa.net/std/UMS#users-0.1 = ivo://cadc.nrc.ca/gms    
