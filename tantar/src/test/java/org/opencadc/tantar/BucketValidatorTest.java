@@ -93,6 +93,8 @@ import org.opencadc.tantar.policy.ResolutionPolicyFactory;
 import org.opencadc.tantar.policy.ResolutionPolicyStrategy;
 import ca.nrc.cadc.util.Log4jInit;
 
+import javax.security.auth.Subject;
+
 
 public class BucketValidatorTest {
 
@@ -152,7 +154,7 @@ public class BucketValidatorTest {
                 new BucketValidator("TESTBUCKET", null,
                                     ResolutionPolicyFactory.createPolicy(
                                             ResolutionPolicyStrategy.INVENTORY_IS_ALWAYS_RIGHT.name(),
-                                            reporter, true)) {
+                                            reporter, true), new Subject()) {
                     @Override
                     Iterator<StorageMetadata> iterateStorage() {
                         return testStorageMetadataList.iterator();
@@ -220,7 +222,7 @@ public class BucketValidatorTest {
                 new BucketValidator("TESTBUCKET", null,
                                     ResolutionPolicyFactory.createPolicy(
                                             ResolutionPolicyStrategy.INVENTORY_IS_ALWAYS_RIGHT.name(),
-                                            reporter, true)) {
+                                            reporter, true), new Subject()) {
                     @Override
                     Iterator<StorageMetadata> iterateStorage() {
                         return Collections.emptyIterator();
@@ -297,7 +299,7 @@ public class BucketValidatorTest {
                 new BucketValidator("TESTBUCKET", null,
                                     ResolutionPolicyFactory.createPolicy(
                                             ResolutionPolicyStrategy.STORAGE_IS_ALWAYS_RIGHT.name(),
-                                            reporter, true)) {
+                                            reporter, true), new Subject()) {
                     @Override
                     Iterator<StorageMetadata> iterateStorage() {
                         return testStorageMetadataList.iterator();
@@ -358,7 +360,7 @@ public class BucketValidatorTest {
                 new BucketValidator("TESTBUCKET", null,
                                     ResolutionPolicyFactory.createPolicy(
                                             ResolutionPolicyStrategy.STORAGE_IS_ALWAYS_RIGHT.name(),
-                                            reporter, true)) {
+                                            reporter, true), new Subject()) {
                     @Override
                     Iterator<StorageMetadata> iterateStorage() {
                         return testStorageMetadataList.iterator();

@@ -119,7 +119,9 @@ public class Main {
         try {
             final Reader configFileReader = new FileReader(CONFIGURATION_FILE_LOCATION);
             properties.load(configFileReader);
-            System.setProperties(properties);
+            final Properties existingProperties = System.getProperties();
+            existingProperties.putAll(properties);
+            System.setProperties(existingProperties);
         } catch (FileNotFoundException e) {
             LOGGER.fatal(
                     String.format("Unable to locate configuration file.  Expected it to be at %s.",

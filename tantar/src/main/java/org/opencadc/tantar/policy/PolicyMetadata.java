@@ -73,6 +73,7 @@ import java.net.URI;
 import java.util.Date;
 import java.util.Objects;
 
+import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.storage.StorageMetadata;
 
@@ -83,30 +84,29 @@ import org.opencadc.inventory.storage.StorageMetadata;
  */
 public class PolicyMetadata {
 
+    private static final Logger LOGGER = Logger.getLogger(PolicyMetadata.class);
+
     private final URI contentChecksum;
-    private final Date contentLastModified;
     private final Long contentLength;
     public final String contentType;
     public final String contentEncoding;
 
-    PolicyMetadata(URI contentChecksum, Date contentLastModified, Long contentLength, String contentType,
+    PolicyMetadata(URI contentChecksum, Long contentLength, String contentType,
                    String contentEncoding) {
         this.contentChecksum = contentChecksum;
-        this.contentLastModified = contentLastModified;
         this.contentLength = contentLength;
         this.contentType = contentType;
         this.contentEncoding = contentEncoding;
     }
 
     static PolicyMetadata fromArtifact(final Artifact artifact) {
-        return new PolicyMetadata(artifact.getContentChecksum(), artifact.getLastModified(),
-                                  artifact.getContentLength(), artifact.contentType, artifact.contentEncoding);
+        return new PolicyMetadata(artifact.getContentChecksum(), artifact.getContentLength(), artifact.contentType,
+                                  artifact.contentEncoding);
     }
 
     static PolicyMetadata fromStorageMetadata(final StorageMetadata storageMetadata) {
-        return new PolicyMetadata(storageMetadata.getContentChecksum(), storageMetadata.contentLastModified,
-                                  storageMetadata.getContentLength(), storageMetadata.contentType,
-                                  storageMetadata.contentEncoding);
+        return new PolicyMetadata(storageMetadata.getContentChecksum(), storageMetadata.getContentLength(),
+                                  storageMetadata.contentType, storageMetadata.contentEncoding);
     }
 
     @Override
@@ -118,8 +118,10 @@ public class PolicyMetadata {
         }
 
         final PolicyMetadata that = (PolicyMetadata) o;
+
+        LOGGER.debug(String.format("Comparing %s with %s.", this, that));
+
         return Objects.equals(contentChecksum, that.contentChecksum)
-               && Objects.equals(contentLastModified, that.contentLastModified)
                && Objects.equals(contentLength, that.contentLength)
                && Objects.equals(contentType, that.contentType)
                && Objects.equals(contentEncoding, that.contentEncoding);
@@ -127,6 +129,16 @@ public class PolicyMetadata {
 
     @Override
     public int hashCode() {
-        return Objects.hash(contentChecksum, contentLastModified, contentLength, contentType, contentEncoding);
+        return Objects.hash(contentChecksum, contentLength, contentType, contentEncoding);
+    }
+
+    @Override
+    public String toString() {
+        return "PolicyMetadata{"
+               + "contentChecksum=" + contentChecksum
+               + ", contentLength=" + contentLength
+               + ", contentType='" + contentType + '\''
+               + ", contentEncoding='" + contentEncoding + '\''
+               + '}';
     }
 }

@@ -69,19 +69,24 @@
 
 package org.opencadc.tantar;
 
+import ca.nrc.cadc.auth.AuthenticationUtil;
+import ca.nrc.cadc.auth.SSLUtil;
 import ca.nrc.cadc.db.ConnectionConfig;
 import ca.nrc.cadc.db.DBUtil;
 import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.util.StringUtil;
 
+import java.io.File;
 import java.io.PipedInputStream;
 import java.io.PipedOutputStream;
 import java.lang.reflect.InvocationTargetException;
+import java.security.PrivilegedExceptionAction;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Properties;
 import javax.naming.NamingException;
+import javax.security.auth.Subject;
 
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
@@ -107,6 +112,7 @@ public class BucketValidator implements ValidateEventListener {
     private static final String JNDI_ARTIFACT_DATASOURCE_NAME = "jdbc/inventory";
     private static final String CONFIG_KEY_PREFIX = "org.opencadc.tantar";
     private static final String BUCKET_KEY = String.format("%s.bucket", CONFIG_KEY_PREFIX);
+    private static final String CERTFILE_KEY = String.format("%s.cert", CONFIG_KEY_PREFIX);
     private static final String RESOLUTION_POLICY_KEY = String.format("%s.resolutionPolicy", CONFIG_KEY_PREFIX);
     private static final String REPORT_ONLY_KEY = String.format("%s.reportOnly", CONFIG_KEY_PREFIX);
     private static final String SQL_GEN_KEY = SQLGenerator.class.getName();
@@ -122,15 +128,18 @@ public class BucketValidator implements ValidateEventListener {
     private final String bucket;
     private final StorageAdapter storageAdapter;
     private final ResolutionPolicy resolutionPolicy;
+    private final Subject runUser;
 
     // The ArtifactDAO can be set later to allow lazy loading.
     private ArtifactDAO artifactDAO;
 
 
-    BucketValidator(final String bucket, final StorageAdapter storageAdapter, final ResolutionPolicy resolutionPolicy) {
+    BucketValidator(final String bucket, final StorageAdapter storageAdapter, final ResolutionPolicy resolutionPolicy,
+                    final Subject runUser) {
         this.bucket = bucket;
         this.storageAdapter = storageAdapter;
         this.resolutionPolicy = resolutionPolicy;
+        this.runUser = runUser;
 
         this.resolutionPolicy.subscribe(this);
     }
@@ -170,17 +179,26 @@ public class BucketValidator implements ValidateEventListener {
         final boolean reportOnlyFlag = Boolean.parseBoolean(System.getProperty(REPORT_ONLY_KEY,
                                                                                Boolean.FALSE.toString()));
 
+        if (reportOnlyFlag) {
+            LOGGER.info("*********");
+            LOGGER.info("********* Reporting actions only.  No actions will be taken. *********");
+            LOGGER.info("*********");
+        }
+
         final ResolutionPolicy resolutionPolicy = ResolutionPolicyFactory.createPolicy(policy, reporter,
                                                                                        reportOnlyFlag);
 
-        return new BucketValidator(bucket, storageAdapter, resolutionPolicy);
+        LOGGER.debug(String.format("Using policy %s.", resolutionPolicy.getClass()));
+
+        return new BucketValidator(bucket, storageAdapter, resolutionPolicy,
+                                   SSLUtil.createSubject(new File(System.getProperty(CERTFILE_KEY))));
     }
 
     /**
      * Main functionality.  This will obtain the iterators necessary to validate, and delegate to the Policy to take
      * action and/or report.
      *
-     * @throws Exception     Pass up any errors to the caller, which is most likely the Main.
+     * @throws Exception Pass up any errors to the caller, which is most likely the Main.
      */
     void validate() throws Exception {
         final Iterator<StorageMetadata> storageMetadataIterator = iterateStorage();
@@ -247,7 +265,11 @@ public class BucketValidator implements ValidateEventListener {
              final PipedOutputStream pipedOutputStream = new PipedOutputStream(pipedInputStream)) {
             final Thread writeThread = new Thread(() -> {
                 try {
-                    storageAdapter.put(new NewArtifact(artifact.getURI()), pipedInputStream);
+                    final NewArtifact newArtifact = new NewArtifact(artifact.getURI());
+                    newArtifact.contentLength = artifact.getContentLength();
+                    newArtifact.contentChecksum = artifact.getContentChecksum();
+
+                    storageAdapter.put(newArtifact, pipedInputStream);
                 } catch (Exception e) {
                     throw new RuntimeException(e);
                 }
@@ -272,8 +294,8 @@ public class BucketValidator implements ValidateEventListener {
     /**
      * Remove a file based on the determination of the Policy.
      *
-     * @param storageMetadata   The StorageMetadata containing a Storage Location to remove.
-     * @throws Exception    Covering numerous exceptions from the StorageAdapter.
+     * @param storageMetadata The StorageMetadata containing a Storage Location to remove.
+     * @throws Exception Covering numerous exceptions from the StorageAdapter.
      */
     @Override
     public void deleteFile(final StorageMetadata storageMetadata) throws Exception {
@@ -282,9 +304,14 @@ public class BucketValidator implements ValidateEventListener {
 
     @Override
     public void addArtifact(StorageMetadata storageMetadata) {
-        getArtifactDAO().put(new Artifact(storageMetadata.artifactURI, storageMetadata.getContentChecksum(),
-                                          storageMetadata.contentLastModified, storageMetadata.getContentLength()),
-                             true);
+        final Artifact artifact = new Artifact(storageMetadata.artifactURI, storageMetadata.getContentChecksum(),
+                                               storageMetadata.contentLastModified, storageMetadata.getContentLength());
+
+        artifact.storageLocation = storageMetadata.getStorageLocation();
+        artifact.contentType = storageMetadata.contentType;
+        artifact.contentEncoding = storageMetadata.contentEncoding;
+
+        getArtifactDAO().put(artifact, false);
     }
 
     @Override
@@ -303,8 +330,11 @@ public class BucketValidator implements ValidateEventListener {
      * @throws StorageEngageException If the adapter failed to interact with storage.
      * @throws TransientException     If an unexpected, temporary exception occurred.
      */
-    Iterator<StorageMetadata> iterateStorage() throws TransientException, StorageEngageException {
-        return storageAdapter.iterator(bucket);
+    Iterator<StorageMetadata> iterateStorage() throws Exception {
+        LOGGER.debug(String.format("Getting iterator for %s", bucket));
+        return Subject.doAs(runUser,
+                            (PrivilegedExceptionAction<Iterator<StorageMetadata>>) () -> storageAdapter
+                                    .iterator(bucket));
     }
 
     /**
