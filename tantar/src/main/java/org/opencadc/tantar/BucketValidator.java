@@ -116,16 +116,22 @@ public class BucketValidator implements Runnable {
 
     private final String bucket;
     private final StorageAdapter storageAdapter;
-    private final BucketIteratorComparator bucketIteratorComparator;
+    private final BucketIteratorDeterminer bucketIteratorDeterminer;
 
 
     BucketValidator(final String bucket, final StorageAdapter storageAdapter,
-                    final BucketIteratorComparator bucketIteratorComparator) {
+                    final BucketIteratorDeterminer bucketIteratorDeterminer) {
         this.bucket = bucket;
         this.storageAdapter = storageAdapter;
-        this.bucketIteratorComparator = bucketIteratorComparator;
+        this.bucketIteratorDeterminer = bucketIteratorDeterminer;
     }
 
+    /**
+     * Factory style creation.  This relies on the System Properties being properly set by the caller.
+     *
+     * @param reporter The Reporter object that will be used to report steps along the way.
+     * @return A BucketValidator instance.
+     */
     @SuppressWarnings("unchecked")
     public static BucketValidator create(final Reporter reporter) {
         final StorageAdapter storageAdapter;
@@ -152,13 +158,13 @@ public class BucketValidator implements Runnable {
                                                              RESOLUTION_POLICY_KEY));
         }
 
-        final boolean reportOnlyFlag = Boolean.parseBoolean(
-                System.getProperty(REPORT_ONLY_KEY, Boolean.FALSE.toString()));
+        final boolean reportOnlyFlag = Boolean.parseBoolean(System.getProperty(REPORT_ONLY_KEY,
+                                                                               Boolean.FALSE.toString()));
 
         final ResolutionPolicy resolutionPolicy = ResolutionPolicyFactory.createPolicy(policy, reporter,
                                                                                        reportOnlyFlag);
 
-        return new BucketValidator(bucket, storageAdapter, new BucketIteratorComparator(resolutionPolicy));
+        return new BucketValidator(bucket, storageAdapter, new BucketIteratorDeterminer(resolutionPolicy));
     }
 
     /**
@@ -183,25 +189,46 @@ public class BucketValidator implements Runnable {
         }
     }
 
-    Iterator<StorageMetadata> iterateStorage() throws TransientException, StorageEngageException {
-        return storageAdapter.iterator(bucket);
-    }
-
-    Iterator<Artifact> iterateInventory() {
-        return getArtifactDAO().iterator(bucket);
-    }
-
     void validate() throws TransientException, StorageEngageException {
         final Iterator<StorageMetadata> storageMetadataIterator = iterateStorage();
         final Iterator<Artifact> inventoryIterator = iterateInventory();
 
-        this.bucketIteratorComparator.compare(inventoryIterator, storageMetadataIterator);
-
-        // TODO
-        // TODO: List compare and validation.
-        // TODO
+        this.bucketIteratorDeterminer.determine(inventoryIterator, storageMetadataIterator);
     }
 
+    /**
+     * Iterate over the StorageMetadata instances from the Storage Adapter.  The consumer of this Iterator will assume
+     * that the StorageLocation is never null.
+     * <p/>
+     * Tests can override this for convenience.
+     *
+     * @return Iterator instance of StorageMetadata objects
+     *
+     * @throws StorageEngageException If the adapter failed to interact with storage.
+     * @throws TransientException     If an unexpected, temporary exception occurred.
+     */
+    Iterator<StorageMetadata> iterateStorage() throws TransientException, StorageEngageException {
+        return storageAdapter.iterator(bucket);
+    }
+
+    /**
+     * Iterate over the Artifact instances from the Storage Inventory database.  The consumer of this Iterator will
+     * assume that the StorageLocation is never null in the Artifact.
+     * <p/>
+     * Tests can override this for convenience.
+     *
+     * @return Iterator instance of Artifact objects
+     */
+    Iterator<Artifact> iterateInventory() {
+        return getArtifactDAO().iterator(bucket);
+    }
+
+    /**
+     * This will method exists to allow a lazy load of the Artifact DAO.  No DAO configuration is performed until
+     * this method is called.
+     *
+     * @return An Artifact DAO instance.
+     */
     ArtifactDAO getArtifactDAO() {
         final ArtifactDAO dao = new ArtifactDAO();
         dao.setConfig(getDAOConfig());

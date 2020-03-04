@@ -78,26 +78,26 @@ import org.opencadc.inventory.storage.StorageMetadata;
 import org.opencadc.tantar.policy.ResolutionPolicy;
 
 
-public class BucketIteratorComparator {
+public class BucketIteratorDeterminer {
 
-    private static final Logger LOGGER = Logger.getLogger(BucketIteratorComparator.class);
+    private static final Logger LOGGER = Logger.getLogger(BucketIteratorDeterminer.class);
 
     private final ResolutionPolicy resolutionPolicy;
 
 
-    public BucketIteratorComparator(final ResolutionPolicy resolutionPolicy) {
+    public BucketIteratorDeterminer(final ResolutionPolicy resolutionPolicy) {
         this.resolutionPolicy = resolutionPolicy;
     }
 
 
     /**
-     * Main method to compare two iterators.
+     * Main method to decide how to deal with two iterators.
      *
      * @param artifactIterator        To iterate items from the Storage Inventory (database entries).
      * @param storageMetadataIterator To iterate items from the Storage Adapter (files).
      */
-    public void compare(final Iterator<Artifact> artifactIterator,
-                        final Iterator<StorageMetadata> storageMetadataIterator) {
+    public void determine(final Iterator<Artifact> artifactIterator,
+                          final Iterator<StorageMetadata> storageMetadataIterator) {
         LOGGER.debug("START comparing iterators.");
 
         Artifact unresolvedArtifact = null;

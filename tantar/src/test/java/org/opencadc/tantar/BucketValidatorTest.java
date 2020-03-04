@@ -150,7 +150,7 @@ public class BucketValidatorTest {
 
         final BucketValidator testSubject =
                 new BucketValidator("TESTBUCKET", null,
-                                    new BucketIteratorComparator(
+                                    new BucketIteratorDeterminer(
                                             ResolutionPolicyFactory.createPolicy(
                                                     ResolutionPolicyStrategy.INVENTORY_IS_ALWAYS_RIGHT.name(),
                                                     reporter, true))) {
@@ -219,7 +219,7 @@ public class BucketValidatorTest {
 
         final BucketValidator testSubject =
                 new BucketValidator("TESTBUCKET", null,
-                                    new BucketIteratorComparator(
+                                    new BucketIteratorDeterminer(
                                             ResolutionPolicyFactory.createPolicy(
                                                     ResolutionPolicyStrategy.INVENTORY_IS_ALWAYS_RIGHT.name(),
                                                     reporter, true))) {
@@ -297,7 +297,7 @@ public class BucketValidatorTest {
 
         final BucketValidator testSubject =
                 new BucketValidator("TESTBUCKET", null,
-                                    new BucketIteratorComparator(
+                                    new BucketIteratorDeterminer(
                                             ResolutionPolicyFactory.createPolicy(
                                                     ResolutionPolicyStrategy.STORAGE_IS_ALWAYS_RIGHT.name(),
                                                     reporter, true))) {
@@ -359,7 +359,7 @@ public class BucketValidatorTest {
 
         final BucketValidator testSubject =
                 new BucketValidator("TESTBUCKET", null,
-                                    new BucketIteratorComparator(
+                                    new BucketIteratorDeterminer(
                                             ResolutionPolicyFactory.createPolicy(
                                                     ResolutionPolicyStrategy.STORAGE_IS_ALWAYS_RIGHT.name(),
                                                     reporter, true))) {
