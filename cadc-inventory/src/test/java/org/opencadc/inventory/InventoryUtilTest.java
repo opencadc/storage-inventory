@@ -284,7 +284,8 @@ public class InventoryUtilTest {
     public void testLoadOK() {
         try {
             System.setProperty(Comparator.class.getName(), "org.opencadc.inventory.InventoryUtilTest$ValidImpl");
-            InventoryUtil.loadPlugin(Comparator.class);
+            Comparator c = InventoryUtil.loadPlugin(Comparator.class);
+            log.info("loaded: " + c.getClass().getName());
         } finally {
             System.clearProperty(Comparator.class.getName());
         }
