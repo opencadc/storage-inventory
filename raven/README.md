@@ -1,7 +1,8 @@
-# Artifact Locate service (raven)
+# Storage Inventory locate service (raven)
+This service implements transfer negotiation in a global inventory deployment.
 
 ## configuration
-See the <a href="https://github.com/opencadc/docker-base/tree/master/cadc-tomcat">cadc-tomcat</a> image docs 
+See the [cadc-tomcat](https://github.com/opencadc/docker-base/tree/master/cadc-tomcat) image docs 
 for expected deployment and general config requirements.
 
 ### catalina.properties
