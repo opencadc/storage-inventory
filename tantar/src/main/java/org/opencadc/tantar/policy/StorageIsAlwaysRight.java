@@ -74,9 +74,9 @@ import org.opencadc.inventory.storage.StorageMetadata;
 import org.opencadc.tantar.Reporter;
 
 
-public class StorageIsAlwaysRight extends AbstractResolutionPolicy {
+public class StorageIsAlwaysRight extends ResolutionPolicy {
 
-    public StorageIsAlwaysRight(final Reporter reporter, final Boolean reportOnlyFlag) {
+    public StorageIsAlwaysRight(final Reporter reporter, final boolean reportOnlyFlag) {
         super(reporter, reportOnlyFlag);
     }
 

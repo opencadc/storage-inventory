@@ -98,24 +98,25 @@ public class PolicyMetadata {
         this.contentEncoding = contentEncoding;
     }
 
+
     /**
      * Create a new Policy Metadata by extracting valid fields from an Artifact.
-     * @param artifact  The Artifact to use.
-     * @return  PolicyMetadata instance.  Never null.
+     *
+     * @param artifact The Artifact to use.
      */
-    static PolicyMetadata fromArtifact(final Artifact artifact) {
-        return new PolicyMetadata(artifact.getContentChecksum(), artifact.getContentLength(), artifact.contentType,
-                                  artifact.contentEncoding);
+    PolicyMetadata(final Artifact artifact) {
+        this(artifact.getContentChecksum(), artifact.getContentLength(), artifact.contentType,
+             artifact.contentEncoding);
     }
 
     /**
      * Create a new Policy Metadata by extracting valid fields from a StorageMetadata.
-     * @param storageMetadata  The StorageMetadata to use.
-     * @return  PolicyMetadata instance.  Never null.
+     *
+     * @param storageMetadata The StorageMetadata to use.
      */
-    static PolicyMetadata fromStorageMetadata(final StorageMetadata storageMetadata) {
-        return new PolicyMetadata(storageMetadata.getContentChecksum(), storageMetadata.getContentLength(),
-                                  storageMetadata.contentType, storageMetadata.contentEncoding);
+    PolicyMetadata(final StorageMetadata storageMetadata) {
+        this(storageMetadata.getContentChecksum(), storageMetadata.getContentLength(),
+             storageMetadata.contentType, storageMetadata.contentEncoding);
     }
 
     @Override

@@ -68,16 +68,22 @@
 
 package org.opencadc.tantar;
 
+import ca.nrc.cadc.auth.SSLUtil;
 import ca.nrc.cadc.util.Log4jInit;
+import ca.nrc.cadc.util.StringUtil;
 
+import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.Reader;
+import java.lang.reflect.InvocationTargetException;
 import java.util.Properties;
 
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
+import org.opencadc.inventory.storage.StorageAdapter;
+import org.opencadc.tantar.policy.ResolutionPolicy;
 
 
 /**
@@ -85,8 +91,16 @@ import org.apache.log4j.Logger;
  */
 public class Main {
 
-    private static final Logger LOGGER = Logger.getLogger(Main.class);
+    private static final String CONFIG_KEY_PREFIX = "org.opencadc.tantar";
+
+    private static final String BUCKET_KEY = String.format("%s.bucket", CONFIG_KEY_PREFIX);
+    private static final String CERTIFICATE_FILE_LOCATION = "/config/cadcproxy.pem";
     private static final String CONFIGURATION_FILE_LOCATION = "/config/tantar.properties";
+    private static final String REPORT_ONLY_KEY = String.format("%s.reportOnly", CONFIG_KEY_PREFIX);
+    private static final String RESOLUTION_POLICY_CLASS = System.getProperty(ResolutionPolicy.class.getCanonicalName());
+    private static final String STORAGE_ADAPTOR_CLASS = System.getProperty(StorageAdapter.class.getCanonicalName());
+
+    private static final Logger LOGGER = Logger.getLogger(Main.class);
     private static final Reporter REPORTER = new Reporter(LOGGER);
 
     public static void main(final String[] args) {
@@ -95,7 +109,53 @@ public class Main {
         Main.setLogging();
 
         try {
-            final BucketValidator bucketValidator = BucketValidator.create(Main.REPORTER);
+            final StorageAdapter storageAdapter;
+
+            try {
+                @SuppressWarnings("unchecked") final Class<StorageAdapter> clazz =
+                        (Class<StorageAdapter>) Class.forName(STORAGE_ADAPTOR_CLASS).asSubclass(StorageAdapter.class);
+                storageAdapter = clazz.getDeclaredConstructor().newInstance();
+            } catch (NoSuchMethodException | ClassNotFoundException | InstantiationException
+                    | IllegalAccessException | InvocationTargetException e) {
+                throw new IllegalStateException(
+                        String.format("Failed to load storage adapter: %s", STORAGE_ADAPTOR_CLASS), e);
+            }
+
+            final String bucket = System.getProperty(BUCKET_KEY);
+            if (!StringUtil.hasLength(bucket)) {
+                throw new IllegalArgumentException(String.format("Bucket is mandatory.  Please set the %s property.",
+                                                                 BUCKET_KEY));
+            }
+
+            final boolean reportOnlyFlag = Boolean.parseBoolean(System.getProperty(REPORT_ONLY_KEY,
+                                                                                   Boolean.FALSE.toString()));
+
+            if (reportOnlyFlag) {
+                LOGGER.info("*********");
+                LOGGER.info("********* Reporting actions only.  No actions will be taken. *********");
+                LOGGER.info("*********");
+            }
+
+            final ResolutionPolicy resolutionPolicy;
+
+            try {
+                @SuppressWarnings("unchecked") final Class<ResolutionPolicy> clazz =
+                        (Class<ResolutionPolicy>) Class.forName(RESOLUTION_POLICY_CLASS).asSubclass(
+                                ResolutionPolicy.class);
+                resolutionPolicy = clazz.getDeclaredConstructor(Reporter.class, boolean.class).newInstance(
+                        Main.REPORTER,
+                        reportOnlyFlag);
+                LOGGER.debug(String.format("Using policy %s.", resolutionPolicy.getClass()));
+            } catch (NoSuchMethodException | ClassNotFoundException | InstantiationException
+                    | IllegalAccessException | InvocationTargetException e) {
+                throw new IllegalStateException(String.format("Failed to load resolution policy implementation: %s",
+                                                              RESOLUTION_POLICY_CLASS), e);
+            }
+
+            final BucketValidator bucketValidator = new BucketValidator(bucket, storageAdapter, resolutionPolicy,
+                                                                        SSLUtil.createSubject(
+                                                                                new File(System.getProperty(
+                                                                                        CERTIFICATE_FILE_LOCATION))));
             bucketValidator.validate();
         } catch (IllegalStateException e) {
             // IllegalStateExceptions are thrown for missing but required configuration.

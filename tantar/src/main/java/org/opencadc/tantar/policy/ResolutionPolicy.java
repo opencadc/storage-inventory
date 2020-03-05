@@ -1,9 +1,3 @@
-package org.opencadc.tantar.policy;
-
-import org.opencadc.inventory.Artifact;
-import org.opencadc.inventory.storage.StorageMetadata;
-import org.opencadc.tantar.ValidateEventListener;
-
 
 /*
  ************************************************************************
@@ -72,7 +66,35 @@ import org.opencadc.tantar.ValidateEventListener;
  *
  ************************************************************************
  */
-public interface ResolutionPolicy {
+
+package org.opencadc.tantar.policy;
+
+import org.opencadc.inventory.Artifact;
+import org.opencadc.inventory.storage.StorageMetadata;
+import org.opencadc.tantar.Reporter;
+import org.opencadc.tantar.ValidateEventListener;
+
+
+public abstract class ResolutionPolicy {
+
+    protected ValidateEventListener validateEventListener;
+
+    final Reporter reporter;
+    private final boolean reportOnlyFlag;
+
+    ResolutionPolicy(final Reporter reporter, final boolean reportOnlyFlag) {
+        this.reporter = reporter;
+        this.reportOnlyFlag = reportOnlyFlag;
+    }
+
+
+    protected final boolean haveDifferentMetadata(final Artifact artifact, final StorageMetadata storageMetadata) {
+        return !(new PolicyMetadata(artifact).equals(new PolicyMetadata(storageMetadata)));
+    }
+
+    protected boolean canTakeAction() {
+        return validateEventListener != null && !reportOnlyFlag;
+    }
 
     /**
      * Use the logic of this Policy to correct a conflict caused by the two given items.  One of the arguments can
@@ -80,19 +102,28 @@ public interface ResolutionPolicy {
      *
      * @param artifact        The Artifact to use in deciding.
      * @param storageMetadata The StorageMetadata to use in deciding.
-     * @throws Exception For any unknown issues with taking action.
      */
-    void resolve(final Artifact artifact, final StorageMetadata storageMetadata) throws Exception;
+    public abstract void resolve(final Artifact artifact, final StorageMetadata storageMetadata) throws Exception;
 
     /**
      * Add a listener for the various actions the policy will dictate.
      *
      * @param listener Listener instance.  Never null.
      */
-    void subscribe(final ValidateEventListener listener);
+    public void subscribe(final ValidateEventListener listener) {
+        if (listener == null) {
+            throw new IllegalArgumentException("Cannot subscribe with a null listener.");
+        } else if (validateEventListener != null) {
+            throw new IllegalStateException("There is already a listener in place.  Unsubscribe first.");
+        } else {
+            this.validateEventListener = listener;
+        }
+    }
 
     /**
      * Remove the current listener.
      */
-    void unsubscribe();
+    public void unsubscribe() {
+        this.validateEventListener = null;
+    }
 }

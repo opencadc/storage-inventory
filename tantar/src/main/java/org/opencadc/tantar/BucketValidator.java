@@ -69,16 +69,13 @@
 
 package org.opencadc.tantar;
 
-import ca.nrc.cadc.auth.SSLUtil;
 import ca.nrc.cadc.db.ConnectionConfig;
 import ca.nrc.cadc.db.DBUtil;
 import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.util.StringUtil;
 
-import java.io.File;
 import java.io.PipedInputStream;
 import java.io.PipedOutputStream;
-import java.lang.reflect.InvocationTargetException;
 import java.security.PrivilegedExceptionAction;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -96,7 +93,6 @@ import org.opencadc.inventory.storage.StorageAdapter;
 import org.opencadc.inventory.storage.StorageEngageException;
 import org.opencadc.inventory.storage.StorageMetadata;
 import org.opencadc.tantar.policy.ResolutionPolicy;
-import org.opencadc.tantar.policy.ResolutionPolicyFactory;
 
 
 /**
@@ -109,14 +105,8 @@ public class BucketValidator implements ValidateEventListener {
     private static final Logger LOGGER = Logger.getLogger(BucketValidator.class);
 
     private static final String JNDI_ARTIFACT_DATASOURCE_NAME = "jdbc/inventory";
-    private static final String CONFIG_KEY_PREFIX = "org.opencadc.tantar";
-    private static final String BUCKET_KEY = String.format("%s.bucket", CONFIG_KEY_PREFIX);
-    private static final String CERTFILE_KEY = String.format("%s.cert", CONFIG_KEY_PREFIX);
-    private static final String RESOLUTION_POLICY_KEY = String.format("%s.resolutionPolicy", CONFIG_KEY_PREFIX);
-    private static final String REPORT_ONLY_KEY = String.format("%s.reportOnly", CONFIG_KEY_PREFIX);
     private static final String SQL_GEN_KEY = SQLGenerator.class.getName();
-    private static final String SCHEMA_KEY = SQLGenerator.class.getPackage().getName() + ".schema";
-    private static final String STORAGE_ADAPTOR_CLASS = System.getProperty(StorageAdapter.class.getCanonicalName());
+    private static final String SCHEMA_KEY = String.format("%s.schema", SQLGenerator.class.getPackage().getName());
 
     private static final String JDBC_CONFIG_KEY_PREFIX = "org.opencadc.inventory.db";
     private static final String JDBC_USERNAME_KEY = String.format("%s.username", JDBC_CONFIG_KEY_PREFIX);
@@ -141,56 +131,6 @@ public class BucketValidator implements ValidateEventListener {
         this.runUser = runUser;
 
         this.resolutionPolicy.subscribe(this);
-    }
-
-    /**
-     * Factory style creation.  This relies on the System Properties being properly set by the caller.
-     *
-     * @param reporter The Reporter object that will be used to report steps along the way.
-     * @return A BucketValidator instance.
-     */
-    @SuppressWarnings("unchecked")
-    public static BucketValidator create(final Reporter reporter) {
-        final StorageAdapter storageAdapter;
-
-        try {
-            final Class<StorageAdapter> clazz =
-                    (Class<StorageAdapter>) Class.forName(STORAGE_ADAPTOR_CLASS).asSubclass(StorageAdapter.class);
-            storageAdapter = clazz.getDeclaredConstructor().newInstance();
-        } catch (NoSuchMethodException | ClassNotFoundException | InstantiationException
-                | IllegalAccessException | InvocationTargetException e) {
-            throw new IllegalStateException(String.format("Failed to load storage adapter: %s", STORAGE_ADAPTOR_CLASS),
-                                            e);
-        }
-
-        final String bucket = System.getProperty(BUCKET_KEY);
-        if (!StringUtil.hasLength(bucket)) {
-            throw new IllegalArgumentException(String.format("Bucket is mandatory.  Please set the %s property.",
-                                                             BUCKET_KEY));
-        }
-
-        final String policy = System.getProperty(RESOLUTION_POLICY_KEY);
-        if (!StringUtil.hasLength(policy)) {
-            throw new IllegalArgumentException(String.format("Policy is mandatory.  Please set the %s property.",
-                                                             RESOLUTION_POLICY_KEY));
-        }
-
-        final boolean reportOnlyFlag = Boolean.parseBoolean(System.getProperty(REPORT_ONLY_KEY,
-                                                                               Boolean.FALSE.toString()));
-
-        if (reportOnlyFlag) {
-            LOGGER.info("*********");
-            LOGGER.info("********* Reporting actions only.  No actions will be taken. *********");
-            LOGGER.info("*********");
-        }
-
-        final ResolutionPolicy resolutionPolicy = ResolutionPolicyFactory.createPolicy(policy, reporter,
-                                                                                       reportOnlyFlag);
-
-        LOGGER.debug(String.format("Using policy %s.", resolutionPolicy.getClass()));
-
-        return new BucketValidator(bucket, storageAdapter, resolutionPolicy,
-                                   SSLUtil.createSubject(new File(System.getProperty(CERTFILE_KEY))));
     }
 
     /**
