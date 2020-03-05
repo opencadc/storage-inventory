@@ -129,10 +129,12 @@ public abstract class InventoryUtil {
      * the fully-qualified class name as a system property key; the value of the system property
      * is the fully qualified class name of an implementation of that interface.
      * 
+     * @param <T>
      * @param clazz an interface class
      * @return configured implementation of the interface
+     * @throws IllegalStateException if an instance cannot be created
      */
-    public static <T> T loadPlugin(Class<T> clazz) {
+    public static <T> T loadPlugin(Class<T> clazz) throws IllegalStateException {
         String cnameProp = clazz.getName();
         String cname = System.getProperty(cnameProp);
         if (cname == null) {
