@@ -69,34 +69,41 @@
 
 package org.opencadc.tantar.policy;
 
-import java.lang.reflect.InvocationTargetException;
-import java.util.HashMap;
-import java.util.Map;
+
+import org.apache.log4j.Level;
+import org.apache.log4j.Logger;
+import org.apache.log4j.SimpleLayout;
+import org.apache.log4j.WriterAppender;
+import org.junit.Assert;
+import org.opencadc.tantar.BucketValidatorTest;
+
+import ca.nrc.cadc.util.Log4jInit;
+
+import java.io.OutputStream;
+import java.util.List;
 
 
-public class ResolutionPolicyFactory {
+public class AbstractResolutionPolicyTest<T extends ResolutionPolicy> {
 
-    private static final Map<ResolutionPolicyStrategy, Class<? extends ResolutionPolicy>> POLICY_DICTIONARY =
-            new HashMap<>();
+    T testSubject;
 
     static {
-        POLICY_DICTIONARY.put(ResolutionPolicyStrategy.STORAGE_IS_ALWAYS_RIGHT, StorageIsAlwaysRight.class);
-        POLICY_DICTIONARY.put(ResolutionPolicyStrategy.INVENTORY_IS_ALWAYS_RIGHT, InventoryIsAlwaysRight.class);
+        Log4jInit.setLevel("org.opencadc.tantar", Level.DEBUG);
     }
 
-    public static ResolutionPolicy createPolicy(final String configuredPolicy, final Object... args) {
-        try {
-            final Class<?>[] argClasses = new Class<?>[args.length];
-            for (int i = 0; i < args.length; i++) {
-                argClasses[i] = args[i].getClass();
-            }
+    void assertListContainsMessage(final List<String> outputLines, final String message) {
+        Assert.assertTrue(String.format("Output does not contain %s", message),
+                          outputLines.stream().anyMatch(s -> s.contains(message)));
+    }
 
-            final ResolutionPolicyStrategy strategy = ResolutionPolicyStrategy.valueOf(
-                    configuredPolicy.toUpperCase());
-            return POLICY_DICTIONARY.get(strategy).getDeclaredConstructor(argClasses).newInstance(args);
-        } catch (NoSuchMethodException | InstantiationException | IllegalAccessException
-                | InvocationTargetException e) {
-            throw new IllegalStateException(String.format("Failed to load policy class: %s", configuredPolicy), e);
-        }
+    Logger getTestLogger(final OutputStream outputStream) {
+        final Logger logger = Logger.getLogger(BucketValidatorTest.class);
+        final WriterAppender testAppender = new WriterAppender(new SimpleLayout(), outputStream);
+        testAppender.setName(String.format("%s appender", StorageIsAlwaysRightTest.class));
+
+        logger.removeAllAppenders();
+        logger.addAppender(testAppender);
+
+        return logger;
     }
 }

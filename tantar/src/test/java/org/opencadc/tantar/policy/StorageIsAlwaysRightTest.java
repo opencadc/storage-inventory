@@ -69,34 +69,71 @@
 
 package org.opencadc.tantar.policy;
 
-import java.lang.reflect.InvocationTargetException;
-import java.util.HashMap;
-import java.util.Map;
+import org.junit.Test;
+import org.opencadc.inventory.Artifact;
+import org.opencadc.inventory.StorageLocation;
+import org.opencadc.inventory.storage.StorageMetadata;
+import org.opencadc.tantar.Reporter;
+
+import java.io.ByteArrayOutputStream;
+import java.net.URI;
+import java.util.Arrays;
+import java.util.Date;
+import java.util.List;
 
 
-public class ResolutionPolicyFactory {
+public class StorageIsAlwaysRightTest extends AbstractResolutionPolicyTest<StorageIsAlwaysRight> {
 
-    private static final Map<ResolutionPolicyStrategy, Class<? extends ResolutionPolicy>> POLICY_DICTIONARY =
-            new HashMap<>();
+    @Test
+    public void resolveArtifactAndStorageMetadata() throws Exception {
+        final ByteArrayOutputStream output = new ByteArrayOutputStream();
+        final Reporter reporter = new Reporter(getTestLogger(output));
+        final Artifact artifact = new Artifact(URI.create("cadc:bucket/file.fits"), URI.create("md5:88"), new Date(),
+                                               88L);
+        artifact.storageLocation = new StorageLocation(URI.create("s3:101010"));
 
-    static {
-        POLICY_DICTIONARY.put(ResolutionPolicyStrategy.STORAGE_IS_ALWAYS_RIGHT, StorageIsAlwaysRight.class);
-        POLICY_DICTIONARY.put(ResolutionPolicyStrategy.INVENTORY_IS_ALWAYS_RIGHT, InventoryIsAlwaysRight.class);
+        final StorageMetadata storageMetadata = new StorageMetadata(new StorageLocation(URI.create("s3:101011")),
+                                                                    URI.create("md5:99"), 1001L);
+
+        testSubject = new StorageIsAlwaysRight(reporter, true);
+        testSubject.resolve(artifact, storageMetadata);
+
+        final List<String> outputLines = Arrays.asList(new String(output.toByteArray()).split("\n"));
+        System.out.println(String.format("Message lines are \n\n%s\n\n", outputLines));
+
+        assertListContainsMessage(outputLines, "Replacing Artifact StorageLocation[s3:101010] as per policy.");
     }
 
-    public static ResolutionPolicy createPolicy(final String configuredPolicy, final Object... args) {
-        try {
-            final Class<?>[] argClasses = new Class<?>[args.length];
-            for (int i = 0; i < args.length; i++) {
-                argClasses[i] = args[i].getClass();
-            }
+    @Test
+    public void resolveArtifactAndNull() throws Exception {
+        final ByteArrayOutputStream output = new ByteArrayOutputStream();
+        final Reporter reporter = new Reporter(getTestLogger(output));
+        final Artifact artifact = new Artifact(URI.create("cadc:bucket/file.fits"), URI.create("md5:88"), new Date(),
+                                               88L);
+        artifact.storageLocation = new StorageLocation(URI.create("s3:101010"));
 
-            final ResolutionPolicyStrategy strategy = ResolutionPolicyStrategy.valueOf(
-                    configuredPolicy.toUpperCase());
-            return POLICY_DICTIONARY.get(strategy).getDeclaredConstructor(argClasses).newInstance(args);
-        } catch (NoSuchMethodException | InstantiationException | IllegalAccessException
-                | InvocationTargetException e) {
-            throw new IllegalStateException(String.format("Failed to load policy class: %s", configuredPolicy), e);
-        }
+        testSubject = new StorageIsAlwaysRight(reporter, true);
+        testSubject.resolve(artifact, null);
+
+        final List<String> outputLines = Arrays.asList(new String(output.toByteArray()).split("\n"));
+        System.out.println(String.format("Message lines are \n\n%s\n\n", outputLines));
+
+        assertListContainsMessage(outputLines, "Removing Unknown Artifact StorageLocation[s3:101010] as per policy.");
+    }
+
+    @Test
+    public void resolveNullAndStorageMetadata() throws Exception {
+        final ByteArrayOutputStream output = new ByteArrayOutputStream();
+        final Reporter reporter = new Reporter(getTestLogger(output));
+        final StorageMetadata storageMetadata = new StorageMetadata(new StorageLocation(URI.create("s3:101011")),
+                                                                    URI.create("md5:99"), 1001L);
+
+        testSubject = new StorageIsAlwaysRight(reporter, true);
+        testSubject.resolve(null, storageMetadata);
+
+        final List<String> outputLines = Arrays.asList(new String(output.toByteArray()).split("\n"));
+        System.out.println(String.format("Message lines are \n\n%s\n\n", outputLines));
+
+        assertListContainsMessage(outputLines, "Adding Artifact StorageLocation[s3:101011] as per policy.");
     }
 }

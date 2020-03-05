@@ -70,7 +70,6 @@
 package org.opencadc.tantar.policy;
 
 import java.net.URI;
-import java.util.Date;
 import java.util.Objects;
 
 import org.apache.log4j.Logger;
@@ -99,11 +98,21 @@ public class PolicyMetadata {
         this.contentEncoding = contentEncoding;
     }
 
+    /**
+     * Create a new Policy Metadata by extracting valid fields from an Artifact.
+     * @param artifact  The Artifact to use.
+     * @return  PolicyMetadata instance.  Never null.
+     */
     static PolicyMetadata fromArtifact(final Artifact artifact) {
         return new PolicyMetadata(artifact.getContentChecksum(), artifact.getContentLength(), artifact.contentType,
                                   artifact.contentEncoding);
     }
 
+    /**
+     * Create a new Policy Metadata by extracting valid fields from a StorageMetadata.
+     * @param storageMetadata  The StorageMetadata to use.
+     * @return  PolicyMetadata instance.  Never null.
+     */
     static PolicyMetadata fromStorageMetadata(final StorageMetadata storageMetadata) {
         return new PolicyMetadata(storageMetadata.getContentChecksum(), storageMetadata.getContentLength(),
                                   storageMetadata.contentType, storageMetadata.contentEncoding);

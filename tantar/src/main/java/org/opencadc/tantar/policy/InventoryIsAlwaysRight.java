@@ -69,7 +69,6 @@
 
 package org.opencadc.tantar.policy;
 
-
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.storage.StorageMetadata;
 import org.opencadc.tantar.Reporter;
@@ -77,11 +76,8 @@ import org.opencadc.tantar.Reporter;
 
 public class InventoryIsAlwaysRight extends AbstractResolutionPolicy {
 
-    private final Reporter reporter;
-
     public InventoryIsAlwaysRight(final Reporter reporter, final Boolean reportOnlyFlag) {
-        super(reportOnlyFlag);
-        this.reporter = reporter;
+        super(reporter, reportOnlyFlag);
     }
 
     /**

@@ -76,11 +76,8 @@ import org.opencadc.tantar.Reporter;
 
 public class StorageIsAlwaysRight extends AbstractResolutionPolicy {
 
-    private final Reporter reporter;
-
     public StorageIsAlwaysRight(final Reporter reporter, final Boolean reportOnlyFlag) {
-        super(reportOnlyFlag);
-        this.reporter = reporter;
+        super(reporter, reportOnlyFlag);
     }
 
     /**

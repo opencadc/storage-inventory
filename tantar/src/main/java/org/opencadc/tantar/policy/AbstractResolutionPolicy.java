@@ -71,15 +71,19 @@ package org.opencadc.tantar.policy;
 
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.storage.StorageMetadata;
+import org.opencadc.tantar.Reporter;
 import org.opencadc.tantar.ValidateEventListener;
 
 
 public abstract class AbstractResolutionPolicy implements ResolutionPolicy {
+
     protected ValidateEventListener validateEventListener;
 
+    final Reporter reporter;
     private final boolean reportOnlyFlag;
 
-    AbstractResolutionPolicy(final Boolean reportOnlyFlag) {
+    AbstractResolutionPolicy(final Reporter reporter, final Boolean reportOnlyFlag) {
+        this.reporter = reporter;
         this.reportOnlyFlag = reportOnlyFlag;
     }
 
@@ -89,7 +93,7 @@ public abstract class AbstractResolutionPolicy implements ResolutionPolicy {
     }
 
     protected boolean canTakeAction() {
-        return !reportOnlyFlag;
+        return validateEventListener != null && !reportOnlyFlag;
     }
 
     /**
