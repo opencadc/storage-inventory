@@ -111,7 +111,7 @@ public class FileSystemStorageAdapterTest {
     private static final byte[] data = dataString.getBytes();
 
     static {
-        Log4jInit.setLevel("org.opencadc.inventory", Level.DEBUG);
+        Log4jInit.setLevel("org.opencadc.inventory", Level.INFO);
     }
     
     @BeforeClass
