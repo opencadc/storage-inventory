@@ -123,7 +123,35 @@ public abstract class InventoryUtil {
         }
         return ssp;
     }
-
+    
+    /**
+     * Load and instantiate an instance of the specified Java interface. This method uses
+     * the fully-qualified class name as a system property key; the value of the system property
+     * is the fully qualified class name of an implementation of that interface.
+     * 
+     * @param <T>
+     * @param clazz an interface class
+     * @return configured implementation of the interface
+     * @throws IllegalStateException if an instance cannot be created
+     */
+    public static <T> T loadPlugin(Class<T> clazz) throws IllegalStateException {
+        String cnameProp = clazz.getName();
+        String cname = System.getProperty(cnameProp);
+        if (cname == null) {
+            throw new IllegalStateException("CONFIG: " + cnameProp + " not set");
+        }
+        try {
+            Class c = Class.forName(cname);
+            return (T) c.newInstance();
+        } catch (ClassNotFoundException ex) {
+            throw new IllegalStateException("CONFIG: " + cnameProp + " implementation not found in classpath: " + cname, ex);
+        } catch (InstantiationException ex) {
+            throw new IllegalStateException("CONFIG: " + cnameProp + " implementation " + cname + " does not have a no-arg constructor", ex);
+        } catch (IllegalAccessException ex) {
+            throw new IllegalStateException("CONFIG: failed to instantiate " + cname, ex);
+        }
+    }
+    
     /**
      * Validates that a URI conforms to the {scheme}:{scheme-specific-part}
      * pattern and that {scheme-specific-part} is a relative path with each

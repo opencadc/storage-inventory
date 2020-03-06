@@ -68,8 +68,11 @@
 package org.opencadc.inventory;
 
 import ca.nrc.cadc.util.Log4jInit;
+
 import java.net.URI;
+import java.util.Comparator;
 import java.util.UUID;
+
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
@@ -218,6 +221,105 @@ public class InventoryUtilTest {
         } catch (Exception unexpected) {
             log.error("unexpected exception", unexpected);
             Assert.fail("unexpected exception: " + unexpected);
+        }
+    }
+    
+    @Test
+    public void testLoadFail() {
+        try {
+            System.clearProperty("org.opencadc.inventory.storage.StorageAdapter");
+            InventoryUtil.loadPlugin(Comparator.class);
+            Assert.fail("missing config should fail");
+        } catch (IllegalStateException expected) {
+            log.info("missing config - caught: " + expected + " cause: " + expected.getCause());
+        }
+        
+        try {
+            System.setProperty(Comparator.class.getName(), "org.opencadc.inventory.storage.InventoryUtilTest$NoImpl");
+            InventoryUtil.loadPlugin(Comparator.class);
+            Assert.fail("missing class should fail");
+        } catch (IllegalStateException expected) {
+            log.info("missing class - caught: " + expected + " cause: " + expected.getCause());
+            Assert.assertTrue(expected.getCause() instanceof ClassNotFoundException);
+        } finally {
+            System.clearProperty(Comparator.class.getName());
+        }
+        
+        try {
+            System.setProperty(Comparator.class.getName(), "org.opencadc.inventory.storage.InventoryUtilTest$InvalidCtorImpl");
+            System.setProperty(Comparator.class.getName(), InvalidCtorImpl.class.getName());
+            InventoryUtil.loadPlugin(Comparator.class);
+            Assert.fail("missing no-arg ctor should fail");
+        } catch (IllegalStateException expected) {
+            log.info("missing no-arg ctor - caught: " + expected + " cause: " + expected.getCause());
+            Assert.assertTrue(expected.getCause() instanceof InstantiationException);
+        } finally {
+            System.clearProperty(Comparator.class.getName());
+        }
+        
+        try {
+            System.setProperty(Comparator.class.getName(), "org.opencadc.inventory.storage.InventoryUtilTest$NoInterfaceImpl");
+            InventoryUtil.loadPlugin(Comparator.class);
+            Assert.fail("missing interface should fail");
+        } catch (IllegalStateException expected) {
+            log.info("missing interface - caught: " + expected + " cause: " + expected.getCause());
+            Assert.assertTrue(expected.getCause() instanceof ClassNotFoundException);
+        } finally {
+            System.clearProperty(Comparator.class.getName());
+        }
+        
+        try {
+            System.setProperty(Comparator.class.getName(), "org.opencadc.inventory.storage.InventoryUtilTest$CtorThrowsImpl");
+            InventoryUtil.loadPlugin(Comparator.class);
+            Assert.fail("ctor throws should fail");
+        } catch (IllegalStateException expected) {
+            log.info("ctor throws - caught: " + expected);
+        } finally {
+            System.clearProperty(Comparator.class.getName());
+        }
+        
+    }
+    
+    @Test
+    public void testLoadOK() {
+        try {
+            System.setProperty(Comparator.class.getName(), "org.opencadc.inventory.InventoryUtilTest$ValidImpl");
+            Comparator c = InventoryUtil.loadPlugin(Comparator.class);
+            log.info("loaded: " + c.getClass().getName());
+        } finally {
+            System.clearProperty(Comparator.class.getName());
+        }
+    }
+    
+    
+    public static class InvalidCtorImpl implements Comparator<Object> {
+        public InvalidCtorImpl(boolean b) {
+        }
+        
+        @Override
+        public int compare(Object a, Object b) {
+            throw new UnsupportedOperationException();
+        }
+    }
+    
+    public static class CtorThrowsImpl implements Comparator<Object> {
+        public CtorThrowsImpl() {
+            throw new IllegalStateException("CtorThrowsImpl: setup fail");
+        }
+        
+        @Override
+        public int compare(Object a, Object b) {
+            throw new UnsupportedOperationException();
+        }
+    }
+    
+    public static class ValidImpl implements Comparator {
+        public ValidImpl() {
+        }
+
+        @Override
+        public int compare(Object a, Object b) {
+            throw new UnsupportedOperationException();
         }
     }
 }
