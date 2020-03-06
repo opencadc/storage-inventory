@@ -76,8 +76,8 @@ import org.opencadc.tantar.Reporter;
 
 public class StorageIsAlwaysRight extends ResolutionPolicy {
 
-    public StorageIsAlwaysRight(final Reporter reporter, final boolean reportOnlyFlag) {
-        super(reporter, reportOnlyFlag);
+    public StorageIsAlwaysRight(final Reporter reporter, final Boolean reportOnly) {
+        super(reporter, reportOnly);
     }
 
     /**
@@ -90,7 +90,7 @@ public class StorageIsAlwaysRight extends ResolutionPolicy {
     @Override
     public void resolve(final Artifact artifact, final StorageMetadata storageMetadata) throws Exception {
         if (artifact == null) {
-            // The Inventory has a file that does not exist in storage.  WTF?
+            // The Inventory has a file that does not exist in storage.  This is most unusual.
             reporter.report(String.format("Adding Artifact %s as per policy.", storageMetadata.getStorageLocation()));
 
             if (canTakeAction()) {

@@ -252,7 +252,7 @@ public class InventoryUtilTest {
             Assert.fail("missing no-arg ctor should fail");
         } catch (IllegalStateException expected) {
             log.info("missing no-arg ctor - caught: " + expected + " cause: " + expected.getCause());
-            Assert.assertTrue(expected.getCause() instanceof InstantiationException);
+            Assert.assertTrue(expected.getCause() instanceof NoSuchMethodException);
         } finally {
             System.clearProperty(Comparator.class.getName());
         }
@@ -279,12 +279,48 @@ public class InventoryUtilTest {
         }
         
     }
+
+    @Test
+    public void testLoadFailConstructorArgs() {
+        try {
+            System.setProperty(Comparator.class.getName(), "org.opencadc.inventory.InventoryUtilTest$ValidImpl");
+            InventoryUtil.loadPlugin(Comparator.class, 88);
+            Assert.fail("missing class should fail");
+        } catch (IllegalStateException expected) {
+            log.info("missing class - caught: " + expected + " cause: " + expected.getCause());
+            Assert.assertTrue(expected.getCause() instanceof NoSuchMethodException);
+        } finally {
+            System.clearProperty(Comparator.class.getName());
+        }
+
+        try {
+            System.setProperty(Comparator.class.getName(), "org.opencadc.inventory.InventoryUtilTest$ValidImpl");
+            InventoryUtil.loadPlugin(Comparator.class, 88, "STRING", false);
+            Assert.fail("missing class should fail");
+        } catch (IllegalStateException expected) {
+            log.info("missing class - caught: " + expected + " cause: " + expected.getCause());
+            Assert.assertTrue(expected.getCause() instanceof NoSuchMethodException);
+        } finally {
+            System.clearProperty(Comparator.class.getName());
+        }
+    }
     
     @Test
     public void testLoadOK() {
         try {
             System.setProperty(Comparator.class.getName(), "org.opencadc.inventory.InventoryUtilTest$ValidImpl");
             Comparator c = InventoryUtil.loadPlugin(Comparator.class);
+            log.info("loaded: " + c.getClass().getName());
+        } finally {
+            System.clearProperty(Comparator.class.getName());
+        }
+    }
+
+    @Test
+    public void testLoadOKConstructorArgs() {
+        try {
+            System.setProperty(Comparator.class.getName(), "org.opencadc.inventory.InventoryUtilTest$ValidImpl");
+            Comparator c = InventoryUtil.loadPlugin(Comparator.class, false, "GOOD");
             log.info("loaded: " + c.getClass().getName());
         } finally {
             System.clearProperty(Comparator.class.getName());
@@ -313,8 +349,12 @@ public class InventoryUtilTest {
         }
     }
     
-    public static class ValidImpl implements Comparator {
+    public static class ValidImpl implements Comparator<Object> {
         public ValidImpl() {
+        }
+
+        public ValidImpl(Boolean b, String s) {
+
         }
 
         @Override

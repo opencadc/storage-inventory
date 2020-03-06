@@ -69,6 +69,7 @@ package org.opencadc.inventory;
 
 import ca.nrc.cadc.util.HexUtil;
 import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
 import java.net.URI;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -129,11 +130,12 @@ public abstract class InventoryUtil {
      * the fully-qualified class name as a system property key; the value of the system property
      * is the fully qualified class name of an implementation of that interface.
      * 
-     * @param <T>
+     * @param <T>   Class type of the instantiated class
      * @param clazz an interface class
      * @return configured implementation of the interface
      * @throws IllegalStateException if an instance cannot be created
      */
+    @SuppressWarnings("unchecked")
     public static <T> T loadPlugin(Class<T> clazz) throws IllegalStateException {
         String cnameProp = clazz.getName();
         String cname = System.getProperty(cnameProp);
@@ -141,11 +143,52 @@ public abstract class InventoryUtil {
             throw new IllegalStateException("CONFIG: " + cnameProp + " not set");
         }
         try {
-            Class c = Class.forName(cname);
-            return (T) c.newInstance();
+            Class<?> c = Class.forName(cname);
+            return (T) c.getDeclaredConstructor().newInstance();
+        } catch (InvocationTargetException ex) {
+            throw new IllegalStateException("CONFIG: " + cnameProp + " implementation crashed during creation.", ex);
         } catch (ClassNotFoundException ex) {
             throw new IllegalStateException("CONFIG: " + cnameProp + " implementation not found in classpath: " + cname, ex);
-        } catch (InstantiationException ex) {
+        } catch (InstantiationException | NoSuchMethodException ex) {
+            throw new IllegalStateException("CONFIG: " + cnameProp + " implementation " + cname + " does not have a no-arg constructor", ex);
+        } catch (IllegalAccessException ex) {
+            throw new IllegalStateException("CONFIG: failed to instantiate " + cname, ex);
+        }
+    }
+
+    /**
+     * Load and instantiate an instance of the specified Java interface.  This method uses
+     * the fully-qualified class name as a system property key; the value of the system property
+     * is the fully qualified class name of an implementation of that interface.
+     * <p />
+     * This overloaded method will use a series of constructor arguments to build a new instance.  It assumes that
+     * the requested Class contains a constructor with the given arguments.
+     *
+     * @param <T>   Class type of the instantiated class
+     * @param clazz an interface class
+     * @param constructorArgs The constructor arguments
+     * @return configured implementation of the interface
+     * @throws IllegalStateException if an instance cannot be created
+     */
+    @SuppressWarnings("unchecked")
+    public static <T> T loadPlugin(Class<T> clazz, final Object... constructorArgs) throws IllegalStateException {
+        String cnameProp = clazz.getName();
+        String cname = System.getProperty(cnameProp);
+        if (cname == null) {
+            throw new IllegalStateException("CONFIG: " + cnameProp + " not set");
+        }
+        Class<?>[] constructorArgTypes = new Class<?>[constructorArgs.length];
+        for (int i = 0; i < constructorArgs.length; i++) {
+            constructorArgTypes[i] = constructorArgs[i].getClass();
+        }
+        try {
+            Class<?> c = Class.forName(cname);
+            return (T) c.getDeclaredConstructor(constructorArgTypes).newInstance(constructorArgs);
+        } catch (InvocationTargetException ex) {
+            throw new IllegalStateException("CONFIG: " + cnameProp + " implementation crashed during creation.", ex);
+        } catch (ClassNotFoundException ex) {
+            throw new IllegalStateException("CONFIG: " + cnameProp + " implementation not found in classpath: " + cname, ex);
+        } catch (InstantiationException | NoSuchMethodException ex) {
             throw new IllegalStateException("CONFIG: " + cnameProp + " implementation " + cname + " does not have a no-arg constructor", ex);
         } catch (IllegalAccessException ex) {
             throw new IllegalStateException("CONFIG: failed to instantiate " + cname, ex);

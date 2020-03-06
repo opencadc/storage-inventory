@@ -80,11 +80,11 @@ public abstract class ResolutionPolicy {
     protected ValidateEventListener validateEventListener;
 
     final Reporter reporter;
-    private final boolean reportOnlyFlag;
+    private final boolean reportOnly;
 
-    ResolutionPolicy(final Reporter reporter, final boolean reportOnlyFlag) {
+    ResolutionPolicy(final Reporter reporter, final Boolean reportOnly) {
         this.reporter = reporter;
-        this.reportOnlyFlag = reportOnlyFlag;
+        this.reportOnly = reportOnly;
     }
 
 
@@ -93,7 +93,7 @@ public abstract class ResolutionPolicy {
     }
 
     protected boolean canTakeAction() {
-        return validateEventListener != null && !reportOnlyFlag;
+        return validateEventListener != null && !reportOnly;
     }
 
     /**

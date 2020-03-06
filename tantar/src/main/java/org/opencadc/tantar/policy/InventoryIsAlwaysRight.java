@@ -76,8 +76,8 @@ import org.opencadc.tantar.Reporter;
 
 public class InventoryIsAlwaysRight extends ResolutionPolicy {
 
-    public InventoryIsAlwaysRight(final Reporter reporter, final boolean reportOnlyFlag) {
-        super(reporter, reportOnlyFlag);
+    public InventoryIsAlwaysRight(final Reporter reporter, final Boolean reportOnly) {
+        super(reporter, reportOnly);
     }
 
     /**
@@ -88,7 +88,7 @@ public class InventoryIsAlwaysRight extends ResolutionPolicy {
      * @param storageMetadata The StorageMetadata to use in deciding.
      */
     @Override
-    public void resolve(Artifact artifact, StorageMetadata storageMetadata) throws Exception {
+    public void resolve(final Artifact artifact, final StorageMetadata storageMetadata) throws Exception {
         if (storageMetadata == null) {
             // Scenario when an Entity exists in the inventory database but the file is not in Storage.  This can
             // happen in the case where all files are managed by the inventory but an intervention outside of the
