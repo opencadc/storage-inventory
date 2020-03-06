@@ -67,17 +67,15 @@
 
 package org.opencadc.inventory.storage.fs;
 
-import ca.nrc.cadc.util.HexUtil;
-
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
 import java.net.URI;
+import java.nio.ByteBuffer;
+import java.nio.charset.Charset;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
-import java.security.DigestInputStream;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
+import java.nio.file.attribute.UserDefinedFileAttributeView;
 import java.util.EmptyStackException;
 import java.util.Iterator;
 import java.util.Stack;
@@ -100,6 +98,7 @@ public class FileSystemIterator implements Iterator<StorageMetadata> {
     private PathItem next = null;
     Stack<StackItem> stack;
     private String fixedParentDir;
+    public static final String CHECKSUM_ATTRIBUTE_NAME = "Artifact.contentChecksum";
 
     /**
      * FileSystemIterator constructor.
@@ -195,7 +194,7 @@ public class FileSystemIterator implements Iterator<StorageMetadata> {
         // TODO: restore bucket consistent with put() return value
         //storageLocation.storageBucket = ??; 
         try {
-            URI checksum = createMD5Checksum(next.path);
+            URI checksum = new URI(getFileAttribute(next.path, CHECKSUM_ATTRIBUTE_NAME));
             long length = Files.size(next.path);
             StorageMetadata meta = new StorageMetadata(storageLocation, checksum, length);
             meta.artifactURI = storageID;
@@ -216,20 +215,15 @@ public class FileSystemIterator implements Iterator<StorageMetadata> {
         Path path;
         String pathAndFileName;
     }
-    
-    private static URI createMD5Checksum(Path path) throws NoSuchAlgorithmException, IOException {
-        MessageDigest md = MessageDigest.getInstance("MD5");
-        InputStream in = Files.newInputStream(path);
-        DigestInputStream dis = new DigestInputStream(in, md);
-        
-        int bytesRead = dis.read();
-        byte[] buf = new byte[512];
-        while (bytesRead > 0) {
-            bytesRead = dis.read(buf);
-        }
-        byte[] digest = md.digest();
-        String md5String = HexUtil.toHex(digest);
-        return URI.create(FileSystemStorageAdapter.MD5_CHECKSUM_SCHEME + ":" + md5String);
+
+    private static String getFileAttribute(Path path, String attributeName) throws IOException {
+        UserDefinedFileAttributeView udv = Files.getFileAttributeView(path,
+            UserDefinedFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);
+
+        int sz = udv.size(attributeName);
+        ByteBuffer buf = ByteBuffer.allocate(2 * sz);
+        udv.read(attributeName, buf);
+        return new String(buf.array(), Charset.forName("UTF-8")).trim();
     }
 
 }

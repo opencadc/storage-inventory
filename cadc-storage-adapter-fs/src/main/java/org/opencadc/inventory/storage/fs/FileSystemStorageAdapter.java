@@ -82,13 +82,17 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.nio.ByteBuffer;
+import java.nio.charset.Charset;
 import java.nio.file.FileSystem;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
+import java.nio.file.attribute.UserDefinedFileAttributeView;
 import java.security.DigestOutputStream;
 import java.security.MessageDigest;
 import java.util.Iterator;
@@ -136,6 +140,7 @@ public class FileSystemStorageAdapter implements StorageAdapter {
     public static final String CONFIG_PROPERTY_ROOT = "root";
     public static final String CONFIG_PROPERTY_BUCKETMODE = "bucketMode";
     public static final String CONFIG_PROPERTY_BUCKETDEPTH = "bucketLength";
+    public static final String CHECKSUM_ATTRIBUTE_NAME = "Artifact.contentChecksum";
     
     static final String MD5_CHECKSUM_SCHEME = "md5";
     static final int MAX_BUCKET_LENGTH = 5;
@@ -389,6 +394,9 @@ public class FileSystemStorageAdapter implements StorageAdapter {
             } else {
                 log.debug("No contentLength provided.");
             }
+
+            // Set contentChecksum file attribute
+            setFileAttribute(path, CHECKSUM_ATTRIBUTE_NAME, checksum.toString());
             
             StorageMetadata metadata = new StorageMetadata(storageLocation, checksum, length);
             metadata.artifactURI = artifactURI;
@@ -582,5 +590,18 @@ public class FileSystemStorageAdapter implements StorageAdapter {
         Path ret = root.resolve(path.toString());
         return ret;
     }
-    
+
+    public static void setFileAttribute(Path path, String propertyName, String property) throws IOException {
+        log.debug("setFileAttribute: " + path);
+        UserDefinedFileAttributeView udv = Files.getFileAttributeView(path,
+            UserDefinedFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);
+        log.debug("setAttribute: " + propertyName + " = " + property);
+        log.debug("property bytes: " + property.getBytes(Charset.forName("UTF-8")));
+        if (property != null) {
+            property = property.trim();
+            ByteBuffer buf = ByteBuffer.wrap(property.getBytes(Charset.forName("UTF-8")));
+            udv.write(propertyName, buf);
+        } // else: do nothing
+    }
+
 }

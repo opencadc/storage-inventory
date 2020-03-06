@@ -88,7 +88,6 @@ import java.util.List;
 import java.util.Set;
 
 import java.util.SortedSet;
-import static java.util.Spliterators.iterator;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
@@ -97,7 +96,6 @@ import org.junit.Test;
 import org.opencadc.inventory.storage.NewArtifact;
 import org.opencadc.inventory.storage.StorageMetadata;
 import org.opencadc.inventory.storage.fs.FileSystemStorageAdapter.BucketMode;
-import static java.util.Spliterators.iterator;
 
 /**
  * @author majorb
@@ -113,7 +111,7 @@ public class FileSystemStorageAdapterTest {
     private static final byte[] data = dataString.getBytes();
 
     static {
-        Log4jInit.setLevel("org.opencadc.inventory", Level.INFO);
+        Log4jInit.setLevel("org.opencadc.inventory", Level.DEBUG);
     }
     
     @BeforeClass
@@ -166,6 +164,7 @@ public class FileSystemStorageAdapterTest {
             FileSystemStorageAdapter fs = new FileSystemStorageAdapter(
                 testDir, bucketMode);
             StorageMetadata storageMetadata = fs.put(newArtifact, source);
+
             Assert.assertEquals("artifactURI",  artifactURI, storageMetadata.artifactURI);
             
             TestOutputStream dest = new TestOutputStream();
@@ -174,6 +173,12 @@ public class FileSystemStorageAdapterTest {
             String resultData = new String(dest.mydata);
             log.info("result data: " + resultData);
             Assert.assertEquals("data", dataString, resultData);
+
+            SortedSet<StorageMetadata> fsList = fs.list(storageMetadata.getStorageLocation().storageBucket);
+
+            StorageMetadata listItem = fsList.first();
+            Assert.assertNotNull(listItem.getContentChecksum());
+            log.info("content checksum found: " + listItem.getContentChecksum());
             
             fs.delete(storageMetadata.getStorageLocation());
             
@@ -201,7 +206,7 @@ public class FileSystemStorageAdapterTest {
     public void testList_URIBucketMode() {
         this.testList(BucketMode.URIBUCKET);
     }
-    
+
     private void testList(BucketMode bucketMode) {
         try {
             
