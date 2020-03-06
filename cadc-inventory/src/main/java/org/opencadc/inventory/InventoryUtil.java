@@ -160,7 +160,7 @@ public abstract class InventoryUtil {
      * Load and instantiate an instance of the specified Java interface.  This method uses
      * the fully-qualified class name as a system property key; the value of the system property
      * is the fully qualified class name of an implementation of that interface.
-     * <p />
+     * <p>
      * This overloaded method will use a series of constructor arguments to build a new instance.  It assumes that
      * the requested Class contains a constructor with the given arguments.
      *
