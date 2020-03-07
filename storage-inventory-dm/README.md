@@ -235,24 +235,52 @@ should harvesting detect if site Artifact.lastModified stream is out of whack?
 - clock skew
 
 # storage back end implementation notes
-The cadc-storage-adapter API places two requirements on the implementation:
-1. store and return (via iterator) the Artifact.uri, Artifact.contentChecksum, and Artifact.contentLength
-2. support ordered iteration (by storageID) *or* batched iteration (by storageBucket):  **preferably both**
+The cadc-storage-adapter API places requirements on the implementation:
+1. store (via put) and return (via iterator) metadata (min: Artifact.uri, Artifact.contentChecksum, Artifact.contentLength)
+2. update metadata after a write: checksum not known before write, update Artifact.uri (rename)
+3. streaming write: content length not known before write
+4. consistent timestamp: contentLastModfied from put and iterator/list
+5. support random access: resumable download, metadata extraction (fhead, fwcs), cutouts
+6. support iterator (ordered by StorageLocation) *or* batched list (by storageBucket): **preferably both**
 
-|backend impl|ordered iterator|bucket iterator|random access|
-|------------|:--------------:|:-------------:|:-----------:|
-|opaque filesystem|N|Y|Y|
-|mountable filesystem (RO)|N|path-components|Y|
-|mountable filesystem|N|N*|Y|
-|Ceph-OS + rados|?|N ({1})|Y|
-|Ceph-OS + S3|Y (UTF-8 Binary)|Y|Y|
-|AD|SQL order-by|archive|code on storage node|
+Y=yes NS=not scalable X=not possible
 
-Note: for a write-mountable filesystem, simple operations in the filesystem (mv) can invalidate an arbitrary
-number of storageID values, make all those artifacts inaccessible, and cause file-validate to do an arbitrary amount
-of work to fix the storageID values. It is not feasible to avoid treating it as a new Artifact and 
+|feature|opaque filesystem|mountable fs (RO)|mountable fs (RW)|ceph+rados|ceph+S3|ceph+swift|AD + /data|
+|-------|:---------------:|:---------------:|:---------------:|:--------:|:-----:|:--------:|:--------:|
+|store/retrieve metadata|Y|Y|Y|?|Y|Y?|Y|
+|update metadata        |Y|Y|Y|?|X|Y?|X|
+|streaming write        |Y|Y|Y|?|X?|Y?|Y|
+|consistent timestamp   |Y|Y|Y|?|NS|?|Y|
+|random access          |Y|Y|Y|Y?|Y?|Y?|Y|
+|batch list             |Y|NS|NS|Y?|Y|Y?|NS|
+|prefix batch list      |Y|NS|NS|Y?|Y|Y?|X|
+|iterator               |Y|NS|NS|?|Y|Y?|Y|
+|prefix iterator        |Y|NS|NS|?|Y|Y?|X|
+|batch iterator         |Y|NS|NS|?|Y|Y?|Y|
+|prefix batch iterator  |Y|NS|NS|?|Y|Y?|X|
+
+For opaque fs: random hierarchical "hex" bucket scheme can give many buckets with few files, so scalability comes from
+using the directory structure (buckets) to maintain finite memory footprint.
+
+For mountable RO filesystem: Artifact.uri structure maps to directories and files so validation (iterator or list) is NS.
+
+For mountable RW filesystem (e.g. cavern): in addition to RO issues above, simple operations in the filesystem (mv) can
+invalidate an arbitrary number of storageID values, make all those artifacts inaccessible, and cause file-validate to do 
+an arbitrary amount of work to fix the storageID values. It is not feasible to avoid treating it as a new Artifact and
 DeletedArtifactEvent that gets propagated to all sites unless you trust the Artifact.contentChecksum to be a unique 
-and reliable identifier.
+and reliable identifier. Also, files created via the FS would not have metadata (checksum) so that would have to be computed
+out of band and the iterator/list implementation would have to not expose the file until that happened.
+
+For ceph+rados: native code is required so not all features were explored in detail.
+
+For ceph+S3: the S3 API requires content-length before a write and treats stored objects as immutable so you cannot update
+metadata once an object is written. Ceph+S3 also has a maximum size for writing an object (5GiB), after which clients *must*
+use the multi-part upload API... that would have to be exposed to clients (not a bad idea, but the limit is modest).
+
+For ceph+swift: the Swift API does not appear to treat stored objects as immutable but this has not been verified with 
+working code.
+
+For AD: storageBucket = {archive} so there is no control over batch size via prefixing the bucket.
 
 {1}: Buckets are not a notion in `RADOS`.  They are part of the Object ID in the format 
 of `{bucket_marker}_{numeric_id}.{key_id}`.  The `bucket_marker` is looked up in the `default.rgw.meta` pool by name.  This
