@@ -236,6 +236,7 @@ should harvesting detect if site Artifact.lastModified stream is out of whack?
 
 # storage back end implementation notes
 The cadc-storage-adapter API places requirements on the implementation:
+
 0. ~fixed overhead to access a stored file (put, get)... scales moderately at best with number of files stored (indexed)
 1. store (via put) and return (via iterator) metadata (min: Artifact.uri, Artifact.contentChecksum, Artifact.contentLength)
 2. update metadata after a write: checksum not known before write, update Artifact.uri (rename)
