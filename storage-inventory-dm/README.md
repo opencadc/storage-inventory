@@ -236,6 +236,7 @@ should harvesting detect if site Artifact.lastModified stream is out of whack?
 
 # storage back end implementation notes
 The cadc-storage-adapter API places requirements on the implementation:
+0. ~fixed overhead to access a stored file (put, get)... scales moderately at best with number of files stored (indexed)
 1. store (via put) and return (via iterator) metadata (min: Artifact.uri, Artifact.contentChecksum, Artifact.contentLength)
 2. update metadata after a write: checksum not known before write, update Artifact.uri (rename)
 3. streaming write: content length not known before write
@@ -247,6 +248,7 @@ Y=yes NS=not scalable X=not possible
 
 |feature|opaque filesystem|mountable fs (RO)|mountable fs (RW)|ceph+rados|ceph+S3|ceph+swift|AD + /data|
 |-------|:---------------:|:---------------:|:---------------:|:--------:|:-----:|:--------:|:--------:|
+|fixed overhead|Y|Y?|Y?|Y|Y|Y|Y|
 |store/retrieve metadata|Y|Y|Y|?|Y|Y?|Y|
 |update metadata        |Y|Y|Y|?|X|Y?|X|
 |streaming write        |Y|Y|Y|?|X?|Y?|Y|
@@ -260,9 +262,10 @@ Y=yes NS=not scalable X=not possible
 |prefix batch iterator  |Y|NS|NS|?|Y|Y?|X|
 
 For opaque fs: random hierarchical "hex" bucket scheme can give many buckets with few files, so scalability comes from
-using the directory structure (buckets) to maintain finite memory footprint.
+using the directory structure (buckets) to maintain finite memory footprint. The hex bucket scheme is implementing a B-tree scheme with directories (more or less).
 
-For mountable RO filesystem: Artifact.uri structure maps to directories and files so validation (iterator or list) is NS.
+For mountable RO filesystem: Artifact.uri structure maps to directories and files is only as scalable as is implied by 
+the Artifact.uri organisation; validation (iterator or list) is NS for current practices (too flat).
 
 For mountable RW filesystem (e.g. cavern): in addition to RO issues above, simple operations in the filesystem (mv) can
 invalidate an arbitrary number of storageID values, make all those artifacts inaccessible, and cause file-validate to do 
