@@ -74,8 +74,12 @@ import java.util.EventListener;
  ************************************************************************
  */
 public interface ValidateEventListener extends EventListener {
-    void retrieveFile(final Artifact artifact) throws Exception;
-    void deleteFile(final StorageMetadata storageMetadata) throws Exception;
+
+    void reset(final Artifact artifact) throws Exception;
+
+    void delete(final StorageMetadata storageMetadata) throws Exception;
+
     void addArtifact(final StorageMetadata storageMetadata) throws Exception;
-    void deleteArtifact(final Artifact artifact) throws Exception;
+
+    void delete(final Artifact artifact) throws Exception;
 }

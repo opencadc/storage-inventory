@@ -99,7 +99,7 @@ public class StorageIsAlwaysRight extends ResolutionPolicy {
         } else if (storageMetadata == null) {
             reporter.report(String.format("Removing Unknown Artifact %s as per policy.", artifact.storageLocation));
             if (canTakeAction()) {
-                validateEventListener.deleteArtifact(artifact);
+                validateEventListener.delete(artifact);
             }
         } else {
             // Check metadata for discrepancies.
@@ -108,7 +108,7 @@ public class StorageIsAlwaysRight extends ResolutionPolicy {
                 reporter.report(String.format("Replacing Artifact %s as per policy.", artifact.storageLocation));
 
                 if (canTakeAction()) {
-                    validateEventListener.deleteArtifact(artifact);
+                    validateEventListener.delete(artifact);
                     validateEventListener.addArtifact(storageMetadata);
                 }
             } else {

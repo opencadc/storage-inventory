@@ -74,8 +74,6 @@ import ca.nrc.cadc.db.DBUtil;
 import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.util.StringUtil;
 
-import java.io.PipedInputStream;
-import java.io.PipedOutputStream;
 import java.security.PrivilegedExceptionAction;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -88,7 +86,6 @@ import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.SQLGenerator;
-import org.opencadc.inventory.storage.NewArtifact;
 import org.opencadc.inventory.storage.StorageAdapter;
 import org.opencadc.inventory.storage.StorageEngageException;
 import org.opencadc.inventory.storage.StorageMetadata;
@@ -190,44 +187,20 @@ public class BucketValidator implements ValidateEventListener {
     }
 
     /**
-     * Obtain a file from its Storage Location as deemed by the Artifact.  This is used by the Policy when the
-     * Artifact is determined to be accurate.
-     * <p />
-     * A RuntimeException is thrown for any issues that occur within the Threads.
+     * Reset the given Artifact by removing its Storage Location.  This will force the file-sync application to assume
+     * it's a new insert and force a re-download of the file.
      *
      * @param artifact The base artifact.  This MUST have a Storage Location.
      * @throws Exception Anything IO/Thread related.
      */
     @Override
-    public void retrieveFile(final Artifact artifact) throws Exception {
-        try (final PipedInputStream pipedInputStream = new PipedInputStream();
-             final PipedOutputStream pipedOutputStream = new PipedOutputStream(pipedInputStream)) {
-            final Thread writeThread = new Thread(() -> {
-                try {
-                    final NewArtifact newArtifact = new NewArtifact(artifact.getURI());
-                    newArtifact.contentLength = artifact.getContentLength();
-                    newArtifact.contentChecksum = artifact.getContentChecksum();
-
-                    storageAdapter.put(newArtifact, pipedInputStream);
-                } catch (Exception e) {
-                    throw new RuntimeException(e);
-                }
-            });
-
-            final Thread readThread = new Thread(() -> {
-                try {
-                    storageAdapter.get(artifact.storageLocation, pipedOutputStream);
-                } catch (Exception e) {
-                    throw new RuntimeException(e);
-                }
-            });
-
-            readThread.start();
-            writeThread.start();
-
-            readThread.join();
-            writeThread.join();
-        }
+    public void reset(final Artifact artifact) throws Exception {
+        artifact.storageLocation = null;
+        final ArtifactDAO artifactDAO = getArtifactDAO();
+        artifactDAO.getTransactionManager().startTransaction();
+        artifactDAO.lock(artifact);
+        artifactDAO.put(artifact);
+        artifactDAO.getTransactionManager().commitTransaction();
     }
 
     /**
@@ -237,12 +210,31 @@ public class BucketValidator implements ValidateEventListener {
      * @throws Exception Covering numerous exceptions from the StorageAdapter.
      */
     @Override
-    public void deleteFile(final StorageMetadata storageMetadata) throws Exception {
+    public void delete(final StorageMetadata storageMetadata) throws Exception {
         storageAdapter.delete(storageMetadata.getStorageLocation());
     }
 
+    /**
+     * Delete the given Artifact.
+     * @param artifact  The Artifact to remove.
+     * @throws Exception        Anything that went wrong.
+     */
     @Override
-    public void addArtifact(StorageMetadata storageMetadata) {
+    public void delete(final Artifact artifact) throws Exception {
+        final ArtifactDAO artifactDAO = getArtifactDAO();
+
+        artifactDAO.getTransactionManager().startTransaction();
+        artifactDAO.lock(artifact);
+        artifactDAO.delete(artifact.getID());
+        artifactDAO.getTransactionManager().commitTransaction();
+    }
+
+    /**
+     * The Artifact from the given StorageMetadata does not exist but it should.
+     * @param storageMetadata   The StorageMetadata to create an Artifact from.
+     */
+    @Override
+    public void addArtifact(final StorageMetadata storageMetadata) {
         final Artifact artifact = new Artifact(storageMetadata.artifactURI, storageMetadata.getContentChecksum(),
                                                storageMetadata.contentLastModified, storageMetadata.getContentLength());
 
@@ -250,12 +242,11 @@ public class BucketValidator implements ValidateEventListener {
         artifact.contentType = storageMetadata.contentType;
         artifact.contentEncoding = storageMetadata.contentEncoding;
 
-        getArtifactDAO().put(artifact, false);
-    }
+        final ArtifactDAO artifactDAO = getArtifactDAO();
 
-    @Override
-    public void deleteArtifact(Artifact artifact) {
-        getArtifactDAO().delete(artifact.getID());
+        artifactDAO.getTransactionManager().startTransaction();
+        artifactDAO.put(artifact, false);
+        artifactDAO.getTransactionManager().commitTransaction();
     }
 
     /**
