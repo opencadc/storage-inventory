@@ -273,8 +273,8 @@ class AbstractDAO<T extends Entity> {
             Entity cur = get.execute(jdbc);
             Date now = getCurrentTime();
             boolean update = cur != null;
-            boolean delta = updateEntity(val, cur, now);
-            if (delta || forceUpdate) {
+            boolean delta = updateEntity(val, cur, now, forceUpdate);
+            if (delta) {
                 EntityPut put = gen.getEntityPut(val.getClass(), update);
                 put.setValue(val);
                 put.execute(jdbc);
@@ -311,27 +311,32 @@ class AbstractDAO<T extends Entity> {
      * @param entity entity to persist
      * @param cur entity state in database
      * @param now current timestamp from time source (database)
-     * @return true is a database change must be performed
+     * @param forceUpdate force update of the Entity.lastModified timestamp
+     * @return true if a database change must be performed
      */
-    protected boolean updateEntity(Entity entity, Entity cur, Date now) {
+    protected boolean updateEntity(Entity entity, Entity cur, Date now, boolean forceUpdate) {
         log.debug("updateEntity: " + entity);
 
         digest.reset(); // just in case
         InventoryUtil.assignMetaChecksum(entity, entity.computeMetaChecksum(digest));
         
         Date dd = entity.getLastModified();
-        boolean delta = false;
+        
+        boolean delta;
         if (cur == null) {
+            // new
             delta = true;
         } else {
+            // update
+            delta = !entity.getMetaChecksum().equals(cur.getMetaChecksum());
             if (dd == null || dd.before(cur.getLastModified())) {
                 dd = cur.getLastModified();  // don't go backwards
-            }
-            delta = !entity.getMetaChecksum().equals(cur.getMetaChecksum());
+            } 
         }
-        if (delta && (dd == null || dd.before(now))) {
-            dd = now; // local state change
+        if ((delta || forceUpdate) && (dd == null || dd.before(now))) {
+            dd = now;
         }
+        
         InventoryUtil.assignLastModified(entity, dd);
         
         return delta;

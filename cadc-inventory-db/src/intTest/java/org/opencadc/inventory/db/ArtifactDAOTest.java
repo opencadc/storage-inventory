@@ -258,12 +258,13 @@ public class ArtifactDAOTest {
             // no storageBucket
             
             dao.put(expected);
+            Date t1 = expected.getLastModified();
             
             Artifact a1 = dao.get(expected.getID());
             Assert.assertNotNull(a1);
             URI mcs1 = a1.computeMetaChecksum(MessageDigest.getInstance("MD5"));
             Assert.assertEquals("round trip metachecksum unchanged", expected.getMetaChecksum(), mcs1);
-            Assert.assertEquals(expected.getLastModified(), a1.getLastModified());
+            Assert.assertNotNull(a1.getLastModified());
             Assert.assertNull("did-not-force-update", a1.storageLocation);
             
             dao.put(expected, true);
@@ -271,7 +272,7 @@ public class ArtifactDAOTest {
             Assert.assertNotNull(a2);
             URI mcs2 = a2.computeMetaChecksum(MessageDigest.getInstance("MD5"));
             Assert.assertEquals("round trip metachecksum unchanged", expected.getMetaChecksum(), mcs2);
-            Assert.assertEquals(expected.getLastModified(), a2.getLastModified());
+            Assert.assertTrue(a1.getLastModified().before(a2.getLastModified()));
             Assert.assertNotNull("force-update", a2.storageLocation);
             Assert.assertEquals(expected.storageLocation.getStorageID(), a2.storageLocation.getStorageID());
             Assert.assertNull(a2.storageLocation.storageBucket);
@@ -283,7 +284,7 @@ public class ArtifactDAOTest {
             Assert.assertNotNull(a2);
             URI mcs3 = a3.computeMetaChecksum(MessageDigest.getInstance("MD5"));
             Assert.assertEquals("round trip metachecksum unchanged", expected.getMetaChecksum(), mcs3);
-            Assert.assertEquals(expected.getLastModified(), a3.getLastModified());
+            Assert.assertTrue(a2.getLastModified().before(a3.getLastModified()));
             Assert.assertNotNull("updated", a3.storageLocation);
             Assert.assertEquals(expected.storageLocation.getStorageID(), a3.storageLocation.getStorageID());
             Assert.assertEquals(expected.storageLocation.storageBucket, a3.storageLocation.storageBucket);
@@ -294,7 +295,7 @@ public class ArtifactDAOTest {
             Assert.assertNotNull(a2);
             URI mcs4 = a4.computeMetaChecksum(MessageDigest.getInstance("MD5"));
             Assert.assertEquals("round trip metachecksum unchanged", expected.getMetaChecksum(), mcs4);
-            Assert.assertEquals(expected.getLastModified(), a4.getLastModified());
+            Assert.assertTrue(a3.getLastModified().before(a4.getLastModified()));
             Assert.assertNull("cleared", a4.storageLocation);
             
             dao.delete(expected.getID());
@@ -345,7 +346,7 @@ public class ArtifactDAOTest {
             Assert.assertNotNull(a1);
             URI mcs1 = a1.computeMetaChecksum(MessageDigest.getInstance("MD5"));
             Assert.assertEquals("round trip metachecksum unchanged", expected.getMetaChecksum(), mcs1);
-            Assert.assertEquals(expected.getLastModified(), a1.getLastModified());
+            Assert.assertNotNull(a1.getLastModified());
             Assert.assertTrue("did-not-force-update", a1.siteLocations.isEmpty());
             
             dao.put(expected, true);
@@ -353,7 +354,7 @@ public class ArtifactDAOTest {
             Assert.assertNotNull(a2);
             URI mcs2 = a2.computeMetaChecksum(MessageDigest.getInstance("MD5"));
             Assert.assertEquals("round trip metachecksum unchanged", expected.getMetaChecksum(), mcs2);
-            Assert.assertEquals(expected.getLastModified(), a2.getLastModified());
+            Assert.assertTrue(a1.getLastModified().before(a2.getLastModified()));
             Assert.assertFalse("force-update", a2.siteLocations.isEmpty());
             Assert.assertEquals(3, a2.siteLocations.size());
             
@@ -363,7 +364,7 @@ public class ArtifactDAOTest {
             Assert.assertNotNull(a1);
             URI mcs3 = a3.computeMetaChecksum(MessageDigest.getInstance("MD5"));
             Assert.assertEquals("round trip metachecksum unchanged", expected.getMetaChecksum(), mcs3);
-            Assert.assertEquals(expected.getLastModified(), a3.getLastModified());
+            Assert.assertTrue(a2.getLastModified().before(a3.getLastModified()));
             Assert.assertTrue("cleaned", a3.siteLocations.isEmpty());
             
             dao.delete(expected.getID());
