@@ -98,7 +98,6 @@ public class FileSystemIterator implements Iterator<StorageMetadata> {
     private PathItem next = null;
     Stack<StackItem> stack;
     private String fixedParentDir;
-    public static final String CHECKSUM_ATTRIBUTE_NAME = "Artifact.contentChecksum";
 
     /**
      * FileSystemIterator constructor.
@@ -194,7 +193,7 @@ public class FileSystemIterator implements Iterator<StorageMetadata> {
         // TODO: restore bucket consistent with put() return value
         //storageLocation.storageBucket = ??; 
         try {
-            URI checksum = new URI(getFileAttribute(next.path, CHECKSUM_ATTRIBUTE_NAME));
+            URI checksum = new URI(getFileAttribute(next.path, FileSystemStorageAdapter.CHECKSUM_ATTRIBUTE_NAME));
             long length = Files.size(next.path);
             StorageMetadata meta = new StorageMetadata(storageLocation, checksum, length);
             meta.artifactURI = storageID;

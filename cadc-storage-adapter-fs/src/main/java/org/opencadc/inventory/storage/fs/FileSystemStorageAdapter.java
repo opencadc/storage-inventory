@@ -140,7 +140,7 @@ public class FileSystemStorageAdapter implements StorageAdapter {
     public static final String CONFIG_PROPERTY_ROOT = "root";
     public static final String CONFIG_PROPERTY_BUCKETMODE = "bucketMode";
     public static final String CONFIG_PROPERTY_BUCKETDEPTH = "bucketLength";
-    public static final String CHECKSUM_ATTRIBUTE_NAME = "Artifact.contentChecksum";
+    static final String CHECKSUM_ATTRIBUTE_NAME = "contentChecksum";
     
     static final String MD5_CHECKSUM_SCHEME = "md5";
     static final int MAX_BUCKET_LENGTH = 5;
@@ -591,16 +591,15 @@ public class FileSystemStorageAdapter implements StorageAdapter {
         return ret;
     }
 
-    public static void setFileAttribute(Path path, String propertyName, String property) throws IOException {
+    public static void setFileAttribute(Path path, String attributeKey, String attributeValue) throws IOException {
         log.debug("setFileAttribute: " + path);
-        UserDefinedFileAttributeView udv = Files.getFileAttributeView(path,
-            UserDefinedFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);
-        log.debug("setAttribute: " + propertyName + " = " + property);
-        log.debug("property bytes: " + property.getBytes(Charset.forName("UTF-8")));
-        if (property != null) {
-            property = property.trim();
-            ByteBuffer buf = ByteBuffer.wrap(property.getBytes(Charset.forName("UTF-8")));
-            udv.write(propertyName, buf);
+        if (attributeValue != null) {
+            UserDefinedFileAttributeView udv = Files.getFileAttributeView(path,
+                UserDefinedFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);
+            attributeValue = attributeValue.trim();
+            log.debug("attribute: " + attributeKey + " = " + attributeValue);
+            ByteBuffer buf = ByteBuffer.wrap(attributeValue.getBytes(Charset.forName("UTF-8")));
+            udv.write(attributeKey, buf);
         } // else: do nothing
     }
 
