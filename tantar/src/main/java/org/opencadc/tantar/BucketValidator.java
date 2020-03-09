@@ -199,7 +199,7 @@ public class BucketValidator implements ValidateEventListener {
         final ArtifactDAO artifactDAO = getArtifactDAO();
         artifactDAO.getTransactionManager().startTransaction();
         artifactDAO.lock(artifact);
-        artifactDAO.put(artifact);
+        artifactDAO.put(artifact, true);
         artifactDAO.getTransactionManager().commitTransaction();
     }
 
