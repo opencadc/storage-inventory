@@ -1,11 +1,3 @@
-package org.opencadc.tantar;
-
-import org.opencadc.inventory.Artifact;
-import org.opencadc.inventory.storage.StorageMetadata;
-
-import java.util.EventListener;
-
-
 /*
  ************************************************************************
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
@@ -73,13 +65,22 @@ import java.util.EventListener;
  *
  ************************************************************************
  */
+
+package org.opencadc.tantar;
+
+import java.util.EventListener;
+
+import org.opencadc.inventory.Artifact;
+import org.opencadc.inventory.storage.StorageMetadata;
+
+
 public interface ValidateEventListener extends EventListener {
-
-    void reset(final Artifact artifact) throws Exception;
-
-    void delete(final StorageMetadata storageMetadata) throws Exception;
 
     void addArtifact(final StorageMetadata storageMetadata) throws Exception;
 
+    void delete(final StorageMetadata storageMetadata) throws Exception;
+
     void delete(final Artifact artifact) throws Exception;
+
+    void reset(final Artifact artifact) throws Exception;
 }

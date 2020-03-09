@@ -69,11 +69,11 @@
 
 package org.opencadc.tantar;
 
-
 import org.apache.log4j.Logger;
 
 
 public class Reporter {
+
     private final Logger logger;
 
     public Reporter(final Logger logger) {
