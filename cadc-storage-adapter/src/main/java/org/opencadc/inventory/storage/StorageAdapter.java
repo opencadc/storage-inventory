@@ -139,11 +139,12 @@ public interface StorageAdapter {
      * @param newArtifact The holds information about the incoming artifact.  If the contentChecksum
      *     and contentLength are set, they will be used to validate the bytes received.
      * @param source The stream from which to read.
-     * @return The storage metadata.
+     * @return result StorageMetadata
      * @throws ca.nrc.cadc.io.ByteLimitExceededException if content length exceeds internal limit
-     * @throws IncorrectContentChecksumException If the calculated checksum does not the expected
+     * @throws IllegalArgumentException if the newArtifact.contentLength or length of stream is zero
+     * @throws IncorrectContentChecksumException If the calculated checksum does not match the expected
      *     checksum as described in newArtifact.
-     * @throws IncorrectContentLengthException If the calculated length does not the expected
+     * @throws IncorrectContentLengthException If the calculated length does not match the expected
      *     length as described in newArtifact.
      * @throws ReadException If the client failed to stream.
      * @throws WriteException If the storage system failed to stream.
@@ -151,7 +152,7 @@ public interface StorageAdapter {
      * @throws TransientException If an unexpected, temporary exception occurred.
      */
     public StorageMetadata put(NewArtifact newArtifact, InputStream source)
-        throws ByteLimitExceededException, IncorrectContentChecksumException, IncorrectContentLengthException, ReadException,
+        throws ByteLimitExceededException, IllegalArgumentException, IncorrectContentChecksumException, IncorrectContentLengthException, ReadException,
             WriteException, StorageEngageException, TransientException;
         
     /**

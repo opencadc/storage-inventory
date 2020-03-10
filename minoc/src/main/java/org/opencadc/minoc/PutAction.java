@@ -86,7 +86,6 @@ import java.net.URISyntaxException;
 import java.util.Date;
 
 import org.apache.log4j.Logger;
-
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.DeletedArtifactEvent;
 import org.opencadc.inventory.db.ArtifactDAO;
