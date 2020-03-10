@@ -89,6 +89,7 @@ import java.util.Set;
 
 import javax.security.auth.Subject;
 
+import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.StorageSite;
@@ -102,7 +103,7 @@ import org.opencadc.inventory.permissions.TokenUtil;
 import org.opencadc.inventory.permissions.WriteGrant;
 import org.opencadc.inventory.storage.StorageAdapter;
 
-import org.apache.log4j.Logger;
+
 
 /**
  * Abstract class for performing tasks all action classes have in common,
