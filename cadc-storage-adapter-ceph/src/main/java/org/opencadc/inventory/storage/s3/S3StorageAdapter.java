@@ -68,9 +68,6 @@
 
 package org.opencadc.inventory.storage.s3;
 
-import software.amazon.awssdk.auth.credentials.AwsCredentials;
-import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
-
 import ca.nrc.cadc.io.ByteLimitExceededException;
 import ca.nrc.cadc.io.ReadException;
 import ca.nrc.cadc.io.ThreadedIO;
@@ -83,6 +80,8 @@ import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.util.HexUtil;
 import ca.nrc.cadc.util.StringUtil;
 
+import java.io.File;
+import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -91,13 +90,12 @@ import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
@@ -110,6 +108,8 @@ import org.opencadc.inventory.storage.StorageAdapter;
 import org.opencadc.inventory.storage.StorageEngageException;
 import org.opencadc.inventory.storage.StorageMetadata;
 
+import software.amazon.awssdk.auth.credentials.AwsCredentials;
+import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
 import software.amazon.awssdk.awscore.exception.AwsErrorDetails;
 import software.amazon.awssdk.core.exception.SdkClientException;
 import software.amazon.awssdk.core.sync.RequestBody;
@@ -133,10 +133,6 @@ import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectResponse;
 import software.amazon.awssdk.services.s3.model.S3Exception;
-
-import java.io.File;
-import java.io.FileReader;
-import java.util.Properties;
 
 /**
  * Base implementation of a Storage Adapter using the Amazon S3 API. 
