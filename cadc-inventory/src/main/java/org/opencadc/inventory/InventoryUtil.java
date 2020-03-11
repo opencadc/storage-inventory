@@ -73,6 +73,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.net.URI;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Date;
 import java.util.UUID;
@@ -80,15 +81,15 @@ import org.apache.log4j.Logger;
 
 /**
  * Static utility methods.
- * 
+ *
  * @author pdowler
  */
 public abstract class InventoryUtil {
     private static final Logger log = Logger.getLogger(InventoryUtil.class);
 
-    private InventoryUtil() { 
+    private InventoryUtil() {
     }
-    
+
     /**
      * Compute a short code based on the URI argument. The returned code is a hex
      * string of the specified length generated from the given URI.
@@ -109,7 +110,7 @@ public abstract class InventoryUtil {
             throw new RuntimeException("BUG: failed to get instance of SHA-1", ex);
         }
     }
-    
+
     /**
      * Compute the filename of an artifact URI.
      * @param uri The uri to parse
@@ -124,18 +125,17 @@ public abstract class InventoryUtil {
         }
         return ssp;
     }
-    
+
     /**
      * Load and instantiate an instance of the specified Java interface. This method uses
      * the fully-qualified class name as a system property key; the value of the system property
      * is the fully qualified class name of an implementation of that interface.
-     * 
+     *
      * @param <T>   Class type of the instantiated class
      * @param clazz an interface class
      * @return configured implementation of the interface
      * @throws IllegalStateException if an instance cannot be created
      */
-    @SuppressWarnings("unchecked")
     public static <T> T loadPlugin(Class<T> clazz) throws IllegalStateException {
         String cnameProp = clazz.getName();
         String cname = System.getProperty(cnameProp);
@@ -166,40 +166,37 @@ public abstract class InventoryUtil {
      *
      * @param <T>   Class type of the instantiated class
      * @param clazz an interface class
+     * @param constructorArgClasses The class order to match an existing constructor.
      * @param constructorArgs The constructor arguments
      * @return configured implementation of the interface
      * @throws IllegalStateException if an instance cannot be created
      */
-    @SuppressWarnings("unchecked")
-    public static <T> T loadPlugin(Class<T> clazz, final Object... constructorArgs) throws IllegalStateException {
+    public static <T> T loadPlugin(Class<T> clazz, final Class<?>[] constructorArgClasses,
+                                   final Object[] constructorArgs) throws IllegalStateException {
         String cnameProp = clazz.getName();
         String cname = System.getProperty(cnameProp);
         if (cname == null) {
             throw new IllegalStateException("CONFIG: " + cnameProp + " not set");
         }
-        Class<?>[] constructorArgTypes = new Class<?>[constructorArgs.length];
-        for (int i = 0; i < constructorArgs.length; i++) {
-            constructorArgTypes[i] = constructorArgs[i].getClass();
-        }
         try {
             Class<?> c = Class.forName(cname);
-            return (T) c.getDeclaredConstructor(constructorArgTypes).newInstance(constructorArgs);
+            return (T) c.getDeclaredConstructor(constructorArgClasses).newInstance(constructorArgs);
         } catch (InvocationTargetException ex) {
             throw new IllegalStateException("CONFIG: " + cnameProp + " implementation crashed during creation.", ex);
         } catch (ClassNotFoundException ex) {
             throw new IllegalStateException("CONFIG: " + cnameProp + " implementation not found in classpath: " + cname, ex);
         } catch (InstantiationException | NoSuchMethodException ex) {
-            throw new IllegalStateException("CONFIG: " + cnameProp + " implementation " + cname + " does not have a no-arg constructor", ex);
+            throw new IllegalStateException("CONFIG: " + cnameProp + " implementation " + cname + " does not have a matching constructor", ex);
         } catch (IllegalAccessException ex) {
             throw new IllegalStateException("CONFIG: failed to instantiate " + cname, ex);
         }
     }
-    
+
     /**
      * Validates that a URI conforms to the {scheme}:{scheme-specific-part}
      * pattern and that {scheme-specific-part} is a relative path with each
      * forward-slash (/) separated component being a valid path component.
-     * 
+     *
      * @param caller class performing the test
      * @param uri artifact URI to check
      * @throws IllegalArgumentException if the uri does not conform
@@ -208,18 +205,18 @@ public abstract class InventoryUtil {
         if (uri.getFragment() != null || uri.getQuery() != null
             || uri.getUserInfo() != null
             || uri.getAuthority() != null || uri.getHost() != null || uri.getPort() != -1) {
-            throw new IllegalArgumentException(caller.getSimpleName() 
+            throw new IllegalArgumentException(caller.getSimpleName()
                 + ": invalid Artifact.uri: " + uri + " -- authority|query|fragment|host|port not permitted");
         }
-        
+
         String scheme = uri.getScheme();
         String ssp = uri.getSchemeSpecificPart();
         if (scheme == null || ssp == null || ssp.isEmpty()) {
-            throw new IllegalArgumentException(caller.getSimpleName() 
+            throw new IllegalArgumentException(caller.getSimpleName()
                 + ": invalid Artifact.uri: " + uri + " -- expected {scheme}:{scheme-specific-part} where {scheme-specific-part} is a relative path");
         }
         if (ssp.charAt(0) == '/') {
-            throw new IllegalArgumentException(caller.getSimpleName() 
+            throw new IllegalArgumentException(caller.getSimpleName()
                 + ": invalid Artifact.uri: " + uri + " -- expected {scheme}:{scheme-specific-part} where {scheme-specific-part} is a relative path");
         }
         String[] comps = ssp.split("/");
@@ -227,10 +224,10 @@ public abstract class InventoryUtil {
             assertValidPathComponent(null, "scheme-specific-part", c);
         }
     }
-    
+
     /**
      * Find storage site by unique id.
-     * 
+     *
      * @param id entity ID
      * @param sites list of known sites
      * @return matching site or null if not found
@@ -243,10 +240,10 @@ public abstract class InventoryUtil {
         }
         return null;
     }
-    
+
     /**
      * Find storage site by resourceID.
-     * 
+     *
      * @param resourceID service identifier
      * @param sites list of known sites
      * @return matching site or null if not found
@@ -259,11 +256,11 @@ public abstract class InventoryUtil {
         }
         return null;
     }
-    
+
     /**
      * Assign last modified timestamp to an entity. This method is to support
      * persisting/serialising and reconstructing/deserialising an entity.
-     * 
+     *
      * @param ce the entity
      * @param d the timestamp
      */
@@ -282,7 +279,7 @@ public abstract class InventoryUtil {
     /**
      * Assign metaChecksum URI to an entity. This method is to support
      * persisting/serialising and reconstructing/deserialising an entity.
-     * 
+     *
      * @param ce the entity
      * @param u the URI
      */
@@ -297,10 +294,10 @@ public abstract class InventoryUtil {
             throw new RuntimeException("BUG", bug);
         }
     }
-    
+
     /**
      * Utility method so constructors can validate arguments.
-     * 
+     *
      * @param caller class doing test
      * @param name field name being checked
      * @param test object to test
@@ -312,15 +309,15 @@ public abstract class InventoryUtil {
             throw new IllegalArgumentException("invalid " + caller.getSimpleName() + "." + name + ": null");
         }
     }
-    
+
     /**
      * A valid path component cannot have: space ( ), slash (/), escape (\), percent (%),
      * semi-colon (;), ampersand (&amp;), or dollar ($) characters.
-     * 
+     *
      * @param caller class doing test
      * @param name field name being checked
      * @param test object to test
-     * @throws IllegalArgumentException if the value is invalid 
+     * @throws IllegalArgumentException if the value is invalid
      */
     public static void assertValidPathComponent(Class caller, String name, String test) {
         assertNotNull(caller, name, test);
@@ -344,26 +341,26 @@ public abstract class InventoryUtil {
                     + " semi-colon (;), ampersand (&), or dollar ($)");
         }
     }
-    
+
     /**
      * Checksum URI validation.
-     * 
+     *
      * @param caller class doing test
      * @param name field name being checked
      * @param uri URI to test
-     * @throws IllegalArgumentException if the value is invalid 
+     * @throws IllegalArgumentException if the value is invalid
      */
     public static void assertValidChecksumURI(Class caller, String name, URI uri) {
         String scheme = uri.getScheme();
         String sval = uri.getSchemeSpecificPart();
         if (scheme == null || sval == null) {
-            throw new IllegalArgumentException("invalid " + caller.getSimpleName() + "." + name + ": " 
+            throw new IllegalArgumentException("invalid " + caller.getSimpleName() + "." + name + ": "
                 + uri + "reason: expected <algorithm>:<hex value>");
         }
         try {
             byte[] b = HexUtil.toBytes(sval); // TODO: could check algorithm vs length here
         } catch (IllegalArgumentException ex) {
-            throw new IllegalArgumentException("invalid " + caller.getSimpleName() + "." + name + ": " 
+            throw new IllegalArgumentException("invalid " + caller.getSimpleName() + "." + name + ": "
                 + uri + " contains invalid hex chars -- expected <algorithm>:<hex value>");
         }
     }

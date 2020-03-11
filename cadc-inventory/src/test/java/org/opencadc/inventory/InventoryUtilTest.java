@@ -284,7 +284,7 @@ public class InventoryUtilTest {
     public void testLoadFailConstructorArgs() {
         try {
             System.setProperty(Comparator.class.getName(), "org.opencadc.inventory.InventoryUtilTest$ValidImpl");
-            InventoryUtil.loadPlugin(Comparator.class, 88);
+            InventoryUtil.loadPlugin(Comparator.class, new Class<?>[]{int.class}, new Object[]{88});
             Assert.fail("missing class should fail");
         } catch (IllegalStateException expected) {
             log.info("missing class - caught: " + expected + " cause: " + expected.getCause());
@@ -295,7 +295,8 @@ public class InventoryUtilTest {
 
         try {
             System.setProperty(Comparator.class.getName(), "org.opencadc.inventory.InventoryUtilTest$ValidImpl");
-            InventoryUtil.loadPlugin(Comparator.class, 88, "STRING", false);
+            InventoryUtil.loadPlugin(Comparator.class, new Class<?>[]{int.class, String.class, boolean.class},
+                                     new Object[]{88, "STRING", false});
             Assert.fail("missing class should fail");
         } catch (IllegalStateException expected) {
             log.info("missing class - caught: " + expected + " cause: " + expected.getCause());
@@ -320,7 +321,8 @@ public class InventoryUtilTest {
     public void testLoadOKConstructorArgs() {
         try {
             System.setProperty(Comparator.class.getName(), "org.opencadc.inventory.InventoryUtilTest$ValidImpl");
-            Comparator c = InventoryUtil.loadPlugin(Comparator.class, false, "GOOD");
+            Comparator c = InventoryUtil.loadPlugin(Comparator.class, new Class<?>[]{boolean.class, String.class},
+                                                    new Object[]{false, "GOOD"});
             log.info("loaded: " + c.getClass().getName());
         } finally {
             System.clearProperty(Comparator.class.getName());
@@ -353,7 +355,7 @@ public class InventoryUtilTest {
         public ValidImpl() {
         }
 
-        public ValidImpl(Boolean b, String s) {
+        public ValidImpl(boolean b, String s) {
 
         }
 
