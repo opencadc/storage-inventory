@@ -76,7 +76,6 @@ import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.util.HexUtil;
 import ca.nrc.cadc.util.PropertiesReader;
-import ca.nrc.cadc.util.StringUtil;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -91,7 +90,6 @@ import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.UserDefinedFileAttributeView;
@@ -142,20 +140,19 @@ public class FileSystemStorageAdapter implements StorageAdapter {
     public static final String CONFIG_PROPERTY_ROOT = "root";
     public static final String CONFIG_PROPERTY_BUCKETMODE = "bucketMode";
     public static final String CONFIG_PROPERTY_BUCKETDEPTH = "bucketLength";
+    private static final String TXN_FOLDER = "transaction";
     static final String CHECKSUM_ATTRIBUTE_NAME = "contentChecksum";
     static final String CONTENT_FOLDER = "content";
-    static final String TXN_FOLDER = "transaction";
-    
+
     static final String MD5_CHECKSUM_SCHEME = "md5";
     static final int MAX_BUCKET_LENGTH = 5;
     static final int DEFAULT_BUCKET_LENGTH = 2;
+    private static int bucketLength = DEFAULT_BUCKET_LENGTH;
     
     private FileSystem fs;
-    private Path root;
-    private Path contentFolder;
-    private Path transactionFolder;
+    private Path  txnPath;
+    private Path contentPath;
     private BucketMode bucketMode;
-    private int bucketLength = DEFAULT_BUCKET_LENGTH;
 
     public static enum BucketMode {
         URI,       // use the URI of the artifact for bucketing
@@ -229,7 +226,7 @@ public class FileSystemStorageAdapter implements StorageAdapter {
         InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "bucketMode", bucketMode);
         this.fs = FileSystems.getDefault();
         try {
-            root = fs.getPath(rootDirectory);
+            Path root = fs.getPath(rootDirectory);
 
             if (!Files.isDirectory(root)) {
                 throw new IllegalArgumentException("root must be a directory");
@@ -239,35 +236,33 @@ public class FileSystemStorageAdapter implements StorageAdapter {
             }
 
             // Ensure  root/CONTENT_FOLDER and TXN_FOLDER exist and have correct permissions
-            Path contentFolder = root.resolve(CONTENT_FOLDER); //.get(rootDirectory + "/" + CONTENT_FOLDER);
-            if (!Files.exists(contentFolder)) {
-                Files.createDirectories(contentFolder);
+            // Set Path elements for transaction and content directories
+            contentPath = root.resolve(CONTENT_FOLDER);
+            if (!Files.exists(contentPath)) {
+                Files.createDirectories(contentPath);
+                log.debug("created content dir: " + contentPath);
             }
-            if (!Files.isReadable(contentFolder) || (!Files.isWritable(contentFolder))) {
+            if (!Files.isReadable(contentPath) || (!Files.isWritable(contentPath))) {
                 throw new IllegalArgumentException("read-write permission required on content directory");
             }
+            log.debug("validated content dir: " + contentPath);
 
-            root = contentFolder;
-
-            log.debug("created content dir");
-
-            transactionFolder = root.resolve(TXN_FOLDER);
-            if (!Files.exists(transactionFolder)) {
-                Files.createDirectories(transactionFolder);
+            txnPath = root.resolve(TXN_FOLDER);
+            if (!Files.exists(txnPath)) {
+                Files.createDirectories(txnPath);
+                log.debug("created txn dir: " + txnPath);
             }
-            if (!Files.isReadable(transactionFolder) || (!Files.isWritable(transactionFolder))) {
+            if (!Files.isReadable(txnPath) || (!Files.isWritable(txnPath))) {
                 throw new IllegalArgumentException("read-write permission required on transaction directory");
             }
-
-            log.debug("created txn dir");
+            log.debug("validated txn dir: " + txnPath);
 
             this.bucketMode = bucketMode;
 
         } catch (InvalidPathException e) {
-            throw new IllegalArgumentException("Invalid rootdirectory: " + rootDirectory, e);
+            throw new IllegalArgumentException("Invalid root directory: " + rootDirectory, e);
         } catch (IOException io) {
-            // TODO: this exception should be something different?
-            throw new RuntimeException(("Could not create content or transaction directory"), io);
+            throw new IllegalArgumentException(("Could not create content or transaction directory"), io);
         }
     }
     
@@ -289,6 +284,7 @@ public class FileSystemStorageAdapter implements StorageAdapter {
         InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "storageLocation", storageLocation);
         InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "dest", dest);
         log.debug("get storageID: " + storageLocation.getStorageID());
+
         Path path = createStorageLocationPath(storageLocation);
         if (!Files.exists(path)) {
             throw new ResourceNotFoundException("not found: " + storageLocation.getStorageID());
@@ -351,10 +347,9 @@ public class FileSystemStorageAdapter implements StorageAdapter {
             StorageEngageException, TransientException {
         InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "artifact", newArtifact);
         InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "source", source);
-        
-        Path txnPath = null;
-        Path contentPath = null;
+
         Path txnTarget = null;
+        Path contentTarget = null;
         StorageLocation storageLocation = null;
         URI artifactURI = newArtifact.getArtifactURI();
         log.debug("put: artifactURI: " + artifactURI.toString());
@@ -362,47 +357,18 @@ public class FileSystemStorageAdapter implements StorageAdapter {
         try {
             // Make storage location using artifactURI
             storageLocation = this.createStorageLocation(artifactURI);
-            StringBuilder path = new StringBuilder();
-            path.append(TXN_FOLDER + "/");
-            log.debug("resolving transaction path: " + path.toString());
-            txnPath = root.resolve(path.toString());
 
             // add UUID to txnPath to make it unique
-            txnTarget = txnPath.getParent().resolve(UUID.randomUUID().toString());
-            log.debug("resolved txnTarget file: " + txnTarget);
+            txnTarget = txnPath.resolve(UUID.randomUUID().toString());
+            log.debug("resolved txnTarget file: " + txnTarget + " based on " + txnPath);
 
             if (Files.exists(txnTarget)) {
                 // This is an error as the name in the transaction directory should be unique
                 log.debug("file/directory exists");
                 throw new IllegalArgumentException(txnPath + " already exists.");
             }
-
-            Files.createDirectories(txnTarget.getParent());
-
         } catch (InvalidPathException e) {
             throw new IllegalArgumentException("Illegal path: " + txnPath, e);
-        } catch (IOException e) {
-            throw new IllegalStateException("Failed to create transaction file: " + txnTarget, e);
-        }
-
-        try {
-            contentPath = this.createStorageLocationPath(storageLocation);
-
-            if (Files.exists(contentPath)) {
-                // is an overwrite
-                log.debug("file/directory exists");
-                if (!Files.isRegularFile(contentPath)) {
-                    throw new IllegalArgumentException(contentPath + " is not a file.");
-                }
-            } else if (!Files.exists(contentPath.getParent())) {
-                // is a new file
-                Files.createDirectories(contentPath.getParent());
-            }
-
-        } catch (InvalidPathException e) {
-            throw new IllegalArgumentException("Illegal path: " + contentPath, e);
-        } catch (IOException e) {
-            throw new IllegalStateException("Failed to create content file: " + contentPath, e);
         }
 
         Throwable throwable = null;
@@ -416,11 +382,12 @@ public class FileSystemStorageAdapter implements StorageAdapter {
             ThreadedIO threadedIO = new ThreadedIO();
             threadedIO.ioLoop(digestOut, source);
             digestOut.flush();
+
             byte[] md5sum = digest.digest();
             String md5Val = HexUtil.toHex(md5sum);
             checksum = URI.create(MD5_CHECKSUM_SCHEME + ":" + md5Val);
-            length = Files.size(txnTarget);
             log.debug("calculated md5sum: " + checksum);
+            length = Files.size(txnTarget);
             log.debug("calculated file size: " + length);
             
             boolean checksumProvided = newArtifact.contentChecksum != null && newArtifact.contentChecksum.getScheme().equals(MD5_CHECKSUM_SCHEME);
@@ -458,11 +425,31 @@ public class FileSystemStorageAdapter implements StorageAdapter {
             // Set contentChecksum file attribute
             setFileAttribute(txnTarget, CHECKSUM_ATTRIBUTE_NAME, checksum.toString());
 
+            try {
+                contentTarget = this.createStorageLocationPath(storageLocation);
+
+                if (Files.exists(contentTarget)) {
+                    // is an overwrite
+                    log.debug("file/directory exists");
+                    if (!Files.isRegularFile(contentTarget)) {
+                        throw new IllegalArgumentException(contentTarget + " is not a file.");
+                    }
+                } else if (!Files.exists(contentTarget.getParent())) {
+                    // is a new file
+                    Files.createDirectories(contentTarget.getParent());
+                }
+
+            } catch (InvalidPathException e) {
+                throw new IllegalArgumentException("Illegal path: " + contentTarget, e);
+            } catch (IOException e) {
+                throw new IllegalStateException("Failed to create content file: " + contentTarget, e);
+            }
+
             // to atomic copy into content directory
-            Path newCopy = Files.move(txnTarget, contentPath, StandardCopyOption.ATOMIC_MOVE);
-            log.debug("moved file to : " + contentPath);
-            txnPath = null;
-            
+            Path newCopy = Files.move(txnTarget, contentTarget, StandardCopyOption.ATOMIC_MOVE);
+            log.debug("moved file to : " + contentTarget);
+            txnTarget = null;
+
             StorageMetadata metadata = new StorageMetadata(storageLocation, checksum, length);
             metadata.artifactURI = artifactURI;
             return metadata;
@@ -483,10 +470,10 @@ public class FileSystemStorageAdapter implements StorageAdapter {
             // if the txnPath file still exists, then something went wrong.
             // Attempt to clear up the transaction file.
             // Otherwise put succeeded.
-            if (txnPath != null) {
+            if (txnTarget != null) {
                 try {
                     log.debug("Deleting transaction file.");
-                    Files.delete(txnPath);
+                    Files.delete(txnTarget);
                 } catch (IOException e) {
                     log.error("Failed to delete transaction file", e);
                 }
@@ -549,8 +536,6 @@ public class FileSystemStorageAdapter implements StorageAdapter {
     public SortedSet<StorageMetadata> list(String storageBucket)
         throws StorageEngageException, TransientException {
         StringBuilder path = new StringBuilder();
-        path.append(CONTENT_FOLDER);
-        path.append("/");
         int bucketDepth = 0;
         String fixedParentDir = null;
         switch (bucketMode) {
@@ -570,10 +555,12 @@ public class FileSystemStorageAdapter implements StorageAdapter {
                 }
                 break;
             case URIBUCKET:
+                log.debug("listing uribucket: ");
                 if (storageBucket != null) {
                     if (storageBucket.length() > bucketLength) {
                         throw new IllegalArgumentException("bucket must be a maximum of " + bucketLength + " characters");
                     }
+                    log.debug("file separator: " + File.separator + "..");
                     for (char c : storageBucket.toCharArray()) {
                         path.append(c).append(File.separator);
                     }
@@ -587,7 +574,7 @@ public class FileSystemStorageAdapter implements StorageAdapter {
         }
         try {
             log.debug("resolving path: " + path.toString());
-            Path bucketPath = root.resolve(path.toString());
+            Path bucketPath = contentPath.resolve(path.toString());
             log.debug("bucketPath: " + bucketPath);
             log.debug("exists: " + Files.exists(bucketPath));
             log.debug("isDir: " + Files.isDirectory(bucketPath));
@@ -631,7 +618,6 @@ public class FileSystemStorageAdapter implements StorageAdapter {
     private Path createStorageLocationPath(StorageLocation storageLocation) {
         URI storageID = storageLocation.getStorageID();
         StringBuilder path = new StringBuilder();
-        path.append(CONTENT_FOLDER + "/");
 
         switch (bucketMode) {
             case URI:
@@ -650,8 +636,8 @@ public class FileSystemStorageAdapter implements StorageAdapter {
                 throw new IllegalStateException("unsupported bucket mode");
         }
         
-        log.debug("Resolving path: " + path.toString());
-        Path ret = root.resolve(path.toString());
+        log.debug("Resolving path in content : " + path.toString());
+        Path ret = contentPath.resolve(path.toString());
         return ret;
     }
 
