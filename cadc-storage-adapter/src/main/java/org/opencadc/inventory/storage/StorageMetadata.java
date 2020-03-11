@@ -96,6 +96,9 @@ public class StorageMetadata implements Comparable<StorageMetadata> {
         InventoryUtil.assertNotNull(StorageMetadata.class, "storageLocation", storageLocation);
         InventoryUtil.assertNotNull(StorageMetadata.class, "contentChecksum", contentChecksum);
         InventoryUtil.assertNotNull(StorageMetadata.class, "contentLength", contentLength);
+        if (contentLength <= 0L) {
+            throw new IllegalArgumentException("invalid " + StorageMetadata.class.getSimpleName() + ".contentLength: " + contentLength);
+        }
         this.storageLocation = storageLocation;
         this.contentChecksum = contentChecksum;
         this.contentLength = contentLength;
