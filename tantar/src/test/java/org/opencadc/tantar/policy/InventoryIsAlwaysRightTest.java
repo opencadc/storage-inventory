@@ -69,6 +69,7 @@
 
 package org.opencadc.tantar.policy;
 
+import org.junit.Assert;
 import org.junit.Test;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.StorageLocation;
@@ -90,18 +91,26 @@ public class InventoryIsAlwaysRightTest extends AbstractResolutionPolicyTest<Inv
         final Reporter reporter = new Reporter(getTestLogger(output));
         final Artifact artifact = new Artifact(URI.create("cadc:bucket/file.fits"), URI.create("md5:88"), new Date(),
                                                88L);
+
         artifact.storageLocation = new StorageLocation(URI.create("s3:998877"));
 
         final StorageMetadata storageMetadata = new StorageMetadata(new StorageLocation(URI.create("s3:989877")),
                                                                     URI.create("md5:99"), 1001L);
+        final TestEventListener testEventListener = new TestEventListener();
 
-        testSubject = new InventoryIsAlwaysRight(reporter, true);
+        testSubject = new InventoryIsAlwaysRight(testEventListener, reporter);
         testSubject.resolve(artifact, storageMetadata);
 
         final List<String> outputLines = Arrays.asList(new String(output.toByteArray()).split("\n"));
         System.out.println(String.format("Message lines are \n\n%s\n\n", outputLines));
 
         assertListContainsMessage(outputLines, "Replacing File StorageLocation[s3:989877] as per policy.");
+        Assert.assertTrue("Should have called resetArtifact.",
+                          !testEventListener.deleteArtifactCalled
+                          && !testEventListener.addArtifactCalled
+                          && testEventListener.resetArtifactCalled
+                          && testEventListener.deleteStorageMetadataCalled
+                          && !testEventListener.replaceArtifactCalled);
     }
 
     @Test
@@ -110,14 +119,21 @@ public class InventoryIsAlwaysRightTest extends AbstractResolutionPolicyTest<Inv
         final Reporter reporter = new Reporter(getTestLogger(output));
         final StorageMetadata storageMetadata = new StorageMetadata(new StorageLocation(URI.create("s3:989877")),
                                                                     URI.create("md5:99"), 1001L);
+        final TestEventListener testEventListener = new TestEventListener();
 
-        testSubject = new InventoryIsAlwaysRight(reporter, true);
+        testSubject = new InventoryIsAlwaysRight(testEventListener, reporter);
         testSubject.resolve(null, storageMetadata);
 
         final List<String> outputLines = Arrays.asList(new String(output.toByteArray()).split("\n"));
         System.out.println(String.format("Message lines are \n\n%s\n\n", outputLines));
 
         assertListContainsMessage(outputLines, "Removing Unknown File StorageLocation[s3:989877] as per policy.");
+        Assert.assertTrue("Should have called resetArtifact.",
+                          !testEventListener.deleteArtifactCalled
+                          && !testEventListener.addArtifactCalled
+                          && !testEventListener.resetArtifactCalled
+                          && testEventListener.deleteStorageMetadataCalled
+                          && !testEventListener.replaceArtifactCalled);
     }
 
     @Test
@@ -128,12 +144,20 @@ public class InventoryIsAlwaysRightTest extends AbstractResolutionPolicyTest<Inv
                                                88L);
         artifact.storageLocation = new StorageLocation(URI.create("s3:101010"));
 
-        testSubject = new InventoryIsAlwaysRight(reporter, true);
+        final TestEventListener testEventListener = new TestEventListener();
+
+        testSubject = new InventoryIsAlwaysRight(testEventListener, reporter);
         testSubject.resolve(artifact, null);
 
         final List<String> outputLines = Arrays.asList(new String(output.toByteArray()).split("\n"));
         System.out.println(String.format("Message lines are \n\n%s\n\n", outputLines));
 
         assertListContainsMessage(outputLines, "Retrieving File StorageLocation[s3:101010] as per policy.");
+        Assert.assertTrue("Should have called resetArtifact.",
+                          !testEventListener.deleteArtifactCalled
+                          && !testEventListener.addArtifactCalled
+                          && testEventListener.resetArtifactCalled
+                          && !testEventListener.deleteStorageMetadataCalled
+                          && !testEventListener.replaceArtifactCalled);
     }
 }

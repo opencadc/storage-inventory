@@ -72,12 +72,13 @@ package org.opencadc.tantar.policy;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.storage.StorageMetadata;
 import org.opencadc.tantar.Reporter;
+import org.opencadc.tantar.ValidateEventListener;
 
 
 public class InventoryIsAlwaysRight extends ResolutionPolicy {
 
-    public InventoryIsAlwaysRight(final Reporter reporter, final Boolean reportOnly) {
-        super(reporter, reportOnly);
+    public InventoryIsAlwaysRight(final ValidateEventListener validateEventListener, final Reporter reporter) {
+        super(validateEventListener, reporter);
     }
 
     /**
@@ -96,15 +97,12 @@ public class InventoryIsAlwaysRight extends ResolutionPolicy {
             // either.
             reporter.report(String.format("Retrieving File %s as per policy.", artifact.storageLocation));
 
-            if (canTakeAction()) {
-                validateEventListener.reset(artifact);
-            }
+            validateEventListener.reset(artifact);
         } else if (artifact == null) {
             reporter.report(String.format("Removing Unknown File %s as per policy.",
                                           storageMetadata.getStorageLocation()));
-            if (canTakeAction()) {
-                validateEventListener.delete(storageMetadata);
-            }
+
+            validateEventListener.delete(storageMetadata);
         } else {
             // Check metadata for discrepancies.
             if (haveDifferentMetadata(artifact, storageMetadata)) {
@@ -112,10 +110,8 @@ public class InventoryIsAlwaysRight extends ResolutionPolicy {
                 reporter.report(String.format("Replacing File %s as per policy.",
                                               storageMetadata.getStorageLocation()));
 
-                if (canTakeAction()) {
-                    validateEventListener.delete(storageMetadata);
-                    validateEventListener.reset(artifact);
-                }
+                validateEventListener.delete(storageMetadata);
+                validateEventListener.reset(artifact);
             } else {
                 reporter.report(String.format("Artifact %s is valid as per policy.", artifact.storageLocation));
             }

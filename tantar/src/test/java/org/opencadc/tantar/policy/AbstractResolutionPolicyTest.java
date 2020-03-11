@@ -75,7 +75,10 @@ import org.apache.log4j.Logger;
 import org.apache.log4j.SimpleLayout;
 import org.apache.log4j.WriterAppender;
 import org.junit.Assert;
+import org.opencadc.inventory.Artifact;
+import org.opencadc.inventory.storage.StorageMetadata;
 import org.opencadc.tantar.BucketValidatorTest;
+import org.opencadc.tantar.ValidateEventListener;
 
 import ca.nrc.cadc.util.Log4jInit;
 
@@ -105,5 +108,39 @@ public class AbstractResolutionPolicyTest<T extends ResolutionPolicy> {
         logger.addAppender(testAppender);
 
         return logger;
+    }
+
+    protected static final class TestEventListener implements ValidateEventListener {
+
+        protected boolean addArtifactCalled = false;
+        protected boolean deleteStorageMetadataCalled = false;
+        protected boolean deleteArtifactCalled = false;
+        protected boolean resetArtifactCalled = false;
+        protected boolean replaceArtifactCalled = false;
+
+        @Override
+        public void addArtifact(StorageMetadata storageMetadata) throws Exception {
+            addArtifactCalled = true;
+        }
+
+        @Override
+        public void delete(StorageMetadata storageMetadata) throws Exception {
+            deleteStorageMetadataCalled = true;
+        }
+
+        @Override
+        public void delete(Artifact artifact) throws Exception {
+            deleteArtifactCalled = true;
+        }
+
+        @Override
+        public void reset(Artifact artifact) throws Exception {
+            resetArtifactCalled = true;
+        }
+
+        @Override
+        public void replaceArtifact(Artifact artifact, StorageMetadata storageMetadata) throws Exception {
+            replaceArtifactCalled = true;
+        }
     }
 }

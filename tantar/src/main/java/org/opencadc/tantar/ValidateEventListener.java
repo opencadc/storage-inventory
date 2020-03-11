@@ -83,4 +83,6 @@ public interface ValidateEventListener extends EventListener {
     void delete(final Artifact artifact) throws Exception;
 
     void reset(final Artifact artifact) throws Exception;
+
+    void replaceArtifact(final Artifact artifact, final StorageMetadata storageMetadata) throws Exception;
 }

@@ -126,14 +126,16 @@ public class Main {
                 LOGGER.info("*********");
             }
 
-            final ResolutionPolicy resolutionPolicy = InventoryUtil.loadPlugin(ResolutionPolicy.class, Main.REPORTER,
-                                                                               reportOnlyFlag);
-
             final BucketValidator bucketValidator =
-                    new BucketValidator(bucket, storageAdapter, resolutionPolicy,
-                                        SSLUtil.createSubject(new File(CERTIFICATE_FILE_LOCATION)));
+                    new BucketValidator(bucket, storageAdapter,
+                                        SSLUtil.createSubject(new File(CERTIFICATE_FILE_LOCATION)), reportOnlyFlag);
 
-            bucketValidator.validate();
+            final ResolutionPolicy resolutionPolicy =
+                    InventoryUtil.loadPlugin(ResolutionPolicy.class,
+                                             new Class<?>[] {ValidateEventListener.class, Reporter.class},
+                                             new Object[] {bucketValidator, Main.REPORTER});
+
+            bucketValidator.validate(resolutionPolicy);
         } catch (IllegalStateException e) {
             // IllegalStateExceptions are thrown for missing but required configuration.
             LOGGER.fatal(e.getMessage());

@@ -72,12 +72,13 @@ package org.opencadc.tantar.policy;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.storage.StorageMetadata;
 import org.opencadc.tantar.Reporter;
+import org.opencadc.tantar.ValidateEventListener;
 
 
 public class StorageIsAlwaysRight extends ResolutionPolicy {
 
-    public StorageIsAlwaysRight(final Reporter reporter, final Boolean reportOnly) {
-        super(reporter, reportOnly);
+    public StorageIsAlwaysRight(final ValidateEventListener validateEventListener, final Reporter reporter) {
+        super(validateEventListener, reporter);
     }
 
     /**
@@ -93,24 +94,17 @@ public class StorageIsAlwaysRight extends ResolutionPolicy {
             // The Inventory has a file that does not exist in storage.  This is most unusual.
             reporter.report(String.format("Adding Artifact %s as per policy.", storageMetadata.getStorageLocation()));
 
-            if (canTakeAction()) {
-                validateEventListener.addArtifact(storageMetadata);
-            }
+            validateEventListener.addArtifact(storageMetadata);
         } else if (storageMetadata == null) {
             reporter.report(String.format("Removing Unknown Artifact %s as per policy.", artifact.storageLocation));
-            if (canTakeAction()) {
-                validateEventListener.delete(artifact);
-            }
+            validateEventListener.delete(artifact);
         } else {
             // Check metadata for discrepancies.
-            if (haveDifferentMetadata(artifact, storageMetadata)) {
+            if (haveDifferentStructure(artifact, storageMetadata)) {
                 // Then prefer the Storage Metadata.
                 reporter.report(String.format("Replacing Artifact %s as per policy.", artifact.storageLocation));
 
-                if (canTakeAction()) {
-                    validateEventListener.delete(artifact);
-                    validateEventListener.addArtifact(storageMetadata);
-                }
+                validateEventListener.replaceArtifact(artifact, storageMetadata);
             } else {
                 reporter.report(String.format("Storage Metadata %s is valid as per policy.",
                                               storageMetadata.getStorageLocation()));

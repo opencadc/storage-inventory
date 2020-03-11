@@ -71,10 +71,12 @@ package org.opencadc.tantar;
 
 import ca.nrc.cadc.db.ConnectionConfig;
 import ca.nrc.cadc.db.DBUtil;
+import ca.nrc.cadc.db.TransactionManager;
 import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.util.StringUtil;
 
 import java.security.PrivilegedExceptionAction;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
@@ -84,11 +86,18 @@ import javax.security.auth.Subject;
 
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
+import org.opencadc.inventory.DeletedArtifactEvent;
+import org.opencadc.inventory.Entity;
+import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.db.ArtifactDAO;
+import org.opencadc.inventory.db.DeletedEventDAO;
+import org.opencadc.inventory.db.ObsoleteStorageLocation;
+import org.opencadc.inventory.db.ObsoleteStorageLocationDAO;
 import org.opencadc.inventory.db.SQLGenerator;
 import org.opencadc.inventory.storage.StorageAdapter;
 import org.opencadc.inventory.storage.StorageEngageException;
 import org.opencadc.inventory.storage.StorageMetadata;
+import org.opencadc.tantar.db.AutoCloseableTransactionManager;
 import org.opencadc.tantar.policy.ResolutionPolicy;
 
 
@@ -113,21 +122,20 @@ public class BucketValidator implements ValidateEventListener {
 
     private final String bucket;
     private final StorageAdapter storageAdapter;
-    private final ResolutionPolicy resolutionPolicy;
     private final Subject runUser;
+    private final boolean reportOnlyFlag;
 
-    // The ArtifactDAO can be set later to allow lazy loading.
+    // The DAOs can be set later to allow lazy loading.
     private ArtifactDAO artifactDAO;
+    private ObsoleteStorageLocationDAO obsoleteStorageLocationDAO;
 
 
-    BucketValidator(final String bucket, final StorageAdapter storageAdapter, final ResolutionPolicy resolutionPolicy,
-                    final Subject runUser) {
+    BucketValidator(final String bucket, final StorageAdapter storageAdapter, final Subject runUser,
+                    final boolean reportOnlyFlag) {
         this.bucket = bucket;
         this.storageAdapter = storageAdapter;
-        this.resolutionPolicy = resolutionPolicy;
         this.runUser = runUser;
-
-        this.resolutionPolicy.subscribe(this);
+        this.reportOnlyFlag = reportOnlyFlag;
     }
 
     /**
@@ -136,7 +144,7 @@ public class BucketValidator implements ValidateEventListener {
      *
      * @throws Exception Pass up any errors to the caller, which is most likely the Main.
      */
-    void validate() throws Exception {
+    void validate(final ResolutionPolicy resolutionPolicy) throws Exception {
         final Iterator<StorageMetadata> storageMetadataIterator = iterateStorage();
         final Iterator<Artifact> inventoryIterator = iterateInventory();
 
@@ -186,6 +194,10 @@ public class BucketValidator implements ValidateEventListener {
         LOGGER.debug("END validating iterators.");
     }
 
+    private boolean canTakeAction() {
+        return !reportOnlyFlag;
+    }
+
     /**
      * Reset the given Artifact by removing its Storage Location.  This will force the file-sync application to assume
      * it's a new insert and force a re-download of the file.
@@ -195,12 +207,14 @@ public class BucketValidator implements ValidateEventListener {
      */
     @Override
     public void reset(final Artifact artifact) throws Exception {
-        artifact.storageLocation = null;
-        final ArtifactDAO artifactDAO = getArtifactDAO();
-        artifactDAO.getTransactionManager().startTransaction();
-        artifactDAO.lock(artifact);
-        artifactDAO.put(artifact, true);
-        artifactDAO.getTransactionManager().commitTransaction();
+        if (canTakeAction()) {
+            artifact.storageLocation = null;
+            final ArtifactDAO artifactDAO = getArtifactDAO();
+            artifactDAO.getTransactionManager().startTransaction();
+            artifactDAO.lock(artifact);
+            artifactDAO.put(artifact, true);
+            artifactDAO.getTransactionManager().commitTransaction();
+        }
     }
 
     /**
@@ -211,42 +225,108 @@ public class BucketValidator implements ValidateEventListener {
      */
     @Override
     public void delete(final StorageMetadata storageMetadata) throws Exception {
-        storageAdapter.delete(storageMetadata.getStorageLocation());
+        if (canTakeAction()) {
+            final StorageLocation storageLocation = storageMetadata.getStorageLocation();
+            final ObsoleteStorageLocationDAO obsoleteStorageLocationDAO = getObsoleteStorageLocationDAO();
+            final ObsoleteStorageLocation obsoleteStorageLocation = obsoleteStorageLocationDAO.get(storageLocation);
+            if (obsoleteStorageLocation != null) {
+                obsoleteStorageLocationDAO.delete(obsoleteStorageLocation.getID());
+            }
+        }
     }
 
     /**
      * Delete the given Artifact.
-     * @param artifact  The Artifact to remove.
-     * @throws Exception        Anything that went wrong.
+     *
+     * @param artifact The Artifact to remove.
+     * @throws Exception Anything that went wrong.
      */
     @Override
     public void delete(final Artifact artifact) throws Exception {
-        final ArtifactDAO artifactDAO = getArtifactDAO();
-
-        artifactDAO.getTransactionManager().startTransaction();
-        artifactDAO.lock(artifact);
-        artifactDAO.delete(artifact.getID());
-        artifactDAO.getTransactionManager().commitTransaction();
+        if (canTakeAction()) {
+            final ArtifactDAO artifactDAO = getArtifactDAO();
+            try (final AutoCloseableTransactionManager transactionManager =
+                         new AutoCloseableTransactionManager(artifactDAO.getTransactionManager())) {
+                final DeletedEventDAO<DeletedArtifactEvent> deletedEventDAO = getDeleteEventDAO();
+                final DeletedArtifactEvent deletedArtifactEvent = new DeletedArtifactEvent(artifact.getID());
+                artifactDAO.delete(artifact.getID());
+                deletedEventDAO.put(deletedArtifactEvent);
+                transactionManager.commit();
+            }
+        }
     }
 
     /**
      * The Artifact from the given StorageMetadata does not exist but it should.
-     * @param storageMetadata   The StorageMetadata to create an Artifact from.
+     *
+     * @param storageMetadata The StorageMetadata to create an Artifact from.
      */
     @Override
-    public void addArtifact(final StorageMetadata storageMetadata) {
-        final Artifact artifact = new Artifact(storageMetadata.artifactURI, storageMetadata.getContentChecksum(),
-                                               storageMetadata.contentLastModified, storageMetadata.getContentLength());
+    public void addArtifact(final StorageMetadata storageMetadata) throws Exception {
+        if (canTakeAction()) {
+            if (storageMetadata.artifactURI != null) {
+                final Artifact artifact = new Artifact(storageMetadata.artifactURI,
+                                                       storageMetadata.getContentChecksum(),
+                                                       storageMetadata.contentLastModified,
+                                                       storageMetadata.getContentLength());
 
-        artifact.storageLocation = storageMetadata.getStorageLocation();
-        artifact.contentType = storageMetadata.contentType;
-        artifact.contentEncoding = storageMetadata.contentEncoding;
+                artifact.storageLocation = storageMetadata.getStorageLocation();
+                artifact.contentType = storageMetadata.contentType;
+                artifact.contentEncoding = storageMetadata.contentEncoding;
 
-        final ArtifactDAO artifactDAO = getArtifactDAO();
+                final ArtifactDAO artifactDAO = getArtifactDAO();
+                try (final AutoCloseableTransactionManager transactionManager =
+                             new AutoCloseableTransactionManager(artifactDAO.getTransactionManager())) {
+                    artifactDAO.put(artifact, false);
+                    transactionManager.commit();
+                }
+            } else {
+                LOGGER.warn(String.format(
+                        "Policy would like to create an Artifact, but no Artifact URI exists in StorageMetadata "
+                        + "located at %s.  This StorageLocation will be skipped for now but will be present in future"
+                        + "runs and will likely require manual intervention.",
+                        storageMetadata.getStorageLocation()));
+            }
+        }
+    }
 
-        artifactDAO.getTransactionManager().startTransaction();
-        artifactDAO.put(artifact, false);
-        artifactDAO.getTransactionManager().commitTransaction();
+    /**
+     * Replace the given Artifact with one that represents the given StorageMetadata.  This is used when the
+     * policy dictates that in the event of a conflict, the Artifact is no longer valid.
+     * @param artifact          The Artifact to replace.
+     * @param storageMetadata   The StorageMetadata whose metadata to use.
+     * @throws Exception        For any unhandled exceptions.
+     */
+    @Override
+    public void replaceArtifact(final Artifact artifact, final StorageMetadata storageMetadata) throws Exception {
+        if (canTakeAction()) {
+            final ArtifactDAO artifactDAO = getArtifactDAO();
+            try (final AutoCloseableTransactionManager transactionManager =
+                         new AutoCloseableTransactionManager(artifactDAO.getTransactionManager())) {
+                // Add an obsolete marker to signify that the Storage Location known to the Artifact is no longer
+                // valid and assumed deleted at the Storage level.  Remove the Artifact after that.
+                final ObsoleteStorageLocation obsoleteStorageLocation =
+                        new ObsoleteStorageLocation(artifact.storageLocation);
+                final ObsoleteStorageLocationDAO obsoleteStorageLocationDAO = getObsoleteStorageLocationDAO();
+                obsoleteStorageLocationDAO.put(obsoleteStorageLocation);
+                artifactDAO.delete(artifact.getID());
+
+                final DeletedArtifactEvent deletedArtifactEvent = new DeletedArtifactEvent(artifact.getID());
+                getDeleteEventDAO().put(deletedArtifactEvent);
+
+                // Create a replacement Artifact with information from the StorageMetadata, as it's assumed to hold
+                // the correct state of this Storage Entity.
+                final Artifact replacementArtifact = new Artifact(artifact.getURI(),
+                                                                  storageMetadata.getContentChecksum(),
+                                                                  new Date(), storageMetadata.getContentLength());
+                replacementArtifact.contentEncoding = storageMetadata.contentEncoding;
+                replacementArtifact.contentType = storageMetadata.contentType;
+                replacementArtifact.storageLocation = storageMetadata.getStorageLocation();
+                artifactDAO.put(replacementArtifact);
+
+                transactionManager.commit();
+            }
+        }
     }
 
     /**
@@ -292,6 +372,19 @@ public class BucketValidator implements ValidateEventListener {
         }
 
         return artifactDAO;
+    }
+
+    ObsoleteStorageLocationDAO getObsoleteStorageLocationDAO() {
+        if (obsoleteStorageLocationDAO == null) {
+            obsoleteStorageLocationDAO = new ObsoleteStorageLocationDAO();
+            obsoleteStorageLocationDAO.setConfig(getDAOConfig());
+        }
+
+        return obsoleteStorageLocationDAO;
+    }
+
+    <T extends Entity> DeletedEventDAO<T> getDeleteEventDAO() {
+        return new DeletedEventDAO<>(getArtifactDAO());
     }
 
     /**

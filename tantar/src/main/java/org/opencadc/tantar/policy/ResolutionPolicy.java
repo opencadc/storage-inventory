@@ -77,14 +77,12 @@ import org.opencadc.tantar.ValidateEventListener;
 
 public abstract class ResolutionPolicy {
 
-    protected ValidateEventListener validateEventListener;
-
+    final ValidateEventListener validateEventListener;
     final Reporter reporter;
-    private final boolean reportOnly;
 
-    ResolutionPolicy(final Reporter reporter, final Boolean reportOnly) {
+    ResolutionPolicy(final ValidateEventListener validateEventListener, final Reporter reporter) {
+        this.validateEventListener = validateEventListener;
         this.reporter = reporter;
-        this.reportOnly = reportOnly;
     }
 
 
@@ -92,8 +90,16 @@ public abstract class ResolutionPolicy {
         return !(new PolicyMetadata(artifact).equals(new PolicyMetadata(storageMetadata)));
     }
 
-    protected boolean canTakeAction() {
-        return validateEventListener != null && !reportOnly;
+    /**
+     * Equality check for the main components that establish a different Storage Entity.
+     *
+     * @param artifact          The Artifact to check.
+     * @param storageMetadata   The StorageMetadata to check.
+     * @return          True if the metadata that verify the structure of the Entity differ.  False otherwise.
+     */
+    protected final boolean haveDifferentStructure(final Artifact artifact, final StorageMetadata storageMetadata) {
+        return !(artifact.getContentChecksum().equals(storageMetadata.getContentChecksum()))
+               || !(artifact.getContentLength().equals(storageMetadata.getContentLength()));
     }
 
     /**
@@ -104,26 +110,4 @@ public abstract class ResolutionPolicy {
      * @param storageMetadata The StorageMetadata to use in deciding.
      */
     public abstract void resolve(final Artifact artifact, final StorageMetadata storageMetadata) throws Exception;
-
-    /**
-     * Add a listener for the various actions the policy will dictate.
-     *
-     * @param listener Listener instance.  Never null.
-     */
-    public void subscribe(final ValidateEventListener listener) {
-        if (listener == null) {
-            throw new IllegalArgumentException("Cannot subscribe with a null listener.");
-        } else if (validateEventListener != null) {
-            throw new IllegalStateException("There is already a listener in place.  Unsubscribe first.");
-        } else {
-            this.validateEventListener = listener;
-        }
-    }
-
-    /**
-     * Remove the current listener.
-     */
-    public void unsubscribe() {
-        this.validateEventListener = null;
-    }
 }
