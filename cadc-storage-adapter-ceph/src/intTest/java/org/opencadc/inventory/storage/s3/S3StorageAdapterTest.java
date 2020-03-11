@@ -75,10 +75,9 @@ import ca.nrc.cadc.net.PreconditionFailedException;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.util.HexUtil;
 import ca.nrc.cadc.util.Log4jInit;
-import java.io.BufferedInputStream;
+
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
@@ -92,8 +91,10 @@ import java.util.Random;
 import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
+
 import nom.tam.fits.BasicHDU;
 import nom.tam.fits.Fits;
+
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.After;
@@ -275,7 +276,7 @@ abstract class S3StorageAdapterTest {
     }
     
     @Test
-    public void testPutGetDeleteMinimal() {
+    public void testPutGetDeleteStream() {
         URI artifactURI = URI.create("cadc:TEST/testPutGetDeleteMinimal");
         
         try {

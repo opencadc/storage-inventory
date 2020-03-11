@@ -67,7 +67,13 @@
 
 package org.opencadc.minoc;
 
-import ca.nrc.cadc.net.*;
+import ca.nrc.cadc.auth.RunnableAction;
+import ca.nrc.cadc.net.HttpDelete;
+import ca.nrc.cadc.net.HttpGet;
+import ca.nrc.cadc.net.HttpPost;
+import ca.nrc.cadc.net.HttpTransfer;
+import ca.nrc.cadc.net.HttpUpload;
+import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.util.Log4jInit;
 
 import java.io.ByteArrayInputStream;
@@ -76,6 +82,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URI;
 import java.net.URL;
+import java.nio.charset.Charset;
 import java.security.PrivilegedExceptionAction;
 import java.util.HashMap;
 import java.util.Map;
@@ -108,80 +115,75 @@ public class BasicOpsTest extends MinocTest {
     @Test
     public void testAllMethodsSimple() {
         try {
-            
-            Subject.doAs(userSubject, new PrivilegedExceptionAction<Object>() {
-                public Object run() throws Exception {
+            URI artifactURI = URI.create("cadc:TEST/file.txt");
+            URL artifactURL = new URL(filesURL + "/" + artifactURI.toString());
 
-                    String data = "abcdefghijklmnopqrstuvwxyz";
-                    URI artifactURI = URI.create("cadc:TEST/file.fits");
-                    URL artifactURL = new URL(anonURL + "/" + artifactURI.toString());
-                    String encoding = "test-encoding";
-                    String type = "test-type";
-                    
-                    // put
-                    InputStream in = new ByteArrayInputStream(data.getBytes());
-                    HttpUpload put = new HttpUpload(in, artifactURL);
-                    put.setRequestProperty(HttpTransfer.CONTENT_TYPE, type);
-                    put.setRequestProperty(HttpTransfer.CONTENT_ENCODING, encoding);
+            String content = "abcdefghijklmnopqrstuvwxyz";
+            String encoding = "test-encoding";
+            String type = "text/plain";
+            byte[] data = content.getBytes();
 
-                    put.run();
-                    Assert.assertNull(put.getThrowable());
-                    
-                    // get
-                    OutputStream out = new ByteArrayOutputStream();
-                    HttpDownload get = new HttpDownload(artifactURL, out);
-                    get.run();
-                    Assert.assertNull(get.getThrowable());
-                    String contentMD5 = get.getContentMD5();
-                    long contentLength = get.getContentLength();
-                    String contentType = get.getContentType();
-                    String contentEncoding = get.getContentEncoding();
-                    Assert.assertEquals(computeMD5(data.getBytes()), contentMD5);
-                    Assert.assertEquals(data.getBytes().length, contentLength);
-                    Assert.assertEquals(type, contentType);
-                    Assert.assertEquals(encoding, contentEncoding);
-                    
-                    // update
-                    // TODO: add update to artifactURI when functionality available
-                    String newEncoding = "test-encoding-2";
-                    String newType = "test-type-2";
-                    Map<String,Object> params = new HashMap<String,Object>(2);
-                    params.put("contentEncoding", newEncoding);
-                    params.put("contentType", newType);
-                    HttpPost post = new HttpPost(artifactURL, params, false);
-                    post.run();
-                    Assert.assertNull(post.getThrowable());
-                    
-                    // head
-                    HttpDownload head = new HttpDownload(artifactURL, out);
-                    head.setHeadOnly(true);
-                    head.run();
-                    Assert.assertNull(head.getThrowable());
-                    contentMD5 = head.getContentMD5();
-                    contentLength = head.getContentLength();
-                    contentType = head.getContentType();
-                    contentEncoding = head.getContentEncoding();
-                    Assert.assertEquals(computeMD5(data.getBytes()), contentMD5);
-                    Assert.assertEquals(data.getBytes().length, contentLength);
-                    Assert.assertEquals(newType, contentType);
-                    Assert.assertEquals(newEncoding, contentEncoding);
-                    
-                    // delete
-                    HttpDelete delete = new HttpDelete(artifactURL, false);
-                    delete.run();
-                    Assert.assertNull(delete.getThrowable());
-                    
-                    // get
-                    get = new HttpDownload(artifactURL, out);
-                    get.run();
-                    Throwable throwable = get.getThrowable();
-                    Assert.assertNotNull(throwable);
-                    Assert.assertTrue(throwable instanceof ResourceNotFoundException);
-                    
-                    return null;
-                }
-                
-            });
+            // put: no length or checksum
+            InputStream in = new ByteArrayInputStream(data);
+            HttpUpload put = new HttpUpload(in, artifactURL);
+            put.setRequestProperty(HttpTransfer.CONTENT_TYPE, type);
+            put.setRequestProperty(HttpTransfer.CONTENT_ENCODING, encoding);
+
+            Subject.doAs(userSubject, new RunnableAction(put));
+            Assert.assertNull(put.getThrowable());
+
+            // get
+            OutputStream out = new ByteArrayOutputStream();
+            HttpGet get = new HttpGet(artifactURL, out);
+            Subject.doAs(userSubject, new RunnableAction(get));
+            Assert.assertNull(get.getThrowable());
+            String contentMD5 = get.getContentMD5();
+            long contentLength = get.getContentLength();
+            String contentType = get.getContentType();
+            String contentEncoding = get.getContentEncoding();
+            Assert.assertEquals(computeMD5(data), contentMD5);
+            Assert.assertEquals(data.length, contentLength);
+            Assert.assertEquals(type, contentType);
+            Assert.assertEquals(encoding, contentEncoding);
+
+            // update
+            // TODO: add update to artifactURI when functionality available
+            String newEncoding = "test-encoding-2";
+            String newType = "application/x-text-message";
+            Map<String,Object> params = new HashMap<String,Object>(2);
+            params.put("contentEncoding", newEncoding);
+            params.put("contentType", newType);
+            HttpPost post = new HttpPost(artifactURL, params, false);
+            Subject.doAs(userSubject, new RunnableAction(post));
+            Assert.assertNull(post.getThrowable());
+
+            // head
+            ByteArrayOutputStream bos = new ByteArrayOutputStream();
+            HttpGet head = new HttpGet(artifactURL, bos);
+            head.setHeadOnly(true);
+            Subject.doAs(userSubject, new RunnableAction(head));
+            log.warn("head output: " + bos.toString());
+            Assert.assertNull(head.getThrowable());
+            contentMD5 = head.getContentMD5();
+            contentLength = head.getContentLength();
+            contentType = head.getContentType();
+            contentEncoding = head.getContentEncoding();
+            Assert.assertEquals(computeMD5(data), contentMD5);
+            Assert.assertEquals(data.length, contentLength);
+            Assert.assertEquals(newType, contentType);
+            Assert.assertEquals(newEncoding, contentEncoding);
+
+            // delete
+            HttpDelete delete = new HttpDelete(artifactURL, false);
+            Subject.doAs(userSubject, new RunnableAction(delete));
+            Assert.assertNull(delete.getThrowable());
+
+            // get
+            get = new HttpGet(artifactURL, out);
+            Subject.doAs(userSubject, new RunnableAction(get));
+            Throwable throwable = get.getThrowable();
+            Assert.assertNotNull(throwable);
+            Assert.assertTrue(throwable instanceof ResourceNotFoundException);
             
         } catch (Exception t) {
             log.error("unexpected throwable", t);
@@ -196,12 +198,12 @@ public class BasicOpsTest extends MinocTest {
             Subject.doAs(userSubject, new PrivilegedExceptionAction<Object>() {
                 public Object run() throws Exception {
                 
-                    URI artifactURI = URI.create("cadc:TEST/" + UUID.randomUUID().toString());
-                    URL artifactURL = new URL(certURL + "/" + artifactURI.toString());
+                    URI artifactURI = URI.create("cadc:TEST/testGetNotFound");
+                    URL artifactURL = new URL(filesURL + "/" + artifactURI.toString());
                     
                     // get
                     OutputStream out = new ByteArrayOutputStream();
-                    HttpDownload get = new HttpDownload(artifactURL, out);
+                    HttpGet get = new HttpGet(artifactURL, out);
                     get.run();
                     Assert.assertNotNull(get.getThrowable());
                     Assert.assertEquals("should be 404, not found", 404, get.getResponseCode());
@@ -224,8 +226,8 @@ public class BasicOpsTest extends MinocTest {
             Subject.doAs(userSubject, new PrivilegedExceptionAction<Object>() {
                 public Object run() throws Exception {
                 
-                    URI artifactURI = URI.create("cadc:TEST/" + UUID.randomUUID().toString());
-                    URL artifactURL = new URL(certURL + "/" + artifactURI.toString());
+                    URI artifactURI = URI.create("cadc:TEST/testDeleteNotFound");
+                    URL artifactURL = new URL(filesURL + "/" + artifactURI.toString());
                     
                     // delete
                     HttpDelete delete = new HttpDelete(artifactURL, false);
@@ -253,16 +255,14 @@ public class BasicOpsTest extends MinocTest {
                 public Object run() throws Exception {
             
                     String data = "";
-                    URI artifactURI = URI.create("cadc:TEST/file.fits");
-                    URL artifactURL = new URL(certURL + "/" + artifactURI.toString());
-                    String encoding = "test-encoding";
-                    String type = "test-type";
+                    URI artifactURI = URI.create("cadc:TEST/testZeroLengthFile");
+                    URL artifactURL = new URL(filesURL + "/" + artifactURI.toString());
+                    String type = "text/plain";
                     
                     // put
                     InputStream in = new ByteArrayInputStream(data.getBytes());
                     HttpUpload put = new HttpUpload(in, artifactURL);
                     put.setRequestProperty(HttpTransfer.CONTENT_TYPE, type);
-                    put.setRequestProperty(HttpTransfer.CONTENT_ENCODING, encoding);
                     put.run();
                     Assert.assertEquals("should be 400, bad request", 400, put.getResponseCode());
                     

@@ -79,6 +79,9 @@ import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.util.HexUtil;
 import ca.nrc.cadc.util.StringUtil;
+
+import java.io.File;
+import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -87,16 +90,16 @@ import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
+
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.StorageLocation;
@@ -104,6 +107,9 @@ import org.opencadc.inventory.storage.NewArtifact;
 import org.opencadc.inventory.storage.StorageAdapter;
 import org.opencadc.inventory.storage.StorageEngageException;
 import org.opencadc.inventory.storage.StorageMetadata;
+
+import software.amazon.awssdk.auth.credentials.AwsCredentials;
+import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
 import software.amazon.awssdk.awscore.exception.AwsErrorDetails;
 import software.amazon.awssdk.core.exception.SdkClientException;
 import software.amazon.awssdk.core.sync.RequestBody;
@@ -134,11 +140,12 @@ import software.amazon.awssdk.services.s3.model.S3Exception;
 abstract class S3StorageAdapter implements StorageAdapter {
 
     private static final Logger LOGGER = Logger.getLogger(S3StorageAdapterSB.class);
+    
+    private static final String CONFIG_FILENAME = "cadc-storage-adapter-ceph.properties";
 
     private static final Region REGION = Region.of("default");
 
     // additional system properties required by subclass
-    protected static final List<String> CONFIG_PROPS = new ArrayList<>();
     private static final String CONF_ENDPOINT = S3StorageAdapter.class.getName() + ".endpoint";
     private static final String CONF_SBLEN = S3StorageAdapter.class.getName() + ".bucketLength";
     private static final String CONF_S3BUCKET = S3StorageAdapter.class.getName() + ".s3bucket";
@@ -163,29 +170,15 @@ abstract class S3StorageAdapter implements StorageAdapter {
     
     protected S3StorageAdapter() {
         try {
+            File config = new File(System.getProperty("user.home") + "/config/" + CONFIG_FILENAME);
+            Properties props = new Properties();
+            props.load(new FileReader(config));
+            
             StringBuilder sb = new StringBuilder();
             sb.append("incomplete config: ");
             boolean ok = true;
             
-            String accessKey = System.getProperty("aws.accessKeyId");
-            sb.append("\n\taws.accessKeyId: ");
-            if (accessKey == null) {
-                sb.append("MISSING");
-                ok = false;
-            } else {
-                sb.append("OK");
-            }
-
-            String secretKey = System.getProperty("aws.secretAccessKey");
-            sb.append("\n\taws.secretAccessKey: ");
-            if (secretKey == null) {
-                sb.append("MISSING");
-                ok = false;
-            } else {
-                sb.append("OK");
-            }
-            
-            String suri = System.getProperty(CONF_ENDPOINT);
+            String suri = props.getProperty(CONF_ENDPOINT);
             sb.append("\n\t" + CONF_ENDPOINT + ": ");
             if (suri == null) {
                 sb.append("MISSING");
@@ -194,7 +187,7 @@ abstract class S3StorageAdapter implements StorageAdapter {
                 sb.append("OK");
             }
 
-            String sbl = System.getProperty(CONF_SBLEN);
+            String sbl = props.getProperty(CONF_SBLEN);
             sb.append("\n\t" + CONF_SBLEN + ": ");
             if (sbl == null) {
                 sb.append("MISSING");
@@ -203,7 +196,7 @@ abstract class S3StorageAdapter implements StorageAdapter {
                 sb.append("OK");
             }
 
-            String s3b = System.getProperty(CONF_S3BUCKET);
+            String s3b = props.getProperty(CONF_S3BUCKET);
             sb.append("\n\t" + CONF_S3BUCKET + ": ");
             if (s3b == null) {
                 sb.append("MISSING");
@@ -212,15 +205,22 @@ abstract class S3StorageAdapter implements StorageAdapter {
                 sb.append("OK");
             }
             
-            for (String prop : CONFIG_PROPS) {
-                String val = System.getProperty(prop);
-                sb.append("\n\t").append(val).append(": ");
-                if (val == null) {
-                    sb.append("MISSING");
-                    ok = false;
-                } else {
-                    sb.append("OK");
-                }
+            final String accessKey = props.getProperty("aws.accessKeyId");
+            sb.append("\n\taws.accessKeyId: ");
+            if (accessKey == null) {
+                sb.append("MISSING");
+                ok = false;
+            } else {
+                sb.append("OK");
+            }
+
+            final String secretKey = props.getProperty("aws.secretAccessKey");
+            sb.append("\n\taws.secretAccessKey: ");
+            if (secretKey == null) {
+                sb.append("MISSING");
+                ok = false;
+            } else {
+                sb.append("OK");
             }
         
             if (!ok) {
@@ -232,25 +232,23 @@ abstract class S3StorageAdapter implements StorageAdapter {
             this.s3bucket = s3b;
 
             S3ClientBuilder builder = S3Client.builder();
-            /*
             // since we require the system properties used by the aws library this is not strictly necessary
-            s3b.credentialsProvider(new AwsCredentialsProvider() {
+            builder.credentialsProvider(new AwsCredentialsProvider() {
                 @Override
                 public AwsCredentials resolveCredentials() {
                     return new AwsCredentials() {
                         @Override
                         public String accessKeyId() {
-                            return System.getProperty("aws.accessKeyId");
+                            return accessKey;
                         }
 
                         @Override
                         public String secretAccessKey() {
-                            return System.getProperty("aws.secretAccessKey");
+                            return secretKey;
                         }
                     };
                 }
             });
-            */
             builder.endpointOverride(s3endpoint);
             builder.region(REGION);
             this.s3client = builder.build();

@@ -68,8 +68,13 @@
 package org.opencadc.minoc;
 
 import ca.nrc.cadc.db.TransactionManager;
+import ca.nrc.cadc.io.ByteLimitExceededException;
 import ca.nrc.cadc.io.ReadException;
+import ca.nrc.cadc.io.WriteException;
+import ca.nrc.cadc.net.IncorrectContentChecksumException;
+import ca.nrc.cadc.net.IncorrectContentLengthException;
 import ca.nrc.cadc.net.ResourceNotFoundException;
+import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.profiler.Profiler;
 import ca.nrc.cadc.rest.InlineContentException;
 import ca.nrc.cadc.rest.InlineContentHandler;
@@ -91,6 +96,7 @@ import org.opencadc.inventory.db.ObsoleteStorageLocationDAO;
 import org.opencadc.inventory.permissions.WriteGrant;
 import org.opencadc.inventory.storage.NewArtifact;
 import org.opencadc.inventory.storage.StorageAdapter;
+import org.opencadc.inventory.storage.StorageEngageException;
 import org.opencadc.inventory.storage.StorageMetadata;
 
 /**
@@ -181,21 +187,22 @@ public class PutAction extends ArtifactAction {
             profiler.checkpoint("storageAdapter.init");
             artifactMetadata = storageAdapter.put(newArtifact, in);
             profiler.checkpoint("storageAdapter.put.ok");
-        } catch (ReadException e) {
-            // error on client read
-            String msg = "read input error";
-            log.debug(msg, e);
-            if (e.getMessage() != null) {
-                msg += ": " + e.getMessage();
-            }
+        } catch (ByteLimitExceededException 
+                | IncorrectContentChecksumException | IncorrectContentLengthException 
+                | ReadException | WriteException 
+                | StorageEngageException | TransientException e) {
             profiler.checkpoint("storageAdapter.put.fail");
-            throw new IllegalArgumentException(msg, e);
+            throw e;
         }
+        
         log.debug("wrote new artifact to storage");
-
+        if (artifactMetadata.contentLastModified == null) {
+            artifactMetadata.contentLastModified = new Date();
+        }
+        
         Artifact artifact = new Artifact(
             artifactURI, artifactMetadata.getContentChecksum(),
-            new Date(), artifactMetadata.getContentLength());
+            artifactMetadata.contentLastModified, artifactMetadata.getContentLength());
         artifact.contentEncoding = encodingHeader;
         artifact.contentType = typeHeader;
         artifact.storageLocation = artifactMetadata.getStorageLocation();

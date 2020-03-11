@@ -94,7 +94,6 @@ import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.StorageSite;
 import org.opencadc.inventory.db.ArtifactDAO;
-import org.opencadc.inventory.db.DeletedEventDAO;
 import org.opencadc.inventory.db.SQLGenerator;
 import org.opencadc.inventory.db.StorageSiteDAO;
 import org.opencadc.inventory.permissions.Grant;
@@ -103,6 +102,8 @@ import org.opencadc.inventory.permissions.ReadGrant;
 import org.opencadc.inventory.permissions.TokenUtil;
 import org.opencadc.inventory.permissions.WriteGrant;
 import org.opencadc.inventory.storage.StorageAdapter;
+
+
 
 /**
  * Abstract class for performing tasks all action classes have in common,

@@ -68,7 +68,7 @@
 package org.opencadc.minoc;
 
 import ca.nrc.cadc.net.HttpDelete;
-import ca.nrc.cadc.net.HttpDownload;
+import ca.nrc.cadc.net.HttpGet;
 import ca.nrc.cadc.net.HttpUpload;
 import ca.nrc.cadc.util.Log4jInit;
 
@@ -113,8 +113,8 @@ public class ReplaceArtifactTest extends MinocTest {
             
                     String data1 = "first artifact";
                     String data2 = "second artifact";
-                    URI artifactURI = URI.create("cadc:TEST/file.fits");
-                    URL artifactURL = new URL(certURL + "/" + artifactURI.toString());
+                    URI artifactURI = URI.create("cadc:TEST/testReplaceFile");
+                    URL artifactURL = new URL(filesURL + "/" + artifactURI.toString());
                     
                     // put initial file
                     InputStream in = new ByteArrayInputStream(data1.getBytes());
@@ -124,7 +124,7 @@ public class ReplaceArtifactTest extends MinocTest {
                     
                     // assert file and metadata
                     OutputStream out = new ByteArrayOutputStream();
-                    HttpDownload get = new HttpDownload(artifactURL, out);
+                    HttpGet get = new HttpGet(artifactURL, out);
                     get.run();
                     Assert.assertNull(get.getThrowable());
                     String contentMD5 = get.getContentMD5();
@@ -140,7 +140,7 @@ public class ReplaceArtifactTest extends MinocTest {
                     
                     // assert new file and metadata
                     out = new ByteArrayOutputStream();
-                    get = new HttpDownload(artifactURL, out);
+                    get = new HttpGet(artifactURL, out);
                     get.run();
                     Assert.assertNull(get.getThrowable());
                     contentMD5 = get.getContentMD5();

@@ -7,9 +7,9 @@ The CEPH storage adapter supports various ways of communicating with a CEPH Clus
 
 ## configuration
 
-### Java System properties
-This library is configured via Java system properties. The method of passing the property values to the JVM depends
-on the execution environment. All properties are required.
+### cadc-storage-adapter-ceph.properties
+
+This library is configured via a properties file in `{user.home}/config`. All properties are required.
 ```
 org.opencadc.inventory.storage.s3.S3StorageAdapter.endpoint = {S3 REST API endpoint}
 org.opencadc.inventory.storage.s3.S3StorageAdapter.s3bucket = {S3 bucket name or prefix}

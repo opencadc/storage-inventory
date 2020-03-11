@@ -101,8 +101,7 @@ public abstract class MinocTest {
     private static final Logger log = Logger.getLogger(MinocTest.class);
     public static final URI MINOC_SERVICE_ID = URI.create("ivo://cadc.nrc.ca/minoc");
     
-    protected URL anonURL;
-    protected URL certURL;
+    protected URL filesURL;
     protected Subject anonSubject;
     protected Subject userSubject;
     
@@ -112,10 +111,9 @@ public abstract class MinocTest {
     
     public MinocTest() {
         RegistryClient regClient = new RegistryClient();
-        anonURL = regClient.getServiceURL(MINOC_SERVICE_ID, Standards.SI_FILES, AuthMethod.ANON);
-        log.info("anonURL: " + anonURL);
-        certURL = regClient.getServiceURL(MINOC_SERVICE_ID, Standards.SI_FILES, AuthMethod.CERT);
-        log.info("certURL: " + certURL);
+        filesURL = regClient.getServiceURL(MINOC_SERVICE_ID, Standards.SI_FILES, AuthMethod.ANON);
+        log.info(Standards.SI_FILES + ": " + filesURL);
+
         anonSubject = AuthenticationUtil.getAnonSubject();
         File cert = FileUtil.getFileFromResource("minoc-test.pem", MinocTest.class);
         log.debug("anonSubject: " + anonSubject);

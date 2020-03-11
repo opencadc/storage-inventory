@@ -67,13 +67,11 @@
 
 package org.opencadc.minoc;
 
-import ca.nrc.cadc.net.HttpDownload;
 import ca.nrc.cadc.net.HttpTransfer;
 import ca.nrc.cadc.net.HttpUpload;
 import ca.nrc.cadc.util.Log4jInit;
 
 import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.net.URI;
 import java.net.URL;
@@ -81,7 +79,6 @@ import java.security.PrivilegedExceptionAction;
 
 import javax.security.auth.Subject;
 
-import ca.nrc.cadc.util.StringUtil;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
@@ -114,8 +111,8 @@ public class IncorrectPutMetadataTest extends MinocTest {
                     String data = "first artifact";
                     byte[] bytes = data.getBytes();
                     String incorrectData = "incorrect artifact";
-                    URI artifactURI = URI.create("cadc:TEST/file.fits");
-                    URL artifactURL = new URL(certURL + "/" + artifactURI.toString());
+                    URI artifactURI = URI.create("cadc:TEST/testUploadContentMD5_Mismatch");
+                    URL artifactURL = new URL(filesURL + "/" + artifactURI.toString());
                     
                     // put file
                     InputStream in = new ByteArrayInputStream(bytes);
@@ -145,8 +142,8 @@ public class IncorrectPutMetadataTest extends MinocTest {
             
                     String data = "first artifact";
                     byte[] bytes = data.getBytes();
-                    URI artifactURI = URI.create("cadc:TEST/file.fits");
-                    URL artifactURL = new URL(certURL + "/" + artifactURI.toString());
+                    URI artifactURI = URI.create("cadc:TEST/testUploadContentLengthHeader_TooLarge");
+                    URL artifactURL = new URL(filesURL + "/" + artifactURI.toString());
                     
                     // put file
                     InputStream in = new ByteArrayInputStream(bytes);
@@ -175,8 +172,8 @@ public class IncorrectPutMetadataTest extends MinocTest {
             
                     String data = "first artifact";
                     byte[] bytes = data.getBytes();
-                    URI artifactURI = URI.create("cadc:TEST/file.fits");
-                    URL artifactURL = new URL(certURL + "/" + artifactURI.toString());
+                    URI artifactURI = URI.create("cadc:TEST/testUploadContentLengthHeader_TooSmall");
+                    URL artifactURL = new URL(filesURL + "/" + artifactURI.toString());
                     
                     // put file
                     InputStream in = new ByteArrayInputStream(bytes);
@@ -205,8 +202,8 @@ public class IncorrectPutMetadataTest extends MinocTest {
             
                     String data = "first artifact";
                     byte[] bytes = data.getBytes();
-                    URI artifactURI = URI.create("cadc:TEST/file.fits");
-                    URL artifactURL = new URL(certURL + "/" + artifactURI.toString());
+                    URI artifactURI = URI.create("cadc:TEST/testUploadContentMD5_Correct_ContentLengthHeader_TooSmall");
+                    URL artifactURL = new URL(filesURL + "/" + artifactURI.toString());
                     
                     // put file
                     InputStream in = new ByteArrayInputStream(bytes);
@@ -236,8 +233,8 @@ public class IncorrectPutMetadataTest extends MinocTest {
             
                     String data = "first artifact";
                     byte[] bytes = data.getBytes();
-                    URI artifactURI = URI.create("cadc:TEST/file.fits");
-                    URL artifactURL = new URL(certURL + "/" + artifactURI.toString());
+                    URI artifactURI = URI.create("cadc:TEST/testUpload_ContentMD5_ContentLength_Correct");
+                    URL artifactURL = new URL(filesURL + "/" + artifactURI.toString());
                     
                     // put file
                     InputStream in = new ByteArrayInputStream(bytes);
