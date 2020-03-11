@@ -88,8 +88,8 @@ public class InventoryUtilTest {
     static {
         Log4jInit.setLevel("org.opencadc.inventory", Level.INFO);
     }
-    
-    public InventoryUtilTest() { 
+
+    public InventoryUtilTest() {
     }
     
     /*
@@ -108,13 +108,13 @@ public class InventoryUtilTest {
     public void testValidateArtifactURI() {
         try {
             InventoryUtil.validateArtifactURI(InventoryUtilTest.class, URI.create("cadc:FOO/bar.fits"));
-            
+
             InventoryUtil.validateArtifactURI(InventoryUtilTest.class, URI.create("cadc:FOO/organised/into/directories/bar.fits"));
-            
+
             InventoryUtil.validateArtifactURI(InventoryUtilTest.class, URI.create("vault:" + UUID.randomUUID().toString()));
-            
+
             InventoryUtil.validateArtifactURI(InventoryUtilTest.class, URI.create("cadc:FOO/bar+baz.fits"));
-            
+
             try {
                 URI u = URI.create("cadc:/foo/bar");
                 log.info("check query: " + u.getQuery());
@@ -123,7 +123,7 @@ public class InventoryUtilTest {
             } catch (IllegalArgumentException expected) {
                 log.info("caught expected: " + expected);
             }
-            
+
             try {
                 URI u = URI.create("cadc:foo?bar");
                 log.info("check query: " + u.getQuery());
@@ -132,7 +132,7 @@ public class InventoryUtilTest {
             } catch (IllegalArgumentException expected) {
                 log.info("caught expected: " + expected);
             }
-            
+
             try {
                 URI u = URI.create("cadc:foo#bar");
                 log.info("check fragment: " + u.getFragment());
@@ -141,7 +141,7 @@ public class InventoryUtilTest {
             } catch (IllegalArgumentException expected) {
                 log.info("caught expected: " + expected);
             }
-            
+
             try {
                 URI u = URI.create("cadc:foo bar");
                 InventoryUtil.validateArtifactURI(InventoryUtilTest.class, u);
@@ -149,7 +149,7 @@ public class InventoryUtilTest {
             } catch (IllegalArgumentException expected) {
                 log.info("caught expected: " + expected);
             }
-            
+
             try {
                 URI u = URI.create("cadc:foo\tbar");
                 InventoryUtil.validateArtifactURI(InventoryUtilTest.class, u);
@@ -157,7 +157,7 @@ public class InventoryUtilTest {
             } catch (IllegalArgumentException expected) {
                 log.info("caught expected: " + expected);
             }
-            
+
             try {
                 URI u = URI.create("cadc:foo\\bar");
                 InventoryUtil.validateArtifactURI(InventoryUtilTest.class, u);
@@ -165,7 +165,7 @@ public class InventoryUtilTest {
             } catch (IllegalArgumentException expected) {
                 log.info("caught expected: " + expected);
             }
-            
+
             try {
                 URI u = URI.create("cadc:foo%25bar"); // %25 == % sign since URI class decodes
                 InventoryUtil.validateArtifactURI(InventoryUtilTest.class, u);
@@ -173,7 +173,7 @@ public class InventoryUtilTest {
             } catch (IllegalArgumentException expected) {
                 log.info("caught expected: " + expected);
             }
-            
+
             try {
                 URI u = URI.create("cadc:foo;bar");
                 InventoryUtil.validateArtifactURI(InventoryUtilTest.class, u);
@@ -181,7 +181,7 @@ public class InventoryUtilTest {
             } catch (IllegalArgumentException expected) {
                 log.info("caught expected: " + expected);
             }
-            
+
             try {
                 URI u = URI.create("cadc:foo&bar");
                 InventoryUtil.validateArtifactURI(InventoryUtilTest.class, u);
@@ -189,7 +189,7 @@ public class InventoryUtilTest {
             } catch (IllegalArgumentException expected) {
                 log.info("caught expected: " + expected);
             }
-            
+
             try {
                 URI u = URI.create("cadc:foo$bar");
                 InventoryUtil.validateArtifactURI(InventoryUtilTest.class, u);
@@ -197,13 +197,13 @@ public class InventoryUtilTest {
             } catch (IllegalArgumentException expected) {
                 log.info("caught expected: " + expected);
             }
-            
+
         } catch (Exception unexpected) {
             log.error("unexpected exception", unexpected);
             Assert.fail("unexpected exception: " + unexpected);
         }
     }
-    
+
     @Test
     public void testComputeArtifactFilename() {
         try {
@@ -223,7 +223,7 @@ public class InventoryUtilTest {
             Assert.fail("unexpected exception: " + unexpected);
         }
     }
-    
+
     @Test
     public void testLoadFail() {
         try {
@@ -233,7 +233,7 @@ public class InventoryUtilTest {
         } catch (IllegalStateException expected) {
             log.info("missing config - caught: " + expected + " cause: " + expected.getCause());
         }
-        
+
         try {
             System.setProperty(Comparator.class.getName(), "org.opencadc.inventory.storage.InventoryUtilTest$NoImpl");
             InventoryUtil.loadPlugin(Comparator.class);
@@ -244,7 +244,7 @@ public class InventoryUtilTest {
         } finally {
             System.clearProperty(Comparator.class.getName());
         }
-        
+
         try {
             System.setProperty(Comparator.class.getName(), "org.opencadc.inventory.storage.InventoryUtilTest$InvalidCtorImpl");
             System.setProperty(Comparator.class.getName(), InvalidCtorImpl.class.getName());
@@ -256,7 +256,7 @@ public class InventoryUtilTest {
         } finally {
             System.clearProperty(Comparator.class.getName());
         }
-        
+
         try {
             System.setProperty(Comparator.class.getName(), "org.opencadc.inventory.storage.InventoryUtilTest$NoInterfaceImpl");
             InventoryUtil.loadPlugin(Comparator.class);
@@ -267,7 +267,7 @@ public class InventoryUtilTest {
         } finally {
             System.clearProperty(Comparator.class.getName());
         }
-        
+
         try {
             System.setProperty(Comparator.class.getName(), "org.opencadc.inventory.storage.InventoryUtilTest$CtorThrowsImpl");
             InventoryUtil.loadPlugin(Comparator.class);
@@ -277,35 +277,34 @@ public class InventoryUtilTest {
         } finally {
             System.clearProperty(Comparator.class.getName());
         }
-        
+
     }
 
     @Test
     public void testLoadFailConstructorArgs() {
         try {
             System.setProperty(Comparator.class.getName(), "org.opencadc.inventory.InventoryUtilTest$ValidImpl");
-            InventoryUtil.loadPlugin(Comparator.class, new Class<?>[]{int.class}, new Object[]{88});
+            InventoryUtil.loadPlugin(Comparator.class, 88);
             Assert.fail("missing class should fail");
         } catch (IllegalStateException expected) {
             log.info("missing class - caught: " + expected + " cause: " + expected.getCause());
-            Assert.assertTrue(expected.getCause() instanceof NoSuchMethodException);
+            Assert.assertEquals("Wrong message.", "No matching constructor found.", expected.getMessage());
         } finally {
             System.clearProperty(Comparator.class.getName());
         }
 
         try {
             System.setProperty(Comparator.class.getName(), "org.opencadc.inventory.InventoryUtilTest$ValidImpl");
-            InventoryUtil.loadPlugin(Comparator.class, new Class<?>[]{int.class, String.class, boolean.class},
-                                     new Object[]{88, "STRING", false});
+            InventoryUtil.loadPlugin(Comparator.class, 88, "STRING", false);
             Assert.fail("missing class should fail");
         } catch (IllegalStateException expected) {
             log.info("missing class - caught: " + expected + " cause: " + expected.getCause());
-            Assert.assertTrue(expected.getCause() instanceof NoSuchMethodException);
+            Assert.assertEquals("Wrong message.", "No matching constructor found.", expected.getMessage());
         } finally {
             System.clearProperty(Comparator.class.getName());
         }
     }
-    
+
     @Test
     public void testLoadOK() {
         try {
@@ -321,36 +320,35 @@ public class InventoryUtilTest {
     public void testLoadOKConstructorArgs() {
         try {
             System.setProperty(Comparator.class.getName(), "org.opencadc.inventory.InventoryUtilTest$ValidImpl");
-            Comparator c = InventoryUtil.loadPlugin(Comparator.class, new Class<?>[]{boolean.class, String.class},
-                                                    new Object[]{false, "GOOD"});
+            Comparator c = InventoryUtil.loadPlugin(Comparator.class, false, "GOOD");
             log.info("loaded: " + c.getClass().getName());
         } finally {
             System.clearProperty(Comparator.class.getName());
         }
     }
-    
-    
+
+
     public static class InvalidCtorImpl implements Comparator<Object> {
         public InvalidCtorImpl(boolean b) {
         }
-        
+
         @Override
         public int compare(Object a, Object b) {
             throw new UnsupportedOperationException();
         }
     }
-    
+
     public static class CtorThrowsImpl implements Comparator<Object> {
         public CtorThrowsImpl() {
             throw new IllegalStateException("CtorThrowsImpl: setup fail");
         }
-        
+
         @Override
         public int compare(Object a, Object b) {
             throw new UnsupportedOperationException();
         }
     }
-    
+
     public static class ValidImpl implements Comparator<Object> {
         public ValidImpl() {
         }

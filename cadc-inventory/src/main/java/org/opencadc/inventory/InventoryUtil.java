@@ -68,6 +68,8 @@
 package org.opencadc.inventory;
 
 import ca.nrc.cadc.util.HexUtil;
+
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.net.URI;
@@ -166,13 +168,11 @@ public abstract class InventoryUtil {
      *
      * @param <T>   Class type of the instantiated class
      * @param clazz an interface class
-     * @param constructorArgClasses The class order to match an existing constructor.
      * @param constructorArgs The constructor arguments
      * @return configured implementation of the interface
      * @throws IllegalStateException if an instance cannot be created
      */
-    public static <T> T loadPlugin(Class<T> clazz, final Class<?>[] constructorArgClasses,
-                                   final Object[] constructorArgs) throws IllegalStateException {
+    public static <T> T loadPlugin(final Class<T> clazz, final Object... constructorArgs) throws IllegalStateException {
         String cnameProp = clazz.getName();
         String cname = System.getProperty(cnameProp);
         if (cname == null) {
@@ -180,12 +180,18 @@ public abstract class InventoryUtil {
         }
         try {
             Class<?> c = Class.forName(cname);
-            return (T) c.getDeclaredConstructor(constructorArgClasses).newInstance(constructorArgs);
+            for (final Constructor<?> constructor : c.getDeclaredConstructors()) {
+                if (constructor.getParameterCount() == constructorArgs.length) {
+                    return (T) constructor.newInstance(constructorArgs);
+                }
+            }
+
+            throw new IllegalStateException("No matching constructor found.");
         } catch (InvocationTargetException ex) {
             throw new IllegalStateException("CONFIG: " + cnameProp + " implementation crashed during creation.", ex);
         } catch (ClassNotFoundException ex) {
             throw new IllegalStateException("CONFIG: " + cnameProp + " implementation not found in classpath: " + cname, ex);
-        } catch (InstantiationException | NoSuchMethodException ex) {
+        } catch (InstantiationException ex) {
             throw new IllegalStateException("CONFIG: " + cnameProp + " implementation " + cname + " does not have a matching constructor", ex);
         } catch (IllegalAccessException ex) {
             throw new IllegalStateException("CONFIG: failed to instantiate " + cname, ex);

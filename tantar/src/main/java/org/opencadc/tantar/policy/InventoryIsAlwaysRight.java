@@ -105,7 +105,7 @@ public class InventoryIsAlwaysRight extends ResolutionPolicy {
             validateEventListener.delete(storageMetadata);
         } else {
             // Check metadata for discrepancies.
-            if (haveDifferentMetadata(artifact, storageMetadata)) {
+            if (haveDifferentStructure(artifact, storageMetadata)) {
                 // Then prefer the Artifact.
                 reporter.report(String.format("Replacing File %s as per policy.",
                                               storageMetadata.getStorageLocation()));

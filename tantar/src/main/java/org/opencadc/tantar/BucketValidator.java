@@ -87,6 +87,7 @@ import javax.security.auth.Subject;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.DeletedArtifactEvent;
+import org.opencadc.inventory.DeletedStorageLocationEvent;
 import org.opencadc.inventory.Entity;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.db.ArtifactDAO;
@@ -208,12 +209,25 @@ public class BucketValidator implements ValidateEventListener {
     @Override
     public void reset(final Artifact artifact) throws Exception {
         if (canTakeAction()) {
-            artifact.storageLocation = null;
             final ArtifactDAO artifactDAO = getArtifactDAO();
-            artifactDAO.getTransactionManager().startTransaction();
-            artifactDAO.lock(artifact);
-            artifactDAO.put(artifact, true);
-            artifactDAO.getTransactionManager().commitTransaction();
+            try (final AutoCloseableTransactionManager transactionManager =
+                         new AutoCloseableTransactionManager(artifactDAO.getTransactionManager())) {
+                final Artifact resetArtifact = new Artifact(artifact.getID(), artifact.getURI(),
+                                                            artifact.getContentChecksum(), new Date(),
+                                                            artifact.getContentLength());
+                resetArtifact.contentType = artifact.contentType;
+                resetArtifact.contentEncoding = artifact.contentEncoding;
+                resetArtifact.storageLocation = null;
+
+                artifactDAO.put(resetArtifact, true);
+
+                final DeletedStorageLocationEvent deletedStorageLocationEvent =
+                        new DeletedStorageLocationEvent(resetArtifact.getID());
+                final DeletedEventDAO<DeletedStorageLocationEvent> deletedEventDAO = getDeleteEventDAO();
+                deletedEventDAO.put(deletedStorageLocationEvent);
+
+                transactionManager.commit();
+            }
         }
     }
 
@@ -230,7 +244,11 @@ public class BucketValidator implements ValidateEventListener {
             final ObsoleteStorageLocationDAO obsoleteStorageLocationDAO = getObsoleteStorageLocationDAO();
             final ObsoleteStorageLocation obsoleteStorageLocation = obsoleteStorageLocationDAO.get(storageLocation);
             if (obsoleteStorageLocation != null) {
-                obsoleteStorageLocationDAO.delete(obsoleteStorageLocation.getID());
+                try (final AutoCloseableTransactionManager transactionManager =
+                             new AutoCloseableTransactionManager(obsoleteStorageLocationDAO.getTransactionManager())) {
+                    obsoleteStorageLocationDAO.delete(obsoleteStorageLocation.getID());
+                    transactionManager.commit();
+                }
             }
         }
     }
