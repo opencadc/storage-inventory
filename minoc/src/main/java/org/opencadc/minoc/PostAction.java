@@ -103,8 +103,7 @@ public class PostAction extends ArtifactAction {
         log.debug("new contentType: " + newContentType);
         log.debug("new contentEncoding: " + newContentEncoding);
         
-        ArtifactDAO dao = getArtifactDAO();
-        Artifact artifact = getArtifact(artifactURI, dao);
+        Artifact artifact = getArtifact(artifactURI);
         
         // TODO: enable modifying URIs when supported by DAO
         // TODO: how to support clearing values?
@@ -115,7 +114,7 @@ public class PostAction extends ArtifactAction {
             artifact.contentEncoding = newContentEncoding;
         }
         log.debug("updating artifact metadata...");
-        dao.put(artifact);
+        artifactDAO.put(artifact);
         log.debug("updated artifact metadata");
     }
 

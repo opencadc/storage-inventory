@@ -81,6 +81,7 @@ import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.security.AccessControlException;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -103,8 +104,6 @@ import org.opencadc.inventory.permissions.TokenUtil;
 import org.opencadc.inventory.permissions.WriteGrant;
 import org.opencadc.inventory.storage.StorageAdapter;
 
-
-
 /**
  * Abstract class for performing tasks all action classes have in common,
  * including request parsing, authentication, and authentication.
@@ -114,10 +113,15 @@ import org.opencadc.inventory.storage.StorageAdapter;
 public abstract class ArtifactAction extends RestAction {
     private static final Logger log = Logger.getLogger(ArtifactAction.class);
     
-    public static final String JNDI_DATASOURCE = "jdbc/inventory";
-    static final String SQL_GEN_KEY = SQLGenerator.class.getName();
-    static final String SCHEMA_KEY = SQLGenerator.class.getPackage().getName() + ".schema";
+    public static final String JNDI_DATASOURCE = "jdbc/inventory"; // context.xml
+
+    // config keys
     static final String RESOURCE_ID_KEY = "org.opencadc.minoc.resourceID";
+    static final String SA_KEY = StorageAdapter.class.getName();
+    static final String SQLGEN_KEY = SQLGenerator.class.getName();
+    static final String SCHEMA_KEY = SQLGenerator.class.getPackage().getName() + ".schema";
+    static final String READ_GRANTS_KEY = ReadGrant.class.getName() +  ".resourceID";
+    static final String WRITE_GRANTS_KEY = WriteGrant.class.getName() +  ".resourceID";
     
     // The target artifact
     URI artifactURI;
@@ -125,9 +129,116 @@ public abstract class ArtifactAction extends RestAction {
     // The (possibly null) authentication token.
     String authToken;
     
-    // minoc properties config
-    MultiValuedProperties props = null;
-
+    // immutable state set in constructor
+    protected final ArtifactDAO artifactDAO;
+    protected final StorageAdapter storageAdapter;
+    protected final List<URI> readGrantServices = new ArrayList<>();
+    protected final List<URI> writeGrantServices = new ArrayList<>();
+    
+    // constructor for unit tests with no config/init
+    ArtifactAction(boolean init) {
+        super();
+        this.artifactDAO = null;
+        this.storageAdapter = null;
+    }
+    
+    protected ArtifactAction() {
+        super();
+        StringBuilder sb = new StringBuilder();
+        try {
+            MultiValuedProperties props = readConfig();
+            sb.append("incomplete config: ");
+            boolean ok = true;
+            
+            String rid = getSingleProperty(props, RESOURCE_ID_KEY);
+            sb.append("\n\t" + RESOURCE_ID_KEY + ": ");
+            if (rid == null) {
+                sb.append("MISSING");
+                ok = false;
+            } else {
+                sb.append("OK");
+            }
+            
+            String sac = getSingleProperty(props, SA_KEY);
+            sb.append("\n\t").append(SA_KEY).append(": ");
+            if (sac == null) {
+                sb.append("MISSING");
+                ok = false;
+            } else {
+                sb.append("OK");
+            }
+            
+            String sqlgen = getSingleProperty(props, SQLGEN_KEY);
+            sb.append("\n\t").append(SQLGEN_KEY).append(": ");
+            if (sqlgen == null) {
+                sb.append("MISSING");
+                ok = false;
+            } else {
+                sb.append("OK");
+            }
+            
+            String schema = getSingleProperty(props, SCHEMA_KEY);
+            sb.append("\n\t").append(SCHEMA_KEY).append(": ");
+            if (schema == null) {
+                sb.append("MISSING");
+                ok = false;
+            } else {
+                sb.append("OK");
+            }
+            
+            if (!ok) {
+                throw new IllegalStateException(sb.toString());
+            }
+            
+            List<String> readGrants = props.getProperty(READ_GRANTS_KEY);
+            if (readGrants != null) {
+                for (String s : readGrants) {
+                    URI u = new URI(s);
+                    readGrantServices.add(u);
+                }
+            }
+            
+            List<String> writeGrants = props.getProperty(WRITE_GRANTS_KEY);
+            if (writeGrants != null) {
+                for (String s : writeGrants) {
+                    URI u = new URI(s);
+                    writeGrantServices.add(u);
+                }
+            }
+            
+            Map<String, Object> config = new HashMap<String, Object>();
+            config.put(SQLGEN_KEY, Class.forName(sqlgen));
+            config.put("jndiDataSourceName", JNDI_DATASOURCE);
+            config.put("schema", schema);
+            //config.put("database", null);
+            this.artifactDAO = new ArtifactDAO();
+            artifactDAO.setConfig(config);
+            
+            //this.storageAdapter = InventoryUtil.loadPlugin(StorageAdapter.class, sac);
+            try {
+                this.storageAdapter = (StorageAdapter) Class.forName(sac).getDeclaredConstructor().newInstance();
+            } catch (Exception ex) {
+                throw new IllegalStateException("invalid config: failed to load StorageAdapter implementation: " + sac, ex);
+            
+            }
+            
+            URI resourceID = new URI(rid);
+            initStorageSite(resourceID);
+            
+        } catch (URISyntaxException | ClassNotFoundException ex) {
+            throw new IllegalStateException("invalid config: " + sb.toString(), ex);
+        }
+    }
+    
+    // used by ServiceAvailability
+    static final String getSingleProperty(MultiValuedProperties props, String key) {
+        List<String> vals = props.getProperty(key);
+        if (vals.isEmpty()) {
+            return null;
+        }
+        return vals.get(0);
+    }
+    
     /**
      * Default implementation.
      * @return No InlineContentHander
@@ -164,61 +275,47 @@ public abstract class ArtifactAction extends RestAction {
     
     void init() {
         parsePath();
-        if (props == null) {
-            this.props = readConfig();
-        }
-        initStorageSite();
+        
     }
         
     // HACK: lazy single init in first request thread
     private static URI SELF_RESOURCE_ID;
     
-    private void initStorageSite() {
+    private void initStorageSite(URI resourceID) {
         if (SELF_RESOURCE_ID != null) {
             // HACK: already did the init
             return;
         }
         
-        String rid = System.getProperty(RESOURCE_ID_KEY);
-        if (rid == null) {
-            throw new IllegalStateException("missing system property: " + RESOURCE_ID_KEY);
+        StorageSiteDAO ssdao = new StorageSiteDAO(artifactDAO); // copy config
+        Set<StorageSite> curlist = ssdao.list();
+        if (curlist.size() > 1) {
+            throw new IllegalStateException("found: " + curlist.size() + " StorageSite(s) in database; expected 0 or 1");
         }
-        try {
-            URI resourceID = new URI(rid);
-            StorageSiteDAO ssdao = new StorageSiteDAO();
-            ssdao.setConfig(getDaoConfig(props));
-            Set<StorageSite> curlist = ssdao.list();
-            if (curlist.size() > 1) {
-                throw new IllegalStateException("found: " + curlist.size() + " StorageSite(s) in database; expected 0 or 1");
-            }
-            // TODO: get display name from config
-            // use path from resourceID as default
-            String name = resourceID.getPath();
-            if (name.charAt(0) == '/') {
-                name = name.substring(1);
-            }
-            
-            if (curlist.isEmpty()) {
-                StorageSite self = new StorageSite(resourceID, name);
-                ssdao.put(self);
-            } else if (curlist.size() == 1) {
-                
-                StorageSite cur = curlist.iterator().next();
-                cur.setResourceID(resourceID);
-                cur.setName(name);
-                ssdao.put(cur);
-            } else {
-                throw new IllegalStateException("BUG: found " + curlist.size() + " StorageSite entries");
-            }
-            log.info("initStorageSite: " + resourceID + " " + name);
-            SELF_RESOURCE_ID = resourceID;
-        } catch (URISyntaxException ex) {
-            throw new IllegalStateException("CONFIG: invalid " + RESOURCE_ID_KEY + " = " + rid, ex);
+        // TODO: get display name from config
+        // use path from resourceID as default
+        String name = resourceID.getPath();
+        if (name.charAt(0) == '/') {
+            name = name.substring(1);
         }
+
+        if (curlist.isEmpty()) {
+            StorageSite self = new StorageSite(resourceID, name);
+            ssdao.put(self);
+        } else if (curlist.size() == 1) {
+
+            StorageSite cur = curlist.iterator().next();
+            cur.setResourceID(resourceID);
+            cur.setName(name);
+            ssdao.put(cur);
+        } else {
+            throw new IllegalStateException("BUG: found " + curlist.size() + " StorageSite entries");
+        }
+        log.info("initStorageSite: " + resourceID + " " + name);
+        SELF_RESOURCE_ID = resourceID;
     }
     
     public void checkReadPermission() throws AccessControlException, ResourceNotFoundException, TransientException {
-        List<String> readGrantServices = getReadGrantServices(props);
         PermissionsClient pc = null;
 
         /*
@@ -250,7 +347,6 @@ public abstract class ArtifactAction extends RestAction {
     }
     
     public void checkWritePermission() throws AccessControlException, ResourceNotFoundException, TransientException {
-        List<String> writeGrantServices = getWriteGrantServices(props);
         PermissionsClient pc = null;
         
         // current write auth is simply to be non-anonymous
@@ -315,8 +411,8 @@ public abstract class ArtifactAction extends RestAction {
         log.debug("authToken: " + authToken);
     }
     
-    Artifact getArtifact(URI artifactURI, ArtifactDAO dao) throws ResourceNotFoundException {
-        Artifact artifact = dao.get(artifactURI);
+    Artifact getArtifact(URI artifactURI) throws ResourceNotFoundException {
+        Artifact artifact = artifactDAO.get(artifactURI);
         if (artifact == null) {
             throw new ResourceNotFoundException("not found: " + artifactURI);
         }
@@ -344,10 +440,6 @@ public abstract class ArtifactAction extends RestAction {
         }
     }
     
-    protected StorageAdapter getStorageAdapter() {
-        return getStorageAdapter(props);
-    }
-    
     static StorageAdapter getStorageAdapter(MultiValuedProperties config) {
         // lazy init
         String adapterKey = StorageAdapter.class.getName();
@@ -367,12 +459,6 @@ public abstract class ArtifactAction extends RestAction {
         } catch (Throwable t) {
             throw new IllegalStateException("failed to load storage adapter: " + adapterClass, t);
         }
-    }
-    
-    protected ArtifactDAO getArtifactDAO() {
-        ArtifactDAO dao = new ArtifactDAO();
-        dao.setConfig(getDaoConfig(props));
-        return dao;
     }
     
     protected List<String> getReadGrantServices(MultiValuedProperties props) {
@@ -396,6 +482,7 @@ public abstract class ArtifactAction extends RestAction {
     static MultiValuedProperties readConfig() {
         PropertiesReader pr = new PropertiesReader("minoc.properties");
         MultiValuedProperties props = pr.getAllProperties();
+        
         if (log.isDebugEnabled()) {
             log.debug("minoc.properties:");
             Set<String> keys = props.keySet();
@@ -405,34 +492,4 @@ public abstract class ArtifactAction extends RestAction {
         }
         return props;
     }
-    
-    static Map<String, Object> getDaoConfig(MultiValuedProperties props) {
-        Map<String, Object> config = new HashMap<String, Object>();
-        Class cls = null;
-        List<String> sqlGenList = props.getProperty(SQL_GEN_KEY);
-        if (sqlGenList != null && sqlGenList.size() > 0) {
-            try {
-                String sqlGenClass = sqlGenList.get(0);
-                cls = Class.forName(sqlGenClass);
-            } catch (ClassNotFoundException e) {
-                throw new IllegalStateException("could not load SQLGenerator class: " + e.getMessage(), e);
-            }
-        } else {
-            // use the default SQL generator
-            cls = SQLGenerator.class;
-        }
-
-        config.put(SQL_GEN_KEY, cls);
-        config.put("jndiDataSourceName", JNDI_DATASOURCE);
-        List<String> schemaList = props.getProperty(SCHEMA_KEY);
-        if (schemaList == null || schemaList.size() < 1) {
-            throw new IllegalStateException("a value for " + SCHEMA_KEY + " is needed"
-                + " in minoc.properties");
-        }
-        config.put("schema", schemaList.get(0));
-        config.put("database", null); 
-            
-        return config;
-    }
-
 }
