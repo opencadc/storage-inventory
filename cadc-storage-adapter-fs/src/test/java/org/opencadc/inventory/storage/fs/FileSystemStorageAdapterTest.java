@@ -106,7 +106,7 @@ public class FileSystemStorageAdapterTest {
     private static final Logger log = Logger.getLogger(FileSystemStorageAdapterTest.class);
     
     private static final String TEST_ROOT = "build/tmp/fsroot";
-    static final int DEFAULT_BUCKET_LENGTH = 2;
+    static final int URI_BUCKET_LENGTH = 2;
     
     private static final String dataString = "abcdefghijklmnopqrstuvwxyz";
     private static final byte[] data = dataString.getBytes();
@@ -134,15 +134,15 @@ public class FileSystemStorageAdapterTest {
     
     @Test
     public void testPutGetDeleteURIMode() {
-        this.testPutGetDelete(BucketMode.URI);
+        this.testPutGetDelete(BucketMode.URI, 0);
     }
     
     @Test
     public void testPutGetDeleteURIBucketMode() {
-        this.testPutGetDelete(BucketMode.URIBUCKET);
+        this.testPutGetDelete(BucketMode.URIBUCKET, URI_BUCKET_LENGTH);
     }
     
-    private void testPutGetDelete(BucketMode bucketMode) {
+    private void testPutGetDelete(BucketMode bucketMode, int bucketLen) {
         try {
             log.info("testPutGetDelete(" + bucketMode + ") - start");
 
@@ -161,7 +161,7 @@ public class FileSystemStorageAdapterTest {
             
             ByteArrayInputStream source = new ByteArrayInputStream(data);
 
-            FileSystemStorageAdapter fs = new FileSystemStorageAdapter(testDir, bucketMode, DEFAULT_BUCKET_LENGTH);
+            FileSystemStorageAdapter fs = new FileSystemStorageAdapter(testDir, bucketMode, bucketLen);
             StorageMetadata storageMetadata = fs.put(newArtifact, source);
 
             Assert.assertEquals("artifactURI",  artifactURI, storageMetadata.artifactURI);
@@ -196,18 +196,58 @@ public class FileSystemStorageAdapterTest {
         }
 
     }
-    
+
+    @Test
+    public void testInvalidBucketLengthTooLong() {
+        BucketMode bucketMode = BucketMode.URIBUCKET;
+        try {
+            log.info("testInvalidBucketLengthTooLong(" + bucketMode + ") - start");
+            String testDir = TEST_ROOT + File.separator + "testPutGetDelete-" + bucketMode;
+            FileSystemStorageAdapter fs = new FileSystemStorageAdapter(testDir, bucketMode, 10);
+            Assert.fail("bucketlength should be wrong for mode");
+
+        } catch (IllegalStateException ise) {
+            log.info("expected exception", ise);
+        }
+        catch (Exception unexpected) {
+            log.error("unexpected exception", unexpected);
+            Assert.fail("unexpected exception: " + unexpected);
+        } finally {
+            log.info("testPutGetDelete(" + bucketMode + ") - end");
+        }
+    }
+
+    @Test
+    public void testInvalidBucketLengthTooShort() {
+        BucketMode bucketMode = BucketMode.URIBUCKET;
+        try {
+            log.info("testInvalidBucketLengthTooLong(" + bucketMode + ") - start");
+            String testDir = TEST_ROOT + File.separator + "testPutGetDelete-" + bucketMode;
+            // nonsense value passed in, should blurt an error
+            FileSystemStorageAdapter fs = new FileSystemStorageAdapter(testDir, bucketMode, -1);
+            Assert.fail("bucketlength should be wrong for mode");
+        } catch (IllegalStateException ise) {
+            log.info("expected exception", ise);
+        }
+        catch (Exception unexpected) {
+            log.error("unexpected exception", unexpected);
+            Assert.fail("unexpected exception: " + unexpected);
+        } finally {
+            log.info("testPutGetDelete(" + bucketMode + ") - end");
+        }
+    }
+
     //@Test
     public void testList_URIMode() {
-        this.testList(BucketMode.URI);
+        this.testList(BucketMode.URI, 0);
     }
     
     //@Test
     public void testList_URIBucketMode() {
-        this.testList(BucketMode.URIBUCKET);
+        this.testList(BucketMode.URIBUCKET, URI_BUCKET_LENGTH);
     }
 
-    private void testList(BucketMode bucketMode) {
+    private void testList(BucketMode bucketMode, int bucketLength) {
         try {
             
             log.info("testUnsortedIterator(" + bucketMode + ") - start");
@@ -215,7 +255,7 @@ public class FileSystemStorageAdapterTest {
             String testDir = TEST_ROOT + File.separator + "testUnsortedIterator-" + bucketMode;
             this.createInstanceTestRoot(testDir);
 
-            FileSystemStorageAdapter fs = new FileSystemStorageAdapter(testDir, bucketMode, DEFAULT_BUCKET_LENGTH);
+            FileSystemStorageAdapter fs = new FileSystemStorageAdapter(testDir, bucketMode, bucketLength);
             
             MessageDigest md = MessageDigest.getInstance("MD5");
             String md5Val = HexUtil.toHex(md.digest(data));
@@ -307,7 +347,7 @@ public class FileSystemStorageAdapterTest {
             String testDir = TEST_ROOT + File.separator + "testIterateSubsetURIMode";
             this.createInstanceTestRoot(testDir);
 
-            FileSystemStorageAdapter fs = new FileSystemStorageAdapter(testDir, BucketMode.URI, DEFAULT_BUCKET_LENGTH);
+            FileSystemStorageAdapter fs = new FileSystemStorageAdapter(testDir, BucketMode.URI, 0);
             
             MessageDigest md = MessageDigest.getInstance("MD5");
             String md5Val = HexUtil.toHex(md.digest(data));
