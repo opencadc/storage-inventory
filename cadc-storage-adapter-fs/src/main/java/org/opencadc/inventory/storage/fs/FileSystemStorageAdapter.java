@@ -457,7 +457,7 @@ public class FileSystemStorageAdapter implements StorageAdapter {
             }
 
             // to atomic copy into content directory
-            Path newCopy = Files.move(txnTarget, contentTarget, StandardCopyOption.ATOMIC_MOVE);
+            Path newCopy = Files.move(txnTarget, contentTarget, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
             log.debug("moved file to : " + contentTarget);
             txnTarget = null;
 
