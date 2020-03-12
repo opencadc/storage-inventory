@@ -209,12 +209,8 @@ public class FileSystemStorageAdapter implements StorageAdapter {
             }
         }
 
-        if (bucketLen == 0) {
-            this.bucketLength = DEFAULT_BUCKET_LENGTH;
-        } else {
-            this.bucketLength = bucketLen;
-        }
-
+        this.bucketLength = bucketLen;
+        
         InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "rootDirectory", rootVal);
         InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "bucketMode", bucketMode);
         this.fs = FileSystems.getDefault();
