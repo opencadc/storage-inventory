@@ -1,0 +1,47 @@
+# Storage Inventoty file-sync process (critwall)
+
+Process to incrementally sync metadata changes between storage sites and global inventory(ies).
+
+## configuration
+See the [cadc-java](https://github.com/opencadc/docker-base/tree/master/cadc-java) image docs for general config requirements.
+
+A file called `critwall.properties` must be made available via the `/config` directory.
+
+### critwall.properties
+```
+org.opencadc.critwall.logging = {info|debug}
+
+# inventory database settings
+org.opencadc.inventory.db.SQLGenerator=org.opencadc.inventory.db.SQLGenerator
+org.opencadc.inventory.db.schema={schema}
+org.opencadc.critwall.username={dbuser}
+org.opencadc.critwall.password={dbpassword}
+org.opencadc.critwall.url=jdbc:postgresql://{server}/{database}
+
+# global transfer negotiation service (raven)
+org.opencadc.critwall.locatorService={resorceID of global transfer negotiation service}
+
+# storage back end
+org.opencadc.inventory.storage.StorageAdapter=org.opencadc.inventory.storage.fs.FileSystemStorageAdapter
+
+# file-sync
+org.opencadc.critwall.buckets = {uriBucket prefix}
+org.opencadc.critwall.threads = {number of download threads}
+```
+
+## building it
+```
+gradle clean build
+docker build -t critwall -f Dockerfile .
+```
+
+## checking it
+```
+docker run -it critwall:latest /bin/bash
+```
+
+## running it
+```
+docker run --user nobody:nobody -v /path/to/external/config:/config:ro --name critwall critwall:latest
+```
+
