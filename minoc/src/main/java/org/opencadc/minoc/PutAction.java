@@ -88,14 +88,12 @@ import java.util.Date;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.DeletedArtifactEvent;
-import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.DeletedEventDAO;
 import org.opencadc.inventory.db.EntityNotFoundException;
 import org.opencadc.inventory.db.ObsoleteStorageLocation;
 import org.opencadc.inventory.db.ObsoleteStorageLocationDAO;
 import org.opencadc.inventory.permissions.WriteGrant;
 import org.opencadc.inventory.storage.NewArtifact;
-import org.opencadc.inventory.storage.StorageAdapter;
 import org.opencadc.inventory.storage.StorageEngageException;
 import org.opencadc.inventory.storage.StorageMetadata;
 
@@ -183,8 +181,6 @@ public class PutAction extends ArtifactAction {
         
         log.debug("writing new artifact to storage...");
         try {
-            StorageAdapter storageAdapter = getStorageAdapter();
-            profiler.checkpoint("storageAdapter.init");
             artifactMetadata = storageAdapter.put(newArtifact, in);
             profiler.checkpoint("storageAdapter.put.ok");
         } catch (ByteLimitExceededException 
@@ -207,8 +203,6 @@ public class PutAction extends ArtifactAction {
         artifact.contentType = typeHeader;
         artifact.storageLocation = artifactMetadata.getStorageLocation();
 
-        ArtifactDAO artifactDAO = getArtifactDAO();
-        profiler.checkpoint("artifactDAO.init");
         ObsoleteStorageLocationDAO locDAO = new ObsoleteStorageLocationDAO(artifactDAO);
         Artifact existing = artifactDAO.get(artifactURI);
         profiler.checkpoint("artifactDAO.get.ok");
@@ -271,8 +265,6 @@ public class PutAction extends ArtifactAction {
             // this block could be passed off to a thread so request completes??
             if (newOSL != null) {
                 log.debug("deleting from storage...");
-                StorageAdapter storageAdapter = getStorageAdapter();
-                profiler.checkpoint("storageAdapter.init");
                 storageAdapter.delete(newOSL.getLocation());
                 profiler.checkpoint("storageAdapter.delete.ok");
                 log.debug("delete from storage: OK");

@@ -103,7 +103,7 @@ public class ArtifactActionTest {
     class TestArtifactAction extends ArtifactAction {
         
         public TestArtifactAction(String path) {
-            super();
+            super(false);
             try {
                 super.syncInput = new TestSyncInput(path);
             } catch (Throwable t) {

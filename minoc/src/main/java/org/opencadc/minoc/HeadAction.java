@@ -99,10 +99,8 @@ public class HeadAction extends ArtifactAction {
         
         initAndAuthorize(ReadGrant.class);
         
-        ArtifactDAO dao = getArtifactDAO();
-        Artifact artifact = getArtifact(artifactURI, dao);
+        Artifact artifact = getArtifact(artifactURI);
         setHeaders(artifact, syncOutput);
-        
     }
     
     /**

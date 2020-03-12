@@ -69,10 +69,10 @@ package org.opencadc.minoc;
 
 import ca.nrc.cadc.db.TransactionManager;
 import ca.nrc.cadc.net.ResourceNotFoundException;
+
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.DeletedArtifactEvent;
-import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.DeletedEventDAO;
 import org.opencadc.inventory.db.EntityNotFoundException;
 import org.opencadc.inventory.db.ObsoleteStorageLocation;
@@ -103,7 +103,6 @@ public class DeleteAction extends ArtifactAction {
         
         initAndAuthorize(WriteGrant.class);
         
-        ArtifactDAO artifactDAO = getArtifactDAO();
         Artifact existing = artifactDAO.get(artifactURI);
         if (existing == null) {
             throw new ResourceNotFoundException("not found: " + artifactURI);
@@ -149,7 +148,7 @@ public class DeleteAction extends ArtifactAction {
             // this block could be passed off to a thread so request completes
             if (dsl != null) {
                 log.debug("deleting from storage...");
-                getStorageAdapter().delete(existing.storageLocation);
+                storageAdapter.delete(existing.storageLocation);
                 log.debug("delete from storage: OK");
                 // obsolete tracker record no longer needed
                 locDAO.delete(dsl.getID());
