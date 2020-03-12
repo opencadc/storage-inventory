@@ -119,7 +119,8 @@ public class FileSystemIterator implements Iterator<StorageMetadata> {
         StackItem item = new StackItem();
         item.stream = Files.list(dir);;
         item.iterator = item.stream.iterator();
-        item.parentDir = "";
+        // base parentDir for the Iterator is CONTENT_FOLDER
+        item.parentDir = FileSystemStorageAdapter.CONTENT_FOLDER;
         item.ignoreDepth = ignoreDepth;
         
         log.debug("bucket depth: " + item.ignoreDepth);
