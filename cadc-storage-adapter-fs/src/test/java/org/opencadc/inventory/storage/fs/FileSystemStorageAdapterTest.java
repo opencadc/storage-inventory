@@ -90,7 +90,6 @@ import java.util.Set;
 import java.util.SortedSet;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
-import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -112,7 +111,7 @@ public class FileSystemStorageAdapterTest {
     private static final byte[] data = dataString.getBytes();
 
     static {
-        Log4jInit.setLevel("org.opencadc.inventory", Level.DEBUG);
+        Log4jInit.setLevel("org.opencadc.inventory", Level.INFO);
     }
     
     @BeforeClass
