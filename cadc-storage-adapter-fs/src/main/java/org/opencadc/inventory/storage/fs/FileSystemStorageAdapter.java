@@ -147,7 +147,7 @@ public class FileSystemStorageAdapter implements StorageAdapter {
     static final String MD5_CHECKSUM_SCHEME = "md5";
     static final int MAX_BUCKET_LENGTH = 5;
     static final int DEFAULT_BUCKET_LENGTH = 2;
-    private static int bucketLength = DEFAULT_BUCKET_LENGTH;
+    private final int bucketLength;
     
     private final FileSystem fs;
     private final Path txnPath;
@@ -191,14 +191,15 @@ public class FileSystemStorageAdapter implements StorageAdapter {
         }
         
         // in uriBucket mode get the bucket depth
+        int bucketLen = 0;
         if (bucketMode.equals(BucketMode.URIBUCKET)) {
             try {
                 String length = pr.getFirstPropertyValue(CONFIG_PROPERTY_BUCKETDEPTH);
                 log.debug("bucketDepth: " + length);
                 if (length != null) {
-                    bucketLength = Integer.parseInt(length);
-                    if (bucketLength < 0 || bucketLength > MAX_BUCKET_LENGTH) {
-                        throw new IllegalStateException("Bucket length of " + bucketLength
+                    bucketLen = Integer.parseInt(length);
+                    if (bucketLen < 0 || bucketLen > MAX_BUCKET_LENGTH) {
+                        throw new IllegalStateException("Bucket length of " + bucketLen
                             + " not in allowed range of 0-" + MAX_BUCKET_LENGTH);
                     }
                 }
@@ -206,6 +207,12 @@ public class FileSystemStorageAdapter implements StorageAdapter {
                 throw new IllegalStateException("failed to load " + CONFIG_PROPERTY_BUCKETMODE
                     + " from " + CONFIG_FILE + ": " + t.getMessage(), t);
             }
+        }
+
+        if (bucketLen == 0) {
+            this.bucketLength = DEFAULT_BUCKET_LENGTH;
+        } else {
+            this.bucketLength = bucketLen;
         }
 
         InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "rootDirectory", rootVal);
@@ -237,6 +244,7 @@ public class FileSystemStorageAdapter implements StorageAdapter {
         this.contentPath = root.resolve(CONTENT_FOLDER);
         this.txnPath = root.resolve(TXN_FOLDER);
         this.bucketMode = bucketMode;
+        this.bucketLength = DEFAULT_BUCKET_LENGTH;
 
         init(rootDirectory);
     }
