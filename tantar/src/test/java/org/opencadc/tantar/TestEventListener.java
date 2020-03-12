@@ -67,48 +67,41 @@
  ************************************************************************
  */
 
-package org.opencadc.tantar.policy;
+package org.opencadc.tantar;
 
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.storage.StorageMetadata;
-import org.opencadc.tantar.Reporter;
-import org.opencadc.tantar.ValidateEventListener;
 
 
-public abstract class ResolutionPolicy {
+public class TestEventListener implements ValidateEventListener {
+    protected boolean addArtifactCalled = false;
+    protected boolean deleteStorageMetadataCalled = false;
+    protected boolean deleteArtifactCalled = false;
+    protected boolean resetArtifactCalled = false;
+    protected boolean replaceArtifactCalled = false;
 
-    final ValidateEventListener validateEventListener;
-    final Reporter reporter;
-
-    ResolutionPolicy(final ValidateEventListener validateEventListener, final Reporter reporter) {
-        this.validateEventListener = validateEventListener;
-        this.reporter = reporter;
+    @Override
+    public void addArtifact(StorageMetadata storageMetadata) throws Exception {
+        addArtifactCalled = true;
     }
 
-
-    protected final boolean haveDifferentMetadata(final Artifact artifact, final StorageMetadata storageMetadata) {
-        return !(new PolicyMetadata(artifact).equals(new PolicyMetadata(storageMetadata)));
+    @Override
+    public void delete(StorageMetadata storageMetadata) throws Exception {
+        deleteStorageMetadataCalled = true;
     }
 
-    /**
-     * Equality check for the main components that establish a different Storage Entity.
-     *
-     * @param artifact          The Artifact to check.
-     * @param storageMetadata   The StorageMetadata to check.
-     * @return          True if the metadata that verify the structure of the Entity differ.  False otherwise.
-     */
-    protected final boolean haveDifferentStructure(final Artifact artifact, final StorageMetadata storageMetadata) {
-        return !(artifact.getContentChecksum().equals(storageMetadata.getContentChecksum()))
-               || !(artifact.getContentLength().equals(storageMetadata.getContentLength()));
+    @Override
+    public void delete(Artifact artifact) throws Exception {
+        deleteArtifactCalled = true;
     }
 
-    /**
-     * Use the logic of this Policy to correct a conflict caused by the two given items.  One of the arguments can
-     * be null, but not both.
-     *
-     * @param artifact        The Artifact to use in deciding.
-     * @param storageMetadata The StorageMetadata to use in deciding.
-     * @throws Exception    For any unknown error that should be passed up.
-     */
-    public abstract void resolve(final Artifact artifact, final StorageMetadata storageMetadata) throws Exception;
+    @Override
+    public void reset(Artifact artifact) throws Exception {
+        resetArtifactCalled = true;
+    }
+
+    @Override
+    public void replaceArtifact(Artifact artifact, StorageMetadata storageMetadata) throws Exception {
+        replaceArtifactCalled = true;
+    }
 }

@@ -162,24 +162,23 @@ public abstract class InventoryUtil {
      * Load and instantiate an instance of the specified Java interface.  This method uses
      * the fully-qualified class name as a system property key; the value of the system property
      * is the fully qualified class name of an implementation of that interface.
-     *
      * <p>This overloaded method will use a series of constructor arguments to build a new instance.  It assumes that
      * the requested Class contains a constructor with the given arguments.
      *
-     * @param <T>   Class type of the instantiated class
-     * @param clazz an interface class
+     * @param <T>             Class type of the instantiated class
+     * @param implementationClassName   Class name to create
      * @param constructorArgs The constructor arguments
      * @return configured implementation of the interface
+     *
      * @throws IllegalStateException if an instance cannot be created
      */
-    public static <T> T loadPlugin(final Class<T> clazz, final Object... constructorArgs) throws IllegalStateException {
-        String cnameProp = clazz.getName();
-        String cname = System.getProperty(cnameProp);
-        if (cname == null) {
-            throw new IllegalStateException("CONFIG: " + cnameProp + " not set");
+    public static <T> T loadPlugin(final String implementationClassName, final Object... constructorArgs)
+            throws IllegalStateException {
+        if (implementationClassName == null) {
+            throw new IllegalStateException("Implementation class name cannot be null.");
         }
         try {
-            Class<?> c = Class.forName(cname);
+            Class<?> c = Class.forName(implementationClassName);
             for (final Constructor<?> constructor : c.getDeclaredConstructors()) {
                 if (constructor.getParameterCount() == constructorArgs.length) {
                     return (T) constructor.newInstance(constructorArgs);
@@ -188,13 +187,15 @@ public abstract class InventoryUtil {
 
             throw new IllegalStateException("No matching constructor found.");
         } catch (InvocationTargetException ex) {
-            throw new IllegalStateException("CONFIG: " + cnameProp + " implementation crashed during creation.", ex);
+            throw new IllegalStateException("CONFIG: " + implementationClassName + " implementation crashed during creation.", ex);
         } catch (ClassNotFoundException ex) {
-            throw new IllegalStateException("CONFIG: " + cnameProp + " implementation not found in classpath: " + cname, ex);
+            throw new IllegalStateException("CONFIG: " + implementationClassName + " implementation not found in classpath: " + implementationClassName,
+                                            ex);
         } catch (InstantiationException ex) {
-            throw new IllegalStateException("CONFIG: " + cnameProp + " implementation " + cname + " does not have a matching constructor", ex);
+            throw new IllegalStateException(
+                    "CONFIG: " + implementationClassName + " implementation " + implementationClassName + " does not have a matching constructor", ex);
         } catch (IllegalAccessException ex) {
-            throw new IllegalStateException("CONFIG: failed to instantiate " + cname, ex);
+            throw new IllegalStateException("CONFIG: failed to instantiate " + implementationClassName, ex);
         }
     }
 

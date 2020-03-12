@@ -94,12 +94,14 @@ public class AutoCloseableTransactionManager implements AutoCloseable {
      * Closes this resource, relinquishing any underlying resources.
      * This method is invoked automatically on objects managed by the
      * {@code try}-with-resources statement.
+     *
      * <p>While this interface method is declared to throw {@code
      * Exception}, implementers are <em>strongly</em> encouraged to
      * declare concrete implementations of the {@code close} method to
      * throw more specific exceptions, or to throw no exception at all
      * if the close operation cannot fail.
-     * <p/>Cases where the close operation may fail require careful
+     *
+     * <p>Cases where the close operation may fail require careful
      * attention by implementers. It is strongly advised to relinquish
      * the underlying resources and to internally <em>mark</em> the
      * resource as closed, prior to throwing the exception. The {@code
@@ -107,6 +109,7 @@ public class AutoCloseableTransactionManager implements AutoCloseable {
      * this ensures that the resources are released in a timely manner.
      * Furthermore it reduces problems that could arise when the resource
      * wraps, or is wrapped, by another resource.
+     *
      * <p><em>Implementers of this interface are also strongly advised
      * to not have the {@code close} method throw {@link
      * InterruptedException}.</em>
@@ -117,6 +120,7 @@ public class AutoCloseableTransactionManager implements AutoCloseable {
      * More generally, if it would cause problems for an
      * exception to be suppressed, the {@code AutoCloseable.close}
      * method should not throw it.
+     *
      * <p>Note that unlike the {@link Closeable#close close}
      * method of {@link Closeable}, this {@code close} method
      * is <em>not</em> required to be idempotent.  In other words,

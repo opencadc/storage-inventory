@@ -69,19 +69,13 @@
 
 package org.opencadc.tantar;
 
-import ca.nrc.cadc.db.ConnectionConfig;
-import ca.nrc.cadc.db.DBUtil;
-import ca.nrc.cadc.db.TransactionManager;
 import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.util.StringUtil;
 
 import java.security.PrivilegedExceptionAction;
 import java.util.Date;
-import java.util.HashMap;
 import java.util.Iterator;
-import java.util.Map;
 import java.util.Properties;
-import javax.naming.NamingException;
 import javax.security.auth.Subject;
 
 import org.apache.log4j.Logger;
@@ -89,12 +83,14 @@ import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.DeletedArtifactEvent;
 import org.opencadc.inventory.DeletedStorageLocationEvent;
 import org.opencadc.inventory.Entity;
+import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.db.ArtifactDAO;
+import org.opencadc.inventory.db.DAOConfigurationManager;
 import org.opencadc.inventory.db.DeletedEventDAO;
 import org.opencadc.inventory.db.ObsoleteStorageLocation;
 import org.opencadc.inventory.db.ObsoleteStorageLocationDAO;
-import org.opencadc.inventory.db.SQLGenerator;
+
 import org.opencadc.inventory.storage.StorageAdapter;
 import org.opencadc.inventory.storage.StorageEngageException;
 import org.opencadc.inventory.storage.StorageMetadata;
@@ -111,32 +107,81 @@ public class BucketValidator implements ValidateEventListener {
 
     private static final Logger LOGGER = Logger.getLogger(BucketValidator.class);
 
-    private static final String JNDI_ARTIFACT_DATASOURCE_NAME = "jdbc/inventory";
-    private static final String SQL_GEN_KEY = SQLGenerator.class.getName();
-    private static final String SCHEMA_KEY = String.format("%s.schema", SQLGenerator.class.getPackage().getName());
-
-    private static final String JDBC_CONFIG_KEY_PREFIX = "org.opencadc.inventory.db";
-    private static final String JDBC_USERNAME_KEY = String.format("%s.username", JDBC_CONFIG_KEY_PREFIX);
-    private static final String JDBC_PASSWORD_KEY = String.format("%s.password", JDBC_CONFIG_KEY_PREFIX);
-    private static final String JDBC_URL_KEY = String.format("%s.url", JDBC_CONFIG_KEY_PREFIX);
-    private static final String JDBC_DRIVER_CLASSNAME = "org.postgresql.Driver";
+    private static final String APPLICATION_CONFIG_KEY_PREFIX = "org.opencadc.tantar";
+    private static final String BUCKET_KEY = String.format("%s.bucket", APPLICATION_CONFIG_KEY_PREFIX);
+    private static final String REPORT_ONLY_KEY = String.format("%s.reportOnly", APPLICATION_CONFIG_KEY_PREFIX);
 
     private final String bucket;
     private final StorageAdapter storageAdapter;
     private final Subject runUser;
     private final boolean reportOnlyFlag;
+    private final ResolutionPolicy resolutionPolicy;
+    private final DAOConfigurationManager daoConfigurationManager;
 
     // The DAOs can be set later to allow lazy loading.
     private ArtifactDAO artifactDAO;
+    private DeletedEventDAO<? extends Entity> deletedEventDAO;
     private ObsoleteStorageLocationDAO obsoleteStorageLocationDAO;
 
 
-    BucketValidator(final String bucket, final StorageAdapter storageAdapter, final Subject runUser,
-                    final boolean reportOnlyFlag) {
+    /**
+     * Constructor to allow configuration via some provided properties.
+     *
+     * @param properties The Properties object.  See above for expected keys.
+     * @param reporter   The Reporter to use in the policy.  Can be used elsewhere.
+     * @param runUser    The user to run as.
+     */
+    BucketValidator(final Properties properties, final Reporter reporter, final Subject runUser) {
+        final String storageAdapterClassName = properties.getProperty(StorageAdapter.class.getCanonicalName());
+        if (!StringUtil.hasLength(storageAdapterClassName)) {
+            throw new IllegalArgumentException(
+                    String.format(
+                            "Storage Adapter is mandatory.  Please set the %s property to a fully qualified class "
+                            + "name.",
+                            StorageAdapter.class.getCanonicalName()));
+        }
+
+        final StorageAdapter storageAdapter = InventoryUtil.loadPlugin(storageAdapterClassName);
+
+        final String bucket = properties.getProperty(BUCKET_KEY);
+        if (!StringUtil.hasLength(bucket)) {
+            throw new IllegalArgumentException(String.format("Bucket is mandatory.  Please set the %s property.",
+                                                             BUCKET_KEY));
+        }
+
+        final boolean reportOnlyFlag =
+                Boolean.parseBoolean(properties.getProperty(REPORT_ONLY_KEY, Boolean.FALSE.toString()));
+
+        if (reportOnlyFlag) {
+            LOGGER.info("*********");
+            LOGGER.info("********* Reporting actions only.  No actions will be taken. *********");
+            LOGGER.info("*********");
+        }
+
+        final String policyClassName = properties.getProperty(ResolutionPolicy.class.getCanonicalName());
+        if (!StringUtil.hasLength(policyClassName)) {
+            throw new IllegalArgumentException(
+                    String.format("Policy is mandatory.  Please set the %s property to a fully qualified class name.",
+                                  ResolutionPolicy.class.getCanonicalName()));
+        }
+
+        this.resolutionPolicy = InventoryUtil.loadPlugin(policyClassName, this, reporter);
         this.bucket = bucket;
         this.storageAdapter = storageAdapter;
         this.runUser = runUser;
         this.reportOnlyFlag = reportOnlyFlag;
+        this.daoConfigurationManager = new DAOConfigurationManager(properties);
+    }
+
+    BucketValidator(final String bucket, final StorageAdapter storageAdapter, final Subject runUser,
+                    final boolean reportOnlyFlag, final ResolutionPolicy resolutionPolicy,
+                    final DAOConfigurationManager daoConfigurationManager) {
+        this.bucket = bucket;
+        this.storageAdapter = storageAdapter;
+        this.runUser = runUser;
+        this.reportOnlyFlag = reportOnlyFlag;
+        this.resolutionPolicy = resolutionPolicy;
+        this.daoConfigurationManager = daoConfigurationManager;
     }
 
     /**
@@ -145,7 +190,7 @@ public class BucketValidator implements ValidateEventListener {
      *
      * @throws Exception Pass up any errors to the caller, which is most likely the Main.
      */
-    void validate(final ResolutionPolicy resolutionPolicy) throws Exception {
+    void validate() throws Exception {
         final Iterator<StorageMetadata> storageMetadataIterator = iterateStorage();
         final Iterator<Artifact> inventoryIterator = iterateInventory();
 
@@ -311,9 +356,10 @@ public class BucketValidator implements ValidateEventListener {
     /**
      * Replace the given Artifact with one that represents the given StorageMetadata.  This is used when the
      * policy dictates that in the event of a conflict, the Artifact is no longer valid.
-     * @param artifact          The Artifact to replace.
-     * @param storageMetadata   The StorageMetadata whose metadata to use.
-     * @throws Exception        For any unhandled exceptions.
+     *
+     * @param artifact        The Artifact to replace.
+     * @param storageMetadata The StorageMetadata whose metadata to use.
+     * @throws Exception For any unhandled exceptions.
      */
     @Override
     public void replaceArtifact(final Artifact artifact, final StorageMetadata storageMetadata) throws Exception {
@@ -377,83 +423,27 @@ public class BucketValidator implements ValidateEventListener {
         return getArtifactDAO().iterator(bucket);
     }
 
-    /**
-     * This will method exists to allow a lazy load of the Artifact DAO.  No DAO configuration is performed until
-     * this method is called.
-     *
-     * @return An Artifact DAO instance.
-     */
-    ArtifactDAO getArtifactDAO() {
+    private ArtifactDAO getArtifactDAO() {
         if (artifactDAO == null) {
-            artifactDAO = new ArtifactDAO();
-            artifactDAO.setConfig(getDAOConfig());
+            artifactDAO = daoConfigurationManager.configure(ArtifactDAO.class);
         }
 
         return artifactDAO;
     }
 
-    ObsoleteStorageLocationDAO getObsoleteStorageLocationDAO() {
+    private ObsoleteStorageLocationDAO getObsoleteStorageLocationDAO() {
         if (obsoleteStorageLocationDAO == null) {
-            obsoleteStorageLocationDAO = new ObsoleteStorageLocationDAO();
-            obsoleteStorageLocationDAO.setConfig(getDAOConfig());
+            obsoleteStorageLocationDAO = daoConfigurationManager.configure(ObsoleteStorageLocationDAO.class);
         }
 
         return obsoleteStorageLocationDAO;
     }
 
-    <T extends Entity> DeletedEventDAO<T> getDeleteEventDAO() {
-        return new DeletedEventDAO<>(getArtifactDAO());
-    }
-
-    /**
-     * Ensure the DataSource is registered in the JNDI, and return the name under which it was registered.
-     *
-     * @return The JNDI name.
-     */
-    private String registerDataSource() {
-        try {
-            // Check if this data source is registered already.
-            DBUtil.findJNDIDataSource(JNDI_ARTIFACT_DATASOURCE_NAME);
-        } catch (NamingException e) {
-            final Properties systemProperties = System.getProperties();
-
-            final ConnectionConfig cc = new ConnectionConfig(null, null,
-                                                             systemProperties.getProperty(JDBC_USERNAME_KEY),
-                                                             systemProperties.getProperty(JDBC_PASSWORD_KEY),
-                                                             JDBC_DRIVER_CLASSNAME,
-                                                             systemProperties.getProperty(JDBC_URL_KEY));
-            try {
-                DBUtil.createJNDIDataSource(JNDI_ARTIFACT_DATASOURCE_NAME, cc);
-            } catch (NamingException ne) {
-                throw new IllegalStateException("Unable to access Inventory Database.", ne);
-            }
+    private <T extends Entity> DeletedEventDAO<T> getDeleteEventDAO() {
+        if (deletedEventDAO == null) {
+            deletedEventDAO = daoConfigurationManager.configure(DeletedEventDAO.class);
         }
 
-        return JNDI_ARTIFACT_DATASOURCE_NAME;
-    }
-
-    private Map<String, Object> getDAOConfig() {
-        final Map<String, Object> config = new HashMap<>();
-        final String sqlGeneratorClassName = System.getProperty(SQL_GEN_KEY, SQLGenerator.class.getCanonicalName());
-        try {
-            config.put(SQL_GEN_KEY, Class.forName(sqlGeneratorClassName));
-        } catch (ClassNotFoundException e) {
-            throw new IllegalStateException("could not load SQLGenerator class: " + e.getMessage(), e);
-        }
-
-        config.put("jndiDataSourceName", registerDataSource());
-
-        final String schemaName = System.getProperty(SCHEMA_KEY);
-
-        if (StringUtil.hasLength(schemaName)) {
-            config.put("schema", schemaName);
-        } else {
-            throw new IllegalStateException(
-                    String.format("A value for %s is required in minoc.properties", SCHEMA_KEY));
-        }
-
-        config.put("database", "inventory");
-
-        return config;
+        return (DeletedEventDAO<T>) deletedEventDAO;
     }
 }

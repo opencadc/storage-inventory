@@ -90,7 +90,6 @@ import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.storage.StorageMetadata;
 import org.opencadc.tantar.policy.InventoryIsAlwaysRight;
-import org.opencadc.tantar.policy.ResolutionPolicy;
 import org.opencadc.tantar.policy.StorageIsAlwaysRight;
 import ca.nrc.cadc.util.Log4jInit;
 
@@ -151,9 +150,12 @@ public class BucketValidatorTest {
         testStorageMetadataList.sort(Comparator.comparing(StorageMetadata::getStorageLocation));
         // **** End Create the Storage Adapter content.
 
+        final TestEventListener testEventListener = new TestEventListener();
+
         final BucketValidator testSubject =
                 new BucketValidator("TESTBUCKET", null,
-                                    new Subject(), true) {
+                                    new Subject(), true, new InventoryIsAlwaysRight(testEventListener, reporter),
+                                    null) {
                     @Override
                     Iterator<StorageMetadata> iterateStorage() {
                         return testStorageMetadataList.iterator();
@@ -165,9 +167,7 @@ public class BucketValidatorTest {
                     }
                 };
 
-        final ResolutionPolicy resolutionPolicy = new InventoryIsAlwaysRight(testSubject, reporter);
-
-        testSubject.validate(resolutionPolicy);
+        testSubject.validate();
 
         /*
         The two iterators only share a single file, which is located at ad:123456.  As a result, it should be left
@@ -219,9 +219,12 @@ public class BucketValidatorTest {
         testArtifactList.sort(Comparator.comparing(o -> o.storageLocation));
         // **** End Create the Storage Adapter content.
 
+        final TestEventListener testEventListener = new TestEventListener();
+
         final BucketValidator testSubject =
                 new BucketValidator("TESTBUCKET", null,
-                                    new Subject(), true) {
+                                    new Subject(), true, new InventoryIsAlwaysRight(testEventListener, reporter),
+                                    null) {
                     @Override
                     Iterator<StorageMetadata> iterateStorage() {
                         return Collections.emptyIterator();
@@ -233,9 +236,7 @@ public class BucketValidatorTest {
                     }
                 };
 
-        final ResolutionPolicy resolutionPolicy = new InventoryIsAlwaysRight(testSubject, reporter);
-
-        testSubject.validate(resolutionPolicy);
+        testSubject.validate();
 
         final List<String> outputLines =
                 Arrays.asList(new String(byteArrayOutputStream.toByteArray()).split("\n"));
@@ -296,9 +297,12 @@ public class BucketValidatorTest {
         testStorageMetadataList.sort(Comparator.comparing(StorageMetadata::getStorageLocation));
         // **** End Create the Storage Adapter content.
 
+        final TestEventListener testEventListener = new TestEventListener();
+
         final BucketValidator testSubject =
                 new BucketValidator("TESTBUCKET", null,
-                                    new Subject(), true) {
+                                    new Subject(), true, new StorageIsAlwaysRight(testEventListener, reporter),
+                                    null) {
                     @Override
                     Iterator<StorageMetadata> iterateStorage() {
                         return testStorageMetadataList.iterator();
@@ -310,9 +314,7 @@ public class BucketValidatorTest {
                     }
                 };
 
-        final ResolutionPolicy resolutionPolicy = new StorageIsAlwaysRight(testSubject, reporter);
-
-        testSubject.validate(resolutionPolicy);
+        testSubject.validate();
 
         /*
         The two iterators only share a single file, which is located at ad:123456.  As a result, it should be left
@@ -357,9 +359,12 @@ public class BucketValidatorTest {
         testStorageMetadataList.sort(Comparator.comparing(StorageMetadata::getStorageLocation));
         // **** End Create the Storage Adapter content.
 
+        final TestEventListener testEventListener = new TestEventListener();
+
         final BucketValidator testSubject =
                 new BucketValidator("TESTBUCKET", null,
-                                    new Subject(), true) {
+                                    new Subject(), true, new StorageIsAlwaysRight(testEventListener, reporter),
+                                    null) {
                     @Override
                     Iterator<StorageMetadata> iterateStorage() {
                         return testStorageMetadataList.iterator();
@@ -371,9 +376,7 @@ public class BucketValidatorTest {
                     }
                 };
 
-        final ResolutionPolicy resolutionPolicy = new StorageIsAlwaysRight(testSubject, reporter);
-
-        testSubject.validate(resolutionPolicy);
+        testSubject.validate();
 
         final List<String> outputLines =
                 Arrays.asList(new String(byteArrayOutputStream.toByteArray()).split("\n"));

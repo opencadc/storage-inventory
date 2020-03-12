@@ -67,48 +67,103 @@
  ************************************************************************
  */
 
-package org.opencadc.tantar.policy;
+package org.opencadc.inventory.db;
 
-import org.opencadc.inventory.Artifact;
-import org.opencadc.inventory.storage.StorageMetadata;
-import org.opencadc.tantar.Reporter;
-import org.opencadc.tantar.ValidateEventListener;
+import ca.nrc.cadc.db.ConnectionConfig;
+import ca.nrc.cadc.db.DBUtil;
+import ca.nrc.cadc.util.StringUtil;
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Properties;
+import javax.naming.NamingException;
+
+import org.opencadc.inventory.Entity;
+import org.opencadc.inventory.InventoryUtil;
 
 
-public abstract class ResolutionPolicy {
+public class DAOConfigurationManager {
 
-    final ValidateEventListener validateEventListener;
-    final Reporter reporter;
+    private static final String JNDI_ARTIFACT_DATASOURCE_NAME = "jdbc/inventory";
+    private static final String SQL_GEN_KEY = SQLGenerator.class.getName();
+    private static final String SCHEMA_KEY = String.format("%s.schema", SQLGenerator.class.getPackage().getName());
 
-    ResolutionPolicy(final ValidateEventListener validateEventListener, final Reporter reporter) {
-        this.validateEventListener = validateEventListener;
-        this.reporter = reporter;
+    private static final String JDBC_CONFIG_KEY_PREFIX = "org.opencadc.inventory.db";
+    private static final String JDBC_USERNAME_KEY = String.format("%s.username", JDBC_CONFIG_KEY_PREFIX);
+    private static final String JDBC_PASSWORD_KEY = String.format("%s.password", JDBC_CONFIG_KEY_PREFIX);
+    private static final String JDBC_URL_KEY = String.format("%s.url", JDBC_CONFIG_KEY_PREFIX);
+    private static final String JDBC_DRIVER_CLASSNAME = "org.postgresql.Driver";
+
+    private final Properties properties;
+
+
+    public DAOConfigurationManager(final Properties properties) {
+        this.properties = properties;
     }
 
 
-    protected final boolean haveDifferentMetadata(final Artifact artifact, final StorageMetadata storageMetadata) {
-        return !(new PolicyMetadata(artifact).equals(new PolicyMetadata(storageMetadata)));
+    /**
+     * This will method exists to allow a lazy load any AbstractDAO.  No DAO configuration is performed until
+     * this method is called.
+     *
+     * @param <T>       Type for the class to create.
+     * @param daoClass  The class of DAO to create and configure.
+     * @return An AbstractDAO concrete instance.  Never null.
+     */
+    public <T extends AbstractDAO<? extends Entity>> T configure(final Class<T> daoClass) {
+        final T abstractDAO = InventoryUtil.loadPlugin(daoClass.getCanonicalName());
+        abstractDAO.setConfig(getConfiguration());
+
+        return abstractDAO;
     }
 
     /**
-     * Equality check for the main components that establish a different Storage Entity.
+     * Ensure the DataSource is registered in the JNDI, and return the name under which it was registered.
      *
-     * @param artifact          The Artifact to check.
-     * @param storageMetadata   The StorageMetadata to check.
-     * @return          True if the metadata that verify the structure of the Entity differ.  False otherwise.
+     * @return The JNDI name.
      */
-    protected final boolean haveDifferentStructure(final Artifact artifact, final StorageMetadata storageMetadata) {
-        return !(artifact.getContentChecksum().equals(storageMetadata.getContentChecksum()))
-               || !(artifact.getContentLength().equals(storageMetadata.getContentLength()));
+    private String registerDataSource() {
+        try {
+            // Check if this data source is registered already.
+            DBUtil.findJNDIDataSource(JNDI_ARTIFACT_DATASOURCE_NAME);
+        } catch (NamingException e) {
+            final ConnectionConfig cc = new ConnectionConfig(null, null,
+                                                             properties.getProperty(JDBC_USERNAME_KEY),
+                                                             properties.getProperty(JDBC_PASSWORD_KEY),
+                                                             JDBC_DRIVER_CLASSNAME,
+                                                             properties.getProperty(JDBC_URL_KEY));
+            try {
+                DBUtil.createJNDIDataSource(JNDI_ARTIFACT_DATASOURCE_NAME, cc);
+            } catch (NamingException ne) {
+                throw new IllegalStateException("Unable to access Inventory Database.", ne);
+            }
+        }
+
+        return JNDI_ARTIFACT_DATASOURCE_NAME;
     }
 
-    /**
-     * Use the logic of this Policy to correct a conflict caused by the two given items.  One of the arguments can
-     * be null, but not both.
-     *
-     * @param artifact        The Artifact to use in deciding.
-     * @param storageMetadata The StorageMetadata to use in deciding.
-     * @throws Exception    For any unknown error that should be passed up.
-     */
-    public abstract void resolve(final Artifact artifact, final StorageMetadata storageMetadata) throws Exception;
+    private Map<String, Object> getConfiguration() {
+        final Map<String, Object> config = new HashMap<>();
+        final String sqlGeneratorClassName = properties.getProperty(SQL_GEN_KEY, SQLGenerator.class.getCanonicalName());
+        try {
+            config.put(SQL_GEN_KEY, Class.forName(sqlGeneratorClassName));
+        } catch (ClassNotFoundException e) {
+            throw new IllegalStateException("could not load SQLGenerator class: " + e.getMessage(), e);
+        }
+
+        config.put("jndiDataSourceName", registerDataSource());
+
+        final String schemaName = properties.getProperty(SCHEMA_KEY);
+
+        if (StringUtil.hasLength(schemaName)) {
+            config.put("schema", schemaName);
+        } else {
+            throw new IllegalStateException(
+                    String.format("A value for %s is required in minoc.properties", SCHEMA_KEY));
+        }
+
+        config.put("database", "inventory");
+
+        return config;
+    }
 }

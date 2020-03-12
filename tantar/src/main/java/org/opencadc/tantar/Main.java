@@ -70,7 +70,6 @@ package org.opencadc.tantar;
 
 import ca.nrc.cadc.auth.SSLUtil;
 import ca.nrc.cadc.util.Log4jInit;
-import ca.nrc.cadc.util.StringUtil;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -81,9 +80,6 @@ import java.util.Properties;
 
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
-import org.opencadc.inventory.InventoryUtil;
-import org.opencadc.inventory.storage.StorageAdapter;
-import org.opencadc.tantar.policy.ResolutionPolicy;
 
 
 /**
@@ -91,17 +87,15 @@ import org.opencadc.tantar.policy.ResolutionPolicy;
  */
 public class Main {
 
-    private static final String CONFIG_KEY_PREFIX = "org.opencadc.tantar";
-
-    private static final String BUCKET_KEY = String.format("%s.bucket", CONFIG_KEY_PREFIX);
     private static final String CONFIGURATION_DIRECTORY = System.getProperty("DEFAULT_CONFIG_DIR", "/config");
-    private static final String CERTIFICATE_FILE_LOCATION = String.format("%s/cadcproxy.pem", CONFIGURATION_DIRECTORY);
+    private static final String CERTIFICATE_FILE_LOCATION = String.format("%s/cadcproxy.pem",
+                                                                          Main.CONFIGURATION_DIRECTORY);
     private static final String CONFIGURATION_FILE_LOCATION = String.format("%s/tantar.properties",
-                                                                            CONFIGURATION_DIRECTORY);
-    private static final String REPORT_ONLY_KEY = String.format("%s.reportOnly", CONFIG_KEY_PREFIX);
+                                                                            Main.CONFIGURATION_DIRECTORY);
 
     private static final Logger LOGGER = Logger.getLogger(Main.class);
-    private static final Reporter REPORTER = new Reporter(LOGGER);
+    private static final Reporter REPORTER = new Reporter(Main.LOGGER);
+    private static final Properties APPLICATION_PROPERTIES = new Properties();
 
     public static void main(final String[] args) {
         Main.REPORTER.start();
@@ -109,40 +103,18 @@ public class Main {
         Main.setLogging();
 
         try {
-            final StorageAdapter storageAdapter = InventoryUtil.loadPlugin(StorageAdapter.class);
-
-            final String bucket = System.getProperty(BUCKET_KEY);
-            if (!StringUtil.hasLength(bucket)) {
-                throw new IllegalArgumentException(String.format("Bucket is mandatory.  Please set the %s property.",
-                                                                 BUCKET_KEY));
-            }
-
-            final boolean reportOnlyFlag = Boolean.parseBoolean(System.getProperty(REPORT_ONLY_KEY,
-                                                                                   Boolean.FALSE.toString()));
-
-            if (reportOnlyFlag) {
-                LOGGER.info("*********");
-                LOGGER.info("********* Reporting actions only.  No actions will be taken. *********");
-                LOGGER.info("*********");
-            }
-
             final BucketValidator bucketValidator =
-                    new BucketValidator(bucket, storageAdapter,
-                                        SSLUtil.createSubject(new File(CERTIFICATE_FILE_LOCATION)), reportOnlyFlag);
+                    new BucketValidator(Main.APPLICATION_PROPERTIES, Main.REPORTER,
+                                        SSLUtil.createSubject(new File(Main.CERTIFICATE_FILE_LOCATION)));
 
-            final ResolutionPolicy resolutionPolicy =
-                    InventoryUtil.loadPlugin(ResolutionPolicy.class,
-                                             new Class<?>[] {ValidateEventListener.class, Reporter.class},
-                                             new Object[] {bucketValidator, Main.REPORTER});
-
-            bucketValidator.validate(resolutionPolicy);
+            bucketValidator.validate();
         } catch (IllegalStateException e) {
             // IllegalStateExceptions are thrown for missing but required configuration.
-            LOGGER.fatal(e.getMessage());
+            Main.LOGGER.fatal(e.getMessage());
             System.exit(3);
         } catch (Exception e) {
             // Used to catch everything else, such as a RuntimeException when a file cannot be obtained and put.
-            LOGGER.fatal(e.getMessage());
+            Main.LOGGER.fatal(e.getMessage());
             System.exit(4);
         } finally {
             Main.REPORTER.end();
@@ -150,24 +122,19 @@ public class Main {
     }
 
     /**
-     * Read in the configuration file and load it into the System properties.
+     * Read in the configuration file and load it into the Main application configuration.
      */
     private static void configure() {
-        final Properties properties = new Properties();
-
         try {
-            final Reader configFileReader = new FileReader(CONFIGURATION_FILE_LOCATION);
-            properties.load(configFileReader);
-            final Properties existingProperties = System.getProperties();
-            existingProperties.putAll(properties);
-            System.setProperties(existingProperties);
+            final Reader configFileReader = new FileReader(Main.CONFIGURATION_FILE_LOCATION);
+            Main.APPLICATION_PROPERTIES.load(configFileReader);
         } catch (FileNotFoundException e) {
-            LOGGER.fatal(
+            Main.LOGGER.fatal(
                     String.format("Unable to locate configuration file.  Expected it to be at %s.",
-                                  CONFIGURATION_FILE_LOCATION));
+                                  Main.CONFIGURATION_FILE_LOCATION));
             System.exit(1);
         } catch (IOException e) {
-            LOGGER.fatal(String.format("Unable to read file located at %s.", CONFIGURATION_FILE_LOCATION));
+            Main.LOGGER.fatal(String.format("Unable to read file located at %s.", Main.CONFIGURATION_FILE_LOCATION));
             System.exit(2);
         }
     }
@@ -178,8 +145,10 @@ public class Main {
 
         final String loggingKey = ".logging";
 
-        System.getProperties().entrySet().stream().filter(entry -> entry.getKey().toString().endsWith(loggingKey))
-              .forEach(entry -> Log4jInit.setLevel(entry.getKey().toString().split(loggingKey)[0],
-                                                   Level.toLevel(entry.getValue().toString().toUpperCase())));
+        Main.APPLICATION_PROPERTIES.entrySet().stream().filter(entry -> entry.getKey().toString().endsWith(loggingKey))
+                                   .forEach(entry -> Log4jInit.setLevel(entry.getKey().toString().split(loggingKey)[0],
+                                                                        Level.toLevel(
+                                                                                entry.getValue().toString()
+                                                                                     .toUpperCase())));
     }
 }
