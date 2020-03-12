@@ -14,7 +14,7 @@ this adapter with the minoc file service)
 root = /fsroot
 ```
 
-Set he bucket mode:
+Set the bucket mode:
 ```
 # URI (uses artifactURIs for dirs) or URIBUCKET (uses uriBucket segments as dirs)
 bucketMode = <URI|URIBUCKET>

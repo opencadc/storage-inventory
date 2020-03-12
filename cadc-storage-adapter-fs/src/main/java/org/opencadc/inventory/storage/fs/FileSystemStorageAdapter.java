@@ -171,7 +171,6 @@ public class FileSystemStorageAdapter implements StorageAdapter {
         PropertiesReader pr = new PropertiesReader(CONFIG_FILE);
         String rootVal = null;
         BucketMode bucketMode = null;
-        log.debug("properties reader: " + pr);
         
         // get the configured root directory
         rootVal = pr.getFirstPropertyValue(CONFIG_PROPERTY_ROOT);
@@ -209,11 +208,38 @@ public class FileSystemStorageAdapter implements StorageAdapter {
             }
         }
 
-        InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "rootDirectory", rootVal);
-        InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "bucketMode", bucketMode);
         this.fs = FileSystems.getDefault();
+        InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "rootDirectory", rootVal);
+        Path root = fs.getPath(rootVal);
+        this.contentPath = root.resolve(CONTENT_FOLDER);
+        txnPath = root.resolve(TXN_FOLDER);
+
+        init(rootVal, bucketMode);
+    }
+
+    /**
+     * Construct a FileSystemStorageAdapter with the config specified
+     * in the arguments.
+     *
+     * @param rootDirectory The root directory of the local file system.
+     * @param bucketMode The mode in which to organize files
+     */
+    public FileSystemStorageAdapter(String rootDirectory, BucketMode bucketMode) {
+        this.fs = FileSystems.getDefault();
+        InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "rootDirectory", rootDirectory);
+        Path root = fs.getPath(rootDirectory);
+        this.contentPath = root.resolve(CONTENT_FOLDER);
+        txnPath = root.resolve(TXN_FOLDER);
+
+        init(rootDirectory, bucketMode);
+    }
+
+    private void init(String rootDirectory, BucketMode bucketMode) {
+        InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "rootDirectory", rootDirectory);
+        InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "bucketMode", bucketMode);
+
         try {
-            Path root = fs.getPath(rootVal);
+            Path root = fs.getPath(rootDirectory);
 
             if (!Files.isDirectory(root)) {
                 throw new IllegalArgumentException("root must be a directory");
@@ -224,7 +250,6 @@ public class FileSystemStorageAdapter implements StorageAdapter {
 
             // Ensure  root/CONTENT_FOLDER and TXN_FOLDER exist and have correct permissions
             // Set Path elements for transaction and content directories
-            contentPath = root.resolve(CONTENT_FOLDER);
             if (!Files.exists(contentPath)) {
                 Files.createDirectories(contentPath);
                 log.debug("created content dir: " + contentPath);
@@ -234,7 +259,6 @@ public class FileSystemStorageAdapter implements StorageAdapter {
             }
             log.debug("validated content dir: " + contentPath);
 
-            txnPath = root.resolve(TXN_FOLDER);
             if (!Files.exists(txnPath)) {
                 Files.createDirectories(txnPath);
                 log.debug("created txn dir: " + txnPath);
@@ -247,13 +271,11 @@ public class FileSystemStorageAdapter implements StorageAdapter {
             this.bucketMode = bucketMode;
 
         } catch (InvalidPathException e) {
-            throw new IllegalArgumentException("Invalid root directory: " + rootVal, e);
+            throw new IllegalArgumentException("Invalid root directory: " + rootDirectory, e);
         } catch (IOException io) {
             throw new IllegalArgumentException(("Could not create content or transaction directory"), io);
         }
-
     }
-
     
     /**
      * Get from storage the artifact identified by storageLocation.

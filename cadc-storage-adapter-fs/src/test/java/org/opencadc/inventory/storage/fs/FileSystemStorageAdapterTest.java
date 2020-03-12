@@ -111,11 +111,8 @@ public class FileSystemStorageAdapterTest {
     private static final String dataString = "abcdefghijklmnopqrstuvwxyz";
     private static final byte[] data = dataString.getBytes();
 
-    private static String userHomeDir;
-
     static {
         Log4jInit.setLevel("org.opencadc.inventory", Level.DEBUG);
-        Log4jInit.setLevel("ca.nrc.cadc.util", Level.DEBUG);
     }
     
     @BeforeClass
@@ -124,20 +121,15 @@ public class FileSystemStorageAdapterTest {
             Set<PosixFilePermission> perms = PosixFilePermissions.fromString("rwxrwxrw-");
             FileAttribute<Set<PosixFilePermission>> attr = PosixFilePermissions.asFileAttribute(perms);
             Files.createDirectories(Paths.get(TEST_ROOT), attr);
-
-            userHomeDir = System.getProperty("user.home");
-            String dollarAdir = System.getenv("A");
-            log.debug("$A: " + dollarAdir);
-            System.setProperty("user.home", dollarAdir);
         } catch (Throwable t) {
             log.error("setup error", t);
         }
     }
 
-    @AfterClass
-    public static void cleanup() {
-        // reset user.home
-        System.setProperty("user.home", userHomeDir);
+    private void createInstanceTestRoot(String path) throws IOException {
+        Set<PosixFilePermission> perms = PosixFilePermissions.fromString("rwxrwxrw-");
+        FileAttribute<Set<PosixFilePermission>> attr = PosixFilePermissions.asFileAttribute(perms);
+        Files.createDirectories(Paths.get(path), attr);
     }
     
     @Test
@@ -154,6 +146,9 @@ public class FileSystemStorageAdapterTest {
         try {
             log.info("testPutGetDelete(" + bucketMode + ") - start");
 
+            String testDir = TEST_ROOT + File.separator + "testPutGetDelete-" + bucketMode;
+            this.createInstanceTestRoot(testDir);
+
             URI artifactURI = URI.create("test:path/file");
             MessageDigest md = MessageDigest.getInstance("MD5");
             String md5Val = HexUtil.toHex(md.digest(data));
@@ -166,7 +161,7 @@ public class FileSystemStorageAdapterTest {
             
             ByteArrayInputStream source = new ByteArrayInputStream(data);
 
-            FileSystemStorageAdapter fs = new FileSystemStorageAdapter();
+            FileSystemStorageAdapter fs = new FileSystemStorageAdapter(testDir, bucketMode);
             StorageMetadata storageMetadata = fs.put(newArtifact, source);
 
             Assert.assertEquals("artifactURI",  artifactURI, storageMetadata.artifactURI);
@@ -217,7 +212,10 @@ public class FileSystemStorageAdapterTest {
             
             log.info("testUnsortedIterator(" + bucketMode + ") - start");
 
-            FileSystemStorageAdapter fs = new FileSystemStorageAdapter();
+            String testDir = TEST_ROOT + File.separator + "testUnsortedIterator-" + bucketMode;
+            this.createInstanceTestRoot(testDir);
+
+            FileSystemStorageAdapter fs = new FileSystemStorageAdapter(testDir, bucketMode);
             
             MessageDigest md = MessageDigest.getInstance("MD5");
             String md5Val = HexUtil.toHex(md.digest(data));
@@ -306,7 +304,10 @@ public class FileSystemStorageAdapterTest {
             
             log.info("testIterateSubsetURIMode - start");
 
-            FileSystemStorageAdapter fs = new FileSystemStorageAdapter();
+            String testDir = TEST_ROOT + File.separator + "testIterateSubsetURIMode";
+            this.createInstanceTestRoot(testDir);
+
+            FileSystemStorageAdapter fs = new FileSystemStorageAdapter(testDir, BucketMode.URI);
             
             MessageDigest md = MessageDigest.getInstance("MD5");
             String md5Val = HexUtil.toHex(md.digest(data));
@@ -391,7 +392,6 @@ public class FileSystemStorageAdapterTest {
     }
     
     private class TestOutputStream extends ByteArrayOutputStream {
-        
         byte[] mydata = new byte[data.length];
         int mypos = 0;
 
