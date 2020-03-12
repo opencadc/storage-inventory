@@ -99,15 +99,14 @@ public class GetAction extends ArtifactAction {
         
         initAndAuthorize(ReadGrant.class);
         
-        ArtifactDAO dao = getArtifactDAO();
-        Artifact artifact = getArtifact(artifactURI, dao);
+        Artifact artifact = getArtifact(artifactURI);
         HeadAction.setHeaders(artifact, syncOutput);
         
         StorageLocation storageLocation = new StorageLocation(artifact.storageLocation.getStorageID());
         storageLocation.storageBucket = artifact.storageLocation.storageBucket;
         log.debug("retrieving artifact from storage...");
         try {
-            getStorageAdapter().get(storageLocation, syncOutput.getOutputStream());
+            storageAdapter.get(storageLocation, syncOutput.getOutputStream());
         } catch (WriteException e) {
             // error on client write
             String msg = "write output error";
