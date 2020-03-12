@@ -106,6 +106,7 @@ public class FileSystemStorageAdapterTest {
     private static final Logger log = Logger.getLogger(FileSystemStorageAdapterTest.class);
     
     private static final String TEST_ROOT = "build/tmp/fsroot";
+    static final int DEFAULT_BUCKET_LENGTH = 2;
     
     private static final String dataString = "abcdefghijklmnopqrstuvwxyz";
     private static final byte[] data = dataString.getBytes();
@@ -160,7 +161,7 @@ public class FileSystemStorageAdapterTest {
             
             ByteArrayInputStream source = new ByteArrayInputStream(data);
 
-            FileSystemStorageAdapter fs = new FileSystemStorageAdapter(testDir, bucketMode);
+            FileSystemStorageAdapter fs = new FileSystemStorageAdapter(testDir, bucketMode, DEFAULT_BUCKET_LENGTH);
             StorageMetadata storageMetadata = fs.put(newArtifact, source);
 
             Assert.assertEquals("artifactURI",  artifactURI, storageMetadata.artifactURI);
@@ -214,7 +215,7 @@ public class FileSystemStorageAdapterTest {
             String testDir = TEST_ROOT + File.separator + "testUnsortedIterator-" + bucketMode;
             this.createInstanceTestRoot(testDir);
 
-            FileSystemStorageAdapter fs = new FileSystemStorageAdapter(testDir, bucketMode);
+            FileSystemStorageAdapter fs = new FileSystemStorageAdapter(testDir, bucketMode, DEFAULT_BUCKET_LENGTH);
             
             MessageDigest md = MessageDigest.getInstance("MD5");
             String md5Val = HexUtil.toHex(md.digest(data));
@@ -306,7 +307,7 @@ public class FileSystemStorageAdapterTest {
             String testDir = TEST_ROOT + File.separator + "testIterateSubsetURIMode";
             this.createInstanceTestRoot(testDir);
 
-            FileSystemStorageAdapter fs = new FileSystemStorageAdapter(testDir, BucketMode.URI);
+            FileSystemStorageAdapter fs = new FileSystemStorageAdapter(testDir, BucketMode.URI, DEFAULT_BUCKET_LENGTH);
             
             MessageDigest md = MessageDigest.getInstance("MD5");
             String md5Val = HexUtil.toHex(md.digest(data));

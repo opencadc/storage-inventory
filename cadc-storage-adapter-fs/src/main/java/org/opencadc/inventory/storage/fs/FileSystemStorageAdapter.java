@@ -146,7 +146,6 @@ public class FileSystemStorageAdapter implements StorageAdapter {
 
     static final String MD5_CHECKSUM_SCHEME = "md5";
     static final int MAX_BUCKET_LENGTH = 5;
-    static final int DEFAULT_BUCKET_LENGTH = 2;
     private final int bucketLength;
     
     private final FileSystem fs;
@@ -191,8 +190,8 @@ public class FileSystemStorageAdapter implements StorageAdapter {
         }
         
         // in uriBucket mode get the bucket depth
-        int bucketLen = 0;
         if (bucketMode.equals(BucketMode.URIBUCKET)) {
+            int bucketLen;
             try {
                 String length = pr.getFirstPropertyValue(CONFIG_PROPERTY_BUCKETDEPTH);
                 log.debug("bucketDepth: " + length);
@@ -202,15 +201,19 @@ public class FileSystemStorageAdapter implements StorageAdapter {
                         throw new IllegalStateException("Bucket length of " + bucketLen
                             + " not in allowed range of 0-" + MAX_BUCKET_LENGTH);
                     }
+                } else {
+                    throw new IllegalStateException("Bucket length required");
                 }
             } catch (Throwable t) {
                 throw new IllegalStateException("failed to load " + CONFIG_PROPERTY_BUCKETMODE
                     + " from " + CONFIG_FILE + ": " + t.getMessage(), t);
             }
+            this.bucketLength = bucketLen;
+        } else {
+            // URI bucketMode
+            this.bucketLength = 0;
         }
 
-        this.bucketLength = bucketLen;
-        
         InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "rootDirectory", rootVal);
         InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "bucketMode", bucketMode);
         this.fs = FileSystems.getDefault();
@@ -230,7 +233,7 @@ public class FileSystemStorageAdapter implements StorageAdapter {
      * @param rootDirectory The root directory of the local file system.
      * @param bucketMode The mode in which to organize files
      */
-    public FileSystemStorageAdapter(String rootDirectory, BucketMode bucketMode) {
+    public FileSystemStorageAdapter(String rootDirectory, BucketMode bucketMode, int bucketLen) {
 
         InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "rootDirectory", rootDirectory);
         InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "bucketMode", bucketMode);
@@ -240,7 +243,12 @@ public class FileSystemStorageAdapter implements StorageAdapter {
         this.contentPath = root.resolve(CONTENT_FOLDER);
         this.txnPath = root.resolve(TXN_FOLDER);
         this.bucketMode = bucketMode;
-        this.bucketLength = DEFAULT_BUCKET_LENGTH;
+
+        if (bucketLen < 0 || bucketLen > MAX_BUCKET_LENGTH) {
+            throw new IllegalStateException("Bucket length of " + bucketLen
+                + " not in allowed range of 0-" + MAX_BUCKET_LENGTH);
+        }
+        this.bucketLength = bucketLen;
 
         init(rootDirectory);
     }
