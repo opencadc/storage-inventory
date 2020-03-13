@@ -82,6 +82,17 @@ import org.opencadc.inventory.Entity;
 import org.opencadc.inventory.InventoryUtil;
 
 
+/**
+ * Class to manage and create DAO instances.  This will create new DAOs, or build one from an existing DAO to have
+ * true transaction management.
+ *
+ * <p>Expected Properties are:
+ * org.opencadc.inventory.db.SQLGenerator=org.opencadc.inventory.db.SQLGenerator
+ * org.opencadc.inventory.db.schema={schema}
+ * org.opencadc.inventory.db.username={dbuser}
+ * org.opencadc.inventory.db.password={dbpassword}
+ * org.opencadc.inventory.db.url=jdbc:postgresql://{server}/{database}
+ */
 public class DAOConfigurationManager {
 
     private static final String JNDI_ARTIFACT_DATASOURCE_NAME = "jdbc/inventory";
@@ -108,6 +119,20 @@ public class DAOConfigurationManager {
      *
      * @param <T>       Type for the class to create.
      * @param daoClass  The class of DAO to create and configure.
+     * @param sourceDAO The DAO to create another DAO from.
+     * @return An AbstractDAO concrete instance.  Never null.
+     */
+    public <T extends AbstractDAO<? extends Entity>> T configure(final Class<T> daoClass,
+                                                                 final AbstractDAO<? extends Entity> sourceDAO) {
+        return InventoryUtil.loadPlugin(daoClass.getCanonicalName(), sourceDAO);
+    }
+
+    /**
+     * This will method exists to allow a lazy load any AbstractDAO.  No DAO configuration is performed until
+     * this method is called.
+     *
+     * @param <T>      Type for the class to create.
+     * @param daoClass The class of DAO to create and configure.
      * @return An AbstractDAO concrete instance.  Never null.
      */
     public <T extends AbstractDAO<? extends Entity>> T configure(final Class<T> daoClass) {

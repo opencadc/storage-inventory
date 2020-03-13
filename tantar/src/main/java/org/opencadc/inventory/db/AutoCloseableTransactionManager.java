@@ -67,27 +67,45 @@
  ************************************************************************
  */
 
-package org.opencadc.tantar.db;
+package org.opencadc.inventory.db;
 
 import ca.nrc.cadc.db.TransactionManager;
 
 import java.io.Closeable;
 
 import org.apache.log4j.Logger;
+import org.opencadc.inventory.Entity;
 
 
-public class AutoCloseableTransactionManager implements AutoCloseable {
+/**
+ * Transaction manager that will self-close (self-rollback if necessary).
+ * @param <T>
+ */
+public class AutoCloseableTransactionManager<T extends AbstractDAO<? extends Entity>> implements AutoCloseable {
 
     private static final Logger LOGGER = Logger.getLogger(AutoCloseableTransactionManager.class);
-    private final TransactionManager transactionManager;
 
-    public AutoCloseableTransactionManager(final TransactionManager transactionManager) {
-        this.transactionManager = transactionManager;
-        this.transactionManager.startTransaction();
+    private final DAOConfigurationManager daoConfigurationManager;
+
+    // DAO to be cached.  Lazy load it.
+    private AbstractDAO<? extends Entity> sourceDAO;
+
+    public AutoCloseableTransactionManager(final DAOConfigurationManager daoConfigurationManager,
+                                           final Class<T> daoClass) {
+        this.daoConfigurationManager = daoConfigurationManager;
+        this.sourceDAO = daoConfigurationManager.configure(daoClass);
     }
 
     public void commit() {
-        this.transactionManager.commitTransaction();
+        this.sourceDAO.getTransactionManager().commitTransaction();
+    }
+
+    public <E extends AbstractDAO<? extends Entity>> E getSourceDAO() {
+        return (E) this.sourceDAO;
+    }
+
+    public <E extends AbstractDAO<? extends Entity>> E createDAO(final Class<E> daoClass) {
+        return daoConfigurationManager.configure(daoClass, this.sourceDAO);
     }
 
     /**
@@ -134,6 +152,7 @@ public class AutoCloseableTransactionManager implements AutoCloseable {
      */
     @Override
     public void close() throws Exception {
+        final TransactionManager transactionManager = sourceDAO.getTransactionManager();
         if (transactionManager.isOpen()) {
             LOGGER.error("BUG - Open transaction in finally");
             transactionManager.rollbackTransaction();

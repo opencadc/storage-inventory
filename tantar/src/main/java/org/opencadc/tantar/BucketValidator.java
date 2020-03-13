@@ -82,10 +82,10 @@ import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.DeletedArtifactEvent;
 import org.opencadc.inventory.DeletedStorageLocationEvent;
-import org.opencadc.inventory.Entity;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.db.ArtifactDAO;
+import org.opencadc.inventory.db.AutoCloseableTransactionManager;
 import org.opencadc.inventory.db.DAOConfigurationManager;
 import org.opencadc.inventory.db.DeletedEventDAO;
 import org.opencadc.inventory.db.ObsoleteStorageLocation;
@@ -94,7 +94,6 @@ import org.opencadc.inventory.db.ObsoleteStorageLocationDAO;
 import org.opencadc.inventory.storage.StorageAdapter;
 import org.opencadc.inventory.storage.StorageEngageException;
 import org.opencadc.inventory.storage.StorageMetadata;
-import org.opencadc.tantar.db.AutoCloseableTransactionManager;
 import org.opencadc.tantar.policy.ResolutionPolicy;
 
 
@@ -117,10 +116,6 @@ public class BucketValidator implements ValidateEventListener {
     private final boolean reportOnlyFlag;
     private final ResolutionPolicy resolutionPolicy;
     private final DAOConfigurationManager daoConfigurationManager;
-
-    // The DAOs can be set later to allow lazy loading.
-    private ArtifactDAO artifactDAO;
-    private ObsoleteStorageLocationDAO obsoleteStorageLocationDAO;
 
 
     /**
@@ -253,9 +248,8 @@ public class BucketValidator implements ValidateEventListener {
     @Override
     public void reset(final Artifact artifact) throws Exception {
         if (canTakeAction()) {
-            final ArtifactDAO artifactDAO = getArtifactDAO();
-            try (final AutoCloseableTransactionManager transactionManager =
-                         new AutoCloseableTransactionManager(artifactDAO.getTransactionManager())) {
+            try (final AutoCloseableTransactionManager<ArtifactDAO> transactionManager =
+                         new AutoCloseableTransactionManager<>(daoConfigurationManager, ArtifactDAO.class)) {
                 final Artifact resetArtifact = new Artifact(artifact.getID(), artifact.getURI(),
                                                             artifact.getContentChecksum(), new Date(),
                                                             artifact.getContentLength());
@@ -263,11 +257,14 @@ public class BucketValidator implements ValidateEventListener {
                 resetArtifact.contentEncoding = artifact.contentEncoding;
                 resetArtifact.storageLocation = null;
 
+                final ArtifactDAO artifactDAO = transactionManager.getSourceDAO();
+
                 artifactDAO.put(resetArtifact, true);
 
                 final DeletedStorageLocationEvent deletedStorageLocationEvent =
                         new DeletedStorageLocationEvent(resetArtifact.getID());
-                final DeletedEventDAO<DeletedStorageLocationEvent> deletedEventDAO = getDeleteEventDAO();
+                final DeletedEventDAO<DeletedStorageLocationEvent> deletedEventDAO =
+                        transactionManager.createDAO(DeletedEventDAO.class);
                 deletedEventDAO.put(deletedStorageLocationEvent);
 
                 transactionManager.commit();
@@ -276,7 +273,10 @@ public class BucketValidator implements ValidateEventListener {
     }
 
     /**
-     * Remove a file based on the determination of the Policy.
+     * Remove a file based on the determination of the Policy.  The use case driving this is when the Policy dictates
+     * that the Inventory is correct, but the Artifact is missing, and the Storage Metadata is present.
+     * TODO: Finalize the logic in this method.
+     * TODO: jenkinsd 2020.03.13
      *
      * @param storageMetadata The StorageMetadata containing a Storage Location to remove.
      * @throws Exception Covering numerous exceptions from the StorageAdapter.
@@ -285,14 +285,17 @@ public class BucketValidator implements ValidateEventListener {
     public void delete(final StorageMetadata storageMetadata) throws Exception {
         if (canTakeAction()) {
             final StorageLocation storageLocation = storageMetadata.getStorageLocation();
-            final ObsoleteStorageLocationDAO obsoleteStorageLocationDAO = getObsoleteStorageLocationDAO();
-            final ObsoleteStorageLocation obsoleteStorageLocation = obsoleteStorageLocationDAO.get(storageLocation);
-            if (obsoleteStorageLocation != null) {
-                try (final AutoCloseableTransactionManager transactionManager =
-                             new AutoCloseableTransactionManager(obsoleteStorageLocationDAO.getTransactionManager())) {
+            try (final AutoCloseableTransactionManager<ObsoleteStorageLocationDAO> transactionManager =
+                         new AutoCloseableTransactionManager<>(daoConfigurationManager,
+                                                               ObsoleteStorageLocationDAO.class)) {
+                final ObsoleteStorageLocationDAO obsoleteStorageLocationDAO = transactionManager.getSourceDAO();
+                final ObsoleteStorageLocation obsoleteStorageLocation = obsoleteStorageLocationDAO.get(storageLocation);
+
+                if (obsoleteStorageLocation != null) {
                     obsoleteStorageLocationDAO.delete(obsoleteStorageLocation.getID());
-                    transactionManager.commit();
                 }
+
+                transactionManager.commit();
             }
         }
     }
@@ -306,13 +309,17 @@ public class BucketValidator implements ValidateEventListener {
     @Override
     public void delete(final Artifact artifact) throws Exception {
         if (canTakeAction()) {
-            final ArtifactDAO artifactDAO = getArtifactDAO();
-            try (final AutoCloseableTransactionManager transactionManager =
-                         new AutoCloseableTransactionManager(artifactDAO.getTransactionManager())) {
-                final DeletedEventDAO<DeletedArtifactEvent> deletedEventDAO = getDeleteEventDAO();
+            try (final AutoCloseableTransactionManager<ArtifactDAO> transactionManager =
+                         new AutoCloseableTransactionManager<>(daoConfigurationManager, ArtifactDAO.class)) {
+                final ArtifactDAO artifactDAO = transactionManager.getSourceDAO();
+
+                final DeletedEventDAO<DeletedArtifactEvent> deletedEventDAO =
+                        transactionManager.createDAO(DeletedEventDAO.class);
                 final DeletedArtifactEvent deletedArtifactEvent = new DeletedArtifactEvent(artifact.getID());
+
                 artifactDAO.delete(artifact.getID());
                 deletedEventDAO.put(deletedArtifactEvent);
+
                 transactionManager.commit();
             }
         }
@@ -336,9 +343,9 @@ public class BucketValidator implements ValidateEventListener {
                 artifact.contentType = storageMetadata.contentType;
                 artifact.contentEncoding = storageMetadata.contentEncoding;
 
-                final ArtifactDAO artifactDAO = getArtifactDAO();
-                try (final AutoCloseableTransactionManager transactionManager =
-                             new AutoCloseableTransactionManager(artifactDAO.getTransactionManager())) {
+                try (final AutoCloseableTransactionManager<ArtifactDAO> transactionManager =
+                             new AutoCloseableTransactionManager<>(daoConfigurationManager, ArtifactDAO.class)) {
+                    final ArtifactDAO artifactDAO = transactionManager.getSourceDAO();
                     artifactDAO.put(artifact, false);
                     transactionManager.commit();
                 }
@@ -363,19 +370,22 @@ public class BucketValidator implements ValidateEventListener {
     @Override
     public void replaceArtifact(final Artifact artifact, final StorageMetadata storageMetadata) throws Exception {
         if (canTakeAction()) {
-            final ArtifactDAO artifactDAO = getArtifactDAO();
-            try (final AutoCloseableTransactionManager transactionManager =
-                         new AutoCloseableTransactionManager(artifactDAO.getTransactionManager())) {
+            try (final AutoCloseableTransactionManager<ArtifactDAO> transactionManager =
+                         new AutoCloseableTransactionManager<>(daoConfigurationManager, ArtifactDAO.class)) {
+                final ArtifactDAO artifactDAO = transactionManager.getSourceDAO();
                 // Add an obsolete marker to signify that the Storage Location known to the Artifact is no longer
                 // valid and assumed deleted at the Storage level.  Remove the Artifact after that.
                 final ObsoleteStorageLocation obsoleteStorageLocation =
                         new ObsoleteStorageLocation(artifact.storageLocation);
-                final ObsoleteStorageLocationDAO obsoleteStorageLocationDAO = getObsoleteStorageLocationDAO();
+                final ObsoleteStorageLocationDAO obsoleteStorageLocationDAO =
+                        transactionManager.createDAO(ObsoleteStorageLocationDAO.class);
                 obsoleteStorageLocationDAO.put(obsoleteStorageLocation);
                 artifactDAO.delete(artifact.getID());
 
                 final DeletedArtifactEvent deletedArtifactEvent = new DeletedArtifactEvent(artifact.getID());
-                getDeleteEventDAO().put(deletedArtifactEvent);
+                final DeletedEventDAO<DeletedArtifactEvent> deletedArtifactEventDeletedEventDAO =
+                        transactionManager.createDAO(DeletedEventDAO.class);
+                deletedArtifactEventDeletedEventDAO.put(deletedArtifactEvent);
 
                 // Create a replacement Artifact with information from the StorageMetadata, as it's assumed to hold
                 // the correct state of this Storage Entity.
@@ -419,31 +429,6 @@ public class BucketValidator implements ValidateEventListener {
      * @return Iterator instance of Artifact objects
      */
     Iterator<Artifact> iterateInventory() {
-        return getArtifactDAO().iterator(bucket);
-    }
-
-    private ArtifactDAO getArtifactDAO() {
-        if (artifactDAO == null) {
-            artifactDAO = daoConfigurationManager.configure(ArtifactDAO.class);
-        }
-
-        return artifactDAO;
-    }
-
-    private ObsoleteStorageLocationDAO getObsoleteStorageLocationDAO() {
-        if (obsoleteStorageLocationDAO == null) {
-            obsoleteStorageLocationDAO = daoConfigurationManager.configure(ObsoleteStorageLocationDAO.class);
-        }
-
-        return obsoleteStorageLocationDAO;
-    }
-
-    /**
-     * We can't really cache this DAO as it can have different types.
-     * @param <T>   The Type of Entity to perform operations on.
-     * @return  An instance of DeletedEventDAO.
-     */
-    private <T extends Entity> DeletedEventDAO<T> getDeleteEventDAO() {
-        return (DeletedEventDAO<T>) daoConfigurationManager.configure(DeletedEventDAO.class);
+        return daoConfigurationManager.configure(ArtifactDAO.class).iterator(bucket);
     }
 }
