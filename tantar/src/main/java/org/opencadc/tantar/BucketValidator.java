@@ -120,7 +120,6 @@ public class BucketValidator implements ValidateEventListener {
 
     // The DAOs can be set later to allow lazy loading.
     private ArtifactDAO artifactDAO;
-    private DeletedEventDAO<? extends Entity> deletedEventDAO;
     private ObsoleteStorageLocationDAO obsoleteStorageLocationDAO;
 
 
@@ -439,11 +438,12 @@ public class BucketValidator implements ValidateEventListener {
         return obsoleteStorageLocationDAO;
     }
 
+    /**
+     * We can't really cache this DAO as it can have different types.
+     * @param <T>   The Type of Entity to perform operations on.
+     * @return  An instance of DeletedEventDAO.
+     */
     private <T extends Entity> DeletedEventDAO<T> getDeleteEventDAO() {
-        if (deletedEventDAO == null) {
-            deletedEventDAO = daoConfigurationManager.configure(DeletedEventDAO.class);
-        }
-
-        return (DeletedEventDAO<T>) deletedEventDAO;
+        return (DeletedEventDAO<T>) daoConfigurationManager.configure(DeletedEventDAO.class);
     }
 }
