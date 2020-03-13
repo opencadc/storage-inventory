@@ -75,10 +75,12 @@ import ca.nrc.cadc.reg.client.RegistryClient;
 import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.vosi.AvailabilityPlugin;
 import ca.nrc.cadc.vosi.AvailabilityStatus;
+import ca.nrc.cadc.vosi.avail.CheckCertificate;
 import ca.nrc.cadc.vosi.avail.CheckException;
 import ca.nrc.cadc.vosi.avail.CheckResource;
 import ca.nrc.cadc.vosi.avail.CheckWebService;
 
+import java.io.File;
 import java.net.URI;
 import java.util.Map;
 
@@ -96,6 +98,7 @@ import org.opencadc.inventory.db.version.InitDatabase;
 public class ServiceAvailability implements AvailabilityPlugin {
 
     private static final Logger log = Logger.getLogger(ServiceAvailability.class);
+    static final File SERVOPS_PEM_FILE = new File(System.getProperty("user.home") + "/.ssl/cadcproxy.pem");
 
     /**
      * Default, no-arg constructor.
@@ -139,6 +142,11 @@ public class ServiceAvailability implements AvailabilityPlugin {
             InitDatabase init = new InitDatabase(ds, database, schema);
             init.doInit();
             log.info("init database... OK");
+
+            // check for a certficate needed to perform network ops
+            CheckCertificate checkCert = new CheckCertificate(SERVOPS_PEM_FILE);
+            checkCert.check();
+            log.info("cert check ok");
 
             // check other services we depend on
             RegistryClient reg = new RegistryClient();
