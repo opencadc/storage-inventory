@@ -160,7 +160,7 @@ public class BucketValidator implements ValidateEventListener {
         }
 
         this.resolutionPolicy = InventoryUtil.loadPlugin(policyClassName, this, reporter);
-        this.bucket = bucket;
+        this.bucket = bucket.trim();
         this.storageAdapter = storageAdapter;
         this.runUser = runUser;
         this.reportOnlyFlag = reportOnlyFlag;
@@ -170,7 +170,7 @@ public class BucketValidator implements ValidateEventListener {
     BucketValidator(final String bucket, final StorageAdapter storageAdapter, final Subject runUser,
                     final boolean reportOnlyFlag, final ResolutionPolicy resolutionPolicy,
                     final DAOConfigurationManager daoConfigurationManager) {
-        this.bucket = bucket;
+        this.bucket = bucket.trim();
         this.storageAdapter = storageAdapter;
         this.runUser = runUser;
         this.reportOnlyFlag = reportOnlyFlag;
@@ -224,11 +224,16 @@ public class BucketValidator implements ValidateEventListener {
         // *** Perform some mop up.  These loops will take effect when one of the iterators is empty but the other is
         // not, like in the case of a fresh load from another site.
         while (inventoryIterator.hasNext()) {
-            resolutionPolicy.resolve(inventoryIterator.next(), null);
+            final Artifact artifact = inventoryIterator.next();
+            LOGGER.debug(String.format("Artifact %s exists with no Storage Metadata.", artifact.storageLocation));
+            resolutionPolicy.resolve(artifact, null);
         }
 
         while (storageMetadataIterator.hasNext()) {
-            resolutionPolicy.resolve(null, storageMetadataIterator.next());
+            final StorageMetadata storageMetadata = storageMetadataIterator.next();
+            LOGGER.debug(String.format("Storage Metadata %s exists with no Artifact.",
+                                       storageMetadata.getStorageLocation()));
+            resolutionPolicy.resolve(null, storageMetadata);
         }
 
         LOGGER.debug("END validating iterators.");

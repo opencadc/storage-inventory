@@ -94,6 +94,7 @@ public class AutoCloseableTransactionManager<T extends AbstractDAO<? extends Ent
                                            final Class<T> daoClass) {
         this.daoConfigurationManager = daoConfigurationManager;
         this.sourceDAO = daoConfigurationManager.configure(daoClass);
+        this.sourceDAO.getTransactionManager().startTransaction();
     }
 
     public void commit() {
