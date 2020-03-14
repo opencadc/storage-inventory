@@ -79,7 +79,7 @@ import org.opencadc.inventory.Entity;
 
 /**
  * Transaction manager that will self-close (self-rollback if necessary).
- * @param <T>
+ * @param <T> Expected type of sourceDAO to use.
  */
 public class AutoCloseableTransactionManager<T extends AbstractDAO<? extends Entity>> implements AutoCloseable {
 
