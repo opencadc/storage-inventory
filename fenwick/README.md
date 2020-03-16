@@ -1,6 +1,7 @@
 # Storage Inventoty metadata-sync process (fenwick)
 
-Process to incrementally sync metadata changes between storage sites and global inventory(ies).
+Process to sync metadata changes between storage sites and global inventory(ies). This process runs in
+incremental mode (single process running continuously to update a local inventory database). 
 
 ## configuration
 See the [cadc-java](https://github.com/opencadc/docker-base/tree/master/cadc-java) image docs for general config requirements.
