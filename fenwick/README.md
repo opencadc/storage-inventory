@@ -14,10 +14,10 @@ org.opencadc.fenwick.logging = {info|debug}
 
 # inventory database settings
 org.opencadc.inventory.db.SQLGenerator=org.opencadc.inventory.db.SQLGenerator
-org.opencadc.inventory.db.schema={schema}
-org.opencadc.fenwick.username={dbuser}
-org.opencadc.fenwick.password={dbpassword}
-org.opencadc.fenwick.url=jdbc:postgresql://{server}/{database}
+org.opencadc.fenwick.db.schema={schema}
+org.opencadc.fenwick.db.username={dbuser}
+org.opencadc.fenwick.db.password={dbpassword}
+org.opencadc.fenwick.db.url=jdbc:postgresql://{server}/{database}
 
 # remote inventory query service (luskan)
 org.opencadc.fenwick.queryService={resorceID of remote TAP service with inventory data model}

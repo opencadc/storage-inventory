@@ -15,10 +15,10 @@ org.opencadc.critwall.logging = {info|debug}
 
 # inventory database settings
 org.opencadc.inventory.db.SQLGenerator=org.opencadc.inventory.db.SQLGenerator
-org.opencadc.inventory.db.schema={schema}
-org.opencadc.critwall.username={dbuser}
-org.opencadc.critwall.password={dbpassword}
-org.opencadc.critwall.url=jdbc:postgresql://{server}/{database}
+org.opencadc.critwall.db.schema={schema}
+org.opencadc.critwall.db.username={dbuser}
+org.opencadc.critwall.db.password={dbpassword}
+org.opencadc.critwall.db.url=jdbc:postgresql://{server}/{database}
 
 # global transfer negotiation service (raven)
 org.opencadc.critwall.locatorService={resorceID of global transfer negotiation service}
