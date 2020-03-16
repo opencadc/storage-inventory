@@ -25,6 +25,10 @@ org.opencadc.fenwick.queryService={resorceID of remote TAP service with inventor
 org.opencadc.fenwick.ArtifactSelector={fully qualified classname of ArtifactSelector implementation}
 ```
 
+### cadcproxy.pem
+Querying the remote query service (luskan) requires permission. `fenwick` uses this certificate file located
+in /config to authenticate.
+
 ## building it
 ```
 gradle clean build

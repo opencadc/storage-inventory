@@ -1,4 +1,4 @@
-# Storage Inventoty file-sync process (critwall)
+# Storage Inventory file-sync process (critwall)
 
 Process to incrementally sync metadata changes between storage sites and global inventory(ies).
 
@@ -28,6 +28,10 @@ org.opencadc.inventory.storage.StorageAdapter=org.opencadc.inventory.storage.fs.
 org.opencadc.critwall.buckets = {uriBucket prefix}
 org.opencadc.critwall.threads = {number of download threads}
 ```
+
+### cadcproxy.pem
+Querying the global locator service (raven) and downloading files requires permission. `critwall` uses 
+this certificate file located in /config to authenticate.
 
 ## building it
 ```
