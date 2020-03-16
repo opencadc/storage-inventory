@@ -30,7 +30,7 @@ org.opencadc.critwall.threads = {number of download threads}
 ```
 
 ### cadcproxy.pem
-Querying the global locator service (raven) and downloading files requires permission. `critwall` uses 
+Querying the global locator service (raven) and downloading files (minoc) requires permission. `critwall` uses 
 this certificate file located in /config to authenticate.
 
 ## building it
