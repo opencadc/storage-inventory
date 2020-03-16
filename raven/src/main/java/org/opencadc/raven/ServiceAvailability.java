@@ -73,9 +73,11 @@ import ca.nrc.cadc.reg.client.LocalAuthority;
 import ca.nrc.cadc.reg.client.RegistryClient;
 import ca.nrc.cadc.vosi.AvailabilityPlugin;
 import ca.nrc.cadc.vosi.AvailabilityStatus;
+import ca.nrc.cadc.vosi.avail.CheckCertificate;
 import ca.nrc.cadc.vosi.avail.CheckException;
 import ca.nrc.cadc.vosi.avail.CheckResource;
 import ca.nrc.cadc.vosi.avail.CheckWebService;
+import java.io.File;
 import java.net.URI;
 import org.apache.log4j.Logger;
 
@@ -88,7 +90,8 @@ import org.apache.log4j.Logger;
 public class ServiceAvailability implements AvailabilityPlugin {
 
     private static final Logger log = Logger.getLogger(ServiceAvailability.class);
-
+    private static final File SERVOPS_PEM_FILE = new File(System.getProperty("user.home") + "/.ssl/cadcproxy.pem");
+    
     /**
      * Default, no-arg constructor.
      */
@@ -122,14 +125,17 @@ public class ServiceAvailability implements AvailabilityPlugin {
         String note = "service is accepting requests";
         
         try {
-
             // check other services we depend on
             RegistryClient reg = new RegistryClient();
             String url;
-            CheckResource checkResource;
-            
             LocalAuthority localAuthority = new LocalAuthority();
 
+            // check for a certficate needed to perform network ops
+            CheckCertificate checkCert = new CheckCertificate(SERVOPS_PEM_FILE);
+            checkCert.check();
+            log.info("cert check ok");
+
+            CheckResource checkResource;
             URI credURI = localAuthority.getServiceURI(Standards.CRED_PROXY_10.toString());
             url = reg.getServiceURL(credURI, Standards.VOSI_AVAILABILITY, AuthMethod.ANON).toExternalForm();
             checkResource = new CheckWebService(url);

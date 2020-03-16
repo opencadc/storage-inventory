@@ -77,11 +77,13 @@ import ca.nrc.cadc.tap.schema.InitDatabaseTS;
 import ca.nrc.cadc.uws.server.impl.InitDatabaseUWS;
 import ca.nrc.cadc.vosi.AvailabilityPlugin;
 import ca.nrc.cadc.vosi.AvailabilityStatus;
+import ca.nrc.cadc.vosi.avail.CheckCertificate;
 import ca.nrc.cadc.vosi.avail.CheckDataSource;
 import ca.nrc.cadc.vosi.avail.CheckException;
 import ca.nrc.cadc.vosi.avail.CheckResource;
 import ca.nrc.cadc.vosi.avail.CheckWebService;
 
+import java.io.File;
 import java.net.URI;
 import javax.sql.DataSource;
 import org.apache.log4j.Logger;
@@ -96,7 +98,9 @@ import org.opencadc.luskan.InitLuskanSchemaContent;
 public class StorageTapService implements AvailabilityPlugin {
 
     private static final Logger log = Logger.getLogger(StorageTapService.class);
-    
+    private static final File SERVOPS_PEM_FILE = new File(System.getProperty("user.home") + "/.ssl/cadcproxy.pem");
+
+
     private static final String TAP_TEST = "select schema_name from tap_schema.schemas11 where schema_name='tap_schema'";
     private static final String UWS_TEST = "select jobID from uws.Job limit 1";
 
@@ -130,6 +134,11 @@ public class StorageTapService implements AvailabilityPlugin {
             DataSource uws = DBUtil.findJNDIDataSource("jdbc/tapadm");
             InitDatabaseUWS uwsi = new InitDatabaseUWS(uws, null, "uws");
             uwsi.doInit();
+
+            // check for a certficate needed to perform network ops
+            CheckCertificate checkCert = new CheckCertificate(SERVOPS_PEM_FILE);
+            checkCert.check();
+            log.info("cert check ok");
 
             // create the TAP schema
             InitLuskanSchemaContent lsc = new InitLuskanSchemaContent(tapadm, null, "tap_schema");
