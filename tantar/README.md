@@ -24,10 +24,10 @@ org.opencadc.tantar.reportOnly = {true|false}
 
 ## inventory database settings
 org.opencadc.inventory.db.SQLGenerator=org.opencadc.inventory.db.SQLGenerator
-org.opencadc.inventory.db.schema={schema}
-org.opencadc.inventory.db.username={dbuser}
-org.opencadc.inventory.db.password={dbpassword}
-org.opencadc.inventory.db.url=jdbc:postgresql://{server}/{database}
+org.opencadc.tantar.db.schema={schema}
+org.opencadc.tantar.db.username={dbuser}
+org.opencadc.tantar.db.password={dbpassword}
+org.opencadc.tantar.db.url=jdbc:postgresql://{server}/{database}
 
 ## storage adapter settings
 org.opencadc.inventory.storage.StorageAdapter={fully-qualified-classname of implementation}
