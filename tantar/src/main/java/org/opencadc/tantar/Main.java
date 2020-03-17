@@ -87,68 +87,66 @@ import org.apache.log4j.Logger;
  */
 public class Main {
 
-    private static final String CONFIGURATION_DIRECTORY = System.getProperty("DEFAULT_CONFIG_DIR", "/config");
-    private static final String CERTIFICATE_FILE_LOCATION = String.format("%s/cadcproxy.pem",
-                                                                          Main.CONFIGURATION_DIRECTORY);
-    private static final String CONFIGURATION_FILE_LOCATION = String.format("%s/tantar.properties",
-                                                                            Main.CONFIGURATION_DIRECTORY);
-
-    private static final Logger LOGGER = Logger.getLogger(Main.class);
-    private static final Reporter REPORTER = new Reporter(Main.LOGGER);
-    private static final Properties APPLICATION_PROPERTIES = new Properties();
-
     public static void main(final String[] args) {
-        Main.REPORTER.start();
-        Main.configure();
-        Main.setLogging();
+        final String configurationDirectory = System.getProperty("DEFAULT_CONFIG_DIR", "/config");
+        final String certificateFileLocation = String.format("%s/cadcproxy.pem", configurationDirectory);
+        final String configurationFileLocation = String.format("%s/tantar.properties", configurationDirectory);
+
+        final Logger logger = Logger.getLogger(Main.class);
+        final Reporter reporter = new Reporter(logger);
+
+        reporter.start();
 
         try {
-            final BucketValidator bucketValidator =
-                    new BucketValidator(Main.APPLICATION_PROPERTIES, Main.REPORTER,
-                                        SSLUtil.createSubject(new File(Main.CERTIFICATE_FILE_LOCATION)));
+            final Properties applicationProperties = Main.configure(configurationFileLocation);
+            Main.setLogging(applicationProperties);
+
+            final BucketValidator bucketValidator = new BucketValidator(applicationProperties, reporter,
+                                                                        SSLUtil.createSubject(
+                                                                                new File(certificateFileLocation)));
 
             bucketValidator.validate();
         } catch (IllegalStateException e) {
             // IllegalStateExceptions are thrown for missing but required configuration.
-            Main.LOGGER.fatal(e.getMessage());
+            logger.fatal(e.getMessage());
             System.exit(3);
+        } catch (FileNotFoundException e) {
+            logger.fatal(
+                    String.format("Unable to locate configuration file.  Expected it to be at %s.",
+                                  configurationFileLocation));
+            System.exit(1);
+        } catch (IOException e) {
+            logger.fatal(String.format("Unable to read file located at %s.", configurationFileLocation));
+            System.exit(2);
         } catch (Exception e) {
             // Used to catch everything else, such as a RuntimeException when a file cannot be obtained and put.
-            Main.LOGGER.fatal(e.getMessage());
+            logger.fatal(e.getMessage());
             System.exit(4);
         } finally {
-            Main.REPORTER.end();
+            reporter.end();
         }
     }
 
     /**
      * Read in the configuration file and load it into the Main application configuration.
      */
-    private static void configure() {
-        try {
-            final Reader configFileReader = new FileReader(Main.CONFIGURATION_FILE_LOCATION);
-            Main.APPLICATION_PROPERTIES.load(configFileReader);
-        } catch (FileNotFoundException e) {
-            Main.LOGGER.fatal(
-                    String.format("Unable to locate configuration file.  Expected it to be at %s.",
-                                  Main.CONFIGURATION_FILE_LOCATION));
-            System.exit(1);
-        } catch (IOException e) {
-            Main.LOGGER.fatal(String.format("Unable to read file located at %s.", Main.CONFIGURATION_FILE_LOCATION));
-            System.exit(2);
-        }
+    private static Properties configure(final String configurationFileLocation) throws IOException {
+        final Properties properties = new Properties();
+        final Reader configFileReader = new FileReader(configurationFileLocation);
+        properties.load(configFileReader);
+        return properties;
     }
 
-    private static void setLogging() {
+    private static void setLogging(final Properties applicationProperties) {
         Log4jInit.setLevel("ca.nrc.cadc", Level.WARN);
         Log4jInit.setLevel("org.opencadc", Level.WARN);
 
         final String loggingKey = ".logging";
 
-        Main.APPLICATION_PROPERTIES.entrySet().stream().filter(entry -> entry.getKey().toString().endsWith(loggingKey))
-                                   .forEach(entry -> Log4jInit.setLevel(entry.getKey().toString().split(loggingKey)[0],
-                                                                        Level.toLevel(
-                                                                                entry.getValue().toString()
-                                                                                     .toUpperCase())));
+        applicationProperties.entrySet().stream().filter(entry -> entry.getKey().toString().endsWith(loggingKey))
+                             .forEach(entry -> Log4jInit.setLevel(entry.getKey().toString().split(loggingKey)[0],
+                                                                  Level.toLevel(
+                                                                          entry.getValue().toString()
+                                                                               .toUpperCase())));
     }
 }

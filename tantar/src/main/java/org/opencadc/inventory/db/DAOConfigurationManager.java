@@ -97,9 +97,9 @@ public class DAOConfigurationManager {
 
     private static final String JNDI_ARTIFACT_DATASOURCE_NAME = "jdbc/inventory";
     private static final String SQL_GEN_KEY = SQLGenerator.class.getName();
-    private static final String SCHEMA_KEY = String.format("%s.schema", SQLGenerator.class.getPackage().getName());
 
     private static final String JDBC_CONFIG_KEY_PREFIX = "org.opencadc.tantar.db";
+    private static final String JDBC_SCHEMA_KEY = String.format("%s.schema", JDBC_CONFIG_KEY_PREFIX);
     private static final String JDBC_USERNAME_KEY = String.format("%s.username", JDBC_CONFIG_KEY_PREFIX);
     private static final String JDBC_PASSWORD_KEY = String.format("%s.password", JDBC_CONFIG_KEY_PREFIX);
     private static final String JDBC_URL_KEY = String.format("%s.url", JDBC_CONFIG_KEY_PREFIX);
@@ -178,13 +178,13 @@ public class DAOConfigurationManager {
 
         config.put("jndiDataSourceName", registerDataSource());
 
-        final String schemaName = properties.getProperty(SCHEMA_KEY);
+        final String schemaName = properties.getProperty(JDBC_SCHEMA_KEY);
 
         if (StringUtil.hasLength(schemaName)) {
             config.put("schema", schemaName);
         } else {
             throw new IllegalStateException(
-                    String.format("A value for %s is required in minoc.properties", SCHEMA_KEY));
+                    String.format("A value for %s is required in minoc.properties", JDBC_SCHEMA_KEY));
         }
 
         config.put("database", "inventory");
