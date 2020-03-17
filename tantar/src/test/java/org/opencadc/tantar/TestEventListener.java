@@ -81,7 +81,7 @@ public class TestEventListener implements ValidateEventListener {
     protected boolean replaceArtifactCalled = false;
 
     @Override
-    public void addArtifact(StorageMetadata storageMetadata) throws Exception {
+    public void createArtifact(StorageMetadata storageMetadata) throws Exception {
         addArtifactCalled = true;
     }
 
@@ -96,7 +96,7 @@ public class TestEventListener implements ValidateEventListener {
     }
 
     @Override
-    public void reset(Artifact artifact) throws Exception {
+    public void markAsNew(Artifact artifact) throws Exception {
         resetArtifactCalled = true;
     }
 

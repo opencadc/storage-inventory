@@ -97,7 +97,7 @@ public class InventoryIsAlwaysRight extends ResolutionPolicy {
             // either.
             reporter.report(String.format("Retrieving File %s as per policy.", artifact.storageLocation));
 
-            validateEventListener.reset(artifact);
+            validateEventListener.markAsNew(artifact);
         } else if (artifact == null) {
             reporter.report(String.format("Removing Unknown File %s as per policy.",
                                           storageMetadata.getStorageLocation()));
@@ -111,7 +111,7 @@ public class InventoryIsAlwaysRight extends ResolutionPolicy {
                                               storageMetadata.getStorageLocation()));
 
                 validateEventListener.delete(storageMetadata);
-                validateEventListener.reset(artifact);
+                validateEventListener.markAsNew(artifact);
             } else {
                 reporter.report(String.format("Artifact %s is valid as per policy.", artifact.storageLocation));
             }

@@ -244,14 +244,14 @@ public class BucketValidator implements ValidateEventListener {
     }
 
     /**
-     * Reset the given Artifact by removing its Storage Location.  This will force the file-sync application to assume
-     * it's a new insert and force a re-download of the file.
+     * Mark the given Artifact as new by removing its Storage Location.  This will force the file-sync application to
+     * assume it's a new insert and force a re-download of the file.
      *
      * @param artifact The base artifact.  This MUST have a Storage Location.
      * @throws Exception Anything IO/Thread related.
      */
     @Override
-    public void reset(final Artifact artifact) throws Exception {
+    public void markAsNew(final Artifact artifact) throws Exception {
         if (canTakeAction()) {
             try (final AutoCloseableTransactionManager<ArtifactDAO> transactionManager =
                          new AutoCloseableTransactionManager<>(daoConfigurationManager, ArtifactDAO.class)) {
@@ -336,7 +336,7 @@ public class BucketValidator implements ValidateEventListener {
      * @param storageMetadata The StorageMetadata to create an Artifact from.
      */
     @Override
-    public void addArtifact(final StorageMetadata storageMetadata) throws Exception {
+    public void createArtifact(final StorageMetadata storageMetadata) throws Exception {
         if (canTakeAction()) {
             if (storageMetadata.artifactURI != null) {
                 final Artifact artifact = new Artifact(storageMetadata.artifactURI,

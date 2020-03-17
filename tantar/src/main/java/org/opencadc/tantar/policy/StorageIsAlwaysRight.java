@@ -94,7 +94,7 @@ public class StorageIsAlwaysRight extends ResolutionPolicy {
             // The Inventory has a file that does not exist in storage.  This is most unusual.
             reporter.report(String.format("Adding Artifact %s as per policy.", storageMetadata.getStorageLocation()));
 
-            validateEventListener.addArtifact(storageMetadata);
+            validateEventListener.createArtifact(storageMetadata);
         } else if (storageMetadata == null) {
             reporter.report(String.format("Removing Unknown Artifact %s as per policy.", artifact.storageLocation));
             validateEventListener.delete(artifact);
