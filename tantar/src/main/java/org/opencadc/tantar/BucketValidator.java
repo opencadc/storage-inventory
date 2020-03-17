@@ -146,12 +146,6 @@ public class BucketValidator implements ValidateEventListener {
         final boolean reportOnlyFlag =
                 Boolean.parseBoolean(properties.getProperty(REPORT_ONLY_KEY, Boolean.FALSE.toString()));
 
-        if (reportOnlyFlag) {
-            LOGGER.info("*********");
-            LOGGER.info("********* Reporting actions only.  No actions will be taken. *********");
-            LOGGER.info("*********");
-        }
-
         final String policyClassName = properties.getProperty(ResolutionPolicy.class.getCanonicalName());
         if (!StringUtil.hasLength(policyClassName)) {
             throw new IllegalArgumentException(
