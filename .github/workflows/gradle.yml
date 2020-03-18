@@ -46,6 +46,12 @@ jobs:
     - name: java build -- baldur
       run: cd baldur && gradle --info clean build javadoc checkstyleMain
 
+    - name: java build -- critwall 
+      run: cd critwall && gradle --info clean build javadoc checkstyleMain
+      
+    - name: java build -- fenwick
+      run: cd fenwick && gradle --info clean build javadoc checkstyleMain
+      
     - name: java build -- minoc 
       run: cd minoc && gradle --info clean build javadoc checkstyleMain
       
