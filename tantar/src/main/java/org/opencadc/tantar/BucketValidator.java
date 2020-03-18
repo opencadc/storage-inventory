@@ -69,6 +69,7 @@
 
 package org.opencadc.tantar;
 
+import ca.nrc.cadc.db.TransactionManager;
 import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.util.StringUtil;
 
@@ -85,7 +86,6 @@ import org.opencadc.inventory.DeletedStorageLocationEvent;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.db.ArtifactDAO;
-import org.opencadc.inventory.db.AutoCloseableTransactionManager;
 import org.opencadc.inventory.db.DAOConfigurationManager;
 import org.opencadc.inventory.db.DeletedEventDAO;
 import org.opencadc.inventory.db.ObsoleteStorageLocation;
@@ -116,6 +116,9 @@ public class BucketValidator implements ValidateEventListener {
     private final boolean reportOnlyFlag;
     private final ResolutionPolicy resolutionPolicy;
     private final DAOConfigurationManager daoConfigurationManager;
+
+    // Cached ArtifactDAO.
+    private ArtifactDAO artifactDAO;
 
 
     /**
@@ -242,13 +245,17 @@ public class BucketValidator implements ValidateEventListener {
      * assume it's a new insert and force a re-download of the file.
      *
      * @param artifact The base artifact.  This MUST have a Storage Location.
-     * @throws Exception Anything IO/Thread related.
      */
     @Override
-    public void markAsNew(final Artifact artifact) throws Exception {
+    public void markAsNew(final Artifact artifact) {
         if (canTakeAction()) {
-            try (final AutoCloseableTransactionManager<ArtifactDAO> transactionManager =
-                         new AutoCloseableTransactionManager<>(daoConfigurationManager, ArtifactDAO.class)) {
+            final ArtifactDAO artifactDAO = getArtifactDAO();
+            final TransactionManager transactionManager = artifactDAO.getTransactionManager();
+
+            try {
+                LOGGER.debug("Start transaction.");
+                transactionManager.startTransaction();
+
                 final Artifact resetArtifact = new Artifact(artifact.getID(), artifact.getURI(),
                                                             artifact.getContentChecksum(), new Date(),
                                                             artifact.getContentLength());
@@ -256,17 +263,25 @@ public class BucketValidator implements ValidateEventListener {
                 resetArtifact.contentEncoding = artifact.contentEncoding;
                 resetArtifact.storageLocation = null;
 
-                final ArtifactDAO artifactDAO = transactionManager.getSourceDAO();
-
                 artifactDAO.put(resetArtifact, true);
 
                 final DeletedStorageLocationEvent deletedStorageLocationEvent =
                         new DeletedStorageLocationEvent(resetArtifact.getID());
-                final DeletedEventDAO<DeletedStorageLocationEvent> deletedEventDAO =
-                        transactionManager.createDAO(DeletedEventDAO.class);
+                final DeletedEventDAO<DeletedStorageLocationEvent> deletedEventDAO = new DeletedEventDAO<>(artifactDAO);
                 deletedEventDAO.put(deletedStorageLocationEvent);
 
-                transactionManager.commit();
+                transactionManager.commitTransaction();
+            } catch (Exception e) {
+                LOGGER.error(String.format("Failed to mark Artifact as new %s.", artifact.getURI()), e);
+                transactionManager.rollbackTransaction();
+                LOGGER.debug("Rollback Transaction: OK");
+                throw e;
+            } finally {
+                if (transactionManager.isOpen()) {
+                    LOGGER.error("BUG - Open transaction in finally");
+                    transactionManager.rollbackTransaction();
+                    LOGGER.error("Transaction rolled back successfully.");
+                }
             }
         }
     }
@@ -278,23 +293,39 @@ public class BucketValidator implements ValidateEventListener {
      * TODO: jenkinsd 2020.03.13
      *
      * @param storageMetadata The StorageMetadata containing a Storage Location to remove.
-     * @throws Exception Covering numerous exceptions from the StorageAdapter.
      */
     @Override
-    public void delete(final StorageMetadata storageMetadata) throws Exception {
+    public void delete(final StorageMetadata storageMetadata) {
         if (canTakeAction()) {
-            final StorageLocation storageLocation = storageMetadata.getStorageLocation();
-            try (final AutoCloseableTransactionManager<ObsoleteStorageLocationDAO> transactionManager =
-                         new AutoCloseableTransactionManager<>(daoConfigurationManager,
-                                                               ObsoleteStorageLocationDAO.class)) {
-                final ObsoleteStorageLocationDAO obsoleteStorageLocationDAO = transactionManager.getSourceDAO();
+            final ArtifactDAO artifactDAO = getArtifactDAO();
+            final TransactionManager transactionManager = artifactDAO.getTransactionManager();
+
+            try {
+                LOGGER.debug("Start transaction.");
+                transactionManager.startTransaction();
+                final StorageLocation storageLocation = storageMetadata.getStorageLocation();
+                final ObsoleteStorageLocationDAO obsoleteStorageLocationDAO =
+                        new ObsoleteStorageLocationDAO(artifactDAO);
                 final ObsoleteStorageLocation obsoleteStorageLocation = obsoleteStorageLocationDAO.get(storageLocation);
 
                 if (obsoleteStorageLocation != null) {
                     obsoleteStorageLocationDAO.delete(obsoleteStorageLocation.getID());
                 }
 
-                transactionManager.commit();
+                LOGGER.debug("Commit transaction.");
+                transactionManager.commitTransaction();
+            } catch (Exception e) {
+                LOGGER.error(String.format("Failed to delete StorageMetadata %s.",
+                                           storageMetadata.getStorageLocation()), e);
+                transactionManager.rollbackTransaction();
+                LOGGER.debug("Rollback Transaction: OK");
+                throw e;
+            } finally {
+                if (transactionManager.isOpen()) {
+                    LOGGER.error("BUG - Open transaction in finally");
+                    transactionManager.rollbackTransaction();
+                    LOGGER.error("Transaction rolled back successfully.");
+                }
             }
         }
     }
@@ -303,23 +334,31 @@ public class BucketValidator implements ValidateEventListener {
      * Delete the given Artifact.
      *
      * @param artifact The Artifact to remove.
-     * @throws Exception Anything that went wrong.
      */
     @Override
-    public void delete(final Artifact artifact) throws Exception {
+    public void delete(final Artifact artifact) {
         if (canTakeAction()) {
-            try (final AutoCloseableTransactionManager<ArtifactDAO> transactionManager =
-                         new AutoCloseableTransactionManager<>(daoConfigurationManager, ArtifactDAO.class)) {
-                final ArtifactDAO artifactDAO = transactionManager.getSourceDAO();
-
-                final DeletedEventDAO<DeletedArtifactEvent> deletedEventDAO =
-                        transactionManager.createDAO(DeletedEventDAO.class);
+            final ArtifactDAO artifactDAO = getArtifactDAO();
+            final TransactionManager transactionManager = artifactDAO.getTransactionManager();
+            try {
+                final DeletedEventDAO<DeletedArtifactEvent> deletedEventDAO = new DeletedEventDAO<>(artifactDAO);
                 final DeletedArtifactEvent deletedArtifactEvent = new DeletedArtifactEvent(artifact.getID());
 
                 artifactDAO.delete(artifact.getID());
                 deletedEventDAO.put(deletedArtifactEvent);
 
-                transactionManager.commit();
+                transactionManager.commitTransaction();
+            } catch (Exception e) {
+                LOGGER.error(String.format("Failed to delete Artifact %s.", artifact.getURI()), e);
+                transactionManager.rollbackTransaction();
+                LOGGER.debug("Rollback Transaction: OK");
+                throw e;
+            } finally {
+                if (transactionManager.isOpen()) {
+                    LOGGER.error("BUG - Open transaction in finally");
+                    transactionManager.rollbackTransaction();
+                    LOGGER.error("Transaction rolled back successfully.");
+                }
             }
         }
     }
@@ -330,7 +369,7 @@ public class BucketValidator implements ValidateEventListener {
      * @param storageMetadata The StorageMetadata to create an Artifact from.
      */
     @Override
-    public void createArtifact(final StorageMetadata storageMetadata) throws Exception {
+    public void createArtifact(final StorageMetadata storageMetadata) {
         if (canTakeAction()) {
             if (storageMetadata.artifactURI != null) {
                 final Artifact artifact = new Artifact(storageMetadata.artifactURI,
@@ -342,11 +381,23 @@ public class BucketValidator implements ValidateEventListener {
                 artifact.contentType = storageMetadata.contentType;
                 artifact.contentEncoding = storageMetadata.contentEncoding;
 
-                try (final AutoCloseableTransactionManager<ArtifactDAO> transactionManager =
-                             new AutoCloseableTransactionManager<>(daoConfigurationManager, ArtifactDAO.class)) {
-                    final ArtifactDAO artifactDAO = transactionManager.getSourceDAO();
+                final ArtifactDAO artifactDAO = getArtifactDAO();
+                final TransactionManager transactionManager = artifactDAO.getTransactionManager();
+
+                try {
                     artifactDAO.put(artifact, false);
-                    transactionManager.commit();
+                    transactionManager.commitTransaction();
+                } catch (Exception e) {
+                    LOGGER.error(String.format("Failed to create Artifact %s.", artifact.getURI()), e);
+                    transactionManager.rollbackTransaction();
+                    LOGGER.debug("Rollback Transaction: OK");
+                    throw e;
+                } finally {
+                    if (transactionManager.isOpen()) {
+                        LOGGER.error("BUG - Open transaction in finally");
+                        transactionManager.rollbackTransaction();
+                        LOGGER.error("Transaction rolled back successfully.");
+                    }
                 }
             } else {
                 LOGGER.warn(String.format(
@@ -364,26 +415,26 @@ public class BucketValidator implements ValidateEventListener {
      *
      * @param artifact        The Artifact to replace.
      * @param storageMetadata The StorageMetadata whose metadata to use.
-     * @throws Exception For any unhandled exceptions.
      */
     @Override
-    public void replaceArtifact(final Artifact artifact, final StorageMetadata storageMetadata) throws Exception {
+    public void replaceArtifact(final Artifact artifact, final StorageMetadata storageMetadata) {
         if (canTakeAction()) {
-            try (final AutoCloseableTransactionManager<ArtifactDAO> transactionManager =
-                         new AutoCloseableTransactionManager<>(daoConfigurationManager, ArtifactDAO.class)) {
-                final ArtifactDAO artifactDAO = transactionManager.getSourceDAO();
+            final ArtifactDAO artifactDAO = getArtifactDAO();
+            final TransactionManager transactionManager = artifactDAO.getTransactionManager();
+
+            try {
                 // Add an obsolete marker to signify that the Storage Location known to the Artifact is no longer
                 // valid and assumed deleted at the Storage level.  Remove the Artifact after that.
                 final ObsoleteStorageLocation obsoleteStorageLocation =
                         new ObsoleteStorageLocation(artifact.storageLocation);
                 final ObsoleteStorageLocationDAO obsoleteStorageLocationDAO =
-                        transactionManager.createDAO(ObsoleteStorageLocationDAO.class);
+                        new ObsoleteStorageLocationDAO(artifactDAO);
                 obsoleteStorageLocationDAO.put(obsoleteStorageLocation);
                 artifactDAO.delete(artifact.getID());
 
                 final DeletedArtifactEvent deletedArtifactEvent = new DeletedArtifactEvent(artifact.getID());
                 final DeletedEventDAO<DeletedArtifactEvent> deletedArtifactEventDeletedEventDAO =
-                        transactionManager.createDAO(DeletedEventDAO.class);
+                        new DeletedEventDAO<>(artifactDAO);
                 deletedArtifactEventDeletedEventDAO.put(deletedArtifactEvent);
 
                 // Create a replacement Artifact with information from the StorageMetadata, as it's assumed to hold
@@ -396,7 +447,18 @@ public class BucketValidator implements ValidateEventListener {
                 replacementArtifact.storageLocation = storageMetadata.getStorageLocation();
                 artifactDAO.put(replacementArtifact);
 
-                transactionManager.commit();
+                transactionManager.commitTransaction();
+            } catch (Exception e) {
+                LOGGER.error(String.format("Failed to create Artifact %s.", artifact.getURI()), e);
+                transactionManager.rollbackTransaction();
+                LOGGER.debug("Rollback Transaction: OK");
+                throw e;
+            } finally {
+                if (transactionManager.isOpen()) {
+                    LOGGER.error("BUG - Open transaction in finally");
+                    transactionManager.rollbackTransaction();
+                    LOGGER.error("Transaction rolled back successfully.");
+                }
             }
         }
     }
@@ -428,6 +490,20 @@ public class BucketValidator implements ValidateEventListener {
      * @return Iterator instance of Artifact objects
      */
     Iterator<Artifact> iterateInventory() {
-        return daoConfigurationManager.configure(ArtifactDAO.class).iterator(bucket);
+        return getArtifactDAO().iterator(bucket);
+    }
+
+    /**
+     * Obtain the instance of the Artifact DAO.
+     *
+     * @return ArtifactDAO instance.  Never null.
+     */
+    ArtifactDAO getArtifactDAO() {
+        if (artifactDAO == null) {
+            artifactDAO = new ArtifactDAO();
+            daoConfigurationManager.configure(artifactDAO);
+        }
+
+        return artifactDAO;
     }
 }

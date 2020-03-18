@@ -79,8 +79,6 @@ import java.util.Properties;
 import javax.naming.NamingException;
 
 import org.opencadc.inventory.Entity;
-import org.opencadc.inventory.InventoryUtil;
-
 
 /**
  * Class to manage and create DAO instances.  This will create new DAOs, or build one from an existing DAO to have
@@ -114,35 +112,6 @@ public class DAOConfigurationManager {
 
 
     /**
-     * This will method exists to allow a lazy load any AbstractDAO.  No DAO configuration is performed until
-     * this method is called.
-     *
-     * @param <T>       Type for the class to create.
-     * @param daoClass  The class of DAO to create and configure.
-     * @param sourceDAO The DAO to create another DAO from.
-     * @return An AbstractDAO concrete instance.  Never null.
-     */
-    public <T extends AbstractDAO<? extends Entity>> T configure(final Class<T> daoClass,
-                                                                 final AbstractDAO<? extends Entity> sourceDAO) {
-        return InventoryUtil.loadPlugin(daoClass.getCanonicalName(), sourceDAO);
-    }
-
-    /**
-     * This will method exists to allow a lazy load any AbstractDAO.  No DAO configuration is performed until
-     * this method is called.
-     *
-     * @param <T>      Type for the class to create.
-     * @param daoClass The class of DAO to create and configure.
-     * @return An AbstractDAO concrete instance.  Never null.
-     */
-    public <T extends AbstractDAO<? extends Entity>> T configure(final Class<T> daoClass) {
-        final T abstractDAO = InventoryUtil.loadPlugin(daoClass.getCanonicalName());
-        abstractDAO.setConfig(getConfiguration());
-
-        return abstractDAO;
-    }
-
-    /**
      * Ensure the DataSource is registered in the JNDI, and return the name under which it was registered.
      *
      * @return The JNDI name.
@@ -167,7 +136,7 @@ public class DAOConfigurationManager {
         return JNDI_ARTIFACT_DATASOURCE_NAME;
     }
 
-    private Map<String, Object> getConfiguration() {
+    public void configure(final AbstractDAO<? extends Entity> abstractDAO) {
         final Map<String, Object> config = new HashMap<>();
         final String sqlGeneratorClassName = properties.getProperty(SQL_GEN_KEY, SQLGenerator.class.getCanonicalName());
         try {
@@ -189,6 +158,6 @@ public class DAOConfigurationManager {
 
         config.put("database", "inventory");
 
-        return config;
+        abstractDAO.setConfig(config);
     }
 }
