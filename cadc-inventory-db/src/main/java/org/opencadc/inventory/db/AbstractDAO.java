@@ -323,7 +323,7 @@ class AbstractDAO<T extends Entity> {
         Date dd = entity.getLastModified();
         
         boolean delta;
-        if (cur == null) {
+        if (cur == null || forceUpdate) {
             // new
             delta = true;
         } else {
@@ -333,7 +333,7 @@ class AbstractDAO<T extends Entity> {
                 dd = cur.getLastModified();  // don't go backwards
             } 
         }
-        if ((delta || forceUpdate) && (dd == null || dd.before(now))) {
+        if ((delta) && (dd == null || dd.before(now))) {
             dd = now;
         }
         
