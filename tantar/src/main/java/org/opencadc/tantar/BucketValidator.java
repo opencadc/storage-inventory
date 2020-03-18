@@ -69,14 +69,19 @@
 
 package org.opencadc.tantar;
 
+import ca.nrc.cadc.db.ConnectionConfig;
+import ca.nrc.cadc.db.DBUtil;
 import ca.nrc.cadc.db.TransactionManager;
 import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.util.StringUtil;
 
 import java.security.PrivilegedExceptionAction;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.Iterator;
+import java.util.Map;
 import java.util.Properties;
+import javax.naming.NamingException;
 import javax.security.auth.Subject;
 
 import org.apache.log4j.Logger;
@@ -86,11 +91,11 @@ import org.opencadc.inventory.DeletedStorageLocationEvent;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.db.ArtifactDAO;
-import org.opencadc.inventory.db.DAOConfigurationManager;
 import org.opencadc.inventory.db.DeletedEventDAO;
 import org.opencadc.inventory.db.ObsoleteStorageLocation;
 import org.opencadc.inventory.db.ObsoleteStorageLocationDAO;
 
+import org.opencadc.inventory.db.SQLGenerator;
 import org.opencadc.inventory.storage.StorageAdapter;
 import org.opencadc.inventory.storage.StorageEngageException;
 import org.opencadc.inventory.storage.StorageMetadata;
@@ -107,73 +112,137 @@ public class BucketValidator implements ValidateEventListener {
     private static final Logger LOGGER = Logger.getLogger(BucketValidator.class);
 
     private static final String APPLICATION_CONFIG_KEY_PREFIX = "org.opencadc.tantar";
-    private static final String BUCKET_KEY = String.format("%s.bucket", APPLICATION_CONFIG_KEY_PREFIX);
-    private static final String REPORT_ONLY_KEY = String.format("%s.reportOnly", APPLICATION_CONFIG_KEY_PREFIX);
 
     private final String bucket;
     private final StorageAdapter storageAdapter;
     private final Subject runUser;
     private final boolean reportOnlyFlag;
     private final ResolutionPolicy resolutionPolicy;
-    private final DAOConfigurationManager daoConfigurationManager;
 
     // Cached ArtifactDAO used for transactional access.
-    private ArtifactDAO artifactDAO;
-    private ArtifactDAO iteratorDAO;
+    private final ArtifactDAO artifactDAO;
+    private final ArtifactDAO iteratorDAO;
 
 
     /**
-     * Constructor to allow configuration via some provided properties.
+     * Constructor to allow configuration via some provided properties.  Expect an IllegalStateException for any
+     * mis-configured or missing values.
      *
-     * @param properties The Properties object.  See above for expected keys.
+     * @param properties The Properties object.
      * @param reporter   The Reporter to use in the policy.  Can be used elsewhere.
      * @param runUser    The user to run as.
      */
     BucketValidator(final Properties properties, final Reporter reporter, final Subject runUser) {
+        this.runUser = runUser;
+
         final String storageAdapterClassName = properties.getProperty(StorageAdapter.class.getCanonicalName());
-        if (!StringUtil.hasLength(storageAdapterClassName)) {
-            throw new IllegalArgumentException(
+        if (StringUtil.hasLength(storageAdapterClassName)) {
+            this.storageAdapter = InventoryUtil.loadPlugin(storageAdapterClassName);
+        } else {
+            throw new IllegalStateException(
                     String.format(
                             "Storage Adapter is mandatory.  Please set the %s property to a fully qualified class "
                             + "name.",
                             StorageAdapter.class.getCanonicalName()));
         }
 
-        final StorageAdapter storageAdapter = InventoryUtil.loadPlugin(storageAdapterClassName);
-
-        final String bucket = properties.getProperty(BUCKET_KEY);
+        this.bucket = properties.getProperty(String.format("%s.bucket", APPLICATION_CONFIG_KEY_PREFIX));
         if (!StringUtil.hasLength(bucket)) {
-            throw new IllegalArgumentException(String.format("Bucket is mandatory.  Please set the %s property.",
-                                                             BUCKET_KEY));
+            throw new IllegalStateException(String.format("Bucket is mandatory.  Please set the %s property.",
+                                                          String.format("%s.bucket",
+                                                                        APPLICATION_CONFIG_KEY_PREFIX)));
         }
 
-        final boolean reportOnlyFlag =
-                Boolean.parseBoolean(properties.getProperty(REPORT_ONLY_KEY, Boolean.FALSE.toString()));
+        this.reportOnlyFlag = Boolean.parseBoolean(
+                properties.getProperty(String.format("%s.reportOnly", APPLICATION_CONFIG_KEY_PREFIX),
+                                       Boolean.FALSE.toString()));
 
         final String policyClassName = properties.getProperty(ResolutionPolicy.class.getCanonicalName());
-        if (!StringUtil.hasLength(policyClassName)) {
-            throw new IllegalArgumentException(
+        if (StringUtil.hasLength(policyClassName)) {
+            this.resolutionPolicy = InventoryUtil.loadPlugin(policyClassName, this, reporter);
+        } else {
+            throw new IllegalStateException(
                     String.format("Policy is mandatory.  Please set the %s property to a fully qualified class name.",
                                   ResolutionPolicy.class.getCanonicalName()));
         }
 
-        this.resolutionPolicy = InventoryUtil.loadPlugin(policyClassName, this, reporter);
-        this.bucket = bucket.trim();
-        this.storageAdapter = storageAdapter;
-        this.runUser = runUser;
-        this.reportOnlyFlag = reportOnlyFlag;
-        this.daoConfigurationManager = new DAOConfigurationManager(properties);
+        // DAO configuration
+        final Map<String, Object> config = new HashMap<>();
+        final String sqlGeneratorKey = SQLGenerator.class.getName();
+        final String sqlGeneratorClass = properties.getProperty(sqlGeneratorKey);
+
+        if (StringUtil.hasLength(sqlGeneratorClass)) {
+            try {
+                config.put(sqlGeneratorKey, Class.forName(sqlGeneratorClass));
+            } catch (ClassNotFoundException e) {
+                throw new IllegalStateException("could not load SQLGenerator class: " + e.getMessage(), e);
+            }
+        } else {
+            throw new IllegalStateException(String.format("A value for %s is required in tantar.properties",
+                                                          sqlGeneratorKey));
+        }
+
+        final String jdbcConfigKeyPrefix = "org.opencadc.tantar.db";
+        final String jdbcSchemaKey = String.format("%s.schema", jdbcConfigKeyPrefix);
+        final String jdbcUsernameKey = String.format("%s.username", jdbcConfigKeyPrefix);
+        final String jdbcPasswordKey = String.format("%s.password", jdbcConfigKeyPrefix);
+        final String jdbcURLKey = String.format("%s.url", jdbcConfigKeyPrefix);
+        final String jdbcDriverClassname = "org.postgresql.Driver";
+
+        final String schemaName = properties.getProperty(jdbcSchemaKey);
+
+        final ConnectionConfig cc = new ConnectionConfig(null, null,
+                                                         properties.getProperty(jdbcUsernameKey),
+                                                         properties.getProperty(jdbcPasswordKey),
+                                                         jdbcDriverClassname,
+                                                         properties.getProperty(jdbcURLKey));
+        try {
+            // Register two datasources.
+            DBUtil.createJNDIDataSource("jdbc/inventory", cc);
+            DBUtil.createJNDIDataSource("jdbc/txinventory", cc);
+        } catch (NamingException ne) {
+            throw new IllegalStateException("Unable to access Inventory Database.", ne);
+        }
+
+        if (StringUtil.hasLength(schemaName)) {
+            config.put("schema", schemaName);
+        } else {
+            throw new IllegalStateException(
+                    String.format("A value for %s is required in tantar.properties", jdbcSchemaKey));
+        }
+
+        config.put("database", "inventory");
+
+        config.put("jndiDataSourceName", "jdbc/txinventory");
+        this.artifactDAO = new ArtifactDAO();
+        this.artifactDAO.setConfig(config);
+
+        config.put("jndiDataSourceName", "jdbc/inventory");
+        this.iteratorDAO = new ArtifactDAO();
+        this.iteratorDAO.setConfig(config);
     }
 
+    /**
+     * Complete constructor.  Useful for unit testing.
+     *
+     * @param bucket           The bucket key to query.
+     * @param storageAdapter   The StorageAdapter instance to interact with a Site.
+     * @param runUser          The Subject to run as when iterating over the Site's StorageMetadata.
+     * @param reportOnlyFlag   Whether to take action or not.  Default is false.
+     * @param resolutionPolicy The policy that dictates handling conflicts.
+     * @param artifactDAO      The Transactional artifact DAO for CRUD operations.
+     * @param iteratorDAO      The bare artifact DAO for iterating.
+     */
     BucketValidator(final String bucket, final StorageAdapter storageAdapter, final Subject runUser,
                     final boolean reportOnlyFlag, final ResolutionPolicy resolutionPolicy,
-                    final DAOConfigurationManager daoConfigurationManager) {
+                    final ArtifactDAO artifactDAO, final ArtifactDAO iteratorDAO) {
         this.bucket = bucket.trim();
         this.storageAdapter = storageAdapter;
         this.runUser = runUser;
         this.reportOnlyFlag = reportOnlyFlag;
         this.resolutionPolicy = resolutionPolicy;
-        this.daoConfigurationManager = daoConfigurationManager;
+        this.artifactDAO = artifactDAO;
+        this.iteratorDAO = iteratorDAO;
     }
 
     /**
@@ -250,7 +319,6 @@ public class BucketValidator implements ValidateEventListener {
     @Override
     public void markAsNew(final Artifact artifact) {
         if (canTakeAction()) {
-            final ArtifactDAO artifactDAO = getArtifactDAO();
             final TransactionManager transactionManager = artifactDAO.getTransactionManager();
 
             try {
@@ -298,7 +366,6 @@ public class BucketValidator implements ValidateEventListener {
     @Override
     public void delete(final StorageMetadata storageMetadata) {
         if (canTakeAction()) {
-            final ArtifactDAO artifactDAO = getArtifactDAO();
             final TransactionManager transactionManager = artifactDAO.getTransactionManager();
 
             try {
@@ -339,7 +406,6 @@ public class BucketValidator implements ValidateEventListener {
     @Override
     public void delete(final Artifact artifact) {
         if (canTakeAction()) {
-            final ArtifactDAO artifactDAO = getArtifactDAO();
             final TransactionManager transactionManager = artifactDAO.getTransactionManager();
             try {
                 final DeletedEventDAO<DeletedArtifactEvent> deletedEventDAO = new DeletedEventDAO<>(artifactDAO);
@@ -382,7 +448,6 @@ public class BucketValidator implements ValidateEventListener {
                 artifact.contentType = storageMetadata.contentType;
                 artifact.contentEncoding = storageMetadata.contentEncoding;
 
-                final ArtifactDAO artifactDAO = getArtifactDAO();
                 final TransactionManager transactionManager = artifactDAO.getTransactionManager();
 
                 try {
@@ -420,7 +485,6 @@ public class BucketValidator implements ValidateEventListener {
     @Override
     public void replaceArtifact(final Artifact artifact, final StorageMetadata storageMetadata) {
         if (canTakeAction()) {
-            final ArtifactDAO artifactDAO = getArtifactDAO();
             final TransactionManager transactionManager = artifactDAO.getTransactionManager();
 
             try {
@@ -491,29 +555,6 @@ public class BucketValidator implements ValidateEventListener {
      * @return Iterator instance of Artifact objects
      */
     Iterator<Artifact> iterateInventory() {
-        return getIteratorDAO().iterator(bucket);
-    }
-
-    /**
-     * Obtain the instance of the Artifact DAO.
-     *
-     * @return ArtifactDAO instance.  Never null.
-     */
-    ArtifactDAO getArtifactDAO() {
-        if (artifactDAO == null) {
-            artifactDAO = new ArtifactDAO();
-            daoConfigurationManager.configureTransactionalDAO(artifactDAO);
-        }
-
-        return artifactDAO;
-    }
-
-    ArtifactDAO getIteratorDAO() {
-        if (iteratorDAO == null) {
-            iteratorDAO = new ArtifactDAO();
-            daoConfigurationManager.configureDAO(iteratorDAO);
-        }
-
-        return iteratorDAO;
+        return iteratorDAO.iterator(bucket);
     }
 }

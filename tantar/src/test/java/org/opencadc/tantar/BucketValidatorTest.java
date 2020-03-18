@@ -69,6 +69,8 @@
 
 package org.opencadc.tantar;
 
+import ca.nrc.cadc.util.Log4jInit;
+
 import java.io.ByteArrayOutputStream;
 import java.io.OutputStream;
 import java.net.URI;
@@ -79,6 +81,7 @@ import java.util.Comparator;
 import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
+import javax.security.auth.Subject;
 
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
@@ -91,9 +94,6 @@ import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.storage.StorageMetadata;
 import org.opencadc.tantar.policy.InventoryIsAlwaysRight;
 import org.opencadc.tantar.policy.StorageIsAlwaysRight;
-import ca.nrc.cadc.util.Log4jInit;
-
-import javax.security.auth.Subject;
 
 
 public class BucketValidatorTest {
@@ -155,7 +155,7 @@ public class BucketValidatorTest {
         final BucketValidator testSubject =
                 new BucketValidator("TESTBUCKET", null,
                                     new Subject(), true, new InventoryIsAlwaysRight(testEventListener, reporter),
-                                    null) {
+                                    null, null) {
                     @Override
                     Iterator<StorageMetadata> iterateStorage() {
                         return testStorageMetadataList.iterator();
@@ -224,7 +224,7 @@ public class BucketValidatorTest {
         final BucketValidator testSubject =
                 new BucketValidator("TESTBUCKET", null,
                                     new Subject(), true, new InventoryIsAlwaysRight(testEventListener, reporter),
-                                    null) {
+                                    null, null) {
                     @Override
                     Iterator<StorageMetadata> iterateStorage() {
                         return Collections.emptyIterator();
@@ -302,7 +302,7 @@ public class BucketValidatorTest {
         final BucketValidator testSubject =
                 new BucketValidator("TESTBUCKET", null,
                                     new Subject(), true, new StorageIsAlwaysRight(testEventListener, reporter),
-                                    null) {
+                                    null, null) {
                     @Override
                     Iterator<StorageMetadata> iterateStorage() {
                         return testStorageMetadataList.iterator();
@@ -364,7 +364,7 @@ public class BucketValidatorTest {
         final BucketValidator testSubject =
                 new BucketValidator("TESTBUCKET", null,
                                     new Subject(), true, new StorageIsAlwaysRight(testEventListener, reporter),
-                                    null) {
+                                    null, null) {
                     @Override
                     Iterator<StorageMetadata> iterateStorage() {
                         return testStorageMetadataList.iterator();
