@@ -237,8 +237,6 @@ public class ArtifactDAOTest {
                     URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"),
                     new Date(),
                     new Long(666L));
-            expected.contentType = "application/octet-stream";
-            expected.contentEncoding = "gzip";
             log.info("expected: " + expected);
             
             
@@ -316,8 +314,6 @@ public class ArtifactDAOTest {
                     URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"),
                     new Date(),
                     new Long(666L));
-            expected.contentType = "application/octet-stream";
-            expected.contentEncoding = "gzip";
             log.info("expected: " + expected);
             
             
@@ -339,6 +335,7 @@ public class ArtifactDAOTest {
             expected.siteLocations.add(new SiteLocation(s1));
             expected.siteLocations.add(new SiteLocation(s2));
             expected.siteLocations.add(new SiteLocation(s3));
+            Thread.sleep(100L);
             
             dao.put(expected);
             
@@ -346,7 +343,6 @@ public class ArtifactDAOTest {
             Assert.assertNotNull(a1);
             URI mcs1 = a1.computeMetaChecksum(MessageDigest.getInstance("MD5"));
             Assert.assertEquals("round trip metachecksum unchanged", expected.getMetaChecksum(), mcs1);
-            Assert.assertNotNull(a1.getLastModified());
             Assert.assertTrue("did-not-force-update", a1.siteLocations.isEmpty());
             
             dao.put(expected, true);
