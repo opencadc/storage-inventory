@@ -118,9 +118,8 @@ public class BucketValidator implements ValidateEventListener {
     private final DAOConfigurationManager daoConfigurationManager;
 
     // Cached ArtifactDAO used for transactional access.
-    private ArtifactDAO transactionalArtifactDAO;
-
     private ArtifactDAO artifactDAO;
+    private ArtifactDAO iteratorDAO;
 
 
     /**
@@ -251,7 +250,7 @@ public class BucketValidator implements ValidateEventListener {
     @Override
     public void markAsNew(final Artifact artifact) {
         if (canTakeAction()) {
-            final ArtifactDAO artifactDAO = getTransactionalArtifactDAO();
+            final ArtifactDAO artifactDAO = getArtifactDAO();
             final TransactionManager transactionManager = artifactDAO.getTransactionManager();
 
             try {
@@ -299,7 +298,7 @@ public class BucketValidator implements ValidateEventListener {
     @Override
     public void delete(final StorageMetadata storageMetadata) {
         if (canTakeAction()) {
-            final ArtifactDAO artifactDAO = getTransactionalArtifactDAO();
+            final ArtifactDAO artifactDAO = getArtifactDAO();
             final TransactionManager transactionManager = artifactDAO.getTransactionManager();
 
             try {
@@ -340,7 +339,7 @@ public class BucketValidator implements ValidateEventListener {
     @Override
     public void delete(final Artifact artifact) {
         if (canTakeAction()) {
-            final ArtifactDAO artifactDAO = getTransactionalArtifactDAO();
+            final ArtifactDAO artifactDAO = getArtifactDAO();
             final TransactionManager transactionManager = artifactDAO.getTransactionManager();
             try {
                 final DeletedEventDAO<DeletedArtifactEvent> deletedEventDAO = new DeletedEventDAO<>(artifactDAO);
@@ -383,7 +382,7 @@ public class BucketValidator implements ValidateEventListener {
                 artifact.contentType = storageMetadata.contentType;
                 artifact.contentEncoding = storageMetadata.contentEncoding;
 
-                final ArtifactDAO artifactDAO = getTransactionalArtifactDAO();
+                final ArtifactDAO artifactDAO = getArtifactDAO();
                 final TransactionManager transactionManager = artifactDAO.getTransactionManager();
 
                 try {
@@ -421,7 +420,7 @@ public class BucketValidator implements ValidateEventListener {
     @Override
     public void replaceArtifact(final Artifact artifact, final StorageMetadata storageMetadata) {
         if (canTakeAction()) {
-            final ArtifactDAO artifactDAO = getTransactionalArtifactDAO();
+            final ArtifactDAO artifactDAO = getArtifactDAO();
             final TransactionManager transactionManager = artifactDAO.getTransactionManager();
 
             try {
@@ -492,7 +491,7 @@ public class BucketValidator implements ValidateEventListener {
      * @return Iterator instance of Artifact objects
      */
     Iterator<Artifact> iterateInventory() {
-        return getArtifactDAO().iterator(bucket);
+        return getIteratorDAO().iterator(bucket);
     }
 
     /**
@@ -500,21 +499,21 @@ public class BucketValidator implements ValidateEventListener {
      *
      * @return ArtifactDAO instance.  Never null.
      */
-    ArtifactDAO getTransactionalArtifactDAO() {
-        if (transactionalArtifactDAO == null) {
-            transactionalArtifactDAO = new ArtifactDAO();
-            daoConfigurationManager.configureTransactionalDAO(transactionalArtifactDAO);
-        }
-
-        return transactionalArtifactDAO;
-    }
-
     ArtifactDAO getArtifactDAO() {
         if (artifactDAO == null) {
             artifactDAO = new ArtifactDAO();
-            daoConfigurationManager.configureDAO(artifactDAO);
+            daoConfigurationManager.configureTransactionalDAO(artifactDAO);
         }
 
         return artifactDAO;
+    }
+
+    ArtifactDAO getIteratorDAO() {
+        if (iteratorDAO == null) {
+            iteratorDAO = new ArtifactDAO();
+            daoConfigurationManager.configureDAO(iteratorDAO);
+        }
+
+        return iteratorDAO;
     }
 }
