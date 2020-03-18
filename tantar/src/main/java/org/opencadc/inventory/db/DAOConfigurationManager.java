@@ -80,20 +80,22 @@ import javax.naming.NamingException;
 
 import org.opencadc.inventory.Entity;
 
+
 /**
  * Class to manage and create DAO instances.  This will create new DAOs, or build one from an existing DAO to have
  * true transaction management.
  *
  * <p>Expected Properties are:
  * org.opencadc.inventory.db.SQLGenerator=org.opencadc.inventory.db.SQLGenerator
- * org.opencadc.inventory.db.schema={schema}
- * org.opencadc.inventory.db.username={dbuser}
- * org.opencadc.inventory.db.password={dbpassword}
- * org.opencadc.inventory.db.url=jdbc:postgresql://{server}/{database}
+ * org.opencadc.tantar.db.schema={schema}
+ * org.opencadc.tantar.db.username={dbuser}
+ * org.opencadc.tantar.db.password={dbpassword}
+ * org.opencadc.tantar.db.url=jdbc:postgresql://{server}/{database}
  */
 public class DAOConfigurationManager {
 
     private static final String JNDI_ARTIFACT_DATASOURCE_NAME = "jdbc/inventory";
+    private static final String JNDI_TRANSACTIONAL_ARTIFACT_DATASOURCE_NAME = "jdbc/txinventory";
     private static final String SQL_GEN_KEY = SQLGenerator.class.getName();
 
     private static final String JDBC_CONFIG_KEY_PREFIX = "org.opencadc.tantar.db";
@@ -102,6 +104,8 @@ public class DAOConfigurationManager {
     private static final String JDBC_PASSWORD_KEY = String.format("%s.password", JDBC_CONFIG_KEY_PREFIX);
     private static final String JDBC_URL_KEY = String.format("%s.url", JDBC_CONFIG_KEY_PREFIX);
     private static final String JDBC_DRIVER_CLASSNAME = "org.postgresql.Driver";
+
+    private static final String DAO_CONFIGURATION_JNDI_SOURCE_KEY = "jndiDataSourceName";
 
     private final Properties properties;
 
@@ -116,10 +120,10 @@ public class DAOConfigurationManager {
      *
      * @return The JNDI name.
      */
-    private String registerDataSource() {
+    private String registerDataSource(final String name) {
         try {
             // Check if this data source is registered already.
-            DBUtil.findJNDIDataSource(JNDI_ARTIFACT_DATASOURCE_NAME);
+            DBUtil.findJNDIDataSource(name);
         } catch (NamingException e) {
             final ConnectionConfig cc = new ConnectionConfig(null, null,
                                                              properties.getProperty(JDBC_USERNAME_KEY),
@@ -127,16 +131,29 @@ public class DAOConfigurationManager {
                                                              JDBC_DRIVER_CLASSNAME,
                                                              properties.getProperty(JDBC_URL_KEY));
             try {
-                DBUtil.createJNDIDataSource(JNDI_ARTIFACT_DATASOURCE_NAME, cc);
+                DBUtil.createJNDIDataSource(name, cc);
             } catch (NamingException ne) {
                 throw new IllegalStateException("Unable to access Inventory Database.", ne);
             }
         }
 
-        return JNDI_ARTIFACT_DATASOURCE_NAME;
+        return name;
     }
 
-    public void configure(final AbstractDAO<? extends Entity> abstractDAO) {
+    public void configureTransactionalDAO(final AbstractDAO<? extends Entity> abstractDAO) {
+        final Map<String, Object> configuration = getConfiguration();
+        configuration.put(DAO_CONFIGURATION_JNDI_SOURCE_KEY,
+                          registerDataSource(JNDI_TRANSACTIONAL_ARTIFACT_DATASOURCE_NAME));
+        abstractDAO.setConfig(configuration);
+    }
+
+    public void configureDAO(final AbstractDAO<? extends Entity> abstractDAO) {
+        final Map<String, Object> configuration = getConfiguration();
+        configuration.put(DAO_CONFIGURATION_JNDI_SOURCE_KEY, registerDataSource(JNDI_ARTIFACT_DATASOURCE_NAME));
+        abstractDAO.setConfig(configuration);
+    }
+
+    private Map<String, Object> getConfiguration() {
         final Map<String, Object> config = new HashMap<>();
         final String sqlGeneratorClassName = properties.getProperty(SQL_GEN_KEY, SQLGenerator.class.getCanonicalName());
         try {
@@ -144,8 +161,6 @@ public class DAOConfigurationManager {
         } catch (ClassNotFoundException e) {
             throw new IllegalStateException("could not load SQLGenerator class: " + e.getMessage(), e);
         }
-
-        config.put("jndiDataSourceName", registerDataSource());
 
         final String schemaName = properties.getProperty(JDBC_SCHEMA_KEY);
 
@@ -158,6 +173,6 @@ public class DAOConfigurationManager {
 
         config.put("database", "inventory");
 
-        abstractDAO.setConfig(config);
+        return config;
     }
 }
