@@ -408,6 +408,9 @@ public class BucketValidator implements ValidateEventListener {
         if (canTakeAction()) {
             final TransactionManager transactionManager = artifactDAO.getTransactionManager();
             try {
+                LOGGER.debug("Start transaction.");
+                transactionManager.startTransaction();
+
                 final DeletedEventDAO<DeletedArtifactEvent> deletedEventDAO = new DeletedEventDAO<>(artifactDAO);
                 final DeletedArtifactEvent deletedArtifactEvent = new DeletedArtifactEvent(artifact.getID());
 
@@ -451,6 +454,8 @@ public class BucketValidator implements ValidateEventListener {
                 final TransactionManager transactionManager = artifactDAO.getTransactionManager();
 
                 try {
+                    LOGGER.debug("Start transaction.");
+                    transactionManager.startTransaction();
                     artifactDAO.put(artifact, false);
                     transactionManager.commitTransaction();
                 } catch (Exception e) {
@@ -488,6 +493,8 @@ public class BucketValidator implements ValidateEventListener {
             final TransactionManager transactionManager = artifactDAO.getTransactionManager();
 
             try {
+                LOGGER.debug("Start transaction.");
+                transactionManager.startTransaction();
                 // Add an obsolete marker to signify that the Storage Location known to the Artifact is no longer
                 // valid and assumed deleted at the Storage level.  Remove the Artifact after that.
                 final ObsoleteStorageLocation obsoleteStorageLocation =
