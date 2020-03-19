@@ -481,7 +481,10 @@ public class SQLGenerator {
             
             try {
                 Connection con = ds.getConnection();
-                PreparedStatement ps = con.prepareStatement(sql);
+                con.setAutoCommit(false);
+                PreparedStatement ps = con.prepareStatement(sql, ResultSet.TYPE_FORWARD_ONLY,
+                                                            ResultSet.CONCUR_READ_ONLY,
+                                                            ResultSet.CLOSE_CURSORS_AT_COMMIT);
                 ps.setFetchSize(1000);
                 ps.setFetchDirection(ResultSet.FETCH_FORWARD);
                 if (prefix != null) {
