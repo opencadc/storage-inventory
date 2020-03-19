@@ -219,9 +219,9 @@ public class SQLGenerator {
         throw new UnsupportedOperationException("entity-get: " + c.getName());
     }
     
-    public EntityIterator getEntityIterator(Class c) {
+    public EntityIterator getEntityIterator(Class c, boolean withStorageLocation) {
         if (Artifact.class.equals(c)) {
-            return new ArtifactIterator();
+            return new ArtifactIterator(withStorageLocation);
         }
         throw new UnsupportedOperationException("entity-list: " + c.getName());
     }
@@ -456,8 +456,14 @@ public class SQLGenerator {
     
     class ArtifactIterator implements EntityIterator<Artifact> {
 
+        private boolean withStorageLocation;
         private String prefix;
 
+        public ArtifactIterator(boolean withStorageLocation) {
+            this.withStorageLocation = withStorageLocation;
+        }
+
+        
         public void setPrefix(String prefix) {
             this.prefix = prefix;
         }
@@ -467,31 +473,46 @@ public class SQLGenerator {
             
             StringBuilder sb = getSelectFromSQL(Artifact.class, false);
             sb.append(" WHERE ");
-            if (prefix != null) {
-                sb.append("storageLocation_storageBucket LIKE ? AND");
+            
+            if (withStorageLocation) {
+                if (prefix != null) {
+                    sb.append("storageLocation_storageBucket LIKE ? AND");
+                }
+                sb.append(" storageLocation_storageID IS NOT NULL");
+            
+                // NOTE: StorageLocation.compare() specifies the correct order
+                // null storageBucket to come after non-null
+                // postgresql: the default order is equivalent to explicitly specifying ASC NULLS LAST
+                // default behaviour may not be db-agnostic
+                sb.append(" ORDER BY storageLocation_storageBucket, storageLocation_storageID");
+            } else {
+                if (prefix != null) {
+                    sb.append("uriBucket LIKE ? AND");
+                }
+                sb.append(" storageLocation_storageID IS NULL");
+                sb.append(" ORDER BY lastModified");
             }
-            sb.append(" storageLocation_storageID IS NOT NULL");
-            // NOTE: StorageLocation.compare() specifies the correct order
-            // null storageBucket to come after non-null
-            // postgresql: the default order is equivalent to explicitly specifying ASC NULLS LAST
-            // default behaviour may not be db-agnostic
-            sb.append(" ORDER BY storageLocation_storageBucket, storageLocation_storageID");
             String sql = sb.toString();
-            log.debug("ArtifactGet: " + sql);
+            log.debug("sql: " + sql);
             
             try {
                 Connection con = ds.getConnection();
+                log.debug("ArtifactIterator: setAutoCommit(false)");
+                con.setAutoCommit(false);
+                // default options: ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY
                 PreparedStatement ps = con.prepareStatement(sql);
-                ps.setFetchSize(1000);
+                ps.setFetchSize(20);
                 ps.setFetchDirection(ResultSet.FETCH_FORWARD);
                 if (prefix != null) {
-                    ps.setString(1, prefix);
+                    String val = prefix + "%";
+                    log.debug("value: " + val);
+                    ps.setString(1, val);
                 }
                 ResultSet rs = ps.executeQuery();
                 
-                return new ArtifactResultSetIterator(rs);
+                return new ArtifactResultSetIterator(con, rs);
             } catch (SQLException ex) {
-                throw new RuntimeException("BUG: artifact list query failed", ex);
+                throw new RuntimeException("BUG: artifact iterator query failed", ex);
             }
         }
         
@@ -924,10 +945,12 @@ public class SQLGenerator {
     
     private class ArtifactResultSetIterator implements Iterator<Artifact> {
         final Calendar utc = Calendar.getInstance(DateUtil.UTC);
+        private final Connection con;
         private final ResultSet rs;
         boolean hasRow;
         
-        ArtifactResultSetIterator(ResultSet rs) throws SQLException {
+        ArtifactResultSetIterator(Connection con, ResultSet rs) throws SQLException {
+            this.con = con;
             this.rs = rs;
             hasRow = rs.next();
         }
@@ -942,6 +965,10 @@ public class SQLGenerator {
             try {
                 Artifact ret = mapRowToArtifact(rs, utc);
                 hasRow = rs.next();
+                if (!hasRow) {
+                    log.debug("ArtifactResultSetIterator: setAutoCommit(true)");
+                    con.setAutoCommit(true);
+                }
                 return ret;
             } catch (SQLException ex) {
                 throw new RuntimeException("BUG: artifact list query failed while iterating", ex);
