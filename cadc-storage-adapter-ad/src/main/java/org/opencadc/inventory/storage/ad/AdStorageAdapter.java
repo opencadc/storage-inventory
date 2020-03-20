@@ -98,6 +98,7 @@ import java.net.URL;
 
 import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.Set;
 import java.util.SortedSet;
 
@@ -261,7 +262,7 @@ public class AdStorageAdapter implements StorageAdapter {
 
         // Filter the baseIterator values returned for duplicates
         Iterator<StorageMetadata> filtered = null;
-        ArrayList<StorageMetadata> filteredList = new ArrayList();
+        LinkedList<StorageMetadata> filteredList = new LinkedList();
         StorageMetadata lastMeta = null;
         while (unfiltered.hasNext()) {
             StorageMetadata curMeta = unfiltered.next();
