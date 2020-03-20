@@ -62,46 +62,71 @@
  *  <http://www.gnu.org/licenses/>.      pas le cas, consultez :
  *                                       <http://www.gnu.org/licenses/>.
  *
- *  $Revision: 4 $
  *
  ************************************************************************
  */
 
 package org.opencadc.inventory.storage.ad;
 
+import ca.nrc.cadc.util.Log4jInit;
+import java.net.URI;
+import java.util.ArrayList;
 import java.util.Iterator;
+import org.apache.log4j.Level;
+import org.apache.log4j.Logger;
+import org.junit.Assert;
+import org.junit.Test;
+import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.storage.StorageMetadata;
 
-public class AdStorageIterator implements Iterator<StorageMetadata> {
+public class AdStorageIteratorTest {
 
-    private StorageMetadata nextItem = null;
-    private Iterator<StorageMetadata> sourceIterator;
+    private static final Logger log = Logger.getLogger(AdStorageIteratorTest.class);
 
-    public AdStorageIterator(Iterator<StorageMetadata> sourceIterator) {
-        this.sourceIterator = sourceIterator;
-        if (sourceIterator.hasNext()) {
-            this.nextItem = sourceIterator.next();
-        }
+    static {
+        Log4jInit.setLevel("org.opencadc.inventory.storage", Level.INFO);
     }
 
-    @Override
-    public boolean hasNext() {
-        return (this.nextItem != null);
-    }
+    @Test
+    public void testGetIterator() throws Exception {
+        ArrayList<StorageMetadata> duplicates = new ArrayList<StorageMetadata>();
 
-    @Override
-    public StorageMetadata next() {
-        final StorageMetadata curMeta = this.nextItem;
-        this.nextItem = null;
-
-        while ((this.nextItem == null) && sourceIterator.hasNext()) {
-            StorageMetadata maybeNext = sourceIterator.next();
-            if (!curMeta.equals(maybeNext)) {
-                this.nextItem = maybeNext;
-            }
+        for (int i = 0; i < 7; i++) {
+            String uriStr = "ad:/TEST/fileuri_" + i + ".txt";
+            URI curUri = new URI(uriStr);
+            StorageLocation sl = new StorageLocation(curUri);
+            sl.storageBucket = "testBucket";
+            StorageMetadata sMeta = new StorageMetadata(sl, new URI("md5:12345"), 12345L);
+            sMeta.artifactURI = curUri;
+            duplicates.add(sMeta);
         }
 
-        return curMeta;
-    }
+        duplicates.add(2, duplicates.get(2));
+        duplicates.add(5, duplicates.get(5));
+        duplicates.add(7, duplicates.get(7));
 
+        int count = 0;
+        Iterator<StorageMetadata> dIter = duplicates.iterator();
+        while (dIter.hasNext()) {
+            StorageMetadata curMeta = dIter.next();
+            count++;
+            log.debug("position: " + count + ": " + curMeta);
+        }
+
+        Assert.assertEquals("expected array count is 10 but got " + count, 10, count);
+
+        log.debug("array with duplicates size:  " + count + "\n");
+
+        AdStorageIterator asi = new AdStorageIterator(duplicates.iterator());
+
+        count = 0;
+        while (asi.hasNext()) {
+            StorageMetadata curMeta = asi.next();
+            count++;
+            log.debug("position: " + count + ": " + curMeta);
+        }
+
+        Assert.assertEquals("expected filtered array count is 7 but got " + count, 7, count);
+        log.debug("total items from AdStorageIterator: " + count);
+    }
 }
