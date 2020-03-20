@@ -499,9 +499,9 @@ public class SQLGenerator {
                 Connection con = ds.getConnection();
                 log.debug("ArtifactIterator: setAutoCommit(false)");
                 con.setAutoCommit(false);
-                // default options: ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY
+                // defaults for options: ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY
                 PreparedStatement ps = con.prepareStatement(sql);
-                ps.setFetchSize(20);
+                ps.setFetchSize(1000);
                 ps.setFetchDirection(ResultSet.FETCH_FORWARD);
                 if (prefix != null) {
                     String val = prefix + "%";
