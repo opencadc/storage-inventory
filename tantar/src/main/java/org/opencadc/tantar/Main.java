@@ -88,7 +88,17 @@ import org.apache.log4j.Logger;
 public class Main {
 
     public static void main(final String[] args) {
-        final String configurationDirectory = System.getProperty("DEFAULT_CONFIG_DIR", "/config");
+        final String configurationDirectory;
+        final String homeConfigDirectoryPath = String.format("%s/config", System.getProperty("user.home"));
+
+        // Allow some flexibility to override.  This is useful for local testing as one would normally require root
+        // access to create /config.
+        if (new File(homeConfigDirectoryPath).isDirectory()) {
+            configurationDirectory = homeConfigDirectoryPath;
+        } else {
+            configurationDirectory = "/config";
+        }
+
         final String certificateFileLocation = String.format("%s/cadcproxy.pem", configurationDirectory);
         final String configurationFileLocation = String.format("%s/tantar.properties", configurationDirectory);
 

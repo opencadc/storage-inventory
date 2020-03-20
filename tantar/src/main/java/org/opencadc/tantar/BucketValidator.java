@@ -318,6 +318,7 @@ public class BucketValidator implements ValidateEventListener {
     /**
      * Mark the given Artifact as new by removing its Storage Location.  This will force the file-sync application to
      * assume it's a new insert and force a re-download of the file.
+     * TODO: Check for an existing ObsoleteStorageLocation that will indicate an already deleted Artifact by Minoc.
      *
      * @param artifact The base artifact.  This MUST have a Storage Location.
      */
@@ -337,12 +338,12 @@ public class BucketValidator implements ValidateEventListener {
                 resetArtifact.contentEncoding = artifact.contentEncoding;
                 resetArtifact.storageLocation = null;
 
-                artifactDAO.put(resetArtifact, true);
-
                 final DeletedStorageLocationEvent deletedStorageLocationEvent =
                         new DeletedStorageLocationEvent(resetArtifact.getID());
                 final DeletedEventDAO deletedEventDAO = new DeletedEventDAO(artifactDAO);
                 deletedEventDAO.put(deletedStorageLocationEvent);
+
+                artifactDAO.put(resetArtifact, true);
 
                 transactionManager.commitTransaction();
             } catch (Exception e) {
@@ -404,7 +405,8 @@ public class BucketValidator implements ValidateEventListener {
     }
 
     /**
-     * Delete the given Artifact.
+     * Delete the given Artifact.  This method is called in the event that the policy deems the Artifact should not
+     * exist given that there is no matching StorageMetadata.
      *
      * @param artifact The Artifact to remove.
      */
@@ -487,7 +489,8 @@ public class BucketValidator implements ValidateEventListener {
 
     /**
      * Replace the given Artifact with one that represents the given StorageMetadata.  This is used when the
-     * policy dictates that in the event of a conflict, the Artifact is no longer valid.
+     * policy dictates that in the event of a conflict, the Artifact is no longer valid (StorageMetadata takes
+     * precedence).  This method will be called if both the Artifact and StorageMetadata have the same Storage Location.
      *
      * @param artifact        The Artifact to replace.
      * @param storageMetadata The StorageMetadata whose metadata to use.
@@ -500,13 +503,7 @@ public class BucketValidator implements ValidateEventListener {
             try {
                 LOGGER.debug("Start transaction.");
                 transactionManager.startTransaction();
-                // Add an obsolete marker to signify that the Storage Location known to the Artifact is no longer
-                // valid and assumed deleted at the Storage level.  Remove the Artifact after that.
-                final ObsoleteStorageLocation obsoleteStorageLocation =
-                        new ObsoleteStorageLocation(artifact.storageLocation);
-                final ObsoleteStorageLocationDAO obsoleteStorageLocationDAO =
-                        new ObsoleteStorageLocationDAO(artifactDAO);
-                obsoleteStorageLocationDAO.put(obsoleteStorageLocation);
+
                 artifactDAO.delete(artifact.getID());
 
                 final DeletedArtifactEvent deletedArtifactEvent = new DeletedArtifactEvent(artifact.getID());
@@ -515,9 +512,10 @@ public class BucketValidator implements ValidateEventListener {
 
                 // Create a replacement Artifact with information from the StorageMetadata, as it's assumed to hold
                 // the correct state of this Storage Entity.
-                final Artifact replacementArtifact = new Artifact(artifact.getURI(),
+                final Artifact replacementArtifact = new Artifact(storageMetadata.artifactURI,
                                                                   storageMetadata.getContentChecksum(),
-                                                                  new Date(), storageMetadata.getContentLength());
+                                                                  storageMetadata.contentLastModified,
+                                                                  storageMetadata.getContentLength());
                 replacementArtifact.contentEncoding = storageMetadata.contentEncoding;
                 replacementArtifact.contentType = storageMetadata.contentType;
                 replacementArtifact.storageLocation = storageMetadata.getStorageLocation();
@@ -525,7 +523,7 @@ public class BucketValidator implements ValidateEventListener {
 
                 transactionManager.commitTransaction();
             } catch (Exception e) {
-                LOGGER.error(String.format("Failed to create Artifact %s.", artifact.getURI()), e);
+                LOGGER.error(String.format("Failed to create Artifact %s.", storageMetadata.artifactURI), e);
                 transactionManager.rollbackTransaction();
                 LOGGER.debug("Rollback Transaction: OK");
                 throw e;
