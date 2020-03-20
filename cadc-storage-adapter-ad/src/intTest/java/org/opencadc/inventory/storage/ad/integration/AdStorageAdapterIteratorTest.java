@@ -72,8 +72,12 @@ import ca.nrc.cadc.auth.SSLUtil;
 import ca.nrc.cadc.util.FileUtil;
 import ca.nrc.cadc.util.Log4jInit;
 import java.io.File;
+import java.net.URI;
+import java.security.MessageDigest;
 import java.security.PrivilegedExceptionAction;
 import java.util.Iterator;
+import java.util.SortedSet;
+import java.util.TreeSet;
 import javax.security.auth.Subject;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
@@ -168,6 +172,55 @@ public class AdStorageAdapterIteratorTest {
         });
     }
 
+
+    @Test
+    public void testIteratorOrder() throws Exception {
+        Subject.doAs(testSubject, new PrivilegedExceptionAction<Object>() {
+            public Object run() throws Exception {
+                final AdStorageAdapter adStorageAdapter = new AdStorageAdapter();
+                String archiveName = "IRIS";
+
+                // Get first version of iterator
+                SortedSet<StorageMetadata> sortedMeta = new TreeSet();
+                try {
+                    Iterator<StorageMetadata>  storageMetaIterator = adStorageAdapter.iterator(archiveName);
+                    Assert.assertTrue("iterator is empty.", storageMetaIterator.hasNext() == true);
+
+                    // Create SortedSet for comparison
+                    while (storageMetaIterator.hasNext()) {
+                        sortedMeta.add(storageMetaIterator.next());
+                    }
+                } catch (Exception unexpected) {
+                    log.error("unexpected exception", unexpected);
+                    Assert.fail("unexpected exception: " + unexpected.getMessage());
+                }
+
+                // Get second version of iterator
+                Iterator<StorageMetadata> storageMeta = null;
+                try {
+                    storageMeta = adStorageAdapter.iterator(archiveName);
+                    Assert.assertTrue("iterator is empty.", storageMeta.hasNext() == true);
+                } catch (Exception unexpected) {
+                    log.error("unexpected exception getting iterator", unexpected);
+                    Assert.fail("unexpected exception getting iterator: " + unexpected.getMessage());
+                }
+
+                // Compare relative ordering of StorageMetadata objects
+                Iterator<StorageMetadata> sortedSetMeta = sortedMeta.iterator();
+
+                int count = 0;
+                while (sortedSetMeta.hasNext()) {
+                    StorageMetadata expected = sortedSetMeta.next();
+                    StorageMetadata actual = storageMeta.next();
+                    log.debug("compare: " + expected.getStorageLocation() + " vs " + actual.getStorageLocation());
+                    if (!expected.equals(actual)) {
+                        Assert.fail("ordering not correct.");
+                    }
+                }
+                return null;
+            }
+        });
+    }
 
 
 }
