@@ -88,7 +88,7 @@ public class AdStorageAdapterIteratorTest {
     private static final Logger log = Logger.getLogger(AdStorageAdapterIteratorTest.class);
 
     static {
-        Log4jInit.setLevel("org.opencadc.inventory.storage", Level.DEBUG);
+        Log4jInit.setLevel("org.opencadc.inventory.storage", Level.INFO);
     }
 
     private static Subject testSubject;
@@ -108,8 +108,12 @@ public class AdStorageAdapterIteratorTest {
                 final AdStorageAdapter adStorageAdapter = new AdStorageAdapter();
                 String archiveName = "IRIS";
 
+                Long startTime = System.currentTimeMillis();
                 try {
                     Iterator<StorageMetadata> storageMetaIterator = adStorageAdapter.iterator(archiveName);
+
+                    Long totalTime = System.currentTimeMillis() - startTime;
+                    log.debug("time to get iterator: " + totalTime + "ms");
                     int archiveSize = 0;
 
                     while (storageMetaIterator.hasNext()) {
@@ -117,7 +121,11 @@ public class AdStorageAdapterIteratorTest {
                         log.info(archiveSize + ") " + curMeta.artifactURI + ": " + curMeta.contentEncoding + ": ");
                         archiveSize++;
                     }
+                    log.debug("archive size: " + archiveSize);
                     Assert.assertTrue( "archive size is zero.", archiveSize > 0);
+
+
+
                 } catch (Exception unexpected) {
                     log.error("unexpected exception", unexpected);
                     Assert.fail("unexpected exception: " + unexpected.getMessage());
@@ -161,4 +169,6 @@ public class AdStorageAdapterIteratorTest {
             }
         });
     }
+
+
 }
