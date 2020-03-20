@@ -96,6 +96,7 @@ import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URL;
 
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.Set;
 import java.util.SortedSet;
@@ -255,6 +256,34 @@ public class AdStorageAdapter implements StorageAdapter {
         }
 
         log.debug("storage bucket: " + storageBucket);
+
+        Iterator<StorageMetadata> unfiltered = baseIterator(storageBucket);
+
+        // Filter the baseIterator values returned for duplicates
+        Iterator<StorageMetadata> filtered = null;
+        ArrayList<StorageMetadata> filteredList = new ArrayList();
+        StorageMetadata lastMeta = null;
+        while (unfiltered.hasNext()) {
+            StorageMetadata curMeta = unfiltered.next();
+            if (curMeta.equals(lastMeta)) {
+                log.debug("duplicate: " + curMeta);
+                continue;
+            }
+            filteredList.add(curMeta);
+            lastMeta = curMeta;
+        }
+
+        return filteredList.iterator();
+    }
+
+    private Iterator<StorageMetadata> baseIterator(String storageBucket)
+        throws StorageEngageException, TransientException {
+        InventoryUtil.assertNotNull(AdStorageQuery.class, "storageBucket", storageBucket);
+        if (!StringUtil.hasLength(storageBucket)) {
+            throw new IllegalArgumentException("Archive name must be specified: " + storageBucket);
+        }
+
+        log.debug("storage bucket: " + storageBucket);
         TapClient tc = null;
         try {
             tc = new TapClient(URI.create(TAP_SERVICE_URI));
@@ -268,6 +297,7 @@ public class AdStorageAdapter implements StorageAdapter {
             storageMetadataIterator = tc.execute(adQuery.getQuery(), adQuery.getRowMapper());
         } catch (Exception e) {
             log.error("error executing TapClient query");
+
             throw new TransientException(e.getMessage());
         }
         return storageMetadataIterator;
