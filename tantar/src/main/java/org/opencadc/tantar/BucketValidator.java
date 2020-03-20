@@ -73,6 +73,7 @@ import ca.nrc.cadc.db.ConnectionConfig;
 import ca.nrc.cadc.db.DBUtil;
 import ca.nrc.cadc.db.TransactionManager;
 import ca.nrc.cadc.net.TransientException;
+import ca.nrc.cadc.profiler.Profiler;
 import ca.nrc.cadc.util.StringUtil;
 
 import java.security.PrivilegedExceptionAction;
@@ -252,8 +253,12 @@ public class BucketValidator implements ValidateEventListener {
      * @throws Exception Pass up any errors to the caller, which is most likely the Main.
      */
     void validate() throws Exception {
+        final Profiler profiler = new Profiler(BucketValidator.class);
+        LOGGER.debug("Acquiring iterators.");
         final Iterator<StorageMetadata> storageMetadataIterator = iterateStorage();
         final Iterator<Artifact> inventoryIterator = iterateInventory();
+        profiler.checkpoint("iterators: ok");
+        LOGGER.debug("Acquired iterators.");
 
         LOGGER.debug("START validating iterators.");
 
@@ -336,7 +341,7 @@ public class BucketValidator implements ValidateEventListener {
 
                 final DeletedStorageLocationEvent deletedStorageLocationEvent =
                         new DeletedStorageLocationEvent(resetArtifact.getID());
-                final DeletedEventDAO<DeletedStorageLocationEvent> deletedEventDAO = new DeletedEventDAO<>(artifactDAO);
+                final DeletedEventDAO deletedEventDAO = new DeletedEventDAO(artifactDAO);
                 deletedEventDAO.put(deletedStorageLocationEvent);
 
                 transactionManager.commitTransaction();
@@ -411,7 +416,7 @@ public class BucketValidator implements ValidateEventListener {
                 LOGGER.debug("Start transaction.");
                 transactionManager.startTransaction();
 
-                final DeletedEventDAO<DeletedArtifactEvent> deletedEventDAO = new DeletedEventDAO<>(artifactDAO);
+                final DeletedEventDAO deletedEventDAO = new DeletedEventDAO(artifactDAO);
                 final DeletedArtifactEvent deletedArtifactEvent = new DeletedArtifactEvent(artifact.getID());
 
                 artifactDAO.delete(artifact.getID());
@@ -505,8 +510,7 @@ public class BucketValidator implements ValidateEventListener {
                 artifactDAO.delete(artifact.getID());
 
                 final DeletedArtifactEvent deletedArtifactEvent = new DeletedArtifactEvent(artifact.getID());
-                final DeletedEventDAO<DeletedArtifactEvent> deletedArtifactEventDeletedEventDAO =
-                        new DeletedEventDAO<>(artifactDAO);
+                final DeletedEventDAO deletedArtifactEventDeletedEventDAO = new DeletedEventDAO(artifactDAO);
                 deletedArtifactEventDeletedEventDAO.put(deletedArtifactEvent);
 
                 // Create a replacement Artifact with information from the StorageMetadata, as it's assumed to hold
@@ -562,6 +566,6 @@ public class BucketValidator implements ValidateEventListener {
      * @return Iterator instance of Artifact objects
      */
     Iterator<Artifact> iterateInventory() {
-        return iteratorDAO.iterator(bucket);
+        return iteratorDAO.storedIterator(bucket);
     }
 }
