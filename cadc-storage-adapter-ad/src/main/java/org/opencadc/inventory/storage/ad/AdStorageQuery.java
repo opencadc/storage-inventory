@@ -89,7 +89,7 @@ public class AdStorageQuery {
     private static final Logger log = Logger.getLogger(AdStorageQuery.class);
     // Query to use that will pull data in the order required by the mapRow function
     private String queryTemplate = "select distinct(uri), archiveName, contentMD5, fileSize,contentEncoding, contentType, ingestDate"
-            + " from archive_files where archiveName='%s'";
+            + " from archive_files where archiveName='%s' order by uri";
     private String query = "";
     private AdStorageMetadataRowMapper rowMapper;
 

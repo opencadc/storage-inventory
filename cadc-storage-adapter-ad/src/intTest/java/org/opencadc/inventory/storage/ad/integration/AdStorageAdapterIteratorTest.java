@@ -124,8 +124,6 @@ public class AdStorageAdapterIteratorTest {
                     log.debug("archive size: " + archiveSize);
                     Assert.assertTrue( "archive size is zero.", archiveSize > 0);
 
-
-
                 } catch (Exception unexpected) {
                     log.error("unexpected exception", unexpected);
                     Assert.fail("unexpected exception: " + unexpected.getMessage());
@@ -169,6 +167,7 @@ public class AdStorageAdapterIteratorTest {
             }
         });
     }
+
 
 
 }
