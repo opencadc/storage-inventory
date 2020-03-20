@@ -68,13 +68,11 @@
 package org.opencadc.inventory.db;
 
 import java.net.URI;
-import java.util.Comparator;
 import java.util.Iterator;
-import java.util.SortedSet;
-import java.util.TreeSet;
 import java.util.UUID;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
+import org.opencadc.inventory.StorageLocation;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
@@ -126,23 +124,45 @@ public class ArtifactDAO extends AbstractDAO<Artifact> {
     
     /**
      * Iterate over Artifacts in StorageLocation order. This only shows artifacts with
-     * a storageLocation value.
+     * a storageLocation value and is used to validate inventory vs storage.
      * 
-     * @param storageBucketPrefix null, partial, or complete storageBucket string
+     * @param storageBucketPrefix null, prefix, or complete storageBucket string
      * @return iterator over artifacts sorted by StorageLocation
      */
-    public Iterator<Artifact> iterator(String storageBucketPrefix) {
+    public Iterator<Artifact> storedIterator(String storageBucketPrefix) {
         checkInit();
         log.debug("iterator: " + storageBucketPrefix);
         long t = System.currentTimeMillis();
 
         try {
-            SQLGenerator.ArtifactIterator iter = (SQLGenerator.ArtifactIterator) gen.getEntityIterator(Artifact.class);
+            SQLGenerator.ArtifactIterator iter = (SQLGenerator.ArtifactIterator) gen.getEntityIterator(Artifact.class, true);
             iter.setPrefix(storageBucketPrefix);
             return iter.query(dataSource);
         } finally {
             long dt = System.currentTimeMillis() - t;
             log.debug("iterator: " + storageBucketPrefix + " " + dt + "ms");
+        }
+    }
+    
+    /**
+     * Iterate over Artifacts with no StorageLocation. This only returns artifacts with
+     * no storageLocation value so the content can be downloaded and stored locally.
+     * 
+     * @param uriBucketPrefix null, prefix, or complete Artifact.uriBucket string
+     * @return iterator over artifacts with no StorageLocation
+     */
+    public Iterator<Artifact> unstoredIterator(String uriBucketPrefix) {
+        checkInit();
+        //log.debug("iterator: ");
+        long t = System.currentTimeMillis();
+
+        try {
+            SQLGenerator.ArtifactIterator iter = (SQLGenerator.ArtifactIterator) gen.getEntityIterator(Artifact.class, false);
+            iter.setPrefix(uriBucketPrefix);
+            return iter.query(dataSource);
+        } finally {
+            long dt = System.currentTimeMillis() - t;
+            log.debug("iterator: " + dt + "ms");
         }
     }
 }
