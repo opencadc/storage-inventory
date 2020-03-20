@@ -90,7 +90,7 @@ public class AdStorageAdapterGetTest {
     private static final String DIGEST_ALGORITHM = "MD5";
 
     static {
-        Log4jInit.setLevel("ca.nrc.cadc.net", Level.INFO);
+        Log4jInit.setLevel("org.opencadc.inventory.storage", Level.INFO);
     }
 
     @Test
