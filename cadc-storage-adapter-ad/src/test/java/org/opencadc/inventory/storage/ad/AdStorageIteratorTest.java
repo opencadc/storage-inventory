@@ -84,7 +84,7 @@ public class AdStorageIteratorTest {
     private static final Logger log = Logger.getLogger(AdStorageIteratorTest.class);
 
     static {
-        Log4jInit.setLevel("org.opencadc.inventory.storage", Level.INFO);
+        Log4jInit.setLevel("org.opencadc.inventory.storage", Level.DEBUG);
     }
 
     @Test
@@ -101,9 +101,9 @@ public class AdStorageIteratorTest {
             duplicates.add(sMeta);
         }
 
-        duplicates.add(2, duplicates.get(2));
+        duplicates.add(0, duplicates.get(0));
         duplicates.add(5, duplicates.get(5));
-        duplicates.add(7, duplicates.get(7));
+        duplicates.add(8, duplicates.get(8));
 
         int count = 0;
         Iterator<StorageMetadata> dIter = duplicates.iterator();
