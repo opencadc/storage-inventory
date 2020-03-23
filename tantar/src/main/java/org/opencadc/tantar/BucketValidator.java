@@ -370,14 +370,20 @@ public class BucketValidator implements ValidateEventListener {
      * @param storageMetadata The StorageMetadata containing a Storage Location to remove.
      */
     @Override
-    public void delete(final StorageMetadata storageMetadata) {
+    public void delete(final StorageMetadata storageMetadata) throws Exception {
         if (canTakeAction()) {
+
+            final StorageLocation storageLocation = storageMetadata.getStorageLocation();
+
+            LOGGER.debug("Deleting from storage...");
+            storageAdapter.delete(storageLocation);
+            LOGGER.debug("Delete from storage: OK");
+
             final TransactionManager transactionManager = artifactDAO.getTransactionManager();
 
             try {
                 LOGGER.debug("Start transaction.");
                 transactionManager.startTransaction();
-                final StorageLocation storageLocation = storageMetadata.getStorageLocation();
                 final ObsoleteStorageLocationDAO obsoleteStorageLocationDAO =
                         new ObsoleteStorageLocationDAO(artifactDAO);
                 final ObsoleteStorageLocation obsoleteStorageLocation = obsoleteStorageLocationDAO.get(storageLocation);
