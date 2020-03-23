@@ -73,7 +73,6 @@ import ca.nrc.cadc.auth.SSLUtil;
 import ca.nrc.cadc.util.FileUtil;
 import ca.nrc.cadc.util.Log4jInit;
 import java.net.URI;
-import java.net.URL;
 import java.security.PrivilegedExceptionAction;
 import java.util.List;
 import javax.security.auth.Subject;
@@ -81,19 +80,16 @@ import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.BeforeClass;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.opencadc.gms.GroupURI;
 
 public class PermissionsClientTest {
 
-    private static final Logger log =
-        Logger.getLogger(PermissionsClientTest.class);
+    private static final Logger log = Logger.getLogger(PermissionsClientTest.class);
 
     private static Subject cadcAnonTest1Subject;
     private static Subject cadcRegTest1Subject;
     private static URI serviceID;
-    private static URL serviceURL;
 
     private static URI testArtifact;
     private static GroupURI readGroup1;
@@ -104,19 +100,12 @@ public class PermissionsClientTest {
     @BeforeClass
     public static void setUpClass() throws Exception
     {
-        Log4jInit.setLevel("org.opencadc.inventory.permissions",
-                           Level.DEBUG);
-
-        serviceURL = new URL("http://localhost:8080/baldur/perms/");
+        Log4jInit.setLevel("org.opencadc.inventory.permissions", Level.INFO);
 
         cadcAnonTest1Subject = SSLUtil.createSubject(
-            FileUtil.getFileFromResource(
-                "x509_CADCAnontest1.pem",
-                PermissionsClientTest.class));
+            FileUtil.getFileFromResource("x509_CADCAnontest1.pem", PermissionsClientTest.class));
         cadcRegTest1Subject = SSLUtil.createSubject(
-            FileUtil.getFileFromResource(
-                "x509_CADCRegtest1.pem",
-                PermissionsClientTest.class));
+            FileUtil.getFileFromResource("x509_CADCRegtest1.pem", PermissionsClientTest.class));
 
         serviceID = URI.create("ivo://cadc.nrc.ca/baldur");
 
@@ -130,23 +119,19 @@ public class PermissionsClientTest {
     @Test
     public void testAnonAccess() {
         try {
-            Subject.doAs(cadcAnonTest1Subject,
-                         new PrivilegedExceptionAction<Object>()
-                         {
-                             @Override
-                             public Object run() throws Exception
-                             {
-                                 PermissionsClient testSubject =
-                                     getTestSubject();
-                                 try {
-                                     ReadGrant readGrant =
-                                         testSubject.getReadGrant(testArtifact);
-                                     Assert.fail("Anonymous user access should "
-                                                     + "throw exception");
-                                 } catch (Exception expected) { }
-                                 return null;
-                             }
-                         });
+            Subject.doAs(cadcAnonTest1Subject, new PrivilegedExceptionAction<Object>()
+            {
+                @Override
+                public Object run() throws Exception
+                {
+                    PermissionsClient testSubject = new PermissionsClient(serviceID);
+                    try {
+                        ReadGrant readGrant = testSubject.getReadGrant(testArtifact);
+                        Assert.fail("Anonymous user access should " + "throw exception");
+                    } catch (Exception expected) { }
+                    return null;
+                }
+            });
         } catch (Exception unexpected) {
             log.error("unexpected exception", unexpected);
             Assert.fail("unexpected exception: " + unexpected);
@@ -156,15 +141,13 @@ public class PermissionsClientTest {
     @Test
     public void testGetReadGrants() {
         try {
-            Subject.doAs(cadcRegTest1Subject,
-                         new PrivilegedExceptionAction<Object>()
+            Subject.doAs(cadcRegTest1Subject, new PrivilegedExceptionAction<Object>()
             {
                 @Override
                 public Object run() throws Exception
                 {
-                    PermissionsClient testSubject = getTestSubject();
-                    ReadGrant readGrant =
-                        testSubject.getReadGrant(testArtifact);
+                    PermissionsClient testSubject = new PermissionsClient(serviceID);
+                    ReadGrant readGrant = testSubject.getReadGrant(testArtifact);
                     Assert.assertNotNull(readGrant);
                     Assert.assertTrue(readGrant.isAnonymousAccess());
 
@@ -183,19 +166,16 @@ public class PermissionsClientTest {
         }
     }
 
-    @Ignore
     @Test
     public void testGetWriteGrants() {
         try {
-            Subject.doAs(cadcRegTest1Subject,
-                         new PrivilegedExceptionAction<Object>()
+            Subject.doAs(cadcRegTest1Subject, new PrivilegedExceptionAction<Object>()
             {
                 @Override
                 public Object run() throws Exception
                 {
-                    PermissionsClient testSubject = getTestSubject();
-                    WriteGrant writeGrant = testSubject.getWriteGrant(
-                        testArtifact);
+                    PermissionsClient testSubject = new PermissionsClient(serviceID);
+                    WriteGrant writeGrant = testSubject.getWriteGrant(testArtifact);
                     Assert.assertNotNull(writeGrant);
 
                     List<GroupURI> groups = writeGrant.groups;
@@ -211,15 +191,6 @@ public class PermissionsClientTest {
             log.error("unexpected exception", unexpected);
             Assert.fail("unexpected exception: " + unexpected);
         }
-    }
-
-    private PermissionsClient getTestSubject() {
-        return new PermissionsClient(serviceID) {
-            @Override
-            URL getServiceURL(URI serviceID) {
-                return serviceURL;
-            }
-        };
     }
 
 }
