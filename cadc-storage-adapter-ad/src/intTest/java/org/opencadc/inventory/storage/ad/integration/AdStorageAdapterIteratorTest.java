@@ -72,8 +72,6 @@ import ca.nrc.cadc.auth.SSLUtil;
 import ca.nrc.cadc.util.FileUtil;
 import ca.nrc.cadc.util.Log4jInit;
 import java.io.File;
-import java.net.URI;
-import java.security.MessageDigest;
 import java.security.PrivilegedExceptionAction;
 import java.util.Iterator;
 import java.util.SortedSet;
@@ -221,6 +219,7 @@ public class AdStorageAdapterIteratorTest {
             }
         });
     }
+
 
 
 }
