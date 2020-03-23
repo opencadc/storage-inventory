@@ -74,6 +74,8 @@ import ca.nrc.cadc.util.Log4jInit;
 import java.io.File;
 import java.security.PrivilegedExceptionAction;
 import java.util.Iterator;
+import java.util.SortedSet;
+import java.util.TreeSet;
 import javax.security.auth.Subject;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
@@ -88,7 +90,7 @@ public class AdStorageAdapterIteratorTest {
     private static final Logger log = Logger.getLogger(AdStorageAdapterIteratorTest.class);
 
     static {
-        Log4jInit.setLevel("org.opencadc.inventory.storage", Level.DEBUG);
+        Log4jInit.setLevel("org.opencadc.inventory.storage", Level.INFO);
     }
 
     private static Subject testSubject;
@@ -108,8 +110,12 @@ public class AdStorageAdapterIteratorTest {
                 final AdStorageAdapter adStorageAdapter = new AdStorageAdapter();
                 String archiveName = "IRIS";
 
+                Long startTime = System.currentTimeMillis();
                 try {
                     Iterator<StorageMetadata> storageMetaIterator = adStorageAdapter.iterator(archiveName);
+
+                    Long totalTime = System.currentTimeMillis() - startTime;
+                    log.debug("time to get iterator: " + totalTime + "ms");
                     int archiveSize = 0;
 
                     while (storageMetaIterator.hasNext()) {
@@ -117,7 +123,9 @@ public class AdStorageAdapterIteratorTest {
                         log.info(archiveSize + ") " + curMeta.artifactURI + ": " + curMeta.contentEncoding + ": ");
                         archiveSize++;
                     }
+                    log.debug("archive size: " + archiveSize);
                     Assert.assertTrue( "archive size is zero.", archiveSize > 0);
+
                 } catch (Exception unexpected) {
                     log.error("unexpected exception", unexpected);
                     Assert.fail("unexpected exception: " + unexpected.getMessage());
@@ -161,4 +169,57 @@ public class AdStorageAdapterIteratorTest {
             }
         });
     }
+
+
+    @Test
+    public void testIteratorOrder() throws Exception {
+        Subject.doAs(testSubject, new PrivilegedExceptionAction<Object>() {
+            public Object run() throws Exception {
+                final AdStorageAdapter adStorageAdapter = new AdStorageAdapter();
+                String archiveName = "IRIS";
+
+                // Get first version of iterator
+                SortedSet<StorageMetadata> sortedMeta = new TreeSet();
+                try {
+                    Iterator<StorageMetadata>  storageMetaIterator = adStorageAdapter.iterator(archiveName);
+                    Assert.assertTrue("iterator is empty.", storageMetaIterator.hasNext() == true);
+
+                    // Create SortedSet for comparison
+                    while (storageMetaIterator.hasNext()) {
+                        sortedMeta.add(storageMetaIterator.next());
+                    }
+                } catch (Exception unexpected) {
+                    log.error("unexpected exception", unexpected);
+                    Assert.fail("unexpected exception: " + unexpected.getMessage());
+                }
+
+                // Get second version of iterator
+                Iterator<StorageMetadata> storageMeta = null;
+                try {
+                    storageMeta = adStorageAdapter.iterator(archiveName);
+                    Assert.assertTrue("iterator is empty.", storageMeta.hasNext() == true);
+                } catch (Exception unexpected) {
+                    log.error("unexpected exception getting iterator", unexpected);
+                    Assert.fail("unexpected exception getting iterator: " + unexpected.getMessage());
+                }
+
+                // Compare relative ordering of StorageMetadata objects
+                Iterator<StorageMetadata> sortedSetMeta = sortedMeta.iterator();
+
+                int count = 0;
+                while (sortedSetMeta.hasNext()) {
+                    StorageMetadata expected = sortedSetMeta.next();
+                    StorageMetadata actual = storageMeta.next();
+                    log.debug("compare: " + expected.getStorageLocation() + " vs " + actual.getStorageLocation());
+                    if (!expected.equals(actual)) {
+                        Assert.fail("ordering not correct.");
+                    }
+                }
+                return null;
+            }
+        });
+    }
+
+
+
 }

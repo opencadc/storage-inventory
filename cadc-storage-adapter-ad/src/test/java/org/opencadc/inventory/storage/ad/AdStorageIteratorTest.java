@@ -66,83 +66,67 @@
  ************************************************************************
  */
 
-package org.opencadc.inventory.storage.ad.integration;
+package org.opencadc.inventory.storage.ad;
 
-import ca.nrc.cadc.io.ByteCountOutputStream;
-import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.util.Log4jInit;
-import java.io.ByteArrayOutputStream;
-import java.io.OutputStream;
-import java.math.BigInteger;
 import java.net.URI;
-import java.security.DigestOutputStream;
-import java.security.MessageDigest;
+import java.util.ArrayList;
+import java.util.Iterator;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.Test;
 import org.opencadc.inventory.StorageLocation;
-import org.opencadc.inventory.storage.ad.AdStorageAdapter;
+import org.opencadc.inventory.storage.StorageMetadata;
 
+public class AdStorageIteratorTest {
 
-public class AdStorageAdapterGetTest {
-    private static final Logger log = Logger.getLogger(AdStorageAdapterGetTest.class);
-    private static final String DIGEST_ALGORITHM = "MD5";
+    private static final Logger log = Logger.getLogger(AdStorageIteratorTest.class);
 
     static {
-        Log4jInit.setLevel("org.opencadc.inventory.storage", Level.INFO);
+        Log4jInit.setLevel("org.opencadc.inventory.storage", Level.DEBUG);
     }
 
     @Test
-    public void testGetValid() {
-        final AdStorageAdapter testSubject = new AdStorageAdapter();
-        final URI testIrisUri = URI.create("ad:IRIS/I429B4H0.fits");
+    public void testGetIterator() throws Exception {
+        ArrayList<StorageMetadata> duplicates = new ArrayList<StorageMetadata>();
 
-        // IRIS
-        final URI expectedIrisChecksum = URI.create("md5:e3922d47243563529f387ebdf00b66da");
-        try {
-            final OutputStream outputStream = new ByteArrayOutputStream();
-            final DigestOutputStream digestOutputStream = new DigestOutputStream(outputStream, MessageDigest
-                .getInstance(AdStorageAdapterGetTest.DIGEST_ALGORITHM));
-            final ByteCountOutputStream byteCountOutputStream = new ByteCountOutputStream(digestOutputStream);
-            final MessageDigest messageDigest = digestOutputStream.getMessageDigest();
-
-            final StorageLocation storageLocation = new StorageLocation(testIrisUri);
-            storageLocation.storageBucket = "IRIS";
-
-            testSubject.get(storageLocation, byteCountOutputStream);
-
-            Assert.assertEquals("Wrong checksum.", expectedIrisChecksum,
-                URI.create(String.format("%s:%s", messageDigest.getAlgorithm().toLowerCase(),
-                    new BigInteger(1, messageDigest.digest()).toString(16))));
-
-        } catch (Exception unexpected) {
-            log.error("unexpected exception", unexpected);
-            Assert.fail("Unexpected exception");
+        for (int i = 0; i < 7; i++) {
+            String uriStr = "ad:/TEST/fileuri_" + i + ".txt";
+            URI curUri = new URI(uriStr);
+            StorageLocation sl = new StorageLocation(curUri);
+            sl.storageBucket = "testBucket";
+            StorageMetadata sMeta = new StorageMetadata(sl, new URI("md5:12345"), 12345L);
+            sMeta.artifactURI = curUri;
+            duplicates.add(sMeta);
         }
 
-        // GEMINI
-        final URI testGeminiUri = URI.create("gemini:GEM/S20191208S0019.jpg");
-        final URI expectedGeminiChecksum = URI.create("md5:160e3957f7b4b48be1f19a4a9a036179");
-        try {
-            final OutputStream outputStream = new ByteArrayOutputStream();
-            final DigestOutputStream digestOutputStream = new DigestOutputStream(outputStream, MessageDigest
-                .getInstance(AdStorageAdapterGetTest.DIGEST_ALGORITHM));
-            final ByteCountOutputStream byteCountOutputStream = new ByteCountOutputStream(digestOutputStream);
-            final MessageDigest messageDigest = digestOutputStream.getMessageDigest();
+        duplicates.add(0, duplicates.get(0));
+        duplicates.add(5, duplicates.get(5));
+        duplicates.add(8, duplicates.get(8));
 
-            final StorageLocation storageLocation = new StorageLocation(testGeminiUri);
-            storageLocation.storageBucket = "GEM";
-
-            testSubject.get(storageLocation, byteCountOutputStream);
-
-            Assert.assertEquals("Wrong checksum.", expectedGeminiChecksum,
-                URI.create(String.format("%s:%s", messageDigest.getAlgorithm().toLowerCase(),
-                    new BigInteger(1, messageDigest.digest()).toString(16))));
-
-        } catch (Exception unexpected) {
-            log.error("unexpected exception", unexpected);
-            Assert.fail("Unexpected exception");
+        int count = 0;
+        Iterator<StorageMetadata> dIter = duplicates.iterator();
+        while (dIter.hasNext()) {
+            StorageMetadata curMeta = dIter.next();
+            count++;
+            log.debug("position: " + count + ": " + curMeta);
         }
+
+        Assert.assertEquals("expected array count is 10 but got " + count, 10, count);
+
+        log.debug("array with duplicates size:  " + count + "\n");
+
+        AdStorageIterator asi = new AdStorageIterator(duplicates.iterator());
+
+        count = 0;
+        while (asi.hasNext()) {
+            StorageMetadata curMeta = asi.next();
+            count++;
+            log.debug("position: " + count + ": " + curMeta);
+        }
+
+        Assert.assertEquals("expected filtered array count is 7 but got " + count, 7, count);
+        log.debug("total items from AdStorageIterator: " + count);
     }
 }

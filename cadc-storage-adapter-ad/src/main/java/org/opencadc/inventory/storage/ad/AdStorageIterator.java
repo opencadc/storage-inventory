@@ -62,87 +62,46 @@
  *  <http://www.gnu.org/licenses/>.      pas le cas, consultez :
  *                                       <http://www.gnu.org/licenses/>.
  *
+ *  $Revision: 4 $
  *
  ************************************************************************
  */
 
-package org.opencadc.inventory.storage.ad.integration;
+package org.opencadc.inventory.storage.ad;
 
-import ca.nrc.cadc.io.ByteCountOutputStream;
-import ca.nrc.cadc.net.ResourceNotFoundException;
-import ca.nrc.cadc.util.Log4jInit;
-import java.io.ByteArrayOutputStream;
-import java.io.OutputStream;
-import java.math.BigInteger;
-import java.net.URI;
-import java.security.DigestOutputStream;
-import java.security.MessageDigest;
-import org.apache.log4j.Level;
-import org.apache.log4j.Logger;
-import org.junit.Assert;
-import org.junit.Test;
-import org.opencadc.inventory.StorageLocation;
-import org.opencadc.inventory.storage.ad.AdStorageAdapter;
+import java.util.Iterator;
+import org.opencadc.inventory.storage.StorageMetadata;
 
+public class AdStorageIterator implements Iterator<StorageMetadata> {
 
-public class AdStorageAdapterGetTest {
-    private static final Logger log = Logger.getLogger(AdStorageAdapterGetTest.class);
-    private static final String DIGEST_ALGORITHM = "MD5";
+    private StorageMetadata nextItem = null;
+    private Iterator<StorageMetadata> sourceIterator;
 
-    static {
-        Log4jInit.setLevel("org.opencadc.inventory.storage", Level.INFO);
-    }
-
-    @Test
-    public void testGetValid() {
-        final AdStorageAdapter testSubject = new AdStorageAdapter();
-        final URI testIrisUri = URI.create("ad:IRIS/I429B4H0.fits");
-
-        // IRIS
-        final URI expectedIrisChecksum = URI.create("md5:e3922d47243563529f387ebdf00b66da");
-        try {
-            final OutputStream outputStream = new ByteArrayOutputStream();
-            final DigestOutputStream digestOutputStream = new DigestOutputStream(outputStream, MessageDigest
-                .getInstance(AdStorageAdapterGetTest.DIGEST_ALGORITHM));
-            final ByteCountOutputStream byteCountOutputStream = new ByteCountOutputStream(digestOutputStream);
-            final MessageDigest messageDigest = digestOutputStream.getMessageDigest();
-
-            final StorageLocation storageLocation = new StorageLocation(testIrisUri);
-            storageLocation.storageBucket = "IRIS";
-
-            testSubject.get(storageLocation, byteCountOutputStream);
-
-            Assert.assertEquals("Wrong checksum.", expectedIrisChecksum,
-                URI.create(String.format("%s:%s", messageDigest.getAlgorithm().toLowerCase(),
-                    new BigInteger(1, messageDigest.digest()).toString(16))));
-
-        } catch (Exception unexpected) {
-            log.error("unexpected exception", unexpected);
-            Assert.fail("Unexpected exception");
-        }
-
-        // GEMINI
-        final URI testGeminiUri = URI.create("gemini:GEM/S20191208S0019.jpg");
-        final URI expectedGeminiChecksum = URI.create("md5:160e3957f7b4b48be1f19a4a9a036179");
-        try {
-            final OutputStream outputStream = new ByteArrayOutputStream();
-            final DigestOutputStream digestOutputStream = new DigestOutputStream(outputStream, MessageDigest
-                .getInstance(AdStorageAdapterGetTest.DIGEST_ALGORITHM));
-            final ByteCountOutputStream byteCountOutputStream = new ByteCountOutputStream(digestOutputStream);
-            final MessageDigest messageDigest = digestOutputStream.getMessageDigest();
-
-            final StorageLocation storageLocation = new StorageLocation(testGeminiUri);
-            storageLocation.storageBucket = "GEM";
-
-            testSubject.get(storageLocation, byteCountOutputStream);
-
-            Assert.assertEquals("Wrong checksum.", expectedGeminiChecksum,
-                URI.create(String.format("%s:%s", messageDigest.getAlgorithm().toLowerCase(),
-                    new BigInteger(1, messageDigest.digest()).toString(16))));
-
-        } catch (Exception unexpected) {
-            log.error("unexpected exception", unexpected);
-            Assert.fail("Unexpected exception");
+    public AdStorageIterator(Iterator<StorageMetadata> sourceIterator) {
+        this.sourceIterator = sourceIterator;
+        if (sourceIterator.hasNext()) {
+            this.nextItem = sourceIterator.next();
         }
     }
+
+    @Override
+    public boolean hasNext() {
+        return (this.nextItem != null);
+    }
+
+    @Override
+    public StorageMetadata next() {
+        final StorageMetadata curMeta = this.nextItem;
+        this.nextItem = null;
+
+        while ((this.nextItem == null) && sourceIterator.hasNext()) {
+            StorageMetadata maybeNext = sourceIterator.next();
+            if (!curMeta.equals(maybeNext)) {
+                this.nextItem = maybeNext;
+            }
+        }
+
+        return curMeta;
+    }
+
 }
