@@ -80,22 +80,19 @@ import ca.nrc.cadc.rest.InlineContentHandler;
 import ca.nrc.cadc.rest.RestAction;
 import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.util.PropertiesReader;
-
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.security.AccessControlException;
-import java.util.ArrayList;
 import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-
 import javax.security.auth.Subject;
-
 import org.apache.log4j.Logger;
 import org.opencadc.gms.GroupURI;
 import org.opencadc.inventory.Artifact;
@@ -303,7 +300,8 @@ public abstract class ArtifactAction extends RestAction {
         StorageSiteDAO ssdao = new StorageSiteDAO(artifactDAO); // copy config
         Set<StorageSite> curlist = ssdao.list();
         if (curlist.size() > 1) {
-                throw new IllegalStateException("found: " + curlist.size() + " StorageSite(s) in database; expected 0 or 1");
+            throw new IllegalStateException("found: " + curlist.size()
+                + " StorageSite(s) in database; expected 0 or 1");
         }
         // TODO: get display name from config
         // use path from resourceID as default
@@ -322,7 +320,8 @@ public abstract class ArtifactAction extends RestAction {
             cur.setName(name);
             ssdao.put(cur);
         } else {
-                throw new IllegalStateException("BUG: found " + curlist.size() + " StorageSite entries");
+            throw new IllegalStateException("BUG: found " + curlist.size()
+                                            + " StorageSite entries");
         }
         log.info("initStorageSite: " + resourceID + " " + name);
         SELF_RESOURCE_ID = resourceID;
@@ -340,28 +339,21 @@ public abstract class ArtifactAction extends RestAction {
         }
 
         // TODO: optimize with threads
-        List<String> readGrantServices = getReadGrantServices(props);
-        for (String readService : readGrantServices) {
-            try {
-                URI serviceID = new URI(readService);
-                PermissionsClient pc = new PermissionsClient(serviceID);
-                ReadGrant grant = pc.getReadGrant(artifactURI);
-                if (grant.isAnonymousAccess()) {
-                    log.debug("anonymous read access granted");
-                    return;
-                }
-                if (grant.getGroups().size() > 0) {
-                    for (GroupURI readGroupUri : grant.getGroups()) {
-                        for (Group userGroup : userGroups) {
-                            if (userGroup.getID() == readGroupUri) {
-                                return;
-                            }
+        for (URI readService : readGrantServices) {
+            PermissionsClient pc = new PermissionsClient(readService);
+            ReadGrant grant = pc.getReadGrant(artifactURI);
+            if (grant.isAnonymousAccess()) {
+                log.debug("anonymous read access granted");
+                return;
+            }
+            if (grant.getGroups().size() > 0) {
+                for (GroupURI readGroupUri : grant.getGroups()) {
+                    for (Group userGroup : userGroups) {
+                        if (userGroup.getID() == readGroupUri) {
+                            return;
                         }
                     }
                 }
-            } catch (URISyntaxException e) {
-                throw new IllegalStateException("Invalid read grant service: "
-                    + readService);
             }
         }
         throw new AccessControlException("read permission denied");
@@ -384,24 +376,17 @@ public abstract class ArtifactAction extends RestAction {
         }
 
         // TODO: optimize with threads
-        List<String> writeGrantServices = getWriteGrantServices(props);
-        for (String writeService : writeGrantServices) {
-            try {
-                URI serviceID = new URI(writeService);
-                PermissionsClient pc = new PermissionsClient(serviceID);
-                WriteGrant grant = pc.getWriteGrant(artifactURI);
-                if (grant.getGroups().size() > 0) {
-                    for (GroupURI writeGroupUri : grant.getGroups()) {
-                        for (Group userGroup : userGroups) {
-                            if (userGroup.getID() == writeGroupUri) {
-                                return;
-                            }
+        for (URI writeService : writeGrantServices) {
+            PermissionsClient pc = new PermissionsClient(writeService);
+            WriteGrant grant = pc.getWriteGrant(artifactURI);
+            if (grant.getGroups().size() > 0) {
+                for (GroupURI writeGroupUri : grant.getGroups()) {
+                    for (Group userGroup : userGroups) {
+                        if (userGroup.getID() == writeGroupUri) {
+                            return;
                         }
                     }
                 }
-            } catch (URISyntaxException e) {
-                throw new IllegalStateException("Invalid write grant service: "
-                    + writeService);
             }
         }
         throw new AccessControlException("write permission denied");
@@ -527,7 +512,7 @@ public abstract class ArtifactAction extends RestAction {
     static Map<String, Object> getDaoConfig(MultiValuedProperties props) {
         Map<String, Object> config = new HashMap<String, Object>();
         Class cls = null;
-        List<String> sqlGenList = props.getProperty(SQL_GEN_KEY);
+        List<String> sqlGenList = props.getProperty(SQLGEN_KEY);
         if (sqlGenList != null && sqlGenList.size() > 0) {
             try {
                 String sqlGenClass = sqlGenList.get(0);
@@ -541,7 +526,7 @@ public abstract class ArtifactAction extends RestAction {
             cls = SQLGenerator.class;
         }
 
-        config.put(SQL_GEN_KEY, cls);
+        config.put(SQLGEN_KEY, cls);
         config.put("jndiDataSourceName", JNDI_DATASOURCE);
         List<String> schemaList = props.getProperty(SCHEMA_KEY);
         if (schemaList == null || schemaList.size() < 1) {
