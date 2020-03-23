@@ -95,7 +95,7 @@
     <!-- Permissions servlet endpoint -->
     <servlet-mapping>
         <servlet-name>PermissionsServlet</servlet-name>
-        <url-pattern>/perms</url-pattern>
+        <url-pattern>/perms/*</url-pattern>
     </servlet-mapping>
 
     <welcome-file-list>
