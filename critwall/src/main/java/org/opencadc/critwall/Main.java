@@ -69,8 +69,20 @@ package org.opencadc.critwall;
 
 import ca.nrc.cadc.util.Log4jInit;
 
+import ca.nrc.cadc.util.MultiValuedProperties;
+import ca.nrc.cadc.util.PropertiesReader;
+import ca.nrc.cadc.util.StringUtil;
+import java.io.FileNotFoundException;
+import java.io.FileReader;
+import java.io.IOException;
+import java.io.Reader;
+import java.net.MalformedURLException;
 import java.net.URI;
+import java.net.URISyntaxException;
+import java.util.List;
 import java.util.Map;
+import java.util.Properties;
+import java.util.Set;
 import java.util.TreeMap;
 
 import org.apache.log4j.Level;
@@ -84,24 +96,59 @@ import org.opencadc.inventory.storage.StorageAdapter;
  */
 public class Main {
     private static final Logger log = Logger.getLogger(Main.class);
+    private static final String CONFIGURATION_FILE_LOCATION = "/config/critwall.properties";
+    private static final String BUCKETS_CONFIG_KEY = "org.opencadc.critwall.buckets";
+    private static final String NTHREADS_CONFIG_KEY = "org.opencadc.critwall.threads";
+    private static final String LOCATOR_SERVICE_CONFIG_KEY = "org.opencadc.critwall.locatorService";
+    private static final String LOGGING_CONFIG_KEY = "org.opencadc.critwall.logging";
+
+
 
     public static void main(String[] args) {
         try {
+            Properties props = readConfig();
+            System.out.println("properties: " + props.toString());
+
             // get log level from config
+            String logCfg = props.getProperty(LOGGING_CONFIG_KEY);
             Level cfg = Level.INFO;
-            Log4jInit.setLevel("org.opencadc", Level.WARN);
-            Log4jInit.setLevel("ca.nrc.cadc", Level.WARN);
-            
+            if (StringUtil.hasLength(logCfg)) {
+                 cfg = Level.toLevel(logCfg);
+            }
+            System.out.println("log level: " + cfg);
+
+//            Log4jInit.setLevel("org.opencadc", Level.WARN);
+//            System.out.println("this far1:");
+//
+//            Log4jInit.setLevel("ca.nrc.cadc", Level.WARN);
+//            System.out.println("this far2");
+
             Log4jInit.setLevel("org.opencadc.inventory", cfg);
+            System.out.println("this far:3");
+
             Log4jInit.setLevel("org.opencadc.tap", cfg);
+            System.out.println("this far4:");
+
             Log4jInit.setLevel("org.opencadc.reg", cfg);
-            
+
+            System.out.println("AFTER SETTING LOG LEVELS");
+
             // parse config file and populate/assign these
+            // which values from the config go in here?
             Map<String,Object> daoConfig = new TreeMap<>();
-            StorageAdapter localStorage = null;
-            URI resourceID = null;
-            BucketSelector selector = null;
-            int nthreads = 1;
+
+            StorageAdapter localStorage = getStorageAdapter(props);
+            System.out.println("storage adapter: " + localStorage);
+
+            URI resourceID = getGlobalResourceId(props);
+            log.debug("resourceID: " + resourceID.toString());
+
+            BucketSelector selector = getBucketSelector(props);
+
+            int nthreads = getNthreads(props);
+            log.debug("nthreads: " + nthreads);
+
+            System.out.println("got config");
             
             FileSync doit = new FileSync(daoConfig, localStorage, resourceID, selector, nthreads);
             doit.run();
@@ -114,4 +161,91 @@ public class Main {
     
     private Main() { 
     }
+
+
+    /**
+     * Read in the configuration file and load it into the System properties.
+     */
+    private static Properties readConfig() {
+        final Properties properties = new Properties();
+
+        try {
+            final Reader configFileReader = new FileReader(CONFIGURATION_FILE_LOCATION);
+            properties.load(configFileReader);
+            System.setProperties(properties);
+        } catch (FileNotFoundException e) {
+            log.fatal(
+                String.format("Unable to locate configuration file.  Expected it to be at %s.",
+                    CONFIGURATION_FILE_LOCATION));
+            System.exit(1);
+        } catch (IOException e) {
+            log.fatal(String.format("Unable to read file located at %s.", CONFIGURATION_FILE_LOCATION));
+            System.exit(2);
+        }
+
+        return properties;
+    }
+
+    private static StorageAdapter getStorageAdapter(Properties config) {
+        String adapterKey = StorageAdapter.class.getName();
+        String adapterClass = config.getProperty(adapterKey);
+        if (StringUtil.hasLength(adapterClass)) {
+            try {
+                Class c = Class.forName(adapterClass);
+                Object o = c.newInstance();
+                StorageAdapter sa = (StorageAdapter) o;
+                System.out.println("StorageAdapter: " + sa);
+                return sa;
+            } catch (Throwable t) {
+                throw new IllegalStateException("failed to load storage adapter: " + adapterClass, t);
+            }
+        } else {
+            throw new IllegalStateException("no storage adapter specified in critwall.properties");
+        }
+    }
+
+    private static URI getGlobalResourceId(Properties config) {
+        String locatorResourceIdStr = config.getProperty(LOCATOR_SERVICE_CONFIG_KEY);
+        URI resourceID = null;
+
+        if (StringUtil.hasLength(locatorResourceIdStr)) {
+            try {
+                resourceID = new URI(locatorResourceIdStr);
+            } catch (URISyntaxException us) {
+                throw new IllegalStateException("invalid locator service in critwall.properties: " + locatorResourceIdStr);
+            }
+        } else {
+            throw new IllegalStateException("locator service not specified in critwall.properties");
+        }
+        return resourceID;
+    }
+
+    private static int getNthreads(Properties config) {
+
+        String nThreadStr = config.getProperty(NTHREADS_CONFIG_KEY);
+        int nthreads = -1;
+
+        if (StringUtil.hasLength(nThreadStr)) {
+            // TODO: if there's no int in the string, it's not caught
+            nthreads = Integer.parseInt(nThreadStr);
+        } else {
+            // default of 1
+            nthreads = 1;
+        }
+        return nthreads;
+    }
+
+    private static BucketSelector getBucketSelector(Properties config) {
+        String bucketSelectorPrefix = config.getProperty(BUCKETS_CONFIG_KEY);
+        BucketSelector bucketSel = null;
+
+        if (StringUtil.hasLength(bucketSelectorPrefix)) {
+            // TODO: implementation of this to be finished in s 2575 ta 13144
+//            bucketSel = new BucketSelector();
+        } else {
+            throw new IllegalStateException("bucket selector not specified in critwall.properties");
+        }
+        return bucketSel;
+    }
+
 }

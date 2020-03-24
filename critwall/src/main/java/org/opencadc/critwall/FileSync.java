@@ -136,12 +136,12 @@ public class FileSync {
     
     // general behaviour:
     // - create a job queue
-    // - create a thread pool to execute jobs
+    // - create a thread pool to execute jobs (ta 13063)
     // - query inventory for Artifact with null StorageLocation and use Iterator<Artifact>
     //   to keep the queue finite in size (not empty, not huge)
-    // job: transfer negotiation + HttpGet with output to local StorageAdapter
+    // job: transfer negotiation  (with global) + HttpGet with output to local StorageAdapter
     // - the job wrapper should balance HttpGet retries to a single URL and cycling through each
-    //   negotiated URL (once)... so if more URLs to try, fewer retries each
+    //   negotiated URL (once)... so if more URLs to try, fewer retries each (separate task)
     // - if a job fails, just log it and move on
     
     // run until Iterator<Artifact> finishes: 
