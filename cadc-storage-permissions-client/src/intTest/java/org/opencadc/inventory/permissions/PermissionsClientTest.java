@@ -73,6 +73,7 @@ import ca.nrc.cadc.auth.SSLUtil;
 import ca.nrc.cadc.util.FileUtil;
 import ca.nrc.cadc.util.Log4jInit;
 import java.net.URI;
+import java.security.AccessControlException;
 import java.security.PrivilegedExceptionAction;
 import java.util.List;
 import javax.security.auth.Subject;
@@ -80,7 +81,6 @@ import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.BeforeClass;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.opencadc.gms.GroupURI;
 
@@ -103,8 +103,7 @@ public class PermissionsClientTest {
 
     @BeforeClass
     public static void setUpClass() throws Exception {
-        Log4jInit.setLevel("org.opencadc.inventory.permissions", Level.DEBUG);
-        Log4jInit.setLevel("ca.nrc.cadc.", Level.DEBUG);
+        Log4jInit.setLevel("org.opencadc.inventory.permissions", Level.INFO);
 
         cadcRegTest1Subject = SSLUtil.createSubject(
             FileUtil.getFileFromResource("x509_CADCRegtest1.pem", PermissionsClientTest.class));
@@ -124,10 +123,10 @@ public class PermissionsClientTest {
     public void testAnonAccess() {
         try {
             PermissionsClient testSubject = new PermissionsClient(serviceID);
-            try {
-                ReadGrant readGrant = testSubject.getReadGrant(testArtifact);
-                Assert.fail("Anonymous user access should " + "throw exception");
-            } catch (Exception ignored) { }
+            ReadGrant readGrant = testSubject.getReadGrant(testArtifact);
+            Assert.fail("Anonymous user access should " + "throw exception");
+        } catch (AccessControlException expected) {
+
         } catch (Exception unexpected) {
             log.error("unexpected exception", unexpected);
             Assert.fail("unexpected exception: " + unexpected);
@@ -138,17 +137,16 @@ public class PermissionsClientTest {
     public void testNotAuthorized() {
         try {
             PermissionsClient testSubject = new PermissionsClient(serviceID);
-
+            log.debug(cadcRegTest1Subject);
             Subject.doAs(cadcRegTest1Subject, new PrivilegedExceptionAction<Object>() {
-                @Override
-                public Object run() throws Exception {
-                    try {
-                        ReadGrant readGrant = testSubject.getReadGrant(testArtifact);
-                        Assert.fail("Anonymous user access should " + "throw exception");
-                    } catch (Exception ignored) { }
+                @Override public Object run() throws Exception {
+                    ReadGrant readGrant = testSubject.getReadGrant(testArtifact);
+                    Assert.fail("Anonymous user access should " + "throw exception");
                     return null;
                 }
             });
+        } catch (AccessControlException expected) {
+
         } catch (Exception unexpected) {
             log.error("unexpected exception", unexpected);
             Assert.fail("unexpected exception: " + unexpected);
