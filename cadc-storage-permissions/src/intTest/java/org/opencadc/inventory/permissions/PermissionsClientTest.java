@@ -80,6 +80,7 @@ import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.BeforeClass;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.opencadc.gms.GroupURI;
 
@@ -87,10 +88,13 @@ public class PermissionsClientTest {
 
     private static final Logger log = Logger.getLogger(PermissionsClientTest.class);
 
-    private static Subject cadcAnonTest1Subject;
+    // Subject NOT authorized in Baldur.properties to retrieve grant information.
     private static Subject cadcRegTest1Subject;
-    private static URI serviceID;
 
+    // Subject authorized in Baldur.properties to retrieve grant information.
+    private static Subject cadcAuthTest1Subject;
+
+    private static URI serviceID;
     private static URI testArtifact;
     private static GroupURI readGroup1;
     private static GroupURI writeGroup1;
@@ -98,14 +102,14 @@ public class PermissionsClientTest {
     private static GroupURI writeGroup3;
 
     @BeforeClass
-    public static void setUpClass() throws Exception
-    {
-        Log4jInit.setLevel("org.opencadc.inventory.permissions", Level.INFO);
+    public static void setUpClass() throws Exception {
+        Log4jInit.setLevel("org.opencadc.inventory.permissions", Level.DEBUG);
+        Log4jInit.setLevel("ca.nrc.cadc.", Level.DEBUG);
 
-        cadcAnonTest1Subject = SSLUtil.createSubject(
-            FileUtil.getFileFromResource("x509_CADCAnontest1.pem", PermissionsClientTest.class));
         cadcRegTest1Subject = SSLUtil.createSubject(
             FileUtil.getFileFromResource("x509_CADCRegtest1.pem", PermissionsClientTest.class));
+        cadcAuthTest1Subject = SSLUtil.createSubject(
+            FileUtil.getFileFromResource("x509_CADCAuthtest1.pem", PermissionsClientTest.class));
 
         serviceID = URI.create("ivo://cadc.nrc.ca/baldur");
 
@@ -119,16 +123,29 @@ public class PermissionsClientTest {
     @Test
     public void testAnonAccess() {
         try {
-            Subject.doAs(cadcAnonTest1Subject, new PrivilegedExceptionAction<Object>()
-            {
+            PermissionsClient testSubject = new PermissionsClient(serviceID);
+            try {
+                ReadGrant readGrant = testSubject.getReadGrant(testArtifact);
+                Assert.fail("Anonymous user access should " + "throw exception");
+            } catch (Exception ignored) { }
+        } catch (Exception unexpected) {
+            log.error("unexpected exception", unexpected);
+            Assert.fail("unexpected exception: " + unexpected);
+        }
+    }
+
+    @Test
+    public void testNotAuthorized() {
+        try {
+            PermissionsClient testSubject = new PermissionsClient(serviceID);
+
+            Subject.doAs(cadcRegTest1Subject, new PrivilegedExceptionAction<Object>() {
                 @Override
-                public Object run() throws Exception
-                {
-                    PermissionsClient testSubject = new PermissionsClient(serviceID);
+                public Object run() throws Exception {
                     try {
                         ReadGrant readGrant = testSubject.getReadGrant(testArtifact);
                         Assert.fail("Anonymous user access should " + "throw exception");
-                    } catch (Exception expected) { }
+                    } catch (Exception ignored) { }
                     return null;
                 }
             });
@@ -141,12 +158,11 @@ public class PermissionsClientTest {
     @Test
     public void testGetReadGrants() {
         try {
-            Subject.doAs(cadcRegTest1Subject, new PrivilegedExceptionAction<Object>()
-            {
+            PermissionsClient testSubject = new PermissionsClient(serviceID);
+
+            Subject.doAs(cadcAuthTest1Subject, new PrivilegedExceptionAction<Object>() {
                 @Override
-                public Object run() throws Exception
-                {
-                    PermissionsClient testSubject = new PermissionsClient(serviceID);
+                public Object run() throws Exception {
                     ReadGrant readGrant = testSubject.getReadGrant(testArtifact);
                     Assert.assertNotNull(readGrant);
                     Assert.assertTrue(readGrant.isAnonymousAccess());
@@ -169,12 +185,11 @@ public class PermissionsClientTest {
     @Test
     public void testGetWriteGrants() {
         try {
-            Subject.doAs(cadcRegTest1Subject, new PrivilegedExceptionAction<Object>()
-            {
+            PermissionsClient testSubject = new PermissionsClient(serviceID);
+
+            Subject.doAs(cadcAuthTest1Subject, new PrivilegedExceptionAction<Object>() {
                 @Override
-                public Object run() throws Exception
-                {
-                    PermissionsClient testSubject = new PermissionsClient(serviceID);
+                public Object run() throws Exception {
                     WriteGrant writeGrant = testSubject.getWriteGrant(testArtifact);
                     Assert.assertNotNull(writeGrant);
 
