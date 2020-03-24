@@ -97,8 +97,6 @@ public class Main {
     private static final String LOCATOR_SERVICE_CONFIG_KEY = "org.opencadc.critwall.locatorService";
     private static final String LOGGING_CONFIG_KEY = "org.opencadc.critwall.logging";
 
-
-
     public static void main(String[] args) {
         try {
             Log4jInit.setLevel("org.opencadc", Level.WARN);
@@ -110,7 +108,7 @@ public class Main {
             String logCfg = props.getProperty(LOGGING_CONFIG_KEY);
             Level cfg = Level.INFO;
             if (StringUtil.hasLength(logCfg)) {
-                 cfg = Level.toLevel(logCfg);
+                cfg = Level.toLevel(logCfg);
             }
 
             Log4jInit.setLevel("org.opencadc.inventory", cfg);
@@ -209,13 +207,11 @@ public class Main {
     }
 
     private static int getNthreads(Properties config) {
-
-        String nThreadStr = config.getProperty(NTHREADS_CONFIG_KEY);
+        String nthreadStr = config.getProperty(NTHREADS_CONFIG_KEY);
         int nthreads = -1;
-
-        if (StringUtil.hasLength(nThreadStr)) {
+        if (StringUtil.hasLength(nthreadStr)) {
             // TODO: if there's no int in the string, it's not caught
-            nthreads = Integer.parseInt(nThreadStr);
+            nthreads = Integer.parseInt(nthreadStr);
         } else {
             // default of 1
             nthreads = 1;
@@ -229,7 +225,7 @@ public class Main {
 
         if (StringUtil.hasLength(bucketSelectorPrefix)) {
             // TODO: implementation of this to be finished in s 2575 ta 13144
-//            bucketSel = new BucketSelector();
+            // bucketSel = new BucketSelector();
         } else {
             throw new IllegalStateException("bucket selector not specified in critwall.properties");
         }
