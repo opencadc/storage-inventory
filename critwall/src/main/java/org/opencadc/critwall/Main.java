@@ -69,20 +69,15 @@ package org.opencadc.critwall;
 
 import ca.nrc.cadc.util.Log4jInit;
 
-import ca.nrc.cadc.util.MultiValuedProperties;
-import ca.nrc.cadc.util.PropertiesReader;
 import ca.nrc.cadc.util.StringUtil;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.Reader;
-import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-import java.util.Set;
 import java.util.TreeMap;
 
 import org.apache.log4j.Level;
@@ -106,8 +101,10 @@ public class Main {
 
     public static void main(String[] args) {
         try {
+            Log4jInit.setLevel("org.opencadc", Level.WARN);
+            Log4jInit.setLevel("ca.nrc.cadc", Level.WARN);
+
             Properties props = readConfig();
-            System.out.println("properties: " + props.toString());
 
             // get log level from config
             String logCfg = props.getProperty(LOGGING_CONFIG_KEY);
@@ -115,30 +112,21 @@ public class Main {
             if (StringUtil.hasLength(logCfg)) {
                  cfg = Level.toLevel(logCfg);
             }
-            System.out.println("log level: " + cfg);
-
-//            Log4jInit.setLevel("org.opencadc", Level.WARN);
-//            System.out.println("this far1:");
-//
-//            Log4jInit.setLevel("ca.nrc.cadc", Level.WARN);
-//            System.out.println("this far2");
 
             Log4jInit.setLevel("org.opencadc.inventory", cfg);
-            System.out.println("this far:3");
-
             Log4jInit.setLevel("org.opencadc.tap", cfg);
-            System.out.println("this far4:");
-
             Log4jInit.setLevel("org.opencadc.reg", cfg);
+            Log4jInit.setLevel("org.opencadc.critwall", cfg);
 
-            System.out.println("AFTER SETTING LOG LEVELS");
+            log.debug("log level: " + cfg);
+            log.debug("properties: " + props.toString());
 
             // parse config file and populate/assign these
             // which values from the config go in here?
             Map<String,Object> daoConfig = new TreeMap<>();
 
             StorageAdapter localStorage = getStorageAdapter(props);
-            System.out.println("storage adapter: " + localStorage);
+            log.debug("storage adapter: " + localStorage);
 
             URI resourceID = getGlobalResourceId(props);
             log.debug("resourceID: " + resourceID.toString());
@@ -147,8 +135,6 @@ public class Main {
 
             int nthreads = getNthreads(props);
             log.debug("nthreads: " + nthreads);
-
-            System.out.println("got config");
             
             FileSync doit = new FileSync(daoConfig, localStorage, resourceID, selector, nthreads);
             doit.run();
@@ -157,6 +143,7 @@ public class Main {
             log.error("unexpected failure", unexpected);
             System.exit(-1);
         }
+        log.debug("finished critwall run.");
     }
     
     private Main() { 
@@ -189,12 +176,13 @@ public class Main {
     private static StorageAdapter getStorageAdapter(Properties config) {
         String adapterKey = StorageAdapter.class.getName();
         String adapterClass = config.getProperty(adapterKey);
+        log.debug("adapter class: " + adapterClass);
         if (StringUtil.hasLength(adapterClass)) {
             try {
                 Class c = Class.forName(adapterClass);
                 Object o = c.newInstance();
                 StorageAdapter sa = (StorageAdapter) o;
-                System.out.println("StorageAdapter: " + sa);
+                log.debug("StorageAdapter: " + sa);
                 return sa;
             } catch (Throwable t) {
                 throw new IllegalStateException("failed to load storage adapter: " + adapterClass, t);
