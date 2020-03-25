@@ -92,6 +92,8 @@ import org.opencadc.inventory.storage.StorageAdapter;
 public class Main {
     private static final Logger log = Logger.getLogger(Main.class);
     private static final String CONFIGURATION_FILE_LOCATION = "/config/critwall.properties";
+    private static final String SCHEMA_CONFIG_KEY = "org.opencadc.critwall.db.schema";
+    private static final String DATABASE_CONFIG_KEY = "org.opencadc.critwall.db.url";
     private static final String BUCKETS_CONFIG_KEY = "org.opencadc.critwall.buckets";
     private static final String NTHREADS_CONFIG_KEY = "org.opencadc.critwall.threads";
     private static final String LOCATOR_SERVICE_CONFIG_KEY = "org.opencadc.critwall.locatorService";
@@ -122,6 +124,9 @@ public class Main {
             // parse config file and populate/assign these
             // which values from the config go in here?
             Map<String,Object> daoConfig = new TreeMap<>();
+            daoConfig.put("schema", getSchema(props));
+            daoConfig.put("database", getDatabase(props));
+            daoConfig.put("jndiDataSourceName", getDatabase(props));
 
             StorageAdapter localStorage = getStorageAdapter(props);
             log.debug("storage adapter: " + localStorage);
@@ -170,6 +175,24 @@ public class Main {
 
         return properties;
     }
+
+    private static String getSchema(Properties config) {
+        String schema = config.getProperty(SCHEMA_CONFIG_KEY);
+        log.debug("schema: " + schema);
+        if (!StringUtil.hasLength(schema)) {
+            throw new IllegalStateException("schema not specified in critwall.properties");
+        }
+        return schema;
+    }
+
+    private static String getDatabase(Properties config) {
+        String schema = config.getProperty(DATABASE_CONFIG_KEY);
+        if (!StringUtil.hasLength(schema)) {
+            throw new IllegalStateException("schema not specified in critwall.properties");
+        }
+        return schema;
+    }
+
 
     private static StorageAdapter getStorageAdapter(Properties config) {
         String adapterKey = StorageAdapter.class.getName();
