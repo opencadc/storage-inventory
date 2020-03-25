@@ -74,6 +74,7 @@ import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.Reader;
+import java.lang.reflect.Constructor;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.Map;
@@ -82,6 +83,7 @@ import java.util.TreeMap;
 
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
+import org.opencadc.inventory.db.SQLGenerator;
 import org.opencadc.inventory.storage.StorageAdapter;
 
 /**
@@ -92,6 +94,7 @@ import org.opencadc.inventory.storage.StorageAdapter;
 public class Main {
     private static final Logger log = Logger.getLogger(Main.class);
     private static final String CONFIGURATION_FILE_LOCATION = "/config/critwall.properties";
+    private static final String SQLGENERATOR_CONFIG_KEY = SQLGenerator.class.getName();
     private static final String SCHEMA_CONFIG_KEY = "org.opencadc.critwall.db.schema";
     private static final String DATABASE_CONFIG_KEY = "org.opencadc.critwall.db.url";
     private static final String BUCKETS_CONFIG_KEY = "org.opencadc.critwall.buckets";
@@ -124,9 +127,13 @@ public class Main {
             // parse config file and populate/assign these
             // which values from the config go in here?
             Map<String,Object> daoConfig = new TreeMap<>();
-            daoConfig.put("schema", getSchema(props));
-            daoConfig.put("database", getDatabase(props));
+            String schema = getSchema(props);
+            daoConfig.put("schema", schema);
+            String db = getDatabase(props);
+            daoConfig.put("database", db);
             daoConfig.put("jndiDataSourceName", getDatabase(props));
+            log.debug(SQLGENERATOR_CONFIG_KEY);
+            daoConfig.put(SQLGENERATOR_CONFIG_KEY, getSqlGenerator(props, db, schema));
 
             StorageAdapter localStorage = getStorageAdapter(props);
             log.debug("storage adapter: " + localStorage);
@@ -186,11 +193,30 @@ public class Main {
     }
 
     private static String getDatabase(Properties config) {
-        String schema = config.getProperty(DATABASE_CONFIG_KEY);
-        if (!StringUtil.hasLength(schema)) {
+        String db = config.getProperty(DATABASE_CONFIG_KEY);
+        if (!StringUtil.hasLength(db)) {
             throw new IllegalStateException("schema not specified in critwall.properties");
         }
-        return schema;
+        return db;
+    }
+
+    private static SQLGenerator getSqlGenerator(Properties config, String database, String schema) {
+        String generatorName = config.getProperty(SQLGENERATOR_CONFIG_KEY);
+        SQLGenerator sqlGenerator = null;
+        if (!StringUtil.hasLength(generatorName)) {
+            throw new IllegalStateException("sql generator not specified in critwall.properties");
+        }
+
+        try {
+            Class<SQLGenerator> theClass = (Class<SQLGenerator>)Class.forName(generatorName);
+            Constructor<SQLGenerator> cons = theClass.getConstructor(String.class, String.class);
+            sqlGenerator = cons.newInstance(database, schema);
+        }
+        catch (Exception ex){
+            log.error(ex + " Cannot instantiate SQLGenerator.");
+        }
+
+        return sqlGenerator;
     }
 
 
