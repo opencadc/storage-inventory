@@ -69,12 +69,19 @@
 
 package org.opencadc.inventory.permissions;
 
+import ca.nrc.cadc.auth.AuthMethod;
+import ca.nrc.cadc.net.HttpGet;
+import ca.nrc.cadc.net.ResourceAlreadyExistsException;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
+import ca.nrc.cadc.reg.Standards;
+import ca.nrc.cadc.reg.client.RegistryClient;
+import java.io.IOException;
+import java.net.MalformedURLException;
 import java.net.URI;
-import java.util.Date;
-
-import org.opencadc.gms.GroupURI;
+import java.net.URL;
+import org.opencadc.inventory.InventoryUtil;
+import org.opencadc.inventory.permissions.xml.GrantReader;
 
 /**
  * Client for retrieving grant information about artifacts.
@@ -84,28 +91,39 @@ import org.opencadc.gms.GroupURI;
  */
 public class PermissionsClient {
 
-    /**
-     * Public, no-arg constructor.
-     */
-    public PermissionsClient() {
+    private final URL serviceURL;
+
+    public enum Operation {
+        read,
+        write;
     }
-    
+
     /**
-     * Get the read permissions information about the file identified by fileURI.
-     * 
+     * Construct a PermissionsClient for the given serviceID URI.
+     *
+     * @param serviceID The URI of the service to query.
+     */
+    public PermissionsClient(URI serviceID) {
+        InventoryUtil.assertNotNull(PermissionsClient.class, "serviceID", serviceID);
+        RegistryClient regClient = new RegistryClient();
+        serviceURL = regClient.getServiceURL(serviceID, Standards.SI_PERMISSIONS, AuthMethod.CERT);
+    }
+
+    /**
+     * Get the read permissions information about the file identified by artifactURI.
+     *
      * @param artifactURI Identifies the artifact for which to retrieve grant information.
      * @return The read grant information.
      * 
      * @throws ResourceNotFoundException If the file could not be found.
-     * @throws TransientException If an unexpected, temporary exception occurred. 
+     * @throws TransientException If an unexpected, temporary exception occurred.
      */
-    public ReadGrant getReadGrant(URI artifactURI)
-        throws ResourceNotFoundException, TransientException {
-        return null;
+    public ReadGrant getReadGrant(URI artifactURI) throws ResourceNotFoundException, TransientException {
+        return (ReadGrant) getGrant(artifactURI, Operation.read);
     }
 
     /**
-     * Get the write permissions information about the file identified by fileURI.
+     * Get the write permissions information about the file identified by artifactURI.
      *
      * @param artifactURI Identifies the artifact for which to retrieve grant information.
      * @return The write grant information.
@@ -113,9 +131,58 @@ public class PermissionsClient {
      * @throws ResourceNotFoundException If the file could not be found.
      * @throws TransientException If an unexpected, temporary exception occurred.
      */
-    public WriteGrant getWriteGrant(URI artifactURI)
-        throws ResourceNotFoundException, TransientException {
-        return null;
+    public WriteGrant getWriteGrant(URI artifactURI) throws ResourceNotFoundException, TransientException {
+        return (WriteGrant) getGrant(artifactURI, Operation.write);
+    }
+
+    /**
+     * Get the permission information about the file identified by artifactURI.
+     *
+     * @param artifactURI Identifies the artifact for which to retrieve grant information.
+     * @param op The type of grant to retrieve.
+     * @return The grant information.
+     * @throws ResourceNotFoundException If the file could not be found.
+     * @throws TransientException If an unexpected, temporary exception occurred.
+     */
+    Grant getGrant(URI artifactURI, Operation op) throws ResourceNotFoundException, TransientException {
+
+        URL grantURL = getGrantURL(serviceURL, op, artifactURI);
+        HttpGet httpGet = new HttpGet(grantURL, true);
+
+        try {
+            httpGet.prepare();
+        } catch (ResourceAlreadyExistsException e) {
+            throw new RuntimeException("BUG: should not be thrown doing a GET", e);
+        } catch (IOException e) {
+            throw new RuntimeException("error reading server response", e);
+        } catch (InterruptedException e) {
+            throw new TransientException("temporarily unavailable: " + artifactURI);
+        }
+
+        Grant grant;
+        try {
+            GrantReader reader = new GrantReader();
+            grant = reader.read(httpGet.getInputStream());
+        } catch (IOException e) {
+            throw new RuntimeException("error reading grant", e);
+        }
+        return grant;
+    }
+
+    /**
+     * Construct the URL to retrieve the grant information.
+     *
+     * @param serviceURL The URL of the permissions service.
+     * @param op The type of grant to retrieve.
+     * @param artifactURI Identifies the artifact for which to retrieve grant information.
+     * @return URL to the grant information.
+     */
+    URL getGrantURL(URL serviceURL, Operation op, URI artifactURI) {
+        try {
+            return new URL(serviceURL.toExternalForm() + "?OP=" + op + "&URI=" + artifactURI.toASCIIString());
+        } catch (MalformedURLException e) {
+            throw new IllegalArgumentException("invalid artifactURI " + artifactURI + ": " + e.getMessage());
+        }
     }
 
 }
