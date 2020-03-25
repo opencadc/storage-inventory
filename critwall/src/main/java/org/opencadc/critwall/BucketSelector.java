@@ -67,15 +67,85 @@
 
 package org.opencadc.critwall;
 
+import ca.nrc.cadc.util.HexUtil;
+import ca.nrc.cadc.util.StringUtil;
 import org.apache.log4j.Logger;
+import org.opencadc.inventory.InventoryUtil;
 
 /**
  *
  * @author pdowler
  */
-public abstract class BucketSelector {
+public class BucketSelector {
     private static final Logger log = Logger.getLogger(BucketSelector.class);
+    private final int min;
+    private final int max;
+    private final String hexMin;
+    private final String hexMax;
+    private final String hexBuffer = "000";
 
-    protected BucketSelector() { 
+    public BucketSelector(String selectors) {
+        InventoryUtil.assertNotNull(BucketSelector.class, "selectors", selectors);
+
+        // For first iteration, selectors can only be a range
+        // Check that selector range only uses 0..15
+        String[] minMax = selectors.split(",");
+
+        try {
+            hexMin = StringUtil.trimLeadingWhitespace(minMax[0]);
+            hexMax = StringUtil.trimLeadingWhitespace(minMax[1]);
+            min = HexUtil.toShort(hexBuffer + hexMin);
+            max = HexUtil.toShort(hexBuffer +hexMax);
+
+            log.debug("values: " + hexMax + " " + hexMin
+                + " " + min + " "  + max);
+        } catch (Exception e ){
+            log.debug("min or max toShort failed" + e);
+            throw new IllegalArgumentException("invalid number format: " + selectors, e);
+        }
+
+
+        // If properties file will be integer??
+        //        try {
+        //            min = Integer.parseInt(StringUtil.trimLeadingWhitespace(minMax[0]));
+        //            max = Integer.parseInt(StringUtil.trimLeadingWhitespace(minMax[1]));
+        //        } catch (NumberFormatException nfe) {
+        //            throw new IllegalArgumentException("invalid number format: " + selectors, nfe);
+        //        }
+
+        //
+        //        try {
+        //            // HexUtil returns '00000000' need to get just the last character
+        //            // or should these be byte?
+        //            hexMin = HexUtil.toHex(min).substring(7,8);
+        //            hexMax = HexUtil.toHex(max).substring(7,8);
+        //        } catch (Exception e) {
+        //            throw new IllegalArgumentException("min/max must be in range 0,15", e);
+        //        }
+
+        if (max < min || max > 15 || min < 0) {
+            throw new IllegalArgumentException("invalid bucket selector range (min,max): " +
+                min + "," + max);
+        }
+
+
     }
+
+    public int getMin() {
+        return min;
+    }
+
+    public int getMax() {
+        return max;
+    }
+
+    public String getHexMin() {
+        return hexMin;
+    }
+
+    public String getHexMax() {
+        return hexMax;
+    }
+
 }
+

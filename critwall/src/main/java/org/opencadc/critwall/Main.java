@@ -224,8 +224,7 @@ public class Main {
         BucketSelector bucketSel = null;
 
         if (StringUtil.hasLength(bucketSelectorPrefix)) {
-            // TODO: implementation of this to be finished in s 2575 ta 13144
-            // bucketSel = new BucketSelector();
+             bucketSel = new BucketSelector(bucketSelectorPrefix);
         } else {
             throw new IllegalStateException("bucket selector not specified in critwall.properties");
         }

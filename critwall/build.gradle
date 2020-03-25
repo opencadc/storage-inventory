@@ -22,10 +22,10 @@ dependencies {
     compile 'org.opencadc:cadc-util:[1.2,2.0)'
     compile 'org.opencadc:cadc-inventory-db:[0.6,1.0)'
     compile 'org.opencadc:cadc-registry:[1.5,2.0)'
+    compile 'org.opencadc:cadc-storage-adapter-ad:[0.1,)'
 
     testCompile 'junit:junit:[4.12,5.0)'
 
-    compile 'org.opencadc:cadc-storage-adapter-ad:[0.1,)'
 }
 
 mainClassName = 'org.opencadc.critwall.Main'
