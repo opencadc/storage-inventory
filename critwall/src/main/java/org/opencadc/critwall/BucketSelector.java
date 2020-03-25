@@ -95,13 +95,15 @@ public class BucketSelector {
             throw new IllegalArgumentException("invalid bucket selector: single value or range only.");
         } else {
             try {
-                hexMin = StringUtil.trimTrailingWhitespace(StringUtil.trimLeadingWhitespace(minMax[0]));
+                String hMin = StringUtil.trimTrailingWhitespace(StringUtil.trimLeadingWhitespace(minMax[0]));
+                hexMin = hMin.toLowerCase();
                 min = HexUtil.toShort(hexBuffer + hexMin);
                 if (minMax.length == 1) {
                     hexMax = hexMin;
                     max = min;
                 } else {
-                    hexMax = StringUtil.trimTrailingWhitespace(StringUtil.trimLeadingWhitespace(minMax[1]));
+                    String hMax = StringUtil.trimTrailingWhitespace(StringUtil.trimLeadingWhitespace(minMax[1]));
+                    hexMax = hMax.toLowerCase();
                     max = HexUtil.toShort(hexBuffer + hexMax);
                 }
                 log.debug("values: " + hexMin + " " + min);
