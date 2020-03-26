@@ -3,7 +3,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2019.                            (c) 2019.
+ *  (c) 2020.                            (c) 2020.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -62,60 +62,59 @@
  *  <http://www.gnu.org/licenses/>.      pas le cas, consultez :
  *                                       <http://www.gnu.org/licenses/>.
  *
- *  $Revision: 4 $
  *
  ************************************************************************
  */
 
-package org.opencadc.inventory.permissions;
+package org.opencadc.tantar;
 
-import ca.nrc.cadc.net.ResourceNotFoundException;
-import ca.nrc.cadc.net.TransientException;
-import java.net.URI;
-import java.util.Date;
+import java.util.EventListener;
 
-import org.opencadc.gms.GroupURI;
+import org.opencadc.inventory.Artifact;
+import org.opencadc.inventory.storage.StorageMetadata;
 
-/**
- * Client for retrieving grant information about artifacts.
- * 
- * @author majorb
- *
- */
-public class PermissionsClient {
+
+public interface ValidateEventListener extends EventListener {
 
     /**
-     * Public, no-arg constructor.
-     */
-    public PermissionsClient() {
-    }
-    
-    /**
-     * Get the read permissions information about the file identified by fileURI.
-     * 
-     * @param artifactURI Identifies the artifact for which to retrieve grant information.
-     * @return The read grant information.
-     * 
-     * @throws ResourceNotFoundException If the file could not be found.
-     * @throws TransientException If an unexpected, temporary exception occurred. 
-     */
-    public ReadGrant getReadGrant(URI artifactURI)
-        throws ResourceNotFoundException, TransientException {
-        return null;
-    }
-
-    /**
-     * Get the write permissions information about the file identified by fileURI.
+     * Create a new Artifact using metadata from the given StorageMetadata.
      *
-     * @param artifactURI Identifies the artifact for which to retrieve grant information.
-     * @return The write grant information.
-     *
-     * @throws ResourceNotFoundException If the file could not be found.
-     * @throws TransientException If an unexpected, temporary exception occurred.
+     * @param storageMetadata       The StorageMetadata to pull metadata from.
+     * @throws Exception    Any unexpected error.
      */
-    public WriteGrant getWriteGrant(URI artifactURI)
-        throws ResourceNotFoundException, TransientException {
-        return null;
-    }
+    void createArtifact(final StorageMetadata storageMetadata) throws Exception;
 
+    /**
+     * Delete the given StorageMetadata.
+     *
+     * @param storageMetadata   The StorageMetadata to delete
+     * @throws Exception    Any unexpected error.
+     */
+    void delete(final StorageMetadata storageMetadata) throws Exception;
+
+    /**
+     * Delete the given Artifact.  Implementors should also create a DeletedArtifactEvent as necessary.
+     *
+     * @param artifact      The Artifact to remove.
+     * @throws Exception    Any unexpected error.
+     */
+    void delete(final Artifact artifact) throws Exception;
+
+    /**
+     * This will force the file-sync application to assume it's a new insert and force a re-download of the file.  The
+     * default logic will most likely be to remove its StorageLocation instance.
+     *
+     * @param artifact The base artifact.  This MUST have a Storage Location.
+     * @throws Exception Anything IO/Thread related.
+     */
+    void markAsNew(final Artifact artifact) throws Exception;
+
+    /**
+     * Replace the given Artifact with a new one created from the given StorageMetadata instance.
+     *
+     * @param artifact          The Artifact to remove.
+     * @param storageMetadata   The StorageMetadata from which to create a new Artifact.
+     * @throws Exception    Any unexpected error.
+     */
+    void replaceArtifact(final Artifact artifact, final StorageMetadata storageMetadata) throws Exception;
 }

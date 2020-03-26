@@ -59,10 +59,8 @@ When more that one entry matches an artifact URI, the grants are combined as fol
 
 ## integration testing
 
-Client certificates named `baldur-test-1.pem` and `baldur-test-2.pem` must exist in directory $A/test-certificates 
+Client certificates specified in the users property in the baldur.properties must exist in the directory $A/test-certificates. 
 
-The running container must be configured so that the identity from `baldur-test-1.pem` can ??? and 
-the identity from `baldur-test-2.pem` can ???.
 
 ## building
 

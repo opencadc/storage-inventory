@@ -1,3 +1,4 @@
+
 /*
  ************************************************************************
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
@@ -66,52 +67,48 @@
  ************************************************************************
  */
 
-package org.opencadc.inventory.validate;
+package org.opencadc.tantar.policy;
 
-import ca.nrc.cadc.util.Log4jInit;
-
-import java.io.FileNotFoundException;
-import java.io.FileReader;
-import java.io.IOException;
-import java.io.Reader;
-import java.util.Properties;
-
-import org.apache.log4j.Level;
-import org.apache.log4j.Logger;
+import org.opencadc.inventory.Artifact;
+import org.opencadc.inventory.storage.StorageMetadata;
+import org.opencadc.tantar.Reporter;
+import org.opencadc.tantar.ValidateEventListener;
 
 
-/**
- * Main application entry.  This class expects a cadc-file-validate.properties file to be available and readable.
- */
-public class Main {
+public abstract class ResolutionPolicy {
 
-    private static final Logger LOGGER = Logger.getLogger(Main.class);
-    private static final String CONFIGURATION_FILE_LOCATION = "/config/cadc-file-validate.properties";
+    final ValidateEventListener validateEventListener;
+    final Reporter reporter;
 
-    public static void main(final String[] args) {
-        Main.configure();
+    ResolutionPolicy(final ValidateEventListener validateEventListener, final Reporter reporter) {
+        this.validateEventListener = validateEventListener;
+        this.reporter = reporter;
+    }
 
 
+    protected final boolean haveDifferentMetadata(final Artifact artifact, final StorageMetadata storageMetadata) {
+        return !(new PolicyMetadata(artifact).equals(new PolicyMetadata(storageMetadata)));
     }
 
     /**
-     * Read in the configuration file and load it into the System properties.
+     * Equality check for the main components that establish a different Storage Entity.
+     *
+     * @param artifact          The Artifact to check.
+     * @param storageMetadata   The StorageMetadata to check.
+     * @return          True if the metadata that verify the structure of the Entity differ.  False otherwise.
      */
-    private static void configure() {
-        final Properties properties = new Properties();
-
-        try {
-            final Reader configFileReader = new FileReader(CONFIGURATION_FILE_LOCATION);
-            properties.load(configFileReader);
-            System.setProperties(properties);
-        } catch (FileNotFoundException e) {
-            LOGGER.fatal(
-                    String.format("Unable to locate configuration file.  Expected it to be at %s.",
-                                  CONFIGURATION_FILE_LOCATION));
-            System.exit(1);
-        } catch (IOException e) {
-            LOGGER.fatal(String.format("Unable to read file located at %s.", CONFIGURATION_FILE_LOCATION));
-            System.exit(2);
-        }
+    protected final boolean haveDifferentStructure(final Artifact artifact, final StorageMetadata storageMetadata) {
+        return !(artifact.getContentChecksum().equals(storageMetadata.getContentChecksum()))
+               || !(artifact.getContentLength().equals(storageMetadata.getContentLength()));
     }
+
+    /**
+     * Use the logic of this Policy to correct a conflict caused by the two given items.  One of the arguments can
+     * be null, but not both.
+     *
+     * @param artifact        The Artifact to use in deciding.
+     * @param storageMetadata The StorageMetadata to use in deciding.
+     * @throws Exception    For any unknown error that should be passed up.
+     */
+    public abstract void resolve(final Artifact artifact, final StorageMetadata storageMetadata) throws Exception;
 }

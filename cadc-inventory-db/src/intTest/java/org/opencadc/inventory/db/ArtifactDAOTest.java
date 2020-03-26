@@ -70,9 +70,11 @@ package org.opencadc.inventory.db;
 import ca.nrc.cadc.db.ConnectionConfig;
 import ca.nrc.cadc.db.DBConfig;
 import ca.nrc.cadc.db.DBUtil;
+import ca.nrc.cadc.util.HexUtil;
 import ca.nrc.cadc.util.Log4jInit;
 import java.net.URI;
 import java.security.MessageDigest;
+import java.util.Comparator;
 import java.util.Date;
 import java.util.Iterator;
 import java.util.Map;
@@ -102,10 +104,12 @@ public class ArtifactDAOTest {
 
     static {
         Log4jInit.setLevel("org.opencadc.inventory", Level.INFO);
+        Log4jInit.setLevel("org.opencadc.inventory.db", Level.INFO);
         Log4jInit.setLevel("ca.nrc.cadc.db", Level.INFO);
     }
     
     ArtifactDAO dao = new ArtifactDAO();
+    ArtifactDAO alt = new ArtifactDAO();
     
     public ArtifactDAOTest() throws Exception {
         try {
@@ -119,6 +123,15 @@ public class ArtifactDAOTest {
             config.put("database", TestUtil.DATABASE);
             config.put("schema", TestUtil.SCHEMA);
             dao.setConfig(config);
+            
+            DBUtil.createJNDIDataSource("jdbc/ArtifactDAOTest-alt", cc);
+            Map<String,Object> altConfig = new TreeMap<String,Object>();
+            altConfig.put(SQLGenerator.class.getName(), SQLGenerator.class);
+            altConfig.put("jndiDataSourceName", "jdbc/ArtifactDAOTest-alt");
+            altConfig.put("database", TestUtil.DATABASE);
+            altConfig.put("schema", TestUtil.SCHEMA);
+            alt.setConfig(altConfig);
+            
         } catch (Exception ex) {
             log.error("setup failed", ex);
             throw ex;
@@ -237,8 +250,6 @@ public class ArtifactDAOTest {
                     URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"),
                     new Date(),
                     new Long(666L));
-            expected.contentType = "application/octet-stream";
-            expected.contentEncoding = "gzip";
             log.info("expected: " + expected);
             
             
@@ -316,8 +327,6 @@ public class ArtifactDAOTest {
                     URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"),
                     new Date(),
                     new Long(666L));
-            expected.contentType = "application/octet-stream";
-            expected.contentEncoding = "gzip";
             log.info("expected: " + expected);
             
             
@@ -339,6 +348,7 @@ public class ArtifactDAOTest {
             expected.siteLocations.add(new SiteLocation(s1));
             expected.siteLocations.add(new SiteLocation(s2));
             expected.siteLocations.add(new SiteLocation(s3));
+            Thread.sleep(100L);
             
             dao.put(expected);
             
@@ -346,7 +356,6 @@ public class ArtifactDAOTest {
             Assert.assertNotNull(a1);
             URI mcs1 = a1.computeMetaChecksum(MessageDigest.getInstance("MD5"));
             Assert.assertEquals("round trip metachecksum unchanged", expected.getMetaChecksum(), mcs1);
-            Assert.assertNotNull(a1.getLastModified());
             Assert.assertTrue("did-not-force-update", a1.siteLocations.isEmpty());
             
             dao.put(expected, true);
@@ -378,9 +387,9 @@ public class ArtifactDAOTest {
     }
     
     @Test
-    public void testEmptyIterator() {
+    public void testEmptyStoredIterator() {
         try {
-            for (int i = 0; i < 10; i++) {
+            for (int i = 0; i < 3; i++) {
                 Artifact a = new Artifact(
                         URI.create("cadc:ARCHIVE/filename" + i),
                         URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"),
@@ -393,7 +402,7 @@ public class ArtifactDAOTest {
                 log.info("expected: " + a);
             }
             
-            Iterator<Artifact> iter = dao.iterator(null);
+            Iterator<Artifact> iter = dao.storedIterator(null);
             Assert.assertFalse("no results", iter.hasNext());
             
         } catch (Exception unexpected) {
@@ -403,10 +412,118 @@ public class ArtifactDAOTest {
     }
     
     @Test
-    public void testIterator() {
+    public void testStoredIterator() {
+        int num = 10;
         try {
+            int numArtifacts = 0;
             SortedSet<Artifact> eset = new TreeSet<>(new StoredArtifactComparator());
-            for (int i = 0; i < 10; i++) {
+            for (int i = 0; i < num; i++) {
+                Artifact a = new Artifact(
+                        URI.create("cadc:ARCHIVE/filename" + i),
+                        URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"),
+                        new Date(),
+                        new Long(666L));
+                a.storageLocation = new StorageLocation(URI.create("foo:" + UUID.randomUUID()));
+                a.storageLocation.storageBucket = InventoryUtil.computeBucket(a.storageLocation.getStorageID(), 3);
+                dao.put(a);
+                log.debug("put: " + a);
+                eset.add(a);
+                numArtifacts++;
+            }
+            // add some artifacts without the optional bucket to check database vs comparator ordering
+            for (int i = num; i < 2 * num; i++) {
+                Artifact a = new Artifact(
+                        URI.create("cadc:ARCHIVE/filename" + i),
+                        URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"),
+                        new Date(),
+                        new Long(666L));
+                a.storageLocation = new StorageLocation(URI.create("foo:" + UUID.randomUUID()));
+                // no bucket
+                dao.put(a);
+                log.debug("put: " + a);
+                eset.add(a);
+                numArtifacts++;
+            }
+            // add some artifacts with no storageLocation
+            for (int i = 2 * num; i < 3 * num; i++) {
+                Artifact a = new Artifact(
+                        URI.create("cadc:ARCHIVE/filename" + i),
+                        URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"),
+                        new Date(),
+                        new Long(666L));
+                // no storageLocation
+                dao.put(a);
+                log.debug("put: " + a);
+                //not in eset
+                numArtifacts++;
+            }
+            log.info("added: " + numArtifacts);
+            
+            Iterator<Artifact> iter = dao.storedIterator(null);
+            Iterator<Artifact> ei = eset.iterator();
+            Artifact prev = null;
+            int count = 0;
+            while (ei.hasNext()) {
+                Artifact expected = ei.next();
+                Artifact actual = iter.next();
+                count++;
+                
+                log.info("compare: " + expected.getURI() + " vs " + actual.getURI() + "\n\t"
+                        + expected.storageLocation + " vs " + actual.storageLocation);
+                Assert.assertEquals("order", expected.storageLocation, actual.storageLocation);
+                Assert.assertEquals(expected.getID(), actual.getID());
+                Assert.assertEquals(expected.getURI(), actual.getURI());
+                Assert.assertEquals(expected.getLastModified(), actual.getLastModified());
+                Assert.assertEquals(expected.getMetaChecksum(), actual.getMetaChecksum());
+                URI mcs2 = actual.computeMetaChecksum(MessageDigest.getInstance("MD5"));
+                Assert.assertEquals("round trip metachecksum", expected.getMetaChecksum(), mcs2);
+                
+                // check if iterator is holding a read lock that prevents update
+                if (prev != null) {
+                    Artifact a = alt.get(prev.getID());
+                    log.info("alt.get: " + a);
+                    a.contentType = "text/plain";
+                    alt.put(a);
+                    log.info("log.put: " + a + " OK");
+                }
+                prev = actual;
+                
+                // one time, part way through: pause so developer can examine database locks held
+                //if (count == numArtifacts / 4) {
+                //    log.warn("count == 100: sleeping for 30 sec...");
+                //    Thread.sleep(30000L);
+                //    log.warn("count == 100: sleeping for 30 sec... DONE");
+                //}
+            }
+            Assert.assertFalse("database iterator exhausted", iter.hasNext());
+            Assert.assertEquals("count", eset.size(), count);
+            
+            int found = 0;
+            for (byte b = 0; b < 16; b++) {
+                String hex =  HexUtil.toHex(b);
+                String bp = hex.substring(1);
+                Iterator<Artifact> i = dao.storedIterator(bp);
+                while (i.hasNext()) {
+                    Artifact a = i.next();
+                    log.info("found: " + bp + " contains " + a.storageLocation);
+                    Assert.assertNotNull(a.storageLocation);
+                    Assert.assertNotNull(a.storageLocation.storageBucket);
+                    Assert.assertTrue("prefix match", a.storageLocation.storageBucket.startsWith(bp));
+                    found++;
+                }
+            }
+            Assert.assertEquals("found with bucketPrefix", num, found); // num is number with a bucket
+            
+        } catch (Exception unexpected) {
+            log.error("unexpected exception", unexpected);
+            Assert.fail("unexpected exception: " + unexpected);
+        }
+    }
+    
+    @Test
+    public void testEmptyUnstoredIterator() {
+        try {
+            for (int i = 0; i < 3; i++) {
                 Artifact a = new Artifact(
                         URI.create("cadc:ARCHIVE/filename" + i),
                         URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"),
@@ -414,29 +531,72 @@ public class ArtifactDAOTest {
                         new Long(666L));
                 a.contentType = "application/octet-stream";
                 a.contentEncoding = "gzip";
+                a.storageLocation = new StorageLocation(URI.create("foo:" + UUID.randomUUID()));
+                dao.put(a);
+                log.info("expected: " + a);
+            }
+            
+            Iterator<Artifact> iter = dao.unstoredIterator(null);
+            Assert.assertFalse("no results", iter.hasNext());
+            
+        } catch (Exception unexpected) {
+            log.error("unexpected exception", unexpected);
+            Assert.fail("unexpected exception: " + unexpected);
+        }
+    }
+    
+    @Test
+    public void testUnstoredIterator() {
+        int num = 10;
+        try {
+            int numArtifacts = 0;
+            SortedSet<Artifact> eset = new TreeSet<>(new LastModifiedComparator());
+            for (int i = 0; i < num; i++) {
+                Artifact a = new Artifact(
+                        URI.create("cadc:ARCHIVE/filename" + i),
+                        URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"),
+                        new Date(),
+                        new Long(666L));
                 a.storageLocation = new StorageLocation(URI.create("foo:" + UUID.randomUUID()));
                 a.storageLocation.storageBucket = InventoryUtil.computeBucket(a.storageLocation.getStorageID(), 3);
                 dao.put(a);
                 log.info("expected: " + a);
-                eset.add(a);
+                // not in eset
+                Thread.sleep(1L);
+                numArtifacts++;
             }
             // add some artifacts without the optional bucket to check database vs comparator ordering
-            for (int i = 10; i < 15; i++) {
+            for (int i = num; i < 2 * num; i++) {
                 Artifact a = new Artifact(
                         URI.create("cadc:ARCHIVE/filename" + i),
                         URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"),
                         new Date(),
                         new Long(666L));
-                a.contentType = "application/octet-stream";
-                a.contentEncoding = "gzip";
                 a.storageLocation = new StorageLocation(URI.create("foo:" + UUID.randomUUID()));
                 // no bucket
                 dao.put(a);
                 log.info("expected: " + a);
-                eset.add(a);
+                // not in eset
+                Thread.sleep(1L);
+                numArtifacts++;
             }
+            // add some artifacts with no storageLocation
+            for (int i = 2 * num; i < 3 * num; i++) {
+                Artifact a = new Artifact(
+                        URI.create("cadc:ARCHIVE/filename" + i),
+                        URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"),
+                        new Date(),
+                        new Long(666L));
+                // no storageLocation
+                dao.put(a);
+                log.info("expected: " + a);
+                eset.add(a);
+                Thread.sleep(1L);
+                numArtifacts++;
+            }
+            log.info("added: " + numArtifacts);
             
-            Iterator<Artifact> iter = dao.iterator(null);
+            Iterator<Artifact> iter = dao.unstoredIterator(null);
             Iterator<Artifact> ei = eset.iterator();
             int count = 0;
             while (ei.hasNext()) {
@@ -444,7 +604,7 @@ public class ArtifactDAOTest {
                 Artifact actual = iter.next();
                 log.info("compare: " + expected.getURI() + " vs " + actual.getURI() + "\n\t"
                         + expected.storageLocation + " vs " + actual.storageLocation);
-                Assert.assertEquals("order", expected.storageLocation, actual.storageLocation);
+                Assert.assertEquals("order", expected.getLastModified(), actual.getLastModified());
                 count++;
                 Assert.assertEquals(expected.getID(), actual.getID());
                 Assert.assertEquals(expected.getURI(), actual.getURI());
@@ -455,9 +615,33 @@ public class ArtifactDAOTest {
             }
             Assert.assertEquals("count", eset.size(), count);
             
+            // check uriBucket prefix usage
+            int found = 0;
+            for (byte b = 0; b < 16; b++) {
+                String urib = HexUtil.toHex(b).substring(1);
+                log.info("bucket prefix: " + urib);
+                Iterator<Artifact> i = dao.unstoredIterator(urib);
+                while (i.hasNext()) {
+                    Artifact a = i.next();
+                    log.info("found: " + urib + " contains " + a.getBucket());
+                    Assert.assertTrue("prefix match", a.getBucket().startsWith(urib));
+                    found++;
+                }
+            }
+            Assert.assertFalse("database iterator exhausted", iter.hasNext());
+            Assert.assertEquals("found with bucketPrefix", num, found); // num unstored
+            
         } catch (Exception unexpected) {
             log.error("unexpected exception", unexpected);
             Assert.fail("unexpected exception: " + unexpected);
+        }
+    }
+    
+    private class LastModifiedComparator implements Comparator<Artifact> {
+
+        @Override
+        public int compare(Artifact lhs, Artifact rhs) {
+            return lhs.getLastModified().compareTo(rhs.getLastModified());
         }
     }
 }

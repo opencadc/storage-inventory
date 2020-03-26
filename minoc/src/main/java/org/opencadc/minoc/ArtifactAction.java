@@ -67,30 +67,34 @@
 
 package org.opencadc.minoc;
 
+import ca.nrc.cadc.ac.Group;
+import ca.nrc.cadc.ac.client.GMSClient;
 import ca.nrc.cadc.auth.AuthMethod;
 import ca.nrc.cadc.auth.AuthenticationUtil;
 import ca.nrc.cadc.auth.HttpPrincipal;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
+import ca.nrc.cadc.reg.Standards;
+import ca.nrc.cadc.reg.client.LocalAuthority;
 import ca.nrc.cadc.rest.InlineContentHandler;
 import ca.nrc.cadc.rest.RestAction;
 import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.util.PropertiesReader;
-
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.security.AccessControlException;
+import java.security.PrivilegedActionException;
+import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-
 import javax.security.auth.Subject;
-
 import org.apache.log4j.Logger;
+import org.opencadc.gms.GroupURI;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.StorageSite;
@@ -122,7 +126,9 @@ public abstract class ArtifactAction extends RestAction {
     static final String SCHEMA_KEY = SQLGenerator.class.getPackage().getName() + ".schema";
     static final String READ_GRANTS_KEY = ReadGrant.class.getName() +  ".resourceID";
     static final String WRITE_GRANTS_KEY = WriteGrant.class.getName() +  ".resourceID";
-    
+    private static final URI GMS_SERVICE_URI =
+        URI.create("ivo://cadc.nrc.ca/gms");
+
     // The target artifact
     URI artifactURI;
     
@@ -134,14 +140,14 @@ public abstract class ArtifactAction extends RestAction {
     protected final StorageAdapter storageAdapter;
     protected final List<URI> readGrantServices = new ArrayList<>();
     protected final List<URI> writeGrantServices = new ArrayList<>();
-    
+
     // constructor for unit tests with no config/init
     ArtifactAction(boolean init) {
         super();
         this.artifactDAO = null;
         this.storageAdapter = null;
     }
-    
+
     protected ArtifactAction() {
         super();
         StringBuilder sb = new StringBuilder();
@@ -149,7 +155,7 @@ public abstract class ArtifactAction extends RestAction {
             MultiValuedProperties props = readConfig();
             sb.append("incomplete config: ");
             boolean ok = true;
-            
+
             String rid = getSingleProperty(props, RESOURCE_ID_KEY);
             sb.append("\n\t" + RESOURCE_ID_KEY + ": ");
             if (rid == null) {
@@ -158,7 +164,7 @@ public abstract class ArtifactAction extends RestAction {
             } else {
                 sb.append("OK");
             }
-            
+
             String sac = getSingleProperty(props, SA_KEY);
             sb.append("\n\t").append(SA_KEY).append(": ");
             if (sac == null) {
@@ -167,7 +173,7 @@ public abstract class ArtifactAction extends RestAction {
             } else {
                 sb.append("OK");
             }
-            
+
             String sqlgen = getSingleProperty(props, SQLGEN_KEY);
             sb.append("\n\t").append(SQLGEN_KEY).append(": ");
             if (sqlgen == null) {
@@ -176,7 +182,7 @@ public abstract class ArtifactAction extends RestAction {
             } else {
                 sb.append("OK");
             }
-            
+
             String schema = getSingleProperty(props, SCHEMA_KEY);
             sb.append("\n\t").append(SCHEMA_KEY).append(": ");
             if (schema == null) {
@@ -185,11 +191,11 @@ public abstract class ArtifactAction extends RestAction {
             } else {
                 sb.append("OK");
             }
-            
+
             if (!ok) {
                 throw new IllegalStateException(sb.toString());
             }
-            
+
             List<String> readGrants = props.getProperty(READ_GRANTS_KEY);
             if (readGrants != null) {
                 for (String s : readGrants) {
@@ -197,7 +203,7 @@ public abstract class ArtifactAction extends RestAction {
                     readGrantServices.add(u);
                 }
             }
-            
+
             List<String> writeGrants = props.getProperty(WRITE_GRANTS_KEY);
             if (writeGrants != null) {
                 for (String s : writeGrants) {
@@ -205,7 +211,7 @@ public abstract class ArtifactAction extends RestAction {
                     writeGrantServices.add(u);
                 }
             }
-            
+
             Map<String, Object> config = new HashMap<String, Object>();
             config.put(SQLGEN_KEY, Class.forName(sqlgen));
             config.put("jndiDataSourceName", JNDI_DATASOURCE);
@@ -213,23 +219,23 @@ public abstract class ArtifactAction extends RestAction {
             //config.put("database", null);
             this.artifactDAO = new ArtifactDAO();
             artifactDAO.setConfig(config);
-            
+
             //this.storageAdapter = InventoryUtil.loadPlugin(StorageAdapter.class, sac);
             try {
                 this.storageAdapter = (StorageAdapter) Class.forName(sac).getDeclaredConstructor().newInstance();
             } catch (Exception ex) {
                 throw new IllegalStateException("invalid config: failed to load StorageAdapter implementation: " + sac, ex);
-            
+
             }
-            
+
             URI resourceID = new URI(rid);
             initStorageSite(resourceID);
-            
+
         } catch (URISyntaxException | ClassNotFoundException ex) {
             throw new IllegalStateException("invalid config: " + sb.toString(), ex);
         }
     }
-    
+
     // used by ServiceAvailability
     static final String getSingleProperty(MultiValuedProperties props, String key) {
         List<String> vals = props.getProperty(key);
@@ -238,7 +244,7 @@ public abstract class ArtifactAction extends RestAction {
         }
         return vals.get(0);
     }
-    
+
     /**
      * Default implementation.
      * @return No InlineContentHander
@@ -249,33 +255,37 @@ public abstract class ArtifactAction extends RestAction {
     }
     
     protected void initAndAuthorize(Class<? extends Grant> grantClass)
-        throws AccessControlException, IOException, ResourceNotFoundException, TransientException {
+        throws AccessControlException, IOException,
+               ResourceNotFoundException, TransientException {
         
         init();
         
         // do authorization (with token or subject)
         Subject subject = AuthenticationUtil.getCurrentSubject();
         if (authToken != null) {
-            String tokenUser = TokenUtil.validateToken(authToken, artifactURI, grantClass);
+            String tokenUser = TokenUtil.validateToken(
+                authToken, artifactURI, grantClass);
             subject.getPrincipals().clear();
             subject.getPrincipals().add(new HttpPrincipal(tokenUser));
             logInfo.setSubject(subject);
         } else {
-            // augment subject (minoc is configured so augment is not done in rest library)
+            // augment subject (minoc is configured so augment
+            // is not done in rest library)
             AuthenticationUtil.augmentSubject(subject);
             if (ReadGrant.class.isAssignableFrom(grantClass)) {
                 checkReadPermission();
             } else if (WriteGrant.class.isAssignableFrom(grantClass)) {
                 checkWritePermission();
             } else {
-                throw new IllegalStateException("Unsupported grant class: " + grantClass);
+                throw new IllegalStateException("Unsupported grant class: "
+                    + grantClass);
             }
         }
     }
     
     void init() {
         parsePath();
-        
+
     }
         
     // HACK: lazy single init in first request thread
@@ -290,7 +300,8 @@ public abstract class ArtifactAction extends RestAction {
         StorageSiteDAO ssdao = new StorageSiteDAO(artifactDAO); // copy config
         Set<StorageSite> curlist = ssdao.list();
         if (curlist.size() > 1) {
-            throw new IllegalStateException("found: " + curlist.size() + " StorageSite(s) in database; expected 0 or 1");
+            throw new IllegalStateException("found: " + curlist.size()
+                + " StorageSite(s) in database; expected 0 or 1");
         }
         // TODO: get display name from config
         // use path from resourceID as default
@@ -309,73 +320,75 @@ public abstract class ArtifactAction extends RestAction {
             cur.setName(name);
             ssdao.put(cur);
         } else {
-            throw new IllegalStateException("BUG: found " + curlist.size() + " StorageSite entries");
+            throw new IllegalStateException("BUG: found " + curlist.size()
+                                            + " StorageSite entries");
         }
         log.info("initStorageSite: " + resourceID + " " + name);
         SELF_RESOURCE_ID = resourceID;
     }
     
-    public void checkReadPermission() throws AccessControlException, ResourceNotFoundException, TransientException {
-        PermissionsClient pc = null;
+    public void checkReadPermission()
+        throws AccessControlException, ResourceNotFoundException,
+               TransientException {
 
-        /*
+        List<Group> userGroups;
+        try {
+            userGroups = getUsersGroups();
+        } catch (PrivilegedActionException e) {
+            throw new IllegalStateException("Error getting user groups", e);
+        }
+
         // TODO: optimize with threads
-        for (String readService : readGrantServices) {
-            try {
-                URI serviceID = new URI(readService);
-                // TODO: add this argument to PermissionsClient constructor
-                pc = new PermissionsClient(serviceID);
-                
-                // uncomment when ready
-                pc = new PermissionsClient();
-                ReadGrant grant = pc.getReadGrant(artifactURI);
-                if (grant.isAnonymousAccess()) {
-                    log.debug("anonymous read access granted");
-                    return;
-                }
-                if (grant.getGroups().size() > 0) {
-                    // TODO: check group membership
-                    return;
-                }
+        for (URI readService : readGrantServices) {
+            PermissionsClient pc = new PermissionsClient(readService);
+            ReadGrant grant = pc.getReadGrant(artifactURI);
+            if (grant.isAnonymousAccess()) {
+                log.debug("anonymous read access granted");
                 return;
-            } catch (URISyntaxException e) {
-                throw new IllegalStateException("Invalid read grant service: " + readService);
+            }
+            if (grant.getGroups().size() > 0) {
+                for (GroupURI readGroupUri : grant.getGroups()) {
+                    for (Group userGroup : userGroups) {
+                        if (userGroup.getID() == readGroupUri) {
+                            return;
+                        }
+                    }
+                }
             }
         }
         throw new AccessControlException("read permission denied");
-        */
     }
     
-    public void checkWritePermission() throws AccessControlException, ResourceNotFoundException, TransientException {
-        PermissionsClient pc = null;
-        
+    public void checkWritePermission()
+        throws AccessControlException, ResourceNotFoundException,
+               TransientException {
         // current write auth is simply to be non-anonymous
-        AuthMethod am = AuthenticationUtil.getAuthMethod(AuthenticationUtil.getCurrentSubject());
-        if (am != null && !am.equals(AuthMethod.ANON)) {
+        AuthMethod am = AuthenticationUtil.getAuthMethod(
+            AuthenticationUtil.getCurrentSubject());
+        if (am != null && am.equals(AuthMethod.ANON)) {
             return;
         }
-        
-        /*
+        List<Group> userGroups;
+        try {
+            userGroups = getUsersGroups();
+        } catch (PrivilegedActionException e) {
+            throw new IllegalStateException("Error getting user groups", e);
+        }
+
         // TODO: optimize with threads
-        for (String writeService : writeGrantServices) {
-            try {
-                URI serviceID = new URI(writeService);
-                // TODO: add this argument to PermissionsClient constructor
-                pc = new PermissionsClient(serviceID);
-                
-                // uncomment when ready
-                pc = new PermissionsClient();
-                WriteGrant grant = pc.getWriteGrant(artifactURI);
-                if (grant.getGroups().size() > 0) {
-                    // TODO: check group membership
-                    return;
+        for (URI writeService : writeGrantServices) {
+            PermissionsClient pc = new PermissionsClient(writeService);
+            WriteGrant grant = pc.getWriteGrant(artifactURI);
+            if (grant.getGroups().size() > 0) {
+                for (GroupURI writeGroupUri : grant.getGroups()) {
+                    for (Group userGroup : userGroups) {
+                        if (userGroup.getID() == writeGroupUri) {
+                            return;
+                        }
+                    }
                 }
-                return;
-            } catch (URISyntaxException e) {
-                throw new IllegalStateException("Invalid read grant service: " + writeService);
             }
         }
-        */
         throw new AccessControlException("write permission denied");
     }
     
@@ -386,16 +399,19 @@ public abstract class ArtifactAction extends RestAction {
         String path = syncInput.getPath();
         log.debug("path: " + path);
         if (path == null) {
-            throw new IllegalArgumentException("mising artifact URI");
+            throw new IllegalArgumentException("missing artifact URI");
         }
         int colonIndex = path.indexOf(":");
         int firstSlashIndex = path.indexOf("/");
         
         if (colonIndex < 0) {
             if (firstSlashIndex > 0 && path.length() > firstSlashIndex + 1) {
-                throw new IllegalArgumentException("missing scheme in artifact URI: " + path.substring(firstSlashIndex + 1));
+                throw new IllegalArgumentException(
+                    "missing scheme in artifact URI: "
+                        + path.substring(firstSlashIndex + 1));
             } else {
-                throw new IllegalArgumentException("missing artifact URI in path: " + path);
+                throw new IllegalArgumentException(
+                    "missing artifact URI in path: " + path);
             }
         }
         
@@ -439,7 +455,7 @@ public abstract class ArtifactAction extends RestAction {
             throw new IllegalArgumentException(message);
         }
     }
-    
+
     static StorageAdapter getStorageAdapter(MultiValuedProperties config) {
         // lazy init
         String adapterKey = StorageAdapter.class.getName();
@@ -460,7 +476,7 @@ public abstract class ArtifactAction extends RestAction {
             throw new IllegalStateException("failed to load storage adapter: " + adapterClass, t);
         }
     }
-    
+
     protected List<String> getReadGrantServices(MultiValuedProperties props) {
         String key = ReadGrant.class.getName() + ".resourceID";
         List<String> values = props.getProperty(key);
@@ -482,7 +498,7 @@ public abstract class ArtifactAction extends RestAction {
     static MultiValuedProperties readConfig() {
         PropertiesReader pr = new PropertiesReader("minoc.properties");
         MultiValuedProperties props = pr.getAllProperties();
-        
+
         if (log.isDebugEnabled()) {
             log.debug("minoc.properties:");
             Set<String> keys = props.keySet();
@@ -492,4 +508,48 @@ public abstract class ArtifactAction extends RestAction {
         }
         return props;
     }
+    
+    static Map<String, Object> getDaoConfig(MultiValuedProperties props) {
+        Map<String, Object> config = new HashMap<String, Object>();
+        Class cls = null;
+        List<String> sqlGenList = props.getProperty(SQLGEN_KEY);
+        if (sqlGenList != null && sqlGenList.size() > 0) {
+            try {
+                String sqlGenClass = sqlGenList.get(0);
+                cls = Class.forName(sqlGenClass);
+            } catch (ClassNotFoundException e) {
+                throw new IllegalStateException(
+                    "could not load SQLGenerator class: " + e.getMessage(), e);
+            }
+        } else {
+            // use the default SQL generator
+            cls = SQLGenerator.class;
+        }
+
+        config.put(SQLGEN_KEY, cls);
+        config.put("jndiDataSourceName", JNDI_DATASOURCE);
+        List<String> schemaList = props.getProperty(SCHEMA_KEY);
+        if (schemaList == null || schemaList.size() < 1) {
+            throw new IllegalStateException("a value for " + SCHEMA_KEY
+                + " is needed in minoc.properties");
+        }
+        config.put("schema", schemaList.get(0));
+        config.put("database", null);
+
+        return config;
+    }
+
+    List<Group> getUsersGroups() throws PrivilegedActionException {
+        PrivilegedExceptionAction<List<Group>> action = () -> {
+            LocalAuthority localAuthority = new LocalAuthority();
+            URI groupsURI = localAuthority.getServiceURI(
+                Standards.GMS_SEARCH_01.toString());
+            GMSClient client = new GMSClient(groupsURI);
+            return client.getGroups();
+        };
+
+        Subject subject = AuthenticationUtil.getCurrentSubject();
+        return Subject.doAs(subject, action);
+    }
+
 }

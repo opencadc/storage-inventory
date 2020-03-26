@@ -268,9 +268,12 @@ public class AdStorageAdapter implements StorageAdapter {
             storageMetadataIterator = tc.execute(adQuery.getQuery(), adQuery.getRowMapper());
         } catch (Exception e) {
             log.error("error executing TapClient query");
+
             throw new TransientException(e.getMessage());
         }
-        return storageMetadataIterator;
+
+        // AdStorageIterator ensures duplicates don't get sent out
+        return new AdStorageIterator(storageMetadataIterator);
     }
 
     /**

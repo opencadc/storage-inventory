@@ -67,17 +67,20 @@
 
 package org.opencadc.inventory.db;
 
+import org.opencadc.inventory.Entity;
+
+
 /**
  * Fire/persist a deleted entity event.
  * 
  * @author pdowler
  */
-public class DeletedEventDAO extends AbstractDAO {
+public class DeletedEventDAO<T extends Entity> extends AbstractDAO<T> {
     public DeletedEventDAO() { 
         super();
     }
 
-    public DeletedEventDAO(AbstractDAO dao) {
+    public DeletedEventDAO(AbstractDAO<?> dao) {
         super(dao);
     }
 }
