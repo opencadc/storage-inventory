@@ -251,8 +251,7 @@ public class Main {
             Class<SQLGenerator> theClass = (Class<SQLGenerator>)Class.forName(generatorName);
             Constructor<SQLGenerator> cons = theClass.getConstructor(String.class, String.class);
             sqlGenerator = cons.newInstance(database, schema);
-        }
-        catch (Exception ex){
+        } catch (Exception ex) {
             log.error(ex + " Cannot instantiate SQLGenerator.");
         }
 
