@@ -24,6 +24,9 @@ The following keys (with example values) are needed:
 # inventory database settings
 org.opencadc.inventory.db.SQLGenerator=org.opencadc.inventory.db.SQLGenerator
 org.opencadc.inventory.db.schema=inventory
+
+# permission granting service settings
+org.opencadc.inventory.permissions.ReadGrant.serviceID=ivo://{authority}/{name}
 ```
 
 ## building

@@ -122,12 +122,11 @@ public abstract class ArtifactAction extends RestAction {
     // config keys
     static final String RESOURCE_ID_KEY = "org.opencadc.minoc.resourceID";
     static final String SA_KEY = StorageAdapter.class.getName();
-    static final String SQLGEN_KEY = SQLGenerator.class.getName();
+    static final String SQL_GEN_KEY = SQLGenerator.class.getName();
     static final String SCHEMA_KEY = SQLGenerator.class.getPackage().getName() + ".schema";
-    static final String READ_GRANTS_KEY = ReadGrant.class.getName() +  ".resourceID";
-    static final String WRITE_GRANTS_KEY = WriteGrant.class.getName() +  ".resourceID";
-    private static final URI GMS_SERVICE_URI =
-        URI.create("ivo://cadc.nrc.ca/gms");
+    static final String READ_GRANTS_KEY = ReadGrant.class.getName() +  ".serviceID";
+    static final String WRITE_GRANTS_KEY = WriteGrant.class.getName() +  ".serviceID";
+    private static final URI GMS_SERVICE_URI = URI.create("ivo://cadc.nrc.ca/gms");
 
     // The target artifact
     URI artifactURI;
@@ -174,8 +173,8 @@ public abstract class ArtifactAction extends RestAction {
                 sb.append("OK");
             }
 
-            String sqlgen = getSingleProperty(props, SQLGEN_KEY);
-            sb.append("\n\t").append(SQLGEN_KEY).append(": ");
+            String sqlgen = getSingleProperty(props, SQL_GEN_KEY);
+            sb.append("\n\t").append(SQL_GEN_KEY).append(": ");
             if (sqlgen == null) {
                 sb.append("MISSING");
                 ok = false;
@@ -213,7 +212,7 @@ public abstract class ArtifactAction extends RestAction {
             }
 
             Map<String, Object> config = new HashMap<String, Object>();
-            config.put(SQLGEN_KEY, Class.forName(sqlgen));
+            config.put(SQL_GEN_KEY, Class.forName(sqlgen));
             config.put("jndiDataSourceName", JNDI_DATASOURCE);
             config.put("schema", schema);
             //config.put("database", null);
@@ -225,7 +224,6 @@ public abstract class ArtifactAction extends RestAction {
                 this.storageAdapter = (StorageAdapter) Class.forName(sac).getDeclaredConstructor().newInstance();
             } catch (Exception ex) {
                 throw new IllegalStateException("invalid config: failed to load StorageAdapter implementation: " + sac, ex);
-
             }
 
             URI resourceID = new URI(rid);
@@ -255,16 +253,14 @@ public abstract class ArtifactAction extends RestAction {
     }
     
     protected void initAndAuthorize(Class<? extends Grant> grantClass)
-        throws AccessControlException, IOException,
-               ResourceNotFoundException, TransientException {
+        throws AccessControlException, IOException, ResourceNotFoundException, TransientException {
         
         init();
         
         // do authorization (with token or subject)
         Subject subject = AuthenticationUtil.getCurrentSubject();
         if (authToken != null) {
-            String tokenUser = TokenUtil.validateToken(
-                authToken, artifactURI, grantClass);
+            String tokenUser = TokenUtil.validateToken(authToken, artifactURI, grantClass);
             subject.getPrincipals().clear();
             subject.getPrincipals().add(new HttpPrincipal(tokenUser));
             logInfo.setSubject(subject);
@@ -277,8 +273,7 @@ public abstract class ArtifactAction extends RestAction {
             } else if (WriteGrant.class.isAssignableFrom(grantClass)) {
                 checkWritePermission();
             } else {
-                throw new IllegalStateException("Unsupported grant class: "
-                    + grantClass);
+                throw new IllegalStateException("Unsupported grant class: " + grantClass);
             }
         }
     }
@@ -300,8 +295,7 @@ public abstract class ArtifactAction extends RestAction {
         StorageSiteDAO ssdao = new StorageSiteDAO(artifactDAO); // copy config
         Set<StorageSite> curlist = ssdao.list();
         if (curlist.size() > 1) {
-            throw new IllegalStateException("found: " + curlist.size()
-                + " StorageSite(s) in database; expected 0 or 1");
+            throw new IllegalStateException("found: " + curlist.size() + " StorageSite(s) in database; expected 0 or 1");
         }
         // TODO: get display name from config
         // use path from resourceID as default
@@ -320,16 +314,13 @@ public abstract class ArtifactAction extends RestAction {
             cur.setName(name);
             ssdao.put(cur);
         } else {
-            throw new IllegalStateException("BUG: found " + curlist.size()
-                                            + " StorageSite entries");
+            throw new IllegalStateException("BUG: found " + curlist.size() + " StorageSite entries");
         }
         log.info("initStorageSite: " + resourceID + " " + name);
         SELF_RESOURCE_ID = resourceID;
     }
     
-    public void checkReadPermission()
-        throws AccessControlException, ResourceNotFoundException,
-               TransientException {
+    public void checkReadPermission() throws AccessControlException, ResourceNotFoundException, TransientException {
 
         List<Group> userGroups;
         try {
@@ -362,9 +353,8 @@ public abstract class ArtifactAction extends RestAction {
     public void checkWritePermission()
         throws AccessControlException, ResourceNotFoundException,
                TransientException {
-        // current write auth is simply to be non-anonymous
-        AuthMethod am = AuthenticationUtil.getAuthMethod(
-            AuthenticationUtil.getCurrentSubject());
+
+        AuthMethod am = AuthenticationUtil.getAuthMethod(AuthenticationUtil.getCurrentSubject());
         if (am != null && am.equals(AuthMethod.ANON)) {
             return;
         }
@@ -406,12 +396,9 @@ public abstract class ArtifactAction extends RestAction {
         
         if (colonIndex < 0) {
             if (firstSlashIndex > 0 && path.length() > firstSlashIndex + 1) {
-                throw new IllegalArgumentException(
-                    "missing scheme in artifact URI: "
-                        + path.substring(firstSlashIndex + 1));
+                throw new IllegalArgumentException("missing scheme in artifact URI: " + path.substring(firstSlashIndex + 1));
             } else {
-                throw new IllegalArgumentException(
-                    "missing artifact URI in path: " + path);
+                throw new IllegalArgumentException("missing artifact URI in path: " + path);
             }
         }
         
@@ -512,26 +499,24 @@ public abstract class ArtifactAction extends RestAction {
     static Map<String, Object> getDaoConfig(MultiValuedProperties props) {
         Map<String, Object> config = new HashMap<String, Object>();
         Class cls = null;
-        List<String> sqlGenList = props.getProperty(SQLGEN_KEY);
+        List<String> sqlGenList = props.getProperty(SQL_GEN_KEY);
         if (sqlGenList != null && sqlGenList.size() > 0) {
             try {
                 String sqlGenClass = sqlGenList.get(0);
                 cls = Class.forName(sqlGenClass);
             } catch (ClassNotFoundException e) {
-                throw new IllegalStateException(
-                    "could not load SQLGenerator class: " + e.getMessage(), e);
+                throw new IllegalStateException("could not load SQLGenerator class: " + e.getMessage(), e);
             }
         } else {
             // use the default SQL generator
             cls = SQLGenerator.class;
         }
 
-        config.put(SQLGEN_KEY, cls);
+        config.put(SQL_GEN_KEY, cls);
         config.put("jndiDataSourceName", JNDI_DATASOURCE);
         List<String> schemaList = props.getProperty(SCHEMA_KEY);
         if (schemaList == null || schemaList.size() < 1) {
-            throw new IllegalStateException("a value for " + SCHEMA_KEY
-                + " is needed in minoc.properties");
+            throw new IllegalStateException("a value for " + SCHEMA_KEY + " is needed in minoc.properties");
         }
         config.put("schema", schemaList.get(0));
         config.put("database", null);
@@ -542,8 +527,7 @@ public abstract class ArtifactAction extends RestAction {
     List<Group> getUsersGroups() throws PrivilegedActionException {
         PrivilegedExceptionAction<List<Group>> action = () -> {
             LocalAuthority localAuthority = new LocalAuthority();
-            URI groupsURI = localAuthority.getServiceURI(
-                Standards.GMS_SEARCH_01.toString());
+            URI groupsURI = localAuthority.getServiceURI(Standards.GMS_SEARCH_01.toString());
             GMSClient client = new GMSClient(groupsURI);
             return client.getGroups();
         };
