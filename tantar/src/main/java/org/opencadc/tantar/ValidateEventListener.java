@@ -66,52 +66,55 @@
  ************************************************************************
  */
 
-package org.opencadc.inventory.validate;
+package org.opencadc.tantar;
 
-import ca.nrc.cadc.util.Log4jInit;
+import java.util.EventListener;
 
-import java.io.FileNotFoundException;
-import java.io.FileReader;
-import java.io.IOException;
-import java.io.Reader;
-import java.util.Properties;
-
-import org.apache.log4j.Level;
-import org.apache.log4j.Logger;
+import org.opencadc.inventory.Artifact;
+import org.opencadc.inventory.storage.StorageMetadata;
 
 
-/**
- * Main application entry.  This class expects a cadc-file-validate.properties file to be available and readable.
- */
-public class Main {
-
-    private static final Logger LOGGER = Logger.getLogger(Main.class);
-    private static final String CONFIGURATION_FILE_LOCATION = "/config/cadc-file-validate.properties";
-
-    public static void main(final String[] args) {
-        Main.configure();
-
-
-    }
+public interface ValidateEventListener extends EventListener {
 
     /**
-     * Read in the configuration file and load it into the System properties.
+     * Create a new Artifact using metadata from the given StorageMetadata.
+     *
+     * @param storageMetadata       The StorageMetadata to pull metadata from.
+     * @throws Exception    Any unexpected error.
      */
-    private static void configure() {
-        final Properties properties = new Properties();
+    void createArtifact(final StorageMetadata storageMetadata) throws Exception;
 
-        try {
-            final Reader configFileReader = new FileReader(CONFIGURATION_FILE_LOCATION);
-            properties.load(configFileReader);
-            System.setProperties(properties);
-        } catch (FileNotFoundException e) {
-            LOGGER.fatal(
-                    String.format("Unable to locate configuration file.  Expected it to be at %s.",
-                                  CONFIGURATION_FILE_LOCATION));
-            System.exit(1);
-        } catch (IOException e) {
-            LOGGER.fatal(String.format("Unable to read file located at %s.", CONFIGURATION_FILE_LOCATION));
-            System.exit(2);
-        }
-    }
+    /**
+     * Delete the given StorageMetadata.
+     *
+     * @param storageMetadata   The StorageMetadata to delete
+     * @throws Exception    Any unexpected error.
+     */
+    void delete(final StorageMetadata storageMetadata) throws Exception;
+
+    /**
+     * Delete the given Artifact.  Implementors should also create a DeletedArtifactEvent as necessary.
+     *
+     * @param artifact      The Artifact to remove.
+     * @throws Exception    Any unexpected error.
+     */
+    void delete(final Artifact artifact) throws Exception;
+
+    /**
+     * This will force the file-sync application to assume it's a new insert and force a re-download of the file.  The
+     * default logic will most likely be to remove its StorageLocation instance.
+     *
+     * @param artifact The base artifact.  This MUST have a Storage Location.
+     * @throws Exception Anything IO/Thread related.
+     */
+    void markAsNew(final Artifact artifact) throws Exception;
+
+    /**
+     * Replace the given Artifact with a new one created from the given StorageMetadata instance.
+     *
+     * @param artifact          The Artifact to remove.
+     * @param storageMetadata   The StorageMetadata from which to create a new Artifact.
+     * @throws Exception    Any unexpected error.
+     */
+    void replaceArtifact(final Artifact artifact, final StorageMetadata storageMetadata) throws Exception;
 }
