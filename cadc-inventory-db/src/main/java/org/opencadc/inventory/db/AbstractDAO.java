@@ -76,8 +76,10 @@ import ca.nrc.cadc.db.TransactionManager;
 import java.lang.reflect.Constructor;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.Map;
@@ -188,6 +190,18 @@ class AbstractDAO<T extends Entity> {
             this.gen = (SQLGenerator) ctor.newInstance(database, schema);
         } catch (Exception ex) {
             throw new RuntimeException("failed to instantiate SQLGenerator: " + genClass.getName(), ex);
+        }
+        
+        try {
+            String sql = gen.getCurrentTimeSQL();
+            Connection c = dataSource.getConnection();
+            Statement s = c.createStatement();
+            ResultSet rs = s.executeQuery(sql);
+            rs.next();
+            Date now = Util.getDate(rs, 1, Calendar.getInstance(DateUtil.LOCAL));
+            log.debug("connection test: " + now);
+        } catch (Exception ex) {
+            throw new RuntimeException("failed to verify DataSource", ex);
         }
     }
 
