@@ -143,7 +143,6 @@ public class Main {
             String errMsg = "";
 
             String schema = props.getProperty(DB_SCHEMA_CONFIG_KEY);
-            log.debug("schema: " + schema);
             if (!StringUtil.hasLength(schema)) {
                 errMsg += DB_SCHEMA_CONFIG_KEY + " ";
             }
@@ -169,7 +168,6 @@ public class Main {
             }
 
             String adapterClass = props.getProperty(StorageAdapter.class.getName());
-            log.debug("adapter class: " + adapterClass);
             if (!StringUtil.hasLength(adapterClass)) {
                 errMsg += StorageAdapter.class.getName() + " ";
             }
@@ -244,20 +242,14 @@ public class Main {
             int nthreads = Integer.parseInt(nthreadStr);
             log.debug("nthreads: " + nthreads);
 
-            // unfinished below this point.
-            throw new UnsupportedOperationException("TODO");
+            // TODO: implementation of this to be finished in s 2575 ta 13144
+            BucketSelector bucketSel = new BucketSelector();
 
-            //            // TODO: implementation of this to be finished in s 2575 ta 13144
-            //            BucketSelector bucketSel = null;
-            //
-            //            FileSync doit = new FileSync(daoConfig, localStorage, resourceID, bucketSel, nthreads);
-            //            doit.run();
-            //            System.exit(0);
-        } catch (UnsupportedOperationException uoe) {
-            // TODO: remove this when code is completed
-            log.info(uoe);
+            FileSync doit = new FileSync(daoConfig, localStorage, resourceID, bucketSel, nthreads);
+            doit.run();
+            System.exit(0);
         } catch (Throwable unexpected) {
-            log.error("unexpected failure", unexpected);
+            log.error("failure", unexpected);
             System.exit(-1);
         }
         log.debug("finished critwall run.");

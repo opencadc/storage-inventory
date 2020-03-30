@@ -112,9 +112,11 @@ public class FileSync {
         InventoryUtil.assertNotNull(FileSync.class, "localStorage", localStorage);
         InventoryUtil.assertNotNull(FileSync.class, "resourceID", resourceID);
         InventoryUtil.assertNotNull(FileSync.class, "selector", selector);
+
         if (nthreads <= 0 || nthreads > MAX_THREADS) {
             throw new IllegalArgumentException("invalid config: nthreads must be in [1," + MAX_THREADS + "], found: " + nthreads);
         }
+
         this.artifactDAO = new ArtifactDAO();
         artifactDAO.setConfig(daoConfig);
         this.resourceID = resourceID;
