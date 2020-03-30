@@ -151,6 +151,7 @@ public class FileSync {
     // - manage idle and run until serious failure?
     
     public void run() {
+        throw new UnsupportedOperationException("TODO");
         
     }
 }

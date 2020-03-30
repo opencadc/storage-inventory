@@ -243,7 +243,7 @@ public class Main {
             log.debug("nthreads: " + nthreads);
 
             // TODO: implementation of this to be finished in s 2575 ta 13144
-            BucketSelector bucketSel = new BucketSelector();
+            BucketSelector bucketSel = new BucketSelector("TODO");
 
             FileSync doit = new FileSync(daoConfig, localStorage, resourceID, bucketSel, nthreads);
             doit.run();
