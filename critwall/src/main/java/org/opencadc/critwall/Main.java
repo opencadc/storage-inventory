@@ -67,6 +67,8 @@
 
 package org.opencadc.critwall;
 
+import ca.nrc.cadc.db.ConnectionConfig;
+import ca.nrc.cadc.db.DBUtil;
 import ca.nrc.cadc.util.Log4jInit;
 
 import ca.nrc.cadc.util.StringUtil;
@@ -81,6 +83,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.TreeMap;
 
+import javax.naming.NamingException;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.db.SQLGenerator;
@@ -88,28 +91,41 @@ import org.opencadc.inventory.storage.StorageAdapter;
 
 /**
  * Main entry point for critwall.
- * 
- * @author pdowler
  */
 public class Main {
     private static final Logger log = Logger.getLogger(Main.class);
     private static final String CONFIGURATION_FILE_LOCATION = "/config/critwall.properties";
+    private static final String CONFIG_PREFIX = Main.class.getPackage().getName();
     private static final String SQLGENERATOR_CONFIG_KEY = SQLGenerator.class.getName();
-    private static final String SCHEMA_CONFIG_KEY = "org.opencadc.critwall.db.schema";
-    private static final String DATABASE_CONFIG_KEY = "org.opencadc.critwall.db.url";
-    private static final String BUCKETS_CONFIG_KEY = "org.opencadc.critwall.buckets";
-    private static final String NTHREADS_CONFIG_KEY = "org.opencadc.critwall.threads";
-    private static final String LOCATOR_SERVICE_CONFIG_KEY = "org.opencadc.critwall.locatorService";
-    private static final String LOGGING_CONFIG_KEY = "org.opencadc.critwall.logging";
+    private static final String DB_SCHEMA_CONFIG_KEY = CONFIG_PREFIX + ".db.schema";
+    private static final String DB_CONFIG_KEY = CONFIG_PREFIX + ".db.url";
+    private static final String DB_USERNAME_CONFIG_KEY = CONFIG_PREFIX + ".db.username";
+    private static final String DB_PASSWORD_CONFIG_KEY = CONFIG_PREFIX + ".db.password";
+    private static final String BUCKETSEL_CONFIG_KEY = CONFIG_PREFIX + ".buckets";
+    private static final String NTHREADS_CONFIG_KEY = CONFIG_PREFIX + ".threads";
+    private static final String LOCATOR_SERVICE_CONFIG_KEY = CONFIG_PREFIX + ".locatorService";
+    private static final String LOGGING_CONFIG_KEY = CONFIG_PREFIX + ".logging";
 
     public static void main(String[] args) {
         try {
             Log4jInit.setLevel("org.opencadc", Level.WARN);
             Log4jInit.setLevel("ca.nrc.cadc", Level.WARN);
 
-            Properties props = readConfig();
+            Properties props = new Properties();
+            try {
+                final Reader configFileReader = new FileReader(CONFIGURATION_FILE_LOCATION);
+                props.load(configFileReader);
+            } catch (FileNotFoundException e) {
+                log.fatal(
+                    String.format("Unable to locate configuration file.  Expected it to be at %s.",
+                        CONFIGURATION_FILE_LOCATION));
+                System.exit(1);
+            } catch (IOException e) {
+                log.fatal(String.format("Unable to read file located at %s.", CONFIGURATION_FILE_LOCATION));
+                System.exit(2);
+            }
 
-            // get log level from config
+            // Set up logging before parsing file otherwise it's hard to report errors sanely
             String logCfg = props.getProperty(LOGGING_CONFIG_KEY);
             Level cfg = Level.INFO;
             if (StringUtil.hasLength(logCfg)) {
@@ -124,160 +140,129 @@ public class Main {
             log.debug("log level: " + cfg);
             log.debug("properties: " + props.toString());
 
-            // parse config file and populate/assign these
-            // which values from the config go in here?
+            // parse config file
+            String errMsg = "";
+
+            String schema = props.getProperty(DB_SCHEMA_CONFIG_KEY);
+            log.debug("schema: " + schema);
+            if (!StringUtil.hasLength(schema)) {
+                errMsg += DB_SCHEMA_CONFIG_KEY + " ";
+            }
+
+            String dbUrl = props.getProperty(DB_CONFIG_KEY);
+            if (!StringUtil.hasLength(dbUrl)) {
+                errMsg += DB_CONFIG_KEY + " ";
+            }
+
+            String generatorName = props.getProperty(SQLGENERATOR_CONFIG_KEY);
+            if (!StringUtil.hasLength(generatorName)) {
+                errMsg += SQLGENERATOR_CONFIG_KEY + " ";
+            }
+
+            String username = props.getProperty(DB_USERNAME_CONFIG_KEY);
+            if (!StringUtil.hasLength(username)) {
+                errMsg += DB_USERNAME_CONFIG_KEY + " ";
+            }
+
+            String password = props.getProperty(DB_PASSWORD_CONFIG_KEY);
+            if (!StringUtil.hasLength(password)) {
+                errMsg += DB_PASSWORD_CONFIG_KEY + " ";
+            }
+
+            String adapterClass = props.getProperty(StorageAdapter.class.getName());
+            log.debug("adapter class: " + adapterClass);
+            if (!StringUtil.hasLength(adapterClass)) {
+                errMsg += StorageAdapter.class.getName() + " ";
+            }
+
+            String locatorResourceIdStr = props.getProperty(LOCATOR_SERVICE_CONFIG_KEY);
+            if (!StringUtil.hasLength(locatorResourceIdStr)) {
+                errMsg += LOCATOR_SERVICE_CONFIG_KEY + " ";
+            }
+
+            String bucketSelectorPrefix = props.getProperty(BUCKETSEL_CONFIG_KEY);
+            if (!StringUtil.hasLength(bucketSelectorPrefix)) {
+                errMsg += BUCKETSEL_CONFIG_KEY + " ";
+            }
+
+            String nthreadStr = props.getProperty(NTHREADS_CONFIG_KEY);
+            if (!StringUtil.hasLength(nthreadStr)) {
+                errMsg += NTHREADS_CONFIG_KEY + " ";
+            }
+
+            // Everything is required
+            if (StringUtil.hasLength(errMsg)) {
+                throw new IllegalStateException("critwall.properties missing one or more values: " + errMsg);
+            }
+
+            // populate/assign values to pass to FileSync
             Map<String,Object> daoConfig = new TreeMap<>();
-            String schema = getSchema(props);
             daoConfig.put("schema", schema);
-            String db = getDatabase(props);
-            daoConfig.put("database", db);
-            daoConfig.put("jndiDataSourceName", getDatabase(props));
-            log.debug(SQLGENERATOR_CONFIG_KEY);
-            daoConfig.put(SQLGENERATOR_CONFIG_KEY, getSqlGenerator(props, db, schema));
+            daoConfig.put("database", dbUrl);
 
-            StorageAdapter localStorage = getStorageAdapter(props);
-            log.debug("storage adapter: " + localStorage);
+            try {
+                daoConfig.put(SQLGENERATOR_CONFIG_KEY, (Class<SQLGenerator>)Class.forName(generatorName));
+            } catch (Exception ex) {
+                throw new IllegalStateException("cannot instantiate SQLGenerator: " + generatorName, ex);
+            }
+            log.debug("SQL generator class made");
 
-            URI resourceID = getGlobalResourceId(props);
-            log.debug("resourceID: " + resourceID.toString());
+            String jndiSourceName = "jdbc/critwall";
+            ConnectionConfig cc = new ConnectionConfig(null, null,
+                username,
+                password,
+                "org.postgresql.Driver",
+                dbUrl);
 
-            BucketSelector selector = getBucketSelector(props);
+            try {
+                DBUtil.createJNDIDataSource(jndiSourceName, cc);
+            } catch (NamingException ne) {
+                throw new IllegalStateException("unable to access database: " + dbUrl, ne);
+            }
+            daoConfig.put("jndiDataSourceName", jndiSourceName);
+            log.debug("JNDIDataSource: " + jndiSourceName);
 
-            int nthreads = getNthreads(props);
-            log.debug("nthreads: " + nthreads);
-            
-            FileSync doit = new FileSync(daoConfig, localStorage, resourceID, selector, nthreads);
-            doit.run();
-            System.exit(0);
-        } catch (Throwable unexpected) {
-            log.error("unexpected failure", unexpected);
-            System.exit(-1);
-        }
-        log.debug("finished critwall run.");
-    }
-    
-    private Main() { 
-    }
-
-
-    /**
-     * Read in the configuration file and load it into the System properties.
-     */
-    private static Properties readConfig() {
-        final Properties properties = new Properties();
-
-        try {
-            final Reader configFileReader = new FileReader(CONFIGURATION_FILE_LOCATION);
-            properties.load(configFileReader);
-            System.setProperties(properties);
-        } catch (FileNotFoundException e) {
-            log.fatal(
-                String.format("Unable to locate configuration file.  Expected it to be at %s.",
-                    CONFIGURATION_FILE_LOCATION));
-            System.exit(1);
-        } catch (IOException e) {
-            log.fatal(String.format("Unable to read file located at %s.", CONFIGURATION_FILE_LOCATION));
-            System.exit(2);
-        }
-
-        return properties;
-    }
-
-    private static String getSchema(Properties config) {
-        String schema = config.getProperty(SCHEMA_CONFIG_KEY);
-        log.debug("schema: " + schema);
-        if (!StringUtil.hasLength(schema)) {
-            throw new IllegalStateException("schema not specified in critwall.properties");
-        }
-        return schema;
-    }
-
-    private static String getDatabase(Properties config) {
-        String db = config.getProperty(DATABASE_CONFIG_KEY);
-        if (!StringUtil.hasLength(db)) {
-            throw new IllegalStateException("schema not specified in critwall.properties");
-        }
-        return db;
-    }
-
-    private static SQLGenerator getSqlGenerator(Properties config, String database, String schema) {
-        String generatorName = config.getProperty(SQLGENERATOR_CONFIG_KEY);
-        SQLGenerator sqlGenerator = null;
-        if (!StringUtil.hasLength(generatorName)) {
-            throw new IllegalStateException("sql generator not specified in critwall.properties");
-        }
-
-        try {
-            Class<SQLGenerator> theClass = (Class<SQLGenerator>)Class.forName(generatorName);
-            Constructor<SQLGenerator> cons = theClass.getConstructor(String.class, String.class);
-            sqlGenerator = cons.newInstance(database, schema);
-        }
-        catch (Exception ex){
-            log.error(ex + " Cannot instantiate SQLGenerator.");
-        }
-
-        return sqlGenerator;
-    }
-
-
-    private static StorageAdapter getStorageAdapter(Properties config) {
-        String adapterKey = StorageAdapter.class.getName();
-        String adapterClass = config.getProperty(adapterKey);
-        log.debug("adapter class: " + adapterClass);
-        if (StringUtil.hasLength(adapterClass)) {
+            StorageAdapter localStorage = null;
             try {
                 Class c = Class.forName(adapterClass);
                 Object o = c.newInstance();
-                StorageAdapter sa = (StorageAdapter) o;
-                log.debug("StorageAdapter: " + sa);
-                return sa;
+                localStorage = (StorageAdapter) o;
+                log.debug("StorageAdapter: " + localStorage);
             } catch (Throwable t) {
-                throw new IllegalStateException("failed to load storage adapter: " + adapterClass, t);
+                throw new IllegalStateException("failed to create storage adapter: " + adapterClass, t);
             }
-        } else {
-            throw new IllegalStateException("no storage adapter specified in critwall.properties");
-        }
-    }
+            log.debug("storage adapter: " + localStorage);
 
-    private static URI getGlobalResourceId(Properties config) {
-        String locatorResourceIdStr = config.getProperty(LOCATOR_SERVICE_CONFIG_KEY);
-        URI resourceID = null;
 
-        if (StringUtil.hasLength(locatorResourceIdStr)) {
+            URI resourceID = null;
             try {
                 resourceID = new URI(locatorResourceIdStr);
             } catch (URISyntaxException us) {
                 throw new IllegalStateException("invalid locator service in critwall.properties: " + locatorResourceIdStr);
             }
-        } else {
-            throw new IllegalStateException("locator service not specified in critwall.properties");
+            log.debug("resourceID: " + resourceID.toString());
+
+
+            // TODO: implementation of this to be finished in s 2575 ta 13144
+            BucketSelector bucketSel = new BucketSelector(bucketSelectorPrefix);
+            log.debug("bucket selector: " + bucketSel);
+            log.debug("bucket selector: " + bucketSel);
+
+            int nthreads = Integer.parseInt(nthreadStr);
+            log.debug("nthreads: " + nthreads);
+            
+            FileSync doit = new FileSync(daoConfig, localStorage, resourceID, bucketSel, nthreads);
+            doit.run();
+            System.exit(0);
+        } catch (Throwable unexpected) {
+            log.error("unexpected failure", unexpected);
+            System.exit(-1);
+
         }
-        return resourceID;
+        log.debug("finished critwall run.");
     }
-
-    private static int getNthreads(Properties config) {
-        String nthreadStr = config.getProperty(NTHREADS_CONFIG_KEY);
-        int nthreads = -1;
-        if (StringUtil.hasLength(nthreadStr)) {
-            // TODO: if there's no int in the string, it's not caught
-            nthreads = Integer.parseInt(nthreadStr);
-        } else {
-            // default of 1
-            nthreads = 1;
-        }
-        return nthreads;
-    }
-
-    private static BucketSelector getBucketSelector(Properties config) {
-        String bucketSelectorPrefix = config.getProperty(BUCKETS_CONFIG_KEY);
-        BucketSelector bucketSel = null;
-
-        if (StringUtil.hasLength(bucketSelectorPrefix)) {
-             bucketSel = new BucketSelector(bucketSelectorPrefix);
-        } else {
-            throw new IllegalStateException("bucket selector not specified in critwall.properties");
-        }
-        return bucketSel;
+    
+    private Main() { 
     }
 
 }
