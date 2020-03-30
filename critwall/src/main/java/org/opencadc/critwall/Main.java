@@ -241,16 +241,18 @@ public class Main {
             }
             log.debug("resourceID: " + resourceID.toString());
 
-
-            // TODO: implementation of this to be finished in s 2575 ta 13144
-            BucketSelector bucketSel = null;
-
             int nthreads = Integer.parseInt(nthreadStr);
             log.debug("nthreads: " + nthreads);
-            
-            FileSync doit = new FileSync(daoConfig, localStorage, resourceID, bucketSel, nthreads);
-            doit.run();
-            System.exit(0);
+
+            // unfinished below this point.
+            throw new UnsupportedOperationException("TODO");
+
+            //            // TODO: implementation of this to be finished in s 2575 ta 13144
+            //            BucketSelector bucketSel = null;
+            //
+            //            FileSync doit = new FileSync(daoConfig, localStorage, resourceID, bucketSel, nthreads);
+            //            doit.run();
+            //            System.exit(0);
         } catch (Throwable unexpected) {
             log.error("unexpected failure", unexpected);
             System.exit(-1);
