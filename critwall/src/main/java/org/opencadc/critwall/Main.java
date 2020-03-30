@@ -218,7 +218,7 @@ public class Main {
             } catch (NamingException ne) {
                 throw new IllegalStateException("unable to access database: " + dbUrl, ne);
             }
-            daoConfig.put(jndiSourceName, cc);
+            daoConfig.put("jndiDataSourceName", jndiSourceName);
             log.debug("JNDIDataSource: " + jndiSourceName);
 
             StorageAdapter localStorage = null;
