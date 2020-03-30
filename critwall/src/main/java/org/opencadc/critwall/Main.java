@@ -253,6 +253,9 @@ public class Main {
             //            FileSync doit = new FileSync(daoConfig, localStorage, resourceID, bucketSel, nthreads);
             //            doit.run();
             //            System.exit(0);
+        } catch (UnsupportedOperationException uoe) {
+            // TODO: remove this when code is completed
+            log.info(uoe);
         } catch (Throwable unexpected) {
             log.error("unexpected failure", unexpected);
             System.exit(-1);
