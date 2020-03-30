@@ -216,7 +216,7 @@ public class Main {
             try {
                 DBUtil.createJNDIDataSource(jndiSourceName, cc);
             } catch (NamingException ne) {
-                throw new IllegalStateException("Unable to access database: " + dbUrl, ne);
+                throw new IllegalStateException("unable to access database: " + dbUrl, ne);
             }
             daoConfig.put(jndiSourceName, cc);
             log.debug("JNDIDataSource: " + jndiSourceName);
@@ -228,7 +228,7 @@ public class Main {
                 localStorage = (StorageAdapter) o;
                 log.debug("StorageAdapter: " + localStorage);
             } catch (Throwable t) {
-                throw new IllegalStateException("failed to load storage adapter: " + adapterClass, t);
+                throw new IllegalStateException("failed to create storage adapter: " + adapterClass, t);
             }
             log.debug("storage adapter: " + localStorage);
 
