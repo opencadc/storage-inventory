@@ -73,9 +73,12 @@ import org.apache.log4j.Logger;
  *
  * @author pdowler
  */
-public abstract class BucketSelector {
-    private static final Logger log = Logger.getLogger(BucketSelector.class);
+public class BucketSelector {
+    private final Logger log = Logger.getLogger(BucketSelector.class);
+    public final String bucketSelector;
 
-    protected BucketSelector() { 
+    BucketSelector(String selectorPrefix) {
+        this.bucketSelector = selectorPrefix;
+        throw new UnsupportedOperationException("TODO");
     }
 }
