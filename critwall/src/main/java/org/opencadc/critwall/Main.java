@@ -71,15 +71,14 @@ import ca.nrc.cadc.db.ConnectionConfig;
 import ca.nrc.cadc.db.DBUtil;
 import ca.nrc.cadc.util.Log4jInit;
 
+import ca.nrc.cadc.util.MultiValuedProperties;
+import ca.nrc.cadc.util.PropertiesReader;
 import ca.nrc.cadc.util.StringUtil;
-import java.io.FileNotFoundException;
-import java.io.FileReader;
-import java.io.IOException;
-import java.io.Reader;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.util.List;
 import java.util.Map;
-import java.util.Properties;
+import java.util.Set;
 import java.util.TreeMap;
 
 import javax.naming.NamingException;
@@ -93,7 +92,6 @@ import org.opencadc.inventory.storage.StorageAdapter;
  */
 public class Main {
     private static final Logger log = Logger.getLogger(Main.class);
-    private static final String CONFIGURATION_FILE_LOCATION = "/config/critwall.properties";
     private static final String CONFIG_PREFIX = Main.class.getPackage().getName();
     private static final String SQLGENERATOR_CONFIG_KEY = SQLGenerator.class.getName();
     private static final String DB_SCHEMA_CONFIG_KEY = CONFIG_PREFIX + ".db.schema";
@@ -110,22 +108,19 @@ public class Main {
             Log4jInit.setLevel("org.opencadc", Level.WARN);
             Log4jInit.setLevel("ca.nrc.cadc", Level.WARN);
 
-            Properties props = new Properties();
-            try {
-                final Reader configFileReader = new FileReader(CONFIGURATION_FILE_LOCATION);
-                props.load(configFileReader);
-            } catch (FileNotFoundException e) {
-                log.fatal(
-                    String.format("Unable to locate configuration file.  Expected it to be at %s.",
-                        CONFIGURATION_FILE_LOCATION));
-                System.exit(1);
-            } catch (IOException e) {
-                log.fatal(String.format("Unable to read file located at %s.", CONFIGURATION_FILE_LOCATION));
-                System.exit(2);
+            PropertiesReader pr = new PropertiesReader("critwall.properties");
+            MultiValuedProperties props = pr.getAllProperties();
+
+            if (log.isDebugEnabled()) {
+                log.debug("critwall.properties:");
+                Set<String> keys = props.keySet();
+                for (String key : keys) {
+                    log.debug("    " + key + " = " + props.getProperty(key));
+                }
             }
 
             // Set up logging before parsing file otherwise it's hard to report errors sanely
-            String logCfg = props.getProperty(LOGGING_CONFIG_KEY);
+            String logCfg = getSingleProperty(props, LOGGING_CONFIG_KEY);
             Level cfg = Level.INFO;
             if (StringUtil.hasLength(logCfg)) {
                 cfg = Level.toLevel(logCfg);
@@ -142,47 +137,47 @@ public class Main {
             // parse config file
             String errMsg = "";
 
-            String schema = props.getProperty(DB_SCHEMA_CONFIG_KEY);
+            String schema = getSingleProperty(props, DB_SCHEMA_CONFIG_KEY);
             if (!StringUtil.hasLength(schema)) {
                 errMsg += DB_SCHEMA_CONFIG_KEY + " ";
             }
 
-            String dbUrl = props.getProperty(DB_CONFIG_KEY);
+            String dbUrl = getSingleProperty(props, DB_CONFIG_KEY);
             if (!StringUtil.hasLength(dbUrl)) {
                 errMsg += DB_CONFIG_KEY + " ";
             }
 
-            String generatorName = props.getProperty(SQLGENERATOR_CONFIG_KEY);
+            String generatorName = getSingleProperty(props, SQLGENERATOR_CONFIG_KEY);
             if (!StringUtil.hasLength(generatorName)) {
                 errMsg += SQLGENERATOR_CONFIG_KEY + " ";
             }
 
-            String username = props.getProperty(DB_USERNAME_CONFIG_KEY);
+            String username = getSingleProperty(props, DB_USERNAME_CONFIG_KEY);
             if (!StringUtil.hasLength(username)) {
                 errMsg += DB_USERNAME_CONFIG_KEY + " ";
             }
 
-            String password = props.getProperty(DB_PASSWORD_CONFIG_KEY);
+            String password = getSingleProperty(props, DB_PASSWORD_CONFIG_KEY);
             if (!StringUtil.hasLength(password)) {
                 errMsg += DB_PASSWORD_CONFIG_KEY + " ";
             }
 
-            String adapterClass = props.getProperty(StorageAdapter.class.getName());
+            String adapterClass = getSingleProperty(props, StorageAdapter.class.getName());
             if (!StringUtil.hasLength(adapterClass)) {
                 errMsg += StorageAdapter.class.getName() + " ";
             }
 
-            String locatorResourceIdStr = props.getProperty(LOCATOR_SERVICE_CONFIG_KEY);
+            String locatorResourceIdStr = getSingleProperty(props, LOCATOR_SERVICE_CONFIG_KEY);
             if (!StringUtil.hasLength(locatorResourceIdStr)) {
                 errMsg += LOCATOR_SERVICE_CONFIG_KEY + " ";
             }
 
-            String bucketSelectorPrefix = props.getProperty(BUCKETSEL_CONFIG_KEY);
+            String bucketSelectorPrefix = getSingleProperty(props, BUCKETSEL_CONFIG_KEY);
             if (!StringUtil.hasLength(bucketSelectorPrefix)) {
                 errMsg += BUCKETSEL_CONFIG_KEY + " ";
             }
 
-            String nthreadStr = props.getProperty(NTHREADS_CONFIG_KEY);
+            String nthreadStr = getSingleProperty(props, NTHREADS_CONFIG_KEY);
             if (!StringUtil.hasLength(nthreadStr)) {
                 errMsg += NTHREADS_CONFIG_KEY + " ";
             }
@@ -230,7 +225,6 @@ public class Main {
             }
             log.debug("storage adapter: " + localStorage);
 
-
             URI resourceID = null;
             try {
                 resourceID = new URI(locatorResourceIdStr);
@@ -242,8 +236,8 @@ public class Main {
             int nthreads = Integer.parseInt(nthreadStr);
             log.debug("nthreads: " + nthreads);
 
-            // TODO: implementation of this to be finished in s 2575 ta 13144
-            BucketSelector bucketSel = new BucketSelector("TODO");
+            BucketSelector bucketSel = new BucketSelector(bucketSelectorPrefix);
+            log.debug("bucket selector: " + bucketSel);
 
             FileSync doit = new FileSync(daoConfig, localStorage, resourceID, bucketSel, nthreads);
             doit.run();
@@ -251,6 +245,7 @@ public class Main {
         } catch (Throwable unexpected) {
             log.error("failure", unexpected);
             System.exit(-1);
+
         }
         log.debug("finished critwall run.");
     }
@@ -258,4 +253,11 @@ public class Main {
     private Main() { 
     }
 
+    static final String getSingleProperty(MultiValuedProperties props, String key) {
+        List<String> vals = props.getProperty(key);
+        if (vals.isEmpty()) {
+            return null;
+        }
+        return vals.get(0);
+    }
 }
