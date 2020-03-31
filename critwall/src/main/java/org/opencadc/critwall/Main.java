@@ -121,7 +121,7 @@ public class Main {
             }
 
             // Set up logging before parsing file otherwise it's hard to report errors sanely
-            String logCfg = getSingleProperty(props, LOGGING_CONFIG_KEY);
+            String logCfg = props.getFirstPropertyValue(LOGGING_CONFIG_KEY);
             Level cfg = Level.INFO;
             if (StringUtil.hasLength(logCfg)) {
                 cfg = Level.toLevel(logCfg);
@@ -136,55 +136,55 @@ public class Main {
             log.debug("properties: " + props.toString());
 
             // parse config file
-            String errMsg = "";
+            StringBuilder errMsg = new StringBuilder();
 
-            String schema = getSingleProperty(props, DB_SCHEMA_CONFIG_KEY);
+            String schema = props.getFirstPropertyValue(DB_SCHEMA_CONFIG_KEY);
             if (!StringUtil.hasLength(schema)) {
-                errMsg += DB_SCHEMA_CONFIG_KEY + " ";
+                errMsg.append(DB_SCHEMA_CONFIG_KEY + " ");
             }
 
-            String dbUrl = getSingleProperty(props, DB_CONFIG_KEY);
+            String dbUrl = props.getFirstPropertyValue(DB_CONFIG_KEY);
             if (!StringUtil.hasLength(dbUrl)) {
-                errMsg += DB_CONFIG_KEY + " ";
+                errMsg.append(DB_CONFIG_KEY + " ");
             }
 
-            String generatorName = getSingleProperty(props, SQLGENERATOR_CONFIG_KEY);
+            String generatorName = props.getFirstPropertyValue(SQLGENERATOR_CONFIG_KEY);
             if (!StringUtil.hasLength(generatorName)) {
-                errMsg += SQLGENERATOR_CONFIG_KEY + " ";
+                errMsg.append(SQLGENERATOR_CONFIG_KEY + " ");
             }
 
-            String username = getSingleProperty(props, DB_USERNAME_CONFIG_KEY);
+            String username = props.getFirstPropertyValue(DB_USERNAME_CONFIG_KEY);
             if (!StringUtil.hasLength(username)) {
-                errMsg += DB_USERNAME_CONFIG_KEY + " ";
+                errMsg.append(DB_USERNAME_CONFIG_KEY + " ");
             }
 
-            String password = getSingleProperty(props, DB_PASSWORD_CONFIG_KEY);
+            String password = props.getFirstPropertyValue(DB_PASSWORD_CONFIG_KEY);
             if (!StringUtil.hasLength(password)) {
-                errMsg += DB_PASSWORD_CONFIG_KEY + " ";
+                errMsg.append(DB_PASSWORD_CONFIG_KEY + " ");
             }
 
-            String adapterClass = getSingleProperty(props, StorageAdapter.class.getName());
+            String adapterClass = props.getFirstPropertyValue(StorageAdapter.class.getName());
             if (!StringUtil.hasLength(adapterClass)) {
-                errMsg += StorageAdapter.class.getName() + " ";
+                errMsg.append(StorageAdapter.class.getName() + " ");
             }
 
-            String locatorResourceIdStr = getSingleProperty(props, LOCATOR_SERVICE_CONFIG_KEY);
+            String locatorResourceIdStr = props.getFirstPropertyValue(LOCATOR_SERVICE_CONFIG_KEY);
             if (!StringUtil.hasLength(locatorResourceIdStr)) {
-                errMsg += LOCATOR_SERVICE_CONFIG_KEY + " ";
+                errMsg.append(LOCATOR_SERVICE_CONFIG_KEY + " ");
             }
 
-            String bucketSelectorPrefix = getSingleProperty(props, BUCKETSEL_CONFIG_KEY);
+            String bucketSelectorPrefix = props.getFirstPropertyValue(BUCKETSEL_CONFIG_KEY);
             if (!StringUtil.hasLength(bucketSelectorPrefix)) {
-                errMsg += BUCKETSEL_CONFIG_KEY + " ";
+                errMsg.append(BUCKETSEL_CONFIG_KEY + " ");
             }
 
-            String nthreadStr = getSingleProperty(props, NTHREADS_CONFIG_KEY);
+            String nthreadStr = props.getFirstPropertyValue(NTHREADS_CONFIG_KEY);
             if (!StringUtil.hasLength(nthreadStr)) {
-                errMsg += NTHREADS_CONFIG_KEY + " ";
+                errMsg.append(NTHREADS_CONFIG_KEY + " ");
             }
 
             // Everything is required
-            if (StringUtil.hasLength(errMsg)) {
+            if (errMsg.length() > 0) {
                 throw new IllegalStateException("critwall.properties missing one or more values: " + errMsg);
             }
 
@@ -254,11 +254,4 @@ public class Main {
     private Main() { 
     }
 
-    static final String getSingleProperty(MultiValuedProperties props, String key) {
-        List<String> vals = props.getProperty(key);
-        if (vals.isEmpty()) {
-            return null;
-        }
-        return vals.get(0);
-    }
 }
