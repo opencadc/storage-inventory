@@ -78,6 +78,7 @@ import org.opencadc.inventory.InventoryUtil;
  */
 public class BucketSelector {
     private static final Logger log = Logger.getLogger(BucketSelector.class);
+    private final String bucketSelectors;
     private final int min;
     private final int max;
     private final String hexMin;
@@ -86,6 +87,7 @@ public class BucketSelector {
 
     public BucketSelector(String selectors) {
         InventoryUtil.assertNotNull(BucketSelector.class, "selectors", selectors);
+        this.bucketSelectors = selectors;
 
         // For first iteration, selectors can only be a range
         // Check that selector range only uses 0..15
