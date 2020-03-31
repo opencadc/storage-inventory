@@ -92,6 +92,7 @@ import org.opencadc.inventory.storage.StorageAdapter;
  */
 public class Main {
     private static final Logger log = Logger.getLogger(Main.class);
+    
     private static final String CONFIG_PREFIX = Main.class.getPackage().getName();
     private static final String SQLGENERATOR_CONFIG_KEY = SQLGenerator.class.getName();
     private static final String DB_SCHEMA_CONFIG_KEY = CONFIG_PREFIX + ".db.schema";
