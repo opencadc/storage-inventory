@@ -1,6 +1,6 @@
 # Storage Inventory file-sync process (critwall)
 
-Process to incrementally sync metadata changes between storage sites and global inventory(ies). This process
+Process to incrementally retrieve files from remote storage sites. This process
 is a hydrid multiprocess-multithread model: the operator runs one process per Artifact.uriBucket and multiple
 download threads within that process.
 
