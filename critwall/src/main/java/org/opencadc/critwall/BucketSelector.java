@@ -93,19 +93,17 @@ public class BucketSelector {
         // Check that selector range only uses 0..15
         String[] minMax = selectors.split("-");
 
-        if (minMax.length > 2 ) {
+        if (minMax.length > 2) {
             throw new IllegalArgumentException("invalid bucket selector: single value or range only.");
         } else {
             try {
-                String hMin = StringUtil.trimTrailingWhitespace(StringUtil.trimLeadingWhitespace(minMax[0]));
-                hexMin = hMin.toLowerCase();
+                hexMin = StringUtil.trimTrailingWhitespace(StringUtil.trimLeadingWhitespace(minMax[0])).toLowerCase();
                 min = HexUtil.toShort(hexBuffer + hexMin);
                 if (minMax.length == 1) {
                     hexMax = hexMin;
                     max = min;
                 } else {
-                    String hMax = StringUtil.trimTrailingWhitespace(StringUtil.trimLeadingWhitespace(minMax[1]));
-                    hexMax = hMax.toLowerCase();
+                    hexMax = StringUtil.trimTrailingWhitespace(StringUtil.trimLeadingWhitespace(minMax[1])).toLowerCase();
                     max = HexUtil.toShort(hexBuffer + hexMax);
                 }
                 log.debug("values: " + hexMin + " " + min);
@@ -116,8 +114,7 @@ public class BucketSelector {
         }
 
         if (min < 0 || max < min || max > 15) {
-            throw new IllegalArgumentException("invalid bucket selector (min,max): " +
-                min + "," + max);
+            throw new IllegalArgumentException("invalid bucket selector (min,max): " + min + "," + max);
         }
     }
 
@@ -136,6 +133,5 @@ public class BucketSelector {
     public String getHexMax() {
         return hexMax;
     }
-
 }
 

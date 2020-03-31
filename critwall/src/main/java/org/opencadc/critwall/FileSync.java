@@ -132,7 +132,8 @@ public class FileSync {
         //            // above call throws IllegalArgumentException... should be ResourceNotFoundException but out of scope to fix
         //            this.locator = caps.findCapability(Standards.SI_LOCATE);
         //            if (locator == null) {
-        //                throw new IllegalArgumentException("invalid config: remote query service " + resourceID + " does not implement " + Standards.SI_LOCATE);
+        //                throw new IllegalArgumentException("invalid config: remote query service " + resourceID + " does not implement "
+        //                + Standards.SI_LOCATE);
         //            }
         //        } catch (IOException ex) {
         //            throw new IllegalArgumentException("invalid config", ex);
