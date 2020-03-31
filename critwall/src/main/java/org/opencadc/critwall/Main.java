@@ -120,7 +120,7 @@ public class Main {
             }
 
             // Set up logging before parsing file otherwise it's hard to report errors sanely
-            String logCfg = getSingleProperty(props, LOGGING_CONFIG_KEY);
+            String logCfg = props.get(LOGGING_CONFIG_KEY);
             Level cfg = Level.INFO;
             if (StringUtil.hasLength(logCfg)) {
                 cfg = Level.toLevel(logCfg);
@@ -188,12 +188,12 @@ public class Main {
             }
 
             // populate/assign values to pass to FileSync
-            Map<String,Object> daoConfig = new TreeMap<>();
+            Map<String, Object> daoConfig = new TreeMap<>();
             daoConfig.put("schema", schema);
             daoConfig.put("database", dbUrl);
 
             try {
-                daoConfig.put(SQLGENERATOR_CONFIG_KEY, (Class<SQLGenerator>)Class.forName(generatorName));
+                daoConfig.put(SQLGENERATOR_CONFIG_KEY, (Class<SQLGenerator>) Class.forName(generatorName));
             } catch (Exception ex) {
                 throw new IllegalStateException("cannot instantiate SQLGenerator: " + generatorName, ex);
             }
@@ -249,16 +249,8 @@ public class Main {
         }
         log.debug("finished critwall run.");
     }
-    
-    private Main() { 
-    }
 
-    static final String getSingleProperty(MultiValuedProperties props, String key) {
-        List<String> vals = props.getProperty(key);
-        if (vals.isEmpty()) {
-            return null;
-        }
-        return vals.get(0);
+    private Main() {
     }
 
 }
