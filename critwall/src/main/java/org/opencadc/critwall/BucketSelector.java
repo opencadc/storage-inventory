@@ -69,69 +69,95 @@ package org.opencadc.critwall;
 
 import ca.nrc.cadc.util.HexUtil;
 import ca.nrc.cadc.util.StringUtil;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+import java.util.TreeSet;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.InventoryUtil;
 
 /**
  *
- * @author pdowler
  */
 public class BucketSelector {
     private static final Logger log = Logger.getLogger(BucketSelector.class);
-    private final String bucketSelectors;
-    private final int min;
-    private final int max;
-    private final String hexMin;
-    private final String hexMax;
-    private final String hexBuffer = "000";
+    // values as entered in .properties file
+    private final List<String> bucketSelectors;
+    // generated list of bucket selectors
+    private TreeSet<String> bucketList = new TreeSet<String>();
+
+    public Iterator<String> getBucketIterator() {
+        return bucketList.iterator();
+    }
 
     public BucketSelector(String selectors) {
         InventoryUtil.assertNotNull(BucketSelector.class, "selectors", selectors);
-        this.bucketSelectors = selectors;
+        this.bucketSelectors = new ArrayList<String>();
+        this.bucketSelectors.add(selectors);
 
-        // For first iteration, selectors can only be a range
-        // Check that selector range only uses 0..15
-        String[] minMax = selectors.split("-");
+        // todo: do it for one entry first: possibly need to process
+        // more than one entry from properties file
+        // - each row in the .properties file could correspond to an individual
+        // iterator, and in that way the work could be chunked up - iterators could
+        // run in parallel in different threads?
 
-        if (minMax.length > 2) {
-            throw new IllegalArgumentException("invalid bucket selector: single value or range only.");
-        } else {
-            try {
-                hexMin = StringUtil.trimTrailingWhitespace(StringUtil.trimLeadingWhitespace(minMax[0])).toLowerCase();
-                min = HexUtil.toShort(hexBuffer + hexMin);
-                if (minMax.length == 1) {
-                    hexMax = hexMin;
-                    max = min;
-                } else {
-                    hexMax = StringUtil.trimTrailingWhitespace(StringUtil.trimLeadingWhitespace(minMax[1])).toLowerCase();
-                    max = HexUtil.toShort(hexBuffer + hexMax);
+        StringBuffer errMsg = new StringBuffer();
+
+        for (String curSelector: this.bucketSelectors) {
+            String[] minMax = curSelector.split("-");
+            int min;
+            int max;
+
+            if (minMax.length > 2) {
+                errMsg.append("invalid bucket selector: single value or range only: " + curSelector + "\n");
+            } else {
+                try {
+                    // trim and convert to lower case for consistent processing
+                    String hexMin = StringUtil.trimTrailingWhitespace(StringUtil.trimLeadingWhitespace(minMax[0])).toLowerCase();
+
+                    if (StringUtil.hasLength(hexMin) && hexMin.length() < 6) {
+                        String padded = "00000000".substring(hexMin.length()) + hexMin;
+                        System.out.println("padded hexMin: " + padded);
+                        // check quality of entry, convert to int for generating full range
+                        min = HexUtil.toInt(HexUtil.toBytes(padded));
+                    } else {
+                        errMsg.append("invalid value in range: " + hexMin + "\n");
+                        continue;
+                    }
+
+                    if (minMax.length == 1) {
+                        max = min;
+                    } else {
+                        String hexMax = StringUtil.trimTrailingWhitespace(StringUtil.trimLeadingWhitespace(minMax[1])).toLowerCase();
+                        String padded = "00000000".substring(hexMax.length()) + hexMax;
+                        System.out.println("padded hexMin: " + padded);
+                        // check quality of entry, convert to int for generating full range
+                        max = HexUtil.toInt(HexUtil.toBytes(padded));
+                    }
+                    log.debug("range values as ints: " + min + "-" + max);
+
+                    // fffff is max currently
+                    if (min < 0 || max < min || max > 1048575) {
+                        errMsg.append("invalid bucket selector (min,max): " + min + "," + max);
+                    }
+
+                    for (int i = min; i <= max; i++) {
+                        // add values to the TreeSet, as hex strings
+                        // TreeSet should ensure no duplicates
+                        bucketList.add(HexUtil.toHex(i).replaceFirst("^0+(?!$)", ""));
+                        log.debug("added " + HexUtil.toHex(i).replaceFirst("^0+(?!$)", ""));
+                    }
+
+                } catch (Exception e) {
+                    log.debug("error processing range: " + curSelector);
+                    errMsg.append("invalid format: " + curSelector + "\n");
                 }
-                log.debug("values: " + hexMin + " " + min);
-            } catch (Exception e) {
-                log.debug("min toShort failed" + e);
-                throw new IllegalArgumentException("invalid format: " + selectors, e);
+            }
+
+            if (errMsg.length() != 0) {
+                throw new IllegalArgumentException("invalid bucket selectors: " + errMsg);
             }
         }
-
-        if (min < 0 || max < min || max > 15) {
-            throw new IllegalArgumentException("invalid bucket selector (min,max): " + min + "," + max);
-        }
-    }
-
-    public int getMin() {
-        return min;
-    }
-
-    public int getMax() {
-        return max;
-    }
-
-    public String getHexMin() {
-        return hexMin;
-    }
-
-    public String getHexMax() {
-        return hexMax;
     }
 }
 

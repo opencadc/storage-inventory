@@ -187,12 +187,12 @@ public class Main {
             }
 
             // populate/assign values to pass to FileSync
-            Map<String, Object> daoConfig = new TreeMap<>();
+            Map<String, Object>daoConfig = new TreeMap<>();
             daoConfig.put("schema", schema);
             daoConfig.put("database", dbUrl);
 
             try {
-                daoConfig.put(SQLGENERATOR_CONFIG_KEY, (Class<SQLGenerator>) Class.forName(generatorName));
+                daoConfig.put(SQLGENERATOR_CONFIG_KEY, (Class<SQLGenerator>)Class.forName(generatorName));
             } catch (Exception ex) {
                 throw new IllegalStateException("cannot instantiate SQLGenerator: " + generatorName, ex);
             }

@@ -66,7 +66,9 @@
  */
 package org.opencadc.critwall;
 
+import ca.nrc.cadc.util.HexUtil;
 import ca.nrc.cadc.util.Log4jInit;
+import java.util.Iterator;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
@@ -93,26 +95,20 @@ public class BucketSelectorTest {
 
         try {
             BucketSelector bucketSel = new BucketSelector(goodRange);
-            blurtBucket(bucketSel);
+            int bucketCount = blurtBucket(bucketSel.getBucketIterator());
+            Assert.assertEquals(16, bucketCount);
 
-            Assert.assertEquals(0,bucketSel.getMin());
-            Assert.assertEquals(15,bucketSel.getMax());
-            Assert.assertEquals("0",bucketSel.getHexMin());
-            Assert.assertEquals("f",bucketSel.getHexMax());
         } catch (Exception t) {
             log.error("unexpected exception", t);
             Assert.fail("unexpected exception: " + t);
         }
 
-        goodRange = "3 - D";
+        // Ridiculously large, but supports 5 character bucket selector
+        goodRange = "00000 - 11111";
         try {
             BucketSelector bucketSel = new BucketSelector(goodRange);
-            blurtBucket(bucketSel);
-
-            Assert.assertEquals(3,bucketSel.getMin());
-            Assert.assertEquals(13,bucketSel.getMax());
-            Assert.assertEquals("3",bucketSel.getHexMin());
-            Assert.assertEquals("d",bucketSel.getHexMax());
+            int bucketCount = blurtBucket(bucketSel.getBucketIterator());
+            Assert.assertEquals(69906, bucketCount);
         } catch (Exception t) {
             log.error("unexpected exception", t);
             Assert.fail("unexpected exception: " + t);
@@ -125,12 +121,8 @@ public class BucketSelectorTest {
 
         try {
             BucketSelector bucketSel = new BucketSelector(goodRange);
-            blurtBucket(bucketSel);
-
-            Assert.assertEquals(13,bucketSel.getMin());
-            Assert.assertEquals(13,bucketSel.getMax());
-            Assert.assertEquals("d",bucketSel.getHexMin());
-            Assert.assertEquals("d",bucketSel.getHexMax());
+            int bucketCount = blurtBucket(bucketSel.getBucketIterator());
+            Assert.assertEquals(1, bucketCount);
         } catch (Exception t) {
             log.error("unexpected exception", t);
             Assert.fail("unexpected exception: " + t);
@@ -139,11 +131,11 @@ public class BucketSelectorTest {
 
     @Test
     public void testOutOfRange() {
-        String outOfRange = "5- j";
+        String outOfRange = "555- eej";
 
         try {
             BucketSelector bucketSel = new BucketSelector(outOfRange);
-            blurtBucket(bucketSel);
+            int bucketCount = blurtBucket(bucketSel.getBucketIterator());
             Assert.fail("should have failed.");
         } catch (IllegalArgumentException expected) {
             log.debug("expected error: " + expected);
@@ -159,7 +151,7 @@ public class BucketSelectorTest {
 
         try {
             BucketSelector bucketSel = new BucketSelector(badRange);
-            blurtBucket(bucketSel);
+            blurtBucket(bucketSel.getBucketIterator());
             Assert.fail("should have failed.");
         } catch (IllegalArgumentException expected) {
             log.debug("expected error: " + expected);
@@ -167,15 +159,18 @@ public class BucketSelectorTest {
             log.error("unexpected exception", t);
             Assert.fail("unexpected exception: " + t);
         }
-
     }
 
-    private void blurtBucket(BucketSelector bucketSel) {
-        log.debug("hex min: " + bucketSel.getHexMin());
-        log.debug("hex max: " + bucketSel.getHexMax());
-        log.debug("int min: " + bucketSel.getMin());
-        log.debug("int max: " + bucketSel.getMax());
+    private int blurtBucket(Iterator<String> bucketIter) {
+        int size = 0;
+        while (bucketIter.hasNext()) {
+            String nextBucket = bucketIter.next();
+            size++;
+            System.out.println("bucket " + size + "= " + nextBucket);
+        }
+        return size;
     }
+
 
 }
 
