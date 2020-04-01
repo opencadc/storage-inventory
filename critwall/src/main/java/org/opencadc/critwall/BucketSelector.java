@@ -76,9 +76,7 @@ import java.util.TreeSet;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.InventoryUtil;
 
-/**
- *
- */
+
 public class BucketSelector {
     private static final Logger log = Logger.getLogger(BucketSelector.class);
     // values as entered in .properties file

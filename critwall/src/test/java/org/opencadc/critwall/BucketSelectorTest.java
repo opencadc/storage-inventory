@@ -66,7 +66,6 @@
  */
 package org.opencadc.critwall;
 
-import ca.nrc.cadc.util.HexUtil;
 import ca.nrc.cadc.util.Log4jInit;
 import java.util.Iterator;
 import org.apache.log4j.Level;
