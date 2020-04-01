@@ -103,11 +103,11 @@ public class BucketSelectorTest {
         }
 
         // Ridiculously large, but supports 5 character bucket selector
-        goodRange = "00000 - 11111";
+        goodRange = "3 - 7";
         try {
             BucketSelector bucketSel = new BucketSelector(goodRange);
             int bucketCount = blurtBucket(bucketSel.getBucketIterator());
-            Assert.assertEquals(69906, bucketCount);
+            Assert.assertEquals(5, bucketCount);
         } catch (Exception t) {
             log.error("unexpected exception", t);
             Assert.fail("unexpected exception: " + t);
@@ -130,7 +130,7 @@ public class BucketSelectorTest {
 
     @Test
     public void testOutOfRange() {
-        String outOfRange = "555- eej";
+        String outOfRange = "5- jj";
 
         try {
             BucketSelector bucketSel = new BucketSelector(outOfRange);

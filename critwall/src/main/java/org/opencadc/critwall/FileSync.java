@@ -74,6 +74,7 @@ import ca.nrc.cadc.reg.client.RegistryClient;
 
 import java.io.IOException;
 import java.net.URI;
+import java.util.Iterator;
 import java.util.Map;
 
 import org.apache.log4j.Logger;
@@ -122,8 +123,9 @@ public class FileSync {
         this.resourceID = resourceID;
         this.selector = selector;
         this.nthreads = nthreads;
+        this.locator = null;
 
-        throw new UnsupportedOperationException("TODO");
+//        throw new UnsupportedOperationException("TODO");
 
         // To be completed in s2575, ta 13061
         //        try {
@@ -155,6 +157,11 @@ public class FileSync {
     // - manage idle and run until serious failure?
     
     public void run() {
+        Iterator<String> bucketSelector = selector.getBucketIterator();
+        while (bucketSelector.hasNext()) {
+            String nextBucket = bucketSelector.next();
+            log.info("processing bucket " + nextBucket);
+        }
         throw new UnsupportedOperationException("TODO");
     }
 

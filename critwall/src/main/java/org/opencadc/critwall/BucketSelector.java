@@ -69,9 +69,7 @@ package org.opencadc.critwall;
 
 import ca.nrc.cadc.util.HexUtil;
 import ca.nrc.cadc.util.StringUtil;
-import java.util.ArrayList;
 import java.util.Iterator;
-import java.util.List;
 import java.util.TreeSet;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.InventoryUtil;
@@ -80,7 +78,9 @@ import org.opencadc.inventory.InventoryUtil;
 public class BucketSelector {
     private static final Logger log = Logger.getLogger(BucketSelector.class);
     // values as entered in .properties file
-    private final List<String> bucketSelectors;
+    private final String bucketSelectors;
+    private final String rangeMin;
+    private final String rangeMax;
     // generated list of bucket selectors
     private TreeSet<String> bucketList = new TreeSet<String>();
 
@@ -90,70 +90,55 @@ public class BucketSelector {
 
     public BucketSelector(String selectors) {
         InventoryUtil.assertNotNull(BucketSelector.class, "selectors", selectors);
-        this.bucketSelectors = new ArrayList<String>();
-        this.bucketSelectors.add(selectors);
+        this.bucketSelectors = selectors;
 
-        // todo: do it for one entry first: possibly need to process
-        // more than one entry from properties file
-        // - each row in the .properties file could correspond to an individual
-        // iterator, and in that way the work could be chunked up - iterators could
-        // run in parallel in different threads?
+        String[] minMax = this.bucketSelectors.split("-");
+        int min;
+        int max;
 
-        StringBuffer errMsg = new StringBuffer();
+        if (minMax.length > 2) {
+            throw new IllegalArgumentException("invalid bucket selector: single value or range only: "
+                + bucketSelectors);
+        } else {
+            try {
+                // trim and convert to lower case for consistent processing
+                rangeMin = StringUtil.trimTrailingWhitespace(StringUtil.trimLeadingWhitespace(minMax[0])).toLowerCase();
 
-        for (String curSelector: this.bucketSelectors) {
-            String[] minMax = curSelector.split("-");
-            int min;
-            int max;
-
-            if (minMax.length > 2) {
-                errMsg.append("invalid bucket selector: single value or range only: " + curSelector + "\n");
-            } else {
-                try {
-                    // trim and convert to lower case for consistent processing
-                    String hexMin = StringUtil.trimTrailingWhitespace(StringUtil.trimLeadingWhitespace(minMax[0])).toLowerCase();
-
-                    if (StringUtil.hasLength(hexMin) && hexMin.length() < 6) {
-                        String padded = "00000000".substring(hexMin.length()) + hexMin;
-                        System.out.println("padded hexMin: " + padded);
-                        // check quality of entry, convert to int for generating full range
-                        min = HexUtil.toInt(HexUtil.toBytes(padded));
-                    } else {
-                        errMsg.append("invalid value in range: " + hexMin + "\n");
-                        continue;
-                    }
-
-                    if (minMax.length == 1) {
-                        max = min;
-                    } else {
-                        String hexMax = StringUtil.trimTrailingWhitespace(StringUtil.trimLeadingWhitespace(minMax[1])).toLowerCase();
-                        String padded = "00000000".substring(hexMax.length()) + hexMax;
-                        System.out.println("padded hexMin: " + padded);
-                        // check quality of entry, convert to int for generating full range
-                        max = HexUtil.toInt(HexUtil.toBytes(padded));
-                    }
-                    log.debug("range values as ints: " + min + "-" + max);
-
-                    // fffff is max currently
-                    if (min < 0 || max < min || max > 1048575) {
-                        errMsg.append("invalid bucket selector (min,max): " + min + "," + max);
-                    }
-
-                    for (int i = min; i <= max; i++) {
-                        // add values to the TreeSet, as hex strings
-                        // TreeSet should ensure no duplicates
-                        bucketList.add(HexUtil.toHex(i).replaceFirst("^0+(?!$)", ""));
-                        log.debug("added " + HexUtil.toHex(i).replaceFirst("^0+(?!$)", ""));
-                    }
-
-                } catch (Exception e) {
-                    log.debug("error processing range: " + curSelector);
-                    errMsg.append("invalid format: " + curSelector + "\n");
+                if (StringUtil.hasLength(rangeMin) && rangeMin.length() < 6) {
+                    String padded = "0000".substring(rangeMin.length()) + rangeMin;
+                    // check quality of entry, convert to int for generating full range
+                    min = HexUtil.toShort(HexUtil.toBytes(padded));
+                    log.debug("here" + min);
+                } else {
+                    throw new IllegalArgumentException("invalid value in range: " + rangeMin);
                 }
-            }
 
-            if (errMsg.length() != 0) {
-                throw new IllegalArgumentException("invalid bucket selectors: " + errMsg);
+                if (minMax.length == 1) {
+                    rangeMax = rangeMin;
+                    max = min;
+                } else {
+                    rangeMax = StringUtil.trimTrailingWhitespace(StringUtil.trimLeadingWhitespace(minMax[1])).toLowerCase();
+                    String padded = "0000".substring(rangeMax.length()) + rangeMax;
+                    // check quality of entry, convert to int for generating full range
+                    max = HexUtil.toShort(HexUtil.toBytes(padded));
+                }
+                log.debug("range values as ints: " + min + "-" + max);
+
+                // 0-f is acceptable range
+                if (min < 0 || max < min || max > 15) {
+                    throw new IllegalArgumentException("invalid bucket selector (min,max): " + min + "," + max);
+                }
+
+                for (int i = min; i <= max; i++) {
+                    // add values to the TreeSet, as hex strings
+                    // TreeSet should ensure no duplicates
+                    bucketList.add(HexUtil.toHex(i).replaceFirst("^0+(?!$)", ""));
+                    log.debug("added " + HexUtil.toHex(i).replaceFirst("^0+(?!$)", ""));
+                }
+
+            } catch (Exception e) {
+                log.debug("error processing range: " + this.bucketSelectors);
+                throw new IllegalArgumentException("invalid format: " + this.bucketSelectors + "\n");
             }
         }
     }
