@@ -67,7 +67,6 @@
 
 package org.opencadc.critwall;
 
-import ca.nrc.cadc.util.HexUtil;
 import ca.nrc.cadc.util.StringUtil;
 import java.util.Iterator;
 import java.util.TreeSet;
@@ -77,10 +76,12 @@ import org.opencadc.inventory.InventoryUtil;
 
 public class BucketSelector {
     private static final Logger log = Logger.getLogger(BucketSelector.class);
-    // values as entered in .properties file
+    // range as entered in .properties file
     private final String bucketSelectors;
+    // parsed values
     private final String rangeMin;
     private final String rangeMax;
+    private static final String HEXVALUES = "0123456789abcdef";
     // generated list of bucket selectors
     private TreeSet<String> bucketList = new TreeSet<String>();
 
@@ -93,6 +94,7 @@ public class BucketSelector {
         this.bucketSelectors = selectors;
 
         String[] minMax = this.bucketSelectors.split("-");
+        StringBuffer errMsg = new StringBuffer();
         int min;
         int max;
 
@@ -103,12 +105,12 @@ public class BucketSelector {
             // trim and convert to lower case for consistent processing
             rangeMin = StringUtil.trimTrailingWhitespace(StringUtil.trimLeadingWhitespace(minMax[0])).toLowerCase();
 
-            if (StringUtil.hasLength(rangeMin) && rangeMin.length() < 2) {
-                String padded = "0000".substring(rangeMin.length()) + rangeMin;
-                // check quality of entry, convert to int for generating full range
-                min = HexUtil.toShort(HexUtil.toBytes(padded));
-            } else {
-                throw new IllegalArgumentException("invalid value in range: " + rangeMin);
+            if (!(StringUtil.hasLength(rangeMin) && rangeMin.length() < 2)) {
+                errMsg.append("invalid value: " + rangeMin + "\n");
+            }
+            min = HEXVALUES.indexOf(rangeMin);
+            if (min == -1) {
+                errMsg.append("invalid hex value: " + rangeMin + "\n");
             }
 
             if (minMax.length == 1) {
@@ -116,25 +118,30 @@ public class BucketSelector {
                 max = min;
             } else {
                 rangeMax = StringUtil.trimTrailingWhitespace(StringUtil.trimLeadingWhitespace(minMax[1])).toLowerCase();
-                if (StringUtil.hasLength(rangeMax) && rangeMax.length() < 2) {
-                    String padded = "0000".substring(rangeMax.length()) + rangeMax;
-                    // check quality of entry, convert to int for generating full range
-                    max = HexUtil.toShort(HexUtil.toBytes(padded));
-                } else {
-                    throw new IllegalArgumentException("invalid value in range: " + rangeMin);
+
+                if (!(StringUtil.hasLength(rangeMax) && rangeMax.length() < 2)) {
+                    errMsg.append("invalid value: " + rangeMax + "\n");
+                }
+                max = HEXVALUES.indexOf(rangeMax);
+                if (max == -1) {
+                    errMsg.append("invalid hex value: " + rangeMax + "\n");
                 }
             }
             log.debug("range values as ints: " + min + "-" + max);
 
             // 0-f is acceptable range
             if (min < 0 || max < min || max > 15) {
-                throw new IllegalArgumentException("invalid bucket selector (min,max): " + min + "," + max);
+               errMsg.append("invalid range (min,max): " + rangeMin + ", " + rangeMax + "\n");
             }
 
+            if (errMsg.length() != 0) {
+                throw new IllegalArgumentException("error creating BucketSelector: " + errMsg);
+            }
+
+            // Populate the bucketList that the iterator will be based on
             for (int i = min; i <= max; i++) {
-                // add values to the TreeSet, as hex strings
-                bucketList.add(HexUtil.toHex(i).replaceFirst("^0+(?!$)", ""));
-                log.debug("added " + HexUtil.toHex(i).replaceFirst("^0+(?!$)", ""));
+                bucketList.add(Character.toString(HEXVALUES.charAt(i)));
+                log.debug("added " + Character.toString(HEXVALUES.charAt(i)));
             }
         }
     }
