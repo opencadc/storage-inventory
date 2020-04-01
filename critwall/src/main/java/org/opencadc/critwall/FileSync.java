@@ -123,11 +123,14 @@ public class FileSync {
         this.resourceID = resourceID;
         this.selector = selector;
         this.nthreads = nthreads;
-        this.locator = null;
 
         //        throw new UnsupportedOperationException("TODO");
 
+
         // To be completed in s2575, ta 13061
+        // TODO: temporary so that FileSync.run can execute remove setting
+        // locator to null when this section is finished
+        this.locator = null;
         //        try {
         //            RegistryClient rc = new RegistryClient();
         //            Capabilities caps = rc.getCapabilities(resourceID);
