@@ -187,7 +187,7 @@ public class Main {
             }
 
             // populate/assign values to pass to FileSync
-            Map<String, Object>daoConfig = new TreeMap<>();
+            Map<String, Object> daoConfig = new TreeMap<>();
             daoConfig.put("schema", schema);
             daoConfig.put("database", dbUrl);
 
