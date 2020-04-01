@@ -100,45 +100,41 @@ public class BucketSelector {
             throw new IllegalArgumentException("invalid bucket selector: single value or range only: "
                 + bucketSelectors);
         } else {
-            try {
-                // trim and convert to lower case for consistent processing
-                rangeMin = StringUtil.trimTrailingWhitespace(StringUtil.trimLeadingWhitespace(minMax[0])).toLowerCase();
+            // trim and convert to lower case for consistent processing
+            rangeMin = StringUtil.trimTrailingWhitespace(StringUtil.trimLeadingWhitespace(minMax[0])).toLowerCase();
 
-                if (StringUtil.hasLength(rangeMin) && rangeMin.length() < 6) {
-                    String padded = "0000".substring(rangeMin.length()) + rangeMin;
-                    // check quality of entry, convert to int for generating full range
-                    min = HexUtil.toShort(HexUtil.toBytes(padded));
-                    log.debug("here" + min);
-                } else {
-                    throw new IllegalArgumentException("invalid value in range: " + rangeMin);
-                }
+            if (StringUtil.hasLength(rangeMin) && rangeMin.length() < 2) {
+                String padded = "0000".substring(rangeMin.length()) + rangeMin;
+                // check quality of entry, convert to int for generating full range
+                min = HexUtil.toShort(HexUtil.toBytes(padded));
+            } else {
+                throw new IllegalArgumentException("invalid value in range: " + rangeMin);
+            }
 
-                if (minMax.length == 1) {
-                    rangeMax = rangeMin;
-                    max = min;
-                } else {
-                    rangeMax = StringUtil.trimTrailingWhitespace(StringUtil.trimLeadingWhitespace(minMax[1])).toLowerCase();
+            if (minMax.length == 1) {
+                rangeMax = rangeMin;
+                max = min;
+            } else {
+                rangeMax = StringUtil.trimTrailingWhitespace(StringUtil.trimLeadingWhitespace(minMax[1])).toLowerCase();
+                if (StringUtil.hasLength(rangeMax) && rangeMax.length() < 2) {
                     String padded = "0000".substring(rangeMax.length()) + rangeMax;
                     // check quality of entry, convert to int for generating full range
                     max = HexUtil.toShort(HexUtil.toBytes(padded));
+                } else {
+                    throw new IllegalArgumentException("invalid value in range: " + rangeMin);
                 }
-                log.debug("range values as ints: " + min + "-" + max);
+            }
+            log.debug("range values as ints: " + min + "-" + max);
 
-                // 0-f is acceptable range
-                if (min < 0 || max < min || max > 15) {
-                    throw new IllegalArgumentException("invalid bucket selector (min,max): " + min + "," + max);
-                }
+            // 0-f is acceptable range
+            if (min < 0 || max < min || max > 15) {
+                throw new IllegalArgumentException("invalid bucket selector (min,max): " + min + "," + max);
+            }
 
-                for (int i = min; i <= max; i++) {
-                    // add values to the TreeSet, as hex strings
-                    // TreeSet should ensure no duplicates
-                    bucketList.add(HexUtil.toHex(i).replaceFirst("^0+(?!$)", ""));
-                    log.debug("added " + HexUtil.toHex(i).replaceFirst("^0+(?!$)", ""));
-                }
-
-            } catch (Exception e) {
-                log.debug("error processing range: " + this.bucketSelectors);
-                throw new IllegalArgumentException("invalid format: " + this.bucketSelectors + "\n");
+            for (int i = min; i <= max; i++) {
+                // add values to the TreeSet, as hex strings
+                bucketList.add(HexUtil.toHex(i).replaceFirst("^0+(?!$)", ""));
+                log.debug("added " + HexUtil.toHex(i).replaceFirst("^0+(?!$)", ""));
             }
         }
     }
