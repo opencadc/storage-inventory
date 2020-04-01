@@ -131,7 +131,7 @@ public class BucketSelector {
 
             // 0-f is acceptable range
             if (min < 0 || max < min || max > 15) {
-               errMsg.append("invalid range (min,max): " + rangeMin + ", " + rangeMax + "\n");
+                errMsg.append("invalid range (min,max): " + rangeMin + ", " + rangeMax + "\n");
             }
 
             if (errMsg.length() != 0) {
