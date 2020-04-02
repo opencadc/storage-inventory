@@ -154,7 +154,7 @@ public class PermissionsConfig {
             
             // get the permission entries
             List<String> entryConfig = allProps.getProperty(KEY_ENTRY);
-            if (entryConfig == null) {
+            if (entryConfig == null || (entryConfig.size() == 0)) {
                 throw new IllegalStateException("no entries found in " + PERMISSIONS_PROPERTIES);
             }
             log.debug("reading permissions config with " + entryConfig.size() + " entries.");
