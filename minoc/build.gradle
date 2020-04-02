@@ -37,7 +37,6 @@ dependencies {
     compile 'org.opencadc:cadc-storage-adapter:[0.2,)'
     compile 'org.opencadc:cadc-storage-permissions:[0.1,)'
     compile 'org.opencadc:cadc-storage-permissions-client:[0.1,)'
-    compile 'org.opencadc:cadc-access-control:[1.1.1,2.0)'
     compile 'org.opencadc:cadc-access-control-identity:[1.0.3,2.0)'
 
     testCompile 'junit:junit:[4.0,)'

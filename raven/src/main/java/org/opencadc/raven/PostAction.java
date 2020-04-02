@@ -300,8 +300,7 @@ public class PostAction extends RestAction {
         transferWriter.write(transfer, syncOutput.getOutputStream());
     }
     
-    private void checkReadPermission(URI artifactURI) throws AccessControlException, ResourceNotFoundException,
-                                                             TransientException {
+    private void checkReadPermission(URI artifactURI) throws AccessControlException, TransientException {
 
         List<Group> userGroups;
         try {

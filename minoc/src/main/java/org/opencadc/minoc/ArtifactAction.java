@@ -253,7 +253,7 @@ public abstract class ArtifactAction extends RestAction {
     }
     
     protected void initAndAuthorize(Class<? extends Grant> grantClass)
-        throws AccessControlException, IOException, ResourceNotFoundException, TransientException {
+        throws AccessControlException, IOException, TransientException {
         
         init();
         
@@ -320,7 +320,7 @@ public abstract class ArtifactAction extends RestAction {
         SELF_RESOURCE_ID = resourceID;
     }
     
-    public void checkReadPermission() throws AccessControlException, ResourceNotFoundException, TransientException {
+    public void checkReadPermission() throws AccessControlException, TransientException {
 
         List<Group> userGroups;
         try {
@@ -330,29 +330,35 @@ public abstract class ArtifactAction extends RestAction {
         }
 
         // TODO: optimize with threads
+        String message = "permission denied: read permissions services not configured";
         for (URI readService : readGrantServices) {
             PermissionsClient pc = new PermissionsClient(readService);
             ReadGrant grant = pc.getReadGrant(artifactURI);
-            if (grant.isAnonymousAccess()) {
-                log.debug("anonymous read access granted");
-                return;
-            }
-            if (grant.getGroups().size() > 0) {
-                for (GroupURI readGroupUri : grant.getGroups()) {
-                    for (Group userGroup : userGroups) {
-                        if (userGroup.getID() == readGroupUri) {
-                            return;
+            if (grant == null) {
+                message = "permission denied: read grants not available for: " + artifactURI.toASCIIString();
+                log.info(message);
+            } else {
+                if (grant.isAnonymousAccess()) {
+                    log.debug("anonymous read access granted");
+                    return;
+                }
+                if (grant.getGroups().size() > 0) {
+                    for (GroupURI readGroupUri : grant.getGroups()) {
+                        for (Group userGroup : userGroups) {
+                            if (userGroup.getID() == readGroupUri) {
+                                return;
+                            }
                         }
                     }
                 }
+                message = "read permission denied for: " + artifactURI.toASCIIString();
             }
         }
-        throw new AccessControlException("read permission denied");
+        throw new AccessControlException(message);
     }
     
     public void checkWritePermission()
-        throws AccessControlException, ResourceNotFoundException,
-               TransientException {
+        throws AccessControlException, TransientException {
 
         AuthMethod am = AuthenticationUtil.getAuthMethod(AuthenticationUtil.getCurrentSubject());
         if (am != null && am.equals(AuthMethod.ANON)) {
@@ -366,20 +372,27 @@ public abstract class ArtifactAction extends RestAction {
         }
 
         // TODO: optimize with threads
+        String message = "permission denied: write permissions services not configured";
         for (URI writeService : writeGrantServices) {
             PermissionsClient pc = new PermissionsClient(writeService);
             WriteGrant grant = pc.getWriteGrant(artifactURI);
-            if (grant.getGroups().size() > 0) {
-                for (GroupURI writeGroupUri : grant.getGroups()) {
-                    for (Group userGroup : userGroups) {
-                        if (userGroup.getID() == writeGroupUri) {
-                            return;
+            if (grant == null) {
+                message = "permission denied: write grants not available for: " + artifactURI.toASCIIString();
+                log.info(message);
+            } else {
+                if (grant.getGroups().size() > 0) {
+                    for (GroupURI writeGroupUri : grant.getGroups()) {
+                        for (Group userGroup : userGroups) {
+                            if (userGroup.getID() == writeGroupUri) {
+                                return;
+                            }
                         }
                     }
                 }
+                message = "read permission denied for: " + artifactURI.toASCIIString();
             }
         }
-        throw new AccessControlException("write permission denied");
+        throw new AccessControlException(message);
     }
     
     /**
