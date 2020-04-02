@@ -90,11 +90,8 @@ public class BucketSelector {
     public BucketSelector(String selector) {
         InventoryUtil.assertNotNull(BucketSelector.class, "selectors", selector);
 
-
         String[] minMax = selector.split("-");
         StringBuilder errMsg = new StringBuilder();
-        int min;
-        int max;
 
         if (minMax.length > 2) {
             throw new IllegalArgumentException("invalid bucket selector: single value or range only: "
@@ -118,13 +115,15 @@ public class BucketSelector {
         }
 
         if (rangeMin.length() > MAX_PREFIX_LENGTH) {
-            errMsg.append("min range value greater than maxlen (" + MAX_PREFIX_LENGTH +"): " + rangeMin + "\n");
+            errMsg.append("min range value greater than maxlen (" + MAX_PREFIX_LENGTH + "): " + rangeMin + "\n");
         }
         if (rangeMax.length() > MAX_PREFIX_LENGTH) {
-            errMsg.append("max range value greater than maxlen (" + MAX_PREFIX_LENGTH +"): " + rangeMax + "\n");
+            errMsg.append("max range value greater than maxlen (" + MAX_PREFIX_LENGTH + "): " + rangeMax + "\n");
         }
 
         // 0-f is acceptable range
+        int min;
+        int max;
         min = Artifact.HEXVALUES.indexOf(rangeMin);
         if (min == -1) {
             errMsg.append("invalid hex value: " + rangeMin + "\n");
@@ -135,7 +134,7 @@ public class BucketSelector {
         }
 
         // order of range must be sane
-        if ( max != -1 && max < min ) {
+        if (max != -1 && max < min) {
             errMsg.append("invalid range (min,max): " + rangeMin + ", " + rangeMax + "\n");
         }
 
