@@ -71,78 +71,84 @@ import ca.nrc.cadc.util.StringUtil;
 import java.util.Iterator;
 import java.util.TreeSet;
 import org.apache.log4j.Logger;
+import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.InventoryUtil;
 
 
 public class BucketSelector {
     private static final Logger log = Logger.getLogger(BucketSelector.class);
-    // range as entered in .properties file
-    private final String bucketSelectors;
-    // parsed values
+
+    private static final int MAX_PREFIX_LENGTH = 1;
     private final String rangeMin;
     private final String rangeMax;
-    private static final String HEXVALUES = "0123456789abcdef";
-    // generated list of bucket selectors
-    private TreeSet<String> bucketList = new TreeSet<String>();
+    private final TreeSet<String> bucketList = new TreeSet<String>();
 
     public Iterator<String> getBucketIterator() {
         return bucketList.iterator();
     }
 
-    public BucketSelector(String selectors) {
-        InventoryUtil.assertNotNull(BucketSelector.class, "selectors", selectors);
-        this.bucketSelectors = selectors;
+    public BucketSelector(String selector) {
+        InventoryUtil.assertNotNull(BucketSelector.class, "selectors", selector);
 
-        String[] minMax = this.bucketSelectors.split("-");
-        StringBuffer errMsg = new StringBuffer();
+
+        String[] minMax = selector.split("-");
+        StringBuilder errMsg = new StringBuilder();
         int min;
         int max;
 
         if (minMax.length > 2) {
             throw new IllegalArgumentException("invalid bucket selector: single value or range only: "
-                + bucketSelectors);
+                + selector);
+        }
+
+        // trim and convert to lower case for consistent processing
+        rangeMin = minMax[0].trim().toLowerCase();
+
+        if (minMax.length == 1) {
+            rangeMax = rangeMin;
         } else {
-            // trim and convert to lower case for consistent processing
-            rangeMin = StringUtil.trimTrailingWhitespace(StringUtil.trimLeadingWhitespace(minMax[0])).toLowerCase();
+            rangeMax = minMax[1].trim().toLowerCase();
+        }
 
-            if (!(StringUtil.hasLength(rangeMin) && rangeMin.length() < 2)) {
-                errMsg.append("invalid value: " + rangeMin + "\n");
-            }
-            min = HEXVALUES.indexOf(rangeMin);
-            if (min == -1) {
-                errMsg.append("invalid hex value: " + rangeMin + "\n");
-            }
+        if (!StringUtil.hasLength(rangeMin)) {
+            errMsg.append("empty min range value: " + rangeMin + "\n");
+        }
+        if (!StringUtil.hasLength(rangeMax)) {
+            errMsg.append("empty max range value: " + rangeMax + "\n");
+        }
 
-            if (minMax.length == 1) {
-                rangeMax = rangeMin;
-                max = min;
-            } else {
-                rangeMax = StringUtil.trimTrailingWhitespace(StringUtil.trimLeadingWhitespace(minMax[1])).toLowerCase();
+        if (rangeMin.length() > MAX_PREFIX_LENGTH) {
+            errMsg.append("min range value greater than maxlen (" + MAX_PREFIX_LENGTH +"): " + rangeMin + "\n");
+        }
+        if (rangeMax.length() > MAX_PREFIX_LENGTH) {
+            errMsg.append("max range value greater than maxlen (" + MAX_PREFIX_LENGTH +"): " + rangeMax + "\n");
+        }
 
-                if (!(StringUtil.hasLength(rangeMax) && rangeMax.length() < 2)) {
-                    errMsg.append("invalid value: " + rangeMax + "\n");
-                }
-                max = HEXVALUES.indexOf(rangeMax);
-                if (max == -1) {
-                    errMsg.append("invalid hex value: " + rangeMax + "\n");
-                }
-            }
-            log.debug("range values as ints: " + min + "-" + max);
+        // 0-f is acceptable range
+        min = Artifact.HEXVALUES.indexOf(rangeMin);
+        if (min == -1) {
+            errMsg.append("invalid hex value: " + rangeMin + "\n");
+        }
+        max = Artifact.HEXVALUES.indexOf(rangeMax);
+        if (max == -1) {
+            errMsg.append("invalid hex value: " + rangeMax + "\n");
+        }
 
-            // 0-f is acceptable range
-            if (min < 0 || max < min || max > 15) {
-                errMsg.append("invalid range (min,max): " + rangeMin + ", " + rangeMax + "\n");
-            }
+        // order of range must be sane
+        if ( max != -1 && max < min ) {
+            errMsg.append("invalid range (min,max): " + rangeMin + ", " + rangeMax + "\n");
+        }
 
-            if (errMsg.length() != 0) {
-                throw new IllegalArgumentException("error creating BucketSelector: " + errMsg);
-            }
+        log.debug("range values as ints: " + min + ", " + max);
 
-            // Populate the bucketList that the iterator will be based on
-            for (int i = min; i <= max; i++) {
-                bucketList.add(Character.toString(HEXVALUES.charAt(i)));
-                log.debug("added " + Character.toString(HEXVALUES.charAt(i)));
-            }
+        if (errMsg.length() != 0) {
+            throw new IllegalArgumentException("error creating BucketSelector: " + errMsg);
+        }
+
+        // Populate the bucketList that the iterator will be based on
+        for (int i = min; i <= max; i++) {
+            bucketList.add(Character.toString(Artifact.HEXVALUES.charAt(i)));
+            log.debug("added " + Character.toString(Artifact.HEXVALUES.charAt(i)));
         }
     }
 }

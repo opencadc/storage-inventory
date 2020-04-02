@@ -96,13 +96,35 @@ public class BucketSelectorTest {
             BucketSelector bucketSel = new BucketSelector(goodRange);
             int bucketCount = blurtBucket(bucketSel.getBucketIterator());
             Assert.assertEquals(16, bucketCount);
-
         } catch (Exception t) {
             log.error("unexpected exception", t);
             Assert.fail("unexpected exception: " + t);
         }
 
-        // Ridiculously large, but supports 5 character bucket selector
+        goodRange = "3-7";
+        try {
+            BucketSelector bucketSel = new BucketSelector(goodRange);
+            int bucketCount = blurtBucket(bucketSel.getBucketIterator());
+            Assert.assertEquals(5, bucketCount);
+        } catch (Exception t) {
+            log.error("unexpected exception", t);
+            Assert.fail("unexpected exception: " + t);
+        }
+    }
+
+    @Test
+    public void testValidRangeSpacing() {
+        String goodRange = "    0 - f  ";
+
+        try {
+            BucketSelector bucketSel = new BucketSelector(goodRange);
+            int bucketCount = blurtBucket(bucketSel.getBucketIterator());
+            Assert.assertEquals(16, bucketCount);
+        } catch (Exception t) {
+            log.error("unexpected exception", t);
+            Assert.fail("unexpected exception: " + t);
+        }
+
         goodRange = "3 - 7";
         try {
             BucketSelector bucketSel = new BucketSelector(goodRange);
@@ -116,7 +138,7 @@ public class BucketSelectorTest {
 
     @Test
     public void testValidSingleSelector() {
-        String goodRange = "d ";
+        String goodRange = "d";
 
         try {
             BucketSelector bucketSel = new BucketSelector(goodRange);
@@ -129,12 +151,38 @@ public class BucketSelectorTest {
     }
 
     @Test
-    public void testOutOfRange() {
-        String outOfRange = "5- jj";
+    public void testValidSingleSelectorSpaces() {
+        String goodVal = " d";
 
         try {
-            BucketSelector bucketSel = new BucketSelector(outOfRange);
+            BucketSelector bucketSel = new BucketSelector(goodVal);
             int bucketCount = blurtBucket(bucketSel.getBucketIterator());
+            Assert.assertEquals(1, bucketCount);
+        } catch (Exception t) {
+            log.error("unexpected exception", t);
+            Assert.fail("unexpected exception: " + t);
+        }
+
+        goodVal = "d  ";
+
+        try {
+            BucketSelector bucketSel = new BucketSelector(goodVal);
+            int bucketCount = blurtBucket(bucketSel.getBucketIterator());
+            Assert.assertEquals(1, bucketCount);
+        } catch (Exception t) {
+            log.error("unexpected exception", t);
+            Assert.fail("unexpected exception: " + t);
+        }
+    }
+
+
+    @Test
+    public void testInvalidRangeInverted() {
+        String badRange = "e-3";
+
+        try {
+            BucketSelector bucketSel = new BucketSelector(badRange);
+            blurtBucket(bucketSel.getBucketIterator());
             Assert.fail("should have failed.");
         } catch (IllegalArgumentException expected) {
             log.debug("expected error: " + expected);
@@ -145,8 +193,8 @@ public class BucketSelectorTest {
     }
 
     @Test
-    public void testInvalidRange() {
-        String badRange = "e- 3";
+    public void testInvalidRangeBadValue() {
+        String badRange = "3-j";
 
         try {
             BucketSelector bucketSel = new BucketSelector(badRange);
