@@ -68,6 +68,7 @@
 package org.opencadc.raven;
 
 import ca.nrc.cadc.ac.Group;
+import ca.nrc.cadc.ac.Role;
 import ca.nrc.cadc.ac.client.GMSClient;
 import ca.nrc.cadc.auth.AuthMethod;
 import ca.nrc.cadc.auth.AuthenticationUtil;
@@ -360,7 +361,7 @@ public class PostAction extends RestAction {
             LocalAuthority localAuthority = new LocalAuthority();
             URI groupsURI = localAuthority.getServiceURI(Standards.GMS_SEARCH_01.toString());
             GMSClient client = new GMSClient(groupsURI);
-            return client.getGroups();
+            return client.getMemberships(Role.MEMBER);
         };
 
         Subject subject = AuthenticationUtil.getCurrentSubject();
