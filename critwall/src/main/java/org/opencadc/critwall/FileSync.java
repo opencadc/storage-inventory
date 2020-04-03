@@ -74,6 +74,7 @@ import ca.nrc.cadc.reg.client.RegistryClient;
 
 import java.io.IOException;
 import java.net.URI;
+import java.util.Iterator;
 import java.util.Map;
 
 import org.apache.log4j.Logger;
@@ -122,18 +123,26 @@ public class FileSync {
         this.resourceID = resourceID;
         this.selector = selector;
         this.nthreads = nthreads;
-        
-        try {
-            RegistryClient rc = new RegistryClient();
-            Capabilities caps = rc.getCapabilities(resourceID); 
-            // above call throws IllegalArgumentException... should be ResourceNotFoundException but out of scope to fix
-            this.locator = caps.findCapability(Standards.SI_LOCATE);
-            if (locator == null) {
-                throw new IllegalArgumentException("invalid config: remote query service " + resourceID + " does not implement " + Standards.SI_LOCATE);
-            }
-        } catch (IOException ex) {
-            throw new IllegalArgumentException("invalid config", ex);
-        }
+
+        //        throw new UnsupportedOperationException("TODO");
+
+
+        // To be completed in s2575, ta 13061
+        // TODO: temporary so that FileSync.run can execute remove setting
+        // locator to null when this section is finished
+        this.locator = null;
+        //        try {
+        //            RegistryClient rc = new RegistryClient();
+        //            Capabilities caps = rc.getCapabilities(resourceID);
+        //            // above call throws IllegalArgumentException... should be ResourceNotFoundException but out of scope to fix
+        //            this.locator = caps.findCapability(Standards.SI_LOCATE);
+        //            if (locator == null) {
+        //                throw new IllegalArgumentException("invalid config: remote query service " + resourceID + " does not implement "
+        //                + Standards.SI_LOCATE);
+        //            }
+        //        } catch (IOException ex) {
+        //            throw new IllegalArgumentException("invalid config", ex);
+        //        }
     }
     
     // general behaviour:
@@ -151,7 +160,14 @@ public class FileSync {
     // - manage idle and run until serious failure?
     
     public void run() {
+        Iterator<String> bucketSelector = selector.getBucketIterator();
+        while (bucketSelector.hasNext()) {
+            String nextBucket = bucketSelector.next();
+            log.info("processing bucket " + nextBucket);
+        }
         throw new UnsupportedOperationException("TODO");
-        
     }
+
+
+
 }
