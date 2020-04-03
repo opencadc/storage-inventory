@@ -27,9 +27,13 @@ luskan.uws.maxActive={}
 luskan.uws.username={}
 luskan.uws.password={}
 luskan.uws.url=jdbc:postgresql://{server}/{database}
+```
 
+### luskan.properties
+```
 # service identity
 org.opencadc.luskan.resourceID=ivo://{authority}/{name}
+org.opencadc.luskan.resultsDir={absolute path to directory for async results}
 ```
 
 ### LocalAuthority.properties
