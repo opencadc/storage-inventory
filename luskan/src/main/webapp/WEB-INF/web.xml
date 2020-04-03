@@ -95,7 +95,7 @@
         <servlet-name>TempStorageServlet</servlet-name>
         <servlet-class>ca.nrc.cadc.rest.RestServlet</servlet-class>
         <init-param>
-        <param-name>get</param-name>
+            <param-name>get</param-name>
             <param-value>org.opencadc.luskan.TempStorageGetAction</param-value>
         </init-param>
         <load-on-startup>3</load-on-startup>
@@ -103,10 +103,18 @@
 
     <servlet>
         <servlet-name>CapabilitiesServlet</servlet-name>
-        <servlet-class>ca.nrc.cadc.vosi.CapabilitiesServlet</servlet-class>
+        <servlet-class>ca.nrc.cadc.rest.RestServlet</servlet-class>
         <init-param>
-        <param-name>input</param-name>
-        <param-value>/capabilities.xml</param-value>
+            <param-name>init</param-name>
+            <param-value>ca.nrc.cadc.vosi.CapInitAction</param-value>
+        </init-param>
+        <init-param>
+            <param-name>get</param-name>
+            <param-value>ca.nrc.cadc.vosi.CapGetAction</param-value>
+        </init-param>
+        <init-param>
+            <param-name>input</param-name>
+            <param-value>/capabilities.xml</param-value>
         </init-param>
         <load-on-startup>3</load-on-startup>
     </servlet>
