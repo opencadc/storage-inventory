@@ -94,6 +94,7 @@ public class BucketSelectorTest {
 
         try {
             BucketSelector bucketSel = new BucketSelector(goodRange);
+            Assert.assertEquals("BucketSelector[0,f]", bucketSel.toString());
             int bucketCount = blurtBucket(bucketSel.getBucketIterator());
             Assert.assertEquals(16, bucketCount);
         } catch (Exception t) {
@@ -104,6 +105,7 @@ public class BucketSelectorTest {
         goodRange = "3-7";
         try {
             BucketSelector bucketSel = new BucketSelector(goodRange);
+            Assert.assertEquals("BucketSelector[3,7]", bucketSel.toString());
             int bucketCount = blurtBucket(bucketSel.getBucketIterator());
             Assert.assertEquals(5, bucketCount);
         } catch (Exception t) {
@@ -118,6 +120,7 @@ public class BucketSelectorTest {
 
         try {
             BucketSelector bucketSel = new BucketSelector(goodRange);
+            Assert.assertEquals("BucketSelector[0,f]", bucketSel.toString());
             int bucketCount = blurtBucket(bucketSel.getBucketIterator());
             Assert.assertEquals(16, bucketCount);
         } catch (Exception t) {
@@ -128,6 +131,7 @@ public class BucketSelectorTest {
         goodRange = "3 - 7";
         try {
             BucketSelector bucketSel = new BucketSelector(goodRange);
+            Assert.assertEquals("BucketSelector[3,7]", bucketSel.toString());
             int bucketCount = blurtBucket(bucketSel.getBucketIterator());
             Assert.assertEquals(5, bucketCount);
         } catch (Exception t) {
@@ -142,6 +146,7 @@ public class BucketSelectorTest {
 
         try {
             BucketSelector bucketSel = new BucketSelector(goodRange);
+            Assert.assertEquals("BucketSelector[d,d]", bucketSel.toString());
             int bucketCount = blurtBucket(bucketSel.getBucketIterator());
             Assert.assertEquals(1, bucketCount);
         } catch (Exception t) {
@@ -156,6 +161,7 @@ public class BucketSelectorTest {
 
         try {
             BucketSelector bucketSel = new BucketSelector(goodVal);
+            Assert.assertEquals("BucketSelector[d,d]", bucketSel.toString());
             int bucketCount = blurtBucket(bucketSel.getBucketIterator());
             Assert.assertEquals(1, bucketCount);
         } catch (Exception t) {
@@ -167,6 +173,7 @@ public class BucketSelectorTest {
 
         try {
             BucketSelector bucketSel = new BucketSelector(goodVal);
+            Assert.assertEquals("BucketSelector[d,d]", bucketSel.toString());
             int bucketCount = blurtBucket(bucketSel.getBucketIterator());
             Assert.assertEquals(1, bucketCount);
         } catch (Exception t) {
@@ -182,7 +189,6 @@ public class BucketSelectorTest {
 
         try {
             BucketSelector bucketSel = new BucketSelector(badRange);
-            blurtBucket(bucketSel.getBucketIterator());
             Assert.fail("should have failed.");
         } catch (IllegalArgumentException expected) {
             log.debug("expected error: " + expected);
@@ -193,12 +199,11 @@ public class BucketSelectorTest {
     }
 
     @Test
-    public void testInvalidRangeBadValue() {
+    public void testInvalidRangeBadSelector() {
         String badRange = "3-j";
 
         try {
             BucketSelector bucketSel = new BucketSelector(badRange);
-            blurtBucket(bucketSel.getBucketIterator());
             Assert.fail("should have failed.");
         } catch (IllegalArgumentException expected) {
             log.debug("expected error: " + expected);
@@ -207,6 +212,22 @@ public class BucketSelectorTest {
             Assert.fail("unexpected exception: " + t);
         }
     }
+
+    @Test
+    public void testInvalidRangeRangeMinTooBig() {
+        String badRange = "33";
+
+        try {
+            BucketSelector bucketSel = new BucketSelector(badRange);
+            Assert.fail("should have failed.");
+        } catch (IllegalArgumentException expected) {
+            log.debug("expected error: " + expected);
+        } catch (Exception t) {
+            log.error("unexpected exception", t);
+            Assert.fail("unexpected exception: " + t);
+        }
+    }
+
 
     private int blurtBucket(Iterator<String> bucketIter) {
         int size = 0;

@@ -84,7 +84,7 @@ import org.apache.log4j.Logger;
  */
 public class Artifact extends Entity {
     private static final Logger log = Logger.getLogger(Artifact.class);
-    public static final String HEXVALUES = "0123456789abcdef";
+    public static final String URI_BUCKET_CHARS = "0123456789abcdef";
 
     private URI uri;
     private String uriBucket;

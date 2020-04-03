@@ -67,7 +67,6 @@
 
 package org.opencadc.critwall;
 
-import ca.nrc.cadc.util.StringUtil;
 import java.util.Iterator;
 import java.util.TreeSet;
 import org.apache.log4j.Logger;
@@ -88,13 +87,11 @@ public class BucketSelector {
     }
 
     public BucketSelector(String selector) {
-        InventoryUtil.assertNotNull(BucketSelector.class, "selectors", selector);
+        InventoryUtil.assertNotNull(BucketSelector.class, "selector", selector);
 
         String[] minMax = selector.split("-");
-        StringBuilder errMsg = new StringBuilder();
-
         if (minMax.length > 2) {
-            throw new IllegalArgumentException("invalid bucket selector: single value or range only: "
+            throw new IllegalArgumentException("invalid prefix range: single value or range only: "
                 + selector);
         }
 
@@ -107,48 +104,51 @@ public class BucketSelector {
             rangeMax = minMax[1].trim().toLowerCase();
         }
 
-        if (!StringUtil.hasLength(rangeMin)) {
-            errMsg.append("empty min range value: " + rangeMin + "\n");
-        }
-        if (!StringUtil.hasLength(rangeMax)) {
-            errMsg.append("empty max range value: " + rangeMax + "\n");
-        }
-
-        if (rangeMin.length() > MAX_PREFIX_LENGTH) {
-            errMsg.append("min range value greater than maxlen (" + MAX_PREFIX_LENGTH + "): " + rangeMin + "\n");
-        }
-        if (rangeMax.length() > MAX_PREFIX_LENGTH) {
-            errMsg.append("max range value greater than maxlen (" + MAX_PREFIX_LENGTH + "): " + rangeMax + "\n");
+        // Prefix size is currently 1. This check will adapt if MAX_PREFIX_LENGTH is changed in future.
+        if ((1 <= rangeMin.length() && rangeMin.length() <= MAX_PREFIX_LENGTH)
+            && (1 <= rangeMax.length() && rangeMax.length() <= MAX_PREFIX_LENGTH)) {
+            log.debug("acceptable length: " + rangeMin + " - " + rangeMax);
+        } else {
+            throw new IllegalArgumentException("invalid bucket prefix (" + rangeMin + " or " + rangeMax
+                + "): max length is " + MAX_PREFIX_LENGTH);
         }
 
-        // 0-f is acceptable range
+        // Note: Lookup of the rangeMin & rangeMax values below in Artifact.URI_BUCKET_CHARS
+        // is an acceptable shortcut while MAX_PREFIX_LENGTH == 1.
+        // If MAX_PREFIX_LENGTH is set to > 1, each character in rangeMin & rangeMax would
+        // need to be evaluated against values in Artifact.URI_BUCKET_CHARS
         int min;
         int max;
-        min = Artifact.HEXVALUES.indexOf(rangeMin);
+        min = Artifact.URI_BUCKET_CHARS.indexOf(rangeMin);
         if (min == -1) {
-            errMsg.append("invalid hex value: " + rangeMin + "\n");
+            throw new IllegalArgumentException("invalid bucket prefix: " + rangeMin);
         }
-        max = Artifact.HEXVALUES.indexOf(rangeMax);
+        max = Artifact.URI_BUCKET_CHARS.indexOf(rangeMax);
         if (max == -1) {
-            errMsg.append("invalid hex value: " + rangeMax + "\n");
+            throw new IllegalArgumentException("invalid bucket prefix: " + rangeMax);
         }
 
         // order of range must be sane
         if (max != -1 && max < min) {
-            errMsg.append("invalid range (min,max): " + rangeMin + ", " + rangeMax + "\n");
+            throw new IllegalArgumentException("invalid prefix range (min - max): " + rangeMin + " - " + rangeMax);
         }
 
         log.debug("range values as ints: " + min + ", " + max);
 
-        if (errMsg.length() != 0) {
-            throw new IllegalArgumentException("error creating BucketSelector: " + errMsg);
-        }
-
-        // Populate the bucketList that the iterator will be based on
+        // Populate bucketList
+        // Note: The index of the character position in Artifact.URI_BUCKET_CHARS can be used
+        // as a sane value to generate bucketList from only in the case that MAX_PREFIX_LENGTH == 1.
+        // Otherwise, a different algorithm needs to be developed here to give sane values
+        // that the bucketList iterator will return.
         for (int i = min; i <= max; i++) {
-            bucketList.add(Character.toString(Artifact.HEXVALUES.charAt(i)));
-            log.debug("added " + Character.toString(Artifact.HEXVALUES.charAt(i)));
+            bucketList.add(Character.toString(Artifact.URI_BUCKET_CHARS.charAt(i)));
+            log.debug("added " + Character.toString(Artifact.URI_BUCKET_CHARS.charAt(i)));
         }
+    }
+
+    @Override
+    public String toString() {
+        return "BucketSelector[" + rangeMin + "," + rangeMax + "]";
     }
 }
 
