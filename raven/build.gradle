@@ -45,6 +45,7 @@ dependencies {
     compile 'org.opencadc:cadc-vos:[1.1.8,)'
     compile 'org.opencadc:cadc-access-control:[1.1.1,2.0)'
 
+    runtime 'org.opencadc:cadc-access-control:[1.1.1,2.0)'
     runtime 'org.opencadc:cadc-access-control-identity:[1.0.3,2.0)'
 
     testCompile 'junit:junit:[4.0,)'

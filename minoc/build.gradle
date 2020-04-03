@@ -42,7 +42,8 @@ dependencies {
     testCompile 'junit:junit:[4.0,)'
 
     intTestCompile 'org.opencadc:cadc-test-vosi:[1.0.2,)'
-    
+
+    runtime 'org.opencadc:cadc-access-control:[1.1.1,2.0)'
     runtime 'org.opencadc:cadc-storage-adapter-fs:[0.1,)'
     runtime 'org.opencadc:cadc-storage-adapter-ad:[0.1,)'
 }
