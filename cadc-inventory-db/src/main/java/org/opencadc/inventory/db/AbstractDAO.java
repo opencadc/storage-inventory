@@ -193,12 +193,7 @@ class AbstractDAO<T extends Entity> {
         }
         
         try {
-            String sql = gen.getCurrentTimeSQL();
-            Connection c = dataSource.getConnection();
-            Statement s = c.createStatement();
-            ResultSet rs = s.executeQuery(sql);
-            rs.next();
-            Date now = Util.getDate(rs, 1, Calendar.getInstance(DateUtil.LOCAL));
+            Date now = getCurrentTime();
             log.debug("connection test: " + now);
         } catch (Exception ex) {
             throw new RuntimeException("failed to verify DataSource", ex);
