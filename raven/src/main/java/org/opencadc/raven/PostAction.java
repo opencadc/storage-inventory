@@ -303,7 +303,7 @@ public class PostAction extends RestAction {
     
     private void checkReadPermission(URI artifactURI) throws AccessControlException, TransientException {
 
-        List<Group> userGroups;
+        List<GroupURI> userGroups;
         try {
             userGroups = getUsersGroups();
         } catch (PrivilegedActionException e) {
@@ -320,8 +320,8 @@ public class PostAction extends RestAction {
             }
             if (grant.getGroups().size() > 0) {
                 for (GroupURI readGroupUri : grant.getGroups()) {
-                    for (Group userGroup : userGroups) {
-                        if (userGroup.getID() == readGroupUri) {
+                    for (GroupURI userGroup : userGroups) {
+                        if (userGroup == readGroupUri) {
                             return;
                         }
                     }
@@ -356,12 +356,12 @@ public class PostAction extends RestAction {
         return new DeletedEventDAO(src);
     }
 
-    List<Group> getUsersGroups() throws PrivilegedActionException {
-        PrivilegedExceptionAction<List<Group>> action = () -> {
+    List<GroupURI> getUsersGroups() throws PrivilegedActionException {
+        PrivilegedExceptionAction<List<GroupURI>> action = () -> {
             LocalAuthority localAuthority = new LocalAuthority();
             URI groupsURI = localAuthority.getServiceURI(Standards.GMS_SEARCH_01.toString());
             GMSClient client = new GMSClient(groupsURI);
-            return client.getMemberships(Role.MEMBER);
+            return client.getMemberships();
         };
 
         Subject subject = AuthenticationUtil.getCurrentSubject();
