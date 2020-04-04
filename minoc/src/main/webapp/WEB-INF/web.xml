@@ -45,6 +45,10 @@
             <param-value>false</param-value>
         </init-param>
         <init-param>
+            <param-name>init</param-name>
+            <param-value>org.opencadc.minoc.InitDatabaseAction</param-value>
+        </init-param>
+        <init-param>
             <param-name>get</param-name>
             <param-value>org.opencadc.minoc.GetAction</param-value>
         </init-param>
