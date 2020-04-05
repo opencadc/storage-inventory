@@ -225,11 +225,9 @@ public abstract class ArtifactAction extends RestAction {
             return;
         }
         
-        Set<GroupURI> granted = new TreeSet<>();
-        
-
         // TODO: could call multiple services in parallel
-        for (URI ps : writeGrantServices) {
+        Set<GroupURI> granted = new TreeSet<>();
+        for (URI ps : readGrantServices) {
             PermissionsClient pc = new PermissionsClient(ps);
             ReadGrant grant = pc.getReadGrant(artifactURI);
             if (grant != null) {
@@ -244,7 +242,15 @@ public abstract class ArtifactAction extends RestAction {
             throw new AccessControlException("permission denied: no read grants for " + artifactURI);
         }
         
-        List<GroupURI> userGroups = getUsersGroups();
+        // TODO: add profiling
+        // if the granted group list is small, it would be better to use GroupClient.isMember()
+        // rather than getting all groups... experiment to determine threshold? 
+        // unfortunately, the speed of GroupClient.getGroups() will depend on how many groups the
+        // caller belomgs to...
+        LocalAuthority loc = new LocalAuthority();
+        URI resourecID = loc.getServiceURI(Standards.GMS_SEARCH_01.toString());
+        GroupClient client = GroupUtil.getGroupClient(resourecID);
+        List<GroupURI> userGroups = client.getMemberships();
         for (GroupURI gg : granted) {
             for (GroupURI userGroup : userGroups) {
                 if (gg.equals(userGroup)) {
@@ -286,13 +292,19 @@ public abstract class ArtifactAction extends RestAction {
             throw new AccessControlException("permission denied: no write grants for " + artifactURI);
         }
         
-        List<GroupURI> userGroups = getUsersGroups();
+        // TODO: add profiling
+        // if the granted group list is small, it would be better to use GroupClient.isMember()
+        // rather than getting all groups...
+        // the speed of GroupClient.getGroups() will depend on how many groups the caller belongs to... 
+        // for write permission we expect granted to be small and caller to be an operations or staff 
+        // member so lots of memberships and few or 1 granted group: assume isMember() is better
+        LocalAuthority loc = new LocalAuthority();
+        URI resourecID = loc.getServiceURI(Standards.GMS_SEARCH_01.toString());
+        GroupClient client = GroupUtil.getGroupClient(resourecID);
         for (GroupURI gg : granted) {
-            for (GroupURI userGroup : userGroups) {
-                if (gg.equals(userGroup)) {
-                    logInfo.setMessage("write grant: " + gg);
-                    return;
-                }
+            if (client.isMember(gg)) {
+                logInfo.setMessage("write grant: " + gg);
+                return;
             }
         }
         
@@ -445,12 +457,4 @@ public abstract class ArtifactAction extends RestAction {
 
         return config;
     }
-
-    List<GroupURI> getUsersGroups() {
-        LocalAuthority localAuthority = new LocalAuthority();
-        URI resourecID = localAuthority.getServiceURI(Standards.GMS_SEARCH_01.toString());
-        GroupClient client = GroupUtil.getGroupClient(resourecID);
-        return client.getMemberships();
-    }
-
 }
