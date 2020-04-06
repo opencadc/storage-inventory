@@ -4,7 +4,7 @@ This service allows queries to the metadata of the Storage Inventory using
 IVOA <a href="http://www.ivoa.net/documents/TAP/20190927/">TAP-1.1</a> web service API.
 
 ## configuration
-See the [cadc-java](https://github.com/opencadc/docker-base/tree/master/cadc-java) image docs 
+See the [cadc-tomcat](https://github.com/opencadc/docker-base/tree/master/cadc-tomcat) image docs 
 for expected deployment and common config requirements.
 
 This service instance is expected to have a database backend to store the TAP metadata and which also includes the 
@@ -27,9 +27,13 @@ luskan.uws.maxActive={}
 luskan.uws.username={}
 luskan.uws.password={}
 luskan.uws.url=jdbc:postgresql://{server}/{database}
+```
 
+### luskan.properties
+```
 # service identity
 org.opencadc.luskan.resourceID=ivo://{authority}/{name}
+org.opencadc.luskan.resultsDir={absolute path to directory for async results}
 ```
 
 ### LocalAuthority.properties

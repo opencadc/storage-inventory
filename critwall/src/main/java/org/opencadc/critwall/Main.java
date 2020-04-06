@@ -76,7 +76,6 @@ import ca.nrc.cadc.util.PropertiesReader;
 import ca.nrc.cadc.util.StringUtil;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
@@ -92,7 +91,6 @@ import org.opencadc.inventory.storage.StorageAdapter;
  */
 public class Main {
     private static final Logger log = Logger.getLogger(Main.class);
-    
     private static final String CONFIG_PREFIX = Main.class.getPackage().getName();
     private static final String SQLGENERATOR_CONFIG_KEY = SQLGenerator.class.getName();
     private static final String DB_SCHEMA_CONFIG_KEY = CONFIG_PREFIX + ".db.schema";
@@ -189,7 +187,7 @@ public class Main {
             }
 
             // populate/assign values to pass to FileSync
-            Map<String,Object> daoConfig = new TreeMap<>();
+            Map<String, Object> daoConfig = new TreeMap<>();
             daoConfig.put("schema", schema);
             daoConfig.put("database", dbUrl);
 
@@ -250,8 +248,7 @@ public class Main {
         }
         log.debug("finished critwall run.");
     }
-    
-    private Main() { 
-    }
 
+    private Main() {
+    }
 }
