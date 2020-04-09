@@ -17,7 +17,7 @@ org.opencadc.inventory.storage.fs.baseDir = {absolute path to base directory}
 org.opencadc.inventory.storage.fs.OpaqueFileSystemStorageAdapter.bucketLength = {random storageBucket length}
 ```
 
-All StorageAdapter implementations use the same key key for the base directory. The keys 
-for specific classes are required for that StorageAdapter implementation.
+All StorageAdapter implementations use the same key for the base directory. The keys for specific classes 
+are applicable to and required for that StorageAdapter implementation only.
 
 
