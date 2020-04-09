@@ -1,8 +1,8 @@
 # Storage Inventory file-sync process (critwall)
 
-Process to incrementally sync metadata changes between storage sites and global inventory(ies). This process
-is a hydrid multiprocess-multithread model: the operator runs one process per Artifact.uriBucket and multiple
-download threads within that process.
+Process to retrieve files from remote storage sites. This process is a hydrid multiprocess-multithread model: 
+the operator runs multiple processes by  subdividing the Artifact.uriBucket space and multiple download threads 
+within that process.
 
 ## configuration
 See the [cadc-java](https://github.com/opencadc/docker-base/tree/master/cadc-java) image docs for general config requirements.
@@ -27,9 +27,10 @@ org.opencadc.critwall.locatorService={resorceID of global transfer negotiation s
 org.opencadc.inventory.storage.StorageAdapter=org.opencadc.inventory.storage.fs.FileSystemStorageAdapter
 
 # file-sync
-org.opencadc.critwall.buckets = {uriBucket prefix}
+org.opencadc.critwall.buckets = {uriBucket prefix or range of prefixes}
 org.opencadc.critwall.threads = {number of download threads}
 ```
+The range of uriBucket prefixes is specified with two values separated by a single - (dash) character; whitespace is ignored.
 
 ### cadcproxy.pem
 Querying the global locator service (raven) and downloading files (minoc) requires permission. `critwall` uses 

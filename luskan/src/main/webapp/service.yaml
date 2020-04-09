@@ -8,8 +8,12 @@ schemes:
 basePath: /luskan
 paths:
   /async:
+    get:
+      summary: TAP-1.1 asynchronous query execution (list jobs)
+      tags: 
+        - TAP
     post:
-      summary: TAP-1.1 asynchronous query execution end point (create UWS Job).
+      summary: TAP-1.1 asynchronous query execution (create job)
       tags:
         - TAP
       description: |
@@ -72,7 +76,7 @@ paths:
           description: Unexpeced error
   /sync:
     get:
-      summary: TAP-1.1 synchronous query execution end point
+      summary: TAP-1.1 synchronous query execution
       tags:
         - TAP
       description: |

@@ -87,6 +87,7 @@ import java.util.Map;
 import javax.sql.DataSource;
 
 import org.apache.log4j.Logger;
+import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.version.InitDatabase;
 
 /**
@@ -133,16 +134,11 @@ public class ServiceAvailability implements AvailabilityPlugin {
         String note = "service is accepting requests";
         
         try {
+            MultiValuedProperties props = InitDatabaseAction.getConfig();
+            Map<String,Object> config = InitDatabaseAction.getDaoConfig(props);
+            ArtifactDAO dao = new ArtifactDAO();
+            dao.setConfig(config); // connectivity tested
             
-            log.info("init database...");
-            DataSource ds = DBUtil.findJNDIDataSource(ArtifactAction.JNDI_DATASOURCE);
-            MultiValuedProperties props = ArtifactAction.readConfig();
-            String database = null;
-            String schema = ArtifactAction.getSingleProperty(props, ArtifactAction.SCHEMA_KEY);
-            InitDatabase init = new InitDatabase(ds, database, schema);
-            init.doInit();
-            log.info("init database... OK");
-
             // check for a certficate needed to perform network ops
             CheckCertificate checkCert = new CheckCertificate(SERVOPS_PEM_FILE);
             checkCert.check();

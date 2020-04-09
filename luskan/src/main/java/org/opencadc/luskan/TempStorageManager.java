@@ -74,6 +74,7 @@ import ca.nrc.cadc.dali.tables.TableWriter;
 import ca.nrc.cadc.reg.Standards;
 import ca.nrc.cadc.reg.client.RegistryClient;
 import ca.nrc.cadc.tap.ResultStore;
+import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.util.PropertiesReader;
 import ca.nrc.cadc.uws.Job;
 import ca.nrc.cadc.uws.server.RandomStringGenerator;
@@ -102,6 +103,7 @@ public class TempStorageManager implements ResultStore, UWSInlineContentHandler 
     private static final Logger log = Logger.getLogger(TempStorageManager.class);
 
     private static final String URI_KEY = TempStorageManager.class.getPackage().getName() + ".resourceID";
+    private static final String TMPDIR_KEY = TempStorageManager.class.getPackage().getName() + ".resultsDir";
     
     private final File resultsDir;
     private String baseResultsURL;
@@ -111,27 +113,49 @@ public class TempStorageManager implements ResultStore, UWSInlineContentHandler 
 
     public TempStorageManager() {
         try {
-            String baseDir = System.getProperty("java.io.tmpdir");
-            if (baseDir == null) {
-                baseDir = System.getProperty("usr.home");
-            }
-            if (baseDir != null) {
-                this.resultsDir = new File(baseDir, "luskan-results");
-            } else {
-                // current working dir
-                this.resultsDir = new File("luskan-results");
-            }
-            resultsDir.mkdirs();
-            log.info("resultsDir: " + resultsDir.getCanonicalPath());
+            PropertiesReader pr = new PropertiesReader("luskan.properties");
+            MultiValuedProperties props = pr.getAllProperties();
             
-            String uriString = System.getProperty(URI_KEY);
-            log.info("system property: " + URI_KEY + " = " + uriString);
-            URI luskan = new URI(uriString);
+            StringBuilder sb = new StringBuilder();
+            sb.append("incomplete config: ");
+            boolean ok = true;
+            
+            String suri = props.getFirstPropertyValue(URI_KEY);
+            sb.append("\n\t").append(URI_KEY);
+            if (suri == null) {
+                sb.append("MISSING");
+                ok = false;
+            } else {
+                sb.append("OK");
+            }
+            
+            String srd = props.getFirstPropertyValue(TMPDIR_KEY);
+            sb.append("\n\t").append(TMPDIR_KEY);
+            if (srd == null) {
+                sb.append("MISSING");
+                ok = false;
+            } else {
+                sb.append("OK");
+            }
+            
+            if (!ok) {
+                throw new IllegalStateException(sb.toString());
+            }
+            
+            log.info("system property: " + URI_KEY + " = " + suri);
+            URI luskan = new URI(suri);
+            
             RegistryClient regClient = new RegistryClient();
             URL serviceURL = regClient.getServiceURL(luskan, Standards.TAP_10, AuthMethod.CERT);
+            
             // NOTE: "results" is used in the servlet mapping in web.xml
             this.baseResultsURL = serviceURL.toExternalForm() + "/results";
             log.info("resultsURL: " + baseResultsURL);
+            
+            this.resultsDir = new File(srd);
+            resultsDir.mkdirs();
+            log.info("resultsDir: " + resultsDir.getCanonicalPath());
+            
         } catch (Exception ex) {
             log.error("CONFIG: failed to load/read config from system properties", ex);
             throw new RuntimeException("CONFIG: failed to load/read config from system properties", ex);
