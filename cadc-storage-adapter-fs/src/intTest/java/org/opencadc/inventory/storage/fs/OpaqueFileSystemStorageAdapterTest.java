@@ -93,6 +93,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.storage.NewArtifact;
+import org.opencadc.inventory.storage.StorageAdapter;
 import org.opencadc.inventory.storage.StorageMetadata;
 
 /**
@@ -208,13 +209,12 @@ public class OpaqueFileSystemStorageAdapterTest {
                 NewArtifact newArtifact = new NewArtifact(uri);
                 newArtifact.contentChecksum = checksum;
                 newArtifact.contentLength = (long) data.length;
-
                 ByteArrayInputStream source = new ByteArrayInputStream(data);
-
                 StorageMetadata meta = adapter.put(newArtifact, source);
                 explist.add(meta);
                 log.info("added file: " + meta.getStorageLocation());
             }
+            
             // put + delete leaves empty dirs behind
             for (int i = num; i < 4 * num; i++) {
                 String suri = "test:FOO/bar" + i;
@@ -222,9 +222,7 @@ public class OpaqueFileSystemStorageAdapterTest {
                 NewArtifact newArtifact = new NewArtifact(uri);
                 newArtifact.contentChecksum = checksum;
                 newArtifact.contentLength = (long) data.length;
-
                 ByteArrayInputStream source = new ByteArrayInputStream(data);
-
                 StorageMetadata meta = adapter.put(newArtifact, source);
                 adapter.delete(meta.getStorageLocation());
                 log.info("added dir: " + meta.getStorageLocation().storageBucket);
@@ -240,13 +238,10 @@ public class OpaqueFileSystemStorageAdapterTest {
                     StorageMetadata expected = ei.next();
                     StorageMetadata actual = ai.next();
                     log.info("adapter.iterator: " + actual);
-                    
                     Assert.assertEquals("order " + count, expected.getStorageLocation(), actual.getStorageLocation());
-
                     Assert.assertEquals("checksum", checksum, actual.getContentChecksum());
                     Assert.assertEquals("length", new Long(data.length), actual.getContentLength());
                     Assert.assertEquals("artifactURI",expected.artifactURI, actual.artifactURI);
-                    
                 }
                 Assert.assertEquals("file count", explist.size(), count);
             }
@@ -257,7 +252,6 @@ public class OpaqueFileSystemStorageAdapterTest {
                 for (int i = 0; i < Artifact.URI_BUCKET_CHARS.length(); i++) {
                     String bucketPrefix = Artifact.URI_BUCKET_CHARS.substring(i, i + 1);
                     log.info("iterator: " + bucketPrefix);
-                    
                     Iterator<StorageMetadata> bi = adapter.iterator(bucketPrefix);
                     while (bi.hasNext()) {
                         StorageMetadata sm = bi.next();
@@ -279,9 +273,7 @@ public class OpaqueFileSystemStorageAdapterTest {
                     StorageMetadata expected = ei.next();
                     StorageMetadata actual = ai.next();
                     log.info("adapter.list: " + actual);
-                    
                     Assert.assertEquals("order " + count, expected.getStorageLocation(), actual.getStorageLocation());
-
                     Assert.assertEquals("checksum", checksum, actual.getContentChecksum());
                     Assert.assertEquals("length", new Long(data.length), actual.getContentLength());
                     Assert.assertEquals("artifactURI",expected.artifactURI, actual.artifactURI);
@@ -289,6 +281,125 @@ public class OpaqueFileSystemStorageAdapterTest {
                 }
                 Assert.assertEquals("file count", explist.size(), count);
             }
+        } catch (Exception unexpected) {
+            log.error("unexpected exception", unexpected);
+            Assert.fail("unexpected exception: " + unexpected);
+        }
+    }
+    
+    // the code currently works correctly if you put files with different storageBucket depths
+    // but it is probably a bad idea because you mix bucket directories and files and thus have
+    // arbitrary sized directory listings to sort
+    //@Test
+    public void testMixedDepthIterator() {
+        try {
+            String dataString = "abcdefghijklmnopqrstuvwxyz";
+            byte[] data = dataString.getBytes();
+            MessageDigest md = MessageDigest.getInstance("MD5");
+            String md5Val = HexUtil.toHex(md.digest(data));
+            URI checksum = URI.create("md5:" + md5Val);
+            log.info("expected md5sum: " + checksum);
+
+            int num = 6;
+            SortedSet<StorageMetadata> explist = new TreeSet<StorageMetadata>();
+            
+            // put files with standard test depth
+            for (int i = 0; i < num; i++) {
+                String suri = "test:FOO/bar" + i;
+                URI uri = URI.create(suri);
+                NewArtifact newArtifact = new NewArtifact(uri);
+                newArtifact.contentChecksum = checksum;
+                newArtifact.contentLength = (long) data.length;
+                ByteArrayInputStream source = new ByteArrayInputStream(data);
+                StorageMetadata meta = adapter.put(newArtifact, source);
+                explist.add(meta);
+                log.info("added file: " + meta.getStorageLocation());
+            }
+            
+            // put files with larger depth
+            File root = adapter.contentPath.getParent().toFile();
+            StorageAdapter sap2 = new OpaqueFileSystemStorageAdapter(root, depth + 2); // opaque
+           
+            for (int i = num; i < 2 * num; i++) {
+                String suri = "test:FOO/bar" + i;
+                URI uri = URI.create(suri);
+                NewArtifact newArtifact = new NewArtifact(uri);
+                newArtifact.contentChecksum = checksum;
+                newArtifact.contentLength = (long) data.length;
+                ByteArrayInputStream source = new ByteArrayInputStream(data);
+                StorageMetadata meta = sap2.put(newArtifact, source);
+                explist.add(meta);
+                log.info("added file: " + meta.getStorageLocation().storageBucket);
+            }
+            
+            // iterate with standard depth adapter
+            {
+                Iterator<StorageMetadata> ai = adapter.iterator();
+                Iterator<StorageMetadata> ei = explist.iterator();
+                int count = 0;
+                while (ai.hasNext()) {
+                    count++;
+                    StorageMetadata expected = ei.next();
+                    StorageMetadata actual = ai.next();
+                    log.info("adapter.iterator: " + actual);
+                    Assert.assertEquals("order " + count, expected.getStorageLocation(), actual.getStorageLocation());
+                    Assert.assertEquals("checksum", checksum, actual.getContentChecksum());
+                    Assert.assertEquals("length", new Long(data.length), actual.getContentLength());
+                    Assert.assertEquals("artifactURI",expected.artifactURI, actual.artifactURI);
+                    
+                }
+                Assert.assertEquals("file count", explist.size(), count);
+            }
+            
+            // iterator with larger depth adapter
+            {
+                Iterator<StorageMetadata> ai = sap2.iterator();
+                Iterator<StorageMetadata> ei = explist.iterator();
+                int count = 0;
+                while (ai.hasNext()) {
+                    count++;
+                    StorageMetadata expected = ei.next();
+                    StorageMetadata actual = ai.next();
+                    log.info("sap2.iterator: " + actual);
+                    Assert.assertEquals("order " + count, expected.getStorageLocation(), actual.getStorageLocation());
+                    Assert.assertEquals("checksum", checksum, actual.getContentChecksum());
+                    Assert.assertEquals("length", new Long(data.length), actual.getContentLength());
+                    Assert.assertEquals("artifactURI",expected.artifactURI, actual.artifactURI);
+                }
+                Assert.assertEquals("sap2 file count", explist.size(), count);
+            }        
+            
+            // iterate individual top-level buckets
+            {
+                int n = 0;
+                for (int i = 0; i < Artifact.URI_BUCKET_CHARS.length(); i++) {
+                    String bucketPrefix = Artifact.URI_BUCKET_CHARS.substring(i, i + 1);
+                    log.info("iterator: " + bucketPrefix);
+                    Iterator<StorageMetadata> bi = adapter.iterator(bucketPrefix);
+                    while (bi.hasNext()) {
+                        StorageMetadata sm = bi.next();
+                        Assert.assertTrue("prefix match", sm.getStorageLocation().storageBucket.startsWith(bucketPrefix));
+                        n++;
+                    }
+                }
+                Assert.assertEquals("file count", explist.size(), n);
+            }
+            
+            {
+                int n = 0;
+                for (int i = 0; i < Artifact.URI_BUCKET_CHARS.length(); i++) {
+                    String bucketPrefix = Artifact.URI_BUCKET_CHARS.substring(i, i + 1);
+                    log.info("sap2.iterator: " + bucketPrefix);
+                    Iterator<StorageMetadata> bi = sap2.iterator(bucketPrefix);
+                    while (bi.hasNext()) {
+                        StorageMetadata sm = bi.next();
+                        Assert.assertTrue("sap2 prefix match", sm.getStorageLocation().storageBucket.startsWith(bucketPrefix));
+                        n++;
+                    }
+                }
+                Assert.assertEquals("sap2 file count", explist.size(), n);
+            }
+            
         } catch (Exception unexpected) {
             log.error("unexpected exception", unexpected);
             Assert.fail("unexpected exception: " + unexpected);
