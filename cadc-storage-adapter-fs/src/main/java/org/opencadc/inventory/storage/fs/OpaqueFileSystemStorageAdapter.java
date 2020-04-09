@@ -97,6 +97,7 @@ import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.UserDefinedFileAttributeView;
 import java.security.DigestOutputStream;
 import java.security.MessageDigest;
+import java.util.Date;
 import java.util.Iterator;
 import java.util.Set;
 import java.util.SortedSet;
@@ -136,8 +137,7 @@ import org.opencadc.inventory.storage.StorageMetadata;
  *
  */
 public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
-    
-    private static final Logger log = Logger.getLogger(FileSystemStorageAdapter.class);
+    private static final Logger log = Logger.getLogger(OpaqueFileSystemStorageAdapter.class);
     
     public static final String CONFIG_FILE = "cadc-storage-adapter-fs.properties";
     public static final String CONFIG_PROPERTY_ROOT = OpaqueFileSystemStorageAdapter.class.getPackage().getName() + ".baseDir";
@@ -418,12 +418,13 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
                 }
                 
                 // to atomic copy into content directory
-                Files.move(txnTarget, contentTarget, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+                final Path result = Files.move(txnTarget, contentTarget, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
                 log.debug("moved file to : " + contentTarget);
                 txnTarget = null;
 
                 StorageMetadata metadata = new StorageMetadata(storageLocation, checksum, length);
                 metadata.artifactURI = artifactURI;
+                metadata.contentLastModified = new Date(Files.getLastModifiedTime(result).toMillis());
                 return metadata;
 
             } catch (InvalidPathException e) {
