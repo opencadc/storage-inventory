@@ -146,7 +146,7 @@ public class OpaqueFileSystemStorageAdapterTest {
         log.info("init_cleanup: delete all content from " + adapter.contentPath + " DONE");
     }
     
-    //@Test
+    @Test
     public void testPutGetDelete() {
         try {
             String dataString = "abcdefghijklmnopqrstuvwxyz";
@@ -193,7 +193,7 @@ public class OpaqueFileSystemStorageAdapterTest {
         }
     }
     
-    //@Test
+    @Test
     public void testPutGetDeleteMinimal() {
         try {
             String dataString = "abcdefghijklmnopqrstuvwxyz";
@@ -294,7 +294,7 @@ public class OpaqueFileSystemStorageAdapterTest {
         }
     }
     
-    //@Test
+    @Test
     public void testIterator() {
         try {
             String dataString = "abcdefghijklmnopqrstuvwxyz";
@@ -393,7 +393,7 @@ public class OpaqueFileSystemStorageAdapterTest {
     // the code currently works correctly if you put files with different storageBucket depths
     // but it is probably a bad idea because you mix bucket directories and files and thus have
     // arbitrary sized directory listings to sort
-    ////@Test
+    //@Test
     public void testMixedDepthIterator() {
         try {
             String dataString = "abcdefghijklmnopqrstuvwxyz";
