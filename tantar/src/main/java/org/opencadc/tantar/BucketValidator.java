@@ -258,7 +258,8 @@ public class BucketValidator implements ValidateEventListener {
         final Iterator<StorageMetadata> storageMetadataIterator = iterateStorage();
         final Iterator<Artifact> inventoryIterator = iterateInventory();
         profiler.checkpoint("iterators: ok");
-        LOGGER.debug("Acquired iterators.");
+        LOGGER.debug(String.format("Acquired iterators: \nHas Artifacts (%b)\nHas Storage Metadata (%b).",
+                                   inventoryIterator.hasNext(), storageMetadataIterator.hasNext()));
 
         LOGGER.debug("START validating iterators.");
 
@@ -271,9 +272,10 @@ public class BucketValidator implements ValidateEventListener {
             final StorageMetadata storageMetadata =
                     (unresolvedStorageMetadata == null) ? storageMetadataIterator.next() : unresolvedStorageMetadata;
 
-            LOGGER.debug(String.format("Comparing Inventory Storage Location %s with Storage Adapter Location %s",
-                                       artifact.storageLocation, storageMetadata.getStorageLocation()));
             final int comparison = artifact.storageLocation.compareTo(storageMetadata.getStorageLocation());
+
+            LOGGER.debug(String.format("Comparing Inventory Storage Location %s with Storage Adapter Location %s (%d)",
+                                       artifact.storageLocation, storageMetadata.getStorageLocation(), comparison));
 
             if (comparison == 0) {
                 // Same storage location.  Test the metadata.
@@ -459,7 +461,6 @@ public class BucketValidator implements ValidateEventListener {
                                                        storageMetadata.getContentChecksum(),
                                                        storageMetadata.contentLastModified,
                                                        storageMetadata.getContentLength());
-
                 artifact.storageLocation = storageMetadata.getStorageLocation();
                 artifact.contentType = storageMetadata.contentType;
                 artifact.contentEncoding = storageMetadata.contentEncoding;

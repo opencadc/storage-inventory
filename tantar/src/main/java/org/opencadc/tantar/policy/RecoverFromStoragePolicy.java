@@ -75,9 +75,15 @@ import org.opencadc.tantar.Reporter;
 import org.opencadc.tantar.ValidateEventListener;
 
 
-public class InventoryIsAlwaysRight extends ResolutionPolicy {
+/**
+ * Policy to ensure that a recovery from Storage (in the event of a disaster or a new site is brought online) will
+ * dictate what goes into the Inventory Database.
+ * TODO: Determine if this implementation is required and complete the logic.
+ * TODO: jenkinsd 2020.04.15
+ */
+public class RecoverFromStoragePolicy extends ResolutionPolicy {
 
-    public InventoryIsAlwaysRight(final ValidateEventListener validateEventListener, final Reporter reporter) {
+    public RecoverFromStoragePolicy(ValidateEventListener validateEventListener, Reporter reporter) {
         super(validateEventListener, reporter);
     }
 
@@ -87,34 +93,16 @@ public class InventoryIsAlwaysRight extends ResolutionPolicy {
      *
      * @param artifact        The Artifact to use in deciding.
      * @param storageMetadata The StorageMetadata to use in deciding.
+     * @throws Exception For any unknown error that should be passed up.
      */
     @Override
     public void resolve(final Artifact artifact, final StorageMetadata storageMetadata) throws Exception {
-        if (storageMetadata == null) {
-            // Scenario when an Entity exists in the inventory database but the file is not in Storage.  This can
-            // happen in the case where all files are managed by the inventory but an intervention outside of the
-            // Storage Inventory caused a file to disappear.  The file may not have been fully uploaded to begin with
-            // either.
-            reporter.report(String.format("Resetting Artifact %s as per policy.", artifact.storageLocation));
-
-            validateEventListener.markAsNew(artifact);
-        } else if (artifact == null) {
-            reporter.report(String.format("Removing Unknown File %s as per policy.",
-                                          storageMetadata.getStorageLocation()));
-
-            validateEventListener.delete(storageMetadata);
-        } else {
-            // Check metadata for discrepancies.
-            if (haveDifferentStructure(artifact, storageMetadata)) {
-                // Then prefer the Artifact.
-                reporter.report(String.format("Replacing File %s as per policy.",
-                                              storageMetadata.getStorageLocation()));
-
-                validateEventListener.delete(storageMetadata);
-                validateEventListener.markAsNew(artifact);
-            } else {
-                reporter.report(String.format("Artifact %s is valid as per policy.", artifact.storageLocation));
-            }
+        if (artifact != null) {
+            reporter.report(String.format("Deleting Artifact %s as per policy.", storageMetadata.getStorageLocation()));
+            validateEventListener.delete(artifact);
         }
+
+        reporter.report(String.format("Adding Artifact %s as per policy.", storageMetadata.getStorageLocation()));
+        validateEventListener.createArtifact(storageMetadata);
     }
 }

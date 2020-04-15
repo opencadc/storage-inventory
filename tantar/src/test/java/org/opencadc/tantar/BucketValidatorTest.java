@@ -180,7 +180,7 @@ public class BucketValidatorTest {
         assertListContainsMessage(outputLines,
                                   "Removing Unknown File StorageLocation[ceph:78787878] as per policy.");
         assertListContainsMessage(outputLines,
-                                  "Retrieving File StorageLocation[ceph:7890AB] as per policy.");
+                                  "Resetting Artifact StorageLocation[ceph:7890AB] as per policy.");
         assertListContainsMessage(outputLines,
                                   "Replacing File StorageLocation[s3:CDEF00] as per policy.");
         assertListContainsMessage(outputLines, "Artifact StorageLocation[ad:123456] is valid as per policy.");
@@ -242,11 +242,11 @@ public class BucketValidatorTest {
                 Arrays.asList(new String(byteArrayOutputStream.toByteArray()).split("\n"));
         System.out.println(String.format("Message lines are \n\n%s\n\n", outputLines));
         assertListContainsMessage(outputLines,
-                                  "Retrieving File StorageLocation[ad:123456] as per policy.");
+                                  "Resetting Artifact StorageLocation[ad:123456] as per policy.");
         assertListContainsMessage(outputLines,
-                                  "Retrieving File StorageLocation[ceph:7890AB] as per policy.");
+                                  "Resetting Artifact StorageLocation[ceph:7890AB] as per policy.");
         assertListContainsMessage(outputLines,
-                                  "Retrieving File StorageLocation[s3:CDEF00] as per policy.");
+                                  "Resetting Artifact StorageLocation[s3:CDEF00] as per policy.");
     }
 
     /**
