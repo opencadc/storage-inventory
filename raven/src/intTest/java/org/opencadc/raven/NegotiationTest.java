@@ -119,7 +119,7 @@ public class NegotiationTest extends RavenTest {
     
     static {
         Log4jInit.setLevel("org.opencadc.raven", Level.INFO);
-        Log4jInit.setLevel("ca.nrc.cadc.db", Level.DEBUG);
+        Log4jInit.setLevel("ca.nrc.cadc.db", Level.INFO);
     }
     
     public NegotiationTest() throws Exception {

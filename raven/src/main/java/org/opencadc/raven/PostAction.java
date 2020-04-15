@@ -67,9 +67,6 @@
 
 package org.opencadc.raven;
 
-import ca.nrc.cadc.ac.Group;
-import ca.nrc.cadc.ac.Role;
-import ca.nrc.cadc.ac.client.GMSClient;
 import ca.nrc.cadc.auth.AuthMethod;
 import ca.nrc.cadc.auth.AuthenticationUtil;
 import ca.nrc.cadc.net.ResourceNotFoundException;
@@ -81,39 +78,33 @@ import ca.nrc.cadc.rest.InlineContentException;
 import ca.nrc.cadc.rest.InlineContentHandler;
 import ca.nrc.cadc.rest.RestAction;
 import ca.nrc.cadc.util.MultiValuedProperties;
-import ca.nrc.cadc.util.PropertiesReader;
 import ca.nrc.cadc.vos.Direction;
 import ca.nrc.cadc.vos.Protocol;
 import ca.nrc.cadc.vos.Transfer;
 import ca.nrc.cadc.vos.TransferReader;
 import ca.nrc.cadc.vos.TransferWriter;
 import ca.nrc.cadc.vos.VOS;
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.security.AccessControlException;
-import java.security.PrivilegedActionException;
-import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-
-import javax.security.auth.Subject;
-
+import java.util.TreeSet;
 import org.apache.log4j.Logger;
+import org.opencadc.gms.GroupClient;
 import org.opencadc.gms.GroupURI;
+import org.opencadc.gms.GroupUtil;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.SiteLocation;
 import org.opencadc.inventory.StorageSite;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.DeletedEventDAO;
-import org.opencadc.inventory.db.SQLGenerator;
 import org.opencadc.inventory.db.StorageSiteDAO;
 import org.opencadc.inventory.permissions.PermissionsClient;
 import org.opencadc.inventory.permissions.ReadGrant;
@@ -128,13 +119,6 @@ import org.opencadc.inventory.permissions.TokenUtil;
 public class PostAction extends RestAction {
     
     private static final Logger log = Logger.getLogger(PostAction.class);
-    
-    public static final String JNDI_DATASOURCE = "jdbc/inventory";
-
-    // config keys
-    static final String SQL_GEN_KEY = SQLGenerator.class.getName();
-    static final String SCHEMA_KEY = SQLGenerator.class.getPackage().getName() + ".schema";
-    static final String READ_GRANTS_KEY = ReadGrant.class.getName() +  ".serviceID";
 
     // immutable state set in constructor
     protected final ArtifactDAO artifactDAO;
@@ -148,53 +132,23 @@ public class PostAction extends RestAction {
      */
     public PostAction() {
         super();
-        StringBuilder sb = new StringBuilder();
-        try {
-            MultiValuedProperties props = readConfig();
-            sb.append("incomplete config: ");
-            boolean ok = true;
+        MultiValuedProperties props = InitDatabaseAction.getConfig();
 
-            String sqlgen = getSingleProperty(props, SQL_GEN_KEY);
-            sb.append("\n\t").append(SQL_GEN_KEY).append(": ");
-            if (sqlgen == null) {
-                sb.append("MISSING");
-                ok = false;
-            } else {
-                sb.append("OK");
-            }
-
-            String schema = getSingleProperty(props, SCHEMA_KEY);
-            sb.append("\n\t").append(SCHEMA_KEY).append(": ");
-            if (schema == null) {
-                sb.append("MISSING");
-                ok = false;
-            } else {
-                sb.append("OK");
-            }
-
-            if (!ok) {
-                throw new IllegalStateException(sb.toString());
-            }
-
-            List<String> readGrants = props.getProperty(READ_GRANTS_KEY);
-            if (readGrants != null) {
-                for (String s : readGrants) {
+        List<String> readGrants = props.getProperty(InitDatabaseAction.READ_GRANTS_KEY);
+        if (readGrants != null) {
+            for (String s : readGrants) {
+                try {
                     URI u = new URI(s);
                     readGrantServices.add(u);
+                } catch (URISyntaxException ex) {
+                    throw new IllegalStateException("invalid config: " + InitDatabaseAction.READ_GRANTS_KEY + "=" + s + " must be a valid URI");
                 }
             }
-
-            Map<String, Object> config = new HashMap<String, Object>();
-            config.put(SQL_GEN_KEY, Class.forName(sqlgen));
-            config.put("jndiDataSourceName", JNDI_DATASOURCE);
-            config.put("schema", schema);
-            config.put("database", null);
-            artifactDAO = new ArtifactDAO();
-            artifactDAO.setConfig(config);
-
-        } catch (URISyntaxException | ClassNotFoundException ex) {
-            throw new IllegalStateException("invalid config: " + sb.toString(), ex);
         }
+
+        Map<String, Object> config = InitDatabaseAction.getDaoConfig(props);
+        this.artifactDAO = new ArtifactDAO();
+        artifactDAO.setConfig(config); // connectivity tested
     }
     
     /**
@@ -303,69 +257,52 @@ public class PostAction extends RestAction {
     
     private void checkReadPermission(URI artifactURI) throws AccessControlException, TransientException {
 
-        List<GroupURI> userGroups;
-        try {
-            userGroups = getUsersGroups();
-        } catch (PrivilegedActionException e) {
-            throw new IllegalStateException("Error getting user groups", e);
+        // TODO: remove this when baldur is functional
+        if (true) {
+            log.warn("allowing unrestricted read for development");
+            return;
         }
 
-        // TODO: optimize with threads
-        for (URI readService : readGrantServices) {
-            PermissionsClient pc = new PermissionsClient(readService);
+        // TODO: could call multiple services in parallel
+        Set<GroupURI> granted = new TreeSet<>();
+        for (URI ps : readGrantServices) {
+            PermissionsClient pc = new PermissionsClient(ps);
             ReadGrant grant = pc.getReadGrant(artifactURI);
-            if (grant.isAnonymousAccess()) {
-                log.debug("anonymous read access granted");
-                return;
+            if (grant != null) {
+                if (grant.isAnonymousAccess()) {
+                    logInfo.setMessage("read grant: anonymous");
+                    return;
+                }
+                granted.addAll(grant.getGroups());
             }
-            if (grant.getGroups().size() > 0) {
-                for (GroupURI readGroupUri : grant.getGroups()) {
-                    for (GroupURI userGroup : userGroups) {
-                        if (userGroup == readGroupUri) {
-                            return;
-                        }
-                    }
+        }
+        if (granted.isEmpty()) {
+            throw new AccessControlException("permission denied: no read grants for " + artifactURI);
+        }
+
+        // TODO: add profiling
+        // if the granted group list is small, it would be better to use GroupClient.isMember()
+        // rather than getting all groups... experiment to determine threshold?
+        // unfortunately, the speed of GroupClient.getGroups() will depend on how many groups the
+        // caller belomgs to...
+        LocalAuthority loc = new LocalAuthority();
+        URI resourecID = loc.getServiceURI(Standards.GMS_SEARCH_01.toString());
+        GroupClient client = GroupUtil.getGroupClient(resourecID);
+        List<GroupURI> userGroups = client.getMemberships();
+        for (GroupURI gg : granted) {
+            for (GroupURI userGroup : userGroups) {
+                if (gg.equals(userGroup)) {
+                    logInfo.setMessage("read grant: " + gg);
+                    return;
                 }
             }
         }
+
         throw new AccessControlException("read permission denied");
     }
-    
-    static MultiValuedProperties readConfig() {
-        PropertiesReader pr = new PropertiesReader("raven.properties");
-        MultiValuedProperties props = pr.getAllProperties();
-        if (log.isDebugEnabled()) {
-            log.debug("raven.properties:");
-            Set<String> keys = props.keySet();
-            for (String key : keys) {
-                log.debug("    " + key + " = " + props.getProperty(key));
-            }
-        }
-        return props;
-    }
 
-    static final String getSingleProperty(MultiValuedProperties props, String key) {
-        List<String> vals = props.getProperty(key);
-        if (vals.isEmpty()) {
-            return null;
-        }
-        return vals.get(0);
-    }
-    
     protected DeletedEventDAO getDeletedEventDAO(ArtifactDAO src) {
         return new DeletedEventDAO(src);
-    }
-
-    List<GroupURI> getUsersGroups() throws PrivilegedActionException {
-        PrivilegedExceptionAction<List<GroupURI>> action = () -> {
-            LocalAuthority localAuthority = new LocalAuthority();
-            URI groupsURI = localAuthority.getServiceURI(Standards.GMS_SEARCH_01.toString());
-            GMSClient client = new GMSClient(groupsURI);
-            return client.getMemberships();
-        };
-
-        Subject subject = AuthenticationUtil.getCurrentSubject();
-        return Subject.doAs(subject, action);
     }
 
 }

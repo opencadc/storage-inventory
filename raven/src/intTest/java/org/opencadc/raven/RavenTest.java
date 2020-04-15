@@ -119,7 +119,7 @@ public abstract class RavenTest {
     public static final URI RAVEN_SERVICE_ID = URI.create("ivo://cadc.nrc.ca/raven");;
     
     static String SERVER = "INVENTORY_TEST";
-    static String DATABASE = "content";
+    static String DATABASE = "cadctest";
     static String SCHEMA = "inventory";
 
     protected URL anonURL;
@@ -141,7 +141,6 @@ public abstract class RavenTest {
         log.info("certURL: " + certURL);
         anonSubject = AuthenticationUtil.getAnonSubject();
         File cert = FileUtil.getFileFromResource("raven-test.pem", RavenTest.class);
-        log.info("userSubject: " + userSubject);
         userSubject = SSLUtil.createSubject(cert);
         log.info("userSubject: " + userSubject);
         

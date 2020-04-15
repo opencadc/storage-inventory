@@ -43,5 +43,5 @@ docker run -it raven:latest /bin/bash
 
 ## running it
 ```
-docker run --user tomcat:tomcat --volume=/path/to/external/conf:/conf:ro --name raven raven:latest
+docker run --user tomcat:tomcat --volume=/path/to/external/config:/config:ro --name raven raven:latest
 ```
