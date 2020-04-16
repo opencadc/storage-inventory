@@ -124,22 +124,21 @@ public class FileSync {
         this.selector = selector;
         this.nthreads = nthreads;
 
-        //        throw new UnsupportedOperationException("TODO");
-
+                throw new UnsupportedOperationException("TODO");
 
         // To be completed in s2575, ta 13061
-        try {
-            RegistryClient rc = new RegistryClient();
-            Capabilities caps = rc.getCapabilities(resourceID);
-            // above call throws IllegalArgumentException... should be ResourceNotFoundException but out of scope to fix
-            this.locator = caps.findCapability(Standards.SI_LOCATE);
-            if (locator == null) {
-                throw new IllegalArgumentException("invalid config: remote query service " + resourceID + " does not implement "
-                + Standards.SI_LOCATE);
-            }
-        } catch (IOException ex) {
-            throw new IllegalArgumentException("invalid config", ex);
-        }
+//        try {
+//            RegistryClient rc = new RegistryClient();
+//            Capabilities caps = rc.getCapabilities(resourceID);
+//            // above call throws IllegalArgumentException... should be ResourceNotFoundException but out of scope to fix
+//            this.locator = caps.findCapability(Standards.SI_LOCATE);
+//            if (locator == null) {
+//                throw new IllegalArgumentException("invalid config: remote query service " + resourceID + " does not implement "
+//                + Standards.SI_LOCATE);
+//            }
+//        } catch (IOException ex) {
+//            throw new IllegalArgumentException("invalid config", ex);
+//        }
     }
     
     // general behaviour:
