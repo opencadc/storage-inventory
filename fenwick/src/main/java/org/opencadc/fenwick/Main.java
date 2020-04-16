@@ -68,9 +68,6 @@
 package org.opencadc.fenwick;
 
 import ca.nrc.cadc.util.Log4jInit;
-import ca.nrc.cadc.util.MultiValuedProperties;
-import ca.nrc.cadc.util.PropertiesReader;
-import ca.nrc.cadc.util.StringUtil;
 
 import java.net.URI;
 import java.util.Map;
@@ -78,9 +75,6 @@ import java.util.TreeMap;
 
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
-import org.opencadc.inventory.InventoryUtil;
-import org.opencadc.inventory.db.SQLGenerator;
-
 
 /**
  * Main entry point for fenwick.
@@ -89,75 +83,23 @@ import org.opencadc.inventory.db.SQLGenerator;
  */
 public class Main {
     private static final Logger log = Logger.getLogger(Main.class);
-    private static final String CONFIG_FILE_NAME = "fenwick.properties";
-    private static final String CONFIG_PREFIX = Main.class.getPackage().getName();
-    private static final String LOGGING_CONFIG_KEY = String.format("%s.logging", CONFIG_PREFIX);
-    private static final String SQLGENERATOR_CONFIG_KEY = SQLGenerator.class.getName();
-    private static final String DB_SCHEMA_CONFIG_KEY = String.format("%s.db.schema", CONFIG_PREFIX);
-    private static final String DB_URL_CONFIG_KEY = String.format("%s.db.url", CONFIG_PREFIX);
-    private static final String DB_USERNAME_CONFIG_KEY = String.format("%s.db.username", CONFIG_PREFIX);
-    private static final String DB_PASSWORD_CONFIG_KEY = String.format("%s.db.password", CONFIG_PREFIX);
-    private static final String QUERY_SERVICE_CONFIG_KEY = String.format("%s.queryService", CONFIG_PREFIX);
-    private static final String ARTIFACT_SELECTOR_CONFIG_KEY = ArtifactSelector.class.getName();
 
     public static void main(String[] args) {
         try {
+            // get log level from config
+            Level cfg = Level.INFO;
             Log4jInit.setLevel("org.opencadc", Level.WARN);
             Log4jInit.setLevel("ca.nrc.cadc", Level.WARN);
-
-            // Read in the configuration file, and create a usable Map from it.
-            final PropertiesReader pr = new PropertiesReader(CONFIG_FILE_NAME);
-            final MultiValuedProperties props = pr.getAllProperties();
-
-            if (props == null) {
-                log.fatal(
-                        String.format("\nFile %s not found where expected. Ensure that %s is put into '%s/config' or in a"
-                                      + " directory specified by the System Property '%s'.\n",
-                                      CONFIG_FILE_NAME, CONFIG_FILE_NAME, System.getProperty("user.home"),
-                                      PropertiesReader.CONFIG_DIR_SYSTEM_PROPERTY));
-                System.exit(1);
-            }
-
-            // get log level from config
-            final String configuredLoggingLevel = Main.readProperty(props, LOGGING_CONFIG_KEY, null);
-            final Level loggingLevel = StringUtil.hasLength(configuredLoggingLevel)
-                              ? Level.toLevel(configuredLoggingLevel)
-                              : Level.INFO;
             
-            Log4jInit.setLevel("org.opencadc.inventory", loggingLevel);
-            Log4jInit.setLevel("org.opencadc.tap", loggingLevel);
-            Log4jInit.setLevel("org.opencadc.reg", loggingLevel);
-
-
-            // Deal with missing required elements from the configuration file.
-            final StringBuilder errorMessage = new StringBuilder();
-
-            // DAO Configuration
-            final Map<String,Object> daoConfig = new TreeMap<>();
-            daoConfig.put("username", Main.readProperty(props, DB_USERNAME_CONFIG_KEY, errorMessage));
-            daoConfig.put("password", Main.readProperty(props, DB_PASSWORD_CONFIG_KEY, errorMessage));
-            daoConfig.put("schema", Main.readProperty(props, DB_SCHEMA_CONFIG_KEY, errorMessage));
-            daoConfig.put("url", Main.readProperty(props, DB_URL_CONFIG_KEY, errorMessage));
-            daoConfig.put(SQLGENERATOR_CONFIG_KEY, Main.readProperty(props, SQLGENERATOR_CONFIG_KEY, errorMessage));
-
-            final String configuredQueryService = Main.readProperty(props, QUERY_SERVICE_CONFIG_KEY, errorMessage);
-            final URI resourceID = StringUtil.hasText(configuredQueryService)
-                                   ? URI.create(configuredQueryService)
-                                   : null;
-
-            final String configuredArtifactSelector = Main.readProperty(props, ARTIFACT_SELECTOR_CONFIG_KEY,
-                                                                        errorMessage);
-            final ArtifactSelector selector = StringUtil.hasText(configuredArtifactSelector)
-                    ? InventoryUtil.loadPlugin(configuredArtifactSelector, ArtifactSelector.class)
-                    : null;
-
-            // Everything is required
-            if (errorMessage.length() > 0) {
-                log.fatal(String.format("\nConfiguration file %s missing one or more values: %s.\n", CONFIG_FILE_NAME,
-                                        errorMessage.toString()));
-                System.exit(2);
-            }
-
+            Log4jInit.setLevel("org.opencadc.inventory", cfg);
+            Log4jInit.setLevel("org.opencadc.tap", cfg);
+            Log4jInit.setLevel("org.opencadc.reg", cfg);
+            
+            // parse config file and populate/assign these
+            Map<String,Object> daoConfig = new TreeMap<>();
+            URI resourceID = null;
+            ArtifactSelector selector = null;
+            
             InventoryHarvester doit = new InventoryHarvester(daoConfig, resourceID, selector);
             doit.run();
             System.exit(0);
@@ -165,31 +107,6 @@ public class Main {
             log.error("unexpected failure", unexpected);
             System.exit(-1);
         }
-    }
-
-    /**
-     * Convenience method to acquire required property values, or append to an error message builder if no property
-     * exists for the given key.
-     *
-     * @param properties            The properties to read from.
-     * @param key                   The key to look up.
-     * @param errorMessageBuilder   The error message builder to append to.  Nullable.
-     * @return                      Value of the property, or null if non existent.
-     */
-    private static String readProperty(final MultiValuedProperties properties, final String key,
-                                       final StringBuilder errorMessageBuilder) {
-        final String configuredValue = properties.getFirstPropertyValue(key);
-        final String returnValue;
-        if (!StringUtil.hasText(configuredValue)) {
-            if (errorMessageBuilder != null) {
-                errorMessageBuilder.append("\n").append(key);
-            }
-            returnValue = null;
-        } else {
-            returnValue = configuredValue;
-        }
-
-        return returnValue;
     }
     
     private Main() { 
