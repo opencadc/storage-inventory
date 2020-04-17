@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2020.                            (c) 2020.
+*  (c) 2019.                            (c) 2019.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -67,103 +67,52 @@
 
 package org.opencadc.critwall;
 
-import ca.nrc.cadc.reg.Capabilities;
-import ca.nrc.cadc.reg.Capability;
-import ca.nrc.cadc.reg.Standards;
-import ca.nrc.cadc.reg.client.RegistryClient;
-
-import java.io.IOException;
-import java.net.URI;
-import java.util.Iterator;
-import java.util.Map;
-
+import java.io.File;
+import java.io.FileReader;
+import java.util.Properties;
 import org.apache.log4j.Logger;
-import org.opencadc.inventory.InventoryUtil;
-import org.opencadc.inventory.SiteLocation;
-import org.opencadc.inventory.db.ArtifactDAO;
-import org.opencadc.inventory.storage.StorageAdapter;
 
 /**
  *
  * @author pdowler
  */
-public class FileSync {
-    private static final Logger log = Logger.getLogger(FileSync.class);
+public class TestUtil {
+    private static final Logger log = Logger.getLogger(TestUtil.class);
 
-    private static final int MAX_THREADS = 16;
+    static String SERVER = "INVENTORY_TEST";
+    static String DATABASE = "cadctest";
+    static String SCHEMA = "inventory";
+    static String TABLE_PREFIX = null;
     
-    private final ArtifactDAO artifactDAO;
-    private StorageAdapter localStorage;
-    private final URI resourceID;
-    private final Capability locator;
-    private final BucketSelector selector;
-    private final int nthreads;
-    
-    /**
-     * Constructor.
-     * 
-     * @param daoConfig config map to pass to cadc-inventory-db DAO classes
-     * @param localStorage adapter to put to local storage
-     * @param resourceID identifier for the remote query service
-     * @param selector selector implementation
-     * @param nthreads number of threads in download thread pool
-     */
-    public FileSync(Map<String,Object> daoConfig, StorageAdapter localStorage, URI resourceID, BucketSelector selector, int nthreads) {
-        InventoryUtil.assertNotNull(FileSync.class, "daoConfig", daoConfig);
-        InventoryUtil.assertNotNull(FileSync.class, "localStorage", localStorage);
-        InventoryUtil.assertNotNull(FileSync.class, "resourceID", resourceID);
-        InventoryUtil.assertNotNull(FileSync.class, "selector", selector);
-
-        if (nthreads <= 0 || nthreads > MAX_THREADS) {
-            throw new IllegalArgumentException("invalid config: nthreads must be in [1," + MAX_THREADS + "], found: " + nthreads);
+    static {
+        try {
+            File opt = new File("intTest.properties");
+            if (opt.exists()) {
+                Properties props = new Properties();
+                props.load(new FileReader(opt));
+                String s = props.getProperty("server");
+                if (s != null) {
+                    SERVER = s.trim();
+                }
+                s = props.getProperty("database");
+                if (s != null) {
+                    DATABASE = s.trim();
+                }
+                s = props.getProperty("schema");
+                if (s != null) {
+                    SCHEMA = s.trim();
+                }
+                s = props.getProperty("tablePrefix");
+                if (s != null) {
+                    TABLE_PREFIX = s.trim();
+                }
+            }
+            log.info("intTest database config: " + SERVER + " " + DATABASE + " " + SCHEMA + " " + TABLE_PREFIX);
+        } catch (Exception oops) {
+            log.debug("failed to load/read optional db config", oops);
         }
-
-        this.artifactDAO = new ArtifactDAO();
-        artifactDAO.setConfig(daoConfig);
-        this.resourceID = resourceID;
-        this.selector = selector;
-        this.nthreads = nthreads;
-
-        throw new UnsupportedOperationException("TODO");
-
-        // To be completed in s2575, ta 13061
-        //        try {
-        //            RegistryClient rc = new RegistryClient();
-        //            Capabilities caps = rc.getCapabilities(resourceID);
-        //            // above call throws IllegalArgumentException... should be ResourceNotFoundException but out of scope to fix
-        //            this.locator = caps.findCapability(Standards.SI_LOCATE);
-        //            if (locator == null) {
-        //                throw new IllegalArgumentException("invalid config: remote query service " + resourceID + " does not implement "
-        //                + Standards.SI_LOCATE);
-        //            }
-        //        } catch (IOException ex) {
-        //            throw new IllegalArgumentException("invalid config", ex);
-        //        }
     }
     
-    // general behaviour:
-    // - create a job queue
-    // - create a thread pool to execute jobs (ta 13063)
-    // - query inventory for Artifact with null StorageLocation and use Iterator<Artifact>
-    //   to keep the queue finite in size (not empty, not huge)
-    // job: transfer negotiation  (with global) + HttpGet with output to local StorageAdapter
-    // - the job wrapper should balance HttpGet retries to a single URL and cycling through each
-    //   negotiated URL (once)... so if more URLs to try, fewer retries each (separate task)
-    // - if a job fails, just log it and move on
-    
-    // run until Iterator<Artifact> finishes: 
-    // - terminate?
-    // - manage idle and run until serious failure?
-    
-    public void run() {
-        Iterator<String> bucketSelector = selector.getBucketIterator();
-        while (bucketSelector.hasNext()) {
-            String nextBucket = bucketSelector.next();
-            log.info("processing bucket " + nextBucket);
-        }
-        throw new UnsupportedOperationException("TODO");
+    private TestUtil() { 
     }
-
-
-
 }
