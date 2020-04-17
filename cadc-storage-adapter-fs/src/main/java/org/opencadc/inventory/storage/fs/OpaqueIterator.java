@@ -97,7 +97,7 @@ class OpaqueIterator implements Iterator<StorageMetadata> {
     private Path subPath;
     
     private StorageMetadata nextItem = null;
-    private final LinkedList<StackItem> stack = new LinkedList<>();
+    private final LinkedList<StackItem> depthFirstPathTraversalStack = new LinkedList<>();
     
     public OpaqueIterator(Path contentPath, String bucketPrefix) throws StorageEngageException {
         this.contentPath = contentPath;
@@ -112,7 +112,7 @@ class OpaqueIterator implements Iterator<StorageMetadata> {
             this.subPath = contentPath.resolve(sb.toString());
         }
         if (Files.exists(subPath)) {
-            this.stack.addFirst(new StackItem(subPath));
+            this.depthFirstPathTraversalStack.addFirst(new StackItem(subPath));
             advance();
         } // else: nothing in this bucket
     }
@@ -141,9 +141,9 @@ class OpaqueIterator implements Iterator<StorageMetadata> {
     }
     
     private void advance() {
-        log.debug("advance: stack size = " + stack.size() + " START");
-        while (!stack.isEmpty() && nextItem == null) {
-            StackItem cur = stack.getFirst();
+        log.debug("advance: stack size = " + depthFirstPathTraversalStack.size() + " START");
+        while (!depthFirstPathTraversalStack.isEmpty() && nextItem == null) {
+            StackItem cur = depthFirstPathTraversalStack.getFirst();
             log.debug("advance: cur " + cur.dir);
             boolean pushed = false;
             while (cur.children.hasNext() && !pushed && nextItem == null) {
@@ -152,19 +152,19 @@ class OpaqueIterator implements Iterator<StorageMetadata> {
                     nextItem = createStorageMetadata(p);
                     log.debug("advance: nextItem=" + nextItem);
                 } else if (Files.isDirectory(p)) {
-                    stack.addFirst(new StackItem(p));
+                    depthFirstPathTraversalStack.addFirst(new StackItem(p));
                     pushed = true;
                 } else {
                     throw new IllegalStateException("INVALID STATE: non-directory and non-regular-file: " + p);
                 }
             }
             if (!pushed && nextItem == null) {
-                log.debug("advance: return from " + cur.dir + " " + stack.size() + " exhausted");
-                StackItem rm = stack.removeFirst(); // pop exhausted/empty dir
-                log.debug("advance: removed " + rm.dir + " stack.isEmpty " + stack.isEmpty());
+                log.debug("advance: return from " + cur.dir + " " + depthFirstPathTraversalStack.size() + " exhausted");
+                StackItem rm = depthFirstPathTraversalStack.removeFirst(); // pop exhausted/empty dir
+                log.debug("advance: removed " + rm.dir + " stack.isEmpty " + depthFirstPathTraversalStack.isEmpty());
             }
         }
-        log.debug("advance: stack size = " + stack.size() + " DONE");
+        log.debug("advance: stack size = " + depthFirstPathTraversalStack.size() + " DONE");
     }
     
     private class StackItem {
