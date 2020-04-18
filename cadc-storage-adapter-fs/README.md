@@ -3,14 +3,13 @@ File system storage adapter implementation
 
 ### cadc-storage-adapter-fs.properties
 
-The cadc-storage-adapter-fs.properties must be available to minoc or whatever system
-is using this adapter. The following StorageAdapter implementations are provided:
+The following StorageAdapter implementations are provided:
 
 |fully qualified class name|description|
 |--------------------------|-----------|
 |org.opencadc.inventory.storage.fs.OpaqueFileSystemStorageAdapter|stores files in an opaque structure in the filesystem, requires POSIX extended attribute support, iterator: scalable|
 
-TODO: fix up the previous implementation's URI mode as TransparentFileSystemStorageAdapter.
+TODO: fix up the previous implementation's URI mode as TransparentFileSystemStorageAdapter (name TBD).
 
 ```
 org.opencadc.inventory.storage.fs.baseDir = {absolute path to base directory}
