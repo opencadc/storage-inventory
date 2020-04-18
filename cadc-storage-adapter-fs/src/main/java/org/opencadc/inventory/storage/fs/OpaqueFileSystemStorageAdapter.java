@@ -75,7 +75,9 @@ import ca.nrc.cadc.net.IncorrectContentLengthException;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.util.HexUtil;
+import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.util.PropertiesReader;
+
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -95,11 +97,13 @@ import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.UserDefinedFileAttributeView;
 import java.security.DigestOutputStream;
 import java.security.MessageDigest;
+import java.util.Date;
 import java.util.Iterator;
 import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.UUID;
+
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.StorageLocation;
@@ -132,139 +136,91 @@ import org.opencadc.inventory.storage.StorageMetadata;
  * @author majorb
  *
  */
-public class FileSystemStorageAdapter implements StorageAdapter {
-    
-    private static final Logger log = Logger.getLogger(FileSystemStorageAdapter.class);
+public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
+    private static final Logger log = Logger.getLogger(OpaqueFileSystemStorageAdapter.class);
     
     public static final String CONFIG_FILE = "cadc-storage-adapter-fs.properties";
-    public static final String CONFIG_PROPERTY_ROOT = "root";
-    public static final String CONFIG_PROPERTY_BUCKETMODE = "bucketMode";
-    public static final String CONFIG_PROPERTY_BUCKETDEPTH = "bucketLength";
+    public static final String CONFIG_PROPERTY_ROOT = OpaqueFileSystemStorageAdapter.class.getPackage().getName() + ".baseDir";
+    public static final String CONFIG_PROPERTY_BUCKET_LENGTH = OpaqueFileSystemStorageAdapter.class.getName() + ".bucketLength";
+
+    public static final int MAX_BUCKET_LENGTH = 7;
+            
+    static final String ARTIFACTID_ATTR = "artifactID";
+    static final String CHECKSUM_ATTR = "contentChecksum";
+    
     private static final String TXN_FOLDER = "transaction";
-    static final String CHECKSUM_ATTRIBUTE_NAME = "contentChecksum";
-    static final String CONTENT_FOLDER = "content";
+    private static final String CONTENT_FOLDER = "content";
 
-    static final String MD5_CHECKSUM_SCHEME = "md5";
-    static final int MAX_BUCKET_LENGTH = 5;
+    private static final String MD5_CHECKSUM_SCHEME = "md5";
+    
+    final Path txnPath;
+    final Path contentPath;
     private final int bucketLength;
-    
-    private final FileSystem fs;
-    private final Path txnPath;
-    private final Path contentPath;
-    private final BucketMode bucketMode;
 
-    public static enum BucketMode {
-        URI,       // use the URI of the artifact for bucketing
-        // This mode is functional except that the bucket sizes exceed
-        // the database column length when used with minoc.  Work on this
-        // mode is suspended until a use case arises.
-        URIBUCKET; // use calculated 5 character uriBucket of the artifact URI for bucketing
-        // This mode has been tested with minoc
-    }
-    
-    /**
-     * Construct a FileSystemStorageAdapter with the config stored in the
-     * well-known properties file with well-known properties.
-     */
-    public FileSystemStorageAdapter() {
+    public OpaqueFileSystemStorageAdapter() {
         PropertiesReader pr = new PropertiesReader(CONFIG_FILE);
+        MultiValuedProperties props = pr.getAllProperties();
+        
         String rootVal = null;
-        BucketMode bucketMode = null;
         
         // get the configured root directory
-        rootVal = pr.getFirstPropertyValue(CONFIG_PROPERTY_ROOT);
+        rootVal = props.getFirstPropertyValue(CONFIG_PROPERTY_ROOT);
+        InventoryUtil.assertNotNull(OpaqueFileSystemStorageAdapter.class, CONFIG_PROPERTY_ROOT, rootVal);
         log.debug("root: " + rootVal);
         if (rootVal == null) {
             throw new IllegalStateException("failed to load " + CONFIG_PROPERTY_ROOT
                 + " from " + CONFIG_FILE);
         }
         
-        // get the configured bucket mode
-        try {
-            String mode = pr.getFirstPropertyValue(CONFIG_PROPERTY_BUCKETMODE);
-            log.debug("bucketMode: " + mode);
-            bucketMode = BucketMode.valueOf(mode);
-        } catch (Throwable t) {
-            throw new IllegalStateException("failed to load " + CONFIG_PROPERTY_BUCKETMODE
-                + " from " + CONFIG_FILE + ": " + t.getMessage(), t);
-        }
-        
         // in uriBucket mode get the bucket depth
-        if (bucketMode.equals(BucketMode.URIBUCKET)) {
-            int bucketLen;
-            try {
-                String length = pr.getFirstPropertyValue(CONFIG_PROPERTY_BUCKETDEPTH);
-                log.debug("bucketDepth: " + length);
-                if (length != null) {
-                    bucketLen = Integer.parseInt(length);
-                    if (bucketLen < 0 || bucketLen > MAX_BUCKET_LENGTH) {
-                        throw new IllegalStateException("Bucket length of " + bucketLen
-                            + " not in allowed range of 0-" + MAX_BUCKET_LENGTH);
-                    }
-                } else {
-                    throw new IllegalStateException("Bucket length required");
-                }
-            } catch (Throwable t) {
-                throw new IllegalStateException("failed to load " + CONFIG_PROPERTY_BUCKETMODE
-                    + " from " + CONFIG_FILE + ": " + t.getMessage(), t);
+        int bucketLen;
+        String length = props.getFirstPropertyValue(CONFIG_PROPERTY_BUCKET_LENGTH);
+        InventoryUtil.assertNotNull(OpaqueFileSystemStorageAdapter.class, CONFIG_PROPERTY_BUCKET_LENGTH, length);
+        try {
+            bucketLen = Integer.parseInt(length);
+            if (bucketLen < 0 || bucketLen > MAX_BUCKET_LENGTH) {
+                throw new IllegalStateException(CONFIG_PROPERTY_BUCKET_LENGTH + " must be in [1," + MAX_BUCKET_LENGTH + "], found " + bucketLen);
             }
-            this.bucketLength = bucketLen;
-        } else {
-            // URI bucketMode
-            this.bucketLength = 0;
+        } catch (NumberFormatException ex) {
+            throw new IllegalStateException("invalid integer value: " + CONFIG_PROPERTY_BUCKET_LENGTH + " = " + length);
         }
-
-        InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "rootDirectory", rootVal);
-        InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "bucketMode", bucketMode);
-        this.fs = FileSystems.getDefault();
-
-        Path root = this.fs.getPath(rootVal);
+        this.bucketLength = bucketLen;
+        
+        FileSystem fs = FileSystems.getDefault();
+        Path root = fs.getPath(rootVal);
         this.contentPath = root.resolve(CONTENT_FOLDER);
         this.txnPath = root.resolve(TXN_FOLDER);
-        this.bucketMode = bucketMode;
 
-        init(rootVal);
+        init(root);
     }
 
-    /**
-     * Construct a FileSystemStorageAdapter with the config specified
-     * in the arguments.
-     *
-     * @param rootDirectory The root directory of the local file system.
-     * @param bucketMode The mode in which to organize files
-     * @param bucketLen length of generated storageBucket string/path
-     */
-    public FileSystemStorageAdapter(String rootDirectory, BucketMode bucketMode, int bucketLen) {
+    // for test code: OPAQUE mode
+    public OpaqueFileSystemStorageAdapter(File rootDirectory, int bucketLen) {
 
         InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "rootDirectory", rootDirectory);
-        InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "bucketMode", bucketMode);
-        this.fs = FileSystems.getDefault();
-
-        Path root = this.fs.getPath(rootDirectory);
-        this.contentPath = root.resolve(CONTENT_FOLDER);
-        this.txnPath = root.resolve(TXN_FOLDER);
-        this.bucketMode = bucketMode;
 
         if (bucketLen < 0 || bucketLen > MAX_BUCKET_LENGTH) {
-            throw new IllegalStateException("Bucket length of " + bucketLen
-                + " not in allowed range of 0-" + MAX_BUCKET_LENGTH);
+            throw new IllegalStateException(CONFIG_PROPERTY_BUCKET_LENGTH + " must be in [1," + MAX_BUCKET_LENGTH + "], found " + bucketLen);
         }
         this.bucketLength = bucketLen;
 
-        init(rootDirectory);
+        FileSystem fs = FileSystems.getDefault();
+        Path root = fs.getPath(rootDirectory.getAbsolutePath());
+        this.contentPath = root.resolve(CONTENT_FOLDER);
+        this.txnPath = root.resolve(TXN_FOLDER);
+        
+        init(root);
     }
 
-    private void init(String rootDirectory) {
+    private void init(Path root) {
         try {
-            Path root = fs.getPath(rootDirectory);
-
             if (!Files.isDirectory(root)) {
                 throw new IllegalArgumentException("root must be a directory");
             }
             if (!Files.isReadable(root) || (!Files.isWritable(root))) {
                 throw new IllegalArgumentException("read-write permission required on root");
             }
-
+            
             // Ensure  root/CONTENT_FOLDER and TXN_FOLDER exist and have correct permissions
             // Set Path elements for transaction and content directories
             if (!Files.exists(contentPath)) {
@@ -286,7 +242,7 @@ public class FileSystemStorageAdapter implements StorageAdapter {
             log.debug("validated txn dir: " + txnPath);
 
         } catch (InvalidPathException e) {
-            throw new IllegalArgumentException("Invalid root directory: " + rootDirectory, e);
+            throw new IllegalArgumentException("Invalid root directory: " + root, e);
         } catch (IOException io) {
             throw new IllegalArgumentException(("Could not create content or transaction directory"), io);
         }
@@ -311,18 +267,18 @@ public class FileSystemStorageAdapter implements StorageAdapter {
         InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "dest", dest);
         log.debug("get storageID: " + storageLocation.getStorageID());
 
-        Path path = createStorageLocationPath(storageLocation);
+        Path path = storageLocationToPath(storageLocation);
         if (!Files.exists(path)) {
-            throw new ResourceNotFoundException("not found: " + storageLocation.getStorageID());
+            throw new ResourceNotFoundException("not found: " + storageLocation);
         }
         if (!Files.isRegularFile(path)) {
-            throw new IllegalArgumentException("not found: " + storageLocation.getStorageID());
+            throw new IllegalArgumentException("not a file: " + storageLocation);
         }
         InputStream source = null;
         try {
             source = Files.newInputStream(path, StandardOpenOption.READ);
         } catch (IOException e) {
-            throw new StorageEngageException("failed to create input stream to file system", e);
+            throw new StorageEngageException("failed to create input stream for stored file: " + storageLocation, e);
         }
         ThreadedIO io = new ThreadedIO();
         io.ioLoop(dest, source);
@@ -375,17 +331,12 @@ public class FileSystemStorageAdapter implements StorageAdapter {
         InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "source", source);
 
         Path txnTarget = null;
-        Path contentTarget = null;
-        StorageLocation storageLocation = null;
         URI artifactURI = newArtifact.getArtifactURI();
         log.debug("put: artifactURI: " + artifactURI.toString());
         
         try {
-            // Make storage location using artifactURI
-            storageLocation = this.createStorageLocation(artifactURI);
-
             // add UUID to txnPath to make it unique
-            txnTarget = txnPath.resolve(UUID.randomUUID().toString());
+            txnTarget = createTmpFile();
             log.debug("resolved txnTarget file: " + txnTarget + " based on " + txnPath);
 
             if (Files.exists(txnTarget)) {
@@ -448,22 +399,33 @@ public class FileSystemStorageAdapter implements StorageAdapter {
                 log.debug("No contentLength provided.");
             }
 
-            // Set contentChecksum file attribute
-            setFileAttribute(txnTarget, CHECKSUM_ATTRIBUTE_NAME, checksum.toString());
+            // Set file attributes that must be recovered in iterator
+            setFileAttribute(txnTarget, CHECKSUM_ATTR, checksum.toString());
+            setFileAttribute(txnTarget, ARTIFACTID_ATTR, newArtifact.getArtifactURI().toASCIIString());
 
+            StorageLocation storageLocation = this.pathToStorageLocation(txnTarget);
+            Path contentTarget = this.storageLocationToPath(storageLocation);
             try {
-                contentTarget = this.createStorageLocationPath(storageLocation);
+                // make sure parent (bucket) directories exist
+                Path parent = contentTarget.getParent();
+                if (!Files.exists(parent)) {
+                    Files.createDirectories(parent);
+                }
 
                 if (Files.exists(contentTarget)) {
-                    // is an overwrite
-                    log.debug("file/directory exists");
-                    if (!Files.isRegularFile(contentTarget)) {
-                        throw new IllegalArgumentException(contentTarget + " is not a file.");
-                    }
-                } else if (!Files.exists(contentTarget.getParent())) {
-                    // is a new file
-                    Files.createDirectories(contentTarget.getParent());
+                    // since filename is a UUID this is fatal
+                    throw new RuntimeException("UUID collision on put: " + newArtifact.getArtifactURI() + " -> " + storageLocation);
                 }
+                
+                // to atomic copy into content directory
+                final Path result = Files.move(txnTarget, contentTarget, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+                log.debug("moved file to : " + contentTarget);
+                txnTarget = null;
+
+                StorageMetadata metadata = new StorageMetadata(storageLocation, checksum, length);
+                metadata.artifactURI = artifactURI;
+                metadata.contentLastModified = new Date(Files.getLastModifiedTime(result).toMillis());
+                return metadata;
 
             } catch (InvalidPathException e) {
                 throw new IllegalArgumentException("Illegal path: " + contentTarget, e);
@@ -471,14 +433,7 @@ public class FileSystemStorageAdapter implements StorageAdapter {
                 throw new IllegalStateException("Failed to create content file: " + contentTarget, e);
             }
 
-            // to atomic copy into content directory
-            Path newCopy = Files.move(txnTarget, contentTarget, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-            log.debug("moved file to : " + contentTarget);
-            txnTarget = null;
-
-            StorageMetadata metadata = new StorageMetadata(storageLocation, checksum, length);
-            metadata.artifactURI = artifactURI;
-            return metadata;
+            
             
         } catch (ReadException | WriteException | IllegalArgumentException
             | IncorrectContentChecksumException | IncorrectContentLengthException e) {
@@ -520,153 +475,113 @@ public class FileSystemStorageAdapter implements StorageAdapter {
     public void delete(StorageLocation storageLocation)
         throws ResourceNotFoundException, IOException, StorageEngageException, TransientException {
         InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "storageLocation", storageLocation);
-        Path path = createStorageLocationPath(storageLocation);
+        Path path = storageLocationToPath(storageLocation);
         Files.delete(path);
     }
     
     /**
-     * Iterator of items ordered by their storageIDs.
-     * @return An iterator over an ordered list of items in storage.
+     * Iterator of items ordered by storageLocation.
      * 
+     * @return An iterator over an ordered list of items in storage.
      * @throws StorageEngageException If the adapter failed to interact with storage.
      * @throws TransientException If an unexpected, temporary exception occurred. 
      */
     @Override
     public Iterator<StorageMetadata> iterator()
         throws StorageEngageException, TransientException {
-        throw new UnsupportedOperationException("sorted iteration not supported");
+        
+        return new OpaqueIterator(contentPath, null);
     }
     
     /**
-     * Iterator of items ordered by their storageIDs in the given bucket.
+     * Iterator of items ordered by storageLocation.
+     * 
      * @param storageBucket Only iterate over items in this bucket.
      * @return An iterator over an ordered list of items in this storage bucket.
-     * 
      * @throws StorageEngageException If the adapter failed to interact with storage.
      * @throws TransientException If an unexpected, temporary exception occurred. 
      */
     @Override
     public Iterator<StorageMetadata> iterator(String storageBucket)
         throws StorageEngageException, TransientException {
-        throw new UnsupportedOperationException("sorted iteration not supported");
+        return new OpaqueIterator(contentPath, storageBucket);
     }
     
     /**
-     * An unordered iterator of items in the given bucket.
-     * @param storageBucket Only iterate over items in this bucket.
-     * @return An iterator over an ordered list of items in this storage bucket.
+     * Ordered set of items in the given bucket.
      * 
+     * @param storageBucket Only iterate over items in this bucket.
+     * @return set of items in this storage bucket.
      * @throws StorageEngageException If the adapter failed to interact with storage.
      * @throws TransientException If an unexpected, temporary exception occurred. 
      */
     public SortedSet<StorageMetadata> list(String storageBucket)
         throws StorageEngageException, TransientException {
-        StringBuilder path = new StringBuilder();
-        int bucketDepth = 0;
-        String fixedParentDir = null;
-        switch (bucketMode) {
-            case URI:
-                if (storageBucket != null && storageBucket.length() > 0) {
-                    try {
-                        URI test = new URI(storageBucket + "/file");
-                        InventoryUtil.validateArtifactURI(FileSystemStorageAdapter.class, test);
-                    } catch (URISyntaxException | IllegalArgumentException e) {
-                        throw new IllegalArgumentException("bucket must be in the form 'scheme:path'");
-                    }
-
-                    path.append(storageBucket);
-                }
-                if (path.length() > 0) {
-                    fixedParentDir = path.toString();
-                }
-                break;
-            case URIBUCKET:
-                log.debug("listing uribucket: ");
-                if (storageBucket != null) {
-                    if (storageBucket.length() > bucketLength) {
-                        throw new IllegalArgumentException("bucket must be a maximum of " + bucketLength + " characters");
-                    }
-                    log.debug("file separator: " + File.separator + "..");
-                    for (char c : storageBucket.toCharArray()) {
-                        path.append(c).append(File.separator);
-                    }
-                    bucketDepth = bucketLength - storageBucket.length();
-                } else {
-                    bucketDepth = bucketLength;
-                }
-                break;
-            default:
-                throw new IllegalStateException("unsupported bucket mode");
+        SortedSet<StorageMetadata> ret = new TreeSet<>();
+        Iterator<StorageMetadata> i = iterator(storageBucket);
+        while (i.hasNext()) {
+            ret.add(i.next());
         }
-        try {
-            log.debug("resolving path: " + path.toString());
-            Path bucketPath = contentPath.resolve(path.toString());
-            log.debug("bucketPath: " + bucketPath);
-            log.debug("exists: " + Files.exists(bucketPath));
-            log.debug("isDir: " + Files.isDirectory(bucketPath));
-            if (!Files.exists(bucketPath) || !Files.isDirectory(bucketPath)) {
-                throw new IllegalArgumentException("Invalid bucket: " + storageBucket);
-            }
-            Iterator<StorageMetadata> iter = new FileSystemIterator(bucketPath, bucketDepth, fixedParentDir);
-            SortedSet<StorageMetadata> ret = new TreeSet<>();
-            while (iter.hasNext()) {
-                ret.add(iter.next());
-            }
-            return ret;
-        } catch (IOException e) {
-            throw new StorageEngageException("failed to obtain iterator", e);
-        } catch (InvalidPathException e) {
-            throw new IllegalArgumentException("Invalid bucket: " + storageBucket);
-        }   
+        return ret;
     }
     
-    private StorageLocation createStorageLocation(URI artifactURI) {
-        URI storageID = artifactURI;
-        String storageBucket = null;
-        switch (bucketMode) {
-            case URI:
-                String ssp = artifactURI.getSchemeSpecificPart();
-                String sspPath = ssp.substring(0, ssp.lastIndexOf("/"));
-                storageBucket = artifactURI.getScheme() + ":" + sspPath;
-                break;
-            case URIBUCKET:
-                storageBucket = InventoryUtil.computeBucket(artifactURI, bucketLength);
-                break;
-            default:
-                throw new IllegalStateException("unsupported bucket mode");
-        }
-        log.debug("new storage location " + storageID + " with bucket: " + storageBucket);
+    // temporary location to write stream to
+    Path createTmpFile() {
+        return txnPath.resolve(UUID.randomUUID().toString());
+    }
+    
+    // create from tmpfile in the txnPath to re-use UUID
+    StorageLocation pathToStorageLocation(Path tmpfile) {
+        // re-use the UUID from the tmpfile
+        String sid = tmpfile.getFileName().toString();
+        URI storageID = URI.create("uuid:" + sid);
+        String storageBucket = InventoryUtil.computeBucket(storageID, bucketLength);
         StorageLocation loc = new StorageLocation(storageID);
         loc.storageBucket = storageBucket;
+        log.debug("created: " + loc);
         return loc;
     }
     
-    private Path createStorageLocationPath(StorageLocation storageLocation) {
-        URI storageID = storageLocation.getStorageID();
+    Path storageLocationToPath(StorageLocation storageLocation) {
         StringBuilder path = new StringBuilder();
-
-        switch (bucketMode) {
-            case URI:
-                path.append(storageID.toString());
-                break;
-            case URIBUCKET:
-                String bucket = storageLocation.storageBucket;
-                log.debug("bucket: " + bucket);
-                InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "storageLocation.bucket", bucket);
-                for (char c : bucket.toCharArray()) {
-                    path.append(c).append(File.separator);
-                }
-                path.append(storageLocation.getStorageID().toString());
-                break;
-            default:
-                throw new IllegalStateException("unsupported bucket mode");
+        String bucket = storageLocation.storageBucket;
+        log.debug("bucket: " + bucket);
+        InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "storageLocation.bucket", bucket);
+        for (char c : bucket.toCharArray()) {
+            path.append(c).append(File.separator);
         }
-        
+        path.append(storageLocation.getStorageID().getSchemeSpecificPart());
         log.debug("Resolving path in content : " + path.toString());
         Path ret = contentPath.resolve(path.toString());
         return ret;
     }
 
+    // TODO: these methods would be used for a readable directory structure impl
+    // split scheme+path components into storageBucket, filename into storageID
+    StorageLocation createReadableStorageLocation(URI artifactURI) {
+        // {scheme}/{path}/{to}/{filename} eg cadc/TEST/foo.fits
+        StringBuilder path = new StringBuilder();
+        path.append(artifactURI.getScheme()).append(File.separator);
+        String ssp = artifactURI.getSchemeSpecificPart();
+        int i = ssp.lastIndexOf("/");
+        path.append(ssp.substring(0, i));
+        String storageBucket = path.toString();
+        URI storageID = URI.create("name:" + ssp.substring(i));
+        StorageLocation loc = new StorageLocation(storageID);
+        loc.storageBucket = storageBucket;
+        log.debug("created: " + loc);
+        return loc;
+    }
+    
+    Path createReadableStorageLocationPath(StorageLocation storageLocation) {
+        StringBuilder path = new StringBuilder();
+        path.append(storageLocation.storageBucket).append(File.separator);
+        path.append(storageLocation.getStorageID().getSchemeSpecificPart());
+        log.debug("Resolving path in content : " + path.toString());
+        Path ret = contentPath.resolve(path.toString());
+        return ret;
+    }
+    
     public static void setFileAttribute(Path path, String attributeKey, String attributeValue) throws IOException {
         log.debug("setFileAttribute: " + path);
         if (attributeValue != null) {
@@ -679,4 +594,13 @@ public class FileSystemStorageAdapter implements StorageAdapter {
         } // else: do nothing
     }
 
+    public static String getFileAttribute(Path path, String attributeName) throws IOException {
+        UserDefinedFileAttributeView udv = Files.getFileAttributeView(path,
+            UserDefinedFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);
+
+        int sz = udv.size(attributeName);
+        ByteBuffer buf = ByteBuffer.allocate(2 * sz);
+        udv.read(attributeName, buf);
+        return new String(buf.array(), Charset.forName("UTF-8")).trim();
+    }
 }
