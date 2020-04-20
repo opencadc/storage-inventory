@@ -78,8 +78,6 @@ import org.opencadc.tantar.ValidateEventListener;
 /**
  * Policy to ensure that a recovery from Storage (in the event of a disaster or a new site is brought online) will
  * dictate what goes into the Inventory Database.
- * TODO: Determine if this implementation is required and complete the logic.
- * TODO: jenkinsd 2020.04.15
  */
 public class RecoverFromStoragePolicy extends ResolutionPolicy {
 
@@ -88,21 +86,22 @@ public class RecoverFromStoragePolicy extends ResolutionPolicy {
     }
 
     /**
-     * Use the logic of this Policy to correct a conflict caused by the two given items.  One of the arguments can
-     * be null, but not both.
+     * Use the logic of this Policy to correct a conflict caused by the two given items.  Only the Artifact can be
+     * null; it will be assumed that the given StorageMetadata is never null.
      *
-     * @param artifact        The Artifact to use in deciding.
-     * @param storageMetadata The StorageMetadata to use in deciding.
+     * @param artifact        The Artifact to use in deciding.  Can be null.
+     * @param storageMetadata The StorageMetadata to use in deciding.  Never null.
      * @throws Exception For any unknown error that should be passed up.
      */
     @Override
     public void resolve(final Artifact artifact, final StorageMetadata storageMetadata) throws Exception {
-        if (artifact != null) {
-            reporter.report(String.format("Deleting Artifact %s as per policy.", storageMetadata.getStorageLocation()));
-            validateEventListener.delete(artifact);
+        if (artifact == null) {
+            reporter.report(String.format("Adding Artifact %s as per policy.", storageMetadata.getStorageLocation()));
+            validateEventListener.createArtifact(storageMetadata);
+        } else {
+            reporter.report(String.format("Replacing Artifact %s as per policy.",
+                                          storageMetadata.getStorageLocation()));
+            validateEventListener.replaceArtifact(artifact, storageMetadata);
         }
-
-        reporter.report(String.format("Adding Artifact %s as per policy.", storageMetadata.getStorageLocation()));
-        validateEventListener.createArtifact(storageMetadata);
     }
 }
