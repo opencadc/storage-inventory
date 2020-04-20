@@ -23,7 +23,7 @@ dependencies {
     compile 'org.opencadc:cadc-inventory:[0.7,2.0)'
     compile 'org.opencadc:cadc-inventory-db:[0.7.4,1.0)'
     compile 'org.opencadc:cadc-registry:[1.5,2.0)'
-    compile 'org.opencadc:cadc-storage-adapter-fs:[0.5,)'
+    compile 'org.opencadc:cadc-storage-adapter-fs:[0.6,)'
     compile 'org.opencadc:cadc-vos:[1.1.8,)'
     compile 'org.opencadc:cadc-vosi:[1.0,)'
 
