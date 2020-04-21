@@ -69,7 +69,6 @@ package org.opencadc.fenwick;
 
 import ca.nrc.cadc.util.Log4jInit;
 import ca.nrc.cadc.util.MultiValuedProperties;
-import ca.nrc.cadc.util.PropertiesReader;
 import ca.nrc.cadc.util.StringUtil;
 
 import java.io.File;
@@ -96,7 +95,6 @@ public class Main {
     private static final Logger log = Logger.getLogger(Main.class);
     private static final String CONFIG_FILE_NAME = "fenwick.properties";
     private static final String CONFIG_PREFIX = Main.class.getPackage().getName();
-    //private static final String LOGGING_CONFIG_KEY = String.format("%s.logging", CONFIG_PREFIX);
     private static final String SQLGENERATOR_CONFIG_KEY = SQLGenerator.class.getName();
     private static final String DB_SCHEMA_CONFIG_KEY = String.format("%s.db.schema", CONFIG_PREFIX);
     private static final String DB_URL_CONFIG_KEY = String.format("%s.db.url", CONFIG_PREFIX);
@@ -105,18 +103,16 @@ public class Main {
     private static final String QUERY_SERVICE_CONFIG_KEY = String.format("%s.queryService", CONFIG_PREFIX);
     private static final String ARTIFACT_SELECTOR_CONFIG_KEY = ArtifactSelector.class.getName();
 
-    public static void main(String[] args) {
+    public static void main(final String[] args) {
         try {
             final MultiValuedProperties props = new MultiValuedProperties();
 
             try {
                 Main.configure(props);
             } catch (IOException e) {
-                log.fatal(
-                        String.format("\nFile %s not found where expected. Ensure that %s is put into '/config', "
-                                      + "'%s/config', or in a directory specified by the System Property '%s'.\n",
-                                      CONFIG_FILE_NAME, CONFIG_FILE_NAME, System.getProperty("user.home"),
-                                      PropertiesReader.CONFIG_DIR_SYSTEM_PROPERTY));
+                log.fatal(String.format("\nFile %s not found where expected. Ensure that %s is put into '/config' or "
+                                        + "'%s/config'.\n", CONFIG_FILE_NAME, CONFIG_FILE_NAME,
+                                        System.getProperty("user.home")));
                 System.exit(1);
             }
 
