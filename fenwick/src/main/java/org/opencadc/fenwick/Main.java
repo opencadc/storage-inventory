@@ -1,72 +1,74 @@
 /*
-************************************************************************
-*******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
-**************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
-*
-*  (c) 2020.                            (c) 2020.
-*  Government of Canada                 Gouvernement du Canada
-*  National Research Council            Conseil national de recherches
-*  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
-*  All rights reserved                  Tous droits réservés
-*
-*  NRC disclaims any warranties,        Le CNRC dénie toute garantie
-*  expressed, implied, or               énoncée, implicite ou légale,
-*  statutory, of any kind with          de quelque nature que ce
-*  respect to the software,             soit, concernant le logiciel,
-*  including without limitation         y compris sans restriction
-*  any warranty of merchantability      toute garantie de valeur
-*  or fitness for a particular          marchande ou de pertinence
-*  purpose. NRC shall not be            pour un usage particulier.
-*  liable in any event for any          Le CNRC ne pourra en aucun cas
-*  damages, whether direct or           être tenu responsable de tout
-*  indirect, special or general,        dommage, direct ou indirect,
-*  consequential or incidental,         particulier ou général,
-*  arising from the use of the          accessoire ou fortuit, résultant
-*  software.  Neither the name          de l'utilisation du logiciel. Ni
-*  of the National Research             le nom du Conseil National de
-*  Council of Canada nor the            Recherches du Canada ni les noms
-*  names of its contributors may        de ses  participants ne peuvent
-*  be used to endorse or promote        être utilisés pour approuver ou
-*  products derived from this           promouvoir les produits dérivés
-*  software without specific prior      de ce logiciel sans autorisation
-*  written permission.                  préalable et particulière
-*                                       par écrit.
-*
-*  This file is part of the             Ce fichier fait partie du projet
-*  OpenCADC project.                    OpenCADC.
-*
-*  OpenCADC is free software:           OpenCADC est un logiciel libre ;
-*  you can redistribute it and/or       vous pouvez le redistribuer ou le
-*  modify it under the terms of         modifier suivant les termes de
-*  the GNU Affero General Public        la “GNU Affero General Public
-*  License as published by the          License” telle que publiée
-*  Free Software Foundation,            par la Free Software Foundation
-*  either version 3 of the              : soit la version 3 de cette
-*  License, or (at your option)         licence, soit (à votre gré)
-*  any later version.                   toute version ultérieure.
-*
-*  OpenCADC is distributed in the       OpenCADC est distribué
-*  hope that it will be useful,         dans l’espoir qu’il vous
-*  but WITHOUT ANY WARRANTY;            sera utile, mais SANS AUCUNE
-*  without even the implied             GARANTIE : sans même la garantie
-*  warranty of MERCHANTABILITY          implicite de COMMERCIALISABILITÉ
-*  or FITNESS FOR A PARTICULAR          ni d’ADÉQUATION À UN OBJECTIF
-*  PURPOSE.  See the GNU Affero         PARTICULIER. Consultez la Licence
-*  General Public License for           Générale Publique GNU Affero
-*  more details.                        pour plus de détails.
-*
-*  You should have received             Vous devriez avoir reçu une
-*  a copy of the GNU Affero             copie de la Licence Générale
-*  General Public License along         Publique GNU Affero avec
-*  with OpenCADC.  If not, see          OpenCADC ; si ce n’est
-*  <http://www.gnu.org/licenses/>.      pas le cas, consultez :
-*                                       <http://www.gnu.org/licenses/>.
-*
-************************************************************************
-*/
+ ************************************************************************
+ *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
+ **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
+ *
+ *  (c) 2020.                            (c) 2020.
+ *  Government of Canada                 Gouvernement du Canada
+ *  National Research Council            Conseil national de recherches
+ *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
+ *  All rights reserved                  Tous droits réservés
+ *
+ *  NRC disclaims any warranties,        Le CNRC dénie toute garantie
+ *  expressed, implied, or               énoncée, implicite ou légale,
+ *  statutory, of any kind with          de quelque nature que ce
+ *  respect to the software,             soit, concernant le logiciel,
+ *  including without limitation         y compris sans restriction
+ *  any warranty of merchantability      toute garantie de valeur
+ *  or fitness for a particular          marchande ou de pertinence
+ *  purpose. NRC shall not be            pour un usage particulier.
+ *  liable in any event for any          Le CNRC ne pourra en aucun cas
+ *  damages, whether direct or           être tenu responsable de tout
+ *  indirect, special or general,        dommage, direct ou indirect,
+ *  consequential or incidental,         particulier ou général,
+ *  arising from the use of the          accessoire ou fortuit, résultant
+ *  software.  Neither the name          de l'utilisation du logiciel. Ni
+ *  of the National Research             le nom du Conseil National de
+ *  Council of Canada nor the            Recherches du Canada ni les noms
+ *  names of its contributors may        de ses  participants ne peuvent
+ *  be used to endorse or promote        être utilisés pour approuver ou
+ *  products derived from this           promouvoir les produits dérivés
+ *  software without specific prior      de ce logiciel sans autorisation
+ *  written permission.                  préalable et particulière
+ *                                       par écrit.
+ *
+ *  This file is part of the             Ce fichier fait partie du projet
+ *  OpenCADC project.                    OpenCADC.
+ *
+ *  OpenCADC is free software:           OpenCADC est un logiciel libre ;
+ *  you can redistribute it and/or       vous pouvez le redistribuer ou le
+ *  modify it under the terms of         modifier suivant les termes de
+ *  the GNU Affero General Public        la “GNU Affero General Public
+ *  License as published by the          License” telle que publiée
+ *  Free Software Foundation,            par la Free Software Foundation
+ *  either version 3 of the              : soit la version 3 de cette
+ *  License, or (at your option)         licence, soit (à votre gré)
+ *  any later version.                   toute version ultérieure.
+ *
+ *  OpenCADC is distributed in the       OpenCADC est distribué
+ *  hope that it will be useful,         dans l’espoir qu’il vous
+ *  but WITHOUT ANY WARRANTY;            sera utile, mais SANS AUCUNE
+ *  without even the implied             GARANTIE : sans même la garantie
+ *  warranty of MERCHANTABILITY          implicite de COMMERCIALISABILITÉ
+ *  or FITNESS FOR A PARTICULAR          ni d’ADÉQUATION À UN OBJECTIF
+ *  PURPOSE.  See the GNU Affero         PARTICULIER. Consultez la Licence
+ *  General Public License for           Générale Publique GNU Affero
+ *  more details.                        pour plus de détails.
+ *
+ *  You should have received             Vous devriez avoir reçu une
+ *  a copy of the GNU Affero             copie de la Licence Générale
+ *  General Public License along         Publique GNU Affero avec
+ *  with OpenCADC.  If not, see          OpenCADC ; si ce n’est
+ *  <http://www.gnu.org/licenses/>.      pas le cas, consultez :
+ *                                       <http://www.gnu.org/licenses/>.
+ *
+ ************************************************************************
+ */
 
 package org.opencadc.fenwick;
 
+import ca.nrc.cadc.db.ConnectionConfig;
+import ca.nrc.cadc.db.DBUtil;
 import ca.nrc.cadc.util.Log4jInit;
 import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.util.StringUtil;
@@ -83,6 +85,8 @@ import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.db.SQLGenerator;
+
+import javax.naming.NamingException;
 
 
 /**
@@ -110,9 +114,9 @@ public class Main {
             try {
                 Main.configure(props);
             } catch (IOException e) {
-                log.fatal(String.format("\nFile %s not found where expected. Ensure that %s is put into '/config' or "
-                                        + "'%s/config'.\n", CONFIG_FILE_NAME, CONFIG_FILE_NAME,
-                                        System.getProperty("user.home")));
+                System.err.println(String.format("\nFile %s not found where expected. Ensure that %s is put into "
+                                                 + "'/config' or '%s/config'.\n", CONFIG_FILE_NAME, CONFIG_FILE_NAME,
+                                                 System.getProperty("user.home")));
                 System.exit(1);
             }
 
@@ -123,11 +127,30 @@ public class Main {
 
             // DAO Configuration
             final Map<String, Object> daoConfig = new TreeMap<>();
-            daoConfig.put("username", Main.readProperty(props, DB_USERNAME_CONFIG_KEY, errorMessage));
-            daoConfig.put("password", Main.readProperty(props, DB_PASSWORD_CONFIG_KEY, errorMessage));
+            final String username = Main.readProperty(props, DB_USERNAME_CONFIG_KEY, errorMessage);
+            final String password = Main.readProperty(props, DB_PASSWORD_CONFIG_KEY, errorMessage);
+            final String dbUrl = Main.readProperty(props, DB_URL_CONFIG_KEY, errorMessage);
+
             daoConfig.put("schema", Main.readProperty(props, DB_SCHEMA_CONFIG_KEY, errorMessage));
-            daoConfig.put("url", Main.readProperty(props, DB_URL_CONFIG_KEY, errorMessage));
-            daoConfig.put(SQLGENERATOR_CONFIG_KEY, Main.readProperty(props, SQLGENERATOR_CONFIG_KEY, errorMessage));
+            daoConfig.put("database", "inventory");
+
+            if (StringUtil.hasText(username) && StringUtil.hasText(password) && StringUtil.hasText(dbUrl)) {
+                final ConnectionConfig cc = new ConnectionConfig(null, null, username, password,
+                                                                 "org.postgresql.Driver", dbUrl);
+
+                try {
+                    DBUtil.createJNDIDataSource("jdbc/inventory", cc);
+                } catch (NamingException ne) {
+                    throw new IllegalStateException(String.format("Unable to access database: %s", dbUrl), ne);
+                }
+
+                daoConfig.put("jndiDataSourceName", "jdbc/inventory");
+            }
+
+            final String configuredSQLGenerator = Main.readProperty(props, SQLGENERATOR_CONFIG_KEY, errorMessage);
+            if (StringUtil.hasText(configuredSQLGenerator)) {
+                daoConfig.put(SQLGENERATOR_CONFIG_KEY, Class.forName(configuredSQLGenerator));
+            }
 
             final String configuredQueryService = Main.readProperty(props, QUERY_SERVICE_CONFIG_KEY, errorMessage);
             final URI resourceID = StringUtil.hasText(configuredQueryService)
@@ -137,14 +160,14 @@ public class Main {
             final String configuredArtifactSelector = Main.readProperty(props, ARTIFACT_SELECTOR_CONFIG_KEY,
                                                                         errorMessage);
             final ArtifactSelector selector = StringUtil.hasText(configuredArtifactSelector)
-                                              ? InventoryUtil.loadPlugin(configuredArtifactSelector,
-                                                                         ArtifactSelector.class)
+                                              ? InventoryUtil.loadPlugin(configuredArtifactSelector)
                                               : null;
 
             // Missing required elements.  Only the expectedFilters and logging are optional.
             if (errorMessage.length() > 0) {
-                log.fatal(String.format("\nConfiguration file %s missing one or more values: %s.\n", CONFIG_FILE_NAME,
-                                        errorMessage.toString()));
+                System.err.println(
+                        String.format("\nConfiguration file %s missing one or more values: %s.\n", CONFIG_FILE_NAME,
+                                      errorMessage.toString()));
                 System.exit(2);
             }
 
@@ -152,7 +175,8 @@ public class Main {
             doit.run();
             System.exit(0);
         } catch (Throwable unexpected) {
-            log.error("unexpected failure", unexpected);
+            log.error("Unexpected failure", unexpected);
+            System.err.println("Unexpected failure.  Check log output.");
             System.exit(-1);
         }
     }
@@ -202,6 +226,7 @@ public class Main {
 
     /**
      * Set any package's logging level here.  Allows for finer grained messages.
+     *
      * @param applicationProperties The properties read from a file.
      */
     private static void setLogging(final MultiValuedProperties applicationProperties) {
