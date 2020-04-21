@@ -141,7 +141,7 @@ public class Main {
                                                                          ArtifactSelector.class)
                                               : null;
 
-            // Everything is required
+            // Missing required elements.  Only the expectedFilters and logging are optional.
             if (errorMessage.length() > 0) {
                 log.fatal(String.format("\nConfiguration file %s missing one or more values: %s.\n", CONFIG_FILE_NAME,
                                         errorMessage.toString()));
