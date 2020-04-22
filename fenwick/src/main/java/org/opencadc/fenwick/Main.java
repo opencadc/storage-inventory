@@ -80,13 +80,13 @@ import java.io.InputStream;
 import java.net.URI;
 import java.util.Map;
 import java.util.TreeMap;
+import javax.naming.NamingException;
 
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.db.SQLGenerator;
 
-import javax.naming.NamingException;
 
 
 /**
