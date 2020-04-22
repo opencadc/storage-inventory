@@ -107,7 +107,7 @@ public class TestUtil {
                     TABLE_PREFIX = s.trim();
                 }
             }
-            log.info("intTest database config: " + SERVER + " " + DATABASE + " " + SCHEMA + " " + TABLE_PREFIX);
+            log.debug("intTest database config: " + SERVER + " " + DATABASE + " " + SCHEMA + " " + TABLE_PREFIX);
         } catch (Exception oops) {
             log.debug("failed to load/read optional db config", oops);
         }

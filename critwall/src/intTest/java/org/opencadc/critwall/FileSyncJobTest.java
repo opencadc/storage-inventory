@@ -159,8 +159,6 @@ public class FileSyncJobTest {
     @Test
     public void testValidJob() {
         BucketMode bucketMode = FileSystemStorageAdapter.BucketMode.URI;
-        log.info("testValidJob(" + bucketMode + ") - start");
-
         String testDir = TEST_ROOT + File.separator + "testValidJob-" + bucketMode;
 
         try {
@@ -192,12 +190,8 @@ public class FileSyncJobTest {
             FileSyncJob fsj = new FileSyncJob(artifactID, resourceID, sa, dao);
             fsj.run();
 
-            // assert that job succeeded
-            // get the artifact by URI again
+            // check job succeeded by trying to get artifact by location
             Artifact storedArtifact = dao.get(artifactID);
-
-            // check that artifact in db has storage location
-            Assert.assertNotNull(storedArtifact.storageLocation);
 
             // check for file on disk, throw away the bytes
             FileOutputStream dest = new FileOutputStream("/dev/null");
@@ -208,7 +202,7 @@ public class FileSyncJobTest {
             Assert.fail("unexpected exception");
             log.debug(unexpected);
         }
-        log.debug("done");
+        log.info("testValidJob(" + bucketMode + ") - DONE");
     }
 
 }
