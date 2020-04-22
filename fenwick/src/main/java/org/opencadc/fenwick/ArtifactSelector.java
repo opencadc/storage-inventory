@@ -67,15 +67,35 @@
 
 package org.opencadc.fenwick;
 
-import org.apache.log4j.Logger;
+import java.io.File;
+import java.nio.file.Path;
+import java.util.Iterator;
+
 
 /**
- * 
+ * A Selector to provide the InventoryHarvester with a means to gather include (additive) clauses to select appropriate
+ * Artifacts to be included in the metadata sync merge.
+ *
  * @author pdowler
  */
 public abstract class ArtifactSelector {
-    private static final Logger log = Logger.getLogger(ArtifactSelector.class);
+    final Path selectorConfigDir;
 
-    protected ArtifactSelector() { 
+    protected ArtifactSelector() {
+        // Read in the configuration file, and create a usable Map from it.
+        final File homeConfigDirectory = new File(String.format("%s/config/include", System.getProperty("user.home")));
+
+        // Allow some flexibility to override.  This is useful for local testing as one would normally require root
+        // access to create /config.  Those Selectors that do not use the include clauses may safely ignore this.
+        selectorConfigDir = homeConfigDirectory.isDirectory()
+                            ? homeConfigDirectory.toPath()
+                            : new File("/config/include").toPath();
     }
+
+    /**
+     * Obtain the iterator of clauses used to build a query to include the Artifacts being merged.
+     * @return  Iterator of String clauses, or empty iterator.  Never null.
+     * @throws Exception    Any issues with establishing the iterator, or reading from configuration
+     */
+    public abstract Iterator<String> iterateIncludeClauses() throws Exception;
 }

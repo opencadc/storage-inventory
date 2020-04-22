@@ -67,11 +67,15 @@
 
 package org.opencadc.fenwick;
 
+import java.util.Collections;
+import java.util.Iterator;
+
 import org.apache.log4j.Logger;
+
 
 /**
  * Selector that does not constrain Artifact selection.
- * 
+ *
  * @author pdowler
  */
 public class AllArtifacts extends ArtifactSelector {
@@ -79,5 +83,16 @@ public class AllArtifacts extends ArtifactSelector {
 
     public AllArtifacts() {
         super();
+    }
+
+    /**
+     * Obtain the iterator of clauses used to build a query to include the Artifacts being merged.
+     *
+     * @return An empty iterator.
+     */
+    @Override
+    public Iterator<String> iterateIncludeClauses() {
+        log.debug("No filters for AllArtifacts.");
+        return Collections.emptyIterator();
     }
 }
