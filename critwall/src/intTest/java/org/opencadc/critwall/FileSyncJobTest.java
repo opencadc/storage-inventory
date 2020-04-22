@@ -70,8 +70,8 @@ package org.opencadc.critwall;
 import ca.nrc.cadc.db.ConnectionConfig;
 import ca.nrc.cadc.db.DBConfig;
 import ca.nrc.cadc.db.DBUtil;
-import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileOutputStream;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.attribute.FileAttribute;
@@ -82,11 +82,12 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.UUID;
+import org.apache.commons.io.FileUtils;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Before;
 import org.opencadc.inventory.Artifact;
-import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.SQLGenerator;
 import org.opencadc.inventory.storage.fs.FileSystemStorageAdapter;
@@ -106,25 +107,25 @@ public class FileSyncJobTest {
     static {
         Log4jInit.setLevel("org.opencadc.inventory", Level.INFO);
         Log4jInit.setLevel("org.opencadc.inventory.db", Level.INFO);
-        Log4jInit.setLevel("ca.nrc.cadc.db", Level.DEBUG);
-        Log4jInit.setLevel("org.opencadc.critwall", Level.DEBUG);
-        Log4jInit.setLevel("org.opencadc.inventory.storage.fs", Level.DEBUG);
+        Log4jInit.setLevel("ca.nrc.cadc.db", Level.INFO);
+        Log4jInit.setLevel("org.opencadc.critwall", Level.INFO);
+        Log4jInit.setLevel("org.opencadc.inventory.storage.fs", Level.INFO);
     }
 
-    ArtifactDAO dao = new ArtifactDAO();
+    private ArtifactDAO dao = new ArtifactDAO();
 
     public FileSyncJobTest() throws Exception {
         try {
-                DBConfig dbrc = new DBConfig();
-                ConnectionConfig cc = dbrc.getConnectionConfig(TestUtil.SERVER, TestUtil.DATABASE);
-                DBUtil.createJNDIDataSource("jdbc/FileSyncJobTest", cc);
+            DBConfig dbrc = new DBConfig();
+            ConnectionConfig cc = dbrc.getConnectionConfig(TestUtil.SERVER, TestUtil.DATABASE);
+            DBUtil.createJNDIDataSource("jdbc/FileSyncJobTest", cc);
 
-                Map<String,Object> config = new TreeMap<String,Object>();
-                config.put(SQLGenerator.class.getName(), SQLGenerator.class);
-                config.put("jndiDataSourceName", "jdbc/FileSyncJobTest");
-                config.put("database", TestUtil.DATABASE);
-                config.put("schema", TestUtil.SCHEMA);
-                dao.setConfig(config);
+            Map<String,Object> config = new TreeMap<String,Object>();
+            config.put(SQLGenerator.class.getName(), SQLGenerator.class);
+            config.put("jndiDataSourceName", "jdbc/FileSyncJobTest");
+            config.put("database", TestUtil.DATABASE);
+            config.put("schema", TestUtil.SCHEMA);
+            dao.setConfig(config);
 
         } catch (Exception ex) {
             log.error("setup failed", ex);
@@ -141,9 +142,7 @@ public class FileSyncJobTest {
     }
 
     @Before
-    public void init_cleanup() throws Exception {
-        // will have to get all artifacts from the table, iterate over them and
-        // delete. Will be completely destructive, but so be it!
+    public void cleanTestEnvironment() throws Exception {
         log.debug("cleaning stored artifacts...");
         Iterator<Artifact> storedArtifacts = dao.storedIterator(null);
         wipe_clean(storedArtifacts);
@@ -152,62 +151,64 @@ public class FileSyncJobTest {
         Iterator<Artifact> unstoredArtifacts = dao.unstoredIterator(null);
         wipe_clean(unstoredArtifacts);
 
+        // Clean up fsroot
+        log.debug("deleting test dir: " + TEST_ROOT);
+        FileUtils.deleteDirectory(new File(TEST_ROOT));
     }
 
-
     @Test
-    public void testJob() throws Exception {
+    public void testValidJob() {
+        BucketMode bucketMode = FileSystemStorageAdapter.BucketMode.URI;
+        log.info("testValidJob(" + bucketMode + ") - start");
+
+        String testDir = TEST_ROOT + File.separator + "testValidJob-" + bucketMode;
 
         try {
-            BucketMode bucketMode = FileSystemStorageAdapter.BucketMode.URI;
-            log.info("testJob(" + bucketMode + ") - start");
-
             // Create the test directory the fs storage adapter needs
-            String testDir = TEST_ROOT + File.separator + "testJob-" + bucketMode;
             Set<PosixFilePermission> perms = PosixFilePermissions.fromString("rwxrwxrw-");
             FileAttribute<Set<PosixFilePermission>> attr = PosixFilePermissions.asFileAttribute(perms);
             Files.createDirectories(Paths.get(testDir), attr);
+
+            FileSystemStorageAdapter sa = new FileSystemStorageAdapter(testDir, bucketMode, 1);
 
             URI artifactID = new URI(TEST_ARTIFACT_URI);
             URI resourceID = new URI(TEST_RESOURCE_ID);
 
             // Set up an Artifact in the database to start.
             Artifact artifactToUpdate = new Artifact(artifactID,
-                new URI("md5:646d3c548ffb98244a0fc52b60556082"), new Date(), //storageMeta.contentLastModified,
+                new URI("md5:646d3c548ffb98244a0fc52b60556082"), new Date(),
                 1008000L);
 
-            log.debug("setting test artifact: ");
+            log.debug("putting test artifact to database");
             dao.put(artifactToUpdate);
-            //verify something is there
-            log.debug("ID of test artifact" + artifactToUpdate.getID());
-            Artifact testArtifact = dao.get(artifactToUpdate.getID());
+            // verify something was done
+            UUID artifactUUID = artifactToUpdate.getID();
+            Assert.assertNotNull(artifactUUID);
+            Artifact testArtifact = dao.get(artifactUUID);
             Assert.assertNotNull(testArtifact);
-            log.debug("test artifact stored");
 
-            FileSystemStorageAdapter sa = new FileSystemStorageAdapter(testDir, bucketMode, 1);
+            log.debug("test artifact stored: UUID is " + artifactUUID.toString());
+
             FileSyncJob fsj = new FileSyncJob(artifactID, resourceID, sa, dao);
             fsj.run();
 
             // assert that job succeeded
-            // Get the artifact by URI again
+            // get the artifact by URI again
             Artifact storedArtifact = dao.get(artifactID);
 
             // check that artifact in db has storage location
             Assert.assertNotNull(storedArtifact.storageLocation);
 
-            StorageLocation expected = new StorageLocation(new URI("ad:IRIS/I212B2H0.fits"));
-            expected.storageBucket = "ad:IRIS";
-            Assert.assertEquals(expected, storedArtifact.storageLocation);
-
-            // check for file on disk
-            ByteArrayOutputStream dest = new ByteArrayOutputStream();
-            sa.get(expected, dest);
+            // check for file on disk, throw away the bytes
+            FileOutputStream dest = new FileOutputStream("/dev/null");
+            log.debug("shunting to /dev/null");
+            sa.get(storedArtifact.storageLocation, dest);
 
         } catch (Exception unexpected) {
             Assert.fail("unexpected exception");
             log.debug(unexpected);
         }
-
         log.debug("done");
     }
+
 }
