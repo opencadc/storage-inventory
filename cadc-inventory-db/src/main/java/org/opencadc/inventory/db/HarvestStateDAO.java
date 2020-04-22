@@ -65,54 +65,56 @@
 ************************************************************************
 */
 
-package org.opencadc.inventory.db.version;
+package org.opencadc.inventory.db;
 
-import java.net.URL;
-import javax.sql.DataSource;
+import java.net.URI;
+import java.util.UUID;
+
 import org.apache.log4j.Logger;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
  *
  * @author pdowler
  */
-public class InitDatabase extends ca.nrc.cadc.db.version.InitDatabase {
-    private static final Logger log = Logger.getLogger(InitDatabase.class);
-    
-    public static final String MODEL_NAME = "storage-inventory";
-    public static final String MODEL_VERSION = "0.8";
-    public static final String PREV_MODEL_VERSION = "0.7";
-    //public static final String PREV_MODEL_VERSION = "DO-NOT_UPGRADE-BY-ACCIDENT";
+public class HarvestStateDAO extends AbstractDAO<HarvestState> {
+    private static final Logger log = Logger.getLogger(HarvestStateDAO.class);
 
-    static String[] CREATE_SQL = new String[] {
-        "inventory.ModelVersion.sql",
-        "inventory.Artifact.sql",
-        "inventory.StorageSite.sql",
-        "inventory.ObsoleteStorageLocation.sql",
-        "inventory.DeletedArtifactEvent.sql",
-        "inventory.DeletedStorageLocationEvent.sql",
-        "inventory.HarvestState.sql",
-        "inventory.permissions.sql"
-    };
+    // only usabe by itself for testing
+    public HarvestStateDAO() { 
+        super();
+    }
     
-    static String[] UPGRADE_SQL = new String[] {
-        "inventory.HarvestState.sql",
-        "inventory.upgrade-0.8.sql",
-        "inventory.permissions.sql"
-    };
+    public HarvestStateDAO(AbstractDAO src) {
+        super(src);
+    }
     
-    public InitDatabase(DataSource ds, String database, String schema) { 
-        super(ds, database, schema, MODEL_NAME, MODEL_VERSION, PREV_MODEL_VERSION);
-        for (String s : CREATE_SQL) {
-            createSQL.add(s);
+    public HarvestState get(UUID id) {
+        return super.get(HarvestState.class, id);
+    }
+    
+    public HarvestState get(String name, URI resourceID) {
+        if (name == null || resourceID == null) {
+            throw new IllegalArgumentException("name and resourceID cannot be null");
         }
-        for (String s : UPGRADE_SQL) {
-            upgradeSQL.add(s);
+        checkInit();
+        log.debug("GET: " + name + " " + resourceID);
+        long t = System.currentTimeMillis();
+
+        try {
+            JdbcTemplate jdbc = new JdbcTemplate(dataSource);
+            
+            SQLGenerator.HarvestStateGet get = ( SQLGenerator.HarvestStateGet) gen.getEntityGet(HarvestState.class);
+            get.setSource(name, resourceID);
+            HarvestState o = get.execute(jdbc);
+            return o;
+        } finally {
+            long dt = System.currentTimeMillis() - t;
+            log.debug("GET: " + name + " " + resourceID + " " + dt + "ms");
         }
     }
-
-    @Override
-    protected URL findSQL(String fname) {
-        // SQL files are stored inside the jar file
-        return InitDatabase.class.getClassLoader().getResource(fname);
+    
+    public void delete(UUID id) {
+        super.delete(HarvestState.class, id);
     }
 }
