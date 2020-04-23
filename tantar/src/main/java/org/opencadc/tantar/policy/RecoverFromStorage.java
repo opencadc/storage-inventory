@@ -79,9 +79,9 @@ import org.opencadc.tantar.ValidateEventListener;
  * Policy to ensure that a recovery from Storage (in the event of a disaster or a new site is brought online) will
  * dictate what goes into the Inventory Database.
  */
-public class RecoverFromStoragePolicy extends ResolutionPolicy {
+public class RecoverFromStorage extends ResolutionPolicy {
 
-    public RecoverFromStoragePolicy(ValidateEventListener validateEventListener, Reporter reporter) {
+    public RecoverFromStorage(ValidateEventListener validateEventListener, Reporter reporter) {
         super(validateEventListener, reporter);
     }
 
@@ -99,9 +99,10 @@ public class RecoverFromStoragePolicy extends ResolutionPolicy {
             reporter.report(String.format("Adding Artifact %s as per policy.", storageMetadata.getStorageLocation()));
             validateEventListener.createArtifact(storageMetadata);
         } else {
-            reporter.report(String.format("Replacing Artifact %s as per policy.",
-                                          storageMetadata.getStorageLocation()));
-            validateEventListener.replaceArtifact(artifact, storageMetadata);
+            // This scenario is for an incomplete previous run.  Treat the Artifact as corrupt and set it back to the
+            // StorageMetadata's values.
+            reporter.report(String.format("Updating Artifact %s as per policy.", storageMetadata.getStorageLocation()));
+            validateEventListener.updateArtifact(artifact, storageMetadata);
         }
     }
 }

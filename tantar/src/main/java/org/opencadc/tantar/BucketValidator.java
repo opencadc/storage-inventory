@@ -545,6 +545,47 @@ public class BucketValidator implements ValidateEventListener {
     }
 
     /**
+     * Update the values of the given Artifact with those from the given StorageMetadata.  This differs from a replace
+     * as it will not delete the original Artifact first, but rather update the values and issue a PUT.
+     *
+     * @param artifact        The Artifact to update.
+     * @param storageMetadata The StorageMetadata from which to update the Artifact's fields.
+     * @throws Exception Any unexpected error.
+     */
+    @Override
+    public void updateArtifact(final Artifact artifact, final StorageMetadata storageMetadata) throws Exception {
+        if (canTakeAction()) {
+            final TransactionManager transactionManager = artifactDAO.getTransactionManager();
+
+            try {
+                LOGGER.debug("Start transaction.");
+                transactionManager.startTransaction();
+
+                // By reusing the Artifact instance's ID we can have the original Artifact but wipe out the mutable
+                // fields below.
+                artifact.contentEncoding = storageMetadata.contentEncoding;
+                artifact.contentType = storageMetadata.contentType;
+                artifact.storageLocation = storageMetadata.getStorageLocation();
+
+                artifactDAO.put(artifact, true);
+
+                transactionManager.commitTransaction();
+            } catch (Exception e) {
+                LOGGER.error(String.format("Failed to update Artifact %s.", storageMetadata.artifactURI), e);
+                transactionManager.rollbackTransaction();
+                LOGGER.debug("Rollback Transaction: OK");
+                throw e;
+            } finally {
+                if (transactionManager.isOpen()) {
+                    LOGGER.error("BUG - Open transaction in finally");
+                    transactionManager.rollbackTransaction();
+                    LOGGER.error("Transaction rolled back successfully.");
+                }
+            }
+        }
+    }
+
+    /**
      * Iterate over the StorageMetadata instances from the Storage Adapter.  The consumer of this Iterator will assume
      * that the StorageLocation is never null.
      * <p/>
