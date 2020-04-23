@@ -68,7 +68,6 @@
 package org.opencadc.critwall;
 
 import ca.nrc.cadc.auth.AuthMethod;
-import ca.nrc.cadc.io.ReadException;
 import ca.nrc.cadc.io.WriteException;
 import ca.nrc.cadc.net.FileContent;
 import ca.nrc.cadc.net.HttpGet;
@@ -106,6 +105,8 @@ import org.opencadc.inventory.storage.StorageMetadata;
 public class FileSyncJob implements Runnable {
     private static final Logger log = Logger.getLogger(FileSyncJob.class);
 
+    private static long[] RETRY_DELAY = new long[] { 2000L, 4000L };
+
     private final ArtifactDAO artifactDAO;
     private final URI artifactID;
     private final URI resourceID;
@@ -139,28 +140,34 @@ public class FileSyncJob implements Runnable {
         int retryCount = 0;
         Iterator<URL> urlIterator = urlList.iterator();
 
-        while (retryCount < 2) {
-            log.debug("attempt " + retryCount + " to sync artifact " + artifactID);
-            StorageMetadata storageMeta = syncArtifact(urlIterator);
+        try {
+            while (retryCount < RETRY_DELAY.length) {
+                log.debug("attempt " + retryCount + " to sync artifact " + artifactID);
+                StorageMetadata storageMeta = syncArtifact(urlIterator);
 
-            // sync succeeded - update storage location
-            if (storageMeta != null) {
-                log.debug(storageMeta.getContentChecksum());
-                log.debug(storageMeta.contentLastModified);
-                log.debug(storageMeta.getContentLength());
+                // sync succeeded - update storage location
+                if (storageMeta != null) {
+                    log.debug(storageMeta.getContentChecksum());
+                    log.debug(storageMeta.contentLastModified);
+                    log.debug(storageMeta.getContentLength());
 
-                // Update curArtifact with new storage location
-                Artifact curArtifact = artifactDAO.get(artifactID);
-                curArtifact.storageLocation = storageMeta.getStorageLocation();
-                artifactDAO.put(curArtifact, true);
-                log.debug("updated artifact storage location");
-                break;
+                    // Update curArtifact with new storage location
+                    Artifact curArtifact = artifactDAO.get(artifactID);
+                    curArtifact.storageLocation = storageMeta.getStorageLocation();
+                    artifactDAO.put(curArtifact, true);
+                    log.debug("updated artifact storage location");
+                    break;
+                }
+                Thread.sleep(RETRY_DELAY[retryCount++]);
+
             }
-            retryCount++;
+        } catch (StorageEngageException |  InterruptedException syncError) {
+            log.error("artifact sync error for " + artifactID + ": " + syncError.getMessage());
         }
     }
 
-    private List<URL> getdownloadURLs() throws IOException, InterruptedException,
+    private List<URL> getdownloadURLs()
+        throws IOException, InterruptedException,
         ResourceAlreadyExistsException, ResourceNotFoundException,
         TransientException, TransferParsingException {
 
@@ -210,7 +217,9 @@ public class FileSyncJob implements Runnable {
         return urlList;
     }
 
-    private StorageMetadata syncArtifact(Iterator<URL> urlIterator) {
+    private StorageMetadata syncArtifact(Iterator<URL> urlIterator)
+        throws StorageEngageException, InterruptedException {
+
         StorageMetadata storageMeta = null;
 
         while (urlIterator.hasNext()) {
@@ -225,28 +234,22 @@ public class FileSyncJob implements Runnable {
                 NewArtifact a = new NewArtifact(artifactID);
                 storageMeta = storageAdapter.put(a, get.getInputStream());
                 log.debug("storage meta returned: " + storageMeta.getStorageLocation());
-                break;
+                return storageMeta;
 
-            } catch (TransientException te) {
-                // could be prepare or put that throws this
+            } catch (WriteException wre) {
+                // IOException will capture this if not explicitly caught
+                log.info("write error for storage adapter put: " + wre.getMessage());
+                break;
+            }
+            catch (TransientException | IOException te) {
+                // ReadException will be caught under the IOException
+                // could be prepare or put throwing this error
+                // will move to next url
                 log.info("transient exception." + te.getMessage());
-                continue;
 
             } catch (ResourceNotFoundException | ResourceAlreadyExistsException  badURL) {
                 log.info("removing URL " + u + " from list: " + badURL.getMessage());
-                continue;
-
-            } catch (StorageEngageException | WriteException | ReadException  putError) {
-                log.error("storage adapter failure: " + putError.getMessage());
-                break;
-
-            } catch (InterruptedException  getError) {
-                log.error("failure getting artifact: " + getError.getMessage());
-                break;
-
-            } catch (IOException prepareOrPut) {
-                log.error(prepareOrPut.getMessage());
-                break;
+                urlIterator.remove();
 
             }
         }

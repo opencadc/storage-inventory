@@ -83,7 +83,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
-import org.apache.commons.io.FileUtils;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Before;
@@ -100,7 +99,7 @@ import org.junit.Test;
 
 public class FileSyncJobTest {
     private static final Logger log = Logger.getLogger(FileSyncJobTest.class);
-    private static final String TEST_ROOT = "build/tmp/fsroot";
+    private static final String TEST_ROOT = "build/tmp/fsroot/critwallTests";
     private static final String TEST_ARTIFACT_URI = "ad:IRIS/I212B2H0.fits";
     private static final String TEST_RESOURCE_ID = "ivo://cadc.nrc.ca/data";
 
@@ -151,9 +150,20 @@ public class FileSyncJobTest {
         Iterator<Artifact> unstoredArtifacts = dao.unstoredIterator(null);
         wipe_clean(unstoredArtifacts);
 
-        // Clean up fsroot
+        // Clean up critwall tests in fsroot
         log.debug("deleting test dir: " + TEST_ROOT);
-        FileUtils.deleteDirectory(new File(TEST_ROOT));
+        deleteDir(new File(TEST_ROOT));
+
+    }
+
+    private void deleteDir(File file) {
+        File[] contents = file.listFiles();
+        if (contents != null) {
+            for (File f : contents) {
+                deleteDir(f);
+            }
+        }
+        file.delete();
     }
 
     @Test

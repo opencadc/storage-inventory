@@ -25,7 +25,6 @@ dependencies {
     compile 'org.opencadc:cadc-registry:[1.5,2.0)'
     compile 'org.opencadc:cadc-storage-adapter-fs:[0.6,)'
     compile 'org.opencadc:cadc-vos:[1.1.8,)'
-    compile 'org.opencadc:cadc-vosi:[1.0,)'
 
     testCompile 'junit:junit:[4.12,5.0)'
 }
