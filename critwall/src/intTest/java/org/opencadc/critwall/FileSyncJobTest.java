@@ -90,12 +90,11 @@ import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.SQLGenerator;
 import org.opencadc.inventory.storage.StorageMetadata;
-import org.opencadc.inventory.storage.fs.FileSystemStorageAdapter;
+import org.opencadc.inventory.storage.fs.OpaqueFileSystemStorageAdapter;
 import ca.nrc.cadc.util.Log4jInit;
 import java.net.URI;
 import org.junit.Assert;
 import org.junit.Test;
-import org.opencadc.inventory.storage.fs.OpaqueFileSystemStorageAdapter;
 
 
 public class FileSyncJobTest {
