@@ -71,6 +71,7 @@ import ca.nrc.cadc.db.ConnectionConfig;
 import ca.nrc.cadc.db.DBUtil;
 import ca.nrc.cadc.util.Log4jInit;
 import ca.nrc.cadc.util.MultiValuedProperties;
+import ca.nrc.cadc.util.PropertiesReader;
 import ca.nrc.cadc.util.StringUtil;
 
 import java.io.File;
@@ -100,27 +101,25 @@ public class Main {
     private static final String CONFIG_FILE_NAME = "fenwick.properties";
     private static final String CONFIG_PREFIX = Main.class.getPackage().getName();
     private static final String SQLGENERATOR_CONFIG_KEY = SQLGenerator.class.getName();
-    private static final String DB_SCHEMA_CONFIG_KEY = String.format("%s.db.schema", CONFIG_PREFIX);
-    private static final String DB_URL_CONFIG_KEY = String.format("%s.db.url", CONFIG_PREFIX);
-    private static final String DB_USERNAME_CONFIG_KEY = String.format("%s.db.username", CONFIG_PREFIX);
-    private static final String DB_PASSWORD_CONFIG_KEY = String.format("%s.db.password", CONFIG_PREFIX);
-    private static final String QUERY_SERVICE_CONFIG_KEY = String.format("%s.queryService", CONFIG_PREFIX);
+    private static final String DB_SCHEMA_CONFIG_KEY = CONFIG_PREFIX + ".db.schema";
+    private static final String LOGGING_KEY = CONFIG_PREFIX + ".logging";
+    private static final String DB_URL_CONFIG_KEY = CONFIG_PREFIX + ".db.url";
+    private static final String DB_USERNAME_CONFIG_KEY = CONFIG_PREFIX + ".db.username";
+    private static final String DB_PASSWORD_CONFIG_KEY = CONFIG_PREFIX + ".db.password";
+    private static final String QUERY_SERVICE_CONFIG_KEY = CONFIG_PREFIX + ".queryService";
     private static final String ARTIFACT_SELECTOR_CONFIG_KEY = ArtifactSelector.class.getName();
 
     public static void main(final String[] args) {
+        Log4jInit.setLevel("ca.nrc.cadc", Level.WARN);
+        Log4jInit.setLevel("org.opencadc", Level.WARN);
+
         try {
-            final MultiValuedProperties props = new MultiValuedProperties();
+            final PropertiesReader propertiesReader = new PropertiesReader(CONFIG_FILE_NAME);
+            final MultiValuedProperties props = propertiesReader.getAllProperties();
 
-            try {
-                Main.configure(props);
-            } catch (IOException e) {
-                System.err.println(String.format("\nFile %s not found where expected. Ensure that %s is put into "
-                                                 + "'/config' or '%s/config'.\n", CONFIG_FILE_NAME, CONFIG_FILE_NAME,
-                                                 System.getProperty("user.home")));
-                System.exit(1);
-            }
-
-            Main.setLogging(props);
+            final String configuredLogging = props.getFirstPropertyValue(LOGGING_KEY);
+            Log4jInit.setLevel("org.opencadc.fenwick", StringUtil.hasText(configuredLogging)
+                                                       ? Level.toLevel(configuredLogging.toUpperCase()) : Level.INFO);
 
             // Deal with missing required elements from the configuration file.
             final StringBuilder errorMessage = new StringBuilder();
@@ -165,7 +164,7 @@ public class Main {
 
             // Missing required elements.  Only the expectedFilters and logging are optional.
             if (errorMessage.length() > 0) {
-                System.err.println(
+                System.out.println(
                         String.format("\nConfiguration file %s missing one or more values: %s.\n", CONFIG_FILE_NAME,
                                       errorMessage.toString()));
                 System.exit(2);
@@ -176,27 +175,9 @@ public class Main {
             System.exit(0);
         } catch (Throwable unexpected) {
             log.error("Unexpected failure", unexpected);
-            System.err.println("Unexpected failure.  Check log output.");
+            System.out.println("Unexpected failure.  Check log output.");
             System.exit(-1);
         }
-    }
-
-    /**
-     * Read in the configuration file and load it into the given Properties.
-     */
-    private static void configure(final MultiValuedProperties properties) throws IOException {
-        // Read in the configuration file, and create a usable Map from it.
-        final String homeConfigDirectoryPath = String.format("%s/config", System.getProperty("user.home"));
-
-        // Allow some flexibility to override.  This is useful for local testing as one would normally require root
-        // access to create /config.
-        final String configurationDirectory = new File(homeConfigDirectoryPath).isDirectory()
-                                              ? homeConfigDirectoryPath : "/config";
-
-        final String configurationFileLocation = String.format("%s/%s", configurationDirectory, CONFIG_FILE_NAME);
-
-        final InputStream configFileInputStream = new FileInputStream(configurationFileLocation);
-        properties.load(configFileInputStream);
     }
 
     /**
@@ -222,24 +203,6 @@ public class Main {
         }
 
         return returnValue;
-    }
-
-    /**
-     * Set any package's logging level here.  Allows for finer grained messages.
-     *
-     * @param applicationProperties The properties read from a file.
-     */
-    private static void setLogging(final MultiValuedProperties applicationProperties) {
-        Log4jInit.setLevel("ca.nrc.cadc", Level.WARN);
-        Log4jInit.setLevel("org.opencadc", Level.WARN);
-
-        final String loggingKey = ".logging";
-
-        applicationProperties.keySet().stream().filter(key -> key.endsWith(loggingKey))
-                             .forEach(key -> Log4jInit.setLevel(key.split(loggingKey)[0],
-                                                                Level.toLevel(
-                                                                        applicationProperties.getFirstPropertyValue(key)
-                                                                                             .toUpperCase())));
     }
 
     private Main() {
