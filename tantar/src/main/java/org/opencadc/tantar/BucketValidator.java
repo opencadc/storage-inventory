@@ -567,7 +567,7 @@ public class BucketValidator implements ValidateEventListener {
                 artifact.contentType = storageMetadata.contentType;
                 artifact.storageLocation = storageMetadata.getStorageLocation();
 
-                artifactDAO.put(artifact, true);
+                artifactDAO.put(artifact);
 
                 transactionManager.commitTransaction();
             } catch (Exception e) {
