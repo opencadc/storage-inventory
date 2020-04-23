@@ -129,7 +129,7 @@ public class FileSyncJob implements Runnable {
 
         final List<URL> urlList;
         try {
-            urlList = getdownloadURLs();
+            urlList = getdownloadURLs(this.resourceID, this.artifactID);
         } catch (Exception e) {
             // fail - nothing can be done without the list, negotiation cannot be retried
             log.error("transfer negotiation failed.");
@@ -142,8 +142,8 @@ public class FileSyncJob implements Runnable {
 
         try {
             while (retryCount < RETRY_DELAY.length) {
-                log.debug("attempt " + retryCount + " to sync artifact " + artifactID);
-                StorageMetadata storageMeta = syncArtifact(urlIterator);
+                log.debug("attempt " + retryCount + " to sync artifact " + this.artifactID);
+                StorageMetadata storageMeta = syncArtifact(urlIterator, this.artifactID, this.storageAdapter);
 
                 // sync succeeded - update storage location
                 if (storageMeta != null) {
@@ -152,28 +152,41 @@ public class FileSyncJob implements Runnable {
                     log.debug(storageMeta.getContentLength());
 
                     // Update curArtifact with new storage location
-                    Artifact curArtifact = artifactDAO.get(artifactID);
+                    Artifact curArtifact = this.artifactDAO.get(this.artifactID);
                     curArtifact.storageLocation = storageMeta.getStorageLocation();
-                    artifactDAO.put(curArtifact, true);
+                    this.artifactDAO.put(curArtifact, true);
                     log.debug("updated artifact storage location");
                     break;
                 }
                 Thread.sleep(RETRY_DELAY[retryCount++]);
 
             }
-        } catch (StorageEngageException |  InterruptedException syncError) {
-            log.error("artifact sync error for " + artifactID + ": " + syncError.getMessage());
+        } catch (StorageEngageException |  InterruptedException | WriteException syncError) {
+            log.error("artifact sync error for " + this.artifactID + ": " + syncError.getMessage());
         }
     }
 
-    private List<URL> getdownloadURLs()
+    /**
+     * Use transfer service at resource URI to get list of download URLs for the artifact.
+     *
+     * @param resource
+     * @param artifact
+     * @return list of URLs from transfer service
+     * @throws IOException
+     * @throws InterruptedException
+     * @throws ResourceAlreadyExistsException
+     * @throws ResourceNotFoundException
+     * @throws TransientException
+     * @throws TransferParsingException
+     */
+    private List<URL> getdownloadURLs(URI resource, URI artifact)
         throws IOException, InterruptedException,
         ResourceAlreadyExistsException, ResourceNotFoundException,
         TransientException, TransferParsingException {
 
         RegistryClient regClient = new RegistryClient();
-        log.debug("resource id: " + this.resourceID);
-        URL transferURL = regClient.getServiceURL(this.resourceID, Standards.VOSPACE_SYNC_21, AuthMethod.CERT);
+        log.debug("resource id: " + resource);
+        URL transferURL = regClient.getServiceURL(resource, Standards.VOSPACE_SYNC_21, AuthMethod.CERT);
         log.debug("certURL: " + transferURL);
 
         // Ask for all protocols available back, and the server will
@@ -184,7 +197,7 @@ public class FileSyncJob implements Runnable {
         log.debug("protocols: " + httpsCert);
         protocolList.add(httpsCert);
 
-        Transfer transfer = new Transfer(artifactID, Direction.pullFromVoSpace, protocolList);
+        Transfer transfer = new Transfer(artifact, Direction.pullFromVoSpace, protocolList);
         transfer.version = VOS.VOSPACE_21;
 
         TransferWriter writer = new TransferWriter();
@@ -193,7 +206,7 @@ public class FileSyncJob implements Runnable {
         FileContent content = new FileContent(out.toByteArray(), "text/xml");
         log.debug("xml file content to be posted: " + transfer);
 
-        log.debug("artifact path: " + artifactID.getPath());
+        log.debug("artifact path: " + artifact.getPath());
         HttpPost post = new HttpPost(transferURL, content, true);
         post.prepare();
         log.debug("post prepare done");
@@ -217,8 +230,19 @@ public class FileSyncJob implements Runnable {
         return urlList;
     }
 
-    private StorageMetadata syncArtifact(Iterator<URL> urlIterator)
-        throws StorageEngageException, InterruptedException {
+    /**
+     * Go through contents of urlIterator, attempting to sync the artifact.
+     * @param urlIterator
+     * @param artifact
+     * @param sa
+     * @return success: return Storage Metadata from first successful sync
+     *         fail: return null if all URLs failed | throw if failure is fatal (internal)
+     * @throws StorageEngageException
+     * @throws InterruptedException
+     * @throws WriteException
+     */
+    private StorageMetadata syncArtifact(Iterator<URL> urlIterator, URI artifact, StorageAdapter sa)
+        throws StorageEngageException, InterruptedException, WriteException {
 
         StorageMetadata storageMeta = null;
 
@@ -231,15 +255,15 @@ public class FileSyncJob implements Runnable {
                 HttpGet get = new HttpGet(u, dest);
                 get.prepare();
 
-                NewArtifact a = new NewArtifact(artifactID);
-                storageMeta = storageAdapter.put(a, get.getInputStream());
+                NewArtifact a = new NewArtifact(artifact);
+                storageMeta = sa.put(a, get.getInputStream());
                 log.debug("storage meta returned: " + storageMeta.getStorageLocation());
                 return storageMeta;
 
             } catch (WriteException wre) {
                 // IOException will capture this if not explicitly caught
                 log.info("write error for storage adapter put: " + wre.getMessage());
-                break;
+                throw wre;
             } catch (TransientException | IOException te) {
                 // ReadException will be caught under the IOException
                 // could be prepare or put throwing this error

@@ -91,7 +91,6 @@ import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.SQLGenerator;
 import org.opencadc.inventory.storage.StorageMetadata;
 import org.opencadc.inventory.storage.fs.FileSystemStorageAdapter;
-import org.opencadc.inventory.storage.fs.FileSystemStorageAdapter.BucketMode;
 import ca.nrc.cadc.util.Log4jInit;
 import java.net.URI;
 import org.junit.Assert;
@@ -130,8 +129,7 @@ public class FileSyncJobTest {
             config.put("schema", TestUtil.SCHEMA);
             dao.setConfig(config);
 
-            BucketMode bucketMode = FileSystemStorageAdapter.BucketMode.URI;
-            String testDir = TEST_ROOT + File.separator + "testValidJob-" + bucketMode;
+            String testDir = TEST_ROOT + File.separator + "testValidJob";
 
             // Create the test directory the fs storage adapter needs
             Set<PosixFilePermission> perms = PosixFilePermissions.fromString("rwxrwxrw-");
@@ -165,7 +163,7 @@ public class FileSyncJobTest {
         wipe_clean(unstoredArtifacts);
 
         // Clean up critwall tests in fsroot
-        log.debug("deleting test dir: " + TEST_ROOT);
+        log.debug("deleting contents of test dir: " + TEST_ROOT);
 
         Iterator<StorageMetadata> iter = oa.iterator();
 
@@ -179,8 +177,7 @@ public class FileSyncJobTest {
 
     @Test
     public void testValidJob() {
-        BucketMode bucketMode = FileSystemStorageAdapter.BucketMode.URI;
-        String testDir = TEST_ROOT + File.separator + "testValidJob-" + bucketMode;
+        String testDir = TEST_ROOT + File.separator + "testValidJob";
 
         try {
             // Create the test directory the fs storage adapter needs
@@ -188,7 +185,7 @@ public class FileSyncJobTest {
             FileAttribute<Set<PosixFilePermission>> attr = PosixFilePermissions.asFileAttribute(perms);
             Files.createDirectories(Paths.get(testDir), attr);
 
-            FileSystemStorageAdapter sa = new FileSystemStorageAdapter(testDir, bucketMode, 1);
+            OpaqueFileSystemStorageAdapter sa = new OpaqueFileSystemStorageAdapter(new File(testDir), 1);
 
             URI artifactID = new URI(TEST_ARTIFACT_URI);
             URI resourceID = new URI(TEST_RESOURCE_ID);
@@ -223,7 +220,7 @@ public class FileSyncJobTest {
             Assert.fail("unexpected exception");
             log.debug(unexpected);
         }
-        log.info("testValidJob(" + bucketMode + ") - DONE");
+        log.info("testValidJob - DONE");
     }
 
 }
