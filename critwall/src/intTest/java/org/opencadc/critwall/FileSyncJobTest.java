@@ -89,12 +89,14 @@ import org.junit.Before;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.SQLGenerator;
+import org.opencadc.inventory.storage.StorageMetadata;
 import org.opencadc.inventory.storage.fs.FileSystemStorageAdapter;
 import org.opencadc.inventory.storage.fs.FileSystemStorageAdapter.BucketMode;
 import ca.nrc.cadc.util.Log4jInit;
 import java.net.URI;
 import org.junit.Assert;
 import org.junit.Test;
+import org.opencadc.inventory.storage.fs.OpaqueFileSystemStorageAdapter;
 
 
 public class FileSyncJobTest {
@@ -102,6 +104,8 @@ public class FileSyncJobTest {
     private static final String TEST_ROOT = "build/tmp/fsroot/critwallTests";
     private static final String TEST_ARTIFACT_URI = "ad:IRIS/I212B2H0.fits";
     private static final String TEST_RESOURCE_ID = "ivo://cadc.nrc.ca/data";
+
+    private OpaqueFileSystemStorageAdapter oa = null;
 
     static {
         Log4jInit.setLevel("org.opencadc.inventory", Level.INFO);
@@ -125,6 +129,16 @@ public class FileSyncJobTest {
             config.put("database", TestUtil.DATABASE);
             config.put("schema", TestUtil.SCHEMA);
             dao.setConfig(config);
+
+            BucketMode bucketMode = FileSystemStorageAdapter.BucketMode.URI;
+            String testDir = TEST_ROOT + File.separator + "testValidJob-" + bucketMode;
+
+            // Create the test directory the fs storage adapter needs
+            Set<PosixFilePermission> perms = PosixFilePermissions.fromString("rwxrwxrw-");
+            FileAttribute<Set<PosixFilePermission>> attr = PosixFilePermissions.asFileAttribute(perms);
+            Files.createDirectories(Paths.get(testDir), attr);
+
+            oa = new OpaqueFileSystemStorageAdapter(new File(TEST_ROOT), 1);
 
         } catch (Exception ex) {
             log.error("setup failed", ex);
@@ -152,19 +166,16 @@ public class FileSyncJobTest {
 
         // Clean up critwall tests in fsroot
         log.debug("deleting test dir: " + TEST_ROOT);
-        deleteDir(new File(TEST_ROOT));
 
-    }
+        Iterator<StorageMetadata> iter = oa.iterator();
 
-    private void deleteDir(File file) {
-        File[] contents = file.listFiles();
-        if (contents != null) {
-            for (File f : contents) {
-                deleteDir(f);
-            }
+        while (iter.hasNext()) {
+            StorageMetadata sm = iter.next();
+            log.debug("deleting storage location: " + sm.getStorageLocation());
+            oa.delete(sm.getStorageLocation());
         }
-        file.delete();
     }
+
 
     @Test
     public void testValidJob() {

@@ -240,8 +240,7 @@ public class FileSyncJob implements Runnable {
                 // IOException will capture this if not explicitly caught
                 log.info("write error for storage adapter put: " + wre.getMessage());
                 break;
-            }
-            catch (TransientException | IOException te) {
+            } catch (TransientException | IOException te) {
                 // ReadException will be caught under the IOException
                 // could be prepare or put throwing this error
                 // will move to next url
