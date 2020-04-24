@@ -74,6 +74,7 @@ import ca.nrc.cadc.db.DBUtil;
 import ca.nrc.cadc.db.TransactionManager;
 import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.profiler.Profiler;
+import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.util.StringUtil;
 
 import java.security.PrivilegedExceptionAction;
@@ -81,7 +82,6 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
-import java.util.Properties;
 import javax.naming.NamingException;
 import javax.security.auth.Subject;
 
@@ -133,10 +133,11 @@ public class BucketValidator implements ValidateEventListener {
      * @param reporter   The Reporter to use in the policy.  Can be used elsewhere.
      * @param runUser    The user to run as.
      */
-    BucketValidator(final Properties properties, final Reporter reporter, final Subject runUser) {
+    BucketValidator(final MultiValuedProperties properties, final Reporter reporter, final Subject runUser) {
         this.runUser = runUser;
 
-        final String storageAdapterClassName = properties.getProperty(StorageAdapter.class.getCanonicalName());
+        final String storageAdapterClassName =
+                properties.getFirstPropertyValue(StorageAdapter.class.getCanonicalName());
         if (StringUtil.hasLength(storageAdapterClassName)) {
             this.storageAdapter = InventoryUtil.loadPlugin(storageAdapterClassName);
         } else {
@@ -147,18 +148,18 @@ public class BucketValidator implements ValidateEventListener {
                             StorageAdapter.class.getCanonicalName()));
         }
 
-        this.bucket = properties.getProperty(String.format("%s.bucket", APPLICATION_CONFIG_KEY_PREFIX));
+        this.bucket = properties.getFirstPropertyValue(String.format("%s.bucket", APPLICATION_CONFIG_KEY_PREFIX));
         if (!StringUtil.hasLength(bucket)) {
             throw new IllegalStateException(String.format("Bucket is mandatory.  Please set the %s property.",
                                                           String.format("%s.bucket",
                                                                         APPLICATION_CONFIG_KEY_PREFIX)));
         }
 
-        this.reportOnlyFlag = Boolean.parseBoolean(
-                properties.getProperty(String.format("%s.reportOnly", APPLICATION_CONFIG_KEY_PREFIX),
-                                       Boolean.FALSE.toString()));
+        final String configuredReportOnly =
+                properties.getFirstPropertyValue(String.format("%s.reportOnly", APPLICATION_CONFIG_KEY_PREFIX));
+        this.reportOnlyFlag = StringUtil.hasText(configuredReportOnly) && Boolean.parseBoolean(configuredReportOnly);
 
-        final String policyClassName = properties.getProperty(ResolutionPolicy.class.getCanonicalName());
+        final String policyClassName = properties.getFirstPropertyValue(ResolutionPolicy.class.getCanonicalName());
         if (StringUtil.hasLength(policyClassName)) {
             this.resolutionPolicy = InventoryUtil.loadPlugin(policyClassName, this, reporter);
         } else {
@@ -170,7 +171,7 @@ public class BucketValidator implements ValidateEventListener {
         // DAO configuration
         final Map<String, Object> config = new HashMap<>();
         final String sqlGeneratorKey = SQLGenerator.class.getName();
-        final String sqlGeneratorClass = properties.getProperty(sqlGeneratorKey);
+        final String sqlGeneratorClass = properties.getFirstPropertyValue(sqlGeneratorKey);
 
         if (StringUtil.hasLength(sqlGeneratorClass)) {
             try {
@@ -190,13 +191,13 @@ public class BucketValidator implements ValidateEventListener {
         final String jdbcURLKey = String.format("%s.url", jdbcConfigKeyPrefix);
         final String jdbcDriverClassname = "org.postgresql.Driver";
 
-        final String schemaName = properties.getProperty(jdbcSchemaKey);
+        final String schemaName = properties.getFirstPropertyValue(jdbcSchemaKey);
 
         final ConnectionConfig cc = new ConnectionConfig(null, null,
-                                                         properties.getProperty(jdbcUsernameKey),
-                                                         properties.getProperty(jdbcPasswordKey),
+                                                         properties.getFirstPropertyValue(jdbcUsernameKey),
+                                                         properties.getFirstPropertyValue(jdbcPasswordKey),
                                                          jdbcDriverClassname,
-                                                         properties.getProperty(jdbcURLKey));
+                                                         properties.getFirstPropertyValue(jdbcURLKey));
         try {
             // Register two datasources.
             DBUtil.createJNDIDataSource("jdbc/inventory", cc);
