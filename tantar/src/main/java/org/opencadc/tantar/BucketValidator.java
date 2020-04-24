@@ -258,7 +258,8 @@ public class BucketValidator implements ValidateEventListener {
         final Iterator<StorageMetadata> storageMetadataIterator = iterateStorage();
         final Iterator<Artifact> inventoryIterator = iterateInventory();
         profiler.checkpoint("iterators: ok");
-        LOGGER.debug("Acquired iterators.");
+        LOGGER.debug(String.format("Acquired iterators: \nHas Artifacts (%b)\nHas Storage Metadata (%b).",
+                                   inventoryIterator.hasNext(), storageMetadataIterator.hasNext()));
 
         LOGGER.debug("START validating iterators.");
 
@@ -271,9 +272,10 @@ public class BucketValidator implements ValidateEventListener {
             final StorageMetadata storageMetadata =
                     (unresolvedStorageMetadata == null) ? storageMetadataIterator.next() : unresolvedStorageMetadata;
 
-            LOGGER.debug(String.format("Comparing Inventory Storage Location %s with Storage Adapter Location %s",
-                                       artifact.storageLocation, storageMetadata.getStorageLocation()));
             final int comparison = artifact.storageLocation.compareTo(storageMetadata.getStorageLocation());
+
+            LOGGER.debug(String.format("Comparing Inventory Storage Location %s with Storage Adapter Location %s (%d)",
+                                       artifact.storageLocation, storageMetadata.getStorageLocation(), comparison));
 
             if (comparison == 0) {
                 // Same storage location.  Test the metadata.
@@ -459,7 +461,6 @@ public class BucketValidator implements ValidateEventListener {
                                                        storageMetadata.getContentChecksum(),
                                                        storageMetadata.contentLastModified,
                                                        storageMetadata.getContentLength());
-
                 artifact.storageLocation = storageMetadata.getStorageLocation();
                 artifact.contentType = storageMetadata.contentType;
                 artifact.contentEncoding = storageMetadata.contentEncoding;
@@ -530,6 +531,47 @@ public class BucketValidator implements ValidateEventListener {
                 transactionManager.commitTransaction();
             } catch (Exception e) {
                 LOGGER.error(String.format("Failed to create Artifact %s.", storageMetadata.artifactURI), e);
+                transactionManager.rollbackTransaction();
+                LOGGER.debug("Rollback Transaction: OK");
+                throw e;
+            } finally {
+                if (transactionManager.isOpen()) {
+                    LOGGER.error("BUG - Open transaction in finally");
+                    transactionManager.rollbackTransaction();
+                    LOGGER.error("Transaction rolled back successfully.");
+                }
+            }
+        }
+    }
+
+    /**
+     * Update the values of the given Artifact with those from the given StorageMetadata.  This differs from a replace
+     * as it will not delete the original Artifact first, but rather update the values and issue a PUT.
+     *
+     * @param artifact        The Artifact to update.
+     * @param storageMetadata The StorageMetadata from which to update the Artifact's fields.
+     * @throws Exception Any unexpected error.
+     */
+    @Override
+    public void updateArtifact(final Artifact artifact, final StorageMetadata storageMetadata) throws Exception {
+        if (canTakeAction()) {
+            final TransactionManager transactionManager = artifactDAO.getTransactionManager();
+
+            try {
+                LOGGER.debug("Start transaction.");
+                transactionManager.startTransaction();
+
+                // By reusing the Artifact instance's ID we can have the original Artifact but wipe out the mutable
+                // fields below.
+                artifact.contentEncoding = storageMetadata.contentEncoding;
+                artifact.contentType = storageMetadata.contentType;
+                artifact.storageLocation = storageMetadata.getStorageLocation();
+
+                artifactDAO.put(artifact);
+
+                transactionManager.commitTransaction();
+            } catch (Exception e) {
+                LOGGER.error(String.format("Failed to update Artifact %s.", storageMetadata.artifactURI), e);
                 transactionManager.rollbackTransaction();
                 LOGGER.debug("Rollback Transaction: OK");
                 throw e;
