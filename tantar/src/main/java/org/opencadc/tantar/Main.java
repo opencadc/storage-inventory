@@ -70,6 +70,9 @@ package org.opencadc.tantar;
 
 import ca.nrc.cadc.auth.SSLUtil;
 import ca.nrc.cadc.util.Log4jInit;
+import ca.nrc.cadc.util.MultiValuedProperties;
+import ca.nrc.cadc.util.PropertiesReader;
+import ca.nrc.cadc.util.StringUtil;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -86,30 +89,33 @@ import org.apache.log4j.Logger;
  * Main application entry.  This class expects a tantar.properties file to be available and readable.
  */
 public class Main {
+    private static final String LOGGING_KEY = Main.class.getPackage().getName() + ".logging";
 
     public static void main(final String[] args) {
-        final String configurationDirectory;
-        final String homeConfigDirectoryPath = String.format("%s/config", System.getProperty("user.home"));
+        Log4jInit.setLevel("ca.nrc.cadc", Level.WARN);
+        Log4jInit.setLevel("org.opencadc", Level.WARN);
 
-        // Allow some flexibility to override.  This is useful for local testing as one would normally require root
-        // access to create /config.
-        if (new File(homeConfigDirectoryPath).isDirectory()) {
-            configurationDirectory = homeConfigDirectoryPath;
-        } else {
-            configurationDirectory = "/config";
-        }
-
-        final String certificateFileLocation = String.format("%s/cadcproxy.pem", configurationDirectory);
-        final String configurationFileLocation = String.format("%s/tantar.properties", configurationDirectory);
-
+        final String certificateFileLocation = String.format("%s/%s/cadcproxy.pem", System.getProperty("user.home"),
+                                                             ".ssl");
         final Logger logger = Logger.getLogger(Main.class);
         final Reporter reporter = new Reporter(logger);
 
         reporter.start();
 
         try {
-            final Properties applicationProperties = Main.configure(configurationFileLocation);
-            Main.setLogging(applicationProperties);
+            final PropertiesReader propertiesReader = new PropertiesReader("tantar.properties");
+            final MultiValuedProperties applicationProperties = propertiesReader.getAllProperties();
+
+            // The PropertiesReader won't throw a FileNotFoundException if the given file doesn't exist at all.  We'll
+            // need to throw it here as an appropriate way to notify users.
+            if (applicationProperties == null) {
+                throw new FileNotFoundException("Unable to locate configuration file.");
+            }
+
+            final String configuredLogging = applicationProperties.getFirstPropertyValue(LOGGING_KEY);
+
+            Log4jInit.setLevel("org.opencadc.tantar", StringUtil.hasText(configuredLogging)
+                                                       ? Level.toLevel(configuredLogging.toUpperCase()) : Level.INFO);
 
             final BucketValidator bucketValidator = new BucketValidator(applicationProperties, reporter,
                                                                         SSLUtil.createSubject(
@@ -118,19 +124,17 @@ public class Main {
             bucketValidator.validate();
         } catch (IllegalStateException e) {
             // IllegalStateExceptions are thrown for missing but required configuration.
-            logger.fatal(e.getMessage());
+            logger.fatal(e.getMessage(), e);
             System.exit(3);
         } catch (FileNotFoundException e) {
-            logger.fatal(
-                    String.format("Unable to locate configuration file.  Expected it to be at %s.",
-                                  configurationFileLocation));
+            logger.fatal(e.getMessage(), e);
             System.exit(1);
         } catch (IOException e) {
-            logger.fatal(String.format("Unable to read file located at %s.", configurationFileLocation));
+            logger.fatal(e.getMessage(), e);
             System.exit(2);
         } catch (Exception e) {
             // Used to catch everything else, such as a RuntimeException when a file cannot be obtained and put.
-            logger.fatal(e.getMessage());
+            logger.fatal(e.getMessage(), e);
             System.exit(4);
         } finally {
             reporter.end();
@@ -145,18 +149,5 @@ public class Main {
         final Reader configFileReader = new FileReader(configurationFileLocation);
         properties.load(configFileReader);
         return properties;
-    }
-
-    private static void setLogging(final Properties applicationProperties) {
-        Log4jInit.setLevel("ca.nrc.cadc", Level.WARN);
-        Log4jInit.setLevel("org.opencadc", Level.WARN);
-
-        final String loggingKey = ".logging";
-
-        applicationProperties.entrySet().stream().filter(entry -> entry.getKey().toString().endsWith(loggingKey))
-                             .forEach(entry -> Log4jInit.setLevel(entry.getKey().toString().split(loggingKey)[0],
-                                                                  Level.toLevel(
-                                                                          entry.getValue().toString()
-                                                                               .toUpperCase())));
     }
 }
