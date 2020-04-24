@@ -76,10 +76,7 @@ import ca.nrc.cadc.util.StringUtil;
 
 import java.io.File;
 import java.io.FileNotFoundException;
-import java.io.FileReader;
 import java.io.IOException;
-import java.io.Reader;
-import java.util.Properties;
 
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
@@ -139,15 +136,5 @@ public class Main {
         } finally {
             reporter.end();
         }
-    }
-
-    /**
-     * Read in the configuration file and load it into the Main application configuration.
-     */
-    private static Properties configure(final String configurationFileLocation) throws IOException {
-        final Properties properties = new Properties();
-        final Reader configFileReader = new FileReader(configurationFileLocation);
-        properties.load(configFileReader);
-        return properties;
     }
 }
