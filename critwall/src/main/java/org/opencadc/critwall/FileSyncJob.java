@@ -72,6 +72,7 @@ import ca.nrc.cadc.io.WriteException;
 import ca.nrc.cadc.net.FileContent;
 import ca.nrc.cadc.net.HttpGet;
 import ca.nrc.cadc.net.HttpPost;
+import ca.nrc.cadc.net.PreconditionFailedException;
 import ca.nrc.cadc.net.ResourceAlreadyExistsException;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
@@ -89,6 +90,7 @@ import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URL;
+import java.security.InvalidParameterException;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -143,7 +145,7 @@ public class FileSyncJob implements Runnable {
         try {
             while (retryCount < RETRY_DELAY.length) {
                 log.debug("attempt " + retryCount + " to sync artifact " + this.artifactID);
-                StorageMetadata storageMeta = syncArtifact(urlIterator, this.artifactID, this.storageAdapter);
+                StorageMetadata storageMeta = syncArtifact(urlIterator, this.artifactID, this.storageAdapter, this.artifactDAO);
 
                 // sync succeeded - update storage location
                 if (storageMeta != null) {
@@ -158,10 +160,17 @@ public class FileSyncJob implements Runnable {
                     log.debug("updated artifact storage location");
                     break;
                 }
-                Thread.sleep(RETRY_DELAY[retryCount++]);
+
+                if (urlIterator.hasNext()) {
+                    Thread.sleep(RETRY_DELAY[retryCount++]);
+                } else {
+                    // Quit early all the URLs were determined to be bad
+                    throw new InvalidParameterException("no valid URLs found.");
+                }
 
             }
-        } catch (StorageEngageException |  InterruptedException | WriteException syncError) {
+        } catch (StorageEngageException | InterruptedException
+                | WriteException | InvalidParameterException syncError) {
             log.error("artifact sync error for " + this.artifactID + ": " + syncError.getMessage());
         }
     }
@@ -241,7 +250,7 @@ public class FileSyncJob implements Runnable {
      * @throws InterruptedException
      * @throws WriteException
      */
-    private StorageMetadata syncArtifact(Iterator<URL> urlIterator, URI artifact, StorageAdapter sa)
+    private StorageMetadata syncArtifact(Iterator<URL> urlIterator, URI artifact, StorageAdapter sa, ArtifactDAO aDAO)
         throws StorageEngageException, InterruptedException, WriteException {
 
         StorageMetadata storageMeta = null;
@@ -255,6 +264,19 @@ public class FileSyncJob implements Runnable {
                 HttpGet get = new HttpGet(u, dest);
                 get.prepare();
 
+                // Check content checksum and length to verify this
+                // artifact can be synced currently
+                Artifact curArtifact = aDAO.get(artifact);
+                log.debug("content checksums: " + get.getContentMD5() + "\n" + curArtifact.getContentChecksum().getSchemeSpecificPart());
+                if (!get.getContentMD5().equals(curArtifact.getContentChecksum().getSchemeSpecificPart())) {
+                    throw new PreconditionFailedException("mismatched content checksum. " + artifact);
+                }
+                if (get.getContentLength() != curArtifact.getContentLength()) {
+                    throw new PreconditionFailedException("mismatched content length. " + artifact);
+                }
+
+                log.debug("artifact checksum and content length match, continue to put.");
+
                 NewArtifact a = new NewArtifact(artifact);
                 storageMeta = sa.put(a, get.getInputStream());
                 log.debug("storage meta returned: " + storageMeta.getStorageLocation());
@@ -266,16 +288,16 @@ public class FileSyncJob implements Runnable {
                 throw wre;
             } catch (TransientException | IOException te) {
                 // ReadException will be caught under the IOException
-                // could be prepare or put throwing this error
-                // will move to next url
+                // - prepare or put throwing this error
+                // - will move to next url
                 log.info("transient exception." + te.getMessage());
 
-            } catch (ResourceNotFoundException | ResourceAlreadyExistsException  badURL) {
+            } catch (ResourceNotFoundException | ResourceAlreadyExistsException | PreconditionFailedException  badURL) {
                 log.info("removing URL " + u + " from list: " + badURL.getMessage());
                 urlIterator.remove();
-
             }
         }
+
         return storageMeta;
     }
 
