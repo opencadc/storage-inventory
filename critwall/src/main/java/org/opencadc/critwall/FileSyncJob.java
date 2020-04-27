@@ -90,7 +90,6 @@ import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URL;
-import java.security.InvalidParameterException;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -157,20 +156,15 @@ public class FileSyncJob implements Runnable {
                     Artifact curArtifact = this.artifactDAO.get(this.artifactID);
                     curArtifact.storageLocation = storageMeta.getStorageLocation();
                     this.artifactDAO.put(curArtifact, true);
-                    log.debug("updated artifact storage location");
+                    log.debug("updated artifact storage location" + curArtifact.storageLocation);
                     break;
                 }
 
-                if (urlIterator.hasNext()) {
-                    Thread.sleep(RETRY_DELAY[retryCount++]);
-                } else {
-                    // Quit early all the URLs were determined to be bad
-                    throw new InvalidParameterException("no valid URLs found.");
-                }
+                Thread.sleep(RETRY_DELAY[retryCount++]);
 
             }
         } catch (StorageEngageException | InterruptedException
-                | WriteException | InvalidParameterException syncError) {
+                | WriteException | IllegalArgumentException syncError) {
             log.error("artifact sync error for " + this.artifactID + ": " + syncError.getMessage());
         }
     }
@@ -232,7 +226,7 @@ public class FileSyncJob implements Runnable {
             try {
                 urlList.add(new URL(urlStrList.get(i)));
             } catch (MalformedURLException mue) {
-                log.info("Malformed URL returned from transfer negotiation: " + urlStrList.get(i) + " skipping... ");
+                log.info("malformed URL returned from transfer negotiation: " + urlStrList.get(i) + " skipping... ");
             }
         }
 
@@ -251,51 +245,56 @@ public class FileSyncJob implements Runnable {
      * @throws WriteException
      */
     private StorageMetadata syncArtifact(Iterator<URL> urlIterator, URI artifact, StorageAdapter sa, ArtifactDAO aDAO)
-        throws StorageEngageException, InterruptedException, WriteException {
+        throws StorageEngageException, InterruptedException, WriteException, IllegalArgumentException {
 
         StorageMetadata storageMeta = null;
 
-        while (urlIterator.hasNext()) {
-            URL u = urlIterator.next();
-            log.debug("trying " + u);
+        if (urlIterator.hasNext()) {
+            while (urlIterator.hasNext()) {
+                URL u = urlIterator.next();
+                log.debug("trying " + u);
 
-            try {
-                ByteArrayOutputStream dest = new ByteArrayOutputStream();
-                HttpGet get = new HttpGet(u, dest);
-                get.prepare();
+                try {
+                    ByteArrayOutputStream dest = new ByteArrayOutputStream();
+                    HttpGet get = new HttpGet(u, dest);
+                    get.prepare();
 
-                // Check content checksum and length to verify this
-                // artifact can be synced currently
-                Artifact curArtifact = aDAO.get(artifact);
-                log.debug("content checksums: " + get.getContentMD5() + "\n" + curArtifact.getContentChecksum().getSchemeSpecificPart());
-                if (!get.getContentMD5().equals(curArtifact.getContentChecksum().getSchemeSpecificPart())) {
-                    throw new PreconditionFailedException("mismatched content checksum. " + artifact);
+                    // Check content checksum and length to verify this
+                    // artifact can be synced currently
+                    Artifact curArtifact = aDAO.get(artifact);
+                    log.debug("content checksums: " + get.getContentMD5() + "\n" + curArtifact.getContentChecksum().getSchemeSpecificPart());
+                    if (!get.getContentMD5().equals(curArtifact.getContentChecksum().getSchemeSpecificPart())) {
+                        throw new PreconditionFailedException("mismatched content checksum. " + artifact);
+                    }
+                    if (get.getContentLength() != curArtifact.getContentLength()) {
+                        throw new PreconditionFailedException("mismatched content length. " + artifact);
+                    }
+
+                    log.debug("artifact checksum and content length match, continue to put.");
+
+                    NewArtifact a = new NewArtifact(artifact);
+                    storageMeta = sa.put(a, get.getInputStream());
+                    log.debug("storage meta returned: " + storageMeta.getStorageLocation());
+                    return storageMeta;
+
+                } catch (WriteException wre) {
+                    // IOException will capture this if not explicitly caught
+                    log.info("write error for storage adapter put: " + wre.getMessage());
+                    throw wre;
+                } catch (TransientException | IOException te) {
+                    // ReadException will be caught under the IOException
+                    // - prepare or put throwing this error
+                    // - will move to next url
+                    log.info("transient exception." + te.getMessage());
+
+                } catch (ResourceNotFoundException | ResourceAlreadyExistsException | PreconditionFailedException badURL) {
+                    log.info("removing URL " + u + " from list: " + badURL.getMessage());
+                    urlIterator.remove();
                 }
-                if (get.getContentLength() != curArtifact.getContentLength()) {
-                    throw new PreconditionFailedException("mismatched content length. " + artifact);
-                }
-
-                log.debug("artifact checksum and content length match, continue to put.");
-
-                NewArtifact a = new NewArtifact(artifact);
-                storageMeta = sa.put(a, get.getInputStream());
-                log.debug("storage meta returned: " + storageMeta.getStorageLocation());
-                return storageMeta;
-
-            } catch (WriteException wre) {
-                // IOException will capture this if not explicitly caught
-                log.info("write error for storage adapter put: " + wre.getMessage());
-                throw wre;
-            } catch (TransientException | IOException te) {
-                // ReadException will be caught under the IOException
-                // - prepare or put throwing this error
-                // - will move to next url
-                log.info("transient exception." + te.getMessage());
-
-            } catch (ResourceNotFoundException | ResourceAlreadyExistsException | PreconditionFailedException  badURL) {
-                log.info("removing URL " + u + " from list: " + badURL.getMessage());
-                urlIterator.remove();
             }
+        } else {
+            // no valid URLs are left in the iterator
+            throw new IllegalArgumentException("No valid URLs found.");
         }
 
         return storageMeta;

@@ -108,9 +108,9 @@ public class FileSyncJobTest {
 
     static {
         Log4jInit.setLevel("org.opencadc.inventory", Level.INFO);
-        Log4jInit.setLevel("org.opencadc.inventory.db", Level.DEBUG);
+        Log4jInit.setLevel("org.opencadc.inventory.db", Level.INFO);
         Log4jInit.setLevel("ca.nrc.cadc.db", Level.INFO);
-        Log4jInit.setLevel("org.opencadc.critwall", Level.DEBUG);
+        Log4jInit.setLevel("org.opencadc.critwall", Level.INFO);
         Log4jInit.setLevel("org.opencadc.inventory.storage.fs", Level.INFO);
     }
 
@@ -162,16 +162,12 @@ public class FileSyncJobTest {
             log.debug("something to remove...");
             Artifact a = artifactIterator.next();
             log.debug("deleting test uri: " + a.getURI() + " ID: " + a.getID());
-            // NOTE: code for tests as they stand never gets in here to
-            // test if this action will be subject to locks
             frameDAO.delete(a.getID());
-//            dao.delete(a.getID());
             deletedArtifacts++;
         }
 
         if (deletedArtifacts > 0) {
             log.info("deleted " + deletedArtifacts+ " artifacts");
-
         }
     }
 
@@ -179,16 +175,12 @@ public class FileSyncJobTest {
     public void cleanTestEnvironment() throws Exception {
 
         log.debug("cleaning stored artifacts...");
-        // NOTE: the use of dao in here seems to lead to database locks.
-        // using frameDAO, the tests complete successfully
-//        Iterator<Artifact> storedArtifacts = frameDAO.storedIterator(null);
-        Iterator<Artifact> storedArtifacts = dao.storedIterator(null);
+        Iterator<Artifact> storedArtifacts = frameDAO.storedIterator(null);
         log.debug("got an iterator back: " + storedArtifacts);
         wipe_clean(storedArtifacts);
 
         log.debug("cleaning unstored artifacts...");
-//        Iterator<Artifact> unstoredArtifacts = frameDAO.unstoredIterator(null);
-        Iterator<Artifact> unstoredArtifacts = dao.unstoredIterator(null);
+        Iterator<Artifact> unstoredArtifacts = frameDAO.unstoredIterator(null);
         log.debug("got an iterator back: " + storedArtifacts);
         wipe_clean(unstoredArtifacts);
 
@@ -342,6 +334,5 @@ public class FileSyncJobTest {
 
         log.info("testInvalidJobBadContentLen - DONE");
     }
-
 
 }
