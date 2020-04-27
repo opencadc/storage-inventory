@@ -244,7 +244,7 @@ public class FileSyncJob implements Runnable {
      * @throws InterruptedException
      * @throws WriteException
      */
-    private StorageMetadata syncArtifact(Iterator<URL> urlIterator, URI artifact, StorageAdapter sa, ArtifactDAO aDAO)
+    private StorageMetadata syncArtifact(Iterator<URL> urlIterator, URI artifact, StorageAdapter sa, ArtifactDAO artDao)
         throws StorageEngageException, InterruptedException, WriteException, IllegalArgumentException {
 
         StorageMetadata storageMeta = null;
@@ -261,7 +261,7 @@ public class FileSyncJob implements Runnable {
 
                     // Check content checksum and length to verify this
                     // artifact can be synced currently
-                    Artifact curArtifact = aDAO.get(artifact);
+                    Artifact curArtifact = artDao.get(artifact);
                     log.debug("content checksums: " + get.getContentMD5() + "\n" + curArtifact.getContentChecksum().getSchemeSpecificPart());
                     if (!get.getContentMD5().equals(curArtifact.getContentChecksum().getSchemeSpecificPart())) {
                         throw new PreconditionFailedException("mismatched content checksum. " + artifact);
