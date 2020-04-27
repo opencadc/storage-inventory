@@ -65,54 +65,63 @@
 ************************************************************************
 */
 
-package org.opencadc.inventory.db.version;
+package org.opencadc.inventory.db;
 
-import java.net.URL;
-import javax.sql.DataSource;
+import java.net.URI;
+import java.util.Date;
+import java.util.UUID;
+
 import org.apache.log4j.Logger;
+import org.opencadc.inventory.Entity;
+import org.opencadc.inventory.InventoryUtil;
 
 /**
  *
  * @author pdowler
  */
-public class InitDatabase extends ca.nrc.cadc.db.version.InitDatabase {
-    private static final Logger log = Logger.getLogger(InitDatabase.class);
-    
-    public static final String MODEL_NAME = "storage-inventory";
-    public static final String MODEL_VERSION = "0.8";
-    public static final String PREV_MODEL_VERSION = "0.7";
-    //public static final String PREV_MODEL_VERSION = "DO-NOT_UPGRADE-BY-ACCIDENT";
+public class HarvestState extends Entity {
+    private static final Logger log = Logger.getLogger(HarvestState.class);
 
-    static String[] CREATE_SQL = new String[] {
-        "inventory.ModelVersion.sql",
-        "inventory.Artifact.sql",
-        "inventory.StorageSite.sql",
-        "inventory.ObsoleteStorageLocation.sql",
-        "inventory.DeletedArtifactEvent.sql",
-        "inventory.DeletedStorageLocationEvent.sql",
-        "inventory.HarvestState.sql",
-        "inventory.permissions.sql"
-    };
+    private final String name;
+    private URI resourceID;
     
-    static String[] UPGRADE_SQL = new String[] {
-        "inventory.HarvestState.sql",
-        "inventory.upgrade-0.8.sql",
-        "inventory.permissions.sql"
-    };
+    /**
+     * The timestamp of the last successfully harvested entity.
+     */
+    public Date curLastModified;
     
-    public InitDatabase(DataSource ds, String database, String schema) { 
-        super(ds, database, schema, MODEL_NAME, MODEL_VERSION, PREV_MODEL_VERSION);
-        for (String s : CREATE_SQL) {
-            createSQL.add(s);
-        }
-        for (String s : UPGRADE_SQL) {
-            upgradeSQL.add(s);
-        }
+    public HarvestState(String name, URI resourceID) { 
+        super();
+        InventoryUtil.assertNotNull(HarvestState.class, "name", name);
+        InventoryUtil.assertNotNull(HarvestState.class, "resourceID", resourceID);
+        this.name = name;
+        this.resourceID = resourceID;
+    }
+    
+    // package access: reconstruct an instance from serialised state.
+    HarvestState(UUID id, String name, URI resourceID) { 
+        super(id);
+        InventoryUtil.assertNotNull(HarvestState.class, "name", name);
+        InventoryUtil.assertNotNull(HarvestState.class, "resourceID", resourceID);
+        this.name = name;
+        this.resourceID = resourceID;
+    }
+    
+    public String getName() {
+        return name;
+    }
+
+    public URI getResourceID() {
+        return resourceID;
+    }
+
+    public void setResourceID(URI resourceID) {
+        InventoryUtil.assertNotNull(HarvestState.class, "resourceID", resourceID);
+        this.resourceID = resourceID;
     }
 
     @Override
-    protected URL findSQL(String fname) {
-        // SQL files are stored inside the jar file
-        return InitDatabase.class.getClassLoader().getResource(fname);
+    public String toString() {
+        return HarvestState.class.getSimpleName() + "[" + name + "," + resourceID + "]";
     }
 }
