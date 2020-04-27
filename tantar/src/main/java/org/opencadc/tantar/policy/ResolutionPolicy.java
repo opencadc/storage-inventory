@@ -85,11 +85,6 @@ public abstract class ResolutionPolicy {
         this.reporter = reporter;
     }
 
-
-    protected final boolean haveDifferentMetadata(final Artifact artifact, final StorageMetadata storageMetadata) {
-        return !(new PolicyMetadata(artifact).equals(new PolicyMetadata(storageMetadata)));
-    }
-
     /**
      * Equality check for the main components that establish a different Storage Entity.
      *

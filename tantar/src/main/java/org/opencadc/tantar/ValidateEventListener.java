@@ -112,9 +112,19 @@ public interface ValidateEventListener extends EventListener {
     /**
      * Replace the given Artifact with a new one created from the given StorageMetadata instance.
      *
-     * @param artifact          The Artifact to remove.
+     * @param artifact          The Artifact to replace.
      * @param storageMetadata   The StorageMetadata from which to create a new Artifact.
      * @throws Exception    Any unexpected error.
      */
     void replaceArtifact(final Artifact artifact, final StorageMetadata storageMetadata) throws Exception;
+
+    /**
+     * Update the values of the given Artifact with those from the given StorageMetadata.  This differs from a replace
+     * as it will not delete the original Artifact first, but rather update the values and issue a PUT.
+     *
+     * @param artifact          The Artifact to update.
+     * @param storageMetadata   The StorageMetadata from which to update the Artifact's fields.
+     * @throws Exception    Any unexpected error.
+     */
+    void updateArtifact(final Artifact artifact, final StorageMetadata storageMetadata) throws Exception;
 }
