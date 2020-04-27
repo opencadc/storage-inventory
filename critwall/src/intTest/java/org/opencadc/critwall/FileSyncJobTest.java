@@ -175,6 +175,9 @@ public class FileSyncJobTest {
     public void cleanTestEnvironment() throws Exception {
 
         log.debug("cleaning stored artifacts...");
+        // NOTE: use of a second ArtifactDAO instance here allows the tests
+        // to run without database locks occurring. Using the same ArtifactDAO as
+        // the rest of the tests will lead to the test suite hanging.
         Iterator<Artifact> storedArtifacts = frameDAO.storedIterator(null);
         log.debug("got an iterator back: " + storedArtifacts);
         wipe_clean(storedArtifacts);
