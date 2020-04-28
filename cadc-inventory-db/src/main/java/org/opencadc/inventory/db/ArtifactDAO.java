@@ -68,10 +68,8 @@
 package org.opencadc.inventory.db;
 
 import ca.nrc.cadc.io.ResourceIterator;
-
 import java.net.URI;
 import java.util.UUID;
-
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.springframework.jdbc.core.JdbcTemplate;

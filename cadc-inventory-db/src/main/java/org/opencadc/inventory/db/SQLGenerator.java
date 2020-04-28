@@ -69,7 +69,6 @@ package org.opencadc.inventory.db;
 
 import ca.nrc.cadc.date.DateUtil;
 import ca.nrc.cadc.io.ResourceIterator;
-
 import java.io.IOException;
 import java.net.URI;
 import java.sql.Connection;
@@ -87,9 +86,7 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.UUID;
-
 import javax.sql.DataSource;
-
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.DeletedArtifactEvent;
