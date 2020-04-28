@@ -265,7 +265,7 @@ public abstract class ArtifactAction extends RestAction {
     
     public void checkWritePermission()
         throws AccessControlException, ResourceNotFoundException, TransientException {
-        
+
         AuthMethod am = AuthenticationUtil.getAuthMethod(AuthenticationUtil.getCurrentSubject());
         if (am != null && am.equals(AuthMethod.ANON)) {
             // never support anon write

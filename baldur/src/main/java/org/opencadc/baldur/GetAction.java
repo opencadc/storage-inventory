@@ -70,6 +70,7 @@
 package org.opencadc.baldur;
 
 import ca.nrc.cadc.auth.AuthenticationUtil;
+import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.rest.InlineContentHandler;
 import ca.nrc.cadc.rest.RestAction;
 
@@ -210,11 +211,17 @@ public class GetAction extends RestAction {
      * @param artifactURI The Artifact URI.
      * @return The read grant information object for the artifact URI.
      */
-    static ReadGrant getReadGrant(PermissionsConfig permissionsConfig, URI artifactURI) {
+    static ReadGrant getReadGrant(PermissionsConfig permissionsConfig, URI artifactURI)
+        throws ResourceNotFoundException {
         InventoryUtil.assertNotNull(PermissionsConfig.class, "artifactURI", artifactURI);
+
+        Iterator<PermissionEntry> matchingEntries = permissionsConfig.getMatchingEntries(artifactURI);
+        if (!matchingEntries.hasNext()) {
+            throw new ResourceNotFoundException("not found: read grant for " + artifactURI.toASCIIString());
+        }
+
         boolean anonymousRead = false;
         List<GroupURI> groups = new ArrayList<GroupURI>();
-        Iterator<PermissionEntry> matchingEntries = permissionsConfig.getMatchingEntries(artifactURI);
         PermissionEntry next = null;
         log.debug("compiling read grant from matching entries");
         while (matchingEntries.hasNext()) {
@@ -246,10 +253,16 @@ public class GetAction extends RestAction {
      * @param artifactURI The Artifact URI.
      * @return The write grant information object for the artifact URI.
      */
-    static WriteGrant getWriteGrant(PermissionsConfig permissionsConfig, URI artifactURI) {
+    static WriteGrant getWriteGrant(PermissionsConfig permissionsConfig, URI artifactURI)
+        throws ResourceNotFoundException {
         InventoryUtil.assertNotNull(PermissionsConfig.class, "artifactURI", artifactURI);
-        List<GroupURI> groups = new ArrayList<GroupURI>();
+
         Iterator<PermissionEntry> matchingEntries = permissionsConfig.getMatchingEntries(artifactURI);
+        if (!matchingEntries.hasNext()) {
+            throw new ResourceNotFoundException("not found: write grant for " + artifactURI.toASCIIString());
+        }
+
+        List<GroupURI> groups = new ArrayList<GroupURI>();
         PermissionEntry next = null;
         log.debug("compiling write grant from matching entries");
         while (matchingEntries.hasNext()) {

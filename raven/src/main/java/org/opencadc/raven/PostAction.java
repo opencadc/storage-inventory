@@ -70,7 +70,9 @@ package org.opencadc.raven;
 import ca.nrc.cadc.auth.AuthMethod;
 import ca.nrc.cadc.auth.AuthenticationUtil;
 import ca.nrc.cadc.net.ResourceNotFoundException;
+import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.reg.Standards;
+import ca.nrc.cadc.reg.client.LocalAuthority;
 import ca.nrc.cadc.reg.client.RegistryClient;
 import ca.nrc.cadc.rest.InlineContentException;
 import ca.nrc.cadc.rest.InlineContentHandler;
@@ -83,19 +85,22 @@ import ca.nrc.cadc.vos.Transfer;
 import ca.nrc.cadc.vos.TransferReader;
 import ca.nrc.cadc.vos.TransferWriter;
 import ca.nrc.cadc.vos.VOS;
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URL;
-import java.util.HashMap;
+import java.security.AccessControlException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-
-import javax.security.auth.Subject;
-
+import java.util.TreeMap;
+import java.util.TreeSet;
 import org.apache.log4j.Logger;
+import org.opencadc.gms.GroupClient;
+import org.opencadc.gms.GroupURI;
+import org.opencadc.gms.GroupUtil;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.SiteLocation;
@@ -104,6 +109,7 @@ import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.DeletedEventDAO;
 import org.opencadc.inventory.db.SQLGenerator;
 import org.opencadc.inventory.db.StorageSiteDAO;
+import org.opencadc.inventory.permissions.PermissionsClient;
 import org.opencadc.inventory.permissions.ReadGrant;
 import org.opencadc.inventory.permissions.TokenUtil;
 
@@ -116,10 +122,15 @@ import org.opencadc.inventory.permissions.TokenUtil;
 public class PostAction extends RestAction {
     
     private static final Logger log = Logger.getLogger(PostAction.class);
-    
-    public static final String JNDI_DATASOURCE = "jdbc/inventory";
-    static final String SQL_GEN_KEY = SQLGenerator.class.getName();
+
+    static final String JNDI_DATASOURCE = "jdbc/inventory"; // context.xml
+
     static final String SCHEMA_KEY = SQLGenerator.class.getPackage().getName() + ".schema";
+    static final String READ_GRANTS_KEY = ReadGrant.class.getName() + ".resourceID";
+
+    // immutable state set in constructor
+    protected final ArtifactDAO artifactDAO;
+    protected final List<URI> readGrantServices = new ArrayList<>();
     
     private static final String INLINE_CONTENT_TAG = "inputstream";
     private static final String CONTENT_TYPE = "text/xml";
@@ -129,6 +140,23 @@ public class PostAction extends RestAction {
      */
     public PostAction() {
         super();
+        MultiValuedProperties props = getConfig();
+
+        List<String> readGrants = props.getProperty(READ_GRANTS_KEY);
+        if (readGrants != null) {
+            for (String s : readGrants) {
+                try {
+                    URI u = new URI(s);
+                    readGrantServices.add(u);
+                } catch (URISyntaxException ex) {
+                    throw new IllegalStateException("invalid config: " + READ_GRANTS_KEY + "=" + s + " must be a valid URI");
+                }
+            }
+        }
+
+        Map<String, Object> config = getDaoConfig(props);
+        this.artifactDAO = new ArtifactDAO();
+        artifactDAO.setConfig(config); // connectivity tested
     }
     
     /**
@@ -176,9 +204,6 @@ public class PostAction extends RestAction {
         // ensure artifact uri is valid and exists
         URI artifactURI = transfer.getTarget();
         InventoryUtil.validateArtifactURI(PostAction.class, artifactURI);
-        MultiValuedProperties props = readConfig();
-        ArtifactDAO artifactDAO = new ArtifactDAO();
-        artifactDAO.setConfig(getDaoConfig(props));
         Artifact artifact = artifactDAO.get(artifactURI);
         if (artifact == null) {
             throw new ResourceNotFoundException(artifactURI.toString());
@@ -236,60 +261,100 @@ public class PostAction extends RestAction {
         
         TransferWriter transferWriter = new TransferWriter();
         transferWriter.write(transfer, syncOutput.getOutputStream());
-        
     }
     
-    private void checkReadPermission(URI artifactURI) {
-        // TODO: the same thing minoc does for checking read permission
-        // probably should be done in the cadc-storage-permissions client
-        return;
-    }
-       
-    
-    static Map<String, Object> getDaoConfig(MultiValuedProperties props) {
-        Map<String, Object> config = new HashMap<String, Object>();
-        Class cls = null;
-        List<String> sqlGenList = props.getProperty(SQL_GEN_KEY);
-        if (sqlGenList != null && sqlGenList.size() > 0) {
-            try {
-                String sqlGenClass = sqlGenList.get(0);
-                cls = Class.forName(sqlGenClass);
-            } catch (ClassNotFoundException e) {
-                throw new IllegalStateException("could not load SQLGenerator class: " + e.getMessage(), e);
-            }
-        } else {
-            // use the default SQL generator
-            cls = SQLGenerator.class;
+    private void checkReadPermission(URI artifactURI) throws AccessControlException, TransientException {
+
+        // TODO: remove this when baldur is functional
+        if (true) {
+            log.warn("allowing unrestricted read for development");
+            return;
         }
 
-        config.put(SQL_GEN_KEY, cls);
-        config.put("jndiDataSourceName", JNDI_DATASOURCE);
-        List<String> schemaList = props.getProperty(SCHEMA_KEY);
-        if (schemaList == null || schemaList.size() < 1) {
-            throw new IllegalStateException("a value for " + SCHEMA_KEY + " is needed"
-                + " in raven.properties");
-        }
-        config.put("schema", schemaList.get(0));
-        config.put("database", null); 
-            
-        return config;
-    }
-    
-    static MultiValuedProperties readConfig() {
-        PropertiesReader pr = new PropertiesReader("raven.properties");
-        MultiValuedProperties props = pr.getAllProperties();
-        if (log.isDebugEnabled()) {
-            log.debug("raven.properties:");
-            Set<String> keys = props.keySet();
-            for (String key : keys) {
-                log.debug("    " + key + " = " + props.getProperty(key));
+        // TODO: could call multiple services in parallel
+        Set<GroupURI> granted = new TreeSet<>();
+        for (URI ps : readGrantServices) {
+            PermissionsClient pc = new PermissionsClient(ps);
+            ReadGrant grant = pc.getReadGrant(artifactURI);
+            if (grant != null) {
+                if (grant.isAnonymousAccess()) {
+                    logInfo.setMessage("read grant: anonymous");
+                    return;
+                }
+                granted.addAll(grant.getGroups());
             }
         }
-        return props;
+        if (granted.isEmpty()) {
+            throw new AccessControlException("permission denied: no read grants for " + artifactURI);
+        }
+
+        // TODO: add profiling
+        // if the granted group list is small, it would be better to use GroupClient.isMember()
+        // rather than getting all groups... experiment to determine threshold?
+        // unfortunately, the speed of GroupClient.getGroups() will depend on how many groups the
+        // caller belomgs to...
+        LocalAuthority loc = new LocalAuthority();
+        URI resourecID = loc.getServiceURI(Standards.GMS_SEARCH_01.toString());
+        GroupClient client = GroupUtil.getGroupClient(resourecID);
+        List<GroupURI> userGroups = client.getMemberships();
+        for (GroupURI gg : granted) {
+            for (GroupURI userGroup : userGroups) {
+                if (gg.equals(userGroup)) {
+                    logInfo.setMessage("read grant: " + gg);
+                    return;
+                }
+            }
+        }
+
+        throw new AccessControlException("read permission denied");
     }
-    
+
     protected DeletedEventDAO getDeletedEventDAO(ArtifactDAO src) {
         return new DeletedEventDAO(src);
+    }
+
+    /**
+     * Read config file and verify that all required entries are present.
+     *
+     * @return MultiValuedProperties containing the application config
+     */
+    static MultiValuedProperties getConfig() {
+        PropertiesReader r = new PropertiesReader("raven.properties");
+        MultiValuedProperties mvp = r.getAllProperties();
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("incomplete config: ");
+        boolean ok = true;
+
+        String schema = mvp.getFirstPropertyValue(SCHEMA_KEY);
+        sb.append("\n\t").append(SCHEMA_KEY).append(": ");
+        if (schema == null) {
+            sb.append("MISSING");
+            ok = false;
+        } else {
+            sb.append("OK");
+        }
+
+        if (!ok) {
+            throw new IllegalStateException(sb.toString());
+        }
+
+        return mvp;
+    }
+
+    static Map<String,Object> getDaoConfig(MultiValuedProperties props) {
+        String cname = props.getFirstPropertyValue(SQLGenerator.class.getName());
+        try {
+            Map<String,Object> ret = new TreeMap<>();
+            Class clz = Class.forName(cname);
+            ret.put(SQLGenerator.class.getName(), clz);
+            ret.put("jndiDataSourceName", JNDI_DATASOURCE);
+            ret.put("schema", props.getFirstPropertyValue(SCHEMA_KEY));
+            //config.put("database", null);
+            return ret;
+        } catch (ClassNotFoundException ex) {
+            throw new IllegalStateException("invalid config: failed to load SQLGenerator: " + cname);
+        }
     }
 
 }
