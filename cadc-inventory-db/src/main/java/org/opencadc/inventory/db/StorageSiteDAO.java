@@ -77,7 +77,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
  * 
  * @author pdowler
  */
-public class StorageSiteDAO extends AbstractDAO {
+public class StorageSiteDAO extends AbstractDAO<StorageSite> {
     private static final Logger log = Logger.getLogger(StorageSiteDAO.class);
 
     public StorageSiteDAO() { 
