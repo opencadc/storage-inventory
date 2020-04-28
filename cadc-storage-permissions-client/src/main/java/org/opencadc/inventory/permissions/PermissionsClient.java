@@ -113,12 +113,11 @@ public class PermissionsClient {
      * Get the read permissions information about the file identified by artifactURI.
      *
      * @param artifactURI Identifies the artifact for which to retrieve grant information.
-     * @return The read grant information.
-     * 
-     * @throws ResourceNotFoundException If the file could not be found.
+     * @return Null if permission information isn't found for the artifactURI, otherwise the read grant information.
+     *
      * @throws TransientException If an unexpected, temporary exception occurred.
      */
-    public ReadGrant getReadGrant(URI artifactURI) throws ResourceNotFoundException, TransientException {
+    public ReadGrant getReadGrant(URI artifactURI) throws TransientException {
         return (ReadGrant) getGrant(artifactURI, Operation.read);
     }
 
@@ -126,12 +125,11 @@ public class PermissionsClient {
      * Get the write permissions information about the file identified by artifactURI.
      *
      * @param artifactURI Identifies the artifact for which to retrieve grant information.
-     * @return The write grant information.
+     * @return Null if permission information isn't found for the artifactURI, otherwise the write grant information.
      *
-     * @throws ResourceNotFoundException If the file could not be found.
      * @throws TransientException If an unexpected, temporary exception occurred.
      */
-    public WriteGrant getWriteGrant(URI artifactURI) throws ResourceNotFoundException, TransientException {
+    public WriteGrant getWriteGrant(URI artifactURI) throws TransientException {
         return (WriteGrant) getGrant(artifactURI, Operation.write);
     }
 
@@ -140,11 +138,10 @@ public class PermissionsClient {
      *
      * @param artifactURI Identifies the artifact for which to retrieve grant information.
      * @param op The type of grant to retrieve.
-     * @return The grant information.
-     * @throws ResourceNotFoundException If the file could not be found.
+     * @return Null if permission information isn't found for the artifactURI, otherwise the grant information.
      * @throws TransientException If an unexpected, temporary exception occurred.
      */
-    Grant getGrant(URI artifactURI, Operation op) throws ResourceNotFoundException, TransientException {
+    Grant getGrant(URI artifactURI, Operation op) throws TransientException {
 
         URL grantURL = getGrantURL(serviceURL, op, artifactURI);
         HttpGet httpGet = new HttpGet(grantURL, true);
@@ -157,6 +154,8 @@ public class PermissionsClient {
             throw new RuntimeException("error reading server response", e);
         } catch (InterruptedException e) {
             throw new TransientException("temporarily unavailable: " + artifactURI);
+        } catch (ResourceNotFoundException e) {
+            return null;
         }
 
         Grant grant;

@@ -75,29 +75,22 @@ import ca.nrc.cadc.db.DBConfig;
 import ca.nrc.cadc.db.DBUtil;
 import ca.nrc.cadc.net.FileContent;
 import ca.nrc.cadc.net.HttpPost;
+import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.reg.Standards;
 import ca.nrc.cadc.reg.client.RegistryClient;
 import ca.nrc.cadc.util.FileUtil;
-import ca.nrc.cadc.util.HexUtil;
 import ca.nrc.cadc.util.Log4jInit;
 import ca.nrc.cadc.vos.Transfer;
 import ca.nrc.cadc.vos.TransferParsingException;
 import ca.nrc.cadc.vos.TransferReader;
 import ca.nrc.cadc.vos.TransferWriter;
 
-import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.io.InputStream;
 import java.net.URI;
 import java.net.URL;
-import java.security.DigestInputStream;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.security.PrivilegedActionException;
-import java.security.PrivilegedExceptionAction;
 import java.util.Map;
 import java.util.TreeMap;
 
@@ -119,7 +112,7 @@ public abstract class RavenTest {
     public static final URI RAVEN_SERVICE_ID = URI.create("ivo://cadc.nrc.ca/raven");;
     
     static String SERVER = "INVENTORY_TEST";
-    static String DATABASE = "content";
+    static String DATABASE = "cadctest";
     static String SCHEMA = "inventory";
 
     protected URL anonURL;
@@ -141,7 +134,6 @@ public abstract class RavenTest {
         log.info("certURL: " + certURL);
         anonSubject = AuthenticationUtil.getAnonSubject();
         File cert = FileUtil.getFileFromResource("raven-test.pem", RavenTest.class);
-        log.info("userSubject: " + userSubject);
         userSubject = SSLUtil.createSubject(cert);
         log.info("userSubject: " + userSubject);
         
@@ -161,15 +153,16 @@ public abstract class RavenTest {
         }
     }
     
-    protected Transfer negotiate(Transfer request) throws IOException, TransferParsingException, PrivilegedActionException {
+    protected Transfer negotiate(Transfer request)
+        throws IOException, TransferParsingException, PrivilegedActionException, ResourceNotFoundException {
         TransferWriter writer = new TransferWriter();
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         writer.write(request, out);
         FileContent content = new FileContent(out.toByteArray(), "text/xml");
         HttpPost post = new HttpPost(certURL, content, false);
         post.run();
-        if (post.getThrowable() != null && post.getThrowable() instanceof FileNotFoundException) {
-            throw (FileNotFoundException) post.getThrowable();
+        if (post.getThrowable() != null && post.getThrowable() instanceof ResourceNotFoundException) {
+            throw (ResourceNotFoundException) post.getThrowable();
         }
         Assert.assertNull(post.getThrowable());
         String response = post.getResponseBody();
