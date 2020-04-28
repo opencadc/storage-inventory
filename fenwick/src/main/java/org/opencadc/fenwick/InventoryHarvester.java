@@ -67,6 +67,8 @@
 
 package org.opencadc.fenwick;
 
+import ca.nrc.cadc.db.TransactionManager;
+import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.reg.Capabilities;
 import ca.nrc.cadc.reg.Capability;
 import ca.nrc.cadc.reg.Standards;
@@ -74,12 +76,15 @@ import ca.nrc.cadc.reg.client.RegistryClient;
 
 import java.io.IOException;
 import java.net.URI;
+import java.util.Iterator;
 import java.util.Map;
 
 import org.apache.log4j.Logger;
+import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.InventoryUtil;
-import org.opencadc.inventory.SiteLocation;
 import org.opencadc.inventory.db.ArtifactDAO;
+import org.opencadc.tap.TapClient;
+
 
 /**
  *
@@ -92,15 +97,17 @@ public class InventoryHarvester {
     private final URI resourceID;
     private final Capability inventoryTAP;
     private final ArtifactSelector selector;
+    private final boolean trackSiteLocations;
     
     /**
      * Constructor.
-     * 
      * @param daoConfig config map to pass to cadc-inventory-db DAO classes
      * @param resourceID identifier for the remote query service
      * @param selector selector implementation
+     * @param trackSiteLocations    Whether to track the remote storage site and add it to the Artifact being processed.
      */
-    public InventoryHarvester(Map<String,Object> daoConfig, URI resourceID, ArtifactSelector selector) {
+    public InventoryHarvester(Map<String, Object> daoConfig, URI resourceID, ArtifactSelector selector,
+                              boolean trackSiteLocations) {
         InventoryUtil.assertNotNull(InventoryHarvester.class, "daoConfig", daoConfig);
         InventoryUtil.assertNotNull(InventoryHarvester.class, "resourceID", resourceID);
         InventoryUtil.assertNotNull(InventoryHarvester.class, "selector", selector);
@@ -108,6 +115,7 @@ public class InventoryHarvester {
         artifactDAO.setConfig(daoConfig);
         this.resourceID = resourceID;
         this.selector = selector;
+        this.trackSiteLocations = trackSiteLocations;
         
         try {
             RegistryClient rc = new RegistryClient();
@@ -150,7 +158,7 @@ public class InventoryHarvester {
     // get tracked progress (latest timestamp seen from any iterator)
     // - the head of an iterator is volatile: events can be inserted that are slightly out of monotonic time sequence
     // - actions taken while processing are idempotent
-    // - therefore: it should be OK to re-process the last N seconds (eg startTime = curLastModfied - 120 seconds)
+    // - therefore: it should be OK to re-process the last N seconds (eg startTime = curLastModified - 120 seconds)
 
     // use TapClient to open multiple iterator streams: Artifact, DeletedArtifactEvent, DeletedStorageLocationEvent
     // - incremental: use latest timestamp from above for all iterators
@@ -161,7 +169,38 @@ public class InventoryHarvester {
     // - stop iterating when reaching a timestamp that exceeds the timestamp when query executed
     
     private void doit() {
-        throw new UnsupportedOperationException("TODO");
+        try {
+            final TapClient<Artifact> tapClient = new TapClient<>(resourceID);
+            // The remoteArtifactIterator is NOT complete.  This is just here to illustrate the site sync.
+            final Iterator<Artifact> remoteArtifactIterator =
+                    tapClient.execute("ARTIFACT QUERY...", row -> new Artifact(URI.create(row.get(0).toString()),
+                                                                               URI.create(row.get(1).toString()),
+                                                                               null, null));
+            final StorageSiteSync storageSiteSync = trackSiteLocations ? new StorageSiteSync(resourceID) : null;
+
+            while (remoteArtifactIterator.hasNext()) {
+                final Artifact artifact = remoteArtifactIterator.next();
+
+                if (storageSiteSync != null) {
+                    storageSiteSync.synchronizeSiteLocations(artifact);
+                }
+
+                // Store the Artifact if it's dirty.
+                final TransactionManager transactionManager = artifactDAO.getTransactionManager();
+
+                // Finish PUTting th artifact afterward.  This will all be part of processing the Artifact iterator.
+                try {
+                    transactionManager.startTransaction();
+                    artifactDAO.put(artifact);
+                    transactionManager.commitTransaction();
+                } catch (Exception e) {
+                    transactionManager.rollbackTransaction();
+                }
+            }
+
+            throw new UnsupportedOperationException("TODO");
+        } catch (Exception exception) {
+            throw new RuntimeException(exception.getMessage(), exception);
+        }
     }
-    
 }

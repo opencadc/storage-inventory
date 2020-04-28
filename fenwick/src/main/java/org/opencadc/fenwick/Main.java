@@ -74,10 +74,6 @@ import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.util.PropertiesReader;
 import ca.nrc.cadc.util.StringUtil;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.io.InputStream;
 import java.net.URI;
 import java.util.Map;
 import java.util.TreeMap;
@@ -87,7 +83,7 @@ import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.db.SQLGenerator;
-
+import org.springframework.util.StringUtils;
 
 
 /**
@@ -107,6 +103,7 @@ public class Main {
     private static final String DB_USERNAME_CONFIG_KEY = CONFIG_PREFIX + ".db.username";
     private static final String DB_PASSWORD_CONFIG_KEY = CONFIG_PREFIX + ".db.password";
     private static final String QUERY_SERVICE_CONFIG_KEY = CONFIG_PREFIX + ".queryService";
+    private static final String TRACK_SITE_LOCATIONS_CONFIG_KEY = CONFIG_PREFIX + ".trackSiteLocations";
     private static final String ARTIFACT_SELECTOR_CONFIG_KEY = ArtifactSelector.class.getName();
 
     public static void main(final String[] args) {
@@ -170,7 +167,12 @@ public class Main {
                 System.exit(2);
             }
 
-            InventoryHarvester doit = new InventoryHarvester(daoConfig, resourceID, selector);
+            final String configuredTrackSiteLocations = Main.readProperty(props, TRACK_SITE_LOCATIONS_CONFIG_KEY,
+                                                                          null);
+            final boolean trackSiteLocations = StringUtil.hasText(configuredTrackSiteLocations)
+                                               && Boolean.parseBoolean(configuredTrackSiteLocations);
+
+            InventoryHarvester doit = new InventoryHarvester(daoConfig, resourceID, selector, trackSiteLocations);
             doit.run();
             System.exit(0);
         } catch (Throwable unexpected) {
