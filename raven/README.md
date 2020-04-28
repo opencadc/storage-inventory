@@ -10,10 +10,10 @@ When running raven.war in tomcat, parameters of the connection pool in META-INF/
 to be configured in catalina.properties:
 ```
 # database connection pools
-raven.invadm.maxActive={}
-raven.invadm.username={}
-raven.invadm.password={}
-raven.invadm.url=jdbc:postgresql://{server}/{database}
+raven.invuser.maxActive={}
+raven.invuser.username={}
+raven.invuser.password={}
+raven.invuser.url=jdbc:postgresql://{server}/{database}
 
 ```
 

@@ -266,12 +266,6 @@ public abstract class ArtifactAction extends RestAction {
     public void checkWritePermission()
         throws AccessControlException, ResourceNotFoundException, TransientException {
 
-        // TODO: remove this when baldur is functional
-        if (true) {
-            log.warn("allowing unrestricted write for development");
-            return;
-        }
-
         AuthMethod am = AuthenticationUtil.getAuthMethod(AuthenticationUtil.getCurrentSubject());
         if (am != null && am.equals(AuthMethod.ANON)) {
             // never support anon write

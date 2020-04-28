@@ -113,7 +113,7 @@ public class PermissionsClient {
      * Get the read permissions information about the file identified by artifactURI.
      *
      * @param artifactURI Identifies the artifact for which to retrieve grant information.
-     * @return The read grant information.
+     * @return Null if permission information isn't found for the artifactURI, otherwise the read grant information.
      *
      * @throws TransientException If an unexpected, temporary exception occurred.
      */
@@ -125,7 +125,7 @@ public class PermissionsClient {
      * Get the write permissions information about the file identified by artifactURI.
      *
      * @param artifactURI Identifies the artifact for which to retrieve grant information.
-     * @return The write grant information.
+     * @return Null if permission information isn't found for the artifactURI, otherwise the write grant information.
      *
      * @throws TransientException If an unexpected, temporary exception occurred.
      */
@@ -138,7 +138,7 @@ public class PermissionsClient {
      *
      * @param artifactURI Identifies the artifact for which to retrieve grant information.
      * @param op The type of grant to retrieve.
-     * @return The grant information.
+     * @return Null if permission information isn't found for the artifactURI, otherwise the grant information.
      * @throws TransientException If an unexpected, temporary exception occurred.
      */
     Grant getGrant(URI artifactURI, Operation op) throws TransientException {

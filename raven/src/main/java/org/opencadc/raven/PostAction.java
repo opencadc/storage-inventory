@@ -78,6 +78,7 @@ import ca.nrc.cadc.rest.InlineContentException;
 import ca.nrc.cadc.rest.InlineContentHandler;
 import ca.nrc.cadc.rest.RestAction;
 import ca.nrc.cadc.util.MultiValuedProperties;
+import ca.nrc.cadc.util.PropertiesReader;
 import ca.nrc.cadc.vos.Direction;
 import ca.nrc.cadc.vos.Protocol;
 import ca.nrc.cadc.vos.Transfer;
@@ -94,6 +95,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.TreeSet;
 import org.apache.log4j.Logger;
 import org.opencadc.gms.GroupClient;
@@ -105,6 +107,7 @@ import org.opencadc.inventory.SiteLocation;
 import org.opencadc.inventory.StorageSite;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.DeletedEventDAO;
+import org.opencadc.inventory.db.SQLGenerator;
 import org.opencadc.inventory.db.StorageSiteDAO;
 import org.opencadc.inventory.permissions.PermissionsClient;
 import org.opencadc.inventory.permissions.ReadGrant;
@@ -120,6 +123,11 @@ public class PostAction extends RestAction {
     
     private static final Logger log = Logger.getLogger(PostAction.class);
 
+    static final String JNDI_DATASOURCE = "jdbc/inventory"; // context.xml
+
+    static final String SCHEMA_KEY = SQLGenerator.class.getPackage().getName() + ".schema";
+    static final String READ_GRANTS_KEY = ReadGrant.class.getName() + ".resourceID";
+
     // immutable state set in constructor
     protected final ArtifactDAO artifactDAO;
     protected final List<URI> readGrantServices = new ArrayList<>();
@@ -132,21 +140,21 @@ public class PostAction extends RestAction {
      */
     public PostAction() {
         super();
-        MultiValuedProperties props = InitDatabaseAction.getConfig();
+        MultiValuedProperties props = getConfig();
 
-        List<String> readGrants = props.getProperty(InitDatabaseAction.READ_GRANTS_KEY);
+        List<String> readGrants = props.getProperty(READ_GRANTS_KEY);
         if (readGrants != null) {
             for (String s : readGrants) {
                 try {
                     URI u = new URI(s);
                     readGrantServices.add(u);
                 } catch (URISyntaxException ex) {
-                    throw new IllegalStateException("invalid config: " + InitDatabaseAction.READ_GRANTS_KEY + "=" + s + " must be a valid URI");
+                    throw new IllegalStateException("invalid config: " + READ_GRANTS_KEY + "=" + s + " must be a valid URI");
                 }
             }
         }
 
-        Map<String, Object> config = InitDatabaseAction.getDaoConfig(props);
+        Map<String, Object> config = getDaoConfig(props);
         this.artifactDAO = new ArtifactDAO();
         artifactDAO.setConfig(config); // connectivity tested
     }
@@ -303,6 +311,50 @@ public class PostAction extends RestAction {
 
     protected DeletedEventDAO getDeletedEventDAO(ArtifactDAO src) {
         return new DeletedEventDAO(src);
+    }
+
+    /**
+     * Read config file and verify that all required entries are present.
+     *
+     * @return MultiValuedProperties containing the application config
+     */
+    static MultiValuedProperties getConfig() {
+        PropertiesReader r = new PropertiesReader("raven.properties");
+        MultiValuedProperties mvp = r.getAllProperties();
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("incomplete config: ");
+        boolean ok = true;
+
+        String schema = mvp.getFirstPropertyValue(SCHEMA_KEY);
+        sb.append("\n\t").append(SCHEMA_KEY).append(": ");
+        if (schema == null) {
+            sb.append("MISSING");
+            ok = false;
+        } else {
+            sb.append("OK");
+        }
+
+        if (!ok) {
+            throw new IllegalStateException(sb.toString());
+        }
+
+        return mvp;
+    }
+
+    static Map<String,Object> getDaoConfig(MultiValuedProperties props) {
+        String cname = props.getFirstPropertyValue(SQLGenerator.class.getName());
+        try {
+            Map<String,Object> ret = new TreeMap<>();
+            Class clz = Class.forName(cname);
+            ret.put(SQLGenerator.class.getName(), clz);
+            ret.put("jndiDataSourceName", JNDI_DATASOURCE);
+            ret.put("schema", props.getFirstPropertyValue(SCHEMA_KEY));
+            //config.put("database", null);
+            return ret;
+        } catch (ClassNotFoundException ex) {
+            throw new IllegalStateException("invalid config: failed to load SQLGenerator: " + cname);
+        }
     }
 
 }
