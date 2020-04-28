@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2019.                            (c) 2019.
+*  (c) 2020.                            (c) 2020.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -67,101 +67,54 @@
 
 package org.opencadc.inventory.db;
 
-import ca.nrc.cadc.io.ResourceIterator;
 import java.net.URI;
 import java.util.UUID;
+
 import org.apache.log4j.Logger;
-import org.opencadc.inventory.Artifact;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
  *
  * @author pdowler
  */
-public class ArtifactDAO extends AbstractDAO<Artifact> {
-    private static final Logger log = Logger.getLogger(ArtifactDAO.class);
+public class HarvestStateDAO extends AbstractDAO<HarvestState> {
+    private static final Logger log = Logger.getLogger(HarvestStateDAO.class);
 
-    public ArtifactDAO() {
+    // only usabe by itself for testing
+    public HarvestStateDAO() { 
         super();
     }
-
-    public ArtifactDAO(AbstractDAO dao) {
-        super(dao);
+    
+    public HarvestStateDAO(AbstractDAO src) {
+        super(src);
     }
     
-    public Artifact get(UUID id) {
-        return super.get(Artifact.class, id);
+    public HarvestState get(UUID id) {
+        return super.get(HarvestState.class, id);
     }
     
-    public Artifact get(URI uri) {
-        if (uri == null) {
-            throw new IllegalArgumentException("uri cannot be null");
+    public HarvestState get(String name, URI resourceID) {
+        if (name == null || resourceID == null) {
+            throw new IllegalArgumentException("name and resourceID cannot be null");
         }
         checkInit();
-        log.debug("get: " + uri);
+        log.debug("GET: " + name + " " + resourceID);
         long t = System.currentTimeMillis();
 
         try {
             JdbcTemplate jdbc = new JdbcTemplate(dataSource);
             
-            SQLGenerator.ArtifactGet get = (SQLGenerator.ArtifactGet) gen.getEntityGet(Artifact.class);
-            get.setURI(uri);
-            Artifact a = get.execute(jdbc);
-            return a;
+            SQLGenerator.HarvestStateGet get = ( SQLGenerator.HarvestStateGet) gen.getEntityGet(HarvestState.class);
+            get.setSource(name, resourceID);
+            HarvestState o = get.execute(jdbc);
+            return o;
         } finally {
             long dt = System.currentTimeMillis() - t;
-            log.debug("get: " + uri + " " + dt + "ms");
+            log.debug("GET: " + name + " " + resourceID + " " + dt + "ms");
         }
     }
     
-    // delete an artifact, all SiteLocation(s), and StorageLocation
-    // caller must also fire an appropriate event via DeletedEventDAO in same txn
-    // unless performing this delete in reaction to such an event
     public void delete(UUID id) {
-        super.delete(Artifact.class, id);
-    }
-    
-    /**
-     * Iterate over Artifacts in StorageLocation order. This only shows artifacts with
-     * a storageLocation value and is used to validate inventory vs storage.
-     * 
-     * @param storageBucketPrefix null, prefix, or complete storageBucket string
-     * @return iterator over artifacts sorted by StorageLocation
-     */
-    public ResourceIterator storedIterator(String storageBucketPrefix) {
-        checkInit();
-        log.debug("iterator: " + storageBucketPrefix);
-        long t = System.currentTimeMillis();
-
-        try {
-            SQLGenerator.ArtifactIteratorQuery iter = (SQLGenerator.ArtifactIteratorQuery) gen.getEntityIteratorQuery(Artifact.class, true);
-            iter.setPrefix(storageBucketPrefix);
-            return iter.query(dataSource);
-        } finally {
-            long dt = System.currentTimeMillis() - t;
-            log.debug("iterator: " + storageBucketPrefix + " " + dt + "ms");
-        }
-    }
-    
-    /**
-     * Iterate over Artifacts with no StorageLocation. This only returns artifacts with
-     * no storageLocation value so the content can be downloaded and stored locally.
-     * 
-     * @param uriBucketPrefix null, prefix, or complete Artifact.uriBucket string
-     * @return iterator over artifacts with no StorageLocation
-     */
-    public ResourceIterator unstoredIterator(String uriBucketPrefix) {
-        checkInit();
-        //log.debug("iterator: ");
-        long t = System.currentTimeMillis();
-
-        try {
-            SQLGenerator.ArtifactIteratorQuery iter = (SQLGenerator.ArtifactIteratorQuery) gen.getEntityIteratorQuery(Artifact.class, false);
-            iter.setPrefix(uriBucketPrefix);
-            return iter.query(dataSource);
-        } finally {
-            long dt = System.currentTimeMillis() - t;
-            log.debug("iterator: " + dt + "ms");
-        }
+        super.delete(HarvestState.class, id);
     }
 }

@@ -152,7 +152,7 @@ public class InventoryIsAlwaysRightTest extends AbstractResolutionPolicyTest<Inv
         final List<String> outputLines = Arrays.asList(new String(output.toByteArray()).split("\n"));
         System.out.println(String.format("Message lines are \n\n%s\n\n", outputLines));
 
-        assertListContainsMessage(outputLines, "Retrieving File StorageLocation[s3:101010] as per policy.");
+        assertListContainsMessage(outputLines, "Resetting Artifact StorageLocation[s3:101010] as per policy.");
         Assert.assertTrue("Should have called resetArtifact.",
                           !testEventListener.deleteArtifactCalled
                           && !testEventListener.addArtifactCalled

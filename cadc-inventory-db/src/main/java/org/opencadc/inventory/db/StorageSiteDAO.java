@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2019.                            (c) 2019.
+*  (c) 2020.                            (c) 2020.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -77,7 +77,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
  * 
  * @author pdowler
  */
-public class StorageSiteDAO extends AbstractDAO {
+public class StorageSiteDAO extends AbstractDAO<StorageSite> {
     private static final Logger log = Logger.getLogger(StorageSiteDAO.class);
 
     public StorageSiteDAO() { 

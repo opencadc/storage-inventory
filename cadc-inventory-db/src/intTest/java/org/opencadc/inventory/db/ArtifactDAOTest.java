@@ -70,8 +70,10 @@ package org.opencadc.inventory.db;
 import ca.nrc.cadc.db.ConnectionConfig;
 import ca.nrc.cadc.db.DBConfig;
 import ca.nrc.cadc.db.DBUtil;
+import ca.nrc.cadc.io.ResourceIterator;
 import ca.nrc.cadc.util.HexUtil;
 import ca.nrc.cadc.util.Log4jInit;
+
 import java.net.URI;
 import java.security.MessageDigest;
 import java.util.Comparator;
@@ -82,7 +84,9 @@ import java.util.SortedSet;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.UUID;
+
 import javax.sql.DataSource;
+
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
@@ -402,8 +406,11 @@ public class ArtifactDAOTest {
                 log.info("expected: " + a);
             }
             
-            Iterator<Artifact> iter = dao.storedIterator(null);
+            ResourceIterator<Artifact> iter = dao.storedIterator(null);
             Assert.assertFalse("no results", iter.hasNext());
+            
+            iter.close();
+            Assert.assertFalse("no more results", iter.hasNext());
             
         } catch (Exception unexpected) {
             log.error("unexpected exception", unexpected);
@@ -459,7 +466,7 @@ public class ArtifactDAOTest {
             }
             log.info("added: " + numArtifacts);
             
-            Iterator<Artifact> iter = dao.storedIterator(null);
+            ResourceIterator<Artifact> iter = dao.storedIterator(null);
             Iterator<Artifact> ei = eset.iterator();
             Artifact prev = null;
             int count = 0;
@@ -498,11 +505,14 @@ public class ArtifactDAOTest {
             Assert.assertFalse("database iterator exhausted", iter.hasNext());
             Assert.assertEquals("count", eset.size(), count);
             
+            iter.close();
+            Assert.assertFalse("no more results", iter.hasNext());
+            
             int found = 0;
             for (byte b = 0; b < 16; b++) {
                 String hex =  HexUtil.toHex(b);
                 String bp = hex.substring(1);
-                Iterator<Artifact> i = dao.storedIterator(bp);
+                ResourceIterator<Artifact> i = dao.storedIterator(bp);
                 while (i.hasNext()) {
                     Artifact a = i.next();
                     log.info("found: " + bp + " contains " + a.storageLocation);
@@ -536,8 +546,11 @@ public class ArtifactDAOTest {
                 log.info("expected: " + a);
             }
             
-            Iterator<Artifact> iter = dao.unstoredIterator(null);
+            ResourceIterator<Artifact> iter = dao.unstoredIterator(null);
             Assert.assertFalse("no results", iter.hasNext());
+            
+            iter.close();
+            Assert.assertFalse("no more results", iter.hasNext());
             
         } catch (Exception unexpected) {
             log.error("unexpected exception", unexpected);
@@ -596,7 +609,7 @@ public class ArtifactDAOTest {
             }
             log.info("added: " + numArtifacts);
             
-            Iterator<Artifact> iter = dao.unstoredIterator(null);
+            ResourceIterator<Artifact> iter = dao.unstoredIterator(null);
             Iterator<Artifact> ei = eset.iterator();
             int count = 0;
             while (ei.hasNext()) {
@@ -615,12 +628,15 @@ public class ArtifactDAOTest {
             }
             Assert.assertEquals("count", eset.size(), count);
             
+            iter.close();
+            Assert.assertFalse("no more results", iter.hasNext());
+            
             // check uriBucket prefix usage
             int found = 0;
             for (byte b = 0; b < 16; b++) {
                 String urib = HexUtil.toHex(b).substring(1);
                 log.info("bucket prefix: " + urib);
-                Iterator<Artifact> i = dao.unstoredIterator(urib);
+                ResourceIterator<Artifact> i = dao.unstoredIterator(urib);
                 while (i.hasNext()) {
                     Artifact a = i.next();
                     log.info("found: " + urib + " contains " + a.getBucket());
@@ -630,6 +646,117 @@ public class ArtifactDAOTest {
             }
             Assert.assertFalse("database iterator exhausted", iter.hasNext());
             Assert.assertEquals("found with bucketPrefix", num, found); // num unstored
+            
+        } catch (Exception unexpected) {
+            log.error("unexpected exception", unexpected);
+            Assert.fail("unexpected exception: " + unexpected);
+        }
+    }
+    
+    @Test
+    public void testIteratorDelete() {
+        int num = 10;
+        long sleep = 20000L;
+        try {
+            log.info("testIteratorDelete: START");
+            int numArtifacts = 0;
+            SortedSet<Artifact> eset = new TreeSet<>(new LastModifiedComparator());
+            for (int i = 0; i < num; i++) {
+                Artifact a = new Artifact(
+                        URI.create("cadc:ARCHIVE/filename" + i),
+                        URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"),
+                        new Date(),
+                        new Long(666L));
+                dao.put(a);
+                log.info("expected: " + a);
+                Thread.sleep(1L);
+                numArtifacts++;
+            }
+            
+            log.info("created: " + numArtifacts);
+            ResourceIterator<Artifact> iter = dao.unstoredIterator(null);
+            
+            int count = 0;
+            while (iter.hasNext()) {
+                Artifact actual = iter.next();
+                dao.delete(actual.getID());
+                log.info("deleted: " + actual.getID() + " aka " + actual.getURI());
+                count++;
+                
+                // one time, part way through: pause so developer can examine database locks held
+                //if (count == numArtifacts / 2) {
+                //    log.warn("iter/delete: sleeping for " + sleep + " ms...");
+                //    Thread.sleep(sleep);
+                //}
+            }
+            
+            iter.close();
+            Assert.assertFalse("no more results", iter.hasNext());
+            
+            iter = dao.unstoredIterator(null);
+            Assert.assertFalse("all deleted", iter.hasNext());
+            log.info("testIteratorDelete: OK");
+            
+            iter.close();
+            Assert.assertFalse("no more results", iter.hasNext());
+            
+        } catch (Exception unexpected) {
+            log.error("unexpected exception", unexpected);
+            Assert.fail("unexpected exception: " + unexpected);
+        }
+    }        
+    
+    @Test
+    public void testIteratorClose() {
+         // to verify locking  and release of locks by ArtifactIterator.close():
+         // - set this to an amount of time in milliseconds so the test sleeps before and after close
+         // - run the query in sql/pg-locks.sql manually to check for locks
+         // note: assumes this test is the only user of the database
+        final long sleep = 0L;
+        
+        int num = 10;
+        int numArtifacts = 0;
+        try {
+            for (int i = 2 * num; i < 3 * num; i++) {
+                Artifact a = new Artifact(
+                        URI.create("cadc:ARCHIVE/filename" + i),
+                        URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"),
+                        new Date(),
+                        new Long(666L));
+                // no storageLocation
+                dao.put(a);
+                log.info("expected: " + a);
+                numArtifacts++;
+            }
+            log.info("added: " + numArtifacts);
+            
+            ResourceIterator<Artifact> iter = dao.unstoredIterator(null);
+            int count = 0;
+            while (iter.hasNext()) {
+                Artifact actual = iter.next();
+                dao.delete(actual.getID()); // delete to create locks in txn
+                log.info("deleted: " + actual.getURI() + " aka " + actual.getID());
+                count++;
+                if (count == numArtifacts / 2) {
+                    break;
+                }
+            }
+            Assert.assertTrue("more results", iter.hasNext());
+            
+            if (sleep > 0L) {
+                log.info("testIteratorClose: before close() -- should be locks in DB (sleep: " + sleep + ")");
+                Thread.sleep(sleep);
+                log.info("testIteratorClose: sleep DONE");
+            }
+            
+            iter.close();
+            Assert.assertFalse("no more results", iter.hasNext());
+            
+            if (sleep > 0L) {
+                log.info("testIteratorClose: after close() -- should be *NO* locks in DB (sleep: " + sleep + ")");
+                Thread.sleep(sleep);
+                log.info("testIteratorClose: sleep DONE");
+            }
             
         } catch (Exception unexpected) {
             log.error("unexpected exception", unexpected);

@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2019.                            (c) 2019.
+*  (c) 2020.                            (c) 2020.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -67,101 +67,61 @@
 
 package org.opencadc.inventory.db;
 
-import ca.nrc.cadc.io.ResourceIterator;
 import java.net.URI;
+import java.util.Date;
 import java.util.UUID;
+
 import org.apache.log4j.Logger;
-import org.opencadc.inventory.Artifact;
-import org.springframework.jdbc.core.JdbcTemplate;
+import org.opencadc.inventory.Entity;
+import org.opencadc.inventory.InventoryUtil;
 
 /**
  *
  * @author pdowler
  */
-public class ArtifactDAO extends AbstractDAO<Artifact> {
-    private static final Logger log = Logger.getLogger(ArtifactDAO.class);
+public class HarvestState extends Entity {
+    private static final Logger log = Logger.getLogger(HarvestState.class);
 
-    public ArtifactDAO() {
+    private final String name;
+    private URI resourceID;
+    
+    /**
+     * The timestamp of the last successfully harvested entity.
+     */
+    public Date curLastModified;
+    
+    public HarvestState(String name, URI resourceID) { 
         super();
+        InventoryUtil.assertNotNull(HarvestState.class, "name", name);
+        InventoryUtil.assertNotNull(HarvestState.class, "resourceID", resourceID);
+        this.name = name;
+        this.resourceID = resourceID;
+    }
+    
+    // package access: reconstruct an instance from serialised state.
+    HarvestState(UUID id, String name, URI resourceID) { 
+        super(id);
+        InventoryUtil.assertNotNull(HarvestState.class, "name", name);
+        InventoryUtil.assertNotNull(HarvestState.class, "resourceID", resourceID);
+        this.name = name;
+        this.resourceID = resourceID;
+    }
+    
+    public String getName() {
+        return name;
     }
 
-    public ArtifactDAO(AbstractDAO dao) {
-        super(dao);
+    public URI getResourceID() {
+        return resourceID;
     }
-    
-    public Artifact get(UUID id) {
-        return super.get(Artifact.class, id);
-    }
-    
-    public Artifact get(URI uri) {
-        if (uri == null) {
-            throw new IllegalArgumentException("uri cannot be null");
-        }
-        checkInit();
-        log.debug("get: " + uri);
-        long t = System.currentTimeMillis();
 
-        try {
-            JdbcTemplate jdbc = new JdbcTemplate(dataSource);
-            
-            SQLGenerator.ArtifactGet get = (SQLGenerator.ArtifactGet) gen.getEntityGet(Artifact.class);
-            get.setURI(uri);
-            Artifact a = get.execute(jdbc);
-            return a;
-        } finally {
-            long dt = System.currentTimeMillis() - t;
-            log.debug("get: " + uri + " " + dt + "ms");
-        }
+    public void setResourceID(URI resourceID) {
+        InventoryUtil.assertNotNull(HarvestState.class, "resourceID", resourceID);
+        this.resourceID = resourceID;
     }
-    
-    // delete an artifact, all SiteLocation(s), and StorageLocation
-    // caller must also fire an appropriate event via DeletedEventDAO in same txn
-    // unless performing this delete in reaction to such an event
-    public void delete(UUID id) {
-        super.delete(Artifact.class, id);
-    }
-    
-    /**
-     * Iterate over Artifacts in StorageLocation order. This only shows artifacts with
-     * a storageLocation value and is used to validate inventory vs storage.
-     * 
-     * @param storageBucketPrefix null, prefix, or complete storageBucket string
-     * @return iterator over artifacts sorted by StorageLocation
-     */
-    public ResourceIterator storedIterator(String storageBucketPrefix) {
-        checkInit();
-        log.debug("iterator: " + storageBucketPrefix);
-        long t = System.currentTimeMillis();
 
-        try {
-            SQLGenerator.ArtifactIteratorQuery iter = (SQLGenerator.ArtifactIteratorQuery) gen.getEntityIteratorQuery(Artifact.class, true);
-            iter.setPrefix(storageBucketPrefix);
-            return iter.query(dataSource);
-        } finally {
-            long dt = System.currentTimeMillis() - t;
-            log.debug("iterator: " + storageBucketPrefix + " " + dt + "ms");
-        }
-    }
-    
-    /**
-     * Iterate over Artifacts with no StorageLocation. This only returns artifacts with
-     * no storageLocation value so the content can be downloaded and stored locally.
-     * 
-     * @param uriBucketPrefix null, prefix, or complete Artifact.uriBucket string
-     * @return iterator over artifacts with no StorageLocation
-     */
-    public ResourceIterator unstoredIterator(String uriBucketPrefix) {
-        checkInit();
-        //log.debug("iterator: ");
-        long t = System.currentTimeMillis();
-
-        try {
-            SQLGenerator.ArtifactIteratorQuery iter = (SQLGenerator.ArtifactIteratorQuery) gen.getEntityIteratorQuery(Artifact.class, false);
-            iter.setPrefix(uriBucketPrefix);
-            return iter.query(dataSource);
-        } finally {
-            long dt = System.currentTimeMillis() - t;
-            log.debug("iterator: " + dt + "ms");
-        }
+    @Override
+    public String toString() {
+        return HarvestState.class.getSimpleName() + "[" + name + "," + resourceID + "]";
     }
 }

@@ -74,6 +74,7 @@ import ca.nrc.cadc.db.DBUtil;
 import ca.nrc.cadc.db.TransactionManager;
 import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.profiler.Profiler;
+import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.util.StringUtil;
 
 import java.security.PrivilegedExceptionAction;
@@ -81,7 +82,6 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
-import java.util.Properties;
 import javax.naming.NamingException;
 import javax.security.auth.Subject;
 
@@ -133,10 +133,11 @@ public class BucketValidator implements ValidateEventListener {
      * @param reporter   The Reporter to use in the policy.  Can be used elsewhere.
      * @param runUser    The user to run as.
      */
-    BucketValidator(final Properties properties, final Reporter reporter, final Subject runUser) {
+    BucketValidator(final MultiValuedProperties properties, final Reporter reporter, final Subject runUser) {
         this.runUser = runUser;
 
-        final String storageAdapterClassName = properties.getProperty(StorageAdapter.class.getCanonicalName());
+        final String storageAdapterClassName =
+                properties.getFirstPropertyValue(StorageAdapter.class.getCanonicalName());
         if (StringUtil.hasLength(storageAdapterClassName)) {
             this.storageAdapter = InventoryUtil.loadPlugin(storageAdapterClassName);
         } else {
@@ -147,18 +148,18 @@ public class BucketValidator implements ValidateEventListener {
                             StorageAdapter.class.getCanonicalName()));
         }
 
-        this.bucket = properties.getProperty(String.format("%s.bucket", APPLICATION_CONFIG_KEY_PREFIX));
+        this.bucket = properties.getFirstPropertyValue(String.format("%s.bucket", APPLICATION_CONFIG_KEY_PREFIX));
         if (!StringUtil.hasLength(bucket)) {
             throw new IllegalStateException(String.format("Bucket is mandatory.  Please set the %s property.",
                                                           String.format("%s.bucket",
                                                                         APPLICATION_CONFIG_KEY_PREFIX)));
         }
 
-        this.reportOnlyFlag = Boolean.parseBoolean(
-                properties.getProperty(String.format("%s.reportOnly", APPLICATION_CONFIG_KEY_PREFIX),
-                                       Boolean.FALSE.toString()));
+        final String configuredReportOnly =
+                properties.getFirstPropertyValue(String.format("%s.reportOnly", APPLICATION_CONFIG_KEY_PREFIX));
+        this.reportOnlyFlag = StringUtil.hasText(configuredReportOnly) && Boolean.parseBoolean(configuredReportOnly);
 
-        final String policyClassName = properties.getProperty(ResolutionPolicy.class.getCanonicalName());
+        final String policyClassName = properties.getFirstPropertyValue(ResolutionPolicy.class.getCanonicalName());
         if (StringUtil.hasLength(policyClassName)) {
             this.resolutionPolicy = InventoryUtil.loadPlugin(policyClassName, this, reporter);
         } else {
@@ -170,7 +171,7 @@ public class BucketValidator implements ValidateEventListener {
         // DAO configuration
         final Map<String, Object> config = new HashMap<>();
         final String sqlGeneratorKey = SQLGenerator.class.getName();
-        final String sqlGeneratorClass = properties.getProperty(sqlGeneratorKey);
+        final String sqlGeneratorClass = properties.getFirstPropertyValue(sqlGeneratorKey);
 
         if (StringUtil.hasLength(sqlGeneratorClass)) {
             try {
@@ -190,13 +191,13 @@ public class BucketValidator implements ValidateEventListener {
         final String jdbcURLKey = String.format("%s.url", jdbcConfigKeyPrefix);
         final String jdbcDriverClassname = "org.postgresql.Driver";
 
-        final String schemaName = properties.getProperty(jdbcSchemaKey);
+        final String schemaName = properties.getFirstPropertyValue(jdbcSchemaKey);
 
         final ConnectionConfig cc = new ConnectionConfig(null, null,
-                                                         properties.getProperty(jdbcUsernameKey),
-                                                         properties.getProperty(jdbcPasswordKey),
+                                                         properties.getFirstPropertyValue(jdbcUsernameKey),
+                                                         properties.getFirstPropertyValue(jdbcPasswordKey),
                                                          jdbcDriverClassname,
-                                                         properties.getProperty(jdbcURLKey));
+                                                         properties.getFirstPropertyValue(jdbcURLKey));
         try {
             // Register two datasources.
             DBUtil.createJNDIDataSource("jdbc/inventory", cc);
@@ -258,7 +259,8 @@ public class BucketValidator implements ValidateEventListener {
         final Iterator<StorageMetadata> storageMetadataIterator = iterateStorage();
         final Iterator<Artifact> inventoryIterator = iterateInventory();
         profiler.checkpoint("iterators: ok");
-        LOGGER.debug("Acquired iterators.");
+        LOGGER.debug(String.format("Acquired iterators: \nHas Artifacts (%b)\nHas Storage Metadata (%b).",
+                                   inventoryIterator.hasNext(), storageMetadataIterator.hasNext()));
 
         LOGGER.debug("START validating iterators.");
 
@@ -271,9 +273,10 @@ public class BucketValidator implements ValidateEventListener {
             final StorageMetadata storageMetadata =
                     (unresolvedStorageMetadata == null) ? storageMetadataIterator.next() : unresolvedStorageMetadata;
 
-            LOGGER.debug(String.format("Comparing Inventory Storage Location %s with Storage Adapter Location %s",
-                                       artifact.storageLocation, storageMetadata.getStorageLocation()));
             final int comparison = artifact.storageLocation.compareTo(storageMetadata.getStorageLocation());
+
+            LOGGER.debug(String.format("Comparing Inventory Storage Location %s with Storage Adapter Location %s (%d)",
+                                       artifact.storageLocation, storageMetadata.getStorageLocation(), comparison));
 
             if (comparison == 0) {
                 // Same storage location.  Test the metadata.
@@ -459,7 +462,6 @@ public class BucketValidator implements ValidateEventListener {
                                                        storageMetadata.getContentChecksum(),
                                                        storageMetadata.contentLastModified,
                                                        storageMetadata.getContentLength());
-
                 artifact.storageLocation = storageMetadata.getStorageLocation();
                 artifact.contentType = storageMetadata.contentType;
                 artifact.contentEncoding = storageMetadata.contentEncoding;
@@ -530,6 +532,47 @@ public class BucketValidator implements ValidateEventListener {
                 transactionManager.commitTransaction();
             } catch (Exception e) {
                 LOGGER.error(String.format("Failed to create Artifact %s.", storageMetadata.artifactURI), e);
+                transactionManager.rollbackTransaction();
+                LOGGER.debug("Rollback Transaction: OK");
+                throw e;
+            } finally {
+                if (transactionManager.isOpen()) {
+                    LOGGER.error("BUG - Open transaction in finally");
+                    transactionManager.rollbackTransaction();
+                    LOGGER.error("Transaction rolled back successfully.");
+                }
+            }
+        }
+    }
+
+    /**
+     * Update the values of the given Artifact with those from the given StorageMetadata.  This differs from a replace
+     * as it will not delete the original Artifact first, but rather update the values and issue a PUT.
+     *
+     * @param artifact        The Artifact to update.
+     * @param storageMetadata The StorageMetadata from which to update the Artifact's fields.
+     * @throws Exception Any unexpected error.
+     */
+    @Override
+    public void updateArtifact(final Artifact artifact, final StorageMetadata storageMetadata) throws Exception {
+        if (canTakeAction()) {
+            final TransactionManager transactionManager = artifactDAO.getTransactionManager();
+
+            try {
+                LOGGER.debug("Start transaction.");
+                transactionManager.startTransaction();
+
+                // By reusing the Artifact instance's ID we can have the original Artifact but wipe out the mutable
+                // fields below.
+                artifact.contentEncoding = storageMetadata.contentEncoding;
+                artifact.contentType = storageMetadata.contentType;
+                artifact.storageLocation = storageMetadata.getStorageLocation();
+
+                artifactDAO.put(artifact);
+
+                transactionManager.commitTransaction();
+            } catch (Exception e) {
+                LOGGER.error(String.format("Failed to update Artifact %s.", storageMetadata.artifactURI), e);
                 transactionManager.rollbackTransaction();
                 LOGGER.debug("Rollback Transaction: OK");
                 throw e;

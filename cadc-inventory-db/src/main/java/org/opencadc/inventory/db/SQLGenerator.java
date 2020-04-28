@@ -68,6 +68,8 @@
 package org.opencadc.inventory.db;
 
 import ca.nrc.cadc.date.DateUtil;
+import ca.nrc.cadc.io.ResourceIterator;
+import java.io.IOException;
 import java.net.URI;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -78,7 +80,6 @@ import java.sql.Types;
 import java.util.Calendar;
 import java.util.Comparator;
 import java.util.Date;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -135,11 +136,14 @@ public class SQLGenerator {
         if (schema != null) {
             pref = schema + ".";
         }
+        // inventory model
         this.tableMap.put(Artifact.class, pref + Artifact.class.getSimpleName());
         this.tableMap.put(StorageSite.class, pref + StorageSite.class.getSimpleName());
         this.tableMap.put(DeletedArtifactEvent.class, pref + DeletedArtifactEvent.class.getSimpleName());
         this.tableMap.put(DeletedStorageLocationEvent.class, pref + DeletedStorageLocationEvent.class.getSimpleName());
+        // internal
         this.tableMap.put(ObsoleteStorageLocation.class, pref + ObsoleteStorageLocation.class.getSimpleName());
+        this.tableMap.put(HarvestState.class, pref + HarvestState.class.getSimpleName());
         
         String[] cols = new String[] {
             "uri", // first column is logical key
@@ -180,6 +184,16 @@ public class SQLGenerator {
             "id" // last column is always PK
         };
         this.columnMap.put(ObsoleteStorageLocation.class, cols);
+        
+        cols = new String[] {
+            "name",
+            "resourceID",
+            "curLastModified",
+            "lastModified",
+            "metaChecksum",
+            "id" // last column is always PK
+        };
+        this.columnMap.put(HarvestState.class, cols);
     }
     
     private static class ClassComp implements Comparator<Class> {
@@ -216,12 +230,15 @@ public class SQLGenerator {
         if (ObsoleteStorageLocation.class.equals(c)) {
             return new ObsoleteStorageLocationGet();
         }
+        if (HarvestState.class.equals(c)) {
+            return new HarvestStateGet();
+        }
         throw new UnsupportedOperationException("entity-get: " + c.getName());
     }
     
-    public EntityIterator getEntityIterator(Class c, boolean withStorageLocation) {
+    public EntityIteratorQuery getEntityIteratorQuery(Class c, boolean withStorageLocation) {
         if (Artifact.class.equals(c)) {
-            return new ArtifactIterator(withStorageLocation);
+            return new ArtifactIteratorQuery(withStorageLocation);
         }
         throw new UnsupportedOperationException("entity-list: " + c.getName());
     }
@@ -260,6 +277,9 @@ public class SQLGenerator {
         }
         if (ObsoleteStorageLocation.class.equals(c)) {
             return new ObsoleteStorageLocationPut(update);
+        }
+        if (HarvestState.class.equals(c)) {
+            return new HarvestStatePut(update);
         }
         throw new UnsupportedOperationException("entity-put: " + c.getName());
     }
@@ -412,6 +432,57 @@ public class SQLGenerator {
         }
     }
     
+    // used directly in HarvestStateDAO
+    class HarvestStateGet implements EntityGet<HarvestState> {
+        private UUID id;
+        private String name;
+        private URI resourceID;
+       
+        @Override
+        public void setID(UUID id) {
+            this.id = id;
+        }
+
+        public void setSource(String name, URI resourceID) {
+            this.name = name;
+            this.resourceID = resourceID;
+        }
+        
+        @Override
+        public HarvestState execute(JdbcTemplate jdbc) {
+            return (HarvestState) jdbc.query(this, new HarvestStateExtractor());
+        }
+        
+        @Override
+        public PreparedStatement createPreparedStatement(Connection conn) throws SQLException {
+            if (id == null && (name == null || resourceID == null)) {
+                throw new IllegalStateException("BUG: execute called with no value for ID or name/resourceID"); 
+            }
+            
+            StringBuilder sb = getSelectFromSQL(HarvestState.class, false);
+            sb.append(" WHERE ");
+            if (id != null) {
+                String col = getKeyColumn(HarvestState.class, true);
+                sb.append(col).append(" = ?");
+            } else {
+                String[] cols = columnMap.get(HarvestState.class);
+                sb.append(cols[0]).append(" = ?");
+                sb.append(" AND ");
+                sb.append(cols[1]).append(" = ?");
+            }
+            String sql = sb.toString();
+            log.debug("HarvestStateGet: " + sql);
+            PreparedStatement prep = conn.prepareStatement(sql);
+            if (id != null) {
+                prep.setObject(1, id);
+            } else {
+                prep.setString(1, name);
+                prep.setString(2, resourceID.toASCIIString());
+            }
+            return prep;
+        }
+    }
+    
     // used directly in ArtifactDAO
     class ArtifactGet implements EntityGet<Artifact> {
         private UUID id;
@@ -454,12 +525,12 @@ public class SQLGenerator {
         }
     }
     
-    class ArtifactIterator implements EntityIterator<Artifact> {
+    class ArtifactIteratorQuery implements EntityIteratorQuery<Artifact> {
 
         private boolean withStorageLocation;
         private String prefix;
 
-        public ArtifactIterator(boolean withStorageLocation) {
+        public ArtifactIteratorQuery(boolean withStorageLocation) {
             this.withStorageLocation = withStorageLocation;
         }
 
@@ -469,7 +540,7 @@ public class SQLGenerator {
         }
         
         @Override
-        public Iterator<Artifact> query(DataSource ds) {
+        public ResourceIterator<Artifact> query(DataSource ds) {
             
             StringBuilder sb = getSelectFromSQL(Artifact.class, false);
             sb.append(" WHERE ");
@@ -716,7 +787,7 @@ public class SQLGenerator {
             } else {
                 sql = getInsertSQL(ObsoleteStorageLocation.class);
             }
-            log.debug("ArtifactPut: " + sql);
+            log.debug("ObsoleteStorageLocationPut: " + sql);
             PreparedStatement prep = conn.prepareStatement(sql);
             int col = 1;
             
@@ -725,6 +796,55 @@ public class SQLGenerator {
                 safeSetString(prep, col++, value.getLocation().storageBucket);
             } else {
                 safeSetString(prep, col++, null);
+            }
+            
+            prep.setTimestamp(col++, new Timestamp(value.getLastModified().getTime()), utc);
+            prep.setString(col++, value.getMetaChecksum().toASCIIString());
+            prep.setObject(col++, value.getID());
+            
+            return prep;
+        }
+        
+    }
+    
+    private class HarvestStatePut implements EntityPut<HarvestState> {
+        private final Calendar utc = Calendar.getInstance(DateUtil.UTC);
+        private final boolean update;
+        private HarvestState value;
+        
+        HarvestStatePut(boolean update) {
+            this.update = update;
+        }
+
+        @Override
+        public void setValue(HarvestState value) {
+            this.value = value;
+        }
+        
+        @Override
+        public void execute(JdbcTemplate jdbc) {
+            jdbc.update(this);
+        }
+        
+        @Override
+        public PreparedStatement createPreparedStatement(Connection conn) throws SQLException {
+            String sql = null;
+            if (update) {
+                sql = getUpdateSQL(HarvestState.class);
+                       
+            } else {
+                sql = getInsertSQL(HarvestState.class);
+            }
+            log.debug("HarvestStatePut: " + sql);
+            PreparedStatement prep = conn.prepareStatement(sql);
+            int col = 1;
+            
+            prep.setString(col++, value.getName());
+            prep.setString(col++, value.getResourceID().toASCIIString());
+            if (value.curLastModified != null) {
+                prep.setTimestamp(col++, new Timestamp(value.curLastModified.getTime()), utc);
+            } else {
+                prep.setNull(col++, Types.TIMESTAMP);
             }
             
             prep.setTimestamp(col++, new Timestamp(value.getLastModified().getTime()), utc);
@@ -943,7 +1063,7 @@ public class SQLGenerator {
         }
     }
     
-    private class ArtifactResultSetIterator implements Iterator<Artifact> {
+    private class ArtifactResultSetIterator implements ResourceIterator {
         final Calendar utc = Calendar.getInstance(DateUtil.UTC);
         private final Connection con;
         private final ResultSet rs;
@@ -953,6 +1073,24 @@ public class SQLGenerator {
             this.con = con;
             this.rs = rs;
             hasRow = rs.next();
+            log.debug("ArtifactResultSetIterator: " + super.toString() + " ctor " + hasRow);
+            if (!hasRow) {
+                log.warn("ArtifactResultSetIterator:  " + super.toString() + " ctor - setAutoCommit(true)");
+                con.setAutoCommit(true);
+            }
+        }
+
+        @Override
+        public void close() throws IOException {
+            if (hasRow) {
+                log.debug("ArtifactResultSetIterator:  " + super.toString() + " ctor - setAutoCommit(true)");
+                try {
+                    con.setAutoCommit(true);
+                    hasRow = false;
+                } catch (SQLException ex) {
+                    throw new RuntimeException("BUG: artifact list query failed during close()", ex);
+                }
+            }
         }
 
         @Override
@@ -966,14 +1104,22 @@ public class SQLGenerator {
                 Artifact ret = mapRowToArtifact(rs, utc);
                 hasRow = rs.next();
                 if (!hasRow) {
-                    log.debug("ArtifactResultSetIterator: setAutoCommit(true)");
+                    log.debug("ArtifactResultSetIterator:  " + super.toString() + " DONE - setAutoCommit(true)");
                     con.setAutoCommit(true);
                 }
                 return ret;
-            } catch (SQLException ex) {
+            } catch (Exception ex) {
+                if (hasRow) {
+                    log.debug("ArtifactResultSetIterator:  " + super.toString() + " ResultSet.next() FAILED - setAutoCommit(true)");
+                    try {
+                        close();
+                        hasRow = false;
+                    } catch (IOException unexpected) {
+                        log.debug("BUG: unexpected IOException from close", unexpected);
+                    }
+                }
                 throw new RuntimeException("BUG: artifact list query failed while iterating", ex);
             }
-            
         }
     }
     
@@ -1029,6 +1175,31 @@ public class SQLGenerator {
             StorageLocation s = new StorageLocation(storLoc);
             s.storageBucket = storBucket;
             Entity ret = new ObsoleteStorageLocation(id, s);
+            InventoryUtil.assignLastModified(ret, lastModified);
+            InventoryUtil.assignMetaChecksum(ret, metaChecksum);
+            return ret;
+        }
+    }
+    
+    private class HarvestStateExtractor implements ResultSetExtractor {
+        final Calendar utc = Calendar.getInstance(DateUtil.UTC);
+        
+        @Override
+        public Object extractData(ResultSet rs) throws SQLException, DataAccessException {
+            if (!rs.next()) {
+                return null;
+            }
+            int col = 1;
+            final String name = rs.getString(col++);
+            final URI resourecID = Util.getURI(rs, col++);
+            final Date curLastModified = Util.getDate(rs, col++, utc);
+            
+            final Date lastModified = Util.getDate(rs, col++, utc);
+            final URI metaChecksum = Util.getURI(rs, col++);
+            final UUID id = Util.getUUID(rs, col++);
+            
+            HarvestState ret = new HarvestState(id, name, resourecID);
+            ret.curLastModified = curLastModified;
             InventoryUtil.assignLastModified(ret, lastModified);
             InventoryUtil.assignMetaChecksum(ret, metaChecksum);
             return ret;

@@ -1,3 +1,4 @@
+
 /*
  ************************************************************************
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
@@ -66,75 +67,42 @@
  ************************************************************************
  */
 
-package org.opencadc.tantar;
+package org.opencadc.tantar.policy;
 
-import ca.nrc.cadc.auth.SSLUtil;
-import ca.nrc.cadc.util.Log4jInit;
-import ca.nrc.cadc.util.MultiValuedProperties;
-import ca.nrc.cadc.util.PropertiesReader;
-import ca.nrc.cadc.util.StringUtil;
-
-import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.IOException;
-
-import org.apache.log4j.Level;
-import org.apache.log4j.Logger;
+import org.opencadc.inventory.Artifact;
+import org.opencadc.inventory.storage.StorageMetadata;
+import org.opencadc.tantar.Reporter;
+import org.opencadc.tantar.ValidateEventListener;
 
 
 /**
- * Main application entry.  This class expects a tantar.properties file to be available and readable.
+ * Policy to ensure that a recovery from Storage (in the event of a disaster or a new site is brought online) will
+ * dictate what goes into the Inventory Database.
  */
-public class Main {
-    private static final String LOGGING_KEY = Main.class.getPackage().getName() + ".logging";
+public class RecoverFromStorage extends ResolutionPolicy {
 
-    public static void main(final String[] args) {
-        Log4jInit.setLevel("ca.nrc.cadc", Level.WARN);
-        Log4jInit.setLevel("org.opencadc", Level.WARN);
+    public RecoverFromStorage(ValidateEventListener validateEventListener, Reporter reporter) {
+        super(validateEventListener, reporter);
+    }
 
-        final String certificateFileLocation = String.format("%s/%s/cadcproxy.pem", System.getProperty("user.home"),
-                                                             ".ssl");
-        final Logger logger = Logger.getLogger(Main.class);
-        final Reporter reporter = new Reporter(logger);
-
-        reporter.start();
-
-        try {
-            final PropertiesReader propertiesReader = new PropertiesReader("tantar.properties");
-            final MultiValuedProperties applicationProperties = propertiesReader.getAllProperties();
-
-            // The PropertiesReader won't throw a FileNotFoundException if the given file doesn't exist at all.  We'll
-            // need to throw it here as an appropriate way to notify users.
-            if (applicationProperties == null) {
-                throw new FileNotFoundException("Unable to locate configuration file.");
-            }
-
-            final String configuredLogging = applicationProperties.getFirstPropertyValue(LOGGING_KEY);
-
-            Log4jInit.setLevel("org.opencadc.tantar", StringUtil.hasText(configuredLogging)
-                                                       ? Level.toLevel(configuredLogging.toUpperCase()) : Level.INFO);
-
-            final BucketValidator bucketValidator = new BucketValidator(applicationProperties, reporter,
-                                                                        SSLUtil.createSubject(
-                                                                                new File(certificateFileLocation)));
-
-            bucketValidator.validate();
-        } catch (IllegalStateException e) {
-            // IllegalStateExceptions are thrown for missing but required configuration.
-            logger.fatal(e.getMessage(), e);
-            System.exit(3);
-        } catch (FileNotFoundException e) {
-            logger.fatal(e.getMessage(), e);
-            System.exit(1);
-        } catch (IOException e) {
-            logger.fatal(e.getMessage(), e);
-            System.exit(2);
-        } catch (Exception e) {
-            // Used to catch everything else, such as a RuntimeException when a file cannot be obtained and put.
-            logger.fatal(e.getMessage(), e);
-            System.exit(4);
-        } finally {
-            reporter.end();
+    /**
+     * Use the logic of this Policy to correct a conflict caused by the two given items.  Only the Artifact can be
+     * null; it will be assumed that the given StorageMetadata is never null.
+     *
+     * @param artifact        The Artifact to use in deciding.  Can be null.
+     * @param storageMetadata The StorageMetadata to use in deciding.  Never null.
+     * @throws Exception For any unknown error that should be passed up.
+     */
+    @Override
+    public void resolve(final Artifact artifact, final StorageMetadata storageMetadata) throws Exception {
+        if (artifact == null) {
+            reporter.report(String.format("Adding Artifact %s as per policy.", storageMetadata.getStorageLocation()));
+            validateEventListener.createArtifact(storageMetadata);
+        } else {
+            // This scenario is for an incomplete previous run.  Treat the Artifact as corrupt and set it back to the
+            // StorageMetadata's values.
+            reporter.report(String.format("Updating Artifact %s as per policy.", storageMetadata.getStorageLocation()));
+            validateEventListener.updateArtifact(artifact, storageMetadata);
         }
     }
 }
