@@ -217,7 +217,7 @@ public abstract class ArtifactAction extends RestAction {
    
     
     public void checkReadPermission()
-        throws AccessControlException, ResourceNotFoundException, TransientException {
+        throws AccessControlException, TransientException {
         
         // TODO: remove this when baldur is functional
         if (true) {
@@ -228,14 +228,18 @@ public abstract class ArtifactAction extends RestAction {
         // TODO: could call multiple services in parallel
         Set<GroupURI> granted = new TreeSet<>();
         for (URI ps : readGrantServices) {
-            PermissionsClient pc = new PermissionsClient(ps);
-            ReadGrant grant = pc.getReadGrant(artifactURI);
-            if (grant != null) {
-                if (grant.isAnonymousAccess()) {
-                    logInfo.setMessage("read grant: anonymous");
-                    return;
+            try {
+                PermissionsClient pc = new PermissionsClient(ps);
+                ReadGrant grant = pc.getReadGrant(artifactURI);
+                if (grant != null) {
+                    if (grant.isAnonymousAccess()) {
+                        logInfo.setMessage("read grant: anonymous");
+                        return;
+                    }
+                    granted.addAll(grant.getGroups());
                 }
-                granted.addAll(grant.getGroups());
+            } catch (ResourceNotFoundException ex) {
+                log.error("failed to find granting service: " + ps, ex);
             }
         }
         if (granted.isEmpty()) {
@@ -264,7 +268,7 @@ public abstract class ArtifactAction extends RestAction {
     }
     
     public void checkWritePermission()
-        throws AccessControlException, ResourceNotFoundException, TransientException {
+        throws AccessControlException, TransientException {
 
         AuthMethod am = AuthenticationUtil.getAuthMethod(AuthenticationUtil.getCurrentSubject());
         if (am != null && am.equals(AuthMethod.ANON)) {
@@ -282,10 +286,14 @@ public abstract class ArtifactAction extends RestAction {
 
         // TODO: could call multiple services in parallel
         for (URI ps : writeGrantServices) {
-            PermissionsClient pc = new PermissionsClient(ps);
-            WriteGrant grant = pc.getWriteGrant(artifactURI);
-            if (grant != null) {
-                granted.addAll(grant.getGroups());
+            try {
+                PermissionsClient pc = new PermissionsClient(ps);
+                WriteGrant grant = pc.getWriteGrant(artifactURI);
+                if (grant != null) {
+                    granted.addAll(grant.getGroups());
+                }
+            } catch (ResourceNotFoundException ex) {
+                log.error("failed to find granting service: " + ps, ex);
             }
         }
         if (granted.isEmpty()) {
@@ -299,8 +307,8 @@ public abstract class ArtifactAction extends RestAction {
         // for write permission we expect granted to be small and caller to be an operations or staff 
         // member so lots of memberships and few or 1 granted group: assume isMember() is better
         LocalAuthority loc = new LocalAuthority();
-        URI resourecID = loc.getServiceURI(Standards.GMS_SEARCH_01.toString());
-        GroupClient client = GroupUtil.getGroupClient(resourecID);
+        URI resourceID = loc.getServiceURI(Standards.GMS_SEARCH_01.toString());
+        GroupClient client = GroupUtil.getGroupClient(resourceID);
         for (GroupURI gg : granted) {
             if (client.isMember(gg)) {
                 logInfo.setMessage("write grant: " + gg);
