@@ -65,106 +65,56 @@
 ************************************************************************
 */
 
-package org.opencadc.critwall;
+package org.opencadc.inventory.db;
 
-import ca.nrc.cadc.reg.Capabilities;
-import ca.nrc.cadc.reg.Capability;
-import ca.nrc.cadc.reg.Standards;
-import ca.nrc.cadc.reg.client.RegistryClient;
-
-import java.io.IOException;
 import java.net.URI;
-import java.util.Iterator;
-import java.util.Map;
+import java.util.UUID;
 
 import org.apache.log4j.Logger;
-import org.opencadc.inventory.InventoryUtil;
-import org.opencadc.inventory.SiteLocation;
-import org.opencadc.inventory.db.ArtifactDAO;
-import org.opencadc.inventory.storage.StorageAdapter;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
  *
  * @author pdowler
  */
-public class FileSync {
-    private static final Logger log = Logger.getLogger(FileSync.class);
+public class HarvestStateDAO extends AbstractDAO<HarvestState> {
+    private static final Logger log = Logger.getLogger(HarvestStateDAO.class);
 
-    private static final int MAX_THREADS = 16;
-    
-    private final ArtifactDAO artifactDAO;
-    private StorageAdapter localStorage;
-    private final URI resourceID;
-    private final Capability locator;
-    private final BucketSelector selector;
-    private final int nthreads;
-    
-    /**
-     * Constructor.
-     * 
-     * @param daoConfig config map to pass to cadc-inventory-db DAO classes
-     * @param localStorage adapter to put to local storage
-     * @param resourceID identifier for the remote query service
-     * @param selector selector implementation
-     * @param nthreads number of threads in download thread pool
-     */
-    public FileSync(Map<String,Object> daoConfig, StorageAdapter localStorage, URI resourceID, BucketSelector selector, int nthreads) {
-        InventoryUtil.assertNotNull(FileSync.class, "daoConfig", daoConfig);
-        InventoryUtil.assertNotNull(FileSync.class, "localStorage", localStorage);
-        InventoryUtil.assertNotNull(FileSync.class, "resourceID", resourceID);
-        InventoryUtil.assertNotNull(FileSync.class, "selector", selector);
-
-        if (nthreads <= 0 || nthreads > MAX_THREADS) {
-            throw new IllegalArgumentException("invalid config: nthreads must be in [1," + MAX_THREADS + "], found: " + nthreads);
-        }
-
-        this.artifactDAO = new ArtifactDAO();
-        artifactDAO.setConfig(daoConfig);
-        this.resourceID = resourceID;
-        this.selector = selector;
-        this.nthreads = nthreads;
-
-        // To be completed in s2575, ta 13061
-        // TODO: temporary so that FileSync.run can execute remove setting
-        // locator to null when this section is finished
-        this.locator = null;
-        //        try {
-        //            RegistryClient rc = new RegistryClient();
-        //            Capabilities caps = rc.getCapabilities(resourceID);
-        //            // above call throws IllegalArgumentException... should be ResourceNotFoundException but out of scope to fix
-        //            this.locator = caps.findCapability(Standards.SI_LOCATE);
-        //            if (locator == null) {
-        //                throw new IllegalArgumentException("invalid config: remote query service " + resourceID + " does not implement "
-        //                + Standards.SI_LOCATE);
-        //            }
-        //        } catch (IOException ex) {
-        //            throw new IllegalArgumentException("invalid config", ex);
-        //        }
+    // only usabe by itself for testing
+    public HarvestStateDAO() { 
+        super();
     }
     
-    // general behaviour:
-    // - create a job queue
-    // - create a thread pool to execute jobs (ta 13063)
-    // - query inventory for Artifact with null StorageLocation and use Iterator<Artifact>
-    //   to keep the queue finite in size (not empty, not huge)
-    // job: transfer negotiation  (with global) + HttpGet with output to local StorageAdapter
-    // - the job wrapper should balance HttpGet retries to a single URL and cycling through each
-    //   negotiated URL (once)... so if more URLs to try, fewer retries each (separate task)
-    // - if a job fails, just log it and move on
-    
-    // run until Iterator<Artifact> finishes: 
-    // - terminate?
-    // - manage idle and run until serious failure?
-    
-    public void run() {
-        Iterator<String> bucketSelector = selector.getBucketIterator();
-        while (bucketSelector.hasNext()) {
-            String nextBucket = bucketSelector.next();
-            log.info("processing bucket " + nextBucket);
-        }
-        throw new UnsupportedOperationException("TODO");
+    public HarvestStateDAO(AbstractDAO src) {
+        super(src);
     }
+    
+    public HarvestState get(UUID id) {
+        return super.get(HarvestState.class, id);
+    }
+    
+    public HarvestState get(String name, URI resourceID) {
+        if (name == null || resourceID == null) {
+            throw new IllegalArgumentException("name and resourceID cannot be null");
+        }
+        checkInit();
+        log.debug("GET: " + name + " " + resourceID);
+        long t = System.currentTimeMillis();
 
-
-
+        try {
+            JdbcTemplate jdbc = new JdbcTemplate(dataSource);
+            
+            SQLGenerator.HarvestStateGet get = ( SQLGenerator.HarvestStateGet) gen.getEntityGet(HarvestState.class);
+            get.setSource(name, resourceID);
+            HarvestState o = get.execute(jdbc);
+            return o;
+        } finally {
+            long dt = System.currentTimeMillis() - t;
+            log.debug("GET: " + name + " " + resourceID + " " + dt + "ms");
+        }
+    }
+    
+    public void delete(UUID id) {
+        super.delete(HarvestState.class, id);
+    }
 }

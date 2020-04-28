@@ -95,7 +95,7 @@ public class InventoryIsAlwaysRight extends ResolutionPolicy {
             // happen in the case where all files are managed by the inventory but an intervention outside of the
             // Storage Inventory caused a file to disappear.  The file may not have been fully uploaded to begin with
             // either.
-            reporter.report(String.format("Retrieving File %s as per policy.", artifact.storageLocation));
+            reporter.report(String.format("Resetting Artifact %s as per policy.", artifact.storageLocation));
 
             validateEventListener.markAsNew(artifact);
         } else if (artifact == null) {

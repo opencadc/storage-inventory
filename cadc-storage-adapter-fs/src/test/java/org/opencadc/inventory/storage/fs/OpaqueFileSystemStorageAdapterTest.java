@@ -65,106 +65,77 @@
 ************************************************************************
 */
 
-package org.opencadc.critwall;
+package org.opencadc.inventory.storage.fs;
 
-import ca.nrc.cadc.reg.Capabilities;
-import ca.nrc.cadc.reg.Capability;
-import ca.nrc.cadc.reg.Standards;
-import ca.nrc.cadc.reg.client.RegistryClient;
+import ca.nrc.cadc.util.Log4jInit;
 
-import java.io.IOException;
-import java.net.URI;
+import java.io.File;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Iterator;
-import java.util.Map;
+import java.util.UUID;
 
+import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
-import org.opencadc.inventory.InventoryUtil;
-import org.opencadc.inventory.SiteLocation;
-import org.opencadc.inventory.db.ArtifactDAO;
-import org.opencadc.inventory.storage.StorageAdapter;
+import org.junit.Assert;
+import org.junit.Test;
+import org.opencadc.inventory.StorageLocation;
 
 /**
- *
+ * Unit tests that create base directory structure but do not otherwise
+ * interact with the file system.
+ * 
  * @author pdowler
  */
-public class FileSync {
-    private static final Logger log = Logger.getLogger(FileSync.class);
+public class OpaqueFileSystemStorageAdapterTest {
+    private static final Logger log = Logger.getLogger(OpaqueFileSystemStorageAdapterTest.class);
 
-    private static final int MAX_THREADS = 16;
-    
-    private final ArtifactDAO artifactDAO;
-    private StorageAdapter localStorage;
-    private final URI resourceID;
-    private final Capability locator;
-    private final BucketSelector selector;
-    private final int nthreads;
-    
-    /**
-     * Constructor.
-     * 
-     * @param daoConfig config map to pass to cadc-inventory-db DAO classes
-     * @param localStorage adapter to put to local storage
-     * @param resourceID identifier for the remote query service
-     * @param selector selector implementation
-     * @param nthreads number of threads in download thread pool
-     */
-    public FileSync(Map<String,Object> daoConfig, StorageAdapter localStorage, URI resourceID, BucketSelector selector, int nthreads) {
-        InventoryUtil.assertNotNull(FileSync.class, "daoConfig", daoConfig);
-        InventoryUtil.assertNotNull(FileSync.class, "localStorage", localStorage);
-        InventoryUtil.assertNotNull(FileSync.class, "resourceID", resourceID);
-        InventoryUtil.assertNotNull(FileSync.class, "selector", selector);
-
-        if (nthreads <= 0 || nthreads > MAX_THREADS) {
-            throw new IllegalArgumentException("invalid config: nthreads must be in [1," + MAX_THREADS + "], found: " + nthreads);
-        }
-
-        this.artifactDAO = new ArtifactDAO();
-        artifactDAO.setConfig(daoConfig);
-        this.resourceID = resourceID;
-        this.selector = selector;
-        this.nthreads = nthreads;
-
-        // To be completed in s2575, ta 13061
-        // TODO: temporary so that FileSync.run can execute remove setting
-        // locator to null when this section is finished
-        this.locator = null;
-        //        try {
-        //            RegistryClient rc = new RegistryClient();
-        //            Capabilities caps = rc.getCapabilities(resourceID);
-        //            // above call throws IllegalArgumentException... should be ResourceNotFoundException but out of scope to fix
-        //            this.locator = caps.findCapability(Standards.SI_LOCATE);
-        //            if (locator == null) {
-        //                throw new IllegalArgumentException("invalid config: remote query service " + resourceID + " does not implement "
-        //                + Standards.SI_LOCATE);
-        //            }
-        //        } catch (IOException ex) {
-        //            throw new IllegalArgumentException("invalid config", ex);
-        //        }
+    static {
+        Log4jInit.setLevel("org.opencadc.inventory.storage.fs", Level.INFO);
     }
     
-    // general behaviour:
-    // - create a job queue
-    // - create a thread pool to execute jobs (ta 13063)
-    // - query inventory for Artifact with null StorageLocation and use Iterator<Artifact>
-    //   to keep the queue finite in size (not empty, not huge)
-    // job: transfer negotiation  (with global) + HttpGet with output to local StorageAdapter
-    // - the job wrapper should balance HttpGet retries to a single URL and cycling through each
-    //   negotiated URL (once)... so if more URLs to try, fewer retries each (separate task)
-    // - if a job fails, just log it and move on
-    
-    // run until Iterator<Artifact> finishes: 
-    // - terminate?
-    // - manage idle and run until serious failure?
-    
-    public void run() {
-        Iterator<String> bucketSelector = selector.getBucketIterator();
-        while (bucketSelector.hasNext()) {
-            String nextBucket = bucketSelector.next();
-            log.info("processing bucket " + nextBucket);
-        }
-        throw new UnsupportedOperationException("TODO");
+    OpaqueFileSystemStorageAdapter adapter;
+    int depth = 2;
+            
+    public OpaqueFileSystemStorageAdapterTest() { 
+        File tmp = new File("build/tmp");
+        File root = new File(tmp, "opaque-unit-tests");
+        root.mkdir();
+
+        this.adapter = new OpaqueFileSystemStorageAdapter(root, depth); // opaque
+        log.info("    content path: " + adapter.contentPath);
+        log.info("transaction path: " + adapter.txnPath);
+        Assert.assertTrue("testInit: contentPath", Files.exists(adapter.contentPath));
+        Assert.assertTrue("testInit: txnPath", Files.exists(adapter.txnPath));
     }
-
-
-
+    
+    @Test
+    public void testStorageLocationMethods() {
+        try {
+            Path p = adapter.txnPath.resolve(UUID.randomUUID().toString());
+            StorageLocation sloc = adapter.pathToStorageLocation(p);
+            log.info("created: " + sloc);
+            Assert.assertNotNull(sloc);
+            Assert.assertNotNull(sloc.storageBucket);
+            Assert.assertEquals(depth, sloc.storageBucket.length());
+            
+            Path pth = adapter.storageLocationToPath(sloc);
+            log.info("path: " + pth);
+            Assert.assertNotNull(pth);
+            int num = 0;
+            Path rel = adapter.contentPath.relativize(pth);
+            Iterator<Path> i = rel.iterator();
+            while (i.hasNext()) {
+                log.info("comp: " + i.next());
+                num++;
+            }
+            Assert.assertEquals("relative path depth", (depth + 1), num);
+            
+        } catch (Exception unexpected) {
+            log.error("unexpected exception", unexpected);
+            Assert.fail("unexpected exception: " + unexpected);
+        }
+    }
+    
+    
 }

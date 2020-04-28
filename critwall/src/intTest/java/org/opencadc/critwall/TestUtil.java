@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2020.                            (c) 2020.
+*  (c) 2019.                            (c) 2019.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -65,54 +65,54 @@
 ************************************************************************
 */
 
-package org.opencadc.inventory.db.version;
+package org.opencadc.critwall;
 
-import java.net.URL;
-import javax.sql.DataSource;
+import java.io.File;
+import java.io.FileReader;
+import java.util.Properties;
 import org.apache.log4j.Logger;
 
 /**
  *
  * @author pdowler
  */
-public class InitDatabase extends ca.nrc.cadc.db.version.InitDatabase {
-    private static final Logger log = Logger.getLogger(InitDatabase.class);
-    
-    public static final String MODEL_NAME = "storage-inventory";
-    public static final String MODEL_VERSION = "0.8";
-    public static final String PREV_MODEL_VERSION = "0.7";
-    //public static final String PREV_MODEL_VERSION = "DO-NOT_UPGRADE-BY-ACCIDENT";
+public class TestUtil {
+    private static final Logger log = Logger.getLogger(TestUtil.class);
 
-    static String[] CREATE_SQL = new String[] {
-        "inventory.ModelVersion.sql",
-        "inventory.Artifact.sql",
-        "inventory.StorageSite.sql",
-        "inventory.ObsoleteStorageLocation.sql",
-        "inventory.DeletedArtifactEvent.sql",
-        "inventory.DeletedStorageLocationEvent.sql",
-        "inventory.HarvestState.sql",
-        "inventory.permissions.sql"
-    };
+    static String SERVER = "INVENTORY_TEST";
+    static String DATABASE = "cadctest";
+    static String SCHEMA = "inventory";
+    static String TABLE_PREFIX = null;
     
-    static String[] UPGRADE_SQL = new String[] {
-        "inventory.HarvestState.sql",
-        "inventory.upgrade-0.8.sql",
-        "inventory.permissions.sql"
-    };
-    
-    public InitDatabase(DataSource ds, String database, String schema) { 
-        super(ds, database, schema, MODEL_NAME, MODEL_VERSION, PREV_MODEL_VERSION);
-        for (String s : CREATE_SQL) {
-            createSQL.add(s);
-        }
-        for (String s : UPGRADE_SQL) {
-            upgradeSQL.add(s);
+    static {
+        try {
+            File opt = new File("intTest.properties");
+            if (opt.exists()) {
+                Properties props = new Properties();
+                props.load(new FileReader(opt));
+                String s = props.getProperty("server");
+                if (s != null) {
+                    SERVER = s.trim();
+                }
+                s = props.getProperty("database");
+                if (s != null) {
+                    DATABASE = s.trim();
+                }
+                s = props.getProperty("schema");
+                if (s != null) {
+                    SCHEMA = s.trim();
+                }
+                s = props.getProperty("tablePrefix");
+                if (s != null) {
+                    TABLE_PREFIX = s.trim();
+                }
+            }
+            log.debug("intTest database config: " + SERVER + " " + DATABASE + " " + SCHEMA + " " + TABLE_PREFIX);
+        } catch (Exception oops) {
+            log.debug("failed to load/read optional db config", oops);
         }
     }
-
-    @Override
-    protected URL findSQL(String fname) {
-        // SQL files are stored inside the jar file
-        return InitDatabase.class.getClassLoader().getResource(fname);
+    
+    private TestUtil() { 
     }
 }

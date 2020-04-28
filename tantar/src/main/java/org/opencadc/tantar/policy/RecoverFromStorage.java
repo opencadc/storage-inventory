@@ -1,9 +1,10 @@
+
 /*
  ************************************************************************
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2019.                            (c) 2019.
+ *  (c) 2020.                            (c) 2020.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -62,81 +63,46 @@
  *  <http://www.gnu.org/licenses/>.      pas le cas, consultez :
  *                                       <http://www.gnu.org/licenses/>.
  *
- *  $Revision: 4 $
  *
  ************************************************************************
  */
 
-package org.opencadc.inventory.storage;
+package org.opencadc.tantar.policy;
 
-import java.net.URI;
-import java.util.Date;
-import org.opencadc.inventory.InventoryUtil;
-import org.opencadc.inventory.StorageLocation;
+import org.opencadc.inventory.Artifact;
+import org.opencadc.inventory.storage.StorageMetadata;
+import org.opencadc.tantar.Reporter;
+import org.opencadc.tantar.ValidateEventListener;
+
 
 /**
- * Class to hold artifact metadata from a storage implementation.
- * 
- * @author majorb
- *
+ * Policy to ensure that a recovery from Storage (in the event of a disaster or a new site is brought online) will
+ * dictate what goes into the Inventory Database.
  */
-public class StorageMetadata implements Comparable<StorageMetadata> {
+public class RecoverFromStorage extends ResolutionPolicy {
 
-    private final StorageLocation storageLocation;
-    private final URI contentChecksum;
-    private final Long contentLength;
-    
-    public URI artifactURI;
-    public Date contentLastModified;
+    public RecoverFromStorage(ValidateEventListener validateEventListener, Reporter reporter) {
+        super(validateEventListener, reporter);
+    }
 
-    public String contentEncoding;
-    public String contentType;
-    
-    public StorageMetadata(StorageLocation storageLocation, URI contentChecksum, Long contentLength) {
-        InventoryUtil.assertNotNull(StorageMetadata.class, "storageLocation", storageLocation);
-        InventoryUtil.assertNotNull(StorageMetadata.class, "contentChecksum", contentChecksum);
-        InventoryUtil.assertNotNull(StorageMetadata.class, "contentLength", contentLength);
-        if (contentLength <= 0L) {
-            throw new IllegalArgumentException("invalid " + StorageMetadata.class.getSimpleName() + ".contentLength: " + contentLength);
+    /**
+     * Use the logic of this Policy to correct a conflict caused by the two given items.  Only the Artifact can be
+     * null; it will be assumed that the given StorageMetadata is never null.
+     *
+     * @param artifact        The Artifact to use in deciding.  Can be null.
+     * @param storageMetadata The StorageMetadata to use in deciding.  Never null.
+     * @throws Exception For any unknown error that should be passed up.
+     */
+    @Override
+    public void resolve(final Artifact artifact, final StorageMetadata storageMetadata) throws Exception {
+        if (artifact == null) {
+            reporter.report(String.format("Adding Artifact %s as per policy.", storageMetadata.getStorageLocation()));
+            validateEventListener.createArtifact(storageMetadata);
+        } else {
+            // This scenario is for an incomplete previous run.  Treat the Artifact as corrupt and set it back to the
+            // StorageMetadata's values.
+            reporter.report(String.format("Updating Artifact %s as per policy.", storageMetadata.getStorageLocation()));
+            validateEventListener.updateArtifact(artifact, storageMetadata);
         }
-        this.storageLocation = storageLocation;
-        this.contentChecksum = contentChecksum;
-        this.contentLength = contentLength;
-    }
-
-    public StorageLocation getStorageLocation() {
-        return storageLocation;
-    }
-
-    public URI getContentChecksum() {
-        return contentChecksum;
-    }
-
-    public Long getContentLength() {
-        return contentLength;
-    }
-    
-    @Override
-    public boolean equals(Object o) {
-        if (o == null || !(o instanceof StorageMetadata)) {
-            return false;
-        }
-        StorageMetadata other = (StorageMetadata) o;
-        return this.storageLocation.equals(other.storageLocation);
-    }
-
-    @Override
-    public int hashCode() {
-        return storageLocation.hashCode();
-    }
-
-    @Override
-    public int compareTo(StorageMetadata rhs) {
-        return storageLocation.compareTo(rhs.storageLocation);
-    }
-
-    @Override
-    public String toString() {
-        return "StorageMetadata[" + storageLocation + "," + artifactURI + "]";
     }
 }
