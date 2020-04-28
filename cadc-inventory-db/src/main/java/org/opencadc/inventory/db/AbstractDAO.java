@@ -76,10 +76,8 @@ import ca.nrc.cadc.db.TransactionManager;
 import java.lang.reflect.Constructor;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Statement;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.Map;
@@ -96,8 +94,9 @@ import org.springframework.jdbc.core.RowMapper;
 /**
  *
  * @author pdowler
+ * @param <T>
  */
-class AbstractDAO<T extends Entity> {
+public abstract class AbstractDAO<T extends Entity> {
 
     private static final Logger log = Logger.getLogger(AbstractDAO.class);
 
