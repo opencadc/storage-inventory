@@ -72,8 +72,11 @@ package org.opencadc.fenwick;
 import ca.nrc.cadc.util.StringUtil;
 
 import java.io.File;
+import java.io.FileReader;
 import java.io.IOException;
+import java.io.LineNumberReader;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -82,14 +85,24 @@ import java.util.Objects;
 import org.apache.log4j.Logger;
 
 
-public class IncludeArtifacts extends ArtifactSelector {
+public class IncludeArtifacts implements ArtifactSelector {
     private static final Logger log = Logger.getLogger(IncludeArtifacts.class);
+    static final String COMMENT_PREFIX = "--";
+
+    private final Path selectorConfigDir;
 
     /**
      * Empty constructor.
      */
     public IncludeArtifacts() {
-        super();
+        // Read in the configuration file, and create a usable Map from it.
+        final File homeConfigDirectory = new File(String.format("%s/config/include", System.getProperty("user.home")));
+
+        // Allow some flexibility to override.  This is useful for local testing as one would normally require root
+        // access to create /config.  Those Selectors that do not use the include clauses may safely ignore this.
+        selectorConfigDir = homeConfigDirectory.isDirectory()
+                            ? homeConfigDirectory.toPath()
+                            : new File("/config/include").toPath();
     }
 
     /**
@@ -101,7 +114,7 @@ public class IncludeArtifacts extends ArtifactSelector {
      * @throws Exception Any issues with establishing the list, or reading from configuration
      */
     @Override
-    public Iterator<String> iterateIncludeClauses() throws Exception {
+    public Iterator<String> iterator() throws Exception {
         final List<String> whereClauses = new ArrayList<>();
         loadClauses(whereClauses);
         if (whereClauses.isEmpty()) {
@@ -118,7 +131,9 @@ public class IncludeArtifacts extends ArtifactSelector {
      * the file names end with an SQL extension, and the clause declared within begins with WHERE.  That clause is
      * then loaded into the given list with the WHERE keyword stripped.
      * <p/>
-     * This method is how the SQL files are read in and loaded as clauses.
+     * This method is how the SQL files are read in and loaded as clauses.  Any lines that are not comments are
+     * considered part of the clause.  Comments begin with <code>--</code> and can be within the line, but anything
+     * after the <code>--</code> will be ignored.
      *
      * @param whereClauses A list of clauses to load into.
      * @throws IOException If anything goes awry while reading the files.
@@ -129,31 +144,49 @@ public class IncludeArtifacts extends ArtifactSelector {
             final File[] fileListing = Objects.requireNonNull(
                     configurationDirFile.listFiles(pathname -> pathname.getName().toLowerCase().endsWith(".sql")));
             for (final File f : fileListing) {
-                boolean isFirstLine = true;
+                boolean validWhereClauseFound = false;
                 final StringBuilder clauseBuilder = new StringBuilder();
-                // There may be multiple lines per file.  Trim each one and treat it like a single clause.
-                for (final String clause : Files.readAllLines(f.toPath())) {
-                    if (StringUtil.hasText(clause)) {
-                        // The first line MUST begin with the WHERE keyword.
-                        if (isFirstLine) {
-                            if (clause.trim().regionMatches(true, 0, "WHERE", 0, "WHERE".length())) {
-                                log.debug(String.format("Loading clause %s.", f.getName()));
-                                final String formattedClause = clause.trim().replaceFirst("(?i)\\bwhere\\b", "").trim();
-                                if (StringUtil.hasText(formattedClause)) {
-                                    clauseBuilder.append(formattedClause);
+
+                try (final LineNumberReader lineNumberReader = new LineNumberReader(new FileReader(f))) {
+                    String line;
+                    while ((line = lineNumberReader.readLine()) != null) {
+                        line = line.trim();
+
+                        if (line.contains(COMMENT_PREFIX)) {
+                            line = line.substring(0, line.indexOf(COMMENT_PREFIX)).trim();
+                        }
+
+                        // Skip empty lines
+                        if (StringUtil.hasText(line)) {
+                            // SQL comment syntax
+                            if (line.regionMatches(true, 0, "WHERE", 0, "WHERE".length())) {
+                                if (validWhereClauseFound) {
+                                    throw new IllegalStateException(
+                                            String.format("A valid WHERE clause is already present (line %d).",
+                                                          lineNumberReader.getLineNumber()));
+                                }
+
+                                validWhereClauseFound = true;
+                                line = line.replaceFirst("(?i)\\bwhere\\b", "").trim();
+
+                                // It is acceptable to have the WHERE keyword on its own line, too.
+                                if (StringUtil.hasText(line)) {
+                                    clauseBuilder.append(line);
                                 }
                             } else {
-                                throw new IllegalStateException(
-                                        String.format("The filter file (%s) MUST begin with the WHERE keyword.",
-                                                      f.getName()));
+                                // This is assumed to be another part of the clause, so ensure we've already passed the
+                                // WHERE portion.
+                                if (validWhereClauseFound) {
+                                    clauseBuilder.append(" ").append(line);
+                                } else {
+                                    throw new IllegalStateException(
+                                            String.format("The first clause found in %s (line %d) MUST be start with "
+                                                          + "the WHERE keyword.", f.getName(),
+                                                          lineNumberReader.getLineNumber()));
+                                }
                             }
-                        } else {
-                            clauseBuilder.append(" ").append(clause.trim());
                         }
-                    } else {
-                        log.warn(String.format("NOT loading %s due to missing WHERE keyword.", f.getName()));
                     }
-                    isFirstLine = false;
                 }
 
                 if ((clauseBuilder.length() > 0) && StringUtil.hasText(clauseBuilder.toString().trim())) {

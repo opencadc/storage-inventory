@@ -79,17 +79,20 @@ import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
 
 
 public class IncludeArtifactsTest {
+
     static {
         Log4jInit.setLevel("org.opencadc.fenwick", Level.DEBUG);
     }
 
     @Test
-    public void iterateIncludeClauses() throws Exception {
+    public void iterator() throws Exception {
         final String currUserHome = System.getProperty("user.home");
         try {
             final Path tmpConfDirPath = Files.createTempDirectory(IncludeArtifactsTest.class.getName());
@@ -103,34 +106,50 @@ public class IncludeArtifactsTest {
             final String clauseOne = "WHERE a = b AND c < 8";
             Files.write(Files.createTempFile(includePath, "clauseone_", ".sql"), clauseOne.getBytes());
 
+            final String clauseTwo =
+                    "--Authored by jenkisnd\n--2020.04.28\nWHERE column between (45, 60) AND column_type = " +
+                    "'PROJECT'\nAND year = 2020";
+            Files.write(Files.createTempFile(includePath, "clausetwo_", ".sql"), clauseTwo.getBytes());
+
             final String clauseThree = "WHERE lastModified >= 1977-11-25";
             Files.write(Files.createTempFile(includePath, "clausethree_", ".sql"), clauseThree.getBytes());
 
+            // TXT files are excluded.
             final String clauseFour = "WHERE name != 'BADARCHIVE'";
             Files.write(Files.createTempFile(includePath, "clausefour_", ".txt"), clauseFour.getBytes());
 
             final String clauseFive = "      where thiscol = 'thisvalue'";
             Files.write(Files.createTempFile(includePath, "clausefive_", ".sql"), clauseFive.getBytes());
 
+            // Should be excluded
             final String clauseSix = "      where ";
             Files.write(Files.createTempFile(includePath, "clausesix_", ".sql"), clauseSix.getBytes());
 
-            final String clauseSeven = "      \nwhere\n number = 88\n  and speed = 'racer'";
+            final String clauseSeven = "      \nwhere\n number = 88\n  and speed = 'racer' --Only speed racer";
             Files.write(Files.createTempFile(includePath, "clauseseven_", ".sql"), clauseSeven.getBytes());
 
             final IncludeArtifacts includeArtifacts = new IncludeArtifacts();
-            final Iterator<String> clauses = includeArtifacts.iterateIncludeClauses();
+            final Iterator<String> clauses = includeArtifacts.iterator();
             final List<String> clauseList = new ArrayList<>();
             clauses.forEachRemaining(clauseList::add);
 
-            Assert.assertEquals("Wrong size of elements.", 4, clauseList.size());
+            final List<String> expectedClauses =
+                    Arrays.asList("column between (45, 60) AND column_type = 'PROJECT' AND year = 2020",
+                                  "a = b AND c < 8", "thiscol = 'thisvalue'", "number = 88 and speed = 'racer'",
+                                  "lastModified >= 1977-11-25");
+
+            // Sort to allow comparisons.
+            expectedClauses.sort(Comparator.naturalOrder());
+            clauseList.sort(Comparator.naturalOrder());
+
+            Assert.assertArrayEquals("Wrong clauses", expectedClauses.toArray(), clauseList.toArray());
         } finally {
             System.setProperty("user.home", currUserHome);
         }
     }
 
     @Test
-    public void iteratorIncludeClausesException() throws Exception {
+    public void iteratorMissingWhereException() throws Exception {
         final String currUserHome = System.getProperty("user.home");
         try {
             final Path tmpConfDirPath = Files.createTempDirectory(IncludeArtifactsTest.class.getName());
@@ -141,14 +160,48 @@ public class IncludeArtifactsTest {
 
             System.setProperty("user.home", tmpConfDirPath.toFile().toString());
 
-            final String clauseTwo = "OR B < 9";
-            Files.write(Files.createTempFile(includePath, "clausetwo_", ".sql"), clauseTwo.getBytes());
+            final String clause = "OR B < 9";
+            final Path tmpFilePath =
+                    Files.write(Files.createTempFile(includePath, "clause_", ".sql"), clause.getBytes());
 
             final IncludeArtifacts includeArtifacts = new IncludeArtifacts();
             try {
-                includeArtifacts.iterateIncludeClauses();
-                Assert.fail("Should throw IllegalStateException for bad format.");
+                includeArtifacts.iterator();
+                Assert.fail("Should throw IllegalStateException for missing where.");
             } catch (IllegalStateException e) {
+                Assert.assertEquals("Wrong message.",
+                                    String.format("The first clause found in %s (line 1) MUST be start with the "
+                                                  + "WHERE keyword.", tmpFilePath.toFile().getName()),
+                                    e.getMessage());
+                // Good.
+            }
+        } finally {
+            System.setProperty("user.home", currUserHome);
+        }
+    }
+
+    @Test
+    public void iteratorMoreThanOneWhereException() throws Exception {
+        final String currUserHome = System.getProperty("user.home");
+        try {
+            final Path tmpConfDirPath = Files.createTempDirectory(IncludeArtifactsTest.class.getName());
+            // Create the expected layout.
+            final File includeDir = new File(tmpConfDirPath.toFile(), "config/include");
+            includeDir.mkdirs();
+            final Path includePath = includeDir.toPath();
+
+            System.setProperty("user.home", tmpConfDirPath.toFile().toString());
+
+            final String clause = "WHERE B < 9 -- first where\nwhere z == 9 -- should fail here";
+            Files.write(Files.createTempFile(includePath, "clause_", ".sql"), clause.getBytes());
+
+            final IncludeArtifacts includeArtifacts = new IncludeArtifacts();
+            try {
+                includeArtifacts.iterator();
+                Assert.fail("Should throw IllegalStateException for too many wheres.");
+            } catch (IllegalStateException e) {
+                Assert.assertEquals("Wrong message.", "A valid WHERE clause is already present (line 2).",
+                                    e.getMessage());
                 // Good.
             }
         } finally {

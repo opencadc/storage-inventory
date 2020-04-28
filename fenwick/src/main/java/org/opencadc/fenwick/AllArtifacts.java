@@ -78,21 +78,23 @@ import org.apache.log4j.Logger;
  *
  * @author pdowler
  */
-public class AllArtifacts extends ArtifactSelector {
+public class AllArtifacts implements ArtifactSelector {
     private static final Logger log = Logger.getLogger(AllArtifacts.class);
+    public static final String EOF_CONDITION = "EOF";
 
     public AllArtifacts() {
         super();
     }
 
     /**
-     * Obtain the iterator of clauses used to build a query to include the Artifacts being merged.
+     * Obtain the iterator of clauses used to build a query to include the Artifacts being merged.  This implementation
+     * will return an iterator over a single NO-OP condition to show intent that no filters will be used.
      *
-     * @return An empty iterator.
+     * @return An iterator with a single NO-OP condition.
      */
     @Override
-    public Iterator<String> iterateIncludeClauses() {
+    public Iterator<String> iterator() {
         log.debug("No filters for AllArtifacts.");
-        return Collections.emptyIterator();
+        return Collections.singletonList(EOF_CONDITION).iterator();
     }
 }
