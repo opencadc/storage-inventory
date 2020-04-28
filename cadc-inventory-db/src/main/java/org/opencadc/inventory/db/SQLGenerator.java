@@ -1095,12 +1095,9 @@ public class SQLGenerator {
                 }
             }
         }
-        
-        
 
         @Override
         public boolean hasNext() {
-            log.debug("ArtifactResultSetIterator: " + super.toString() + " hasNext=" + hasRow);
             return hasRow;
         }
 
@@ -1114,10 +1111,18 @@ public class SQLGenerator {
                     con.setAutoCommit(true);
                 }
                 return ret;
-            } catch (SQLException ex) {
+            } catch (Exception ex) {
+                if (hasRow) {
+                    log.debug("ArtifactResultSetIterator:  " + super.toString() + " ResultSet.next() FAILED - setAutoCommit(true)");
+                    try {
+                        close();
+                        hasRow = false;
+                    } catch (IOException unexpected) {
+                        log.debug("BUG: unexpected IOException from close", unexpected);
+                    }
+                }
                 throw new RuntimeException("BUG: artifact list query failed while iterating", ex);
             }
-            
         }
     }
     
