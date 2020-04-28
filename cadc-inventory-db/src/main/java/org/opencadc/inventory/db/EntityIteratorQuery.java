@@ -75,6 +75,6 @@ import javax.sql.DataSource;
  * @author pdowler
  * @param <T> entity subclass
  */
-public interface EntityIterator<T>  {
+public interface EntityIteratorQuery<T> {
     Iterator<T> query(DataSource ds);
 }

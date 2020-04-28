@@ -68,6 +68,9 @@
 package org.opencadc.inventory.db;
 
 import ca.nrc.cadc.date.DateUtil;
+import ca.nrc.cadc.io.ResourceIterator;
+
+import java.io.IOException;
 import java.net.URI;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -78,14 +81,15 @@ import java.sql.Types;
 import java.util.Calendar;
 import java.util.Comparator;
 import java.util.Date;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.UUID;
+
 import javax.sql.DataSource;
+
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.DeletedArtifactEvent;
@@ -235,9 +239,9 @@ public class SQLGenerator {
         throw new UnsupportedOperationException("entity-get: " + c.getName());
     }
     
-    public EntityIterator getEntityIterator(Class c, boolean withStorageLocation) {
+    public EntityIteratorQuery getEntityIteratorQuery(Class c, boolean withStorageLocation) {
         if (Artifact.class.equals(c)) {
-            return new ArtifactIterator(withStorageLocation);
+            return new ArtifactIteratorQuery(withStorageLocation);
         }
         throw new UnsupportedOperationException("entity-list: " + c.getName());
     }
@@ -524,12 +528,12 @@ public class SQLGenerator {
         }
     }
     
-    class ArtifactIterator implements EntityIterator<Artifact> {
+    class ArtifactIteratorQuery implements EntityIteratorQuery<Artifact> {
 
         private boolean withStorageLocation;
         private String prefix;
 
-        public ArtifactIterator(boolean withStorageLocation) {
+        public ArtifactIteratorQuery(boolean withStorageLocation) {
             this.withStorageLocation = withStorageLocation;
         }
 
@@ -539,7 +543,7 @@ public class SQLGenerator {
         }
         
         @Override
-        public Iterator<Artifact> query(DataSource ds) {
+        public ResourceIterator<Artifact> query(DataSource ds) {
             
             StringBuilder sb = getSelectFromSQL(Artifact.class, false);
             sb.append(" WHERE ");
@@ -1062,7 +1066,7 @@ public class SQLGenerator {
         }
     }
     
-    private class ArtifactResultSetIterator implements Iterator<Artifact> {
+    private class ArtifactResultSetIterator implements ResourceIterator {
         final Calendar utc = Calendar.getInstance(DateUtil.UTC);
         private final Connection con;
         private final ResultSet rs;
@@ -1072,10 +1076,31 @@ public class SQLGenerator {
             this.con = con;
             this.rs = rs;
             hasRow = rs.next();
+            log.debug("ArtifactResultSetIterator: " + super.toString() + " ctor " + hasRow);
+            if (!hasRow) {
+                log.warn("ArtifactResultSetIterator:  " + super.toString() + " ctor - setAutoCommit(true)");
+                con.setAutoCommit(true);
+            }
         }
 
         @Override
+        public void close() throws IOException {
+            if (hasRow) {
+                log.debug("ArtifactResultSetIterator:  " + super.toString() + " ctor - setAutoCommit(true)");
+                try {
+                    con.setAutoCommit(true);
+                    hasRow = false;
+                } catch (SQLException ex) {
+                    throw new RuntimeException("BUG: artifact list query failed during close()", ex);
+                }
+            }
+        }
+        
+        
+
+        @Override
         public boolean hasNext() {
+            log.debug("ArtifactResultSetIterator: " + super.toString() + " hasNext=" + hasRow);
             return hasRow;
         }
 
@@ -1085,7 +1110,7 @@ public class SQLGenerator {
                 Artifact ret = mapRowToArtifact(rs, utc);
                 hasRow = rs.next();
                 if (!hasRow) {
-                    log.debug("ArtifactResultSetIterator: setAutoCommit(true)");
+                    log.debug("ArtifactResultSetIterator:  " + super.toString() + " DONE - setAutoCommit(true)");
                     con.setAutoCommit(true);
                 }
                 return ret;

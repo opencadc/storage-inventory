@@ -67,12 +67,13 @@
 
 package org.opencadc.inventory.db;
 
+import ca.nrc.cadc.io.ResourceIterator;
+
 import java.net.URI;
-import java.util.Iterator;
 import java.util.UUID;
+
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
-import org.opencadc.inventory.StorageLocation;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
@@ -129,13 +130,13 @@ public class ArtifactDAO extends AbstractDAO<Artifact> {
      * @param storageBucketPrefix null, prefix, or complete storageBucket string
      * @return iterator over artifacts sorted by StorageLocation
      */
-    public Iterator<Artifact> storedIterator(String storageBucketPrefix) {
+    public ResourceIterator storedIterator(String storageBucketPrefix) {
         checkInit();
         log.debug("iterator: " + storageBucketPrefix);
         long t = System.currentTimeMillis();
 
         try {
-            SQLGenerator.ArtifactIterator iter = (SQLGenerator.ArtifactIterator) gen.getEntityIterator(Artifact.class, true);
+            SQLGenerator.ArtifactIteratorQuery iter = (SQLGenerator.ArtifactIteratorQuery) gen.getEntityIteratorQuery(Artifact.class, true);
             iter.setPrefix(storageBucketPrefix);
             return iter.query(dataSource);
         } finally {
@@ -151,13 +152,13 @@ public class ArtifactDAO extends AbstractDAO<Artifact> {
      * @param uriBucketPrefix null, prefix, or complete Artifact.uriBucket string
      * @return iterator over artifacts with no StorageLocation
      */
-    public Iterator<Artifact> unstoredIterator(String uriBucketPrefix) {
+    public ResourceIterator unstoredIterator(String uriBucketPrefix) {
         checkInit();
         //log.debug("iterator: ");
         long t = System.currentTimeMillis();
 
         try {
-            SQLGenerator.ArtifactIterator iter = (SQLGenerator.ArtifactIterator) gen.getEntityIterator(Artifact.class, false);
+            SQLGenerator.ArtifactIteratorQuery iter = (SQLGenerator.ArtifactIteratorQuery) gen.getEntityIteratorQuery(Artifact.class, false);
             iter.setPrefix(uriBucketPrefix);
             return iter.query(dataSource);
         } finally {
