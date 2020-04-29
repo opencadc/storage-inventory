@@ -115,7 +115,6 @@ public class FileSyncJobTest {
     }
 
     private ArtifactDAO dao = new ArtifactDAO();
-//    private ArtifactDAO frameDAO = new ArtifactDAO();
 
     public FileSyncJobTest() throws Exception {
         try {
@@ -129,16 +128,6 @@ public class FileSyncJobTest {
             config.put("database", TestUtil.DATABASE);
             config.put("schema", TestUtil.SCHEMA);
             dao.setConfig(config);
-
-//            DBUtil.createJNDIDataSource("jdbc/FileSyncJobTestFramework", cc);
-//
-//            // If this
-//            Map<String,Object> config2 = new TreeMap<String,Object>();
-//            config2.put(SQLGenerator.class.getName(), SQLGenerator.class);
-//            config2.put("jndiDataSourceName", "jdbc/FileSyncJobTestFramework");
-//            config2.put("database", TestUtil.DATABASE);
-//            config2.put("schema", TestUtil.SCHEMA);
-//            frameDAO.setConfig(config2);
 
             String testDir = TEST_ROOT + File.separator + "testValidJob";
 
@@ -175,9 +164,6 @@ public class FileSyncJobTest {
     public void cleanTestEnvironment() throws Exception {
 
         log.debug("cleaning stored artifacts...");
-        // NOTE: use of a second ArtifactDAO instance here allows the tests
-        // to run without database locks occurring. Using the same ArtifactDAO as
-        // the rest of the tests will lead to the test suite hanging.
         Iterator<Artifact> storedArtifacts = dao.storedIterator(null);
         log.debug("got an iterator back: " + storedArtifacts);
         wipe_clean(storedArtifacts);
@@ -198,7 +184,13 @@ public class FileSyncJobTest {
             log.debug("deleting storage location: " + sm.getStorageLocation());
             oa.delete(sm.getStorageLocation());
         }
+    }
 
+    private void createTestDirectory(String testDirectory) throws IOException {
+        // Create the test directory the fs storage adapter needs
+        Set<PosixFilePermission> perms = PosixFilePermissions.fromString("rwxrwxrw-");
+        FileAttribute<Set<PosixFilePermission>> attr = PosixFilePermissions.asFileAttribute(perms);
+        Files.createDirectories(Paths.get(testDirectory), attr);
     }
 
     @Test
@@ -243,14 +235,6 @@ public class FileSyncJobTest {
             log.debug(unexpected);
         }
         log.info("testValidJob - DONE");
-    }
-
-
-    private void createTestDirectory(String testDirectory) throws IOException {
-        // Create the test directory the fs storage adapter needs
-        Set<PosixFilePermission> perms = PosixFilePermissions.fromString("rwxrwxrw-");
-        FileAttribute<Set<PosixFilePermission>> attr = PosixFilePermissions.asFileAttribute(perms);
-        Files.createDirectories(Paths.get(testDirectory), attr);
     }
 
     @Test
@@ -335,5 +319,4 @@ public class FileSyncJobTest {
 
         log.info("testInvalidJobBadContentLen - DONE");
     }
-
 }
