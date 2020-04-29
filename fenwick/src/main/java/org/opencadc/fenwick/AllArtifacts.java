@@ -67,17 +67,36 @@
 
 package org.opencadc.fenwick;
 
+import java.util.Collections;
+import java.util.Iterator;
+
 import org.apache.log4j.Logger;
+
 
 /**
  * Selector that does not constrain Artifact selection.
- * 
+ *
  * @author pdowler
  */
-public class AllArtifacts extends ArtifactSelector {
+public class AllArtifacts implements ArtifactSelector {
     private static final Logger log = Logger.getLogger(AllArtifacts.class);
 
     public AllArtifacts() {
         super();
+    }
+
+    /**
+     * Obtain the iterator of clauses used to build a query to include the Artifacts being merged.  This implementation
+     * will return an iterator over a single NO-OP condition to show intent that no filters will be used.
+     *
+     * <p>In this case the empty string will be injected into the query but will produce no constraints, allowing all
+     * Artifacts to be returned.
+     *
+     * @return An iterator with a single empty string.
+     */
+    @Override
+    public Iterator<String> iterator() {
+        log.debug("No filters for AllArtifacts.");
+        return Collections.singletonList("").iterator();
     }
 }
