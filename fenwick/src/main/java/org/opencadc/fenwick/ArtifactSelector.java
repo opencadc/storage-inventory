@@ -67,15 +67,53 @@
 
 package org.opencadc.fenwick;
 
-import org.apache.log4j.Logger;
+import ca.nrc.cadc.net.ResourceNotFoundException;
+
+import java.io.IOException;
+import java.util.Iterator;
+
 
 /**
- * 
+ * A Selector to provide the InventoryHarvester with a means to gather include (additive) clauses to select appropriate
+ * Artifacts to be included in the metadata sync merge.
+ *
  * @author pdowler
  */
-public abstract class ArtifactSelector {
-    private static final Logger log = Logger.getLogger(ArtifactSelector.class);
-
-    protected ArtifactSelector() { 
-    }
+public interface ArtifactSelector {
+    /**
+     * Obtain the iterator of clauses used to build a query to include the Artifacts being merged.
+     *
+     * <p>This class will read in the SQL (*.sql) files located in the configuration directory and parse the SQL
+     * fragments.  Each fragment MUST begin with the WHERE keyword and be followed by one or more SQL conditions:
+     *
+     * <p>include-date.sql
+     * <code>
+     *     -- Comments are OK and ignored!
+     *     WHERE lastmodified &gt; 2020-03-03 AND lastmodified &lt; 2020-03-30
+     * </code>
+     *
+     * <p>include-uri.sql
+     * <code>
+     *     -- Multiline is OK, too!
+     *     WHERE uri like 'ad:TEST%'
+     *     OR uri like 'ad:CADC%'
+     * </code>
+     *
+     * <p>The *.sql files are parsed and ANDed together to form the WHERE clause for the query to select desired
+     * Artifacts:
+     * <code>
+     *     WHERE (lastmodified &gt; 2020-03-03 AND lastmodified &lt; 2020-03-30)
+     *     AND (uri like 'ad:TEST%' OR uri like 'ad:CADC%')
+     * </code>
+     *
+     * <p>Those implementations not wishing to restrict the Artifacts returned may have an empty configuration directory
+     * and return an Iterator with a single empty string.
+     * @see AllArtifacts
+     *
+     * @return Iterator of String clauses, or empty iterator.  Never null.
+     * @throws ResourceNotFoundException    For any missing required configuration that is missing.
+     * @throws IOException      For unreadable configuration files.
+     * @throws IllegalStateException    For any invalid configuration.
+     */
+    Iterator<String> iterator() throws ResourceNotFoundException, IOException, IllegalStateException;
 }
