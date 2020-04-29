@@ -115,7 +115,7 @@ public class FileSyncJobTest {
     }
 
     private ArtifactDAO dao = new ArtifactDAO();
-    private ArtifactDAO frameDAO = new ArtifactDAO();
+//    private ArtifactDAO frameDAO = new ArtifactDAO();
 
     public FileSyncJobTest() throws Exception {
         try {
@@ -130,15 +130,15 @@ public class FileSyncJobTest {
             config.put("schema", TestUtil.SCHEMA);
             dao.setConfig(config);
 
-            DBUtil.createJNDIDataSource("jdbc/FileSyncJobTestFramework", cc);
-
-            // If this
-            Map<String,Object> config2 = new TreeMap<String,Object>();
-            config2.put(SQLGenerator.class.getName(), SQLGenerator.class);
-            config2.put("jndiDataSourceName", "jdbc/FileSyncJobTestFramework");
-            config2.put("database", TestUtil.DATABASE);
-            config2.put("schema", TestUtil.SCHEMA);
-            frameDAO.setConfig(config2);
+//            DBUtil.createJNDIDataSource("jdbc/FileSyncJobTestFramework", cc);
+//
+//            // If this
+//            Map<String,Object> config2 = new TreeMap<String,Object>();
+//            config2.put(SQLGenerator.class.getName(), SQLGenerator.class);
+//            config2.put("jndiDataSourceName", "jdbc/FileSyncJobTestFramework");
+//            config2.put("database", TestUtil.DATABASE);
+//            config2.put("schema", TestUtil.SCHEMA);
+//            frameDAO.setConfig(config2);
 
             String testDir = TEST_ROOT + File.separator + "testValidJob";
 
@@ -162,7 +162,7 @@ public class FileSyncJobTest {
             log.debug("something to remove...");
             Artifact a = artifactIterator.next();
             log.debug("deleting test uri: " + a.getURI() + " ID: " + a.getID());
-            frameDAO.delete(a.getID());
+            dao.delete(a.getID());
             deletedArtifacts++;
         }
 
@@ -178,12 +178,12 @@ public class FileSyncJobTest {
         // NOTE: use of a second ArtifactDAO instance here allows the tests
         // to run without database locks occurring. Using the same ArtifactDAO as
         // the rest of the tests will lead to the test suite hanging.
-        Iterator<Artifact> storedArtifacts = frameDAO.storedIterator(null);
+        Iterator<Artifact> storedArtifacts = dao.storedIterator(null);
         log.debug("got an iterator back: " + storedArtifacts);
         wipe_clean(storedArtifacts);
 
         log.debug("cleaning unstored artifacts...");
-        Iterator<Artifact> unstoredArtifacts = frameDAO.unstoredIterator(null);
+        Iterator<Artifact> unstoredArtifacts = dao.unstoredIterator(null);
         log.debug("got an iterator back: " + storedArtifacts);
         wipe_clean(unstoredArtifacts);
 
@@ -268,7 +268,6 @@ public class FileSyncJobTest {
 
             // Set up an Artifact in the database to start.
             // Set checksum to the wrong value.
-
             Artifact artifactToUpdate = new Artifact(artifactID,
                 new URI("md5:646d3c548ffb98244a0fc52b6055555"), new Date(),
                 1008000L);
@@ -310,7 +309,6 @@ public class FileSyncJobTest {
 
             // Set up an Artifact in the database to start.
             // Set checksum to the wrong value.
-
             Artifact artifactToUpdate = new Artifact(artifactID,
                 new URI("md5:646d3c548ffb98244a0fc52b60556082"), new Date(),
                 2008000L);
