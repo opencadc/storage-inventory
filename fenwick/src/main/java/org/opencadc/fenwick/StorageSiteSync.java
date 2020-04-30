@@ -111,7 +111,9 @@ public class StorageSiteSync {
     }
 
     /**
-     * Query for Storage Sites from a remote TAP (Luskan) service.
+     * Query for a Storage Site from a remote TAP (Luskan) service.  This method is expected to return a single
+     * StorageSite instance.  The result will typically be used to set to an Artifact's site locations during metadata
+     * synchronization.
      *
      * @return StorageSite  There should be a single StorageSite found.
      * @throws AccessControlException permission denied
