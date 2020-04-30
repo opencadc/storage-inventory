@@ -84,7 +84,14 @@ import java.util.Objects;
 
 import org.apache.log4j.Logger;
 
-
+/**
+ * Implementation of ArtifactSelector that includes artifacts via selective queries.
+ * This class requires one or more fragments of SQL (a WHERE clause), each in a separate
+ * file located in {user.home}/config/include and named {something}.sql -- see the
+ * iterator() method for details.
+ * 
+ * @author pdowler
+ */
 public class IncludeArtifacts implements ArtifactSelector {
     private static final Logger log = Logger.getLogger(IncludeArtifacts.class);
     static final String COMMENT_PREFIX = "--";
@@ -102,8 +109,31 @@ public class IncludeArtifacts implements ArtifactSelector {
 
     /**
      * Obtain the iterator of clauses used to build a query to include the Artifacts being merged.
+     * 
+     * <p>This class will read in the SQL (*.sql) files located in the configuration directory and parse the SQL
+     * fragments.  Each fragment MUST begin with the WHERE keyword and be followed by one or more SQL conditions:
      *
-     * @return Iterator of String clauses, or empty iterator.  Never null.
+     * <p>include-date.sql
+     * <code>
+     *     -- Comments are OK and ignored!
+     *     WHERE lastmodified &gt; 2020-03-03 AND lastmodified &lt; 2020-03-30
+     * </code>
+     *
+     * <p>include-uri.sql
+     * <code>
+     *     -- Multiline is OK, too!
+     *     WHERE uri like 'ad:TEST%'
+     *     OR uri like 'ad:CADC%'
+     * </code>
+     *
+     * <p>The *.sql files are parsed and ANDed together to form the WHERE clause for the query to select desired
+     * Artifacts:
+     * <code>
+     *     WHERE (lastmodified &gt; 2020-03-03 AND lastmodified &lt; 2020-03-30)
+     *     AND (uri like 'ad:TEST%' OR uri like 'ad:CADC%')
+     * </code>
+     *
+     * @return Iterator of String clauses
      *
      * @throws ResourceNotFoundException For any missing required configuration.
      * @throws IOException               For unreadable configuration files.
