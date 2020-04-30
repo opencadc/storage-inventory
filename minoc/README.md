@@ -41,7 +41,7 @@ Additional configuration may be required by the storage adapter implementation.
 
 ### LocalAuthority.properties
 The LocalAuthority.properties file specifies which local service is authoritative for various site-wide functions. The keys
-are standardID values for the functions and the values are resouceID values for the service that implements that standard 
+are standardID values for the functions and the values are resourceID values for the service that implements that standard 
 feature.
 
 Example:
