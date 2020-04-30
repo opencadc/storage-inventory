@@ -81,34 +81,8 @@ import java.util.Iterator;
  */
 public interface ArtifactSelector {
     /**
-     * Obtain the iterator of clauses used to build a query to include the Artifacts being merged.
-     *
-     * <p>This class will read in the SQL (*.sql) files located in the configuration directory and parse the SQL
-     * fragments.  Each fragment MUST begin with the WHERE keyword and be followed by one or more SQL conditions:
-     *
-     * <p>include-date.sql
-     * <code>
-     *     -- Comments are OK and ignored!
-     *     WHERE lastmodified &gt; 2020-03-03 AND lastmodified &lt; 2020-03-30
-     * </code>
-     *
-     * <p>include-uri.sql
-     * <code>
-     *     -- Multiline is OK, too!
-     *     WHERE uri like 'ad:TEST%'
-     *     OR uri like 'ad:CADC%'
-     * </code>
-     *
-     * <p>The *.sql files are parsed and ANDed together to form the WHERE clause for the query to select desired
-     * Artifacts:
-     * <code>
-     *     WHERE (lastmodified &gt; 2020-03-03 AND lastmodified &lt; 2020-03-30)
-     *     AND (uri like 'ad:TEST%' OR uri like 'ad:CADC%')
-     * </code>
-     *
-     * <p>Those implementations not wishing to restrict the Artifacts returned may have an empty configuration directory
-     * and return an Iterator with a single empty string.
-     * @see AllArtifacts
+     * Obtain the iterator of clauses used to build a query to include the Artifacts being merged. Each string in
+     * the iterator is expected to be a condition that can be added to the WHERE clause of artifact sync queries.
      *
      * @return Iterator of String clauses, or empty iterator.  Never null.
      * @throws ResourceNotFoundException    For any missing required configuration that is missing.
