@@ -67,8 +67,6 @@
 
 package org.opencadc.fenwick;
 
-import ca.nrc.cadc.db.TransactionManager;
-import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.reg.Capabilities;
 import ca.nrc.cadc.reg.Capability;
 import ca.nrc.cadc.reg.Standards;
@@ -76,14 +74,11 @@ import ca.nrc.cadc.reg.client.RegistryClient;
 
 import java.io.IOException;
 import java.net.URI;
-import java.util.Iterator;
 import java.util.Map;
 
 import org.apache.log4j.Logger;
-import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.db.ArtifactDAO;
-import org.opencadc.tap.TapClient;
 
 
 /**
@@ -169,38 +164,6 @@ public class InventoryHarvester {
     // - stop iterating when reaching a timestamp that exceeds the timestamp when query executed
     
     private void doit() {
-        try {
-            final TapClient<Artifact> tapClient = new TapClient<>(resourceID);
-            // The remoteArtifactIterator is NOT complete.  This is just here to illustrate the site sync.
-            final Iterator<Artifact> remoteArtifactIterator =
-                    tapClient.execute("ARTIFACT QUERY...", row -> new Artifact(URI.create(row.get(0).toString()),
-                                                                               URI.create(row.get(1).toString()),
-                                                                               null, null));
-            final StorageSiteSync storageSiteSync = trackSiteLocations ? new StorageSiteSync(resourceID) : null;
-
-            while (remoteArtifactIterator.hasNext()) {
-                final Artifact artifact = remoteArtifactIterator.next();
-
-                if (storageSiteSync != null) {
-                    storageSiteSync.synchronizeSiteLocations(artifact);
-                }
-
-                // Store the Artifact if it's dirty.
-                final TransactionManager transactionManager = artifactDAO.getTransactionManager();
-
-                // Finish PUTting th artifact afterward.  This will all be part of processing the Artifact iterator.
-                try {
-                    transactionManager.startTransaction();
-                    artifactDAO.put(artifact);
-                    transactionManager.commitTransaction();
-                } catch (Exception e) {
-                    transactionManager.rollbackTransaction();
-                }
-            }
-
-            throw new UnsupportedOperationException("TODO");
-        } catch (Exception exception) {
-            throw new RuntimeException(exception.getMessage(), exception);
-        }
+        throw new UnsupportedOperationException("TODO");
     }
 }

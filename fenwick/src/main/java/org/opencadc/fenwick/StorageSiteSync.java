@@ -68,9 +68,15 @@
 
 package org.opencadc.fenwick;
 
+import ca.nrc.cadc.auth.NotAuthenticatedException;
+import ca.nrc.cadc.io.ByteLimitExceededException;
+import ca.nrc.cadc.io.ResourceIterator;
 import ca.nrc.cadc.net.ResourceNotFoundException;
+import ca.nrc.cadc.net.TransientException;
 
+import java.io.IOException;
 import java.net.URI;
+import java.security.AccessControlException;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -85,70 +91,72 @@ import org.opencadc.tap.TapClient;
 
 
 /**
- * Class to synchronize the state of StorageSites in an inventory database.  This will ensure that all sites that are
- * currently recorded is accurate at each site.  This is NOT thread-safe as it stores the Storage Sites locally.
+ * Class to pull a single StorageSite from a remote TAP (Luskan) service.  This class is enabled by the
+ * org.opencadc.fenwick.trackSiteLocations property in the fenwick.properties file.
  */
 public class StorageSiteSync {
     private static final Logger log = Logger.getLogger(StorageSiteSync.class);
 
-    //
     private static final String STORAGE_SITE_QUERY = "SELECT name, id, resourceid FROM inventory.storagesite";
 
     private final TapClient<StorageSite> tapClient;
-
-    // Keep the remote storage sites here.  Meant to be kept while instances are in memory during a Fenwick run.
-    private final transient List<StorageSite> remoteStorageSites = new ArrayList<>();
-
 
     /**
      * Constructor that accepts a TapClient to query Storage Sites to sync.  Useful for testing.
      *
      * @param tapClient The TapClient to use.
      */
-    StorageSiteSync(final TapClient<StorageSite> tapClient) {
+    public StorageSiteSync(final TapClient<StorageSite> tapClient) {
         this.tapClient = tapClient;
     }
 
     /**
-     * Use the given URI to create a TapClient to query a service for StorageSites.
-     *
-     * @param resourceID  The URI of the TAP service.  Never null.
-     */
-    public StorageSiteSync(final URI resourceID) throws ResourceNotFoundException {
-        this(new TapClient<>(resourceID));
-    }
-
-    /**
      * Query for Storage Sites from a remote TAP (Luskan) service.
-     * This class uses no DAOs and so doesn't store the Artifact back.  It will merely query for StorageSite instances
-     * and add their IDs to the given Artifact.  The caller MUST persist it.
-     * @param artifact  The Artifact whose locations to synchronize.
+     *
+     * @return StorageSite  There should be a single StorageSite found.
+     * @throws AccessControlException permission denied
+     * @throws NotAuthenticatedException authentication attempt failed or rejected
+     * @throws ByteLimitExceededException input or output limit exceeded
+     * @throws IllegalArgumentException null method arguments or invalid query
+     * @throws ResourceNotFoundException remote resource not found
+     * @throws TransientException temporary failure of TAP service: same call could work in future
+     * @throws IOException failure to send or read data stream
+     * @throws InterruptedException thread interrupted
      */
-    public void synchronizeSiteLocations(final Artifact artifact) {
-        try {
-            // Keep it locally.  This may be dangerously close to caching, but it would save some querying.
-            if (remoteStorageSites.isEmpty()) {
-                final Iterator<StorageSite> remoteStorageSiteIterator = queryStorageSites();
-                remoteStorageSiteIterator.forEachRemaining(remoteStorageSites::add);
-            }
-
-            remoteStorageSites.forEach(remoteStorageSite -> {
-                final SiteLocation siteLocation = new SiteLocation(remoteStorageSite.getID());
-                if (!artifact.siteLocations.contains(siteLocation)) {
-                    artifact.siteLocations.add(siteLocation);
+    public StorageSite doit() throws AccessControlException, ResourceNotFoundException,
+                                     ByteLimitExceededException, NotAuthenticatedException,
+                                     IllegalArgumentException, TransientException, IOException,
+                                     InterruptedException {
+        try (final ResourceIterator<StorageSite> storageSiteIterator = queryStorageSites()) {
+            if (storageSiteIterator.hasNext()) {
+                final StorageSite returnValue = storageSiteIterator.next();
+                if (storageSiteIterator.hasNext()) {
+                    throw new IllegalStateException("More than one Storage Site found.");
+                } else {
+                    return returnValue;
                 }
-            });
-        } catch (Exception e) {
-            throw new RuntimeException(e);
+            } else {
+                throw new IllegalStateException("No storage sites available to sync.");
+            }
         }
     }
 
     /**
      * Override this method in tests to avoid recreating a TapClient.
      * @return      Iterator over Storage Sites, or empty Iterator.  Never null.
-     * @throws Exception    For an array of network query Exceptions.
+     * @throws AccessControlException permission denied
+     * @throws NotAuthenticatedException authentication attempt failed or rejected
+     * @throws ByteLimitExceededException input or output limit exceeded
+     * @throws IllegalArgumentException null method arguments or invalid query
+     * @throws ResourceNotFoundException remote resource not found
+     * @throws TransientException temporary failure of TAP service: same call could work in future
+     * @throws IOException failure to send or read data stream
+     * @throws InterruptedException thread interrupted
      */
-    Iterator<StorageSite> queryStorageSites() throws Exception {
+    ResourceIterator<StorageSite> queryStorageSites() throws AccessControlException, ResourceNotFoundException,
+                                                             ByteLimitExceededException, NotAuthenticatedException,
+                                                             IllegalArgumentException, TransientException, IOException,
+                                                             InterruptedException {
         return tapClient.execute(STORAGE_SITE_QUERY, row -> {
             final String name = row.get(0).toString();
             final String id = row.get(1).toString();

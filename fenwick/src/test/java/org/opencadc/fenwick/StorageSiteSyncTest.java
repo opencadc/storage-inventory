@@ -69,19 +69,18 @@
 
 package org.opencadc.fenwick;
 
+import ca.nrc.cadc.io.ResourceIterator;
 import ca.nrc.cadc.util.Log4jInit;
 
+import java.io.IOException;
 import java.net.URI;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
 
 import org.apache.log4j.Level;
 import org.junit.Assert;
 import org.junit.Test;
-import org.opencadc.inventory.Artifact;
-import org.opencadc.inventory.SiteLocation;
 import org.opencadc.inventory.StorageSite;
 import org.opencadc.tap.TapClient;
 
@@ -92,14 +91,9 @@ public class StorageSiteSyncTest {
     }
 
     @Test
-    public void synchronizeSiteLocations() throws Exception {
+    public void doit() throws Exception {
         final List<StorageSite> storageSiteList = new ArrayList<>();
         storageSiteList.add(new StorageSite(URI.create("test:org.opencadc/SITE1"), "Site One"));
-        storageSiteList.add(new StorageSite(URI.create("test:org.opencadc/SITE2"), "Site Two"));
-        storageSiteList.add(new StorageSite(URI.create("test:org.opencadc/SITE3"), "Site Thre"));
-        storageSiteList.add(new StorageSite(URI.create("test:org.opencadc/SITE4"), "Site Four"));
-
-
 
         final StorageSiteSync testSubject = new StorageSiteSync((TapClient) null) {
             /**
@@ -108,19 +102,111 @@ public class StorageSiteSyncTest {
              * @return Iterator over Storage Sites, or empty Iterator.  Never null.
              */
             @Override
-            Iterator<StorageSite> queryStorageSites() {
-                return storageSiteList.iterator();
+            ResourceIterator<StorageSite> queryStorageSites() {
+                final Iterator<StorageSite> storageSiteIterator = storageSiteList.iterator();
+                return new ResourceIterator<StorageSite>() {
+                    @Override
+                    public void close() throws IOException {
+
+                    }
+
+                    @Override
+                    public boolean hasNext() {
+                        return storageSiteIterator.hasNext();
+                    }
+
+                    @Override
+                    public StorageSite next() {
+                        return storageSiteIterator.next();
+                    }
+                };
             }
         };
-        final Artifact artifact = new Artifact(URI.create("test:TEST/ARTIFACT1"), URI.create("md5:123456"),
-                                               new Date(), 88L);
 
-        testSubject.synchronizeSiteLocations(artifact);
+        final StorageSite storageSiteResult = testSubject.doit();
 
-        final List<SiteLocation> siteLocations = new ArrayList<>(storageSiteList.size());
+        Assert.assertEquals("Wrong site list.", storageSiteList.get(0), storageSiteResult);
+    }
 
-        storageSiteList.forEach(storageSite -> siteLocations.add(new SiteLocation(storageSite.getID())));
+    @Test
+    public void doitException() throws Exception {
+        final List<StorageSite> storageSiteList = new ArrayList<>();
+        storageSiteList.add(new StorageSite(URI.create("test:org.opencadc/SITE1"), "Site One"));
+        storageSiteList.add(new StorageSite(URI.create("test:org.opencadc/SITE2"), "Site Two"));
 
-        Assert.assertEquals("Wrong site list.", siteLocations, artifact.siteLocations);
+        StorageSiteSync testSubject = new StorageSiteSync((TapClient) null) {
+            /**
+             * Override this method in tests to avoid recreating a TapClient.
+             *
+             * @return Iterator over Storage Sites, or empty Iterator.  Never null.
+             */
+            @Override
+            ResourceIterator<StorageSite> queryStorageSites() {
+                final Iterator<StorageSite> storageSiteIterator = storageSiteList.iterator();
+                return new ResourceIterator<StorageSite>() {
+                    @Override
+                    public void close() throws IOException {
+
+                    }
+
+                    @Override
+                    public boolean hasNext() {
+                        return storageSiteIterator.hasNext();
+                    }
+
+                    @Override
+                    public StorageSite next() {
+                        return storageSiteIterator.next();
+                    }
+                };
+            }
+        };
+
+        try {
+            testSubject.doit();
+            Assert.fail("Should throw IllegalStateException");
+        } catch (IllegalStateException e) {
+            // Good.
+            Assert.assertEquals("Wrong message.", "More than one Storage Site found.", e.getMessage());
+        }
+
+        // Second kind of exception
+
+        storageSiteList.clear();
+        testSubject = new StorageSiteSync((TapClient) null) {
+            /**
+             * Override this method in tests to avoid recreating a TapClient.
+             *
+             * @return Iterator over Storage Sites, or empty Iterator.  Never null.
+             */
+            @Override
+            ResourceIterator<StorageSite> queryStorageSites() {
+                final Iterator<StorageSite> storageSiteIterator = storageSiteList.iterator();
+                return new ResourceIterator<StorageSite>() {
+                    @Override
+                    public void close() throws IOException {
+
+                    }
+
+                    @Override
+                    public boolean hasNext() {
+                        return storageSiteIterator.hasNext();
+                    }
+
+                    @Override
+                    public StorageSite next() {
+                        return storageSiteIterator.next();
+                    }
+                };
+            }
+        };
+
+        try {
+            testSubject.doit();
+            Assert.fail("Should throw IllegalStateException");
+        } catch (IllegalStateException e) {
+            // Good.
+            Assert.assertEquals("Wrong message.", "No storage sites available to sync.", e.getMessage());
+        }
     }
 }
