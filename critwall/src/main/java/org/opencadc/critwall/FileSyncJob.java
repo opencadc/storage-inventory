@@ -144,7 +144,7 @@ public class FileSyncJob implements Runnable {
         try {
             while (retryCount < RETRY_DELAY.length) {
                 log.debug("attempt " + retryCount + " to sync artifact " + this.artifactID);
-                StorageMetadata storageMeta = syncArtifact(urlIterator, this.artifactID, this.storageAdapter, this.artifactDAO);
+                StorageMetadata storageMeta = syncArtifact(urlIterator);
 
                 // sync succeeded - update storage location
                 if (storageMeta != null) {
@@ -236,15 +236,14 @@ public class FileSyncJob implements Runnable {
     /**
      * Go through contents of urlIterator, attempting to sync the artifact.
      * @param urlIterator
-     * @param artifact
-     * @param sa
      * @return success: return Storage Metadata from first successful sync
      *         fail: return null if all URLs failed | throw if failure is fatal (internal)
      * @throws StorageEngageException
      * @throws InterruptedException
      * @throws WriteException
+     * @throws IllegalArgumentException
      */
-    private StorageMetadata syncArtifact(Iterator<URL> urlIterator, URI artifact, StorageAdapter sa, ArtifactDAO artDao)
+    private StorageMetadata syncArtifact(Iterator<URL> urlIterator)
         throws StorageEngageException, InterruptedException, WriteException, IllegalArgumentException {
 
         StorageMetadata storageMeta = null;
@@ -261,19 +260,36 @@ public class FileSyncJob implements Runnable {
 
                     // Check content checksum and length to verify this
                     // artifact can be synced currently
-                    Artifact curArtifact = artDao.get(artifact);
-                    log.debug("content checksums: " + get.getContentMD5() + "\n" + curArtifact.getContentChecksum().getSchemeSpecificPart());
-                    if (!get.getContentMD5().equals(curArtifact.getContentChecksum().getSchemeSpecificPart())) {
-                        throw new PreconditionFailedException("mismatched content checksum. " + artifact);
+                    Artifact curArtifact = this.artifactDAO.get(this.artifactID);
+
+                    if (curArtifact.storageLocation != null) {
+                        // artifact has been acted on since this FileSyncJob
+                        // instance started and it was null
+                        throw new IllegalArgumentException("storage location is not null (artifact was acted on during FileSyncJob run): " + this.artifactID);
                     }
-                    if (get.getContentLength() != curArtifact.getContentLength()) {
-                        throw new PreconditionFailedException("mismatched content length. " + artifact);
+
+                    // Note: the storage adapter 'put' below does checksum and content length
+                    // checks, but only after downloading the entire file.
+                    // Making the checks here is more efficient.
+                    String getContentMD5 = get.getContentMD5();
+                    if (getContentMD5 != null
+                        && !getContentMD5.equals(curArtifact.getContentChecksum().getSchemeSpecificPart())) {
+                        throw new PreconditionFailedException("mismatched content checksum. " + this.artifactID);
+                    }
+
+                    long getContentLen = get.getContentLength();
+                    if (getContentLen != -1
+                        && getContentLen != curArtifact.getContentLength()) {
+                        throw new PreconditionFailedException("mismatched content length. " + this.artifactID);
                     }
 
                     log.debug("artifact checksum and content length match, continue to put.");
 
-                    NewArtifact a = new NewArtifact(artifact);
-                    storageMeta = sa.put(a, get.getInputStream());
+                    NewArtifact a = new NewArtifact(this.artifactID);
+                    a.contentChecksum = curArtifact.getContentChecksum();
+                    a.contentLength = curArtifact.getContentLength();
+
+                    storageMeta = this.storageAdapter.put(a, get.getInputStream());
                     log.debug("storage meta returned: " + storageMeta.getStorageLocation());
                     return storageMeta;
 

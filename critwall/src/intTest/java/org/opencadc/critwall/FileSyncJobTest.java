@@ -88,6 +88,7 @@ import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Before;
 import org.opencadc.inventory.Artifact;
+import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.SQLGenerator;
 import org.opencadc.inventory.storage.StorageMetadata;
@@ -253,7 +254,7 @@ public class FileSyncJobTest {
             // Set up an Artifact in the database to start.
             // Set checksum to the wrong value.
             Artifact artifactToUpdate = new Artifact(artifactID,
-                new URI("md5:646d3c548ffb98244a0fc52b6055555"), new Date(),
+                new URI("md5:0123456789abcdef0123456789abcdef"), new Date(),
                 1008000L);
 
             log.debug("putting test artifact to database");
@@ -295,7 +296,7 @@ public class FileSyncJobTest {
             // Set checksum to the wrong value.
             Artifact artifactToUpdate = new Artifact(artifactID,
                 new URI("md5:646d3c548ffb98244a0fc52b60556082"), new Date(),
-                2008000L);
+                2000000L);
 
             log.debug("putting test artifact to database");
             dao.put(artifactToUpdate, true);
@@ -319,4 +320,50 @@ public class FileSyncJobTest {
 
         log.info("testInvalidJobBadContentLen - DONE");
     }
+
+    @Test
+    public void testInvalidJobBadStorageLocation() {
+        final String testDir = TEST_ROOT + File.separator + "testInvalidJobBadStorageLocation";
+        UUID artifactUUID = null;
+
+        try {
+            createTestDirectory(testDir);
+
+            OpaqueFileSystemStorageAdapter sa = new OpaqueFileSystemStorageAdapter(new File(TEST_ROOT), 1);
+
+            URI artifactID = new URI(TEST_ARTIFACT_URI);
+            URI resourceID = new URI(TEST_RESOURCE_ID);
+
+            // Set up an Artifact in the database to start.
+            // Set checksum to the wrong value.
+            Artifact artifactToUpdate = new Artifact(artifactID,
+                new URI("md5:646d3c548ffb98244a0fc52b60556082"), new Date(),
+                1008000L);
+            StorageLocation testLocation = new StorageLocation(artifactID);
+            artifactToUpdate.storageLocation = testLocation;
+
+            log.debug("putting test artifact to database");
+            dao.put(artifactToUpdate, true);
+            // verify something was done
+            artifactUUID = artifactToUpdate.getID();
+            Assert.assertNotNull(artifactUUID);
+            log.debug("test artifact stored: UUID is " + artifactUUID.toString());
+
+            FileSyncJob fsj = new FileSyncJob(artifactID, resourceID, sa, dao);
+            fsj.run();
+
+            log.debug("finished run in failure test.");
+
+            // check job failed by verifying that storage location not changed
+            Artifact storedArtifact = dao.get(artifactID);
+            Assert.assertEquals(testLocation, storedArtifact.storageLocation);
+
+        } catch (Exception unexpected) {
+            log.debug("unexpected exception: " + unexpected);
+            Assert.fail("unexpected exception");
+        }
+
+        log.info("testInvalidJobBadStorageLocation - DONE");
+    }
+
 }
