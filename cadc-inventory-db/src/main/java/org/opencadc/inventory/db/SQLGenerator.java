@@ -691,8 +691,9 @@ public class SQLGenerator {
             
             if (!value.siteLocations.isEmpty()) {
                 UUID[] ua = new UUID[value.siteLocations.size()];
-                for (int i = 0; i < value.siteLocations.size(); i++) {
-                    ua[i] = value.siteLocations.get(i).getSiteID();
+                int i = 0;
+                for (SiteLocation si : value.siteLocations) {
+                    ua[i++] = si.getSiteID();
                 }
                 java.sql.Array arr = prep.getConnection().createArrayOf("uuid", ua);
                 prep.setObject(col++, arr);

@@ -67,13 +67,10 @@
 
 package org.opencadc.inventory;
 
-import ca.nrc.cadc.util.HexUtil;
 import java.net.URI;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.util.ArrayList;
 import java.util.Date;
-import java.util.List;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.UUID;
 import org.apache.log4j.Logger;
 
@@ -107,7 +104,7 @@ public class Artifact extends Entity {
      * to have a copy of the artifact. This value is not part of the artifact entity state 
      * and adding/removing values does not change the metaChecksum of the artifact.
      */
-    public final transient List<SiteLocation> siteLocations = new ArrayList<SiteLocation>();
+    public final transient Set<SiteLocation> siteLocations = new TreeSet<SiteLocation>();
     
     /**
      * Create a new artifact.

@@ -223,8 +223,7 @@ public class PostAction extends RestAction {
         }
         
         // gather all copies of the artifact
-        List<SiteLocation> locations = artifact.siteLocations;
-        if (locations == null || locations.size() == 0) {
+        if (artifact.siteLocations.isEmpty()) {
             throw new ResourceNotFoundException("no copies");
         }
         
@@ -242,7 +241,7 @@ public class PostAction extends RestAction {
         // and check for updates to that list periodically (every 5 min or so)
         
         // produce URLs to each of the copies
-        for (SiteLocation site : locations) {
+        for (SiteLocation site : artifact.siteLocations) {
             storageSite = storageSiteDAO.get(site.getSiteID());
             resourceID = storageSite.getResourceID();
             baseURL = regClient.getServiceURL(resourceID, Standards.SI_FILES, AuthMethod.ANON);
@@ -274,14 +273,18 @@ public class PostAction extends RestAction {
         // TODO: could call multiple services in parallel
         Set<GroupURI> granted = new TreeSet<>();
         for (URI ps : readGrantServices) {
-            PermissionsClient pc = new PermissionsClient(ps);
-            ReadGrant grant = pc.getReadGrant(artifactURI);
-            if (grant != null) {
-                if (grant.isAnonymousAccess()) {
-                    logInfo.setMessage("read grant: anonymous");
-                    return;
+            try {
+                PermissionsClient pc = new PermissionsClient(ps);
+                ReadGrant grant = pc.getReadGrant(artifactURI);
+                if (grant != null) {
+                    if (grant.isAnonymousAccess()) {
+                        logInfo.setMessage("read grant: anonymous");
+                        return;
+                    }
+                    granted.addAll(grant.getGroups());
                 }
-                granted.addAll(grant.getGroups());
+            } catch (ResourceNotFoundException ex) {
+                log.error("failed to find granting service: " + ps, ex);
             }
         }
         if (granted.isEmpty()) {
@@ -291,11 +294,11 @@ public class PostAction extends RestAction {
         // TODO: add profiling
         // if the granted group list is small, it would be better to use GroupClient.isMember()
         // rather than getting all groups... experiment to determine threshold?
-        // unfortunately, the speed of GroupClient.getGroups() will depend on how many groups the
-        // caller belomgs to...
+        // unfortunately, the speed of GroupClient.getGroups() will also depend on how many groups the
+        // caller belongs to...
         LocalAuthority loc = new LocalAuthority();
-        URI resourecID = loc.getServiceURI(Standards.GMS_SEARCH_01.toString());
-        GroupClient client = GroupUtil.getGroupClient(resourecID);
+        URI resourceID = loc.getServiceURI(Standards.GMS_SEARCH_01.toString());
+        GroupClient client = GroupUtil.getGroupClient(resourceID);
         List<GroupURI> userGroups = client.getMemberships();
         for (GroupURI gg : granted) {
             for (GroupURI userGroup : userGroups) {
