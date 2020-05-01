@@ -274,14 +274,18 @@ public class PostAction extends RestAction {
         // TODO: could call multiple services in parallel
         Set<GroupURI> granted = new TreeSet<>();
         for (URI ps : readGrantServices) {
-            PermissionsClient pc = new PermissionsClient(ps);
-            ReadGrant grant = pc.getReadGrant(artifactURI);
-            if (grant != null) {
-                if (grant.isAnonymousAccess()) {
-                    logInfo.setMessage("read grant: anonymous");
-                    return;
+            try {
+                PermissionsClient pc = new PermissionsClient(ps);
+                ReadGrant grant = pc.getReadGrant(artifactURI);
+                if (grant != null) {
+                    if (grant.isAnonymousAccess()) {
+                        logInfo.setMessage("read grant: anonymous");
+                        return;
+                    }
+                    granted.addAll(grant.getGroups());
                 }
-                granted.addAll(grant.getGroups());
+            } catch (ResourceNotFoundException ex) {
+                log.error("failed to find granting service: " + ps, ex);
             }
         }
         if (granted.isEmpty()) {
@@ -291,11 +295,11 @@ public class PostAction extends RestAction {
         // TODO: add profiling
         // if the granted group list is small, it would be better to use GroupClient.isMember()
         // rather than getting all groups... experiment to determine threshold?
-        // unfortunately, the speed of GroupClient.getGroups() will depend on how many groups the
-        // caller belomgs to...
+        // unfortunately, the speed of GroupClient.getGroups() will also depend on how many groups the
+        // caller belongs to...
         LocalAuthority loc = new LocalAuthority();
-        URI resourecID = loc.getServiceURI(Standards.GMS_SEARCH_01.toString());
-        GroupClient client = GroupUtil.getGroupClient(resourecID);
+        URI resourceID = loc.getServiceURI(Standards.GMS_SEARCH_01.toString());
+        GroupClient client = GroupUtil.getGroupClient(resourceID);
         List<GroupURI> userGroups = client.getMemberships();
         for (GroupURI gg : granted) {
             for (GroupURI userGroup : userGroups) {

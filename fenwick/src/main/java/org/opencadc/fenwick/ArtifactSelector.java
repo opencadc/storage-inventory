@@ -67,15 +67,27 @@
 
 package org.opencadc.fenwick;
 
-import org.apache.log4j.Logger;
+import ca.nrc.cadc.net.ResourceNotFoundException;
+
+import java.io.IOException;
+import java.util.Iterator;
+
 
 /**
- * 
+ * A Selector to provide the InventoryHarvester with a means to gather include (additive) clauses to select appropriate
+ * Artifacts to be included in the metadata sync merge.
+ *
  * @author pdowler
  */
-public abstract class ArtifactSelector {
-    private static final Logger log = Logger.getLogger(ArtifactSelector.class);
-
-    protected ArtifactSelector() { 
-    }
+public interface ArtifactSelector {
+    /**
+     * Obtain the iterator of clauses used to build a query to include the Artifacts being merged. Each string in
+     * the iterator is expected to be a condition that can be added to the WHERE clause of artifact sync queries.
+     *
+     * @return Iterator of String clauses, or empty iterator.  Never null.
+     * @throws ResourceNotFoundException    For any missing required configuration that is missing.
+     * @throws IOException      For unreadable configuration files.
+     * @throws IllegalStateException    For any invalid configuration.
+     */
+    Iterator<String> iterator() throws ResourceNotFoundException, IOException, IllegalStateException;
 }
