@@ -163,6 +163,8 @@ public class FileSyncJob implements Runnable {
                 Thread.sleep(RETRY_DELAY[retryCount++]);
 
             }
+        } catch (IllegalStateException ise) {
+            log.info(ise.getMessage());
         } catch (StorageEngageException | InterruptedException
                 | WriteException | IllegalArgumentException syncError) {
             log.error("artifact sync error for " + this.artifactID + ": " + syncError.getMessage());
@@ -265,7 +267,7 @@ public class FileSyncJob implements Runnable {
                     if (curArtifact.storageLocation != null) {
                         // artifact has been acted on since this FileSyncJob
                         // instance started and it was null
-                        throw new IllegalArgumentException("storage location is not null (artifact was acted on during FileSyncJob run): " + this.artifactID);
+                        throw new IllegalStateException("storage location is not null (artifact was acted on during FileSyncJob run): " + this.artifactID);
                     }
 
                     // Note: the storage adapter 'put' below does checksum and content length

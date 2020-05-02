@@ -322,8 +322,8 @@ public class FileSyncJobTest {
     }
 
     @Test
-    public void testInvalidJobBadStorageLocation() {
-        final String testDir = TEST_ROOT + File.separator + "testInvalidJobBadStorageLocation";
+    public void testStorageLocationNotNull() {
+        final String testDir = TEST_ROOT + File.separator + "testStorageLocationNotNull";
         UUID artifactUUID = null;
 
         try {
@@ -335,15 +335,17 @@ public class FileSyncJobTest {
             URI resourceID = new URI(TEST_RESOURCE_ID);
 
             // Set up an Artifact in the database to start.
-            // Set checksum to the wrong value.
             Artifact artifactToUpdate = new Artifact(artifactID,
                 new URI("md5:646d3c548ffb98244a0fc52b60556082"), new Date(),
                 1008000L);
-            StorageLocation testLocation = new StorageLocation(artifactID);
+            StorageLocation testLocation = new StorageLocation(new URI("uri:do-not-overwrite-me"));
+            // Set storage location to a value, as FileSyncJob should quit
+            // when it discovers it
             artifactToUpdate.storageLocation = testLocation;
 
             log.debug("putting test artifact to database");
             dao.put(artifactToUpdate, true);
+            
             // verify something was done
             artifactUUID = artifactToUpdate.getID();
             Assert.assertNotNull(artifactUUID);
@@ -352,9 +354,9 @@ public class FileSyncJobTest {
             FileSyncJob fsj = new FileSyncJob(artifactID, resourceID, sa, dao);
             fsj.run();
 
-            log.debug("finished run in failure test.");
+            log.debug("successfully finished FileSyncJob run in test.");
 
-            // check job failed by verifying that storage location not changed
+            // check job fdid nothing to the storageLocation
             Artifact storedArtifact = dao.get(artifactID);
             Assert.assertEquals(testLocation, storedArtifact.storageLocation);
 
@@ -363,7 +365,7 @@ public class FileSyncJobTest {
             Assert.fail("unexpected exception");
         }
 
-        log.info("testInvalidJobBadStorageLocation - DONE");
+        log.info("testStorageLocationNotNull - DONE");
     }
 
 }
