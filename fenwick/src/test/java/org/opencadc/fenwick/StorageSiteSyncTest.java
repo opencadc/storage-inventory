@@ -92,10 +92,12 @@ public class StorageSiteSyncTest {
 
     @Test
     public void doit() throws Exception {
+        final List<StorageSite> localDB = new ArrayList<>();
         final List<StorageSite> storageSiteList = new ArrayList<>();
-        storageSiteList.add(new StorageSite(URI.create("test:org.opencadc/SITE1"), "Site One"));
+        final StorageSite testStorageSite = new StorageSite(URI.create("test:org.opencadc/SITE1"), "Site One");
+        storageSiteList.add(testStorageSite);
 
-        final StorageSiteSync testSubject = new StorageSiteSync((TapClient) null) {
+        final StorageSiteSync testSubject = new StorageSiteSync(null, null) {
             /**
              * Override this method in tests to avoid recreating a TapClient.
              *
@@ -121,20 +123,32 @@ public class StorageSiteSyncTest {
                     }
                 };
             }
+
+            /**
+             * Store the StorageSite in the local inventory database.
+             *
+             * @param storageSite The StorageSite to store.
+             */
+            @Override
+            void putStorageSite(StorageSite storageSite) {
+                localDB.add(storageSite);
+            }
         };
 
         final StorageSite storageSiteResult = testSubject.doit();
 
         Assert.assertEquals("Wrong site list.", storageSiteList.get(0), storageSiteResult);
+        Assert.assertEquals("Wrong inventory storage site.", testStorageSite, localDB.get(0));
     }
 
     @Test
     public void doitException() throws Exception {
+        final List<StorageSite> localDB = new ArrayList<>();
         final List<StorageSite> storageSiteList = new ArrayList<>();
         storageSiteList.add(new StorageSite(URI.create("test:org.opencadc/SITE1"), "Site One"));
         storageSiteList.add(new StorageSite(URI.create("test:org.opencadc/SITE2"), "Site Two"));
 
-        StorageSiteSync testSubject = new StorageSiteSync((TapClient) null) {
+        StorageSiteSync testSubject = new StorageSiteSync(null, null) {
             /**
              * Override this method in tests to avoid recreating a TapClient.
              *
@@ -159,6 +173,16 @@ public class StorageSiteSyncTest {
                         return storageSiteIterator.next();
                     }
                 };
+            }
+
+            /**
+             * Store the StorageSite in the local inventory database.
+             *
+             * @param storageSite The StorageSite to store.
+             */
+            @Override
+            void putStorageSite(StorageSite storageSite) {
+                localDB.add(storageSite);
             }
         };
 
@@ -168,12 +192,13 @@ public class StorageSiteSyncTest {
         } catch (IllegalStateException e) {
             // Good.
             Assert.assertEquals("Wrong message.", "More than one Storage Site found.", e.getMessage());
+            Assert.assertTrue("Local DB should be empty.", localDB.isEmpty());
         }
 
         // Second kind of exception
 
         storageSiteList.clear();
-        testSubject = new StorageSiteSync((TapClient) null) {
+        testSubject = new StorageSiteSync(null, null) {
             /**
              * Override this method in tests to avoid recreating a TapClient.
              *
@@ -199,6 +224,16 @@ public class StorageSiteSyncTest {
                     }
                 };
             }
+
+            /**
+             * Store the StorageSite in the local inventory database.
+             *
+             * @param storageSite The StorageSite to store.
+             */
+            @Override
+            void putStorageSite(StorageSite storageSite) {
+                localDB.add(storageSite);
+            }
         };
 
         try {
@@ -207,6 +242,7 @@ public class StorageSiteSyncTest {
         } catch (IllegalStateException e) {
             // Good.
             Assert.assertEquals("Wrong message.", "No storage sites available to sync.", e.getMessage());
+            Assert.assertTrue("Local DB should be empty.", localDB.isEmpty());
         }
     }
 }

@@ -112,13 +112,14 @@ public class Main {
         try {
             final PropertiesReader propertiesReader = new PropertiesReader(CONFIG_FILE_NAME);
             final MultiValuedProperties props = propertiesReader.getAllProperties();
-
-            final String configuredLogging = props.getFirstPropertyValue(LOGGING_KEY);
-            Log4jInit.setLevel("org.opencadc.fenwick", StringUtil.hasText(configuredLogging)
-                                                       ? Level.toLevel(configuredLogging.toUpperCase()) : Level.INFO);
-
             // Deal with missing required elements from the configuration file.
             final StringBuilder errorMessage = new StringBuilder();
+
+            final String configuredLogging = Main.readProperty(props, LOGGING_KEY, errorMessage);
+
+            if (StringUtil.hasText(configuredLogging)) {
+                Log4jInit.setLevel("org.opencadc.fenwick", Level.toLevel(configuredLogging.toUpperCase()));
+            }
 
             // DAO Configuration
             final Map<String, Object> daoConfig = new TreeMap<>();
@@ -158,6 +159,18 @@ public class Main {
                                               ? InventoryUtil.loadPlugin(configuredArtifactSelector)
                                               : null;
 
+            final String configuredTrackSiteLocations = Main.readProperty(props, TRACK_SITE_LOCATIONS_CONFIG_KEY,
+                                                                          errorMessage);
+            final boolean trackSiteLocations;
+            if (StringUtil.hasText(configuredTrackSiteLocations)) {
+                trackSiteLocations = StringUtil.hasText(configuredTrackSiteLocations)
+                                     && Boolean.parseBoolean(configuredTrackSiteLocations);
+            } else {
+                // If it gets here then the property wasn't set but needs to be.  Setting it here doesn't matter since
+                // it will exit below.
+                trackSiteLocations = false;
+            }
+
             // Missing required elements.  Only the expectedFilters and logging are optional.
             if (errorMessage.length() > 0) {
                 System.out.println(
@@ -165,11 +178,6 @@ public class Main {
                                       errorMessage.toString()));
                 System.exit(2);
             }
-
-            final String configuredTrackSiteLocations = Main.readProperty(props, TRACK_SITE_LOCATIONS_CONFIG_KEY,
-                                                                          null);
-            final boolean trackSiteLocations = StringUtil.hasText(configuredTrackSiteLocations)
-                                               && Boolean.parseBoolean(configuredTrackSiteLocations);
 
             InventoryHarvester doit = new InventoryHarvester(daoConfig, resourceID, selector, trackSiteLocations);
             doit.run();

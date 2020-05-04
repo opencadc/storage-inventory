@@ -69,6 +69,7 @@
 package org.opencadc.fenwick;
 
 import ca.nrc.cadc.auth.NotAuthenticatedException;
+import ca.nrc.cadc.db.TransactionManager;
 import ca.nrc.cadc.io.ByteLimitExceededException;
 import ca.nrc.cadc.io.ResourceIterator;
 import ca.nrc.cadc.net.ResourceNotFoundException;
@@ -87,6 +88,9 @@ import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.SiteLocation;
 import org.opencadc.inventory.StorageSite;
+import org.opencadc.inventory.db.ObsoleteStorageLocation;
+import org.opencadc.inventory.db.ObsoleteStorageLocationDAO;
+import org.opencadc.inventory.db.StorageSiteDAO;
 import org.opencadc.tap.TapClient;
 
 
@@ -100,14 +104,16 @@ public class StorageSiteSync {
     private static final String STORAGE_SITE_QUERY = "SELECT name, id, resourceid FROM inventory.storagesite";
 
     private final TapClient<StorageSite> tapClient;
+    private final StorageSiteDAO storageSiteDAO;
 
     /**
      * Constructor that accepts a TapClient to query Storage Sites to sync.  Useful for testing.
      *
      * @param tapClient The TapClient to use.
      */
-    public StorageSiteSync(final TapClient<StorageSite> tapClient) {
+    public StorageSiteSync(final TapClient<StorageSite> tapClient, final StorageSiteDAO storageSiteDAO) {
         this.tapClient = tapClient;
+        this.storageSiteDAO = storageSiteDAO;
     }
 
     /**
@@ -131,14 +137,43 @@ public class StorageSiteSync {
                                      InterruptedException {
         try (final ResourceIterator<StorageSite> storageSiteIterator = queryStorageSites()) {
             if (storageSiteIterator.hasNext()) {
-                final StorageSite returnValue = storageSiteIterator.next();
+                final StorageSite storageSite = storageSiteIterator.next();
                 if (storageSiteIterator.hasNext()) {
                     throw new IllegalStateException("More than one Storage Site found.");
                 } else {
-                    return returnValue;
+                    putStorageSite(storageSite);
+                    return storageSite;
                 }
             } else {
                 throw new IllegalStateException("No storage sites available to sync.");
+            }
+        }
+    }
+
+    /**
+     * Store the StorageSite in the local inventory database.
+     * @param storageSite   The StorageSite to store.
+     */
+    void putStorageSite(final StorageSite storageSite) {
+        final TransactionManager transactionManager = storageSiteDAO.getTransactionManager();
+
+        try {
+            log.debug("Start transaction.");
+            transactionManager.startTransaction();
+            storageSiteDAO.put(storageSite);
+            transactionManager.commitTransaction();
+            log.debug("Commit transaction.");
+            transactionManager.commitTransaction();
+        } catch (Exception e) {
+            log.error(String.format("Failed to put StorageSite %s.", storageSite), e);
+            transactionManager.rollbackTransaction();
+            log.debug("Rollback Transaction: OK");
+            throw e;
+        } finally {
+            if (transactionManager.isOpen()) {
+                log.error("BUG - Open transaction in finally");
+                transactionManager.rollbackTransaction();
+                log.error("Transaction rolled back successfully.");
             }
         }
     }
