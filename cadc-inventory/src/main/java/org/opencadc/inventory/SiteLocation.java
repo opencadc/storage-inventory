@@ -75,7 +75,7 @@ import java.util.UUID;
  * 
  * @author pdowler
  */
-public class SiteLocation {
+public class SiteLocation implements Comparable<SiteLocation> {
     private final UUID siteID;
     
     public SiteLocation(UUID siteID) {
@@ -104,5 +104,10 @@ public class SiteLocation {
         }
         SiteLocation s = (SiteLocation) o;
         return siteID.equals(s.siteID);
+    }
+
+    @Override
+    public int compareTo(SiteLocation t) {
+        return siteID.compareTo(t.siteID);
     }
 }
