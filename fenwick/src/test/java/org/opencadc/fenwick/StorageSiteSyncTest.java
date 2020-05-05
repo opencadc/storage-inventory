@@ -74,15 +74,18 @@ import ca.nrc.cadc.util.Log4jInit;
 
 import java.io.IOException;
 import java.net.URI;
+import java.security.MessageDigest;
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.Iterator;
 import java.util.List;
 
 import org.apache.log4j.Level;
 import org.junit.Assert;
+import org.junit.Ignore;
 import org.junit.Test;
+import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.StorageSite;
-import org.opencadc.tap.TapClient;
 
 
 public class StorageSiteSyncTest {
@@ -91,10 +94,17 @@ public class StorageSiteSyncTest {
     }
 
     @Test
+    @Ignore("Would require a StorageSiteDAO to be mocked.")
     public void doit() throws Exception {
-        final List<StorageSite> localDB = new ArrayList<>();
         final List<StorageSite> storageSiteList = new ArrayList<>();
+        final Calendar cal = Calendar.getInstance();
+        cal.set(1977, Calendar.NOVEMBER, 25, 3, 12, 0);
+        cal.set(Calendar.MILLISECOND, 0);
+        final MessageDigest messageDigest = MessageDigest.getInstance("MD5");
         final StorageSite testStorageSite = new StorageSite(URI.create("test:org.opencadc/SITE1"), "Site One");
+        InventoryUtil.assignLastModified(testStorageSite, cal.getTime());
+        InventoryUtil.assignMetaChecksum(testStorageSite, testStorageSite.computeMetaChecksum(messageDigest));
+
         storageSiteList.add(testStorageSite);
 
         final StorageSiteSync testSubject = new StorageSiteSync(null, null) {
@@ -123,27 +133,15 @@ public class StorageSiteSyncTest {
                     }
                 };
             }
-
-            /**
-             * Store the StorageSite in the local inventory database.
-             *
-             * @param storageSite The StorageSite to store.
-             */
-            @Override
-            void putStorageSite(StorageSite storageSite) {
-                localDB.add(storageSite);
-            }
         };
 
         final StorageSite storageSiteResult = testSubject.doit();
 
         Assert.assertEquals("Wrong site list.", storageSiteList.get(0), storageSiteResult);
-        Assert.assertEquals("Wrong inventory storage site.", testStorageSite, localDB.get(0));
     }
 
     @Test
     public void doitException() throws Exception {
-        final List<StorageSite> localDB = new ArrayList<>();
         final List<StorageSite> storageSiteList = new ArrayList<>();
         storageSiteList.add(new StorageSite(URI.create("test:org.opencadc/SITE1"), "Site One"));
         storageSiteList.add(new StorageSite(URI.create("test:org.opencadc/SITE2"), "Site Two"));
@@ -174,16 +172,6 @@ public class StorageSiteSyncTest {
                     }
                 };
             }
-
-            /**
-             * Store the StorageSite in the local inventory database.
-             *
-             * @param storageSite The StorageSite to store.
-             */
-            @Override
-            void putStorageSite(StorageSite storageSite) {
-                localDB.add(storageSite);
-            }
         };
 
         try {
@@ -192,7 +180,6 @@ public class StorageSiteSyncTest {
         } catch (IllegalStateException e) {
             // Good.
             Assert.assertEquals("Wrong message.", "More than one Storage Site found.", e.getMessage());
-            Assert.assertTrue("Local DB should be empty.", localDB.isEmpty());
         }
 
         // Second kind of exception
@@ -224,16 +211,6 @@ public class StorageSiteSyncTest {
                     }
                 };
             }
-
-            /**
-             * Store the StorageSite in the local inventory database.
-             *
-             * @param storageSite The StorageSite to store.
-             */
-            @Override
-            void putStorageSite(StorageSite storageSite) {
-                localDB.add(storageSite);
-            }
         };
 
         try {
@@ -242,7 +219,56 @@ public class StorageSiteSyncTest {
         } catch (IllegalStateException e) {
             // Good.
             Assert.assertEquals("Wrong message.", "No storage sites available to sync.", e.getMessage());
-            Assert.assertTrue("Local DB should be empty.", localDB.isEmpty());
+        }
+    }
+
+    @Test
+    @Ignore("Would require a StorageSiteDAO to be mocked.")
+    public void doitInvalidChecksum() throws Exception {
+        final List<StorageSite> storageSiteList = new ArrayList<>();
+        final Calendar cal = Calendar.getInstance();
+        cal.set(1977, Calendar.NOVEMBER, 25, 3, 12, 0);
+        cal.set(Calendar.MILLISECOND, 0);
+        final StorageSite testStorageSite = new StorageSite(URI.create("test:org.opencadc/MAINSITE"), "Main Site");
+        InventoryUtil.assignLastModified(testStorageSite, cal.getTime());
+        InventoryUtil.assignMetaChecksum(testStorageSite, URI.create("md5:incorrect"));
+
+        storageSiteList.add(testStorageSite);
+
+        final StorageSiteSync testSubject = new StorageSiteSync(null, null) {
+            /**
+             * Override this method in tests to avoid recreating a TapClient.
+             *
+             * @return Iterator over Storage Sites, or empty Iterator.  Never null.
+             */
+            @Override
+            ResourceIterator<StorageSite> queryStorageSites() {
+                final Iterator<StorageSite> storageSiteIterator = storageSiteList.iterator();
+                return new ResourceIterator<StorageSite>() {
+                    @Override
+                    public void close() throws IOException {
+
+                    }
+
+                    @Override
+                    public boolean hasNext() {
+                        return storageSiteIterator.hasNext();
+                    }
+
+                    @Override
+                    public StorageSite next() {
+                        return storageSiteIterator.next();
+                    }
+                };
+            }
+        };
+
+        try {
+            testSubject.doit();
+        } catch (IllegalStateException e) {
+            // Good.
+            Assert.assertTrue("Wrong message.", e.getMessage().contains(
+                    "Discovered Storage Site checksum (md5:incorrect) does not match computed value"));
         }
     }
 }
