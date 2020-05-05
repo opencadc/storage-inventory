@@ -78,7 +78,10 @@ import ca.nrc.cadc.net.TransientException;
 import java.io.IOException;
 import java.net.URI;
 import java.security.AccessControlException;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
 import java.util.UUID;
@@ -101,7 +104,8 @@ import org.opencadc.tap.TapClient;
 public class StorageSiteSync {
     private static final Logger log = Logger.getLogger(StorageSiteSync.class);
 
-    private static final String STORAGE_SITE_QUERY = "SELECT name, id, resourceid FROM inventory.storagesite";
+    private static final String STORAGE_SITE_QUERY =
+            "SELECT name, id, resourceid, lastmodified, metachecksum FROM inventory.storagesite";
 
     private final TapClient<StorageSite> tapClient;
     private final StorageSiteDAO storageSiteDAO;
@@ -135,47 +139,36 @@ public class StorageSiteSync {
                                      ByteLimitExceededException, NotAuthenticatedException,
                                      IllegalArgumentException, TransientException, IOException,
                                      InterruptedException {
+        StorageSite storageSite;
         try (final ResourceIterator<StorageSite> storageSiteIterator = queryStorageSites()) {
             if (storageSiteIterator.hasNext()) {
-                final StorageSite storageSite = storageSiteIterator.next();
+                storageSite = storageSiteIterator.next();
+                // Ensure there is only one returned.
                 if (storageSiteIterator.hasNext()) {
                     throw new IllegalStateException("More than one Storage Site found.");
-                } else {
-                    putStorageSite(storageSite);
-                    return storageSite;
                 }
             } else {
                 throw new IllegalStateException("No storage sites available to sync.");
             }
         }
-    }
-
-    /**
-     * Store the StorageSite in the local inventory database.
-     * @param storageSite   The StorageSite to store.
-     */
-    void putStorageSite(final StorageSite storageSite) {
-        final TransactionManager transactionManager = storageSiteDAO.getTransactionManager();
 
         try {
-            log.debug("Start transaction.");
-            transactionManager.startTransaction();
-            storageSiteDAO.put(storageSite);
-            transactionManager.commitTransaction();
-            log.debug("Commit transaction.");
-            transactionManager.commitTransaction();
-        } catch (Exception e) {
-            log.error(String.format("Failed to put StorageSite %s.", storageSite), e);
-            transactionManager.rollbackTransaction();
-            log.debug("Rollback Transaction: OK");
-            throw e;
-        } finally {
-            if (transactionManager.isOpen()) {
-                log.error("BUG - Open transaction in finally");
-                transactionManager.rollbackTransaction();
-                log.error("Transaction rolled back successfully.");
+            final MessageDigest messageDigest = MessageDigest.getInstance("MD5");
+            final URI metaChecksum = storageSite.getMetaChecksum();
+            final URI computedMetaChecksum = storageSite.computeMetaChecksum(messageDigest);
+
+            if (!metaChecksum.equals(computedMetaChecksum)) {
+                throw new IllegalStateException(
+                        String.format("Discovered Storage Site checksum (%s) does not match computed value (%s).",
+                                      metaChecksum, computedMetaChecksum));
             }
+
+            // Update the local inventory database values for this Storage Site.
+            storageSiteDAO.put(storageSite);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e.getMessage(), e);
         }
+        return storageSite;
     }
 
     /**
@@ -195,10 +188,16 @@ public class StorageSiteSync {
                                                              IllegalArgumentException, TransientException, IOException,
                                                              InterruptedException {
         return tapClient.execute(STORAGE_SITE_QUERY, row -> {
-            final String name = row.get(0).toString();
-            final String id = row.get(1).toString();
-            final String resourceID = row.get(2).toString();
-            return new StorageSite(UUID.fromString(id), URI.create(resourceID), name);
+            int index = 0;
+            final String name = row.get(index++).toString();
+            final String id = row.get(index++).toString();
+            final String resourceID = row.get(index++).toString();
+            final StorageSite storageSite = new StorageSite(UUID.fromString(id), URI.create(resourceID), name);
+
+            InventoryUtil.assignLastModified(storageSite, (Date) row.get(index++));
+            InventoryUtil.assignMetaChecksum(storageSite, (URI) row.get(index));
+
+            return storageSite;
         });
     }
 }
