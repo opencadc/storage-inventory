@@ -72,10 +72,11 @@ import ca.nrc.cadc.db.DBUtil;
 import ca.nrc.cadc.util.Log4jInit;
 import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.util.PropertiesReader;
-import ca.nrc.cadc.util.StringUtil;
 
 import java.net.URI;
+import java.util.Arrays;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
 import javax.naming.NamingException;
 
@@ -105,6 +106,19 @@ public class Main {
     private static final String TRACK_SITE_LOCATIONS_CONFIG_KEY = CONFIG_PREFIX + ".trackSiteLocations";
     private static final String ARTIFACT_SELECTOR_CONFIG_KEY = ArtifactSelector.class.getName();
 
+    // Used to verify configuration items.  See the README for descriptions.
+    private static final String[] MANDATORY_PROPERTY_KEYS = {
+        ARTIFACT_SELECTOR_CONFIG_KEY,
+        DB_PASSWORD_CONFIG_KEY,
+        DB_SCHEMA_CONFIG_KEY,
+        DB_URL_CONFIG_KEY,
+        DB_USERNAME_CONFIG_KEY,
+        LOGGING_KEY,
+        QUERY_SERVICE_CONFIG_KEY,
+        SQLGENERATOR_CONFIG_KEY,
+        TRACK_SITE_LOCATIONS_CONFIG_KEY
+    };
+
     public static void main(final String[] args) {
         Log4jInit.setLevel("ca.nrc.cadc", Level.WARN);
         Log4jInit.setLevel("org.opencadc", Level.WARN);
@@ -112,106 +126,67 @@ public class Main {
         try {
             final PropertiesReader propertiesReader = new PropertiesReader(CONFIG_FILE_NAME);
             final MultiValuedProperties props = propertiesReader.getAllProperties();
-            // Deal with missing required elements from the configuration file.
-            final StringBuilder errorMessage = new StringBuilder();
+            final String[] missingKeys = Main.verifyConfiguration(props);
 
-            final String configuredLogging = Main.readProperty(props, LOGGING_KEY, errorMessage);
-
-            if (StringUtil.hasText(configuredLogging)) {
-                Log4jInit.setLevel("org.opencadc.fenwick", Level.toLevel(configuredLogging.toUpperCase()));
+            if (missingKeys.length > 0) {
+                log.fatal(String.format("\nConfiguration file %s missing one or more values: %s.\n", CONFIG_FILE_NAME,
+                                        Arrays.toString(missingKeys)));
+                System.exit(2);
             }
+
+            final String configuredLogging = props.getFirstPropertyValue(LOGGING_KEY);
+            Log4jInit.setLevel("org.opencadc.fenwick", Level.toLevel(configuredLogging.toUpperCase()));
 
             // DAO Configuration
             final Map<String, Object> daoConfig = new TreeMap<>();
-            final String username = Main.readProperty(props, DB_USERNAME_CONFIG_KEY, errorMessage);
-            final String password = Main.readProperty(props, DB_PASSWORD_CONFIG_KEY, errorMessage);
-            final String dbUrl = Main.readProperty(props, DB_URL_CONFIG_KEY, errorMessage);
+            final String username = props.getFirstPropertyValue(DB_USERNAME_CONFIG_KEY);
+            final String password = props.getFirstPropertyValue(DB_PASSWORD_CONFIG_KEY);
+            final String dbUrl = props.getFirstPropertyValue(DB_URL_CONFIG_KEY);
 
-            daoConfig.put("schema", Main.readProperty(props, DB_SCHEMA_CONFIG_KEY, errorMessage));
+            daoConfig.put("schema", props.getFirstPropertyValue(DB_SCHEMA_CONFIG_KEY));
             daoConfig.put("database", "inventory");
 
-            if (StringUtil.hasText(username) && StringUtil.hasText(password) && StringUtil.hasText(dbUrl)) {
-                final ConnectionConfig cc = new ConnectionConfig(null, null, username, password,
-                                                                 "org.postgresql.Driver", dbUrl);
+            final ConnectionConfig cc = new ConnectionConfig(null, null, username, password,
+                                                             "org.postgresql.Driver", dbUrl);
 
-                try {
-                    DBUtil.createJNDIDataSource("jdbc/inventory", cc);
-                } catch (NamingException ne) {
-                    throw new IllegalStateException(String.format("Unable to access database: %s", dbUrl), ne);
-                }
-
-                daoConfig.put("jndiDataSourceName", "jdbc/inventory");
+            try {
+                DBUtil.createJNDIDataSource("jdbc/inventory", cc);
+            } catch (NamingException ne) {
+                throw new IllegalStateException(String.format("Unable to access database: %s", dbUrl), ne);
             }
 
-            final String configuredSQLGenerator = Main.readProperty(props, SQLGENERATOR_CONFIG_KEY, errorMessage);
-            if (StringUtil.hasText(configuredSQLGenerator)) {
-                daoConfig.put(SQLGENERATOR_CONFIG_KEY, Class.forName(configuredSQLGenerator));
-            }
+            daoConfig.put("jndiDataSourceName", "jdbc/inventory");
 
-            final String configuredQueryService = Main.readProperty(props, QUERY_SERVICE_CONFIG_KEY, errorMessage);
-            final URI resourceID = StringUtil.hasText(configuredQueryService)
-                                   ? URI.create(configuredQueryService)
-                                   : null;
+            final String configuredSQLGenerator = props.getFirstPropertyValue(SQLGENERATOR_CONFIG_KEY);
+            daoConfig.put(SQLGENERATOR_CONFIG_KEY, Class.forName(configuredSQLGenerator));
+            // End DAO Configuration
 
-            final String configuredArtifactSelector = Main.readProperty(props, ARTIFACT_SELECTOR_CONFIG_KEY,
-                                                                        errorMessage);
-            final ArtifactSelector selector = StringUtil.hasText(configuredArtifactSelector)
-                                              ? InventoryUtil.loadPlugin(configuredArtifactSelector)
-                                              : null;
+            final String configuredQueryService = props.getFirstPropertyValue(QUERY_SERVICE_CONFIG_KEY);
+            final URI resourceID = URI.create(configuredQueryService);
 
-            final String configuredTrackSiteLocations = Main.readProperty(props, TRACK_SITE_LOCATIONS_CONFIG_KEY,
-                                                                          errorMessage);
-            final boolean trackSiteLocations;
-            if (StringUtil.hasText(configuredTrackSiteLocations)) {
-                trackSiteLocations = StringUtil.hasText(configuredTrackSiteLocations)
-                                     && Boolean.parseBoolean(configuredTrackSiteLocations);
-            } else {
-                // If it gets here then the property wasn't set but needs to be.  Setting it here doesn't matter since
-                // it will exit below.
-                trackSiteLocations = false;
-            }
+            final String configuredArtifactSelector = props.getFirstPropertyValue(ARTIFACT_SELECTOR_CONFIG_KEY);
+            final ArtifactSelector selector = InventoryUtil.loadPlugin(configuredArtifactSelector);
 
-            // Missing required elements.  Only the expectedFilters and logging are optional.
-            if (errorMessage.length() > 0) {
-                System.out.println(
-                        String.format("\nConfiguration file %s missing one or more values: %s.\n", CONFIG_FILE_NAME,
-                                      errorMessage.toString()));
-                System.exit(2);
-            }
+            final String configuredTrackSiteLocations = props.getFirstPropertyValue(TRACK_SITE_LOCATIONS_CONFIG_KEY);
+            final boolean trackSiteLocations = Boolean.parseBoolean(configuredTrackSiteLocations);
 
             InventoryHarvester doit = new InventoryHarvester(daoConfig, resourceID, selector, trackSiteLocations);
             doit.run();
             System.exit(0);
         } catch (Throwable unexpected) {
-            log.error("Unexpected failure", unexpected);
-            System.out.println("Unexpected failure.  Check log output.");
+            log.fatal("Unexpected failure", unexpected);
             System.exit(-1);
         }
     }
 
     /**
-     * Convenience method to acquire required property values, or append to an error message builder if no property
-     * exists for the given key.
-     *
-     * @param properties          The properties to read from.
-     * @param key                 The key to look up.
-     * @param errorMessageBuilder The error message builder to append to.  Can be null.
-     * @return Value of the property, or null if non existent.
+     * Verify all of the mandatory properties.
+     * @param properties    The properties to check the mandatory keys against.
+     * @return  An array of missing String keys, or empty array.  Never null.
      */
-    private static String readProperty(final MultiValuedProperties properties, final String key,
-                                       final StringBuilder errorMessageBuilder) {
-        final String configuredValue = properties.getFirstPropertyValue(key);
-        final String returnValue;
-        if (!StringUtil.hasText(configuredValue)) {
-            if (errorMessageBuilder != null) {
-                errorMessageBuilder.append("\n").append(key);
-            }
-            returnValue = null;
-        } else {
-            returnValue = configuredValue;
-        }
-
-        return returnValue;
+    private static String[] verifyConfiguration(final MultiValuedProperties properties) {
+        final Set<String> keySet = properties.keySet();
+        return Arrays.stream(MANDATORY_PROPERTY_KEYS).filter(k -> !keySet.contains(k)).toArray(String[]::new);
     }
 
     private Main() {
