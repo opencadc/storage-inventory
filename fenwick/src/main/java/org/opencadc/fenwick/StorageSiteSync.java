@@ -190,9 +190,9 @@ public class StorageSiteSync {
         return tapClient.execute(STORAGE_SITE_QUERY, row -> {
             int index = 0;
             final String name = row.get(index++).toString();
-            final String id = row.get(index++).toString();
-            final String resourceID = row.get(index++).toString();
-            final StorageSite storageSite = new StorageSite(UUID.fromString(id), URI.create(resourceID), name);
+            final UUID id = (UUID) row.get(index++);
+            final URI resourceID = (URI) row.get(index++);
+            final StorageSite storageSite = new StorageSite(id, resourceID, name);
 
             InventoryUtil.assignLastModified(storageSite, (Date) row.get(index++));
             InventoryUtil.assignMetaChecksum(storageSite, (URI) row.get(index));
