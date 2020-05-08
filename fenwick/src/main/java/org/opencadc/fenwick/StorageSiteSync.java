@@ -114,6 +114,7 @@ public class StorageSiteSync {
      * Constructor that accepts a TapClient to query Storage Sites to sync.  Useful for testing.
      *
      * @param tapClient The TapClient to use.
+     * @param storageSiteDAO    The DAO for the StorageSite table.  Used for PUTs.
      */
     public StorageSiteSync(final TapClient<StorageSite> tapClient, final StorageSiteDAO storageSiteDAO) {
         this.tapClient = tapClient;
