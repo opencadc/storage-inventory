@@ -77,9 +77,11 @@ import java.net.URI;
 import java.util.Map;
 
 import org.apache.log4j.Logger;
+import org.opencadc.inventory.DeletedStorageLocationEvent;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.SiteLocation;
 import org.opencadc.inventory.db.ArtifactDAO;
+import org.opencadc.inventory.db.DeletedEventDAO;
 
 /**
  *
@@ -89,6 +91,7 @@ public class InventoryHarvester {
     private static final Logger log = Logger.getLogger(InventoryHarvester.class);
 
     private final ArtifactDAO artifactDAO;
+    private final DeletedEventDAO<DeletedStorageLocationEvent> deletedEventDAO;
     private final URI resourceID;
     private final Capability inventoryTAP;
     private final ArtifactSelector selector;
@@ -106,6 +109,8 @@ public class InventoryHarvester {
         InventoryUtil.assertNotNull(InventoryHarvester.class, "selector", selector);
         this.artifactDAO = new ArtifactDAO();
         artifactDAO.setConfig(daoConfig);
+        this.deletedEventDAO = new DeletedEventDAO<DeletedStorageLocationEvent>();
+        deletedEventDAO.setConfig(daoConfig);
         this.resourceID = resourceID;
         this.selector = selector;
         
