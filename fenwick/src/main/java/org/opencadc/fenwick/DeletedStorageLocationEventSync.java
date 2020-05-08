@@ -73,24 +73,23 @@ import ca.nrc.cadc.date.DateUtil;
 import ca.nrc.cadc.io.ResourceIterator;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
-import org.apache.log4j.Logger;
-import org.opencadc.inventory.DeletedStorageLocationEvent;
-import org.opencadc.inventory.InventoryUtil;
-import org.opencadc.tap.TapClient;
-import org.opencadc.tap.TapRowMapper;
-
 import java.io.IOException;
 import java.net.URI;
 import java.text.DateFormat;
 import java.util.Date;
 import java.util.List;
 import java.util.UUID;
+import org.apache.log4j.Logger;
+import org.opencadc.inventory.DeletedStorageLocationEvent;
+import org.opencadc.inventory.InventoryUtil;
+import org.opencadc.tap.TapClient;
+import org.opencadc.tap.TapRowMapper;
 
 public class DeletedStorageLocationEventSync {
 
     private static final Logger log = Logger.getLogger(DeletedStorageLocationEventSync.class);
 
-    // TODO sufficient to use 3 digit precision in DateUtil?
+    // TODO sufficient to use 3 digit precision ISO_DATE_FORMAT in DateUtil?
     public static final String ISO_DATE_FORMAT = "yyyy-MM-dd HH:mm:ss.SSSSSS";
     private static final DateFormat dateFormat = DateUtil.getDateFormat(ISO_DATE_FORMAT, DateUtil.UTC);
 
@@ -105,16 +104,16 @@ public class DeletedStorageLocationEventSync {
         this.startTime = startTime;
     }
 
-    public ResourceIterator<org.opencadc.inventory.DeletedStorageLocationEvent> getEvents()
+    public ResourceIterator<DeletedStorageLocationEvent> getEvents()
             throws InterruptedException, IOException, ResourceNotFoundException, TransientException {
         final String query = String.format(DELETED_STORAGE_LOCATION_QUERY, dateFormat.format(startTime));
         return tapClient.execute(query, new DeletedStorageLocationEventRowMapper());
-    };
+    }
     
     static class DeletedStorageLocationEventRowMapper implements TapRowMapper<DeletedStorageLocationEvent> {
 
         @Override
-        public org.opencadc.inventory.DeletedStorageLocationEvent mapRow(List<Object> row) {
+        public DeletedStorageLocationEvent mapRow(List<Object> row) {
             int index = 0;
             final UUID id = (UUID) row.get(index++);
             final Date lastModified = (Date) row.get(index++);
@@ -125,7 +124,7 @@ public class DeletedStorageLocationEventSync {
             InventoryUtil.assignMetaChecksum(deletedStorageLocationEvent, metaChecksum);
 
             return deletedStorageLocationEvent;
-        };
+        }
     }
 
 }
