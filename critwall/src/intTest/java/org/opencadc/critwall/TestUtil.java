@@ -79,7 +79,7 @@ import org.apache.log4j.Logger;
 public class TestUtil {
     private static final Logger log = Logger.getLogger(TestUtil.class);
 
-    static String SERVER = "INVENTORY_TEST";
+    static String SERVER = "CRITWALL_TEST";
     static String DATABASE = "cadctest";
     static String SCHEMA = "inventory";
     static String TABLE_PREFIX = null;

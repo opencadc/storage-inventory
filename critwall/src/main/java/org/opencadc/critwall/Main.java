@@ -85,6 +85,7 @@ import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.db.SQLGenerator;
 import org.opencadc.inventory.storage.StorageAdapter;
+import org.opencadc.inventory.storage.fs.OpaqueFileSystemStorageAdapter;
 
 /**
  * Main entry point for critwall.
@@ -161,9 +162,9 @@ public class Main {
                 errMsg.append(DB_PASSWORD_CONFIG_KEY + " ");
             }
 
-            String adapterClass = props.getFirstPropertyValue(StorageAdapter.class.getName());
+            String adapterClass = props.getFirstPropertyValue(OpaqueFileSystemStorageAdapter.class.getName());
             if (!StringUtil.hasLength(adapterClass)) {
-                errMsg.append(StorageAdapter.class.getName() + " ");
+                errMsg.append(OpaqueFileSystemStorageAdapter.class.getName() + " ");
             }
 
             String locatorResourceIdStr = props.getFirstPropertyValue(LOCATOR_SERVICE_CONFIG_KEY);
@@ -191,6 +192,10 @@ public class Main {
             daoConfig.put("schema", schema);
             daoConfig.put("database", dbUrl);
 
+            Map<String, Object> jobDaoConfig = new TreeMap<>();
+            jobDaoConfig.put("schema", schema);
+            jobDaoConfig.put("database", dbUrl);
+
             try {
                 daoConfig.put(SQLGENERATOR_CONFIG_KEY, (Class<SQLGenerator>)Class.forName(generatorName));
             } catch (Exception ex) {
@@ -213,11 +218,23 @@ public class Main {
             daoConfig.put("jndiDataSourceName", jndiSourceName);
             log.debug("JNDIDataSource: " + jndiSourceName);
 
-            StorageAdapter localStorage = null;
+            // FileSyncJob ArtifactDAO creation
+
+            jndiSourceName = "jdbc/critwallJobs";
+            try {
+                DBUtil.createJNDIDataSource(jndiSourceName, cc);
+            } catch (NamingException ne) {
+                throw new IllegalStateException("unable to access database: " + dbUrl, ne);
+            }
+            jobDaoConfig.put("jndiDataSourceName", jndiSourceName);
+            log.debug("job JNDIDataSource: " + jndiSourceName);
+
+            // todo: this might be far more complicated than ncessary to create the storage adapter
+            OpaqueFileSystemStorageAdapter localStorage = null;
             try {
                 Class c = Class.forName(adapterClass);
                 Object o = c.newInstance();
-                localStorage = (StorageAdapter) o;
+                localStorage = (OpaqueFileSystemStorageAdapter) o;
                 log.debug("StorageAdapter: " + localStorage);
             } catch (Throwable t) {
                 throw new IllegalStateException("failed to create storage adapter: " + adapterClass, t);
@@ -238,7 +255,7 @@ public class Main {
             BucketSelector bucketSel = new BucketSelector(bucketSelectorPrefix);
             log.debug("bucket selector: " + bucketSel);
 
-            FileSync doit = new FileSync(daoConfig, localStorage, resourceID, bucketSel, nthreads);
+            FileSync doit = new FileSync(daoConfig, jobDaoConfig, localStorage, resourceID, bucketSel, nthreads);
             doit.run();
             System.exit(0);
         } catch (Throwable unexpected) {

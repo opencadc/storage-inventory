@@ -67,21 +67,36 @@
 
 package org.opencadc.critwall;
 
+import ca.nrc.cadc.db.ConnectionConfig;
+import ca.nrc.cadc.db.DBConfig;
+import ca.nrc.cadc.db.DBUtil;
 import ca.nrc.cadc.reg.Capabilities;
 import ca.nrc.cadc.reg.Capability;
 import ca.nrc.cadc.reg.Standards;
 import ca.nrc.cadc.reg.client.RegistryClient;
 
+import java.io.File;
 import java.io.IOException;
 import java.net.URI;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.nio.file.attribute.FileAttribute;
+import java.nio.file.attribute.PosixFilePermission;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 
+import java.util.Set;
+import java.util.TreeMap;
 import org.apache.log4j.Logger;
+import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.SiteLocation;
 import org.opencadc.inventory.db.ArtifactDAO;
+import org.opencadc.inventory.db.SQLGenerator;
 import org.opencadc.inventory.storage.StorageAdapter;
+import org.opencadc.inventory.storage.fs.OpaqueFileSystemStorageAdapter;
 
 /**
  *
@@ -93,12 +108,16 @@ public class FileSync {
     private static final int MAX_THREADS = 16;
     
     private final ArtifactDAO artifactDAO;
-    private StorageAdapter localStorage;
-    private final URI resourceID;
-    private final Capability locator;
+    private final ArtifactDAO jobArtifactDAO;
+    private final URI locatorResourceID;
     private final BucketSelector selector;
     private final int nthreads;
-    
+
+    // Filesync needs to know what directory to work in.
+    // set a temporary one for now
+//    private final String fileSyncDir;
+    private final OpaqueFileSystemStorageAdapter storageAdapter;
+
     /**
      * Constructor.
      * 
@@ -108,8 +127,9 @@ public class FileSync {
      * @param selector selector implementation
      * @param nthreads number of threads in download thread pool
      */
-    public FileSync(Map<String,Object> daoConfig, StorageAdapter localStorage, URI resourceID, BucketSelector selector, int nthreads) {
+    public FileSync(Map<String,Object> daoConfig, Map<String,Object> jobDaoConfig, OpaqueFileSystemStorageAdapter localStorage, URI resourceID, BucketSelector selector, int nthreads) {
         InventoryUtil.assertNotNull(FileSync.class, "daoConfig", daoConfig);
+        InventoryUtil.assertNotNull(FileSync.class, "jobDaoConfig", jobDaoConfig);
         InventoryUtil.assertNotNull(FileSync.class, "localStorage", localStorage);
         InventoryUtil.assertNotNull(FileSync.class, "resourceID", resourceID);
         InventoryUtil.assertNotNull(FileSync.class, "selector", selector);
@@ -118,28 +138,22 @@ public class FileSync {
             throw new IllegalArgumentException("invalid config: nthreads must be in [1," + MAX_THREADS + "], found: " + nthreads);
         }
 
-        this.artifactDAO = new ArtifactDAO();
-        artifactDAO.setConfig(daoConfig);
-        this.resourceID = resourceID;
+
+
+        this.locatorResourceID = resourceID;
         this.selector = selector;
         this.nthreads = nthreads;
 
-        // To be completed in s2575, ta 13061
-        // TODO: temporary so that FileSync.run can execute remove setting
-        // locator to null when this section is finished
-        this.locator = null;
-        //        try {
-        //            RegistryClient rc = new RegistryClient();
-        //            Capabilities caps = rc.getCapabilities(resourceID);
-        //            // above call throws IllegalArgumentException... should be ResourceNotFoundException but out of scope to fix
-        //            this.locator = caps.findCapability(Standards.SI_LOCATE);
-        //            if (locator == null) {
-        //                throw new IllegalArgumentException("invalid config: remote query service " + resourceID + " does not implement "
-        //                + Standards.SI_LOCATE);
-        //            }
-        //        } catch (IOException ex) {
-        //            throw new IllegalArgumentException("invalid config", ex);
-        //        }
+        // For managing the artifact iterator FileSync loops over
+        this.artifactDAO = new ArtifactDAO();
+        this.artifactDAO.setConfig(daoConfig);
+
+        // For passing to FileSyncJob
+        this.jobArtifactDAO = new ArtifactDAO();
+        this.jobArtifactDAO.setConfig(jobDaoConfig);
+
+        this.storageAdapter = localStorage;
+        log.debug("FileSync ctor done");
     }
     
     // general behaviour:
@@ -158,11 +172,32 @@ public class FileSync {
     
     public void run() {
         Iterator<String> bucketSelector = selector.getBucketIterator();
-        while (bucketSelector.hasNext()) {
-            String nextBucket = bucketSelector.next();
-            log.info("processing bucket " + nextBucket);
+        String currentArtifactInfo = "";
+
+        try {
+            while (bucketSelector.hasNext()) {
+                String nextBucket = bucketSelector.next();
+                log.info("processing bucket " + nextBucket);
+                 Iterator<Artifact> unstoredArtifacts = artifactDAO.unstoredIterator(nextBucket);
+
+                while (unstoredArtifacts.hasNext()) {
+                    Artifact curArtifact = unstoredArtifacts.next();
+                    currentArtifactInfo = "bucket: " + nextBucket + " artifact: " + curArtifact.getURI();
+                    log.debug("processing: " + currentArtifactInfo);
+
+                    FileSyncJob fsj = new FileSyncJob(curArtifact.getURI(), this.locatorResourceID,
+                        this.storageAdapter, this.jobArtifactDAO);
+                    fsj.run();
+                }
+            }
+
+        } catch (Exception e) {
+          // capture database errors here and quit if there's a failure
+          log.error("error processing list of artifacts, at: " + currentArtifactInfo);
+          return;
         }
-        throw new UnsupportedOperationException("TODO");
+
+        log.info("END - processing buckets.");
     }
 
 
