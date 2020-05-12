@@ -139,18 +139,18 @@ public class ArtifactSync {
         return tapClient.execute(query, row -> {
             int index = 0;
             final Artifact artifact = new Artifact((UUID) row.get(index++),
-                                                   URI.create(row.get(index++).toString()),
-                                                   URI.create(row.get(index++).toString()),
+                                                   (URI) row.get(index++),
+                                                   (URI) row.get(index++),
                                                    (Date) row.get(index++),
                                                    (Long) row.get(index++));
             artifact.contentType = row.get(index++).toString();
             artifact.contentEncoding = row.get(index++).toString();
             artifact.siteLocations.addAll((Set<SiteLocation>) row.get(index++));
 
-            final StorageLocation storageLocation = new StorageLocation(URI.create(row.get(index++).toString()));
+            final StorageLocation storageLocation = new StorageLocation((URI) row.get(index++));
             storageLocation.storageBucket = row.get(index++).toString();
 
-            InventoryUtil.assignMetaChecksum(artifact, URI.create(row.get(index++).toString()));
+            InventoryUtil.assignMetaChecksum(artifact, (URI) row.get(index++));
             InventoryUtil.assignLastModified(artifact, (Date) row.get(index));
 
             return artifact;
