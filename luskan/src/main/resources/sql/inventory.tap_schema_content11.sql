@@ -40,7 +40,7 @@ insert into tap_schema.tables11 (schema_name,table_name,table_type,description,t
 ;
 
 insert into tap_schema.columns11 (table_name,column_name,utype,description,unit,datatype,arraysize,xtype,principal,indexed,std,column_index) values
-( 'inventory.Artifact', 'uri', 'si:Artifact.uri', 'URI for this file', NULL, 'char','512*', NULL, 1, 1, 1, 1 ),
+( 'inventory.Artifact', 'uri', 'si:Artifact.uri', 'URI for this file', NULL, 'char','512*', 'uri', 1, 1, 1, 1 ),
 ( 'inventory.Artifact', 'uriBucket', 'si:Artifact.uriBucket', 'URI for the storage bucket', NULL, 'char','5', NULL, 1, 1, 1, 2 ),
 ( 'inventory.Artifact', 'contentChecksum', 'si:Artifact.contentChecksum', 'checksum of the file content', NULL, 'char','136*', NULL, 1, 0, 1, 3 ),
 ( 'inventory.Artifact', 'contentLastModified', 'si:Artifact.contentLastModified', 'timestamp of last modification of the file', NULL, 'char','23*','timestamp', 1, 0, 1, 4 ),
@@ -48,26 +48,26 @@ insert into tap_schema.columns11 (table_name,column_name,utype,description,unit,
 ( 'inventory.Artifact', 'contentType', 'si:Artifact.contentType', 'format of the file', NULL, 'char','128*',NULL, 1, 0, 1, 6 ),
 ( 'inventory.Artifact', 'contentEncoding', 'si:Artifact.contentEncoding', 'encoding type of the file', NULL, 'char','128*',NULL, 1, 0, 1, 7 ),
 ( 'inventory.Artifact', 'lastModified', 'si:Entity.lastModified', 'timestamp of last modification of the metadata', NULL, 'char','23*','timestamp', 1, 1, 1, 8 ),
-( 'inventory.Artifact', 'metaChecksum', 'si:Entity.metaChecksum', 'checksum of the file metadata', NULL, 'char','136*',NULL, 1, 0, 1, 9 ),
+( 'inventory.Artifact', 'metaChecksum', 'si:Entity.metaChecksum', 'checksum of the file metadata', NULL, 'char','136*','uri', 1, 0, 1, 9 ),
 ( 'inventory.Artifact', 'id', 'si:Entity.id', 'primary key', NULL, 'char','36','uuid', 1, 1, 1, 10 )
 ;
 
 insert into tap_schema.columns11 (table_name,column_name,utype,description,unit,datatype,arraysize,xtype,principal,indexed,std,column_index) values
-( 'inventory.StorageSite', 'resourceID', 'si:StorageSite.resourceID', 'ID of the storage site (URI)', NULL, 'char','512*', NULL, 1, 1, 1, 1 ),
+( 'inventory.StorageSite', 'resourceID', 'si:StorageSite.resourceID', 'ID of the storage site (URI)', NULL, 'char','512*', 'uri', 1, 1, 1, 1 ),
 ( 'inventory.StorageSite', 'name', 'si:StorageSite.name', 'Name of the storage site', NULL, 'char','32*',NULL, 1, 0, 1, 2 ),
 ( 'inventory.StorageSite', 'id', 'si:StorageSite.id', 'primary key', NULL, 'char','36','uuid', 1, 1, 1, 3 ),
 ( 'inventory.StorageSite', 'lastModified', 'si:StorageSite.lastModified', 'timestamp of the file at location', NULL, 'char','23*','timestamp', 1, 1, 1, 4 ),
-( 'inventory.StorageSite', 'metaChecksum', 'si:StorageSite.metaChecksum', 'checksum of the file at location', NULL, 'char','136*',NULL, 1, 0, 1, 5 )
+( 'inventory.StorageSite', 'metaChecksum', 'si:StorageSite.metaChecksum', 'checksum of the file at location', NULL, 'char','136*','uri', 1, 0, 1, 5 )
 ;
 
 insert into tap_schema.columns11 (table_name,column_name,utype,description,unit,datatype,arraysize,xtype,principal,indexed,std,column_index) values
 ( 'inventory.DeletedArtifactEvent', 'id', 'si:Entity.id', 'primary key', NULL, 'char','36','uuid', 1, 1, 1, 1 ),
 ( 'inventory.DeletedArtifactEvent', 'lastModified', 'si:Entity.lastModified', 'timestamp of the event', NULL, 'char','23*','timestamp', 1, 1, 1, 2 ),
-( 'inventory.DeletedArtifactEvent', 'metaChecksum', 'si:Entity.metaChecksum', 'checksum of the file metadata', NULL, 'char','136*',NULL, 1, 0, 1, 3 )
+( 'inventory.DeletedArtifactEvent', 'metaChecksum', 'si:Entity.metaChecksum', 'checksum of the file metadata', NULL, 'char','136*','uri', 1, 0, 1, 3 )
 ;
 
 insert into tap_schema.columns11 (table_name,column_name,utype,description,unit,datatype,arraysize,xtype,principal,indexed,std,column_index) values
 ( 'inventory.DeletedStorageLocationEvent', 'id', 'si:Entity.id', 'primary key', NULL, 'char','36','uuid', 1, 1, 1, 1 ),
 ( 'inventory.DeletedStorageLocationEvent', 'lastModified', 'si:Entity.lastModified', 'timestamp of the event', NULL, 'char','23*','timestamp', 1, 1, 1, 2 ),
-( 'inventory.DeletedStorageLocationEvent', 'metaChecksum', 'si:Entity.metaChecksum', 'checksum of the file metadata', NULL, 'char','136*',NULL, 1, 0, 1, 3 )
+( 'inventory.DeletedStorageLocationEvent', 'metaChecksum', 'si:Entity.metaChecksum', 'checksum of the file metadata', NULL, 'char','136*','uri', 1, 0, 1, 3 )
 ;
