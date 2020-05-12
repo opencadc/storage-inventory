@@ -74,6 +74,7 @@ import ca.nrc.cadc.net.TransientException;
 
 import java.io.IOException;
 import java.net.URI;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.Iterator;
 import java.util.Set;
@@ -84,6 +85,7 @@ import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.SiteLocation;
 import org.opencadc.inventory.StorageLocation;
+import org.opencadc.inventory.StorageSite;
 import org.opencadc.tap.TapClient;
 
 
@@ -98,12 +100,12 @@ public class ArtifactSync {
     // First string replace is the date to verify, and the second is the constraint clause as set by the selector.
     private static final String ARTIFACT_QUERY_TEMPLATE =
             "SELECT id, uri, contentchecksum, contentlastmodified, contentlength, contenttype, "
-            + "contentencoding, sitelocations, storagelocation_storageid, storagelocation_storagebucket, lastmodified, "
-            + "metachecksum WHERE lastModified >= %s%s";
+            + "contentencoding, lastmodified, metachecksum FROM inventory.Artifact WHERE lastModified >= %s%s";
 
     private final ArtifactSelector selector;
     private final TapClient<Artifact> tapClient;
     private final Date currLastModified;
+    private final StorageSite storageSite;
 
     /**
      * Complete constructor.
@@ -111,12 +113,14 @@ public class ArtifactSync {
      * @param selector         The ArtifactSelector used to constrain the query.
      * @param tapClient        The TapClient to interface with a site's TAP (Luskan) service.
      * @param currLastModified The last modified date to start the query at.
+     * @param storageSite      The Storage Site to set on the Artifact as provided by the StorageSiteSync.
      */
     public ArtifactSync(final ArtifactSelector selector, final TapClient<Artifact> tapClient,
-                        final Date currLastModified) {
+                        final Date currLastModified, final StorageSite storageSite) {
         this.selector = selector;
         this.tapClient = tapClient;
         this.currLastModified = currLastModified;
+        this.storageSite = storageSite;
     }
 
     /**
@@ -145,13 +149,11 @@ public class ArtifactSync {
                                                    (Long) row.get(index++));
             artifact.contentType = row.get(index++).toString();
             artifact.contentEncoding = row.get(index++).toString();
-            artifact.siteLocations.addAll((Set<SiteLocation>) row.get(index++));
-
-            final StorageLocation storageLocation = new StorageLocation((URI) row.get(index++));
-            storageLocation.storageBucket = row.get(index++).toString();
 
             InventoryUtil.assignMetaChecksum(artifact, (URI) row.get(index++));
             InventoryUtil.assignLastModified(artifact, (Date) row.get(index));
+
+            artifact.siteLocations.add(new SiteLocation(storageSite.getID()));
 
             return artifact;
         });
@@ -160,6 +162,7 @@ public class ArtifactSync {
     /**
      * Create a query for the TAP (Luskan) query.  This method will tally up the selector's clauses into a formulated
      * query for the TapClient.
+     *
      * <p>A potential risk with this method is that there is no enforcement for at least one clause.  This could result
      * in a very large query.
      *
