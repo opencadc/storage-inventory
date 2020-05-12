@@ -104,41 +104,16 @@ public class AdStorageAdapterIteratorTest {
     }
 
     @Test
-    public void testGetIterator() throws Exception {
+    public void testEmptyIterator() throws Exception {
         Subject.doAs(testSubject, new PrivilegedExceptionAction<Object>() {
             public Object run() throws Exception {
                 final AdStorageAdapter adStorageAdapter = new AdStorageAdapter();
-                String archiveName = "IRIS";
-
-                Long startTime = System.currentTimeMillis();
-                try {
-                    Iterator<StorageMetadata> storageMetaIterator = adStorageAdapter.iterator(archiveName);
-
-                    Long totalTime = System.currentTimeMillis() - startTime;
-                    log.debug("time to get iterator: " + totalTime + "ms");
-                    int archiveSize = 0;
-
-                    while (storageMetaIterator.hasNext()) {
-                        StorageMetadata curMeta = storageMetaIterator.next();
-                        log.info(archiveSize + ") " + curMeta.artifactURI + ": " + curMeta.contentEncoding + ": ");
-                        archiveSize++;
-                    }
-                    log.debug("archive size: " + archiveSize);
-                    Assert.assertTrue( "archive size is zero.", archiveSize > 0);
-
-                } catch (Exception unexpected) {
-                    log.error("unexpected exception", unexpected);
-                    Assert.fail("unexpected exception: " + unexpected.getMessage());
-                }
 
                 // query should come back with 0
-                archiveName = "NOT_IN_ARCHIVE";
+                String archiveName = "NOT_IN_ARCHIVE";
                 try {
                     Iterator<StorageMetadata> storageMetaIterator = adStorageAdapter.iterator(archiveName);
-                    int archiveSize = 0;
                     Assert.assertTrue("iterator is not empty.", storageMetaIterator.hasNext() == false);
-                } catch (IllegalArgumentException expected) {
-                    log.info("expected error", expected);
                 } catch (Exception unexpected) {
                     log.error("unexpected exception", unexpected);
                     Assert.fail("unexpected exception: " + unexpected.getMessage());
@@ -160,7 +135,7 @@ public class AdStorageAdapterIteratorTest {
                     Iterator<StorageMetadata> storageMetaIterator = adStorageAdapter.iterator(archiveName);
                     Assert.fail("iterator call should have failed but did not.");
                 } catch (IllegalArgumentException expected) {
-                    log.info("expected error", expected);
+                    log.info("caught expected: " + expected);
                 } catch (Exception unexpected) {
                     log.error("unexpected exception", unexpected);
                     Assert.fail("unexpected exception: " + unexpected.getMessage());
@@ -210,7 +185,7 @@ public class AdStorageAdapterIteratorTest {
                 while (sortedSetMeta.hasNext()) {
                     StorageMetadata expected = sortedSetMeta.next();
                     StorageMetadata actual = storageMeta.next();
-                    log.debug("compare: " + expected.getStorageLocation() + " vs " + actual.getStorageLocation());
+                    log.info("compare: " + expected.getStorageLocation() + " vs " + actual.getStorageLocation());
                     if (!expected.equals(actual)) {
                         Assert.fail("ordering not correct.");
                     }
