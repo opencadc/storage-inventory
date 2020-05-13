@@ -107,7 +107,7 @@ public class FileSyncTest {
     private static final String TEST_ROOT = "build/tmp/fsroot/critwallTests";
     private static final String TEST_RESOURCE_ID = "ivo://cadc.nrc.ca/data";
     private static Map<String,Object> daoConfig;
-    private static Map<String,Object> jobDaoConfig;
+    private static ConnectionConfig cc;
 
     // Used in the different test suites to pass to the function that populates
     // the test database.
@@ -128,10 +128,9 @@ public class FileSyncTest {
 
     public FileSyncTest() throws Exception {
         daoConfig = new TreeMap<String,Object>();
-        jobDaoConfig = new TreeMap<String,Object>();
         try {
             DBConfig dbrc = new DBConfig();
-            ConnectionConfig cc = dbrc.getConnectionConfig(TestUtil.SERVER, TestUtil.DATABASE);
+            cc = dbrc.getConnectionConfig(TestUtil.SERVER, TestUtil.DATABASE);
             DBUtil.createJNDIDataSource("jdbc/FileSyncTest", cc);
 
             daoConfig.put(SQLGenerator.class.getName(), SQLGenerator.class);
@@ -139,14 +138,6 @@ public class FileSyncTest {
             daoConfig.put("database", TestUtil.DATABASE);
             daoConfig.put("schema", TestUtil.SCHEMA);
             dao.setConfig(daoConfig);
-
-            // Create JNDIDataSource for FileSydJobs
-            DBUtil.createJNDIDataSource("jdbc/FileSyncTest_Job", cc);
-            jobDaoConfig.put(SQLGenerator.class.getName(), SQLGenerator.class);
-            jobDaoConfig.put("jndiDataSourceName", "jdbc/FileSyncTest_Job");
-            jobDaoConfig.put("database", TestUtil.DATABASE);
-            jobDaoConfig.put("schema", TestUtil.SCHEMA);
-//            jobDao.setConfig(daoConfig);
 
             String testDir = TEST_ROOT + File.separator + "testFileSync";
 
@@ -228,11 +219,6 @@ public class FileSyncTest {
             createTestDirectory(testDir);
 
             // set up 4-5 IRIS artifacts need: checksum, size, artifact uri.
-            // f429h000: ad:IRIS/I429B4H0.fits , 1008000, 	md5:e3922d47243563529f387ebdf00b66da
-            // f429h000: ad:IRIS/f429h000_preview_1024.png, 471897, md5:ffdd0ee84d648035b0b4bd8eac6c849e
-            // f427h000, 	ad:IRIS/I427B4H0.fits, 1008000, md5:a00cecbcd584a1177b70b2c0b6827cae
-            // f427h000, ad:IRIS/f427h000_preview_1024.png, 540880, md5:13323f84fda29e3335485d8bf5b61db2
-
             Artifact testArtifact = new Artifact(new URI("ad:IRIS/I429B4H0.fits"),
                 new URI("md5:e3922d47243563529f387ebdf00b66da"), new Date(),
                 1008000L);
@@ -286,16 +272,14 @@ public class FileSyncTest {
             int nthreads = 1;
             log.debug("nthreads: " + nthreads);
 
-            // Single bucket to start, for simplicity
-            // could use range ie 3-7 or 0-f for more complex tests
-//            String goodRange = "b-d";
+            // Can't count on computed bucket, so use entire range to cover all
             String goodRange = "0-f";
             BucketSelector bucketSel = new BucketSelector(goodRange);
             log.debug("bucket selector: " + bucketSel);
 
             URI locatorResourceID = new URI(TEST_RESOURCE_ID);
 
-            FileSync doit = new FileSync(daoConfig, jobDaoConfig, localStorage, locatorResourceID, bucketSel, nthreads);
+            FileSync doit = new FileSync(daoConfig, cc, localStorage, locatorResourceID, bucketSel, nthreads);
             doit.run();
 
             // check job succeeded by checking storage locations of at least one of
@@ -314,144 +298,11 @@ public class FileSyncTest {
                 localStorage.get(thirdStoredArtifact.storageLocation, dest);
             }
 
-
-
-
         } catch (Exception unexpected) {
             Assert.fail("unexpected exception: " + unexpected);
             log.debug(unexpected);
         }
         log.info("testValidJob - DONE");
     }
-
-//    @Test
-//    public void testInvalidJobBadChecksum() {
-//        final String testDir = TEST_ROOT + File.separator + "testValidJobBadChecksum";
-//        UUID artifactUUID = null;
-//
-//        try {
-//            createTestDirectory(testDir);
-//
-//            OpaqueFileSystemStorageAdapter sa = new OpaqueFileSystemStorageAdapter(new File(TEST_ROOT), 1);
-//
-//            URI artifactID = new URI(TEST_ARTIFACT_URI);
-//            URI resourceID = new URI(TEST_RESOURCE_ID);
-//
-//            // Set up an Artifact in the database to start.
-//            // Set checksum to the wrong value.
-//            Artifact artifactToUpdate = new Artifact(artifactID,
-//                new URI("md5:0123456789abcdef0123456789abcdef"), new Date(),
-//                1008000L);
-//
-//            log.debug("putting test artifact to database");
-//            dao.put(artifactToUpdate, true);
-//            // verify something was done
-//            artifactUUID = artifactToUpdate.getID();
-//            Assert.assertNotNull(artifactUUID);
-//            log.debug("test artifact stored: UUID is " + artifactUUID.toString());
-//
-//            FileSyncJob fsj = new FileSyncJob(artifactID, resourceID, sa, dao);
-//            fsj.run();
-//
-//            log.debug("finished run in failure test.");
-//            // check job failed by verifying that storage location not set
-//            Artifact storedArtifact = dao.get(artifactID);
-//            Assert.assertNull(storedArtifact.storageLocation);
-//
-//        } catch (Exception unexpected) {
-//            log.debug("unexpected exception: " + unexpected);
-//            Assert.fail("unexpected exception");
-//        }
-//        log.info("testValidJobBadChecksum - DONE");
-//    }
-//
-//    @Test
-//    public void testInvalidJobBadContentLen() {
-//        final String testDir = TEST_ROOT + File.separator + "testInvalidJobBadContentLen";
-//        UUID artifactUUID = null;
-//
-//        try {
-//            createTestDirectory(testDir);
-//
-//            OpaqueFileSystemStorageAdapter sa = new OpaqueFileSystemStorageAdapter(new File(TEST_ROOT), 1);
-//
-//            URI artifactID = new URI(TEST_ARTIFACT_URI);
-//            URI resourceID = new URI(TEST_RESOURCE_ID);
-//
-//            // Set up an Artifact in the database to start.
-//            // Set checksum to the wrong value.
-//            Artifact artifactToUpdate = new Artifact(artifactID,
-//                new URI("md5:646d3c548ffb98244a0fc52b60556082"), new Date(),
-//                2000000L);
-//
-//            log.debug("putting test artifact to database");
-//            dao.put(artifactToUpdate, true);
-//            // verify something was done
-//            artifactUUID = artifactToUpdate.getID();
-//            Assert.assertNotNull(artifactUUID);
-//            log.debug("test artifact stored: UUID is " + artifactUUID.toString());
-//
-//            FileSyncJob fsj = new FileSyncJob(artifactID, resourceID, sa, dao);
-//            fsj.run();
-//
-//            log.debug("finished run in failure test.");
-//            // check job failed by verifying that storage location not set
-//            Artifact storedArtifact = dao.get(artifactID);
-//            Assert.assertNull(storedArtifact.storageLocation);
-//
-//        } catch (Exception unexpected) {
-//            log.debug("unexpected exception: " + unexpected);
-//            Assert.fail("unexpected exception");
-//        }
-//
-//        log.info("testInvalidJobBadContentLen - DONE");
-//    }
-//
-//    @Test
-//    public void testStorageLocationNotNull() {
-//        final String testDir = TEST_ROOT + File.separator + "testStorageLocationNotNull";
-//        UUID artifactUUID = null;
-//
-//        try {
-//            createTestDirectory(testDir);
-//
-//            OpaqueFileSystemStorageAdapter sa = new OpaqueFileSystemStorageAdapter(new File(TEST_ROOT), 1);
-//
-//            URI artifactID = new URI(TEST_ARTIFACT_URI);
-//            URI resourceID = new URI(TEST_RESOURCE_ID);
-//
-//            // Set up an Artifact in the database to start.
-//            Artifact artifactToUpdate = new Artifact(artifactID,
-//                new URI("md5:646d3c548ffb98244a0fc52b60556082"), new Date(),
-//                1008000L);
-//            StorageLocation testLocation = new StorageLocation(new URI("uri:do-not-overwrite-me"));
-//            // Set storage location to a value, as FileSyncJob should quit
-//            // when it discovers it
-//            artifactToUpdate.storageLocation = testLocation;
-//
-//            log.debug("putting test artifact to database");
-//            dao.put(artifactToUpdate, true);
-//
-//            // verify something was done
-//            artifactUUID = artifactToUpdate.getID();
-//            Assert.assertNotNull(artifactUUID);
-//            log.debug("test artifact stored: UUID is " + artifactUUID.toString());
-//
-//            FileSyncJob fsj = new FileSyncJob(artifactID, resourceID, sa, dao);
-//            fsj.run();
-//
-//            log.debug("successfully finished FileSyncJob run in test.");
-//
-//            // check job fdid nothing to the storageLocation
-//            Artifact storedArtifact = dao.get(artifactID);
-//            Assert.assertEquals(testLocation, storedArtifact.storageLocation);
-//
-//        } catch (Exception unexpected) {
-//            log.debug("unexpected exception: " + unexpected);
-//            Assert.fail("unexpected exception");
-//        }
-//
-//        log.info("testStorageLocationNotNull - DONE");
-//    }
 
 }

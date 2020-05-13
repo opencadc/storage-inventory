@@ -210,24 +210,13 @@ public class Main {
                 "org.postgresql.Driver",
                 dbUrl);
 
-            try {
-                DBUtil.createJNDIDataSource(jndiSourceName, cc);
-            } catch (NamingException ne) {
-                throw new IllegalStateException("unable to access database: " + dbUrl, ne);
-            }
+//            try {
+//                DBUtil.createJNDIDataSource(jndiSourceName, cc);
+//            } catch (NamingException ne) {
+//                throw new IllegalStateException("unable to access database: " + dbUrl, ne);
+//            }
             daoConfig.put("jndiDataSourceName", jndiSourceName);
             log.debug("JNDIDataSource: " + jndiSourceName);
-
-            // FileSyncJob ArtifactDAO creation
-
-            jndiSourceName = "jdbc/critwallJobs";
-            try {
-                DBUtil.createJNDIDataSource(jndiSourceName, cc);
-            } catch (NamingException ne) {
-                throw new IllegalStateException("unable to access database: " + dbUrl, ne);
-            }
-            jobDaoConfig.put("jndiDataSourceName", jndiSourceName);
-            log.debug("job JNDIDataSource: " + jndiSourceName);
 
             // todo: this might be far more complicated than ncessary to create the storage adapter
             OpaqueFileSystemStorageAdapter localStorage = null;
@@ -255,7 +244,7 @@ public class Main {
             BucketSelector bucketSel = new BucketSelector(bucketSelectorPrefix);
             log.debug("bucket selector: " + bucketSel);
 
-            FileSync doit = new FileSync(daoConfig, jobDaoConfig, localStorage, resourceID, bucketSel, nthreads);
+            FileSync doit = new FileSync(daoConfig, cc, localStorage, resourceID, bucketSel, nthreads);
             doit.run();
             System.exit(0);
         } catch (Throwable unexpected) {
