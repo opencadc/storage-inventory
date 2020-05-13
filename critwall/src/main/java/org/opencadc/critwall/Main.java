@@ -202,22 +202,7 @@ public class Main {
                 throw new IllegalStateException("cannot instantiate SQLGenerator: " + generatorName, ex);
             }
             log.debug("SQL generator class made");
-
-            String jndiSourceName = "jdbc/critwall";
-            ConnectionConfig cc = new ConnectionConfig(null, null,
-                username,
-                password,
-                "org.postgresql.Driver",
-                dbUrl);
-
-//            try {
-//                DBUtil.createJNDIDataSource(jndiSourceName, cc);
-//            } catch (NamingException ne) {
-//                throw new IllegalStateException("unable to access database: " + dbUrl, ne);
-//            }
-            daoConfig.put("jndiDataSourceName", jndiSourceName);
-            log.debug("JNDIDataSource: " + jndiSourceName);
-
+            
             // todo: this might be far more complicated than ncessary to create the storage adapter
             OpaqueFileSystemStorageAdapter localStorage = null;
             try {
@@ -243,6 +228,15 @@ public class Main {
 
             BucketSelector bucketSel = new BucketSelector(bucketSelectorPrefix);
             log.debug("bucket selector: " + bucketSel);
+
+            String jndiSourceName = "jdbc/critwall";
+            ConnectionConfig cc = new ConnectionConfig(null, null,
+                username,
+                password,
+                "org.postgresql.Driver",
+                dbUrl);
+            daoConfig.put("jndiDataSourceName", jndiSourceName);
+            log.debug("JNDIDataSource: " + jndiSourceName);
 
             FileSync doit = new FileSync(daoConfig, cc, localStorage, resourceID, bucketSel, nthreads);
             doit.run();

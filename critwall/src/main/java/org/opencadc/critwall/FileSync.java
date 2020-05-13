@@ -104,7 +104,9 @@ public class FileSync {
      * @param selector selector implementation
      * @param nthreads number of threads in download thread pool
      */
-    public FileSync(Map<String,Object> daoConfig, ConnectionConfig connectionConfig,  OpaqueFileSystemStorageAdapter localStorage, URI resourceID, BucketSelector selector, int nthreads) {
+    public FileSync(Map<String,Object> daoConfig, ConnectionConfig connectionConfig,  OpaqueFileSystemStorageAdapter
+            localStorage, URI resourceID, BucketSelector selector, int nthreads) {
+
         InventoryUtil.assertNotNull(FileSync.class, "daoConfig", daoConfig);
         InventoryUtil.assertNotNull(FileSync.class, "connectionConfig", connectionConfig);
         InventoryUtil.assertNotNull(FileSync.class, "localStorage", localStorage);
@@ -155,7 +157,7 @@ public class FileSync {
             while (bucketSelector.hasNext()) {
                 String nextBucket = bucketSelector.next();
                 log.info("processing bucket " + nextBucket);
-                 Iterator<Artifact> unstoredArtifacts = artifactDAO.unstoredIterator(nextBucket);
+                Iterator<Artifact> unstoredArtifacts = artifactDAO.unstoredIterator(nextBucket);
 
                 while (unstoredArtifacts.hasNext()) {
                     Artifact curArtifact = unstoredArtifacts.next();
@@ -167,11 +169,10 @@ public class FileSync {
                     fsj.run();
                 }
             }
-
         } catch (Exception e) {
-          // capture database errors here and quit if there's a failure
-          log.error("error processing list of artifacts, at: " + currentArtifactInfo);
-          return;
+            // capture database errors here and quit if there's a failure
+            log.error("error processing list of artifacts, at: " + currentArtifactInfo);
+            return;
         }
 
         log.info("END - processing buckets.");
