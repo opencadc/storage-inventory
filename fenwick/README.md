@@ -19,6 +19,9 @@ org.opencadc.fenwick.db.username={dbuser}
 org.opencadc.fenwick.db.password={dbpassword}
 org.opencadc.fenwick.db.url=jdbc:postgresql://{server}/{database}
 
+# Enable Storage Site lookup to synchronize site locations on Artifacts
+org.opencadc.fenwick.trackSiteLocations={true|false}
+
 # remote inventory query service (luskan)
 org.opencadc.fenwick.queryService={resorceID of remote TAP service with inventory data model}
 
