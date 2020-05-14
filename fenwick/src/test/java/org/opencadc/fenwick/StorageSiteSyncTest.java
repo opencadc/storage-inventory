@@ -1,9 +1,10 @@
+
 /*
  ************************************************************************
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2019.                            (c) 2019.
+ *  (c) 2020.                            (c) 2020.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -62,65 +63,107 @@
  *  <http://www.gnu.org/licenses/>.      pas le cas, consultez :
  *                                       <http://www.gnu.org/licenses/>.
  *
+ *
  ************************************************************************
  */
 
-package org.opencadc.luskan;
+package org.opencadc.fenwick;
 
-import ca.nrc.cadc.db.version.InitDatabase;
+import ca.nrc.cadc.io.ResourceIterator;
+import ca.nrc.cadc.util.Log4jInit;
 
-import java.net.URL;
-import javax.sql.DataSource;
+import java.net.URI;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.List;
+
+import org.apache.log4j.Level;
+import org.junit.Assert;
+import org.junit.Test;
+import org.opencadc.inventory.StorageSite;
 
 
-/**
- * This class automates adding/updating the description of CAOM tables and views
- * in the tap_schema. This class assumes that it can re-use the tap_schema.ModelVersion
- * table (usually created by InitDatabaseTS in cadc-tap-schema library) and does
- * not try to create it.  The init includes base CAOM tables and IVOA views (ObsCore++),
- * but <em>does not include</em> aggregate (simple or materialised) views. The service
- * operator must create simple views manually or implement a mechanism to create and
- * update materialised views periodically.
- *
- * @author pdowler
- */
-public class InitLuskanSchemaContent extends InitDatabase {
+public class StorageSiteSyncTest {
+    static {
+        Log4jInit.setLevel("org.opencadc.fenwick", Level.DEBUG);
+    }
 
-    public static final String MODEL_NAME = "luskan-schema";
-    public static final String MODEL_VERSION = "0.5.1";
-    public static final String PREV_MODEL_VERSION = "0.5";
+    @Test
+    public void testStorageSiteMultiple() throws Exception {
+        final List<StorageSite> storageSiteList = new ArrayList<>();
+        storageSiteList.add(new StorageSite(URI.create("test:org.opencadc/SITE1"), "Site One"));
+        storageSiteList.add(new StorageSite(URI.create("test:org.opencadc/SITE2"), "Site Two"));
 
-    // the SQL is tightly coupled to cadc-tap-schema table names (for TAP-1.1)
-    static String[] CREATE_SQL = new String[] {
-        "inventory.tap_schema_content11.sql"
-    };
+        final StorageSiteSync testSubject = new StorageSiteSync(null, null) {
+            /**
+             * Override this method in tests to avoid recreating a TapClient.
+             *
+             * @return Iterator over Storage Sites, or empty Iterator.  Never null.
+             */
+            @Override
+            ResourceIterator<StorageSite> queryStorageSites() {
+                final Iterator<StorageSite> storageSiteIterator = storageSiteList.iterator();
+                return new ResourceIterator<StorageSite>() {
+                    @Override
+                    public void close() { }
 
-    // upgrade is normally the same as create since SQL is idempotent
-    static String[] UPGRADE_SQL = new String[] {
-        "inventory.tap_schema_content11.sql"
-    };
+                    @Override
+                    public boolean hasNext() {
+                        return storageSiteIterator.hasNext();
+                    }
 
-    /**
-     * Constructor. The schema argument is used to query the ModelVersion table
-     * as {schema}.ModelVersion.
-     *
-     * @param dataSource connection with write permission to tap_schema tables
-     * @param database   database name (should be null if not needed in SQL)
-     * @param schema     schema name (usually tap_schema)
-     */
-    public InitLuskanSchemaContent(DataSource dataSource, String database, String schema) {
-        super(dataSource, database, schema, MODEL_NAME, MODEL_VERSION, PREV_MODEL_VERSION);
-        for (String s : CREATE_SQL) {
-            createSQL.add(s);
-        }
+                    @Override
+                    public StorageSite next() {
+                        return storageSiteIterator.next();
+                    }
+                };
+            }
+        };
 
-        for (String s : UPGRADE_SQL) {
-            upgradeSQL.add(s);
+        try {
+            testSubject.doit();
+            Assert.fail("Should throw IllegalStateException");
+        } catch (IllegalStateException e) {
+            // Good.
+            Assert.assertEquals("Wrong message.", "More than one Storage Site found.", e.getMessage());
         }
     }
 
-    @Override
-    protected URL findSQL(String fname) {
-        return InitLuskanSchemaContent.class.getClassLoader().getResource("sql/" + fname);
+    @Test
+    public void testStorageSiteNotFound() throws Exception {
+        final StorageSiteSync testSubject = new StorageSiteSync(null, null) {
+            /**
+             * Override this method in tests to avoid recreating a TapClient.
+             *
+             * @return Iterator over Storage Sites, or empty Iterator.  Never null.
+             */
+            @Override
+            ResourceIterator<StorageSite> queryStorageSites() {
+                final Iterator<StorageSite> storageSiteIterator = Collections.emptyIterator();
+                return new ResourceIterator<StorageSite>() {
+                    @Override
+                    public void close() { }
+
+                    @Override
+                    public boolean hasNext() {
+                        return storageSiteIterator.hasNext();
+                    }
+
+                    @Override
+                    public StorageSite next() {
+                        return storageSiteIterator.next();
+                    }
+                };
+            }
+        };
+
+        try {
+            testSubject.doit();
+            Assert.fail("Should throw IllegalStateException");
+        } catch (IllegalStateException e) {
+            // Good.
+            Assert.assertEquals("Wrong message.", "No storage sites available to sync.", e.getMessage());
+        }
     }
 }
