@@ -72,19 +72,15 @@ package org.opencadc.fenwick;
 import ca.nrc.cadc.io.ResourceIterator;
 import ca.nrc.cadc.util.Log4jInit;
 
-import java.io.IOException;
 import java.net.URI;
-import java.security.MessageDigest;
 import java.util.ArrayList;
-import java.util.Calendar;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 
 import org.apache.log4j.Level;
 import org.junit.Assert;
-import org.junit.Ignore;
 import org.junit.Test;
-import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.StorageSite;
 
 
@@ -94,18 +90,10 @@ public class StorageSiteSyncTest {
     }
 
     @Test
-    @Ignore("Would require a StorageSiteDAO to be mocked.")
-    public void doit() throws Exception {
+    public void testStorageSiteMultiple() throws Exception {
         final List<StorageSite> storageSiteList = new ArrayList<>();
-        final Calendar cal = Calendar.getInstance();
-        cal.set(1977, Calendar.NOVEMBER, 25, 3, 12, 0);
-        cal.set(Calendar.MILLISECOND, 0);
-        final MessageDigest messageDigest = MessageDigest.getInstance("MD5");
-        final StorageSite testStorageSite = new StorageSite(URI.create("test:org.opencadc/SITE1"), "Site One");
-        InventoryUtil.assignLastModified(testStorageSite, cal.getTime());
-        InventoryUtil.assignMetaChecksum(testStorageSite, testStorageSite.computeMetaChecksum(messageDigest));
-
-        storageSiteList.add(testStorageSite);
+        storageSiteList.add(new StorageSite(URI.create("test:org.opencadc/SITE1"), "Site One"));
+        storageSiteList.add(new StorageSite(URI.create("test:org.opencadc/SITE2"), "Site Two"));
 
         final StorageSiteSync testSubject = new StorageSiteSync(null, null) {
             /**
@@ -118,48 +106,7 @@ public class StorageSiteSyncTest {
                 final Iterator<StorageSite> storageSiteIterator = storageSiteList.iterator();
                 return new ResourceIterator<StorageSite>() {
                     @Override
-                    public void close() throws IOException {
-
-                    }
-
-                    @Override
-                    public boolean hasNext() {
-                        return storageSiteIterator.hasNext();
-                    }
-
-                    @Override
-                    public StorageSite next() {
-                        return storageSiteIterator.next();
-                    }
-                };
-            }
-        };
-
-        final StorageSite storageSiteResult = testSubject.doit();
-
-        Assert.assertEquals("Wrong site list.", storageSiteList.get(0), storageSiteResult);
-    }
-
-    @Test
-    public void doitException() throws Exception {
-        final List<StorageSite> storageSiteList = new ArrayList<>();
-        storageSiteList.add(new StorageSite(URI.create("test:org.opencadc/SITE1"), "Site One"));
-        storageSiteList.add(new StorageSite(URI.create("test:org.opencadc/SITE2"), "Site Two"));
-
-        StorageSiteSync testSubject = new StorageSiteSync(null, null) {
-            /**
-             * Override this method in tests to avoid recreating a TapClient.
-             *
-             * @return Iterator over Storage Sites, or empty Iterator.  Never null.
-             */
-            @Override
-            ResourceIterator<StorageSite> queryStorageSites() {
-                final Iterator<StorageSite> storageSiteIterator = storageSiteList.iterator();
-                return new ResourceIterator<StorageSite>() {
-                    @Override
-                    public void close() throws IOException {
-
-                    }
+                    public void close() { }
 
                     @Override
                     public boolean hasNext() {
@@ -181,11 +128,11 @@ public class StorageSiteSyncTest {
             // Good.
             Assert.assertEquals("Wrong message.", "More than one Storage Site found.", e.getMessage());
         }
+    }
 
-        // Second kind of exception
-
-        storageSiteList.clear();
-        testSubject = new StorageSiteSync(null, null) {
+    @Test
+    public void testStorageSiteNotFound() throws Exception {
+        final StorageSiteSync testSubject = new StorageSiteSync(null, null) {
             /**
              * Override this method in tests to avoid recreating a TapClient.
              *
@@ -193,12 +140,10 @@ public class StorageSiteSyncTest {
              */
             @Override
             ResourceIterator<StorageSite> queryStorageSites() {
-                final Iterator<StorageSite> storageSiteIterator = storageSiteList.iterator();
+                final Iterator<StorageSite> storageSiteIterator = Collections.emptyIterator();
                 return new ResourceIterator<StorageSite>() {
                     @Override
-                    public void close() throws IOException {
-
-                    }
+                    public void close() { }
 
                     @Override
                     public boolean hasNext() {
@@ -219,56 +164,6 @@ public class StorageSiteSyncTest {
         } catch (IllegalStateException e) {
             // Good.
             Assert.assertEquals("Wrong message.", "No storage sites available to sync.", e.getMessage());
-        }
-    }
-
-    @Test
-    @Ignore("Would require a StorageSiteDAO to be mocked.")
-    public void doitInvalidChecksum() throws Exception {
-        final List<StorageSite> storageSiteList = new ArrayList<>();
-        final Calendar cal = Calendar.getInstance();
-        cal.set(1977, Calendar.NOVEMBER, 25, 3, 12, 0);
-        cal.set(Calendar.MILLISECOND, 0);
-        final StorageSite testStorageSite = new StorageSite(URI.create("test:org.opencadc/MAINSITE"), "Main Site");
-        InventoryUtil.assignLastModified(testStorageSite, cal.getTime());
-        InventoryUtil.assignMetaChecksum(testStorageSite, URI.create("md5:incorrect"));
-
-        storageSiteList.add(testStorageSite);
-
-        final StorageSiteSync testSubject = new StorageSiteSync(null, null) {
-            /**
-             * Override this method in tests to avoid recreating a TapClient.
-             *
-             * @return Iterator over Storage Sites, or empty Iterator.  Never null.
-             */
-            @Override
-            ResourceIterator<StorageSite> queryStorageSites() {
-                final Iterator<StorageSite> storageSiteIterator = storageSiteList.iterator();
-                return new ResourceIterator<StorageSite>() {
-                    @Override
-                    public void close() throws IOException {
-
-                    }
-
-                    @Override
-                    public boolean hasNext() {
-                        return storageSiteIterator.hasNext();
-                    }
-
-                    @Override
-                    public StorageSite next() {
-                        return storageSiteIterator.next();
-                    }
-                };
-            }
-        };
-
-        try {
-            testSubject.doit();
-        } catch (IllegalStateException e) {
-            // Good.
-            Assert.assertTrue("Wrong message.", e.getMessage().contains(
-                    "Discovered Storage Site checksum (md5:incorrect) does not match computed value"));
         }
     }
 }

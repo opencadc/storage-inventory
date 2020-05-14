@@ -69,7 +69,6 @@
 
 package org.opencadc.fenwick;
 
-import ca.nrc.cadc.auth.AuthenticationUtil;
 import ca.nrc.cadc.auth.NotAuthenticatedException;
 import ca.nrc.cadc.auth.SSLUtil;
 import ca.nrc.cadc.db.ConnectionConfig;
@@ -80,14 +79,12 @@ import ca.nrc.cadc.io.ResourceIterator;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.util.Log4jInit;
-import ca.nrc.cadc.util.StringUtil;
 
 import java.io.File;
 import java.io.IOException;
 import java.net.URI;
 import java.security.AccessControlException;
 import java.security.MessageDigest;
-import java.security.PrivilegedAction;
 import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -96,6 +93,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
+import javax.security.auth.Subject;
 
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
@@ -109,8 +107,6 @@ import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.SQLGenerator;
 import org.opencadc.inventory.db.StorageSiteDAO;
 import org.opencadc.tap.TapClient;
-
-import javax.security.auth.Subject;
 
 
 public class StorageSiteSyncTest {
@@ -168,18 +164,8 @@ public class StorageSiteSyncTest {
         }
     }
 
-    /**
-     * Test StorageSite synchronization.
-     * Test one: Populate the local inventory database with a StorageSite from the remote Luskan.
-     * Test two: Ensure the same site is put again without error.
-     * Test three: Ensure a failed execution if that same site has a different checksum than its computed one.
-     * Test four: Ensure a failed execution if multiple sites are found.
-     * Test five: Ensure a failed execution if no sites are found.
-     *
-     * @throws Exception
-     */
     @Test
-    public void doSiteSync() throws Exception {
+    public void intTestSiteSyncOK() throws Exception {
         final MessageDigest messageDigest = MessageDigest.getInstance("MD5");
         final Subject subject = SSLUtil.createSubject(PROXY_PEM);
         final TapClient<StorageSite> tapClient = new TapClient<>(URI.create(TestUtil.LUSKAN_URI));
@@ -201,12 +187,30 @@ public class StorageSiteSyncTest {
         Assert.assertEquals("Wrong site resource ID.", URI.create("ivo://cadc.nrc.ca/minoc"),
                             storageSites[0].getResourceID());
         Assert.assertEquals("Wrong checksum.", expectedChecksum, storageSites[0].getMetaChecksum());
+    }
 
-        //
-        // Test two
-        //
-        // Running it again should be idempotent
-        //
+    @Test
+    public void intTestSiteSyncIdempotent() throws Exception {
+        final MessageDigest messageDigest = MessageDigest.getInstance("MD5");
+        final Subject subject = SSLUtil.createSubject(PROXY_PEM);
+        final TapClient<StorageSite> tapClient = new TapClient<>(URI.create(TestUtil.LUSKAN_URI));
+
+        Assert.assertTrue("Sites should be empty.", storageSiteDAO.list().isEmpty());
+
+        final StorageSiteSync storageSiteSync = new StorageSiteSync(tapClient, storageSiteDAO);
+        Subject.doAs(subject, (PrivilegedExceptionAction<StorageSite>) storageSiteSync::doit);
+
+        final Set<StorageSite> storageSiteSet = storageSiteDAO.list();
+        Assert.assertEquals("Should be a single site.", 1, storageSiteSet.size());
+
+        final StorageSite[] storageSites = storageSiteSet.toArray(new StorageSite[0]);
+        final URI expectedChecksum = storageSites[0].computeMetaChecksum(messageDigest);
+        Assert.assertEquals("Wrong site name.", "minoc", storageSites[0].getName());
+        Assert.assertEquals("Wrong site resource ID.", URI.create("ivo://cadc.nrc.ca/minoc"),
+                            storageSites[0].getResourceID());
+        Assert.assertEquals("Wrong checksum.", expectedChecksum, storageSites[0].getMetaChecksum());
+
+        // PUT it again.
         Subject.doAs(subject, (PrivilegedExceptionAction<StorageSite>) storageSiteSync::doit);
 
         final Set<StorageSite> storageSiteSetVerify = storageSiteDAO.list();
@@ -217,6 +221,22 @@ public class StorageSiteSyncTest {
         Assert.assertEquals("Wrong site resource ID.", URI.create("ivo://cadc.nrc.ca/minoc"),
                             storageSitesVerify[0].getResourceID());
         Assert.assertEquals("Wrong checksum.", expectedChecksum, storageSitesVerify[0].getMetaChecksum());
+    }
+
+    @Test
+    public void intTestSiteSyncChecksumError() throws Exception {
+        final MessageDigest messageDigest = MessageDigest.getInstance("MD5");
+        final Subject subject = SSLUtil.createSubject(PROXY_PEM);
+        final TapClient<StorageSite> tapClient = new TapClient<>(URI.create(TestUtil.LUSKAN_URI));
+
+        Assert.assertTrue("Sites should be empty.", storageSiteDAO.list().isEmpty());
+
+        final StorageSiteSync storageSiteSync = new StorageSiteSync(tapClient, storageSiteDAO);
+        Subject.doAs(subject, (PrivilegedExceptionAction<StorageSite>) storageSiteSync::doit);
+
+        // Read in the new Storage Site.  There should only be one.
+        final Set<StorageSite> storageSiteSet = storageSiteDAO.list();
+        final StorageSite storageSite = storageSiteSet.toArray(new StorageSite[0])[0];
 
         // ****************
         // Error conditions
@@ -231,7 +251,7 @@ public class StorageSiteSyncTest {
                     throws AccessControlException, ResourceNotFoundException, ByteLimitExceededException,
                            NotAuthenticatedException, IllegalArgumentException, TransientException, IOException,
                            InterruptedException {
-                return new ResourceIteratorModifiedChecksum(storageSites[0]);
+                return new ResourceIteratorModifiedChecksum(storageSite);
             }
         };
 
@@ -242,15 +262,18 @@ public class StorageSiteSyncTest {
             Assert.fail("Should throw IllegalStateException.");
         } catch (IllegalStateException e) {
             // Good.
+            final URI expectedChecksum = storageSite.computeMetaChecksum(messageDigest);
             Assert.assertEquals("Wrong error message.",
                                 String.format("Discovered Storage Site checksum (md5:889900) does not "
                                               + "match computed value (%s).", expectedChecksum),
                                 e.getMessage());
         }
+    }
 
-        //
-        // Test four
-        //
+    @Test
+    public void intTestSiteSyncMultiple() throws Exception {
+        final Subject subject = SSLUtil.createSubject(PROXY_PEM);
+        final TapClient<StorageSite> tapClient = new TapClient<>(URI.create(TestUtil.LUSKAN_URI));
         final StorageSiteSync storageSiteSyncMultipleSitesError = new StorageSiteSync(tapClient, storageSiteDAO) {
             @Override
             ResourceIterator<StorageSite> queryStorageSites()
@@ -270,10 +293,24 @@ public class StorageSiteSyncTest {
             // Good.
             Assert.assertEquals("Wrong error message.", "More than one Storage Site found.", e.getMessage());
         }
+    }
 
-        //
-        // Test five
-        //
+    /**
+     * Test StorageSite synchronization.
+     * Test four: Ensure a failed execution if multiple sites are found.
+     * Test five: Ensure a failed execution if no sites are found.
+     *
+     */
+    @Test
+    public void intTestSiteSyncNoSitesFound() throws Exception {
+        final Subject subject = SSLUtil.createSubject(PROXY_PEM);
+        final TapClient<StorageSite> tapClient = new TapClient<>(URI.create(TestUtil.LUSKAN_URI));
+
+        Assert.assertTrue("Sites should be empty.", storageSiteDAO.list().isEmpty());
+
+        final StorageSiteSync storageSiteSync = new StorageSiteSync(tapClient, storageSiteDAO);
+        Subject.doAs(subject, (PrivilegedExceptionAction<StorageSite>) storageSiteSync::doit);
+
         final StorageSiteSync storageSiteSyncEmptySitesError = new StorageSiteSync(tapClient, storageSiteDAO) {
             @Override
             ResourceIterator<StorageSite> queryStorageSites()
