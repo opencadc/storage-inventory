@@ -110,17 +110,17 @@ public class FileSyncJob implements Runnable {
 
     private final ArtifactDAO artifactDAO;
     private final URI artifactID;
-    private final URI locatorResourceID;
+    private final URI locatorService;
     private final StorageAdapter storageAdapter;
 
-    public FileSyncJob(URI artifactID, URI resourceID, StorageAdapter storageAdapter, ArtifactDAO artifactDAO) {
+    public FileSyncJob(URI artifactID, URI locatorServiceID, StorageAdapter storageAdapter, ArtifactDAO artifactDAO) {
         InventoryUtil.assertNotNull(FileSyncJob.class, "artifactID", artifactID);
-        InventoryUtil.assertNotNull(FileSyncJob.class, "locatorResourceID", resourceID);
+        InventoryUtil.assertNotNull(FileSyncJob.class, "locatorServiceID", locatorServiceID);
         InventoryUtil.assertNotNull(FileSyncJob.class, "storageAdapter", storageAdapter);
         InventoryUtil.assertNotNull(FileSyncJob.class, "artifactDAO", artifactDAO);
 
         this.artifactID = artifactID;
-        this.locatorResourceID = resourceID;
+        this.locatorService = locatorServiceID;
         this.storageAdapter = storageAdapter;
 
         this.artifactDAO = artifactDAO;
@@ -131,7 +131,7 @@ public class FileSyncJob implements Runnable {
 
         final List<URL> urlList;
         try {
-            urlList = getdownloadURLs(this.locatorResourceID, this.artifactID);
+            urlList = getdownloadURLs(this.locatorService, this.artifactID);
         } catch (Exception e) {
             // fail - nothing can be done without the list, negotiation cannot be retried
             log.error("transfer negotiation failed.");

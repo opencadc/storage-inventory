@@ -74,11 +74,14 @@ import java.net.URI;
 import java.util.Iterator;
 import java.util.Map;
 
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import javax.naming.NamingException;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.db.ArtifactDAO;
+import org.opencadc.inventory.storage.StorageAdapter;
 import org.opencadc.inventory.storage.fs.OpaqueFileSystemStorageAdapter;
 
 
@@ -89,10 +92,11 @@ public class FileSync {
     
     private final ArtifactDAO artifactDAO;
     private final ArtifactDAO jobArtifactDAO;
-    private final URI locatorResourceID;
+    private final URI locatorService;
     private final BucketSelector selector;
     private final int nthreads;
-    private final OpaqueFileSystemStorageAdapter storageAdapter;
+    private final StorageAdapter storageAdapter;
+    ExecutorService executor = null;
 
     /**
      * Constructor.
@@ -100,41 +104,41 @@ public class FileSync {
      * @param daoConfig config map to pass to cadc-inventory-db DAO classes
      * @param connectionConfig ConnectionConfig object to use for creating jndiDataSource
      * @param localStorage adapter to put to local storage
-     * @param resourceID identifier for the remote query service (locator)
+     * @param locatorServiceID identifier for the remote query service (locator)
      * @param selector selector implementation
      * @param nthreads number of threads in download thread pool
      */
-    public FileSync(Map<String,Object> daoConfig, ConnectionConfig connectionConfig,  OpaqueFileSystemStorageAdapter
-            localStorage, URI resourceID, BucketSelector selector, int nthreads) {
+    public FileSync(Map<String,Object> daoConfig, ConnectionConfig connectionConfig,  StorageAdapter
+            localStorage, URI locatorServiceID, BucketSelector selector, int nthreads) {
 
         InventoryUtil.assertNotNull(FileSync.class, "daoConfig", daoConfig);
         InventoryUtil.assertNotNull(FileSync.class, "connectionConfig", connectionConfig);
         InventoryUtil.assertNotNull(FileSync.class, "localStorage", localStorage);
-        InventoryUtil.assertNotNull(FileSync.class, "resourceID", resourceID);
+        InventoryUtil.assertNotNull(FileSync.class, "locatorServiceID", locatorServiceID);
         InventoryUtil.assertNotNull(FileSync.class, "selector", selector);
 
         if (nthreads <= 0 || nthreads > MAX_THREADS) {
             throw new IllegalArgumentException("invalid config: nthreads must be in [1," + MAX_THREADS + "], found: " + nthreads);
         }
 
-        this.locatorResourceID = resourceID;
+        this.locatorService = locatorServiceID;
         this.selector = selector;
         this.nthreads = nthreads;
 
         // For managing the artifact iterator FileSync loops over
         try {
             // Make FileSync ArtifactDAO instance
-            String jndiSourceName = (String)daoConfig.get("jndiDataSourceName");
+            String jndiSourceName = "jdbc/fileSync";
+            daoConfig.put("jndiDataSourceName", jndiSourceName);
             DBUtil.createJNDIDataSource(jndiSourceName,connectionConfig);
 
             this.artifactDAO = new ArtifactDAO();
             this.artifactDAO.setConfig(daoConfig);
 
             // Make FileSyncJob ArtifactDAO instance
-            String jndiSourceNameJobs = (String)daoConfig.get("jndiDataSourceName") + "Job";
-            DBUtil.createJNDIDataSource(jndiSourceNameJobs,connectionConfig);
-
-            daoConfig.put("jndiDataSourceName", jndiSourceNameJobs);
+            jndiSourceName = "jdbc/fileSyncJob";
+            daoConfig.put("jndiDataSourceName", jndiSourceName);
+            DBUtil.createJNDIDataSource(jndiSourceName,connectionConfig);
 
             // For passing to FileSyncJob
             this.jobArtifactDAO = new ArtifactDAO();
@@ -152,19 +156,20 @@ public class FileSync {
     public void run() {
         Iterator<String> bucketSelector = selector.getBucketIterator();
         String currentArtifactInfo = "";
+        executor = Executors.newFixedThreadPool(this.nthreads);
 
         try {
             while (bucketSelector.hasNext()) {
-                String nextBucket = bucketSelector.next();
-                log.info("processing bucket " + nextBucket);
-                Iterator<Artifact> unstoredArtifacts = artifactDAO.unstoredIterator(nextBucket);
+                String bucket = bucketSelector.next();
+                log.info("processing bucket " + bucket);
+                Iterator<Artifact> unstoredArtifacts = artifactDAO.unstoredIterator(bucket);
 
                 while (unstoredArtifacts.hasNext()) {
                     Artifact curArtifact = unstoredArtifacts.next();
-                    currentArtifactInfo = "bucket: " + nextBucket + " artifact: " + curArtifact.getURI();
+                    currentArtifactInfo = "bucket: " + bucket + " artifact: " + curArtifact.getURI();
                     log.debug("processing: " + currentArtifactInfo);
 
-                    FileSyncJob fsj = new FileSyncJob(curArtifact.getURI(), this.locatorResourceID,
+                    FileSyncJob fsj = new FileSyncJob(curArtifact.getURI(), this.locatorService,
                         this.storageAdapter, this.jobArtifactDAO);
                     fsj.run();
                 }
