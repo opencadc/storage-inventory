@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2019.                            (c) 2019.
+*  (c) 2020.                            (c) 2020.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -65,12 +65,16 @@
 ************************************************************************
 */
 
-package org.opencadc.critwall;
+package org.opencadc.fenwick;
+
+import org.apache.log4j.Logger;
+
+import ca.nrc.cadc.util.FileUtil;
 
 import java.io.File;
 import java.io.FileReader;
 import java.util.Properties;
-import org.apache.log4j.Logger;
+
 
 /**
  *
@@ -79,33 +83,33 @@ import org.apache.log4j.Logger;
 public class TestUtil {
     private static final Logger log = Logger.getLogger(TestUtil.class);
 
-    static String SERVER = "CRITWALL_TEST";
+    static String SERVER = "INVENTORY_TEST";
     static String DATABASE = "cadctest";
-    static String SCHEMA = "inventory"
-
+    static String SCHEMA = "inventory";
     static String TABLE_PREFIX = null;
-    
+    static String LUSKAN_URI = "ivo://cadc.nrc.ca/luskan";
+
     static {
         try {
-            File opt = new File("intTest.properties");
+            File opt = FileUtil.getFileFromResource("intTest.properties", TestUtil.class);
             if (opt.exists()) {
                 Properties props = new Properties();
                 props.load(new FileReader(opt));
-                String s = props.getProperty("server");
-                if (s != null) {
-                    SERVER = s.trim();
+
+                if (props.containsKey("server")) {
+                    SERVER = props.getProperty("server").trim();
                 }
-                s = props.getProperty("database");
-                if (s != null) {
-                    DATABASE = s.trim();
+                if (props.containsKey("database")) {
+                    DATABASE = props.getProperty("database").trim();
                 }
-                s = props.getProperty("schema");
-                if (s != null) {
-                    SCHEMA = s.trim();
+                if (props.containsKey("schema")) {
+                    SCHEMA = props.getProperty("schema").trim();
                 }
-                s = props.getProperty("tablePrefix");
-                if (s != null) {
-                    TABLE_PREFIX = s.trim();
+                if (props.containsKey("tablePrefix")) {
+                    TABLE_PREFIX = props.getProperty("tablePrefix").trim();
+                }
+                if (props.containsKey("luskanURI")) {
+                    LUSKAN_URI = props.getProperty("luskanURI").trim();
                 }
             }
             log.debug("intTest database config: " + SERVER + " " + DATABASE + " " + SCHEMA + " " + TABLE_PREFIX);
