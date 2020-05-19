@@ -140,7 +140,7 @@ public class IncludeArtifacts implements ArtifactSelector {
      * @throws IllegalStateException     For any invalid configuration.
      */
     @Override
-    public Iterator<String> iterator() throws ResourceNotFoundException, IOException, IllegalStateException {
+    public List<String> getConstraints() throws ResourceNotFoundException, IOException, IllegalStateException {
         final List<String> whereClauses = new ArrayList<>();
         loadClauses(whereClauses);
         if (whereClauses.isEmpty()) {
@@ -149,7 +149,7 @@ public class IncludeArtifacts implements ArtifactSelector {
                                   + "with the .sql extension whose content begins with the keyword 'WHERE'.",
                                   selectorConfigDir));
         }
-        return whereClauses.iterator();
+        return whereClauses;
     }
 
     /**
