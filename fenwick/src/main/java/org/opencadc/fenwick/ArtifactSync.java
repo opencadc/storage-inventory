@@ -71,22 +71,19 @@ package org.opencadc.fenwick;
 import ca.nrc.cadc.io.ResourceIterator;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
+import ca.nrc.cadc.util.StringUtil;
 
 import java.io.IOException;
 import java.net.URI;
-import java.util.Arrays;
 import java.util.Date;
-import java.util.Iterator;
-import java.util.Set;
+import java.util.List;
 import java.util.UUID;
 
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.InventoryUtil;
-import org.opencadc.inventory.SiteLocation;
-import org.opencadc.inventory.StorageLocation;
-import org.opencadc.inventory.StorageSite;
 import org.opencadc.tap.TapClient;
+import org.opencadc.tap.TapRowMapper;
 
 
 /**
@@ -100,33 +97,28 @@ public class ArtifactSync {
     // First string replace is the date to verify, and the second is the constraint clause as set by the selector.
     private static final String ARTIFACT_QUERY_TEMPLATE =
             "SELECT id, uri, contentchecksum, contentlastmodified, contentlength, contenttype, "
-            + "contentencoding, lastmodified, metachecksum FROM inventory.Artifact WHERE lastModified >= %s%s";
+            + "contentencoding, lastmodified, metachecksum FROM inventory.Artifact WHERE lastModified >= '%s' %s "
+            + "ORDER BY lastmodified";
 
-    private final ArtifactSelector selector;
     private final TapClient<Artifact> tapClient;
     private final Date currLastModified;
-    private final StorageSite storageSite;
 
     /**
      * Complete constructor.
      *
-     * @param selector         The ArtifactSelector used to constrain the query.
      * @param tapClient        The TapClient to interface with a site's TAP (Luskan) service.
      * @param currLastModified The last modified date to start the query at.
-     * @param storageSite      The Storage Site to set on the Artifact as provided by the StorageSiteSync.
      */
-    public ArtifactSync(final ArtifactSelector selector, final TapClient<Artifact> tapClient,
-                        final Date currLastModified, final StorageSite storageSite) {
-        this.selector = selector;
+    public ArtifactSync(final TapClient<Artifact> tapClient, final Date currLastModified) {
         this.tapClient = tapClient;
         this.currLastModified = currLastModified;
-        this.storageSite = storageSite;
     }
 
     /**
      * Execute the query and return the iterator back.
      *
-     * @return ResourceIterator over Artifact instances matching the selector's query parameters.
+     * @param  includeClause        The String clause to be AND'd to the query.
+     * @return ResourceIterator over Artifact instances matching this sync's constraint(s).
      *
      * @throws ResourceNotFoundException For any missing required configuration that is missing.
      * @throws IOException               For unreadable configuration files.
@@ -134,13 +126,33 @@ public class ArtifactSync {
      * @throws TransientException        temporary failure of TAP service: same call could work in future
      * @throws InterruptedException      thread interrupted
      */
-    public ResourceIterator<Artifact> iterator()
+    public ResourceIterator<Artifact> iterator(final String includeClause)
             throws ResourceNotFoundException, IOException, IllegalStateException, TransientException,
                    InterruptedException {
+        final String query = String.format(ARTIFACT_QUERY_TEMPLATE, currLastModified,
+                                           StringUtil.hasText(includeClause) ? "AND (" + includeClause.trim() + ")"
+                                                                             : "");
 
-        final String query = assembleQuery();
         LOGGER.debug("\nExecuting query '" + query + "'\n");
-        return tapClient.execute(query, row -> {
+        return tapClient.execute(query, new ArtifactRowMapper());
+    }
+
+    private static final class ArtifactRowMapper implements TapRowMapper<Artifact> {
+
+        /**
+         * Map raw row data into a domain object. The values in the row (list) will
+         * already be converted from text or binary into suitable immutable value objects,
+         * such as Double, Integer, String... or extended types (DALI xtypes) (Point,
+         * Circle, Date, etc.) or custom xtypes (URI, UUID, etc.) supported by the cadc-dali
+         * library. The presence of null values is allowed and depends entirely on the TAP
+         * table that was queried. The number and order of values is consistent with the
+         * list of items in the select clause of the ADQL query.
+         *
+         * @param row list of values for one row
+         * @return domain-specific value object created for single row
+         */
+        @Override
+        public Artifact mapRow(final List<Object> row) {
             int index = 0;
             final Artifact artifact = new Artifact((UUID) row.get(index++),
                                                    (URI) row.get(index++),
@@ -153,32 +165,7 @@ public class ArtifactSync {
             InventoryUtil.assignMetaChecksum(artifact, (URI) row.get(index++));
             InventoryUtil.assignLastModified(artifact, (Date) row.get(index));
 
-            artifact.siteLocations.add(new SiteLocation(storageSite.getID()));
-
             return artifact;
-        });
-    }
-
-    /**
-     * Create a query for the TAP (Luskan) query.  This method will tally up the selector's clauses into a formulated
-     * query for the TapClient.
-     *
-     * <p>A potential risk with this method is that there is no enforcement for at least one clause.  This could result
-     * in a very large query.
-     *
-     * @return String ADQL query with expected WHERE clauses.
-     *
-     * @throws ResourceNotFoundException For any missing required configuration that is missing.
-     * @throws IOException               For unreadable configuration files.
-     * @throws IllegalStateException     For any invalid configuration.
-     */
-    private String assembleQuery() throws ResourceNotFoundException, IOException, IllegalStateException {
-        final StringBuilder whereClauseBuilder = new StringBuilder();
-        final Iterator<String> whereClauseIterator = selector.iterator();
-
-        whereClauseIterator.forEachRemaining(clause -> whereClauseBuilder.append(" AND (").append(clause.trim())
-                                                                         .append(")"));
-
-        return String.format(ARTIFACT_QUERY_TEMPLATE, currLastModified, whereClauseBuilder.toString());
+        }
     }
 }
