@@ -68,7 +68,6 @@
 package org.opencadc.critwall;
 
 import ca.nrc.cadc.db.ConnectionConfig;
-import ca.nrc.cadc.db.DBUtil;
 import ca.nrc.cadc.util.Log4jInit;
 
 import ca.nrc.cadc.util.MultiValuedProperties;
@@ -80,7 +79,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 
-import javax.naming.NamingException;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.db.SQLGenerator;
@@ -166,8 +164,8 @@ public class Main {
                 errMsg.append(StorageAdapter.class.getName() + " ");
             }
 
-            String locatorResourceIdStr = props.getFirstPropertyValue(LOCATOR_SERVICE_CONFIG_KEY);
-            if (!StringUtil.hasLength(locatorResourceIdStr)) {
+            String locatorSourceStr = props.getFirstPropertyValue(LOCATOR_SERVICE_CONFIG_KEY);
+            if (!StringUtil.hasLength(locatorSourceStr)) {
                 errMsg.append(LOCATOR_SERVICE_CONFIG_KEY + " ");
             }
 
@@ -198,21 +196,7 @@ public class Main {
             }
             log.debug("SQL generator class made");
 
-            String jndiSourceName = "jdbc/critwall";
-            ConnectionConfig cc = new ConnectionConfig(null, null,
-                username,
-                password,
-                "org.postgresql.Driver",
-                dbUrl);
-
-            try {
-                DBUtil.createJNDIDataSource(jndiSourceName, cc);
-            } catch (NamingException ne) {
-                throw new IllegalStateException("unable to access database: " + dbUrl, ne);
-            }
-            daoConfig.put("jndiDataSourceName", jndiSourceName);
-            log.debug("JNDIDataSource: " + jndiSourceName);
-
+            // todo: this might be far more complicated than ncessary to create the storage adapter
             StorageAdapter localStorage = null;
             try {
                 Class c = Class.forName(adapterClass);
@@ -224,13 +208,13 @@ public class Main {
             }
             log.debug("storage adapter: " + localStorage);
 
-            URI resourceID = null;
+            URI locatorService = null;
             try {
-                resourceID = new URI(locatorResourceIdStr);
+                locatorService = new URI(locatorSourceStr);
             } catch (URISyntaxException us) {
-                throw new IllegalStateException("invalid locator service in critwall.properties: " + locatorResourceIdStr);
+                throw new IllegalStateException("invalid locator service in critwall.properties: " + locatorSourceStr);
             }
-            log.debug("resourceID: " + resourceID.toString());
+            log.debug("locatorService: " + locatorService.toString());
 
             int nthreads = Integer.parseInt(nthreadStr);
             log.debug("nthreads: " + nthreads);
@@ -238,7 +222,13 @@ public class Main {
             BucketSelector bucketSel = new BucketSelector(bucketSelectorPrefix);
             log.debug("bucket selector: " + bucketSel);
 
-            FileSync doit = new FileSync(daoConfig, localStorage, resourceID, bucketSel, nthreads);
+            ConnectionConfig cc = new ConnectionConfig(null, null,
+                username,
+                password,
+                "org.postgresql.Driver",
+                dbUrl);
+
+            FileSync doit = new FileSync(daoConfig, cc, localStorage, locatorService, bucketSel, nthreads);
             doit.run();
             System.exit(0);
         } catch (Throwable unexpected) {
