@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2019.                            (c) 2019.
+*  (c) 2020.                            (c) 2020.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -65,49 +65,59 @@
 ************************************************************************
 */
 
-package org.opencadc.inventory;
+package org.opencadc.fenwick;
 
-import java.util.UUID;
+import org.apache.log4j.Logger;
+
+import ca.nrc.cadc.util.FileUtil;
+
+import java.io.File;
+import java.io.FileReader;
+import java.util.Properties;
+
 
 /**
- * Reference to a StorageSite. This is currently just a wrapper around the globally unique
- * storage site identifier; it may evolve.
- * 
+ *
  * @author pdowler
  */
-public class SiteLocation implements Comparable<SiteLocation> {
-    private final UUID siteID;
-    
-    public SiteLocation(UUID siteID) {
-        InventoryUtil.assertNotNull(SiteLocation.class, "siteID", siteID);
-        this.siteID = siteID;
-    }
+public class TestUtil {
+    private static final Logger log = Logger.getLogger(TestUtil.class);
 
-    public UUID getSiteID() {
-        return siteID;
-    }
+    static String SERVER = "INVENTORY_TEST";
+    static String DATABASE = "cadctest";
+    static String SCHEMA = "inventory";
+    static String TABLE_PREFIX = null;
+    static String LUSKAN_URI = "ivo://cadc.nrc.ca/luskan";
 
-    @Override
-    public String toString() {
-        StringBuilder sb = new StringBuilder();
-        sb.append(this.getClass().getSimpleName());
-        sb.append("[");
-        sb.append(siteID);
-        sb.append("]");
-        return sb.toString();
-    }
+    static {
+        try {
+            File opt = FileUtil.getFileFromResource("intTest.properties", TestUtil.class);
+            if (opt.exists()) {
+                Properties props = new Properties();
+                props.load(new FileReader(opt));
 
-    @Override
-    public boolean equals(Object o) {
-        if (o == null) {
-            return false;
+                if (props.containsKey("server")) {
+                    SERVER = props.getProperty("server").trim();
+                }
+                if (props.containsKey("database")) {
+                    DATABASE = props.getProperty("database").trim();
+                }
+                if (props.containsKey("schema")) {
+                    SCHEMA = props.getProperty("schema").trim();
+                }
+                if (props.containsKey("tablePrefix")) {
+                    TABLE_PREFIX = props.getProperty("tablePrefix").trim();
+                }
+                if (props.containsKey("luskanURI")) {
+                    LUSKAN_URI = props.getProperty("luskanURI").trim();
+                }
+            }
+            log.debug("intTest database config: " + SERVER + " " + DATABASE + " " + SCHEMA + " " + TABLE_PREFIX);
+        } catch (Exception oops) {
+            log.debug("failed to load/read optional db config", oops);
         }
-        SiteLocation s = (SiteLocation) o;
-        return siteID.equals(s.siteID);
     }
-
-    @Override
-    public int compareTo(SiteLocation t) {
-        return siteID.compareTo(t.siteID);
+    
+    private TestUtil() { 
     }
 }

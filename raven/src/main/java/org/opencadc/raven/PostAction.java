@@ -223,8 +223,7 @@ public class PostAction extends RestAction {
         }
         
         // gather all copies of the artifact
-        List<SiteLocation> locations = artifact.siteLocations;
-        if (locations == null || locations.size() == 0) {
+        if (artifact.siteLocations.isEmpty()) {
             throw new ResourceNotFoundException("no copies");
         }
         
@@ -242,7 +241,7 @@ public class PostAction extends RestAction {
         // and check for updates to that list periodically (every 5 min or so)
         
         // produce URLs to each of the copies
-        for (SiteLocation site : locations) {
+        for (SiteLocation site : artifact.siteLocations) {
             storageSite = storageSiteDAO.get(site.getSiteID());
             resourceID = storageSite.getResourceID();
             baseURL = regClient.getServiceURL(resourceID, Standards.SI_FILES, AuthMethod.ANON);

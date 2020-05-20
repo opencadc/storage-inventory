@@ -91,7 +91,6 @@ public class AdStorageQuery {
     private String queryTemplate = "select archiveName, uri, contentMD5, fileSize, contentEncoding, contentType, ingestDate"
             + " from archive_files where archiveName='%s' order by uri asc, ingestDate desc";
     private String query = "";
-    private AdStorageMetadataRowMapper rowMapper;
 
     private static String MD5_ENCODING_SCHEME = "md5:";
 
@@ -100,11 +99,8 @@ public class AdStorageQuery {
         setQuery(storageBucket);
     }
 
-    public AdStorageMetadataRowMapper getRowMapper() {
-        if (rowMapper == null) {
-            rowMapper = new AdStorageMetadataRowMapper();
-        }
-        return rowMapper;
+    public TapRowMapper<StorageMetadata> getRowMapper() {
+        return new AdStorageMetadataRowMapper();
     }
 
     class AdStorageMetadataRowMapper implements TapRowMapper<StorageMetadata> {
@@ -116,19 +112,14 @@ public class AdStorageQuery {
             // archive_files.archiveName
             String storageBucket = (String) i.next();
 
-            // convert to URI: archive_files.uri
-            URI storageID = null;
-            try {
-                storageID = new URI((String) i.next());
-            } catch (URISyntaxException u) {
-                throw new IllegalArgumentException("artifact uri error: " + u.getMessage());
-            }
+            // archive_files.uri
+            URI storageID = (URI) i.next();
 
             // Set up StorageLocation object first
             StorageLocation sl = new StorageLocation(storageID);
             sl.storageBucket = storageBucket;
 
-            // archive_files.contentMD5
+            // archive_files.contentMD5 is just the hex value
             URI contentChecksum = null;
             try {
                 contentChecksum = new URI(MD5_ENCODING_SCHEME + i.next());
@@ -144,10 +135,7 @@ public class AdStorageQuery {
 
             // Build StorageMetadata object - this will throw errors if anything that should be set isn't
             StorageMetadata ret = new StorageMetadata(sl, contentChecksum, contentLength);
-            if (ret == null) {
-                throw new IllegalArgumentException("oops");
-            }
-
+            
             ret.artifactURI = storageID;
 
             // Set optional values into ret at this point - allowed to be null
@@ -162,7 +150,7 @@ public class AdStorageQuery {
             // archive_files.ingestDate
             Date contentLastModified = (Date) i.next();
             ret.contentLastModified = contentLastModified;
-            log.debug("StorageMetadata artifactURI: " + ret.artifactURI.toString());
+            log.debug("StorageMetadata: " + ret);
 
             return ret;
         }

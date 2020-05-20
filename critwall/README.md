@@ -24,7 +24,7 @@ org.opencadc.critwall.db.url=jdbc:postgresql://{server}/{database}
 org.opencadc.critwall.locatorService={resorceID of global transfer negotiation service}
 
 # storage back end
-org.opencadc.inventory.storage.StorageAdapter=org.opencadc.inventory.storage.fs.FileSystemStorageAdapter
+org.opencadc.inventory.storage.StorageAdapter={fully qualified class name for StorageAdapter implementation}
 
 # file-sync
 org.opencadc.critwall.buckets = {uriBucket prefix or range of prefixes}
@@ -35,6 +35,9 @@ The range of uriBucket prefixes is specified with two values separated by a sing
 ### cadcproxy.pem
 Querying the global locator service (raven) and downloading files (minoc) requires permission. `critwall` uses 
 this certificate file located in /config to authenticate.
+
+### addtional configuration
+Additional configuration file(s) may be needed for the StorageAdapter that is configured.
 
 ## building it
 ```

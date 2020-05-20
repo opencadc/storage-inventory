@@ -69,12 +69,7 @@
 
 package org.opencadc.fenwick;
 
-import org.apache.log4j.Level;
-import org.junit.Test;
-import org.junit.Assert;
-
 import ca.nrc.cadc.util.Log4jInit;
-
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -83,6 +78,9 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
+import org.apache.log4j.Level;
+import org.junit.Assert;
+import org.junit.Test;
 
 
 public class IncludeArtifactsTest {
@@ -129,7 +127,7 @@ public class IncludeArtifactsTest {
             Files.write(Files.createTempFile(includePath, "clauseseven_", ".sql"), clauseSeven.getBytes());
 
             final IncludeArtifacts includeArtifacts = new IncludeArtifacts();
-            final Iterator<String> clauses = includeArtifacts.iterator();
+            final Iterator<String> clauses = includeArtifacts.getConstraints().iterator();
             final List<String> clauseList = new ArrayList<>();
             clauses.forEachRemaining(clauseList::add);
 
@@ -166,7 +164,7 @@ public class IncludeArtifactsTest {
 
             final IncludeArtifacts includeArtifacts = new IncludeArtifacts();
             try {
-                includeArtifacts.iterator();
+                includeArtifacts.getConstraints().iterator();
                 Assert.fail("Should throw IllegalStateException for missing where.");
             } catch (IllegalStateException e) {
                 Assert.assertEquals("Wrong message.",
@@ -197,7 +195,7 @@ public class IncludeArtifactsTest {
 
             final IncludeArtifacts includeArtifacts = new IncludeArtifacts();
             try {
-                includeArtifacts.iterator();
+                includeArtifacts.getConstraints().iterator();
                 Assert.fail("Should throw IllegalStateException for too many wheres.");
             } catch (IllegalStateException e) {
                 Assert.assertEquals("Wrong message.", "A valid WHERE clause is already present (line 2).",
