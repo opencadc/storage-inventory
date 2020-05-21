@@ -103,6 +103,9 @@ public class ArtifactSync {
     private final TapClient<Artifact> tapClient;
     private final Date currLastModified;
 
+    // Mutable field to use in the query.  Will be AND'd to the query but isolated in parentheses.
+    public String includeClause;
+
     /**
      * Complete constructor.
      *
@@ -117,7 +120,6 @@ public class ArtifactSync {
     /**
      * Execute the query and return the iterator back.
      *
-     * @param  includeClause        The String clause to be AND'd to the query.
      * @return ResourceIterator over Artifact instances matching this sync's constraint(s).
      *
      * @throws ResourceNotFoundException For any missing required configuration that is missing.
@@ -126,12 +128,14 @@ public class ArtifactSync {
      * @throws TransientException        temporary failure of TAP service: same call could work in future
      * @throws InterruptedException      thread interrupted
      */
-    public ResourceIterator<Artifact> iterator(final String includeClause)
+    public ResourceIterator<Artifact> iterator()
             throws ResourceNotFoundException, IOException, IllegalStateException, TransientException,
                    InterruptedException {
+        LOGGER.debug("\nInjecting clause '" + includeClause + "'\n");
         final String query = String.format(ARTIFACT_QUERY_TEMPLATE, currLastModified,
-                                           StringUtil.hasText(includeClause) ? "AND (" + includeClause.trim() + ")"
-                                                                             : "");
+                                           StringUtil.hasText(this.includeClause)
+                                           ? "AND (" + this.includeClause.trim() + ")"
+                                           : "");
 
         LOGGER.debug("\nExecuting query '" + query + "'\n");
         return tapClient.execute(query, new ArtifactRowMapper());
