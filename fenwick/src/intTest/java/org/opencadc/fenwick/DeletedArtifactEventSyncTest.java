@@ -94,16 +94,17 @@ import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
+import org.opencadc.inventory.DeletedArtifactEvent;
 import org.opencadc.inventory.DeletedStorageLocationEvent;
 import org.opencadc.inventory.db.DeletedEventDAO;
 import org.opencadc.inventory.db.SQLGenerator;
 import org.opencadc.tap.TapClient;
 import org.opencadc.tap.TapRowMapper;
 
-public class DeletedStorageLocationEventSyncTest {
+public class DeletedArtifactEventSyncTest {
 
 
-    private static final Logger log = Logger.getLogger(DeletedStorageLocationEventSyncTest.class);
+    private static final Logger log = Logger.getLogger(DeletedArtifactEventSyncTest.class);
 
     private static final File PROXY_PEM = new File(System.getProperty("user.home") + "/.ssl/cadcproxy.pem");
 
@@ -113,9 +114,9 @@ public class DeletedStorageLocationEventSyncTest {
         Log4jInit.setLevel("org.opencadc.fenwick", Level.DEBUG);
     }
 
-    private final DeletedEventDAO<DeletedStorageLocationEvent> deletedEventDAO = new DeletedEventDAO<>();
+    private final DeletedEventDAO<DeletedArtifactEvent> deletedEventDAO = new DeletedEventDAO<>();
 
-    public DeletedStorageLocationEventSyncTest() throws Exception {
+    public DeletedArtifactEventSyncTest() throws Exception {
         final DBConfig dbConfig = new DBConfig();
         final ConnectionConfig cc = dbConfig.getConnectionConfig(TestUtil.SERVER, DATABASE);
         DBUtil.createJNDIDataSource("jdbc/DeletedEventSyncTest", cc);
@@ -133,7 +134,7 @@ public class DeletedStorageLocationEventSyncTest {
     public void setup() throws SQLException {
         log.info("deleting events...");
         DataSource ds = deletedEventDAO.getDataSource();
-        String sql = "delete from DeletedStorageLocationEvent";
+        String sql = "delete from DeletedArtifactEvent";
         ds.getConnection().createStatement().execute(sql);
         log.info("deleting events... OK");
     }
@@ -152,9 +153,9 @@ public class DeletedStorageLocationEventSyncTest {
             row.add(lasModified);
             row.add(metaChecksum);
 
-            TapRowMapper<DeletedStorageLocationEvent> mapper =
-                new DeletedStorageLocationEventSync.DeletedStorageLocationEventRowMapper();
-            DeletedStorageLocationEvent event = mapper.mapRow(row);
+            TapRowMapper<DeletedArtifactEvent> mapper =
+                new DeletedArtifactEventSync.DeletedArtifactEventRowMapper();
+            DeletedArtifactEvent event = mapper.mapRow(row);
 
             Assert.assertNotNull(event);
             Assert.assertEquals(uuid, event.getID());
@@ -171,34 +172,34 @@ public class DeletedStorageLocationEventSyncTest {
         try {
             log.info("testGetEventsNoneFound()");
 
-            TapClient<DeletedStorageLocationEvent> tapClient = new TapClient<>(URI.create(TestUtil.LUSKAN_URI));
+            TapClient<DeletedArtifactEvent> tapClient = new TapClient<>(URI.create(TestUtil.LUSKAN_URI));
 
             Calendar now = Calendar.getInstance();
             now.add(Calendar.HOUR, -1);
             Date startTime = now.getTime();
 
             // query with no results
-            DeletedStorageLocationEventSync sync = new DeletedStorageLocationEventSync(tapClient, startTime);
-            ResourceIterator<DeletedStorageLocationEvent> emptyIterator = sync.getEvents();
+            DeletedArtifactEventSync sync = new DeletedArtifactEventSync(tapClient, startTime);
+            ResourceIterator<DeletedArtifactEvent> emptyIterator = sync.getEvents();
             Assert.assertNotNull(emptyIterator);
             Assert.assertFalse(emptyIterator.hasNext());
 
-            DeletedStorageLocationEvent expected1 = new DeletedStorageLocationEvent(UUID.randomUUID());
-            DeletedStorageLocationEvent expected2 = new DeletedStorageLocationEvent(UUID.randomUUID());
+            DeletedArtifactEvent expected1 = new DeletedArtifactEvent(UUID.randomUUID());
+            DeletedArtifactEvent expected2 = new DeletedArtifactEvent(UUID.randomUUID());
 
             deletedEventDAO.put(expected1);
             deletedEventDAO.put(expected2);
 
             // query with multiple results
-            ResourceIterator<DeletedStorageLocationEvent> iterator = sync.getEvents();
+            ResourceIterator<DeletedArtifactEvent> iterator = sync.getEvents();
             Assert.assertNotNull(iterator);
 
             Assert.assertTrue(iterator.hasNext());
-            DeletedStorageLocationEvent actual1 = iterator.next();
+            DeletedArtifactEvent actual1 = iterator.next();
             Date lastModified1 = actual1.getLastModified();
 
             Assert.assertTrue(iterator.hasNext());
-            DeletedStorageLocationEvent actual2 = iterator.next();
+            DeletedArtifactEvent actual2 = iterator.next();
             Date lastModified2 = actual2.getLastModified();
 
             // newest date should be returned first.
