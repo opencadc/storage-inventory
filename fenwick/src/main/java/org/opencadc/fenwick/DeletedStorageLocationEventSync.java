@@ -89,12 +89,11 @@ public class DeletedStorageLocationEventSync {
 
     private static final Logger log = Logger.getLogger(DeletedStorageLocationEventSync.class);
 
-    // TODO sufficient to use 3 digit precision ISO_DATE_FORMAT in DateUtil?
-    public static final String ISO_DATE_FORMAT = "yyyy-MM-dd HH:mm:ss.SSSSSS";
-    private static final DateFormat dateFormat = DateUtil.getDateFormat(ISO_DATE_FORMAT, DateUtil.UTC);
+    private static final DateFormat dateFormat = DateUtil.getDateFormat(DateUtil.ISO_DATE_FORMAT, DateUtil.UTC);
 
     private static final String DELETED_STORAGE_LOCATION_QUERY =
-            "SELECT id, lastModified, metaChecksum FROM inventory.DeletedStorageLocationEvent WHERE lastModified >= %s";
+            "SELECT id, lastModified, metaChecksum FROM inventory.DeletedStorageLocationEvent "
+                + "WHERE lastModified >= %s order by lastModified";
 
     private final TapClient<DeletedStorageLocationEvent> tapClient;
     private final Date startTime;
