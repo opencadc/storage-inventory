@@ -69,14 +69,13 @@
 
 package org.opencadc.baldur;
 
-import ca.nrc.cadc.auth.AuthenticationUtil;
 import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.util.PropertiesReader;
-
 import java.net.URI;
-import java.security.AccessControlException;
 import java.security.Principal;
 import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Date;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -84,10 +83,7 @@ import java.util.NoSuchElementException;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-
-import javax.security.auth.Subject;
 import javax.security.auth.x500.X500Principal;
-
 import org.apache.log4j.Logger;
 import org.opencadc.gms.GroupURI;
 
@@ -108,9 +104,11 @@ public class PermissionsConfig {
     private static final String KEY_ANON_READ = ".anon";
     private static final String KEY_READONLY_GROUPS = ".readOnlyGroups";
     private static final String KEY_READWRITE_GROUPS = ".readWriteGroups";
+    private static final String KEY_EXPIRY_TIME = "expiryTime";
     
     private static Set<Principal> authPrincipals = new HashSet<Principal>();
     private static List<PermissionEntry> entries = null;
+    private static Date expiryDate;
     
     PermissionsConfig() {
         init();
@@ -122,6 +120,10 @@ public class PermissionsConfig {
     
     Iterator<PermissionEntry> getMatchingEntries(URI artifactURI) {
         return new PermissionIterator(artifactURI);
+    }
+
+    Date getExpiryDate() {
+        return expiryDate;
     }
 
     /**
@@ -142,7 +144,8 @@ public class PermissionsConfig {
             // (TODO: Issue 41: https://github.com/opencadc/storage-inventory/issues/41)
             List<String> authUsersConfig = allProps.getProperty(KEY_USERS);
             if (authUsersConfig == null) {
-                throw new IllegalStateException("missing configrations for key " + KEY_USERS + " in: " + PERMISSIONS_PROPERTIES);
+                throw new IllegalStateException("missing configurations for key " + KEY_USERS + " in: "
+                    + PERMISSIONS_PROPERTIES);
             }
             for (String dn : authUsersConfig) {
                 log.debug("authorized dn: " + dn);
@@ -198,11 +201,34 @@ public class PermissionsConfig {
                 tmp.add(next);
                 log.debug("Added permission entry: " + next);
             }
+
+            // get the Grant timeout
+            List<String> timeout = allProps.getProperty(KEY_EXPIRY_TIME);
+            if (timeout.size() == 0) {
+                throw new IllegalStateException("no values for key " + KEY_EXPIRY_TIME + " in " + PERMISSIONS_PROPERTIES);
+            }
+            if (timeout.size() > 1) {
+                throw new IllegalStateException("multiple values for key " + KEY_EXPIRY_TIME + " in "
+                    + PERMISSIONS_PROPERTIES + " where single value expected");
+            }
+            try {
+                expiryDate = calcExpiryDate(Integer.parseInt(timeout.get(0)));
+            } catch (NumberFormatException nfe) {
+                throw new IllegalStateException("invalid  number value for " + KEY_EXPIRY_TIME + " in "
+                    + PERMISSIONS_PROPERTIES);
+            }
+
             log.debug("permissions initialization complete.");
             entries = tmp;
         }
     }
-    
+
+    Date calcExpiryDate(int expiryTime) {
+        Calendar expiryDate = Calendar.getInstance();
+        expiryDate.add(Calendar.SECOND, expiryTime);
+        return expiryDate.getTime();
+    }
+
     private void initAddGroups(List<String> configList, List<GroupURI> targetList, String key) {
         if (configList != null && !configList.isEmpty()) {
             if (configList.size() > 1) {

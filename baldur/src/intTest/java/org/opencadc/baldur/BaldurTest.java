@@ -73,21 +73,11 @@ import ca.nrc.cadc.auth.SSLUtil;
 import ca.nrc.cadc.reg.Standards;
 import ca.nrc.cadc.reg.client.RegistryClient;
 import ca.nrc.cadc.util.FileUtil;
-import ca.nrc.cadc.util.HexUtil;
 import ca.nrc.cadc.util.Log4jInit;
-
-import java.io.ByteArrayInputStream;
 import java.io.File;
-import java.io.IOException;
-import java.io.InputStream;
 import java.net.URI;
 import java.net.URL;
-import java.security.DigestInputStream;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-
 import javax.security.auth.Subject;
-
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 
@@ -115,10 +105,10 @@ public abstract class BaldurTest {
         certURL = regClient.getServiceURL(BALDUR_SERVICE_ID, Standards.SI_PERMISSIONS, AuthMethod.CERT);
         log.info("certURL: " + certURL);
         anonSubject = AuthenticationUtil.getAnonSubject();
-        File cert = FileUtil.getFileFromResource("baldur-test-1.pem", BaldurTest.class);
+        File cert = FileUtil.getFileFromResource("baldur-test-auth.pem", BaldurTest.class);
         authSubject = SSLUtil.createSubject(cert);
         log.info("authSubject: " + authSubject);
-        cert = FileUtil.getFileFromResource("baldur-test-2.pem", BaldurTest.class);
+        cert = FileUtil.getFileFromResource("baldur-test-noauth.pem", BaldurTest.class);
         noAuthSubject = SSLUtil.createSubject(cert);
         log.info("noAuthSubject: " + noAuthSubject);
     }

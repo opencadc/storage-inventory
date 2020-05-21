@@ -10,6 +10,9 @@ The following configuration files must be available in the /config directory.
 
 The configuration in baldur.properties serves two purposes:  to allow certain users access to the service and to describe the permission rules for URIs that baldur will produce through its REST API.
 ```
+# time (in seconds) the grant is considered valid 
+expiryTime = {time in seconds}
+
 # space separated list of users who are allowed to call this service
 users = {user identity} ...
 
@@ -24,6 +27,7 @@ entry = {entry name} {regular expression}`
 {entry name}.readOnlyGroups = {group URI} ...
 {entry name}.readWriteGroups = {group URI} ...
 ```
+The `expiryTime` value is used to calculate the expiry date of a grant. The value is an integer in seconds. The expiry date of a grant is: (the current time when a grant is issued + the number of seconds given by the expiryTime).
 
 The `users` value is used to specify the user(s) who are authorized to make calls to the service. The value is a space-separated list of user identities (e.g. X500 distingushed name).
 
@@ -38,13 +42,21 @@ empty list).
 
 ### example baldur.properites entry section:
 ```
+expiryTime = 60
+
+users = cn=foo,ou=acme,o=example,c=com cn=bar,ou=acme,o=example,c=com
+
 entry = TEST ^cadc:TEST/.*
 TEST.anon = false
 TEST.readOnlyGroups = ivo://cadc.nrc.ca/gms?TestRead
 TEST.readWriteGroups = ivo://cadc.nrc.ca/gms?TestWrite
 ```
 
-In this example, for any artifact with a URI that matches `^cadc:TEST\\/.*`, the read grant will be:
+In this example the expiry time is 60 seconds. 
+
+The users `foo` and `bar` are authorized to call this service.
+
+Any artifact with a URI that matches `^cadc:TEST\\/.*`, the read grant will be:
 * anonymous read not allowed
 * readable by members of group TestRead and TestWrite
 
@@ -59,8 +71,21 @@ When more that one entry matches an artifact URI, the grants are combined as fol
 
 ## integration testing
 
-Client certificates specified in the users property in the baldur.properties must exist in the directory $A/test-certificates. 
+Client certificates named `baldur-test-auth.pem` and `baldur-test-noauth.pem` must exist in the directory $A/test-certificates.
+`baldur-test-auth.pem` must match one of the `users` identities given in `baldur.properties`. This user has authorization to call this service to retrieve permissions.
+`baldur-test-noauth.pem` is user not listed in `users` and therefore is not authorized to call this service.
 
+The integration tests expect the following entry in `baldur.properties`. 
+```
+expiryTime = 60
+
+users = { authorized user identity }
+
+entry = TEST-GROUPS ^cadc:TEST-GROUPS/.*
+TEST-GROUPS.anon = true
+TEST-GROUPS.readOnlyGroups = ivo://cadc.nrc.ca/gms?TestReadGroup-1
+TEST-GROUPS.readWriteGroups = ivo://cadc.nrc.ca/gms?TestWriteGroup-1 ivo://cadc.nrc.ca/gms?TestWriteGroup-2
+```
 
 ## building
 

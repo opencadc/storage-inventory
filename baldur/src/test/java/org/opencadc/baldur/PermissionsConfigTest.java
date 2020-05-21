@@ -74,6 +74,8 @@ import ca.nrc.cadc.util.PropertiesReader;
 
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
 
@@ -103,6 +105,8 @@ public class PermissionsConfigTest {
             PermissionsConfig.clearCache();
             PermissionsConfig config = new PermissionsConfig();
             URI artifactURI = URI.create("cadc:TEST/file.fits");
+
+            Assert.assertNotNull(config.getExpiryDate());
             
             Iterator<PermissionEntry> entryIterator = config.getMatchingEntries(artifactURI);
             List<PermissionEntry> entries = iteratorToList(entryIterator);
@@ -123,6 +127,8 @@ public class PermissionsConfigTest {
             
             ReadGrant readGrant = GetAction.getReadGrant(config, artifactURI);
             Assert.assertNotNull(readGrant);
+            Assert.assertNotNull(readGrant.getExpiryDate());
+            Assert.assertEquals(config.getExpiryDate(), readGrant.getExpiryDate());
             Assert.assertTrue(readGrant.isAnonymousAccess());
             Assert.assertEquals(4, readGrant.getGroups().size());
             Assert.assertTrue(readGrant.getGroups().contains(readGroup1));
@@ -132,6 +138,8 @@ public class PermissionsConfigTest {
             
             WriteGrant writeGrant = GetAction.getWriteGrant(config, artifactURI);
             Assert.assertNotNull(writeGrant);
+            Assert.assertNotNull(writeGrant.getExpiryDate());
+            Assert.assertEquals(config.getExpiryDate(), writeGrant.getExpiryDate());
             Assert.assertEquals(2, writeGrant.getGroups().size());
             Assert.assertTrue(writeGrant.getGroups().contains(readWriteGroup1));
             Assert.assertTrue(writeGrant.getGroups().contains(readWriteGroup2));
@@ -162,6 +170,8 @@ public class PermissionsConfigTest {
             PermissionsConfig.clearCache();
             PermissionsConfig config = new PermissionsConfig();
             URI artifactURI = URI.create("TEST");
+
+            Assert.assertNotNull(config.getExpiryDate());
             
             Iterator<PermissionEntry> entryIterator = config.getMatchingEntries(artifactURI);
             List<PermissionEntry> entries = iteratorToList(entryIterator);
@@ -185,6 +195,8 @@ public class PermissionsConfigTest {
             PermissionsConfig.clearCache();
             PermissionsConfig config = new PermissionsConfig();
             URI artifactURI = URI.create("TEST");
+
+            Assert.assertNotNull(config.getExpiryDate());
             
             Iterator<PermissionEntry> entryIterator = config.getMatchingEntries(artifactURI);
             List<PermissionEntry> entries = iteratorToList(entryIterator);
@@ -198,6 +210,8 @@ public class PermissionsConfigTest {
             
             ReadGrant readGrant = GetAction.getReadGrant(config, artifactURI);
             Assert.assertNotNull(readGrant);
+            Assert.assertNotNull(readGrant.getExpiryDate());
+            Assert.assertEquals(config.getExpiryDate(), readGrant.getExpiryDate());
             Assert.assertTrue(readGrant.isAnonymousAccess());
             Assert.assertEquals(4, readGrant.getGroups().size());
             Assert.assertTrue(readGrant.getGroups().contains(readGroup1));
@@ -207,6 +221,8 @@ public class PermissionsConfigTest {
             
             WriteGrant writeGrant = GetAction.getWriteGrant(config, artifactURI);
             Assert.assertNotNull(writeGrant);
+            Assert.assertNotNull(writeGrant.getExpiryDate());
+            Assert.assertEquals(config.getExpiryDate(), writeGrant.getExpiryDate());
             Assert.assertEquals(2, writeGrant.getGroups().size());
             Assert.assertTrue(writeGrant.getGroups().contains(readWriteGroup1));
             Assert.assertTrue(writeGrant.getGroups().contains(readWriteGroup2));
