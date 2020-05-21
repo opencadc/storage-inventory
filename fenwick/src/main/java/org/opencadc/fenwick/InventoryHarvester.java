@@ -67,6 +67,9 @@
 
 package org.opencadc.fenwick;
 
+import ca.nrc.cadc.db.TransactionManager;
+import ca.nrc.cadc.net.ResourceNotFoundException;
+import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.reg.Capabilities;
 import ca.nrc.cadc.reg.Capability;
 import ca.nrc.cadc.reg.Standards;
@@ -74,11 +77,22 @@ import ca.nrc.cadc.reg.client.RegistryClient;
 
 import java.io.IOException;
 import java.net.URI;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 
 import org.apache.log4j.Logger;
+import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.InventoryUtil;
+import org.opencadc.inventory.SiteLocation;
+import org.opencadc.inventory.StorageSite;
 import org.opencadc.inventory.db.ArtifactDAO;
+import org.opencadc.inventory.db.HarvestState;
+import org.opencadc.inventory.db.HarvestStateDAO;
+import org.opencadc.inventory.db.StorageSiteDAO;
+import org.opencadc.tap.TapClient;
 
 
 /**
@@ -93,6 +107,7 @@ public class InventoryHarvester {
     private final Capability inventoryTAP;
     private final ArtifactSelector selector;
     private final boolean trackSiteLocations;
+    private final HarvestStateDAO harvestStateDAO;
     
     /**
      * Constructor.
@@ -111,6 +126,7 @@ public class InventoryHarvester {
         this.resourceID = resourceID;
         this.selector = selector;
         this.trackSiteLocations = trackSiteLocations;
+        this.harvestStateDAO = new HarvestStateDAO(artifactDAO);
         
         try {
             RegistryClient rc = new RegistryClient();
@@ -141,6 +157,8 @@ public class InventoryHarvester {
                 Thread.sleep(dt);
             } catch (InterruptedException ex) {
                 throw new RuntimeException("interrupted", ex);
+            } catch (Exception ex) {
+                throw new IllegalStateException(ex.getMessage(), ex);
             }
         }
     }
@@ -163,7 +181,63 @@ public class InventoryHarvester {
     // - taking appropriate action for each track progress
     // - stop iterating when reaching a timestamp that exceeds the timestamp when query executed
     
-    private void doit() {
-        throw new UnsupportedOperationException("TODO");
+    private void doit() throws ResourceNotFoundException, IOException, IllegalStateException, TransientException,
+                               InterruptedException, NoSuchAlgorithmException {
+        final MessageDigest messageDigest = MessageDigest.getInstance("MD5");
+        final StorageSiteDAO storageSiteDAO = new StorageSiteDAO(this.artifactDAO);
+        final TapClient<StorageSite> storageSiteTapClient = new TapClient<>(this.resourceID);
+        final StorageSiteSync storageSiteSync = new StorageSiteSync(storageSiteTapClient, storageSiteDAO);
+        final StorageSite storageSite = storageSiteSync.doit();
+
+        final TapClient<Artifact> artifactTapClient = new TapClient<>(this.resourceID);
+        final HarvestState harvestState = this.harvestStateDAO.get(Artifact.class.getName(), this.resourceID);
+        final ArtifactSync artifactSync = new ArtifactSync(artifactTapClient, harvestState.getLastModified());
+        final List<String> artifactIncludeConstraints = this.selector.getConstraints();
+        final Iterator<String> artifactIncludeConstraintIterator = artifactIncludeConstraints.iterator();
+
+        final TransactionManager transactionManager = artifactDAO.getTransactionManager();
+        try {
+            boolean keepRunning = true;
+
+            // This loop will always run at least once.  This will allow a list of constraints of one or more clauses,
+            // or include the case where no constraints are issued.
+            while (keepRunning) {
+
+                if (artifactIncludeConstraintIterator.hasNext()) {
+                    artifactSync.includeClause = artifactIncludeConstraintIterator.next();
+                }
+
+                artifactSync.iterator().forEachRemaining(artifact -> {
+                    transactionManager.startTransaction();
+                    final Artifact currentArtifact = artifactDAO.get(artifact.getID());
+                    currentArtifact.siteLocations.add(new SiteLocation(storageSite.getID()));
+                    final URI computedChecksum = artifact.computeMetaChecksum(messageDigest);
+
+                    if (!artifact.getContentChecksum().equals(computedChecksum)) {
+                        throw new IllegalStateException(String.format("Checksums for Artifact %s (%s) do not match.",
+                                                                      artifact.getURI(), artifact.getID()));
+                    }
+
+                    currentArtifact.contentEncoding = artifact.contentEncoding;
+                    currentArtifact.contentType = artifact.contentType;
+                    currentArtifact.storageLocation = artifact.storageLocation;
+
+                    artifactDAO.put(currentArtifact);
+                    harvestState.curLastModified = artifact.getLastModified();
+                    harvestStateDAO.put(harvestState);
+                    transactionManager.commitTransaction();
+                });
+
+                keepRunning = artifactIncludeConstraintIterator.hasNext();
+            }
+        } catch (Exception exception) {
+            if (transactionManager.isOpen()) {
+                log.error("Exception in transaction.  Rolling back...");
+                transactionManager.rollbackTransaction();
+                log.error("Rollback: OK");
+            } else {
+                log.error("No transaction started.");
+            }
+        }
     }
 }
