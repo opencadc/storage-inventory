@@ -1,3 +1,4 @@
+
 /*
  ************************************************************************
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
@@ -62,111 +63,107 @@
  *  <http://www.gnu.org/licenses/>.      pas le cas, consultez :
  *                                       <http://www.gnu.org/licenses/>.
  *
- *  $Revision: 4 $
  *
  ************************************************************************
  */
 
-package org.opencadc.inventory.storage.ad;
+package org.opencadc.fenwick;
+
+import ca.nrc.cadc.io.ResourceIterator;
+import ca.nrc.cadc.util.Log4jInit;
 
 import java.net.URI;
-import java.net.URISyntaxException;
-import java.util.Date;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 
-import org.apache.log4j.Logger;
-import org.opencadc.inventory.InventoryUtil;
-import org.opencadc.inventory.StorageLocation;
-import org.opencadc.inventory.storage.StorageMetadata;
-import org.opencadc.tap.TapRowMapper;
+import org.apache.log4j.Level;
+import org.junit.Assert;
+import org.junit.Test;
+import org.opencadc.inventory.StorageSite;
 
-/**
- * Provide query and RowMapper instance for grabbing data from ad.
- * RowMapper maps from ad's archive_files table to a StorageMetadata object.
- */
-public class AdStorageQuery {
-    private static final Logger log = Logger.getLogger(AdStorageQuery.class);
-    // Query to use that will pull data in the order required by the mapRow function
-    private String queryTemplate = "select archiveName, uri, contentMD5, fileSize, contentEncoding, contentType, ingestDate"
-            + " from archive_files where archiveName='%s' order by uri asc, ingestDate desc";
-    private String query = "";
 
-    private static String MD5_ENCODING_SCHEME = "md5:";
-
-    AdStorageQuery(String storageBucket) {
-        InventoryUtil.assertNotNull(AdStorageQuery.class, "storageBucket", storageBucket);
-        setQuery(storageBucket);
+public class StorageSiteSyncTest {
+    static {
+        Log4jInit.setLevel("org.opencadc.fenwick", Level.DEBUG);
     }
 
-    public TapRowMapper<StorageMetadata> getRowMapper() {
-        return new AdStorageMetadataRowMapper();
-    }
+    @Test
+    public void testStorageSiteMultiple() throws Exception {
+        final List<StorageSite> storageSiteList = new ArrayList<>();
+        storageSiteList.add(new StorageSite(URI.create("test:org.opencadc/SITE1"), "Site One"));
+        storageSiteList.add(new StorageSite(URI.create("test:org.opencadc/SITE2"), "Site Two"));
 
-    class AdStorageMetadataRowMapper implements TapRowMapper<StorageMetadata> {
+        final StorageSiteSync testSubject = new StorageSiteSync(null, null) {
+            /**
+             * Override this method in tests to avoid recreating a TapClient.
+             *
+             * @return Iterator over Storage Sites, or empty Iterator.  Never null.
+             */
+            @Override
+            ResourceIterator<StorageSite> queryStorageSites() {
+                final Iterator<StorageSite> storageSiteIterator = storageSiteList.iterator();
+                return new ResourceIterator<StorageSite>() {
+                    @Override
+                    public void close() { }
 
-        @Override
-        public StorageMetadata mapRow(List<Object> row) {
-            Iterator i = row.iterator();
+                    @Override
+                    public boolean hasNext() {
+                        return storageSiteIterator.hasNext();
+                    }
 
-            // archive_files.archiveName
-            String storageBucket = (String) i.next();
-
-            // archive_files.uri
-            URI storageID = (URI) i.next();
-
-            // Set up StorageLocation object first
-            StorageLocation sl = new StorageLocation(storageID);
-            sl.storageBucket = storageBucket;
-
-            // archive_files.contentMD5 is just the hex value
-            URI contentChecksum = null;
-            try {
-                contentChecksum = new URI(MD5_ENCODING_SCHEME + i.next());
-            } catch (URISyntaxException u) {
-                throw new IllegalArgumentException("checksum error: " + storageID.toString() + ": " + u.getMessage());
+                    @Override
+                    public StorageSite next() {
+                        return storageSiteIterator.next();
+                    }
+                };
             }
+        };
 
-            // archive_files.fileSize
-            Long contentLength = (Long) i.next();
-            if (contentLength == null) {
-                throw new IllegalArgumentException("content length error (null): " + storageID.toString());
-            }
-
-            // Build StorageMetadata object - this will throw errors if anything that should be set isn't
-            StorageMetadata ret = new StorageMetadata(sl, contentChecksum, contentLength);
-            
-            ret.artifactURI = storageID;
-
-            // Set optional values into ret at this point - allowed to be null
-            // archive_files.contentEncoding
-            String contentEncoding = (String) i.next();
-            ret.contentEncoding = contentEncoding;
-
-            // archive_files.contentType
-            String contentType = (String) i.next();
-            ret.contentType = contentType;
-
-            // archive_files.ingestDate
-            Date contentLastModified = (Date) i.next();
-            ret.contentLastModified = contentLastModified;
-            log.debug("StorageMetadata: " + ret);
-
-            return ret;
+        try {
+            testSubject.doit();
+            Assert.fail("Should throw IllegalStateException");
+        } catch (IllegalStateException e) {
+            // Good.
+            Assert.assertEquals("Wrong message.", "More than one Storage Site found.", e.getMessage());
         }
     }
 
-    // Getters & Setters
+    @Test
+    public void testStorageSiteNotFound() throws Exception {
+        final StorageSiteSync testSubject = new StorageSiteSync(null, null) {
+            /**
+             * Override this method in tests to avoid recreating a TapClient.
+             *
+             * @return Iterator over Storage Sites, or empty Iterator.  Never null.
+             */
+            @Override
+            ResourceIterator<StorageSite> queryStorageSites() {
+                final Iterator<StorageSite> storageSiteIterator = Collections.emptyIterator();
+                return new ResourceIterator<StorageSite>() {
+                    @Override
+                    public void close() { }
 
-    public String getQuery() {
-        return this.query;
-    }
+                    @Override
+                    public boolean hasNext() {
+                        return storageSiteIterator.hasNext();
+                    }
 
-    public void setQuery(String storageBucket) {
-        if (storageBucket == null || storageBucket.length() == 0) {
-            throw new IllegalArgumentException("Storage bucket (archive) an not be null.");
+                    @Override
+                    public StorageSite next() {
+                        return storageSiteIterator.next();
+                    }
+                };
+            }
+        };
+
+        try {
+            testSubject.doit();
+            Assert.fail("Should throw IllegalStateException");
+        } catch (IllegalStateException e) {
+            // Good.
+            Assert.assertEquals("Wrong message.", "No storage sites available to sync.", e.getMessage());
         }
-        this.query = String.format(this.queryTemplate, storageBucket);
     }
 }
-

@@ -28,7 +28,7 @@ dependencies {
     compile 'gov.nasa.gsfc.heasarc:nom-tam-fits:[1,2)'
 
     // RADOS Java Library from Ceph
-    compile 'com.ceph:rados:0.6.0-SNAPSHOT'
+    //compile 'com.ceph:rados:0.6.0-SNAPSHOT'
 
     // Amazon S3 Java Library
     compile 'software.amazon.awssdk:s3:2.10.49'

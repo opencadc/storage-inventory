@@ -95,6 +95,7 @@ import java.util.TreeSet;
 import nom.tam.fits.BasicHDU;
 import nom.tam.fits.Fits;
 
+import ca.nrc.cadc.io.ByteLimitExceededException;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.After;
@@ -202,30 +203,32 @@ abstract class S3StorageAdapterTest {
     }
     
     @Test
-    public void testPutCheckDeleteLargeFile() {
-        URI artifactURI = URI.create("cadc:TEST/testPutCheckDeleteLargeFile");
+    public void testPutCheckDeleteLargeFileFail() {
+        URI artifactURI = URI.create("cadc:TEST/testPutCheckDeleteLargeFileFail");
         
+        final NewArtifact na = new NewArtifact(artifactURI);
+        na.contentChecksum = URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"); // md5 of 0-length file
+        //na.contentLength = (long) 8 * 1024; // 8 KiB
+        //na.contentLength = (long) 8 * 1024 * 1024; // 8 MiB
+        na.contentLength = (long) 8 * 1024 * 1024 * 1024; // 8 GiB exceeds ceph/S3 limit of 5GiB
+            
         try {
-            NewArtifact na = new NewArtifact(artifactURI);
-            na.contentChecksum = URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"); // md5 of 0-length file
-            //na.contentLength = (long) 8 * 1024; // 8 KiB
-            //na.contentLength = (long) 8 * 1024 * 1024; // 8 MiB
-            na.contentLength = (long) 8 * 1024 * 1024 * 1024; // 8 GiB
-            LOGGER.debug("testPutGetDelete file data: " + na.contentLength + " " + na.contentChecksum);
+            
+            LOGGER.debug("testPutCheckDeleteLargeFileFail file data: " + na.contentLength + " " + na.contentChecksum);
             InputStream istream = getJunk(na.contentLength);
             
-            LOGGER.info("testPutCheckDeleteLargeFile put: " + artifactURI + " " + na.contentLength);
+            LOGGER.info("testPutCheckDeleteLargeFileFail put: " + artifactURI + " " + na.contentLength);
             StorageMetadata sm = adapter.put(na, istream);
-            LOGGER.info("testPutCheckDeleteLargeFile put: " + artifactURI + " to " + sm.getStorageLocation());
+            LOGGER.info("testPutCheckDeleteLargeFileFail put: " + artifactURI + " to " + sm.getStorageLocation());
             
             // TODO: verify metadata captured without using iterator
 
-            LOGGER.debug("testPutCheckDeleteLargeFile delete: " + sm.getStorageLocation());
+            LOGGER.debug("testPutCheckDeleteLargeFileFail delete: " + sm.getStorageLocation());
             adapter.delete(sm.getStorageLocation());
             Assert.assertTrue("deleted", !adapter.exists(sm.getStorageLocation()));
-            LOGGER.info("testPutCheckDeleteLargeFile deleted: " + sm.getStorageLocation());
-        } catch (IncorrectContentChecksumException expected) {
-            LOGGER.info("test limitation: don't know MD5 of random 8 GiB of data: " + expected);
+            LOGGER.info("testPutCheckDeleteLargeFileFail deleted: " + sm.getStorageLocation());
+        } catch (ByteLimitExceededException expected) {
+            LOGGER.info("caught: " + expected);
         } catch (Exception ex) {
             LOGGER.error("unexpected exception", ex);
             Assert.fail("unexpected exception: " + ex);
@@ -276,7 +279,7 @@ abstract class S3StorageAdapterTest {
     }
     
     @Test
-    public void testPutGetDeleteStream() {
+    public void testPutGetDeleteMinimal() {
         URI artifactURI = URI.create("cadc:TEST/testPutGetDeleteMinimal");
         
         try {
@@ -284,7 +287,7 @@ abstract class S3StorageAdapterTest {
             byte[] data = new byte[1024];
             rnd.nextBytes(data);
             
-            NewArtifact na = new NewArtifact(artifactURI);
+            final NewArtifact na = new NewArtifact(artifactURI);
             MessageDigest md = MessageDigest.getInstance("MD5");
             md.update(data);
             URI expectedChecksum = URI.create("md5:" + HexUtil.toHex(md.digest()));
@@ -323,6 +326,8 @@ abstract class S3StorageAdapterTest {
             adapter.delete(sm.getStorageLocation());
             Assert.assertTrue("deleted", !adapter.exists(sm.getStorageLocation()));
             LOGGER.info("testPutGetDeleteMinimal deleted: " + sm.getStorageLocation());
+        } catch (UnsupportedOperationException limitation) {
+            LOGGER.info("caught S3 API limitation: " + limitation);
         } catch (Exception ex) {
             LOGGER.error("unexpected exception", ex);
             Assert.fail("unexpected exception: " + ex);
@@ -518,7 +523,7 @@ abstract class S3StorageAdapterTest {
         }
     }
     
-    //@Test
+    @Test
     public void testListBucketPrefix() {
         
         try {
@@ -597,7 +602,6 @@ abstract class S3StorageAdapterTest {
         */
     }
     
-    //////@Test
     public void getHeaders() throws Exception {
         LOGGER.info("Skip to headers...");
         LOGGER.info("***");
@@ -617,7 +621,6 @@ abstract class S3StorageAdapterTest {
         LOGGER.info("Skip to headers done.");
     }
 
-    //////@Test
     public void getCutouts() throws Exception {
         final URI testURI = URI.create("cadc:TEST/getCutouts");
         //final long expectedByteCount = 159944L;
