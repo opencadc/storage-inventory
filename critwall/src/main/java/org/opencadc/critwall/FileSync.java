@@ -71,18 +71,24 @@ import ca.nrc.cadc.db.ConnectionConfig;
 import ca.nrc.cadc.db.DBUtil;
 
 import java.net.URI;
+import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import javax.naming.NamingException;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.storage.StorageAdapter;
-import org.opencadc.inventory.storage.fs.OpaqueFileSystemStorageAdapter;
 
 
 public class FileSync {
@@ -96,7 +102,7 @@ public class FileSync {
     private final BucketSelector selector;
     private final int nthreads;
     private final StorageAdapter storageAdapter;
-    ExecutorService executor = null;
+    private final ExecutorService executor;
 
     /**
      * Constructor.
@@ -125,6 +131,19 @@ public class FileSync {
         this.selector = selector;
         this.nthreads = nthreads;
 
+        // Use default AbortPolicy for rejectedExecutionException
+        // logs and continues
+        // otherwise add a new Policy to the ctor for ThreadPoolExecutor
+        // core pool size is 1. will be max nthreads
+        // keepaliveTime may be increased, as it is unused threads stop immediately
+        this.executor = Executors.newFixedThreadPool(nthreads);
+//        this.executor = new ThreadPoolExecutor(
+//            1,
+//            nthreads,
+//            0L,
+//            TimeUnit.MILLISECONDS,
+//            new LinkedBlockingQueue<>(this.nthreads * 2));
+
         // For managing the artifact iterator FileSync loops over
         try {
             // Make FileSync ArtifactDAO instance
@@ -149,14 +168,17 @@ public class FileSync {
         }
 
         this.storageAdapter = localStorage;
+
         log.debug("FileSync ctor done");
     }
     
 
     public void run() {
+        log.info("START - FileSync");
+        long start = System.currentTimeMillis();
+
         Iterator<String> bucketSelector = selector.getBucketIterator();
         String currentArtifactInfo = "";
-        executor = Executors.newFixedThreadPool(this.nthreads);
 
         try {
             while (bucketSelector.hasNext()) {
@@ -169,18 +191,32 @@ public class FileSync {
                     currentArtifactInfo = "bucket: " + bucket + " artifact: " + curArtifact.getURI();
                     log.debug("processing: " + currentArtifactInfo);
 
+
                     FileSyncJob fsj = new FileSyncJob(curArtifact.getURI(), this.locatorService,
                         this.storageAdapter, this.jobArtifactDAO);
-                    fsj.run();
+
+                    log.debug("creating file sync job: " + curArtifact.getURI());
+                    // fire & forget
+                    // This is using a bounded queue, nthreads*2 in size
+//                    executor.execute(fsj);
+                    executor.submit(fsj);
+                    log.debug("executed job");
                 }
             }
+
         } catch (Exception e) {
-            // capture database errors here and quit if there's a failure
+            log.info("Thread pool error", e);
             log.error("error processing list of artifacts, at: " + currentArtifactInfo);
             return;
+        } finally {
+            if (executor != null && !executor.isShutdown()) {
+                log.warn("Manually shutting down thread pool");
+//                executor.shutdownNow();
+            }
         }
 
-        log.info("END - processing buckets.");
+        long elapsed = System.currentTimeMillis() - start;
+        log.info("END - FileSync - elapsed ms: " + elapsed);
     }
 
 }
