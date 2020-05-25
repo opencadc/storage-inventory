@@ -80,6 +80,7 @@ import java.io.IOException;
 import java.net.URI;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -201,21 +202,23 @@ public class InventoryHarvester {
      */
     private void doit() throws ResourceNotFoundException, IOException, IllegalStateException, TransientException,
                                InterruptedException, NoSuchAlgorithmException {
-        final HarvestState harvestState = this.harvestStateDAO.get(Artifact.class.getName(), this.resourceID);
+        final HarvestState existingHarvestState = this.harvestStateDAO.get(Artifact.class.getName(), this.resourceID);
+        final HarvestState harvestState = (existingHarvestState == null)
+                                          ? new HarvestState(Artifact.class.getName(), this.resourceID)
+                                          : existingHarvestState;
 
-        syncDeletedStorageLocationEvents(harvestState);
-        syncDeletedArtifactEvents(harvestState);
+        syncDeletedStorageLocationEvents(harvestState.getLastModified());
+        syncDeletedArtifactEvents(harvestState.getLastModified());
         syncArtifacts(harvestState);
     }
 
-    private void syncDeletedStorageLocationEvents(final HarvestState harvestState)
+    private void syncDeletedStorageLocationEvents(final Date lastModified)
             throws ResourceNotFoundException, IOException, IllegalStateException, TransientException,
                    InterruptedException {
         final TapClient<DeletedStorageLocationEvent> deletedStorageLocationEventTapClient =
                 new TapClient<>(this.resourceID);
         final DeletedStorageLocationEventSync deletedStorageLocationEventSync =
-                new DeletedStorageLocationEventSync(deletedStorageLocationEventTapClient,
-                                                    harvestState.getLastModified());
+                new DeletedStorageLocationEventSync(deletedStorageLocationEventTapClient, lastModified);
         try (final ResourceIterator<DeletedStorageLocationEvent> deletedStorageLocationEventResourceIterator =
                      deletedStorageLocationEventSync.getEvents()) {
             final ObsoleteStorageLocationDAO obsoleteStorageLocationDAO =
@@ -226,17 +229,29 @@ public class InventoryHarvester {
         }
     }
 
-    private void syncDeletedArtifactEvents(final HarvestState harvestState)
+    private void syncDeletedArtifactEvents(final Date lastModified)
             throws ResourceNotFoundException, IOException, IllegalStateException, TransientException,
                    InterruptedException {
         final TapClient<DeletedArtifactEvent> deletedArtifactEventTapClientTapClient = new TapClient<>(this.resourceID);
         final DeletedArtifactEventSync deletedArtifactEventSync =
-                new DeletedArtifactEventSync(deletedArtifactEventTapClientTapClient, harvestState.getLastModified());
+                new DeletedArtifactEventSync(deletedArtifactEventTapClientTapClient, lastModified);
         deletedArtifactEventSync.getEvents().forEachRemaining(deletedArtifactEvent -> {
             artifactDAO.delete(deletedArtifactEvent.getID());
         });
     }
 
+    /**
+     * Synchronize the artifacts found by the TAP (Luskan) query.  This method WILL modify the HarvestState and store it
+     * for the next run.
+     *
+     * @param harvestState      The HarvestState object w
+     * @throws ResourceNotFoundException For any missing required configuration that is missing.
+     * @throws IOException               For unreadable configuration files.
+     * @throws IllegalStateException     For any invalid configuration.
+     * @throws TransientException        temporary failure of TAP service: same call could work in future
+     * @throws InterruptedException      thread interrupted
+     * @throws NoSuchAlgorithmException  If the MessageDigest for synchronizing Artifacts cannot be used.
+     */
     private void syncArtifacts(final HarvestState harvestState)
             throws ResourceNotFoundException, IOException, IllegalStateException, TransientException,
                    InterruptedException, NoSuchAlgorithmException {
@@ -306,7 +321,7 @@ public class InventoryHarvester {
                 transactionManager.rollbackTransaction();
                 log.error("Rollback: OK");
             } else {
-                log.error("No transaction started.");
+                log.warn("No transaction started.");
             }
         }
     }
