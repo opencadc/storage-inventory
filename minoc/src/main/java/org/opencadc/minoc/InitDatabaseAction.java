@@ -104,7 +104,7 @@ public class InitDatabaseAction extends InitAction {
     static final String SA_KEY = StorageAdapter.class.getName();
     
     static final String READ_GRANTS_KEY = MINOC_KEY + ".readGrantProvider";
-    static final String WRITE_GRANTS_KEY = MINOC_KEY + "writeGrantProvider";
+    static final String WRITE_GRANTS_KEY = MINOC_KEY + ".writeGrantProvider";
     
     static final String DEV_AUTH_ONLY_KEY = MINOC_KEY + ".authenticateOnly";
     

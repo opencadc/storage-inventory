@@ -31,8 +31,8 @@ org.opencadc.inventory.db.SQLGenerator=org.opencadc.inventory.db.SQLGenerator
 org.opencadc.minoc.db.schema={schema}
 
 # permission granting service settings (optional)
-org.opencadc.minoc.permissions.ReadGrant.resourceID=ivo://{authority}/{name}
-org.opencadc.minoc.permissions.WriteGrant.resourceID=ivo://{authority}/{name}
+org.opencadc.minoc.readGrantProvider=ivo://{authority}/{name}
+org.opencadc.minoc.writeGrantProvider=ivo://{authority}/{name}
 ```
 Multiple values of the permission granting service resourceID(s) may be provided. All services will 
 be consulted but a single positive result is sufficient to grant permission for an action.
@@ -40,7 +40,7 @@ be consulted but a single positive result is sufficient to grant permission for 
 **For developer testing only:** To require authentication only and disable permission checking, add the following
 configuration entry to minoc.properties:
 ```
-org.opencadc.minoc.permissions.authenticateOnly=true
+org.opencadc.minoc.authenticateOnly=true
 ```
 
 Additional configuration may be required by the storage adapter implementation.
