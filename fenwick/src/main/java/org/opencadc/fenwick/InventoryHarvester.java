@@ -68,6 +68,7 @@
 package org.opencadc.fenwick;
 
 import ca.nrc.cadc.db.TransactionManager;
+import ca.nrc.cadc.io.ResourceIterator;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.reg.Capabilities;
@@ -85,21 +86,24 @@ import java.util.Map;
 
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
+import org.opencadc.inventory.DeletedArtifactEvent;
+import org.opencadc.inventory.DeletedStorageLocationEvent;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.SiteLocation;
 import org.opencadc.inventory.StorageSite;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.HarvestState;
 import org.opencadc.inventory.db.HarvestStateDAO;
+import org.opencadc.inventory.db.ObsoleteStorageLocationDAO;
 import org.opencadc.inventory.db.StorageSiteDAO;
 import org.opencadc.tap.TapClient;
 
 
 /**
- *
  * @author pdowler
  */
 public class InventoryHarvester {
+
     private static final Logger log = Logger.getLogger(InventoryHarvester.class);
 
     private final ArtifactDAO artifactDAO;
@@ -108,13 +112,14 @@ public class InventoryHarvester {
     private final ArtifactSelector selector;
     private final boolean trackSiteLocations;
     private final HarvestStateDAO harvestStateDAO;
-    
+
     /**
      * Constructor.
-     * @param daoConfig config map to pass to cadc-inventory-db DAO classes
-     * @param resourceID identifier for the remote query service
-     * @param selector selector implementation
-     * @param trackSiteLocations    Whether to track the remote storage site and add it to the Artifact being processed.
+     *
+     * @param daoConfig          config map to pass to cadc-inventory-db DAO classes
+     * @param resourceID         identifier for the remote query service
+     * @param selector           selector implementation
+     * @param trackSiteLocations Whether to track the remote storage site and add it to the Artifact being processed.
      */
     public InventoryHarvester(Map<String, Object> daoConfig, URI resourceID, ArtifactSelector selector,
                               boolean trackSiteLocations) {
@@ -127,30 +132,32 @@ public class InventoryHarvester {
         this.selector = selector;
         this.trackSiteLocations = trackSiteLocations;
         this.harvestStateDAO = new HarvestStateDAO(artifactDAO);
-        
+
         try {
             RegistryClient rc = new RegistryClient();
-            Capabilities caps = rc.getCapabilities(resourceID); 
+            Capabilities caps = rc.getCapabilities(resourceID);
             // above call throws IllegalArgumentException... should be ResourceNotFoundException but out of scope to fix
             this.inventoryTAP = caps.findCapability(Standards.TAP_10);
             if (inventoryTAP == null) {
-                throw new IllegalArgumentException("invalid config: remote query service " + resourceID + " does not implement " + Standards.TAP_10);
+                throw new IllegalArgumentException(
+                        "invalid config: remote query service " + resourceID + " does not implement "
+                        + Standards.TAP_10);
             }
         } catch (IOException ex) {
             throw new IllegalArgumentException("invalid config", ex);
         }
     }
-    
+
     // general behaviour is that this process runs continually and manages it's own schedule
     // - harvest everything up to *now*
     // - go idle for a dynamically determined amount of time
     // - repeat until fail/killed
-    
+
     public void run() {
         while (true) {
             try {
                 doit();
-                
+
                 // TODO: dynamic depending on how rapidly the remote content is changing
                 // ... this value and the reprocess-last-N-seconds should be related
                 long dt = 60 * 1000L;
@@ -162,10 +169,12 @@ public class InventoryHarvester {
             }
         }
     }
-    
+
     // use TapClient to get remote StorageSite record and store it locally
-    // - only global inventory needs to track remote StorageSite(s); should be exactly one (minoc) record at a storage site
-    // - could be a harmless simplification to ignore the fact that storage sites don't need to sync other StorageSite records from global
+    // - only global inventory needs to track remote StorageSite(s); should be exactly one (minoc) record at a
+    // storage site
+    // - could be a harmless simplification to ignore the fact that storage sites don't need to sync other
+    // StorageSite records from global
     // - keep the StorageSite UUID for creating SiteLocation objects below
 
     // get tracked progress (latest timestamp seen from any iterator)
@@ -180,17 +189,70 @@ public class InventoryHarvester {
     // process multiple iterators in timestamp order
     // - taking appropriate action for each track progress
     // - stop iterating when reaching a timestamp that exceeds the timestamp when query executed
-    
+
+    /**
+     * Perform a sync for Artifacts that match the include constraints in this harvester's selector.
+     * @throws ResourceNotFoundException For any missing required configuration that is missing.
+     * @throws IOException               For unreadable configuration files.
+     * @throws IllegalStateException     For any invalid configuration.
+     * @throws TransientException        temporary failure of TAP service: same call could work in future
+     * @throws InterruptedException      thread interrupted
+     * @throws NoSuchAlgorithmException  If the MessageDigest for synchronizing Artifacts cannot be used.
+     */
     private void doit() throws ResourceNotFoundException, IOException, IllegalStateException, TransientException,
                                InterruptedException, NoSuchAlgorithmException {
+        final HarvestState harvestState = this.harvestStateDAO.get(Artifact.class.getName(), this.resourceID);
+
+        syncDeletedStorageLocationEvents(harvestState);
+        syncDeletedArtifactEvents(harvestState);
+        syncArtifacts(harvestState);
+    }
+
+    private void syncDeletedStorageLocationEvents(final HarvestState harvestState)
+            throws ResourceNotFoundException, IOException, IllegalStateException, TransientException,
+                   InterruptedException {
+        final TapClient<DeletedStorageLocationEvent> deletedStorageLocationEventTapClient =
+                new TapClient<>(this.resourceID);
+        final DeletedStorageLocationEventSync deletedStorageLocationEventSync =
+                new DeletedStorageLocationEventSync(deletedStorageLocationEventTapClient,
+                                                    harvestState.getLastModified());
+        try (final ResourceIterator<DeletedStorageLocationEvent> deletedStorageLocationEventResourceIterator =
+                     deletedStorageLocationEventSync.getEvents()) {
+            final ObsoleteStorageLocationDAO obsoleteStorageLocationDAO =
+                    new ObsoleteStorageLocationDAO(this.artifactDAO);
+            deletedStorageLocationEventResourceIterator.forEachRemaining(deletedStorageLocationEvent -> {
+                obsoleteStorageLocationDAO.delete(deletedStorageLocationEvent.getID());
+            });
+        }
+    }
+
+    private void syncDeletedArtifactEvents(final HarvestState harvestState)
+            throws ResourceNotFoundException, IOException, IllegalStateException, TransientException,
+                   InterruptedException {
+        final TapClient<DeletedArtifactEvent> deletedArtifactEventTapClientTapClient = new TapClient<>(this.resourceID);
+        final DeletedArtifactEventSync deletedArtifactEventSync =
+                new DeletedArtifactEventSync(deletedArtifactEventTapClientTapClient, harvestState.getLastModified());
+        deletedArtifactEventSync.getEvents().forEachRemaining(deletedArtifactEvent -> {
+            artifactDAO.delete(deletedArtifactEvent.getID());
+        });
+    }
+
+    private void syncArtifacts(final HarvestState harvestState)
+            throws ResourceNotFoundException, IOException, IllegalStateException, TransientException,
+                   InterruptedException, NoSuchAlgorithmException {
         final MessageDigest messageDigest = MessageDigest.getInstance("MD5");
         final StorageSiteDAO storageSiteDAO = new StorageSiteDAO(this.artifactDAO);
         final TapClient<StorageSite> storageSiteTapClient = new TapClient<>(this.resourceID);
-        final StorageSiteSync storageSiteSync = new StorageSiteSync(storageSiteTapClient, storageSiteDAO);
-        final StorageSite storageSite = storageSiteSync.doit();
+
+        final StorageSite storageSite;
+        if (trackSiteLocations) {
+            final StorageSiteSync storageSiteSync = new StorageSiteSync(storageSiteTapClient, storageSiteDAO);
+            storageSite = storageSiteSync.doit();
+        } else {
+            storageSite = null;
+        }
 
         final TapClient<Artifact> artifactTapClient = new TapClient<>(this.resourceID);
-        final HarvestState harvestState = this.harvestStateDAO.get(Artifact.class.getName(), this.resourceID);
         final ArtifactSync artifactSync = new ArtifactSync(artifactTapClient, harvestState.getLastModified());
         final List<String> artifactIncludeConstraints = this.selector.getConstraints();
         final Iterator<String> artifactIncludeConstraintIterator = artifactIncludeConstraints.iterator();
@@ -207,26 +269,34 @@ public class InventoryHarvester {
                     artifactSync.includeClause = artifactIncludeConstraintIterator.next();
                 }
 
-                artifactSync.iterator().forEachRemaining(artifact -> {
-                    transactionManager.startTransaction();
-                    final Artifact currentArtifact = artifactDAO.get(artifact.getID());
-                    currentArtifact.siteLocations.add(new SiteLocation(storageSite.getID()));
-                    final URI computedChecksum = artifact.computeMetaChecksum(messageDigest);
+                try (final ResourceIterator<Artifact> artifactResourceIterator = artifactSync.iterator()) {
+                    artifactResourceIterator.forEachRemaining(artifact -> {
+                        transactionManager.startTransaction();
+                        final Artifact currentArtifact = artifactDAO.get(artifact.getID());
 
-                    if (!artifact.getContentChecksum().equals(computedChecksum)) {
-                        throw new IllegalStateException(String.format("Checksums for Artifact %s (%s) do not match.",
-                                                                      artifact.getURI(), artifact.getID()));
-                    }
+                        // trackSiteLocations is false if storageSite is null.
+                        if (storageSite != null) {
+                            currentArtifact.siteLocations.add(new SiteLocation(storageSite.getID()));
+                        }
 
-                    currentArtifact.contentEncoding = artifact.contentEncoding;
-                    currentArtifact.contentType = artifact.contentType;
-                    currentArtifact.storageLocation = artifact.storageLocation;
+                        final URI computedChecksum = artifact.computeMetaChecksum(messageDigest);
 
-                    artifactDAO.put(currentArtifact);
-                    harvestState.curLastModified = artifact.getLastModified();
-                    harvestStateDAO.put(harvestState);
-                    transactionManager.commitTransaction();
-                });
+                        if (!artifact.getContentChecksum().equals(computedChecksum)) {
+                            throw new IllegalStateException(
+                                    String.format("Checksums for Artifact %s (%s) do not match.",
+                                                  artifact.getURI(), artifact.getID()));
+                        }
+
+                        currentArtifact.contentEncoding = artifact.contentEncoding;
+                        currentArtifact.contentType = artifact.contentType;
+                        currentArtifact.storageLocation = artifact.storageLocation;
+
+                        artifactDAO.put(currentArtifact);
+                        harvestState.curLastModified = artifact.getLastModified();
+                        harvestStateDAO.put(harvestState);
+                        transactionManager.commitTransaction();
+                    });
+                }
 
                 keepRunning = artifactIncludeConstraintIterator.hasNext();
             }
