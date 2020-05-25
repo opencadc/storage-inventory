@@ -68,6 +68,7 @@
 package org.opencadc.baldur;
 
 import ca.nrc.cadc.net.HttpDownload;
+import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.util.Log4jInit;
 
 import java.io.ByteArrayOutputStream;
@@ -229,17 +230,10 @@ public class GetPermissionsTest extends BaldurTest {
                     URL getPermissionsURL = new URL(certURL.toString() + "?OP=read&uri=" + notFoundArtifactURL);
                     HttpDownload get = new HttpDownload(getPermissionsURL, out);
                     get.run();
-                    Assert.assertNull(get.getThrowable());
-                    Assert.assertEquals(200, get.getResponseCode());
-                    
-                    GrantReader grantReader = new GrantReader();
-                    Grant grant = grantReader.read(out.toString());
-                    Assert.assertTrue(grant instanceof ReadGrant);
-                    ReadGrant readGrant = (ReadGrant) grant;
-                    Assert.assertEquals(URI.create(notFoundArtifactURL), readGrant.getArtifactURI());
-                    Assert.assertFalse(readGrant.isAnonymousAccess());
-                    Assert.assertTrue(readGrant.getGroups().isEmpty());
-                    
+                    Assert.assertEquals(404, get.getResponseCode());
+                    Assert.assertNotNull(get.getThrowable());
+                    Assert.assertTrue(get.getThrowable() instanceof ResourceNotFoundException);
+
                     return null;
                 }
             });
@@ -262,16 +256,10 @@ public class GetPermissionsTest extends BaldurTest {
                     URL getPermissionsURL = new URL(certURL.toString() + "?OP=write&uri=" + notFoundArtifactURL);
                     HttpDownload get = new HttpDownload(getPermissionsURL, out);
                     get.run();
-                    Assert.assertNull(get.getThrowable());
-                    Assert.assertEquals(200, get.getResponseCode());
-                    
-                    GrantReader grantReader = new GrantReader();
-                    Grant grant = grantReader.read(out.toString());
-                    Assert.assertTrue(grant instanceof WriteGrant);
-                    WriteGrant writeGrant = (WriteGrant) grant;
-                    Assert.assertEquals(URI.create(notFoundArtifactURL), writeGrant.getArtifactURI());
-                    Assert.assertTrue(writeGrant.getGroups().isEmpty());
-                    
+                    Assert.assertEquals(404, get.getResponseCode());
+                    Assert.assertNotNull(get.getThrowable());
+                    Assert.assertTrue(get.getThrowable() instanceof ResourceNotFoundException);
+
                     return null;
                 }
             });

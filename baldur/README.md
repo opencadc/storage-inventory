@@ -48,8 +48,8 @@ users = cn=foo,ou=acme,o=example,c=com cn=bar,ou=acme,o=example,c=com
 
 entry = TEST ^cadc:TEST/.*
 TEST.anon = false
-TEST.readOnlyGroups = ivo://cadc.nrc.ca/gms?TestRead
-TEST.readWriteGroups = ivo://cadc.nrc.ca/gms?TestWrite
+TEST.readOnlyGroups = ivo://cadc.nrc.ca/gms?TestRead-1 ivo://cadc.nrc.ca/gms?TestRead-2
+TEST.readWriteGroups = ivo://cadc.nrc.ca/gms?TestWrite-1 ivo://cadc.nrc.ca/gms?TestWrite-2
 ```
 
 In this example the expiry time is 60 seconds. 
@@ -72,19 +72,19 @@ When more that one entry matches an artifact URI, the grants are combined as fol
 ## integration testing
 
 Client certificates named `baldur-test-auth.pem` and `baldur-test-noauth.pem` must exist in the directory $A/test-certificates.
-`baldur-test-auth.pem` must match one of the `users` identities given in `baldur.properties`. This user has authorization to call this service to retrieve permissions.
-`baldur-test-noauth.pem` is user not listed in `users` and therefore is not authorized to call this service.
+The `baldur-test-auth.pem` must belong to a `users` identity given in `baldur.properties`. This user has authorization to call this service to retrieve permissions.
+The `baldur-test-noauth.pem` is for a user not listed in `users` and therefore is not authorized to call this service.
 
 The integration tests expect the following entry in `baldur.properties`. 
 ```
 expiryTime = 60
 
-users = { authorized user identity }
+users = { user identity for baldur-test-auth.pem }
 
-entry = TEST-GROUPS ^cadc:TEST-GROUPS/.*
-TEST-GROUPS.anon = true
-TEST-GROUPS.readOnlyGroups = ivo://cadc.nrc.ca/gms?TestReadGroup-1
-TEST-GROUPS.readWriteGroups = ivo://cadc.nrc.ca/gms?TestWriteGroup-1 ivo://cadc.nrc.ca/gms?TestWriteGroup-2
+entry = test ^cadc:TEST/.*
+test.anon = true
+test.readOnlyGroups = ivo://cadc.nrc.ca/gms?TestRead
+test.readWriteGroups = ivo://cadc.nrc.ca/gms?TestWrite
 ```
 
 ## building
