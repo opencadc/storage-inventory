@@ -28,14 +28,20 @@ org.opencadc.inventory.storage.StorageAdapter={fully qualified classname of Stor
 
 # inventory database settings
 org.opencadc.inventory.db.SQLGenerator=org.opencadc.inventory.db.SQLGenerator
-org.opencadc.inventory.db.schema={schema}
+org.opencadc.minoc.db.schema={schema}
 
-# permission granting service settings
-org.opencadc.inventory.permissions.ReadGrant.resourceID=ivo://{authority}/{name}
-org.opencadc.inventory.permissions.WriteGrant.resourceID=ivo://{authority}/{name}
+# permission granting service settings (optional)
+org.opencadc.minoc.permissions.ReadGrant.resourceID=ivo://{authority}/{name}
+org.opencadc.minoc.permissions.WriteGrant.resourceID=ivo://{authority}/{name}
 ```
-Multiple values of the permission granting service resourceID(s) may be provided. All services will be consulted but a single
-positive result is sufficient to grant permission for an action.
+Multiple values of the permission granting service resourceID(s) may be provided. All services will 
+be consulted but a single positive result is sufficient to grant permission for an action.
+
+**For developer testing only:** To require authentication only and disable permission checking, add the following
+configuration entry to minoc.properties:
+```
+org.opencadc.minoc.permissions.authenticateOnly=true
+```
 
 Additional configuration may be required by the storage adapter implementation.
 

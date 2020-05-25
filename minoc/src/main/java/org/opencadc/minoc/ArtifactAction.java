@@ -128,12 +128,15 @@ public abstract class ArtifactAction extends RestAction {
     protected final StorageAdapter storageAdapter;
     protected final List<URI> readGrantServices = new ArrayList<>();
     protected final List<URI> writeGrantServices = new ArrayList<>();
+    
+    private final boolean authenticateOnly;
 
     // constructor for unit tests with no config/init
     ArtifactAction(boolean init) {
         super();
         this.artifactDAO = null;
         this.storageAdapter = null;
+        this.authenticateOnly = false;
     }
 
     protected ArtifactAction() {
@@ -163,7 +166,20 @@ public abstract class ArtifactAction extends RestAction {
                 }
             }
         }
-
+        
+        String ao = props.getFirstPropertyValue(InitDatabaseAction.DEV_AUTH_ONLY_KEY);
+        log.warn(InitDatabaseAction.DEV_AUTH_ONLY_KEY + " = " + ao);
+        if (ao != null) {
+            try {
+                this.authenticateOnly = Boolean.valueOf(ao);
+            } catch (Exception ex) {
+                throw new IllegalStateException("invalid config: " + InitDatabaseAction.DEV_AUTH_ONLY_KEY + "=" + ao + " must be true|false or not set");
+            }
+        } else {
+            authenticateOnly = false;
+        }
+        log.warn("configured authenticateOnly = " + authenticateOnly);
+        
         Map<String, Object> config = InitDatabaseAction.getDaoConfig(props);
         this.artifactDAO = new ArtifactDAO();
         artifactDAO.setConfig(config); // connectivity tested
@@ -211,7 +227,6 @@ public abstract class ArtifactAction extends RestAction {
     
     void init() {
         parsePath();
-
     }
         
    
@@ -219,9 +234,8 @@ public abstract class ArtifactAction extends RestAction {
     public void checkReadPermission()
         throws AccessControlException, TransientException {
         
-        // TODO: remove this when baldur is functional
-        if (true) {
-            log.warn("allowing unrestricted read for development");
+        if (authenticateOnly) {
+            log.warn(InitDatabaseAction.DEV_AUTH_ONLY_KEY + "=true: allowing unrestricted access");
             return;
         }
         
@@ -269,6 +283,7 @@ public abstract class ArtifactAction extends RestAction {
     
     public void checkWritePermission()
         throws AccessControlException, TransientException {
+        log.warn("checkWritePermission: authenticateOnly = " + authenticateOnly);
 
         AuthMethod am = AuthenticationUtil.getAuthMethod(AuthenticationUtil.getCurrentSubject());
         if (am != null && am.equals(AuthMethod.ANON)) {
@@ -276,9 +291,8 @@ public abstract class ArtifactAction extends RestAction {
             throw new AccessControlException("permission denied");
         }
         
-        // TODO: remove this when baldur is functional
-        if (true) {
-            log.warn("allowing unrestricted write for development");
+        if (authenticateOnly) {
+            log.warn(InitDatabaseAction.DEV_AUTH_ONLY_KEY + "=true: allowing unrestricted access");
             return;
         }
         
