@@ -228,8 +228,6 @@ public abstract class ArtifactAction extends RestAction {
         parsePath();
     }
         
-   
-    
     public void checkReadPermission()
         throws AccessControlException, TransientException {
         
