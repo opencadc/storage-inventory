@@ -230,35 +230,26 @@ public class FileSync {
         log.info("END - FileSync - total ms: " + total);
     }
 
-}
+    class FileSyncThreadExecutor extends ThreadPoolExecutor {
+        public FileSyncThreadExecutor(int poolSize, int maxPoolSize, long keepAliveTime, TimeUnit unit,
+                                      BlockingQueue<Runnable> workQueue, RejectedExecutionHandler rejectedHandler) {
+            super(poolSize, maxPoolSize, keepAliveTime, unit, workQueue, rejectedHandler);
+        }
 
-class FileSyncThreadExecutor extends ThreadPoolExecutor {
-    private static final Logger log = Logger.getLogger(FileSyncThreadExecutor.class);
-
-    /**
-     * ctor: adds functionality to the afterExecute function to log success or failure of
-     * items submitted via execute in FileSync
-     * @param PoolSize
-     * @param maxPoolSize
-     * @param keepAliveTime
-     * @param unit
-     * @param workQueue
-     * @param rejectedHandler
-     */
-    public FileSyncThreadExecutor(int PoolSize, int maxPoolSize, long keepAliveTime, TimeUnit unit,
-                                  BlockingQueue<Runnable> workQueue, RejectedExecutionHandler rejectedHandler) {
-        super(PoolSize, maxPoolSize, keepAliveTime, unit, workQueue, rejectedHandler);
+        @Override
+        protected void afterExecute(Runnable run, Throwable thrown) {
+            super.afterExecute(run, thrown);
+            if (thrown == null) {
+                log.info("FileSyncJob completed");
+            } else {
+                log.info("exception - " + thrown.getMessage());
+            }
+        }
     }
 
-    @Override
-    protected void afterExecute(Runnable run, Throwable throw1) {
-        super.afterExecute(run, throw1);
-        if (throw1 == null)
-            log.info("FileSyncJob completed");
-        else
-            log.info("exception - " +throw1.getMessage());
-    }
 }
+
+
 
 
 // general behaviour: (original notes from pdowler
