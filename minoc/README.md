@@ -17,8 +17,7 @@ minoc.invadm.url=jdbc:postgresql://{server}/{database}
 Additional java system properties may be required by libraries.
 
 ### minoc.properties
-A minoc.properties file in /config is required to run this service.  The following keys (with example values) are needed:
-
+A minoc.properties file in /config is required to run this service.  The following keys are required:
 ```
 # service identity
 org.opencadc.minoc.resourceID=ivo://{authority}/{name}
@@ -29,19 +28,25 @@ org.opencadc.inventory.storage.StorageAdapter={fully qualified classname of Stor
 # inventory database settings
 org.opencadc.inventory.db.SQLGenerator=org.opencadc.inventory.db.SQLGenerator
 org.opencadc.minoc.db.schema={schema}
-
-# permission granting service settings (optional)
-org.opencadc.minoc.readGrantProvider=ivo://{authority}/{name}
-org.opencadc.minoc.writeGrantProvider=ivo://{authority}/{name}
 ```
-Multiple values of the permission granting service resourceID(s) may be provided. All services will 
-be consulted but a single positive result is sufficient to grant permission for an action.
+The following optional keys configure minoc to use external service(s) to obtain grant information in order
+to perform authorization checks:
+# permission granting service settings (optional)
+```
+org.opencadc.minoc.readGrantProvider={resourceID of a permission granting service}
+org.opencadc.minoc.writeGrantProvider={resourceID of a permission granting service}
+```
+Multiple values of the permission granting service resourceID(s) may be provided by including multiple property 
+settings. All services will be consulted but a single positive result is sufficient to grant permission for an 
+action.
 
-**For developer testing only:** To require authentication only and disable permission checking, add the following
-configuration entry to minoc.properties:
+**For developer testing only:** To disable authorization checking (via `readGrantProvider` or `writeGrantProvider`
+services), add the following configuration entry to minoc.properties:
 ```
 org.opencadc.minoc.authenticateOnly=true
 ```
+With `authenticateOnly=true`, any authenticated user will be able to read/write/delete files and anonymous users
+will be able to read files.
 
 Additional configuration may be required by the storage adapter implementation.
 

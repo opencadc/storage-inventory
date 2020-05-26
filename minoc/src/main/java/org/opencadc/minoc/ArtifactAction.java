@@ -168,24 +168,23 @@ public abstract class ArtifactAction extends RestAction {
         }
         
         String ao = props.getFirstPropertyValue(InitDatabaseAction.DEV_AUTH_ONLY_KEY);
-        log.warn(InitDatabaseAction.DEV_AUTH_ONLY_KEY + " = " + ao);
         if (ao != null) {
             try {
                 this.authenticateOnly = Boolean.valueOf(ao);
+                log.warn("(configuration) authenticateOnly = " + authenticateOnly);
             } catch (Exception ex) {
                 throw new IllegalStateException("invalid config: " + InitDatabaseAction.DEV_AUTH_ONLY_KEY + "=" + ao + " must be true|false or not set");
             }
         } else {
             authenticateOnly = false;
         }
-        log.warn("configured authenticateOnly = " + authenticateOnly);
+        
         
         Map<String, Object> config = InitDatabaseAction.getDaoConfig(props);
         this.artifactDAO = new ArtifactDAO();
         artifactDAO.setConfig(config); // connectivity tested
 
         this.storageAdapter = InventoryUtil.loadPlugin(props.getFirstPropertyValue(InitDatabaseAction.SA_KEY));
-            
     }
 
     /**
@@ -253,7 +252,7 @@ public abstract class ArtifactAction extends RestAction {
                     granted.addAll(grant.getGroups());
                 }
             } catch (ResourceNotFoundException ex) {
-                log.error("failed to find granting service: " + ps, ex);
+                log.warn("failed to find granting service: " + ps + " -- cause: " + ex);
             }
         }
         if (granted.isEmpty()) {
@@ -266,8 +265,8 @@ public abstract class ArtifactAction extends RestAction {
         // unfortunately, the speed of GroupClient.getGroups() will depend on how many groups the
         // caller belomgs to...
         LocalAuthority loc = new LocalAuthority();
-        URI resourecID = loc.getServiceURI(Standards.GMS_SEARCH_01.toString());
-        GroupClient client = GroupUtil.getGroupClient(resourecID);
+        URI resourceID = loc.getServiceURI(Standards.GMS_SEARCH_01.toString());
+        GroupClient client = GroupUtil.getGroupClient(resourceID);
         List<GroupURI> userGroups = client.getMemberships();
         for (GroupURI gg : granted) {
             for (GroupURI userGroup : userGroups) {
@@ -307,7 +306,7 @@ public abstract class ArtifactAction extends RestAction {
                     granted.addAll(grant.getGroups());
                 }
             } catch (ResourceNotFoundException ex) {
-                log.error("failed to find granting service: " + ps, ex);
+                log.warn("failed to find granting service: " + ps + " -- cause: " + ex);
             }
         }
         if (granted.isEmpty()) {
