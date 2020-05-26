@@ -209,6 +209,9 @@ public class FileSync {
             log.error("error processing list of artifacts, at: " + currentArtifactInfo);
             return;
         } finally {
+            long elapsed = System.currentTimeMillis() - start;
+            log.info("FINALLY - FileSync - elapsed ms: " + elapsed);
+
             if (executor != null && !executor.isShutdown()) {
                 log.warn("Waiting for jobs to complete before shutting down thread pool (or 60s.)");
                 try {
@@ -223,8 +226,8 @@ public class FileSync {
             }
         }
 
-        long elapsed = System.currentTimeMillis() - start;
-        log.info("END - FileSync - elapsed ms: " + elapsed);
+        long total = System.currentTimeMillis() - start;
+        log.info("END - FileSync - total ms: " + total);
     }
 
 }
