@@ -197,7 +197,6 @@ public class Main {
             }
             log.debug("SQL generator class made");
 
-            // todo: this might be far more complicated than ncessary to create the storage adapter
             StorageAdapter localStorage = null;
             try {
                 Class c = Class.forName(adapterClass);

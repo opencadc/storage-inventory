@@ -71,16 +71,13 @@ import ca.nrc.cadc.db.ConnectionConfig;
 import ca.nrc.cadc.db.DBUtil;
 
 import java.net.URI;
-import java.util.ArrayList;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Map;
 
-import java.util.concurrent.Callable;
-import java.util.concurrent.ExecutionException;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.RejectedExecutionHandler;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import javax.naming.NamingException;
@@ -131,18 +128,23 @@ public class FileSync {
         this.selector = selector;
         this.nthreads = nthreads;
 
-        // Use default AbortPolicy for rejectedExecutionException
-        // logs and continues
-        // otherwise add a new Policy to the ctor for ThreadPoolExecutor
-        // core pool size is 1. will be max nthreads
-        // keepaliveTime may be increased, as it is unused threads stop immediately
-        this.executor = Executors.newFixedThreadPool(nthreads);
-//        this.executor = new ThreadPoolExecutor(
-//            1,
-//            nthreads,
-//            0L,
-//            TimeUnit.MILLISECONDS,
-//            new LinkedBlockingQueue<>(this.nthreads * 2));
+        // Notes on this executor instance:
+        // core pool size = 1, max = nthreads. Executor will prefer
+        // adding threads over queueing if there are fewer than nthreads
+        // threads alive. After that it will add up to (nthreads*2) jobs
+        // to the queue.
+        // The (nthreads*2)+1 th job will be rejected, and the CallerRunsPolicy
+        // causes the main thread to run the job. No new jobs are added to the queue
+        // until after that job is complete. In that time under normal circumstances
+        // the queue should have drained at least partially so when the main thread
+        // gets back to running executor.execute(), there should be room again.
+        this.executor = new FileSyncThreadExecutor(
+            1,
+            nthreads,
+            0L,
+            TimeUnit.MILLISECONDS,
+            new LinkedBlockingQueue<>(this.nthreads * 2),
+            new ThreadPoolExecutor.CallerRunsPolicy());
 
         // For managing the artifact iterator FileSync loops over
         try {
@@ -196,10 +198,8 @@ public class FileSync {
                         this.storageAdapter, this.jobArtifactDAO);
 
                     log.debug("creating file sync job: " + curArtifact.getURI());
-                    // fire & forget
-                    // This is using a bounded queue, nthreads*2 in size
-//                    executor.execute(fsj);
-                    executor.submit(fsj);
+                    // fire & forget - jobs log their issues to the queue
+                    executor.execute(fsj);
                     log.debug("executed job");
                 }
             }
@@ -210,8 +210,16 @@ public class FileSync {
             return;
         } finally {
             if (executor != null && !executor.isShutdown()) {
-                log.warn("Manually shutting down thread pool");
-//                executor.shutdownNow();
+                log.warn("Waiting for jobs to complete before shutting down thread pool (or 60s.)");
+                try {
+                    // NOTE: Java documentation says an alternate way is to use getPoolSize()
+                    // and sleep/check in a loop until size 1, but
+                    // that still risks the last job not completing down before this thread closes.
+                    // Also - it doesn't seem to be available with the version of Java used?
+                    executor.awaitTermination(20L, TimeUnit.SECONDS);
+                } catch (InterruptedException ie) {
+                    log.error("interrupted while waiting for threads to terminate");
+                }
             }
         }
 
@@ -220,3 +228,46 @@ public class FileSync {
     }
 
 }
+
+class FileSyncThreadExecutor extends ThreadPoolExecutor {
+    private static final Logger log = Logger.getLogger(FileSyncThreadExecutor.class);
+
+    /**
+     * ctor: adds functionality to the afterExecute function to log success or failure of
+     * items submitted via execute in FileSync
+     * @param PoolSize
+     * @param maxPoolSize
+     * @param keepAliveTime
+     * @param unit
+     * @param workQueue
+     * @param rejectedHandler
+     */
+    public FileSyncThreadExecutor(int PoolSize, int maxPoolSize, long keepAliveTime, TimeUnit unit,
+                                  BlockingQueue<Runnable> workQueue, RejectedExecutionHandler rejectedHandler) {
+        super(PoolSize, maxPoolSize, keepAliveTime, unit, workQueue, rejectedHandler);
+    }
+
+    @Override
+    protected void afterExecute(Runnable run, Throwable throw1) {
+        super.afterExecute(run, throw1);
+        if (throw1 == null)
+            log.info("FileSyncJob completed");
+        else
+            log.info("exception - " +throw1.getMessage());
+    }
+}
+
+
+// general behaviour: (original notes from pdowler
+// - create a job queue
+// - create a thread pool to execute jobs (ta 13063)
+// - query inventory for Artifact with null StorageLocation and use Iterator<Artifact>
+//   to keep the queue finite in size (not empty, not huge)
+// job: transfer negotiation  (with global) + HttpGet with output to local StorageAdapter
+// - the job wrapper should balance HttpGet retries to a single URL and cycling through each
+//   negotiated URL (once)... so if more URLs to try, fewer retries each (separate task)
+// - if a job fails, just log it and move on
+
+// run until Iterator<Artifact> finishes:
+// - terminate?
+// - manage idle and run until serious failure?
