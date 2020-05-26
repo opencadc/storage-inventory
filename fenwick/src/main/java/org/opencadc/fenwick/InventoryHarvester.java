@@ -67,6 +67,7 @@
 
 package org.opencadc.fenwick;
 
+import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.reg.Capabilities;
 import ca.nrc.cadc.reg.Capability;
 import ca.nrc.cadc.reg.Standards;
@@ -120,6 +121,8 @@ public class InventoryHarvester {
             if (inventoryTAP == null) {
                 throw new IllegalArgumentException("invalid config: remote query service " + resourceID + " does not implement " + Standards.TAP_10);
             }
+        } catch (ResourceNotFoundException ex) {
+            throw new IllegalArgumentException("query service not found: " + resourceID, ex);
         } catch (IOException ex) {
             throw new IllegalArgumentException("invalid config", ex);
         }
