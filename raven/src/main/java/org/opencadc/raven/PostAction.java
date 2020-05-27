@@ -125,12 +125,17 @@ public class PostAction extends RestAction {
 
     static final String JNDI_DATASOURCE = "jdbc/inventory"; // context.xml
 
-    static final String SCHEMA_KEY = SQLGenerator.class.getPackage().getName() + ".schema";
-    static final String READ_GRANTS_KEY = ReadGrant.class.getName() + ".resourceID";
-
+    private static final String KEY_BASE = PostAction.class.getPackage().getName();
+    static final String SCHEMA_KEY =  KEY_BASE + ".db.schema";
+    static final String READ_GRANTS_KEY = KEY_BASE + ".readGrantProvider";
+    static final String WRITE_GRANTS_KEY = KEY_BASE + ".writeGrantProvider";
+    static final String DEV_AUTH_ONLY_KEY = KEY_BASE + ".authenticateOnly";
+    
     // immutable state set in constructor
     protected final ArtifactDAO artifactDAO;
-    protected final List<URI> readGrantServices = new ArrayList<>();
+    private final List<URI> readGrantServices = new ArrayList<>();
+    private final List<URI> writeGrantServices = new ArrayList<>();
+    private final boolean authenticateOnly;
     
     private static final String INLINE_CONTENT_TAG = "inputstream";
     private static final String CONTENT_TYPE = "text/xml";
@@ -152,6 +157,30 @@ public class PostAction extends RestAction {
                     throw new IllegalStateException("invalid config: " + READ_GRANTS_KEY + "=" + s + " must be a valid URI");
                 }
             }
+        }
+        
+        List<String> writeGrants = props.getProperty(WRITE_GRANTS_KEY);
+        if (writeGrants != null) {
+            for (String s : writeGrants) {
+                try {
+                    URI u = new URI(s);
+                    writeGrantServices.add(u);
+                } catch (URISyntaxException ex) {
+                    throw new IllegalStateException("invalid config: " + WRITE_GRANTS_KEY + "=" + s + " must be a valid URI");
+                }
+            }
+        }
+        
+        String ao = props.getFirstPropertyValue(DEV_AUTH_ONLY_KEY);
+        if (ao != null) {
+            try {
+                this.authenticateOnly = Boolean.valueOf(ao);
+                log.warn("(configuration) authenticateOnly = " + authenticateOnly);
+            } catch (Exception ex) {
+                throw new IllegalStateException("invalid config: " + DEV_AUTH_ONLY_KEY + "=" + ao + " must be true|false or not set");
+            }
+        } else {
+            authenticateOnly = false;
         }
 
         Map<String, Object> config = getDaoConfig(props);
@@ -181,6 +210,7 @@ public class PostAction extends RestAction {
 
     /**
      * Perform transfer negotiation.
+     * TODO: add support for write negotiation (pushToVoSpace and PROTOCOL_HTTPS_PUT)
      */
     @Override
     public void doAction() throws Exception {
@@ -195,9 +225,10 @@ public class PostAction extends RestAction {
         }
         
         // only support https over anonymous auth method for now
+        // TODO: if the protocol includes an auth method that the storage site supports, generate a non-token URL
         Protocol supportedProtocol = new Protocol(VOS.PROTOCOL_HTTPS_GET);
         if (!transfer.getProtocols().contains(supportedProtocol)) {
-            throw new IllegalArgumentException("no supported protocols (require https with anon security method)");
+            throw new UnsupportedOperationException("no supported protocols (require https with anon security method)");
         }
         transfer.getProtocols().clear();
         
@@ -209,7 +240,10 @@ public class PostAction extends RestAction {
             throw new ResourceNotFoundException(artifactURI.toString());
         }
         
-        // check read permission
+        // TODO: checkReadPermission for pullFromVoSpace/GET
+        // TODO: checkWritePermission for pushToVoSpace/PUT
+        // TODO: checkReadPermission and checkWritePermission are identical in minoc so move to a
+        //       service utility library rather than implement here
         checkReadPermission(artifactURI);
         
         // get the user for logging
@@ -264,9 +298,8 @@ public class PostAction extends RestAction {
     
     private void checkReadPermission(URI artifactURI) throws AccessControlException, TransientException {
 
-        // TODO: remove this when baldur is functional
-        if (true) {
-            log.warn("allowing unrestricted read for development");
+        if (authenticateOnly) {
+            log.warn(DEV_AUTH_ONLY_KEY + "=true: allowing unrestricted access");
             return;
         }
 
@@ -284,7 +317,7 @@ public class PostAction extends RestAction {
                     granted.addAll(grant.getGroups());
                 }
             } catch (ResourceNotFoundException ex) {
-                log.error("failed to find granting service: " + ps, ex);
+                log.warn("failed to find granting service: " + ps + " -- cause: " + ex);
             }
         }
         if (granted.isEmpty()) {
