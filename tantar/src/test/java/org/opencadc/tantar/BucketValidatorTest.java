@@ -93,6 +93,7 @@ import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.storage.StorageMetadata;
 import org.opencadc.tantar.policy.InventoryIsAlwaysRight;
+import org.opencadc.tantar.policy.RecoverFromStorage;
 import org.opencadc.tantar.policy.StorageIsAlwaysRight;
 
 
@@ -180,7 +181,7 @@ public class BucketValidatorTest {
         assertListContainsMessage(outputLines,
                                   "Removing Unknown File StorageLocation[ceph:78787878] as per policy.");
         assertListContainsMessage(outputLines,
-                                  "Retrieving File StorageLocation[ceph:7890AB] as per policy.");
+                                  "Resetting Artifact StorageLocation[ceph:7890AB] as per policy.");
         assertListContainsMessage(outputLines,
                                   "Replacing File StorageLocation[s3:CDEF00] as per policy.");
         assertListContainsMessage(outputLines, "Artifact StorageLocation[ad:123456] is valid as per policy.");
@@ -242,11 +243,11 @@ public class BucketValidatorTest {
                 Arrays.asList(new String(byteArrayOutputStream.toByteArray()).split("\n"));
         System.out.println(String.format("Message lines are \n\n%s\n\n", outputLines));
         assertListContainsMessage(outputLines,
-                                  "Retrieving File StorageLocation[ad:123456] as per policy.");
+                                  "Resetting Artifact StorageLocation[ad:123456] as per policy.");
         assertListContainsMessage(outputLines,
-                                  "Retrieving File StorageLocation[ceph:7890AB] as per policy.");
+                                  "Resetting Artifact StorageLocation[ceph:7890AB] as per policy.");
         assertListContainsMessage(outputLines,
-                                  "Retrieving File StorageLocation[s3:CDEF00] as per policy.");
+                                  "Resetting Artifact StorageLocation[s3:CDEF00] as per policy.");
     }
 
     /**
@@ -364,6 +365,62 @@ public class BucketValidatorTest {
         final BucketValidator testSubject =
                 new BucketValidator("TESTBUCKET", null,
                                     new Subject(), true, new StorageIsAlwaysRight(testEventListener, reporter),
+                                    null, null) {
+                    @Override
+                    Iterator<StorageMetadata> iterateStorage() {
+                        return testStorageMetadataList.iterator();
+                    }
+
+                    @Override
+                    Iterator<Artifact> iterateInventory() {
+                        return Collections.emptyIterator();
+                    }
+                };
+
+        testSubject.validate();
+
+        final List<String> outputLines =
+                Arrays.asList(new String(byteArrayOutputStream.toByteArray()).split("\n"));
+        System.out.println(String.format("Message lines are \n\n%s\n\n", outputLines));
+        assertListContainsMessage(outputLines,
+                                  "Adding Artifact StorageLocation[ad:123456] as per policy.");
+        assertListContainsMessage(outputLines,
+                                  "Adding Artifact StorageLocation[ad:78787878] as per policy.");
+        assertListContainsMessage(outputLines,
+                                  "Adding Artifact StorageLocation[ad:CDEF00] as per policy.");
+    }
+
+    /**
+     * Ensure the RecoverFromStoragePolicy policy will maintain the integrity of the Storage Adapter (StorageMetadata)
+     * over that of the Inventory (Artifact).  This will use an empty inventory to simulate a first run.
+     *
+     * @throws Exception For anything unexpected.
+     */
+    @Test
+    public void validateRecoverFromStoragePolicyEmptyInventory() throws Exception {
+        final ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+
+        final Reporter reporter = new Reporter(getTestLogger(byteArrayOutputStream));
+
+        // **** Create the Storage Adapter content.
+        final List<StorageMetadata> testStorageMetadataList = new ArrayList<>();
+        testStorageMetadataList.add(new StorageMetadata(new StorageLocation(URI.create("ad:123456")),
+                                                        URI.create("md5:8899"), 88L));
+
+        testStorageMetadataList.add(new StorageMetadata(new StorageLocation(URI.create("ad:78787878")),
+                                                        URI.create("md5:0055998"), 99L));
+
+        testStorageMetadataList.add(
+                new StorageMetadata(new StorageLocation(URI.create("ad:CDEF00")),
+                                    URI.create("md5:2222"), 100L));
+        testStorageMetadataList.sort(Comparator.comparing(StorageMetadata::getStorageLocation));
+        // **** End Create the Storage Adapter content.
+
+        final TestEventListener testEventListener = new TestEventListener();
+
+        final BucketValidator testSubject =
+                new BucketValidator("TESTBUCKET", null,
+                                    new Subject(), true, new RecoverFromStorage(testEventListener, reporter),
                                     null, null) {
                     @Override
                     Iterator<StorageMetadata> iterateStorage() {

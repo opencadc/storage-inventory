@@ -67,17 +67,26 @@
 
 package org.opencadc.fenwick;
 
-import org.apache.log4j.Logger;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Selector that does not constrain Artifact selection.
- * 
+ *
  * @author pdowler
  */
-public class AllArtifacts extends ArtifactSelector {
-    private static final Logger log = Logger.getLogger(AllArtifacts.class);
+public class AllArtifacts implements ArtifactSelector {
 
     public AllArtifacts() {
-        super();
+    }
+
+    /**
+     * This implementation returns an empty list: no constraints. 
+     * 
+     * @return empty list
+     */
+    @Override
+    public List<String> getConstraints() {
+        return new ArrayList<String>(0);
     }
 }

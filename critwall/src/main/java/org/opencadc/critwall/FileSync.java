@@ -67,107 +67,120 @@
 
 package org.opencadc.critwall;
 
-import ca.nrc.cadc.reg.Capabilities;
-import ca.nrc.cadc.reg.Capability;
-import ca.nrc.cadc.reg.Standards;
-import ca.nrc.cadc.reg.client.RegistryClient;
+import ca.nrc.cadc.db.ConnectionConfig;
+import ca.nrc.cadc.db.DBUtil;
 
-import java.io.IOException;
 import java.net.URI;
 import java.util.Iterator;
 import java.util.Map;
 
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import javax.naming.NamingException;
 import org.apache.log4j.Logger;
+import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.InventoryUtil;
-import org.opencadc.inventory.SiteLocation;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.storage.StorageAdapter;
+import org.opencadc.inventory.storage.fs.OpaqueFileSystemStorageAdapter;
 
-/**
- *
- * @author pdowler
- */
+
 public class FileSync {
     private static final Logger log = Logger.getLogger(FileSync.class);
 
     private static final int MAX_THREADS = 16;
     
     private final ArtifactDAO artifactDAO;
-    private StorageAdapter localStorage;
-    private final URI resourceID;
-    private final Capability locator;
+    private final ArtifactDAO jobArtifactDAO;
+    private final URI locatorService;
     private final BucketSelector selector;
     private final int nthreads;
-    
+    private final StorageAdapter storageAdapter;
+    ExecutorService executor = null;
+
     /**
      * Constructor.
      * 
      * @param daoConfig config map to pass to cadc-inventory-db DAO classes
+     * @param connectionConfig ConnectionConfig object to use for creating jndiDataSource
      * @param localStorage adapter to put to local storage
-     * @param resourceID identifier for the remote query service
+     * @param locatorServiceID identifier for the remote query service (locator)
      * @param selector selector implementation
      * @param nthreads number of threads in download thread pool
      */
-    public FileSync(Map<String,Object> daoConfig, StorageAdapter localStorage, URI resourceID, BucketSelector selector, int nthreads) {
+    public FileSync(Map<String,Object> daoConfig, ConnectionConfig connectionConfig,  StorageAdapter
+            localStorage, URI locatorServiceID, BucketSelector selector, int nthreads) {
+
         InventoryUtil.assertNotNull(FileSync.class, "daoConfig", daoConfig);
+        InventoryUtil.assertNotNull(FileSync.class, "connectionConfig", connectionConfig);
         InventoryUtil.assertNotNull(FileSync.class, "localStorage", localStorage);
-        InventoryUtil.assertNotNull(FileSync.class, "resourceID", resourceID);
+        InventoryUtil.assertNotNull(FileSync.class, "locatorServiceID", locatorServiceID);
         InventoryUtil.assertNotNull(FileSync.class, "selector", selector);
 
         if (nthreads <= 0 || nthreads > MAX_THREADS) {
             throw new IllegalArgumentException("invalid config: nthreads must be in [1," + MAX_THREADS + "], found: " + nthreads);
         }
 
-        this.artifactDAO = new ArtifactDAO();
-        artifactDAO.setConfig(daoConfig);
-        this.resourceID = resourceID;
+        this.locatorService = locatorServiceID;
         this.selector = selector;
         this.nthreads = nthreads;
 
-        //        throw new UnsupportedOperationException("TODO");
+        // For managing the artifact iterator FileSync loops over
+        try {
+            // Make FileSync ArtifactDAO instance
+            String jndiSourceName = "jdbc/fileSync";
+            daoConfig.put("jndiDataSourceName", jndiSourceName);
+            DBUtil.createJNDIDataSource(jndiSourceName,connectionConfig);
 
+            this.artifactDAO = new ArtifactDAO();
+            this.artifactDAO.setConfig(daoConfig);
 
-        // To be completed in s2575, ta 13061
-        // TODO: temporary so that FileSync.run can execute remove setting
-        // locator to null when this section is finished
-        this.locator = null;
-        //        try {
-        //            RegistryClient rc = new RegistryClient();
-        //            Capabilities caps = rc.getCapabilities(resourceID);
-        //            // above call throws IllegalArgumentException... should be ResourceNotFoundException but out of scope to fix
-        //            this.locator = caps.findCapability(Standards.SI_LOCATE);
-        //            if (locator == null) {
-        //                throw new IllegalArgumentException("invalid config: remote query service " + resourceID + " does not implement "
-        //                + Standards.SI_LOCATE);
-        //            }
-        //        } catch (IOException ex) {
-        //            throw new IllegalArgumentException("invalid config", ex);
-        //        }
+            // Make FileSyncJob ArtifactDAO instance
+            jndiSourceName = "jdbc/fileSyncJob";
+            daoConfig.put("jndiDataSourceName", jndiSourceName);
+            DBUtil.createJNDIDataSource(jndiSourceName,connectionConfig);
+
+            // For passing to FileSyncJob
+            this.jobArtifactDAO = new ArtifactDAO();
+            this.jobArtifactDAO.setConfig(daoConfig);
+
+        } catch (NamingException ne) {
+            throw new IllegalStateException("unable to access database: " + daoConfig.get("database"), ne);
+        }
+
+        this.storageAdapter = localStorage;
+        log.debug("FileSync ctor done");
     }
     
-    // general behaviour:
-    // - create a job queue
-    // - create a thread pool to execute jobs (ta 13063)
-    // - query inventory for Artifact with null StorageLocation and use Iterator<Artifact>
-    //   to keep the queue finite in size (not empty, not huge)
-    // job: transfer negotiation  (with global) + HttpGet with output to local StorageAdapter
-    // - the job wrapper should balance HttpGet retries to a single URL and cycling through each
-    //   negotiated URL (once)... so if more URLs to try, fewer retries each (separate task)
-    // - if a job fails, just log it and move on
-    
-    // run until Iterator<Artifact> finishes: 
-    // - terminate?
-    // - manage idle and run until serious failure?
-    
+
     public void run() {
         Iterator<String> bucketSelector = selector.getBucketIterator();
-        while (bucketSelector.hasNext()) {
-            String nextBucket = bucketSelector.next();
-            log.info("processing bucket " + nextBucket);
+        String currentArtifactInfo = "";
+        executor = Executors.newFixedThreadPool(this.nthreads);
+
+        try {
+            while (bucketSelector.hasNext()) {
+                String bucket = bucketSelector.next();
+                log.info("processing bucket " + bucket);
+                Iterator<Artifact> unstoredArtifacts = artifactDAO.unstoredIterator(bucket);
+
+                while (unstoredArtifacts.hasNext()) {
+                    Artifact curArtifact = unstoredArtifacts.next();
+                    currentArtifactInfo = "bucket: " + bucket + " artifact: " + curArtifact.getURI();
+                    log.debug("processing: " + currentArtifactInfo);
+
+                    FileSyncJob fsj = new FileSyncJob(curArtifact.getURI(), this.locatorService,
+                        this.storageAdapter, this.jobArtifactDAO);
+                    fsj.run();
+                }
+            }
+        } catch (Exception e) {
+            // capture database errors here and quit if there's a failure
+            log.error("error processing list of artifacts, at: " + currentArtifactInfo);
+            return;
         }
-        throw new UnsupportedOperationException("TODO");
+
+        log.info("END - processing buckets.");
     }
-
-
 
 }

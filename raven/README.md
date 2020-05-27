@@ -10,21 +10,37 @@ When running raven.war in tomcat, parameters of the connection pool in META-INF/
 to be configured in catalina.properties:
 ```
 # database connection pools
-raven.invadm.maxActive={}
-raven.invadm.username={}
-raven.invadm.password={}
-raven.invadm.url=jdbc:postgresql://{server}/{database}
+raven.invuser.maxActive={}
+raven.invuser.username={}
+raven.invuser.password={}
+raven.invuser.url=jdbc:postgresql://{server}/{database}
 
 ```
 
 ### raven.properties
-The following keys (with example values) are needed:
-
+The following keys are required:
 ```
 # inventory database settings
 org.opencadc.inventory.db.SQLGenerator=org.opencadc.inventory.db.SQLGenerator
-org.opencadc.inventory.db.schema=inventory
+org.opencadc.raven.db.schema={schema}
 ```
+The following optional keys configure raven to use external service(s) to obtain grant information in order
+to perform authorization checks:
+```
+org.opencadc.raven.readGrantProvider={resourceID of a permission granting service}
+org.opencadc.raven.writeGrantProvider={resourceID of a permission granting service}
+```
+Multiple values of the permission granting service resourceID(s) may be provided by including multiple property 
+settings. All services will be consulted but a single positive result is sufficient to grant permission for an 
+action. TODO: `writeGrantProvider` and negotiation of write transfers are not yet implemented.
+
+**For developer testing only:** To disable authorization checking (via `readGrantProvider` or `writeGrantProvider`
+services), add the following configuration entry to raven.properties:
+```
+org.opencadc.raven.authenticateOnly=true
+```
+With `authenticateOnly=true`, any authenticated user will be able to read/write/delete files and anonymous users
+will be able to read files.
 
 ## building
 
@@ -40,5 +56,5 @@ docker run -it raven:latest /bin/bash
 
 ## running it
 ```
-docker run --user tomcat:tomcat --volume=/path/to/external/conf:/conf:ro --name raven raven:latest
+docker run --user tomcat:tomcat --volume=/path/to/external/config:/config:ro --name raven raven:latest
 ```

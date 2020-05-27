@@ -117,6 +117,7 @@ public class AbstractResolutionPolicyTest<T extends ResolutionPolicy> {
         protected boolean deleteArtifactCalled = false;
         protected boolean resetArtifactCalled = false;
         protected boolean replaceArtifactCalled = false;
+        protected boolean updateArtifactCalled = false;
 
         @Override
         public void createArtifact(StorageMetadata storageMetadata) throws Exception {
@@ -141,6 +142,11 @@ public class AbstractResolutionPolicyTest<T extends ResolutionPolicy> {
         @Override
         public void replaceArtifact(Artifact artifact, StorageMetadata storageMetadata) throws Exception {
             replaceArtifactCalled = true;
+        }
+
+        @Override
+        public void updateArtifact(Artifact artifact, StorageMetadata storageMetadata) throws Exception {
+            updateArtifactCalled = true;
         }
     }
 }

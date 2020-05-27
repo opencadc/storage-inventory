@@ -232,6 +232,7 @@ public class FileSystemStorageAdapter implements StorageAdapter {
      *
      * @param rootDirectory The root directory of the local file system.
      * @param bucketMode The mode in which to organize files
+     * @param bucketLen length of generated storageBucket string/path
      */
     public FileSystemStorageAdapter(String rootDirectory, BucketMode bucketMode, int bucketLen) {
 

@@ -67,6 +67,7 @@
 
 package org.opencadc.fenwick;
 
+import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.reg.Capabilities;
 import ca.nrc.cadc.reg.Capability;
 import ca.nrc.cadc.reg.Standards;
@@ -78,8 +79,8 @@ import java.util.Map;
 
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.InventoryUtil;
-import org.opencadc.inventory.SiteLocation;
 import org.opencadc.inventory.db.ArtifactDAO;
+
 
 /**
  *
@@ -92,15 +93,17 @@ public class InventoryHarvester {
     private final URI resourceID;
     private final Capability inventoryTAP;
     private final ArtifactSelector selector;
+    private final boolean trackSiteLocations;
     
     /**
      * Constructor.
-     * 
      * @param daoConfig config map to pass to cadc-inventory-db DAO classes
      * @param resourceID identifier for the remote query service
      * @param selector selector implementation
+     * @param trackSiteLocations    Whether to track the remote storage site and add it to the Artifact being processed.
      */
-    public InventoryHarvester(Map<String,Object> daoConfig, URI resourceID, ArtifactSelector selector) {
+    public InventoryHarvester(Map<String, Object> daoConfig, URI resourceID, ArtifactSelector selector,
+                              boolean trackSiteLocations) {
         InventoryUtil.assertNotNull(InventoryHarvester.class, "daoConfig", daoConfig);
         InventoryUtil.assertNotNull(InventoryHarvester.class, "resourceID", resourceID);
         InventoryUtil.assertNotNull(InventoryHarvester.class, "selector", selector);
@@ -108,6 +111,7 @@ public class InventoryHarvester {
         artifactDAO.setConfig(daoConfig);
         this.resourceID = resourceID;
         this.selector = selector;
+        this.trackSiteLocations = trackSiteLocations;
         
         try {
             RegistryClient rc = new RegistryClient();
@@ -117,6 +121,8 @@ public class InventoryHarvester {
             if (inventoryTAP == null) {
                 throw new IllegalArgumentException("invalid config: remote query service " + resourceID + " does not implement " + Standards.TAP_10);
             }
+        } catch (ResourceNotFoundException ex) {
+            throw new IllegalArgumentException("query service not found: " + resourceID, ex);
         } catch (IOException ex) {
             throw new IllegalArgumentException("invalid config", ex);
         }
@@ -150,7 +156,7 @@ public class InventoryHarvester {
     // get tracked progress (latest timestamp seen from any iterator)
     // - the head of an iterator is volatile: events can be inserted that are slightly out of monotonic time sequence
     // - actions taken while processing are idempotent
-    // - therefore: it should be OK to re-process the last N seconds (eg startTime = curLastModfied - 120 seconds)
+    // - therefore: it should be OK to re-process the last N seconds (eg startTime = curLastModified - 120 seconds)
 
     // use TapClient to open multiple iterator streams: Artifact, DeletedArtifactEvent, DeletedStorageLocationEvent
     // - incremental: use latest timestamp from above for all iterators
@@ -163,5 +169,4 @@ public class InventoryHarvester {
     private void doit() {
         throw new UnsupportedOperationException("TODO");
     }
-    
 }
