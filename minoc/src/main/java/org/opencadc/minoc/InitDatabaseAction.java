@@ -71,25 +71,17 @@ import ca.nrc.cadc.db.DBUtil;
 import ca.nrc.cadc.rest.InitAction;
 import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.util.PropertiesReader;
-
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
-
-import javax.naming.Context;
-import javax.naming.InitialContext;
-import javax.naming.NamingException;
 import javax.sql.DataSource;
-
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.StorageSite;
 import org.opencadc.inventory.db.SQLGenerator;
 import org.opencadc.inventory.db.StorageSiteDAO;
 import org.opencadc.inventory.db.version.InitDatabase;
-import org.opencadc.inventory.permissions.ReadGrant;
-import org.opencadc.inventory.permissions.WriteGrant;
 import org.opencadc.inventory.storage.StorageAdapter;
 
 /**
@@ -102,15 +94,19 @@ public class InitDatabaseAction extends InitAction {
     static final String JNDI_DATASOURCE = "jdbc/inventory"; // context.xml
     
     // config keys
-    static final String RESOURCE_ID_KEY = "org.opencadc.minoc.resourceID";
+    private static final String MINOC_KEY = "org.opencadc.minoc";
+    static final String RESOURCE_ID_KEY = MINOC_KEY + ".resourceID";
     
     static final String SQLGEN_KEY = SQLGenerator.class.getName();
-    static final String SCHEMA_KEY = SQLGenerator.class.getPackage().getName() + ".schema";
+    
+    static final String SCHEMA_KEY = MINOC_KEY + ".db.schema";
     
     static final String SA_KEY = StorageAdapter.class.getName();
     
-    static final String READ_GRANTS_KEY = ReadGrant.class.getName() + ".resourceID";
-    static final String WRITE_GRANTS_KEY = WriteGrant.class.getName() + ".resourceID";
+    static final String READ_GRANTS_KEY = MINOC_KEY + ".readGrantProvider";
+    static final String WRITE_GRANTS_KEY = MINOC_KEY + ".writeGrantProvider";
+    
+    static final String DEV_AUTH_ONLY_KEY = MINOC_KEY + ".authenticateOnly";
     
     // set init initConfig, used by subsequent init methods
     
@@ -133,6 +129,7 @@ public class InitDatabaseAction extends InitAction {
      * Read config file and verify that all required entries are present.
      * 
      * @return MultiValuedProperties containing the application config
+     * @throws IllegalStateException if required config items are missing
      */
     static MultiValuedProperties getConfig() {
         PropertiesReader r = new PropertiesReader("minoc.properties");
