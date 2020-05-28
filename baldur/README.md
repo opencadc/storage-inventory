@@ -11,13 +11,14 @@ The following configuration files must be available in the /config directory.
 The configuration in baldur.properties serves two purposes:  to allow certain users access to the service and to describe the permission rules for URIs that baldur will produce through its REST API.
 ```
 # time (in seconds) the grant is considered valid 
-expiryTime = {time in seconds}
+org.opencadc.baldur.grantExpiry = {time in seconds}
 
 # space separated list of users who are allowed to call this service
-users = {user identity} ...
+org.opencadc.baldur.allowedUser = {user identity}
 
+TODO: add support for allowedGroup
 # space separated list of groups who are allowed to call this service
-groups = {group URI} ...
+org.opencadc.baldur.allowedGroup = {groupURI}
 
 # one or more entry properties to grant permission to access artifacts
 # - each entry has a name and an Artifact URI pattern (regex)

@@ -68,10 +68,14 @@
 package org.opencadc.baldur;
 
 import ca.nrc.cadc.net.HttpDownload;
+import ca.nrc.cadc.net.HttpGet;
+import ca.nrc.cadc.net.ResourceAlreadyExistsException;
 import ca.nrc.cadc.net.ResourceNotFoundException;
+import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.util.Log4jInit;
 
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.io.OutputStream;
 import java.net.URI;
 import java.net.URL;
@@ -113,12 +117,11 @@ public class GetPermissionsTest extends BaldurTest {
     public void testAnonAccess() {
         try {
             log.info("start - testAnonAccess");
-            OutputStream out = new ByteArrayOutputStream();
             URL getPermissionsURL = new URL(certURL.toString() + "?OP=read&uri=" + artifactURI.toString());
-            HttpDownload get = new HttpDownload(getPermissionsURL, out);
-            get.run();
-            Assert.assertNotNull(get.getThrowable());
-            Assert.assertEquals(403, get.getResponseCode());
+            HttpGet httpGet = new HttpGet(getPermissionsURL, true);
+            httpGet.prepare();
+            Assert.assertNotNull(httpGet.getThrowable());
+            Assert.assertEquals(403,httpGet.getResponseCode());
         } catch (Throwable t) {
             log.error("unexpected throwable", t);
             Assert.fail("unexpected throwable: " + t);
@@ -133,12 +136,11 @@ public class GetPermissionsTest extends BaldurTest {
             log.info("start - testForbiddenAccess");
             Subject.doAs(noAuthSubject, new PrivilegedExceptionAction<Object>() {
                 public Object run() throws Exception {
-                    OutputStream out = new ByteArrayOutputStream();
                     URL getPermissionsURL = new URL(certURL.toString() + "?OP=read&uri=" + artifactURI.toString());
-                    HttpDownload get = new HttpDownload(getPermissionsURL, out);
-                    get.run();
-                    Assert.assertNotNull(get.getThrowable());
-                    Assert.assertEquals(403, get.getResponseCode());
+                    HttpGet httpGet = new HttpGet(getPermissionsURL, true);
+                    httpGet.prepare();
+                    Assert.assertNotNull(httpGet.getThrowable());
+                    Assert.assertEquals(403, httpGet.getResponseCode());
                     return null;
                 }
             });
@@ -156,15 +158,14 @@ public class GetPermissionsTest extends BaldurTest {
             log.info("start - testCorrectReadPermissions");
             Subject.doAs(authSubject, new PrivilegedExceptionAction<Object>() {
                 public Object run() throws Exception {
-                    OutputStream out = new ByteArrayOutputStream();
                     URL getPermissionsURL = new URL(certURL.toString() + "?OP=read&uri=" + artifactURI.toString());
-                    HttpDownload get = new HttpDownload(getPermissionsURL, out);
-                    get.run();
-                    Assert.assertNull(get.getThrowable());  
-                    Assert.assertEquals(200, get.getResponseCode());
+                    HttpGet httpGet = new HttpGet(getPermissionsURL, true);
+                    httpGet.prepare();
+                    Assert.assertNull(httpGet.getThrowable());
+                    Assert.assertEquals(200, httpGet.getResponseCode());
                     
                     GrantReader grantReader = new GrantReader();
-                    Grant grant = grantReader.read(out.toString());
+                    Grant grant = grantReader.read(httpGet.getInputStream());
                     Assert.assertTrue(grant instanceof ReadGrant);
                     ReadGrant readGrant = (ReadGrant) grant;
                     Assert.assertEquals(artifactURI, readGrant.getArtifactURI());
@@ -174,7 +175,6 @@ public class GetPermissionsTest extends BaldurTest {
                     GroupURI readWriteGroup = new GroupURI("ivo://cadc.nrc.ca/gms?TestWrite");
                     Assert.assertTrue(readGrant.getGroups().contains(readGroup));
                     Assert.assertTrue(readGrant.getGroups().contains(readWriteGroup));
-                    
                     return null;
                 }
             });
@@ -192,22 +192,20 @@ public class GetPermissionsTest extends BaldurTest {
             log.info("start - testCorrectWritePermissions");
             Subject.doAs(authSubject, new PrivilegedExceptionAction<Object>() {
                 public Object run() throws Exception {
-                    OutputStream out = new ByteArrayOutputStream();
                     URL getPermissionsURL = new URL(certURL.toString() + "?OP=write&uri=" + artifactURI.toString());
-                    HttpDownload get = new HttpDownload(getPermissionsURL, out);
-                    get.run();
-                    Assert.assertNull(get.getThrowable());
-                    Assert.assertEquals(200, get.getResponseCode());
+                    HttpGet httpGet = new HttpGet(getPermissionsURL, true);
+                    httpGet.prepare();
+                    Assert.assertNull(httpGet.getThrowable());
+                    Assert.assertEquals(200, httpGet.getResponseCode());
                     
                     GrantReader grantReader = new GrantReader();
-                    Grant grant = grantReader.read(out.toString());
+                    Grant grant = grantReader.read(httpGet.getInputStream());
                     Assert.assertTrue(grant instanceof WriteGrant);
                     WriteGrant writeGrant = (WriteGrant) grant;
                     Assert.assertEquals(artifactURI, writeGrant.getArtifactURI());
                     Assert.assertEquals(1, writeGrant.getGroups().size());
                     GroupURI readWriteGroup = new GroupURI("ivo://cadc.nrc.ca/gms?TestWrite");
                     Assert.assertEquals(readWriteGroup, writeGrant.getGroups().get(0));
-                    
                     return null;
                 }
             });
@@ -226,14 +224,11 @@ public class GetPermissionsTest extends BaldurTest {
             String notFoundArtifactURL = "notfound:this.file";
             Subject.doAs(authSubject, new PrivilegedExceptionAction<Object>() {
                 public Object run() throws Exception {
-                    OutputStream out = new ByteArrayOutputStream();
                     URL getPermissionsURL = new URL(certURL.toString() + "?OP=read&uri=" + notFoundArtifactURL);
-                    HttpDownload get = new HttpDownload(getPermissionsURL, out);
-                    get.run();
-                    Assert.assertEquals(404, get.getResponseCode());
-                    Assert.assertNotNull(get.getThrowable());
-                    Assert.assertTrue(get.getThrowable() instanceof ResourceNotFoundException);
-
+                    HttpGet httpGet = new HttpGet(getPermissionsURL, true);
+                    httpGet.prepare();
+                    Assert.assertNotNull(httpGet.getThrowable());
+                    Assert.assertEquals(404, httpGet.getResponseCode());
                     return null;
                 }
             });
@@ -252,14 +247,11 @@ public class GetPermissionsTest extends BaldurTest {
             String notFoundArtifactURL = "notfound:this.file";
             Subject.doAs(authSubject, new PrivilegedExceptionAction<Object>() {
                 public Object run() throws Exception {
-                    OutputStream out = new ByteArrayOutputStream();
                     URL getPermissionsURL = new URL(certURL.toString() + "?OP=write&uri=" + notFoundArtifactURL);
-                    HttpDownload get = new HttpDownload(getPermissionsURL, out);
-                    get.run();
-                    Assert.assertEquals(404, get.getResponseCode());
-                    Assert.assertNotNull(get.getThrowable());
-                    Assert.assertTrue(get.getThrowable() instanceof ResourceNotFoundException);
-
+                    HttpGet httpGet = new HttpGet(getPermissionsURL, true);
+                    httpGet.prepare();
+                    Assert.assertNotNull(httpGet.getThrowable());
+                    Assert.assertEquals(404, httpGet.getResponseCode());
                     return null;
                 }
             });
@@ -277,12 +269,11 @@ public class GetPermissionsTest extends BaldurTest {
             log.info("start - testInvalidOperation");
             Subject.doAs(authSubject, new PrivilegedExceptionAction<Object>() {
                 public Object run() throws Exception {
-                    OutputStream out = new ByteArrayOutputStream();
                     URL getPermissionsURL = new URL(certURL.toString() + "?OP=nonsense&uri=" + artifactURI.toString());
-                    HttpDownload get = new HttpDownload(getPermissionsURL, out);
-                    get.run();
-                    Assert.assertNotNull(get.getThrowable());
-                    Assert.assertEquals(400, get.getResponseCode());
+                    HttpGet httpGet = new HttpGet(getPermissionsURL, true);
+                    httpGet.prepare();
+                    Assert.assertNotNull(httpGet.getThrowable());
+                    Assert.assertEquals(400, httpGet.getResponseCode());
                     return null;
                 }
             });
@@ -300,12 +291,11 @@ public class GetPermissionsTest extends BaldurTest {
             log.info("start - testMissingOperation");
             Subject.doAs(authSubject, new PrivilegedExceptionAction<Object>() {
                 public Object run() throws Exception {
-                    OutputStream out = new ByteArrayOutputStream();
                     URL getPermissionsURL = new URL(certURL.toString() + "?uri=" + artifactURI.toString());
-                    HttpDownload get = new HttpDownload(getPermissionsURL, out);
-                    get.run();
-                    Assert.assertNotNull(get.getThrowable());
-                    Assert.assertEquals(400, get.getResponseCode());
+                    HttpGet httpGet = new HttpGet(getPermissionsURL, true);
+                    httpGet.prepare();
+                    Assert.assertNotNull(httpGet.getThrowable());
+                    Assert.assertEquals(400, httpGet.getResponseCode());
                     return null;
                 }
             });
@@ -323,12 +313,11 @@ public class GetPermissionsTest extends BaldurTest {
             log.info("start - testMissingURI");
             Subject.doAs(authSubject, new PrivilegedExceptionAction<Object>() {
                 public Object run() throws Exception {
-                    OutputStream out = new ByteArrayOutputStream();
                     URL getPermissionsURL = new URL(certURL.toString() + "?op=read");
-                    HttpDownload get = new HttpDownload(getPermissionsURL, out);
-                    get.run();
-                    Assert.assertNotNull(get.getThrowable());
-                    Assert.assertEquals(400, get.getResponseCode());
+                    HttpGet httpGet = new HttpGet(getPermissionsURL, true);
+                    httpGet.prepare();
+                    Assert.assertNotNull(httpGet.getThrowable());
+                    Assert.assertEquals(400, httpGet.getResponseCode());
                     return null;
                 }
             });
@@ -348,12 +337,11 @@ public class GetPermissionsTest extends BaldurTest {
             String invalidURI = "nonsense-uri";
             Subject.doAs(authSubject, new PrivilegedExceptionAction<Object>() {
                 public Object run() throws Exception {
-                    OutputStream out = new ByteArrayOutputStream();
                     URL getPermissionsURL = new URL(certURL.toString() + "?OP=read&uri=" + invalidURI);
-                    HttpDownload get = new HttpDownload(getPermissionsURL, out);
-                    get.run();
-                    Assert.assertNotNull(get.getThrowable());
-                    Assert.assertEquals(400, get.getResponseCode());
+                    HttpGet httpGet = new HttpGet(getPermissionsURL, true);
+                    httpGet.prepare();
+                    Assert.assertNotNull(httpGet.getThrowable());
+                    Assert.assertEquals(400, httpGet.getResponseCode());
                     return null;
                 }
             });
