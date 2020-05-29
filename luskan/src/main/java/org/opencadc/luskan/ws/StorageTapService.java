@@ -69,6 +69,11 @@ package org.opencadc.luskan.ws;
 
 import ca.nrc.cadc.auth.AuthMethod;
 import ca.nrc.cadc.db.DBUtil;
+import ca.nrc.cadc.net.ResourceNotFoundException;
+import ca.nrc.cadc.reg.AccessURL;
+import ca.nrc.cadc.reg.Capabilities;
+import ca.nrc.cadc.reg.Capability;
+import ca.nrc.cadc.reg.Interface;
 import ca.nrc.cadc.reg.Standards;
 import ca.nrc.cadc.reg.client.LocalAuthority;
 import ca.nrc.cadc.reg.client.RegistryClient;
@@ -84,7 +89,9 @@ import ca.nrc.cadc.vosi.avail.CheckResource;
 import ca.nrc.cadc.vosi.avail.CheckWebService;
 
 import java.io.File;
+import java.io.IOException;
 import java.net.URI;
+import java.util.NoSuchElementException;
 import javax.sql.DataSource;
 import org.apache.log4j.Logger;
 
@@ -148,22 +155,16 @@ public class StorageTapService implements AvailabilityPlugin {
             CheckResource cr = new CheckDataSource("jdbc/tapuser", TAP_TEST);
             cr.check();
 
-            LocalAuthority localAuthority = new LocalAuthority();
-            RegistryClient reg = new RegistryClient();
-
             // TODO - These do not work for intTest unless the testing environment deploys these services.
-            URI credURI = localAuthority.getServiceURI(Standards.CRED_PROXY_10.toString());
-            String url = reg.getServiceURL(credURI, Standards.VOSI_AVAILABILITY, AuthMethod.ANON).toExternalForm();
+            String url = getServiceUrl(Standards.CRED_PROXY_10, Standards.VOSI_AVAILABILITY, AuthMethod.ANON);
             CheckResource checkResource = new CheckWebService(url);
             //checkResource.check();
 
-            URI usersURI = localAuthority.getServiceURI(Standards.UMS_USERS_01.toString());
-            url = reg.getServiceURL(usersURI, Standards.VOSI_AVAILABILITY, AuthMethod.ANON).toExternalForm();
+            url = getServiceUrl(Standards.UMS_USERS_01, Standards.VOSI_AVAILABILITY, AuthMethod.ANON);
             checkResource = new CheckWebService(url);
             //checkResource.check();
 
-            URI groupsURI = localAuthority.getServiceURI(Standards.GMS_SEARCH_01.toString());
-            url = reg.getServiceURL(groupsURI, Standards.VOSI_AVAILABILITY, AuthMethod.ANON).toExternalForm();
+            url = getServiceUrl(Standards.GMS_SEARCH_01, Standards.VOSI_AVAILABILITY, AuthMethod.ANON);
             checkResource = new CheckWebService(url);
             checkResource.check();
 
@@ -171,13 +172,66 @@ public class StorageTapService implements AvailabilityPlugin {
             // tests determined that the resource is not working
             isGood = false;
             note = ce.getMessage();
-        } catch (Throwable t) {
+        } catch (Throwable throwable) {
             // the test itself failed
-            log.error("test failed", t);
+            StringBuilder sb = new StringBuilder();
+            sb.append("test failed because: ");
+            while (throwable != null) {
+                sb.append(throwable.getMessage()).append(": ");
+                throwable = throwable.getCause();
+            }
+            log.error(sb.toString());
             isGood = false;
-            note = "test failed, reason: " + t;
+            note = sb.toString();
         }
         return new AvailabilityStatus(isGood, null, null, null, note);
+    }
+
+    private String getServiceUrl(URI standardID, URI standard, AuthMethod authMethod)
+        throws ResourceNotFoundException {
+        LocalAuthority localAuthority = new LocalAuthority();
+        RegistryClient reg = new RegistryClient();
+
+        URI resourceID;
+        try {
+            resourceID = localAuthority.getServiceURI(standardID.toString());
+        } catch (NoSuchElementException e) {
+            String message = String.format("service URI not found in LocalAuthority for standardID %s", standardID);
+            throw new ResourceNotFoundException(message);
+        }
+
+        Capabilities capabilities;
+        try {
+            capabilities = reg.getCapabilities(resourceID);
+        } catch (IOException e) {
+            String message = String.format("io error getting capabilities for resourceID %s, standardID %s, because %s",
+                                           resourceID, standardID, e.getMessage());
+            throw new ResourceNotFoundException(message);
+        }
+
+        Capability capability = capabilities.findCapability(standard);
+        if (capability == null) {
+            String message = String.format("standard %s not found in capabilities for resourceID %s, standardID %s",
+                                           standard, resourceID, standardID);
+            throw new ResourceNotFoundException(message);
+        }
+
+        Interface anInterface = capability.findInterface(authMethod);
+        if (anInterface == null) {
+            String message = String.format(
+                "AuthMethod %s not found in capability %s, standard %s, resourceID %s, standardID %s",
+                authMethod, capability, standard, resourceID, standardID);
+            throw new ResourceNotFoundException(message);
+        }
+
+        AccessURL accessURL = anInterface.getAccessURL();
+        if (accessURL == null) {
+            String message = String.format(
+                "AccessURL not found in interface %s, capability %s, authMethod %s, standard %s, resourceID %s, "
+                    + "standardID %s", anInterface, capability, authMethod, standard, resourceID, standardID);
+            throw new ResourceNotFoundException(message);
+        }
+        return accessURL.getURL().toExternalForm();
     }
 
     @Override
