@@ -80,6 +80,7 @@ import java.io.IOException;
 import java.net.URI;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.Calendar;
 import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
@@ -103,7 +104,7 @@ import org.opencadc.tap.TapClient;
 /**
  * @author pdowler
  */
-public class InventoryHarvester {
+public class InventoryHarvester implements Runnable {
 
     private static final Logger log = Logger.getLogger(InventoryHarvester.class);
 
@@ -155,7 +156,7 @@ public class InventoryHarvester {
     // - harvest everything up to *now*
     // - go idle for a dynamically determined amount of time
     // - repeat until fail/killed
-
+    @Override
     public void run() {
         while (true) {
             try {
@@ -217,10 +218,14 @@ public class InventoryHarvester {
     private void syncDeletedStorageLocationEvents(final Date lastModified)
             throws ResourceNotFoundException, IOException, IllegalStateException, TransientException,
                    InterruptedException {
+        final Calendar calendar = Calendar.getInstance();
+        calendar.set(1970, Calendar.JANUARY, 1, 1, 0, 0);
+        calendar.set(Calendar.MILLISECOND, 0);
+
         final TapClient<DeletedStorageLocationEvent> deletedStorageLocationEventTapClient =
                 new TapClient<>(this.resourceID);
         final DeletedStorageLocationEventSync deletedStorageLocationEventSync =
-                new DeletedStorageLocationEventSync(deletedStorageLocationEventTapClient, lastModified);
+                new DeletedStorageLocationEventSync(deletedStorageLocationEventTapClient, (lastModified == null) ? calendar.getTime() : lastModified);
         try (final ResourceIterator<DeletedStorageLocationEvent> deletedStorageLocationEventResourceIterator =
                      deletedStorageLocationEventSync.getEvents()) {
             final ObsoleteStorageLocationDAO obsoleteStorageLocationDAO =
@@ -234,9 +239,12 @@ public class InventoryHarvester {
     private void syncDeletedArtifactEvents(final Date lastModified)
             throws ResourceNotFoundException, IOException, IllegalStateException, TransientException,
                    InterruptedException {
+        final Calendar calendar = Calendar.getInstance();
+        calendar.set(1970, Calendar.JANUARY, 1, 1, 0, 0);
+        calendar.set(Calendar.MILLISECOND, 0);
         final TapClient<DeletedArtifactEvent> deletedArtifactEventTapClientTapClient = new TapClient<>(this.resourceID);
         final DeletedArtifactEventSync deletedArtifactEventSync =
-                new DeletedArtifactEventSync(deletedArtifactEventTapClientTapClient, lastModified);
+                new DeletedArtifactEventSync(deletedArtifactEventTapClientTapClient, (lastModified == null) ? calendar.getTime() : lastModified);
         deletedArtifactEventSync.getEvents().forEachRemaining(deletedArtifactEvent -> {
             artifactDAO.delete(deletedArtifactEvent.getID());
         });
@@ -325,6 +333,8 @@ public class InventoryHarvester {
             } else {
                 log.warn("No transaction started.");
             }
+
+            throw exception;
         }
     }
 }
