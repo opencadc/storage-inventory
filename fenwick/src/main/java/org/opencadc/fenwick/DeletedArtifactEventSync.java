@@ -93,7 +93,7 @@ public class DeletedArtifactEventSync {
 
     private static final String DELETED_ARTIFACT_QUERY =
         "SELECT id, lastModified, metaChecksum FROM inventory.DeletedArtifactEvent "
-            + "WHERE lastModified >= %s order by lastModified";
+            + "WHERE lastModified is not null AND lastModified >= '%s' order by lastModified";
 
     private final TapClient<DeletedArtifactEvent> tapClient;
     private final Date startTime;

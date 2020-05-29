@@ -93,7 +93,7 @@ public class DeletedStorageLocationEventSync {
 
     private static final String DELETED_STORAGE_LOCATION_QUERY =
             "SELECT id, lastModified, metaChecksum FROM inventory.DeletedStorageLocationEvent "
-                + "WHERE lastModified >= %s order by lastModified";
+                + "WHERE lastModified is not null AND lastModified >= '%s' order by lastModified";
 
     private final TapClient<DeletedStorageLocationEvent> tapClient;
     private final Date startTime;

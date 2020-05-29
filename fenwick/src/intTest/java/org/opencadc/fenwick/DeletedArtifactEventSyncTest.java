@@ -72,7 +72,7 @@ package org.opencadc.fenwick;
 import static org.opencadc.fenwick.TestUtil.DATABASE;
 import static org.opencadc.fenwick.TestUtil.SCHEMA;
 
-
+import ca.nrc.cadc.auth.SSLUtil;
 import ca.nrc.cadc.db.ConnectionConfig;
 import ca.nrc.cadc.db.DBConfig;
 import ca.nrc.cadc.db.DBUtil;
@@ -80,6 +80,7 @@ import ca.nrc.cadc.io.ResourceIterator;
 import ca.nrc.cadc.util.Log4jInit;
 import java.io.File;
 import java.net.URI;
+import java.security.PrivilegedExceptionAction;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Calendar;
@@ -88,6 +89,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.UUID;
+import javax.security.auth.Subject;
 import javax.sql.DataSource;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
@@ -95,7 +97,6 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.opencadc.inventory.DeletedArtifactEvent;
-import org.opencadc.inventory.DeletedStorageLocationEvent;
 import org.opencadc.inventory.db.DeletedEventDAO;
 import org.opencadc.inventory.db.SQLGenerator;
 import org.opencadc.tap.TapClient;
@@ -103,15 +104,14 @@ import org.opencadc.tap.TapRowMapper;
 
 public class DeletedArtifactEventSyncTest {
 
-
     private static final Logger log = Logger.getLogger(DeletedArtifactEventSyncTest.class);
 
     private static final File PROXY_PEM = new File(System.getProperty("user.home") + "/.ssl/cadcproxy.pem");
 
     static {
-        Log4jInit.setLevel("org.opencadc.inventory", Level.DEBUG);
-        Log4jInit.setLevel("ca.nrc.cadc.db", Level.DEBUG);
-        Log4jInit.setLevel("org.opencadc.fenwick", Level.DEBUG);
+        Log4jInit.setLevel("org.opencadc.inventory", Level.INFO);
+        Log4jInit.setLevel("ca.nrc.cadc.db", Level.INFO);
+        Log4jInit.setLevel("org.opencadc.fenwick", Level.INFO);
     }
 
     private final DeletedEventDAO<DeletedArtifactEvent> deletedEventDAO = new DeletedEventDAO<>();
@@ -134,7 +134,7 @@ public class DeletedArtifactEventSyncTest {
     public void setup() throws SQLException {
         log.info("deleting events...");
         DataSource ds = deletedEventDAO.getDataSource();
-        String sql = "delete from DeletedArtifactEvent";
+        String sql = String.format("delete from %s.DeletedArtifactEvent", SCHEMA);
         ds.getConnection().createStatement().execute(sql);
         log.info("deleting events... OK");
     }
@@ -142,7 +142,7 @@ public class DeletedArtifactEventSyncTest {
     @Test
     public void testRowMapper() {
         try {
-            log.info("testRowMapper()");
+            log.info("testRowMapper");
 
             UUID uuid = UUID.randomUUID();
             Date lasModified = new Date();
@@ -170,43 +170,51 @@ public class DeletedArtifactEventSyncTest {
     @Test
     public void testGetEvents() {
         try {
-            log.info("testGetEventsNoneFound()");
-
+            log.info("testGetEvents");
+            Subject userSubject = SSLUtil.createSubject(PROXY_PEM);
             TapClient<DeletedArtifactEvent> tapClient = new TapClient<>(URI.create(TestUtil.LUSKAN_URI));
 
             Calendar now = Calendar.getInstance();
-            now.add(Calendar.HOUR, -1);
+            now.add(Calendar.DAY_OF_MONTH, -1);
             Date startTime = now.getTime();
-
-            // query with no results
             DeletedArtifactEventSync sync = new DeletedArtifactEventSync(tapClient, startTime);
-            ResourceIterator<DeletedArtifactEvent> emptyIterator = sync.getEvents();
-            Assert.assertNotNull(emptyIterator);
-            Assert.assertFalse(emptyIterator.hasNext());
 
-            DeletedArtifactEvent expected1 = new DeletedArtifactEvent(UUID.randomUUID());
-            DeletedArtifactEvent expected2 = new DeletedArtifactEvent(UUID.randomUUID());
+            Subject.doAs(userSubject, new PrivilegedExceptionAction<Object>() {
 
-            deletedEventDAO.put(expected1);
-            deletedEventDAO.put(expected2);
+                public Object run() throws Exception {
 
-            // query with multiple results
-            ResourceIterator<DeletedArtifactEvent> iterator = sync.getEvents();
-            Assert.assertNotNull(iterator);
+                    // query with no results
+                    ResourceIterator<DeletedArtifactEvent> emptyIterator = sync.getEvents();
+                    Assert.assertNotNull(emptyIterator);
+                    Assert.assertFalse(emptyIterator.hasNext());
 
-            Assert.assertTrue(iterator.hasNext());
-            DeletedArtifactEvent actual1 = iterator.next();
-            Date lastModified1 = actual1.getLastModified();
+                    DeletedArtifactEvent expected1 = new DeletedArtifactEvent(UUID.randomUUID());
+                    DeletedArtifactEvent expected2 = new DeletedArtifactEvent(UUID.randomUUID());
 
-            Assert.assertTrue(iterator.hasNext());
-            DeletedArtifactEvent actual2 = iterator.next();
-            Date lastModified2 = actual2.getLastModified();
+                    deletedEventDAO.put(expected1);
+                    deletedEventDAO.put(expected2);
 
-            // newest date should be returned first.
-            Assert.assertTrue(lastModified1.before(lastModified2));
+                    // query with multiple results
+                    ResourceIterator<DeletedArtifactEvent> iterator = sync.getEvents();
+                    Assert.assertNotNull(iterator);
 
-            Assert.assertFalse(iterator.hasNext());
+                    Assert.assertTrue(iterator.hasNext());
+                    DeletedArtifactEvent actual1 = iterator.next();
+                    Date lastModified1 = actual1.getLastModified();
+
+                    Assert.assertTrue(iterator.hasNext());
+                    DeletedArtifactEvent actual2 = iterator.next();
+                    Date lastModified2 = actual2.getLastModified();
+
+                    // newest date should be returned first.
+                    Assert.assertTrue(lastModified1.before(lastModified2));
+                    Assert.assertFalse(iterator.hasNext());
+
+                    return null;
+                }
+            });
         } catch (Exception ex) {
+            ex.printStackTrace();
             log.error("unexpected exception", ex);
             Assert.fail("unexpected exception: " + ex);
         }
