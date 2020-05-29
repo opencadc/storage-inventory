@@ -297,24 +297,30 @@ public class InventoryHarvester implements Runnable {
                 try (final ResourceIterator<Artifact> artifactResourceIterator = artifactSync.iterator()) {
                     artifactResourceIterator.forEachRemaining(artifact -> {
                         transactionManager.startTransaction();
-                        final Artifact currentArtifact = artifactDAO.get(artifact.getID());
-
-                        // trackSiteLocations is false if storageSite is null.
-                        if (storageSite != null) {
-                            currentArtifact.siteLocations.add(new SiteLocation(storageSite.getID()));
-                        }
 
                         final URI computedChecksum = artifact.computeMetaChecksum(messageDigest);
 
-                        if (!artifact.getContentChecksum().equals(computedChecksum)) {
+                        if (!artifact.getMetaChecksum().equals(computedChecksum)) {
                             throw new IllegalStateException(
-                                    String.format("Checksums for Artifact %s (%s) do not match.",
-                                                  artifact.getURI(), artifact.getID()));
+                                    String.format("Checksums for Artifact %s do not match.  "
+                                                  + "\nProvided: %s\nComputed: %s.",
+                                                  artifact.getURI(), artifact.getMetaChecksum(), computedChecksum));
                         }
 
-                        currentArtifact.contentEncoding = artifact.contentEncoding;
-                        currentArtifact.contentType = artifact.contentType;
-                        currentArtifact.storageLocation = artifact.storageLocation;
+                        Artifact currentArtifact = artifactDAO.get(artifact.getID());
+
+                        if (currentArtifact != null) {
+                            // trackSiteLocations is false if storageSite is null.
+                            if (storageSite != null) {
+                                currentArtifact.siteLocations.add(new SiteLocation(storageSite.getID()));
+                            }
+
+                            currentArtifact.contentEncoding = artifact.contentEncoding;
+                            currentArtifact.contentType = artifact.contentType;
+                            currentArtifact.storageLocation = artifact.storageLocation;
+                        } else {
+                            currentArtifact = artifact;
+                        }
 
                         artifactDAO.put(currentArtifact);
                         harvestState.curLastModified = artifact.getLastModified();

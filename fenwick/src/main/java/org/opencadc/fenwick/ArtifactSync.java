@@ -78,6 +78,7 @@ import java.io.IOException;
 import java.net.URI;
 import java.util.Date;
 import java.util.List;
+import java.util.Objects;
 import java.util.TimeZone;
 import java.util.UUID;
 
@@ -190,11 +191,18 @@ public class ArtifactSync {
                                                    (URI) row.get(index++),
                                                    (Date) row.get(index++),
                                                    (Long) row.get(index++));
-            artifact.contentType = row.get(index++).toString();
-            artifact.contentEncoding = row.get(index++).toString();
+            final Object contentTypeObj = row.get(index++);
+            if (contentTypeObj != null) {
+                artifact.contentType = Objects.toString(contentTypeObj);
+            }
 
-            InventoryUtil.assignMetaChecksum(artifact, (URI) row.get(index++));
-            InventoryUtil.assignLastModified(artifact, (Date) row.get(index));
+            final Object contentEncodingObj = row.get(index++);
+            if (contentEncodingObj != null) {
+                artifact.contentEncoding = contentEncodingObj.toString();
+            }
+
+            InventoryUtil.assignLastModified(artifact, (Date) row.get(index++));
+            InventoryUtil.assignMetaChecksum(artifact, (URI) row.get(index));
 
             return artifact;
         }
