@@ -92,6 +92,13 @@ public class StorageMetadata implements Comparable<StorageMetadata> {
     public String contentEncoding;
     public String contentType;
     
+    /**
+     * Constructor for a valid stored object.
+     * 
+     * @param storageLocation
+     * @param contentChecksum
+     * @param contentLength 
+     */
     public StorageMetadata(StorageLocation storageLocation, URI contentChecksum, Long contentLength) {
         InventoryUtil.assertNotNull(StorageMetadata.class, "storageLocation", storageLocation);
         InventoryUtil.assertNotNull(StorageMetadata.class, "contentChecksum", contentChecksum);
@@ -103,7 +110,23 @@ public class StorageMetadata implements Comparable<StorageMetadata> {
         this.contentChecksum = contentChecksum;
         this.contentLength = contentLength;
     }
+    
+    /**
+     * Constructor for an invalid stored object that should be cleaned up.
+     * 
+     * @param storageLocation 
+     */
+    public StorageMetadata(StorageLocation storageLocation) {
+        InventoryUtil.assertNotNull(StorageMetadata.class, "storageLocation", storageLocation);
+        this.storageLocation = storageLocation;
+        this.contentChecksum = null;
+        this.contentLength = null;
+    }
 
+    public boolean isValid() {
+        return contentChecksum != null;
+    }
+    
     public StorageLocation getStorageLocation() {
         return storageLocation;
     }
