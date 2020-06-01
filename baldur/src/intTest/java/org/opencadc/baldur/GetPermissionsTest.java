@@ -67,22 +67,14 @@
 
 package org.opencadc.baldur;
 
-import ca.nrc.cadc.net.HttpDownload;
 import ca.nrc.cadc.net.HttpGet;
-import ca.nrc.cadc.net.ResourceAlreadyExistsException;
 import ca.nrc.cadc.net.ResourceNotFoundException;
-import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.util.Log4jInit;
-
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.OutputStream;
 import java.net.URI;
 import java.net.URL;
+import java.security.AccessControlException;
 import java.security.PrivilegedExceptionAction;
-
 import javax.security.auth.Subject;
-
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
@@ -112,16 +104,20 @@ public class GetPermissionsTest extends BaldurTest {
     public GetPermissionsTest() {
         super();
     }
-    
+
     @Test
     public void testAnonAccess() {
         try {
             log.info("start - testAnonAccess");
             URL getPermissionsURL = new URL(certURL.toString() + "?OP=read&uri=" + artifactURI.toString());
             HttpGet httpGet = new HttpGet(getPermissionsURL, true);
-            httpGet.prepare();
-            Assert.assertNotNull(httpGet.getThrowable());
-            Assert.assertEquals(403,httpGet.getResponseCode());
+            try {
+                httpGet.prepare();
+                Assert.fail("anon get should have thrown AccessControlException");
+            }
+            catch (AccessControlException expected) {
+                Assert.assertEquals(403,httpGet.getResponseCode());
+            }
         } catch (Throwable t) {
             log.error("unexpected throwable", t);
             Assert.fail("unexpected throwable: " + t);
@@ -129,7 +125,7 @@ public class GetPermissionsTest extends BaldurTest {
             log.info("end - testAnonAccess");
         }
     }
-    
+
     @Test
     public void testForbiddenAccess() {
         try {
@@ -138,9 +134,13 @@ public class GetPermissionsTest extends BaldurTest {
                 public Object run() throws Exception {
                     URL getPermissionsURL = new URL(certURL.toString() + "?OP=read&uri=" + artifactURI.toString());
                     HttpGet httpGet = new HttpGet(getPermissionsURL, true);
-                    httpGet.prepare();
-                    Assert.assertNotNull(httpGet.getThrowable());
-                    Assert.assertEquals(403, httpGet.getResponseCode());
+                    try {
+                        httpGet.prepare();
+                        Assert.fail("anon get should have thrown AccessControlException");
+                    }
+                    catch (AccessControlException expected) {
+                        Assert.assertEquals(403,httpGet.getResponseCode());
+                    }
                     return null;
                 }
             });
@@ -151,7 +151,7 @@ public class GetPermissionsTest extends BaldurTest {
             log.info("end - testForbiddenAccess");
         }
     }
-    
+
     @Test
     public void testCorrectReadPermissions() {
         try {
@@ -185,7 +185,7 @@ public class GetPermissionsTest extends BaldurTest {
             log.info("end - testCorrectReadPermissions");
         }
     }
-        
+
     @Test
     public void testCorrectWritePermissions() {
         try {
@@ -216,7 +216,7 @@ public class GetPermissionsTest extends BaldurTest {
             log.info("end - testCorrectWritePermissions");
         }
     }
-    
+
     @Test
     public void testNoMatchReadPermissions() {
         try {
@@ -226,9 +226,12 @@ public class GetPermissionsTest extends BaldurTest {
                 public Object run() throws Exception {
                     URL getPermissionsURL = new URL(certURL.toString() + "?OP=read&uri=" + notFoundArtifactURL);
                     HttpGet httpGet = new HttpGet(getPermissionsURL, true);
-                    httpGet.prepare();
-                    Assert.assertNotNull(httpGet.getThrowable());
-                    Assert.assertEquals(404, httpGet.getResponseCode());
+                    try {
+                        httpGet.prepare();
+                        Assert.fail("should throw ResourceNotFoundException");
+                    } catch (ResourceNotFoundException expected) {
+                        Assert.assertEquals(404, httpGet.getResponseCode());
+                    }
                     return null;
                 }
             });
@@ -239,7 +242,7 @@ public class GetPermissionsTest extends BaldurTest {
             log.info("end - testNoMatchReadPermissions");
         }
     }
-    
+
     @Test
     public void testNoMatchWritePermissions() {
         try {
@@ -249,9 +252,12 @@ public class GetPermissionsTest extends BaldurTest {
                 public Object run() throws Exception {
                     URL getPermissionsURL = new URL(certURL.toString() + "?OP=write&uri=" + notFoundArtifactURL);
                     HttpGet httpGet = new HttpGet(getPermissionsURL, true);
-                    httpGet.prepare();
-                    Assert.assertNotNull(httpGet.getThrowable());
-                    Assert.assertEquals(404, httpGet.getResponseCode());
+                    try {
+                        httpGet.prepare();
+                        Assert.fail("should throw ResourceNotFoundException");
+                    } catch (ResourceNotFoundException expected) {
+                        Assert.assertEquals(404, httpGet.getResponseCode());
+                    }
                     return null;
                 }
             });
@@ -262,7 +268,7 @@ public class GetPermissionsTest extends BaldurTest {
             log.info("end - testNoMatchWritePermissions");
         }
     }
-    
+
     @Test
     public void testInvalidOperation() {
         try {
@@ -271,9 +277,12 @@ public class GetPermissionsTest extends BaldurTest {
                 public Object run() throws Exception {
                     URL getPermissionsURL = new URL(certURL.toString() + "?OP=nonsense&uri=" + artifactURI.toString());
                     HttpGet httpGet = new HttpGet(getPermissionsURL, true);
-                    httpGet.prepare();
-                    Assert.assertNotNull(httpGet.getThrowable());
-                    Assert.assertEquals(400, httpGet.getResponseCode());
+                    try {
+                        httpGet.prepare();
+                        Assert.fail("should throw IllegalArgumentException");
+                    } catch (IllegalArgumentException expected) {
+                        Assert.assertEquals(400, httpGet.getResponseCode());
+                    }
                     return null;
                 }
             });
@@ -284,7 +293,7 @@ public class GetPermissionsTest extends BaldurTest {
             log.info("end - testInvalidOperation");
         }
     }
-    
+
     @Test
     public void testMissingOperation() {
         try {
@@ -293,9 +302,12 @@ public class GetPermissionsTest extends BaldurTest {
                 public Object run() throws Exception {
                     URL getPermissionsURL = new URL(certURL.toString() + "?uri=" + artifactURI.toString());
                     HttpGet httpGet = new HttpGet(getPermissionsURL, true);
-                    httpGet.prepare();
-                    Assert.assertNotNull(httpGet.getThrowable());
-                    Assert.assertEquals(400, httpGet.getResponseCode());
+                    try {
+                        httpGet.prepare();
+                        Assert.fail("should throw IllegalArgumentException");
+                    } catch (IllegalArgumentException expected) {
+                        Assert.assertEquals(400, httpGet.getResponseCode());
+                    }
                     return null;
                 }
             });
@@ -306,7 +318,7 @@ public class GetPermissionsTest extends BaldurTest {
             log.info("end - testMissingOperation");
         }
     }
-    
+
     @Test
     public void testMissingURI() {
         try {
@@ -315,9 +327,12 @@ public class GetPermissionsTest extends BaldurTest {
                 public Object run() throws Exception {
                     URL getPermissionsURL = new URL(certURL.toString() + "?op=read");
                     HttpGet httpGet = new HttpGet(getPermissionsURL, true);
-                    httpGet.prepare();
-                    Assert.assertNotNull(httpGet.getThrowable());
-                    Assert.assertEquals(400, httpGet.getResponseCode());
+                    try {
+                        httpGet.prepare();
+                        Assert.fail("should throw IllegalArgumentException");
+                    } catch (IllegalArgumentException expected) {
+                        Assert.assertEquals(400, httpGet.getResponseCode());
+                    }
                     return null;
                 }
             });
@@ -328,7 +343,7 @@ public class GetPermissionsTest extends BaldurTest {
             log.info("end - testMissingURI");
         }
     }
-    
+
     @Test
     public void testInvalidArtifactURI() {
         try {
@@ -339,9 +354,12 @@ public class GetPermissionsTest extends BaldurTest {
                 public Object run() throws Exception {
                     URL getPermissionsURL = new URL(certURL.toString() + "?OP=read&uri=" + invalidURI);
                     HttpGet httpGet = new HttpGet(getPermissionsURL, true);
-                    httpGet.prepare();
-                    Assert.assertNotNull(httpGet.getThrowable());
-                    Assert.assertEquals(400, httpGet.getResponseCode());
+                    try {
+                        httpGet.prepare();
+                        Assert.fail("should throw IllegalArgumentException");
+                    } catch (IllegalArgumentException expected) {
+                        Assert.assertEquals(400, httpGet.getResponseCode());
+                    }
                     return null;
                 }
             });

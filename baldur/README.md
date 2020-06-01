@@ -13,26 +13,27 @@ The configuration in baldur.properties serves two purposes:  to allow certain us
 # time (in seconds) the grant is considered valid 
 org.opencadc.baldur.grantExpiry = {time in seconds}
 
-# space separated list of users who are allowed to call this service
+# list of users (one per line) who are allowed to call this service
 org.opencadc.baldur.allowedUser = {user identity}
 
-TODO: add support for allowedGroup
-# space separated list of groups who are allowed to call this service
+TODO: the allowedGroup property currently does not enable access to this service,
+TODO: add support for allowedGroup to give service access.
+# list of groups (one per line) whose members are allowed to call this service
 org.opencadc.baldur.allowedGroup = {groupURI}
 
 # one or more entry properties to grant permission to access artifacts
 # - each entry has a name and an Artifact URI pattern (regex)
 # - followed by entry-specific permission keys with a space separated list of group identifiers
-entry = {entry name} {regular expression}`
+org.opencadc.baldur.entry = {entry name} {regular expression}
 {entry name}.anon = {true|false}
 {entry name}.readOnlyGroups = {group URI} ...
 {entry name}.readWriteGroups = {group URI} ...
 ```
-The `expiryTime` value is used to calculate the expiry date of a grant. The value is an integer in seconds. The expiry date of a grant is: (the current time when a grant is issued + the number of seconds given by the expiryTime).
+`org.opencadc.baldur.grantExpiry` is used to calculate the expiry date of a grant. The value is an integer in seconds. The expiry date of a grant is: (the current time when a grant is issued + the number of seconds given by the expiryTime).
 
-The `users` value is used to specify the user(s) who are authorized to make calls to the service. The value is a space-separated list of user identities (e.g. X500 distingushed name).
+`org.opencadc.baldur.allowedUser` specifies the user(s) who are authorized to make calls to the service. The value is a list of user identities (e.g. X500 distingushed name), one line per user.
 
-The `groups` value is used to specify the group(s) who are authorized to make calls to the service. The value is a space-separated list of group identifiers (e.g. ivo://cadc.nrc.ca/gms?CADC).
+`org.opencadc.baldur.allowedGroup` specifies the group(s) whose members have authorization to make calls to the service. The value is a list of group identifiers (e.g. ivo://cadc.nrc.ca/gms?CADC), one line per group.
 
 The `{entry name}.anon` flag specifies that all users (including anonymous) can get matching artifacts (default: false).
 
@@ -43,11 +44,12 @@ empty list).
 
 ### example baldur.properites entry section:
 ```
-expiryTime = 60
+org.opencadc.baldur.grantExpiry = 60
 
-users = cn=foo,ou=acme,o=example,c=com cn=bar,ou=acme,o=example,c=com
+org.opencadc.baldur.allowedUser = cn=foo,ou=acme,o=example,c=com 
+org.opencadc.baldur.allowedUser = bar,ou=acme,o=example,c=com
 
-entry = TEST ^cadc:TEST/.*
+org.opencadc.baldur.entry = TEST ^cadc:TEST/.*
 TEST.anon = false
 TEST.readOnlyGroups = ivo://cadc.nrc.ca/gms?TestRead-1 ivo://cadc.nrc.ca/gms?TestRead-2
 TEST.readWriteGroups = ivo://cadc.nrc.ca/gms?TestWrite-1 ivo://cadc.nrc.ca/gms?TestWrite-2
@@ -55,7 +57,7 @@ TEST.readWriteGroups = ivo://cadc.nrc.ca/gms?TestWrite-1 ivo://cadc.nrc.ca/gms?T
 
 In this example the expiry time is 60 seconds. 
 
-The users `foo` and `bar` are authorized to call this service.
+`foo` and `bar` are authorized users that can call this service.
 
 Any artifact with a URI that matches `^cadc:TEST\\/.*`, the read grant will be:
 * anonymous read not allowed
@@ -78,11 +80,11 @@ The `baldur-test-noauth.pem` is for a user not listed in `users` and therefore i
 
 The integration tests expect the following entry in `baldur.properties`. 
 ```
-expiryTime = 60
+org.opencadc.baldur.grantExpiry = 60
 
-users = { user identity for baldur-test-auth.pem }
+org.opencadc.baldur.allowedUser = { user identity for baldur-test-auth.pem }
 
-entry = test ^cadc:TEST/.*
+org.opencadc.baldur.entry = test ^cadc:TEST/.*
 test.anon = true
 test.readOnlyGroups = ivo://cadc.nrc.ca/gms?TestRead
 test.readWriteGroups = ivo://cadc.nrc.ca/gms?TestWrite

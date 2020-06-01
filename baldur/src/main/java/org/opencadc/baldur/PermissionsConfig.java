@@ -99,12 +99,12 @@ public class PermissionsConfig {
     private static final Logger log = Logger.getLogger(PermissionsConfig.class);
 
     private static final String PERMISSIONS_PROPERTIES = "baldur.properties";
-    private static final String KEY_USERS = "users";
-    private static final String KEY_ENTRY = "entry";
+    private static final String KEY_ALLOWED_USER = "org.opencadc.baldur.allowedUser";
+    private static final String KEY_ENTRY = "org.opencadc.baldur.entry";
     private static final String KEY_ANON_READ = ".anon";
     private static final String KEY_READONLY_GROUPS = ".readOnlyGroups";
     private static final String KEY_READWRITE_GROUPS = ".readWriteGroups";
-    private static final String KEY_EXPIRY_TIME = "expiryTime";
+    private static final String KEY_GRANT_EXPIRY = "org.opencadc.baldur.grantExpiry";
     
     private static Set<Principal> authPrincipals = new HashSet<Principal>();
     private static List<PermissionEntry> entries = null;
@@ -142,9 +142,9 @@ public class PermissionsConfig {
             
             // get the authorized users
             // (TODO: Issue 41: https://github.com/opencadc/storage-inventory/issues/41)
-            List<String> authUsersConfig = allProps.getProperty(KEY_USERS);
+            List<String> authUsersConfig = allProps.getProperty(KEY_ALLOWED_USER);
             if (authUsersConfig == null) {
-                throw new IllegalStateException("missing configurations for key " + KEY_USERS + " in: "
+                throw new IllegalStateException("missing configurations for key " + KEY_ALLOWED_USER + " in: "
                     + PERMISSIONS_PROPERTIES);
             }
             for (String dn : authUsersConfig) {
@@ -152,7 +152,7 @@ public class PermissionsConfig {
                 authPrincipals.add(new X500Principal(dn));
             }
             if (authPrincipals.size() == 0) {
-                throw new IllegalStateException("no values for key " + KEY_USERS + " in " + PERMISSIONS_PROPERTIES);
+                throw new IllegalStateException("no values for key " + KEY_ALLOWED_USER + " in " + PERMISSIONS_PROPERTIES);
             }
             
             // get the permission entries
@@ -203,18 +203,18 @@ public class PermissionsConfig {
             }
 
             // get the Grant timeout
-            List<String> timeout = allProps.getProperty(KEY_EXPIRY_TIME);
+            List<String> timeout = allProps.getProperty(KEY_GRANT_EXPIRY);
             if (timeout.size() == 0) {
-                throw new IllegalStateException("no values for key " + KEY_EXPIRY_TIME + " in " + PERMISSIONS_PROPERTIES);
+                throw new IllegalStateException("no values for key " + KEY_GRANT_EXPIRY + " in " + PERMISSIONS_PROPERTIES);
             }
             if (timeout.size() > 1) {
-                throw new IllegalStateException("multiple values for key " + KEY_EXPIRY_TIME + " in "
+                throw new IllegalStateException("multiple values for key " + KEY_GRANT_EXPIRY + " in "
                     + PERMISSIONS_PROPERTIES + " where single value expected");
             }
             try {
                 expiryDate = calcExpiryDate(Integer.parseInt(timeout.get(0)));
             } catch (NumberFormatException nfe) {
-                throw new IllegalStateException("invalid  number value for " + KEY_EXPIRY_TIME + " in "
+                throw new IllegalStateException("invalid  number value for " + KEY_GRANT_EXPIRY + " in "
                     + PERMISSIONS_PROPERTIES);
             }
 
@@ -254,6 +254,8 @@ public class PermissionsConfig {
      */
     static void clearCache() {
         entries = null;
+        expiryDate = null;
+        authPrincipals.clear();
     }
     
     /**
