@@ -609,7 +609,7 @@ public class SwiftStorageAdapter  implements StorageAdapter {
     
     private class StorageMetadataIterator implements Iterator<StorageMetadata> {
 
-        private static final int BATCH_SIZE = 5;
+        private static final int BATCH_SIZE = 1000;
         private Iterator<DirectoryOrObject> objectIterator;
         private final String bucketPrefix;
         

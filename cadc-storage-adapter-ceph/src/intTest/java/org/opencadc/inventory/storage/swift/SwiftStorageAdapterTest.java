@@ -317,13 +317,14 @@ public class SwiftStorageAdapterTest {
     @Test
     public void testIterator() {
         
+        int iterNum = 66;
         try {
             MessageDigest md = MessageDigest.getInstance("MD5");
             Random rnd = new Random();
             byte[] data = new byte[1024];
             
             SortedSet<StorageMetadata> expected = new TreeSet<>();
-            for (int i = 0; i < 10; i++) {
+            for (int i = 0; i < iterNum; i++) {
                 URI artifactURI = URI.create("cadc:TEST/testIterator-" + i);
                 rnd.nextBytes(data);
                 NewArtifact na = new NewArtifact(artifactURI);
@@ -376,13 +377,14 @@ public class SwiftStorageAdapterTest {
     @Test
     public void testIteratorBucketPrefix() {
         
+        int iterNum = 66;
         try {
             MessageDigest md = MessageDigest.getInstance("MD5");
             Random rnd = new Random();
             byte[] data = new byte[1024];
             
             SortedSet<StorageMetadata> expected = new TreeSet<>();
-            for (int i = 0; i < 10; i++) {
+            for (int i = 0; i < iterNum; i++) {
                 URI artifactURI = URI.create("cadc:TEST/testIteratorBucketPrefix-" + i);
                 rnd.nextBytes(data);
                 NewArtifact na = new NewArtifact(artifactURI);
