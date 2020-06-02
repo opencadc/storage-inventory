@@ -126,7 +126,7 @@ public class DeletedArtifactEventSync {
         if (this.startTime == null) {
             where = "";
         } else {
-            where = "WHERE lastModified >= '" + getDateFormat().format(this.startTime) +"'";
+            where = "WHERE lastModified >= '" + getDateFormat().format(this.startTime) + "'";
         }
         final String query = String.format(DELETED_ARTIFACT_QUERY, where);
         log.debug("tap query: " + query);
