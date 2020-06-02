@@ -327,17 +327,7 @@ public class FileSyncTest {
     public void fileSyncTestBody(int nthreads, String testDir, TreeMap<Integer,Artifact> artMap) throws Exception {
 
         createTestMetadata(artMap);
-        log.debug("=test metadata put to database");
-        // iterate through stored metadata and see what the bucket is set to.
-        Iterator<Artifact> artIter = dao.unstoredIterator(null);
-
-        // can't count on the computed buckets to be the same. :(
-        String bucketFirstChar = "a - f";
-        artIter = dao.unstoredIterator(bucketFirstChar);
-        log.debug("bucket: " + bucketFirstChar + " iterator hasNext: " + artIter.hasNext());
-
-        // probably should have something here or in the above function that tests that the
-        // data is actually written correctly.
+        log.debug("test metadata put to database");
 
         OpaqueFileSystemStorageAdapter localStorage = new OpaqueFileSystemStorageAdapter(new File(testDir), 1);
         log.debug("created storage adapter for test dir.");
@@ -354,8 +344,18 @@ public class FileSyncTest {
         FileSync doit = new FileSync(daoConfig, cc, localStorage, locatorResourceID, bucketSel, nthreads);
         doit.run();
 
+        // Check the storage locations, as these should get updated within a reasonable
+        // amount of timeA
+        Iterator artIter = dao.unstoredIterator(null);
+
+        while (artIter.hasNext()) {
+            log.debug("waiting for file sync jobs to update database");
+            Thread.sleep(1000);
+            artIter = dao.unstoredIterator(null);
+        }
+
         // check job succeeded by checking storage locations of at least one of
-        // the artifacts from the map are not null
+        // the artifacts from the map are not nullA
         // for one or two of the artifacts
 
         for(Artifact arti : artMap.values()) {
@@ -379,7 +379,7 @@ public class FileSyncTest {
         try {
             createTestDirectory(testDir);
             TreeMap<Integer, Artifact> aMap = mkSmallDataset();
-            fileSyncTestBody(2, testDir, aMap);
+            fileSyncTestBody(1, testDir, aMap);
 
 
         } catch (Exception unexpected) {
