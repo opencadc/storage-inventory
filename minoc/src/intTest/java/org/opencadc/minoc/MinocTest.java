@@ -86,6 +86,7 @@ import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 
+import java.util.Random;
 import javax.security.auth.Subject;
 
 import org.apache.log4j.Level;
@@ -119,6 +120,16 @@ public abstract class MinocTest {
         log.debug("anonSubject: " + anonSubject);
         userSubject = SSLUtil.createSubject(cert);
         log.debug("userSubject: " + userSubject);
+    }
+
+    protected static byte[] randomData(int len) {
+        byte[] ret = new byte[len];
+        Random rnd = new Random();
+        int ri = rnd.nextInt();
+        byte[] rb4 = HexUtil.toBytes(ri);
+        System.arraycopy(rb4, 0, ret, 0, 4);         // first 4 bytes
+        System.arraycopy(rb4, 0, ret, (len - 5), 4); // last 4 bytes
+        return ret;
     }
     
     protected static String computeMD5(byte[] input) throws NoSuchAlgorithmException, IOException {

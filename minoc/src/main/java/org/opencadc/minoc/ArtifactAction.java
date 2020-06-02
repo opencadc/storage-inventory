@@ -128,12 +128,15 @@ public abstract class ArtifactAction extends RestAction {
     protected final StorageAdapter storageAdapter;
     protected final List<URI> readGrantServices = new ArrayList<>();
     protected final List<URI> writeGrantServices = new ArrayList<>();
+    
+    private final boolean authenticateOnly;
 
     // constructor for unit tests with no config/init
     ArtifactAction(boolean init) {
         super();
         this.artifactDAO = null;
         this.storageAdapter = null;
+        this.authenticateOnly = false;
     }
 
     protected ArtifactAction() {
@@ -163,13 +166,25 @@ public abstract class ArtifactAction extends RestAction {
                 }
             }
         }
-
+        
+        String ao = props.getFirstPropertyValue(InitDatabaseAction.DEV_AUTH_ONLY_KEY);
+        if (ao != null) {
+            try {
+                this.authenticateOnly = Boolean.valueOf(ao);
+                log.warn("(configuration) authenticateOnly = " + authenticateOnly);
+            } catch (Exception ex) {
+                throw new IllegalStateException("invalid config: " + InitDatabaseAction.DEV_AUTH_ONLY_KEY + "=" + ao + " must be true|false or not set");
+            }
+        } else {
+            authenticateOnly = false;
+        }
+        
+        
         Map<String, Object> config = InitDatabaseAction.getDaoConfig(props);
         this.artifactDAO = new ArtifactDAO();
         artifactDAO.setConfig(config); // connectivity tested
 
         this.storageAdapter = InventoryUtil.loadPlugin(props.getFirstPropertyValue(InitDatabaseAction.SA_KEY));
-            
     }
 
     /**
@@ -211,17 +226,13 @@ public abstract class ArtifactAction extends RestAction {
     
     void init() {
         parsePath();
-
     }
         
-   
-    
     public void checkReadPermission()
         throws AccessControlException, TransientException {
         
-        // TODO: remove this when baldur is functional
-        if (true) {
-            log.warn("allowing unrestricted read for development");
+        if (authenticateOnly) {
+            log.warn(InitDatabaseAction.DEV_AUTH_ONLY_KEY + "=true: allowing unrestricted access");
             return;
         }
         
@@ -239,7 +250,7 @@ public abstract class ArtifactAction extends RestAction {
                     granted.addAll(grant.getGroups());
                 }
             } catch (ResourceNotFoundException ex) {
-                log.error("failed to find granting service: " + ps, ex);
+                log.warn("failed to find granting service: " + ps + " -- cause: " + ex);
             }
         }
         if (granted.isEmpty()) {
@@ -252,8 +263,8 @@ public abstract class ArtifactAction extends RestAction {
         // unfortunately, the speed of GroupClient.getGroups() will depend on how many groups the
         // caller belomgs to...
         LocalAuthority loc = new LocalAuthority();
-        URI resourecID = loc.getServiceURI(Standards.GMS_SEARCH_01.toString());
-        GroupClient client = GroupUtil.getGroupClient(resourecID);
+        URI resourceID = loc.getServiceURI(Standards.GMS_SEARCH_01.toString());
+        GroupClient client = GroupUtil.getGroupClient(resourceID);
         List<GroupURI> userGroups = client.getMemberships();
         for (GroupURI gg : granted) {
             for (GroupURI userGroup : userGroups) {
@@ -269,6 +280,7 @@ public abstract class ArtifactAction extends RestAction {
     
     public void checkWritePermission()
         throws AccessControlException, TransientException {
+        log.warn("checkWritePermission: authenticateOnly = " + authenticateOnly);
 
         AuthMethod am = AuthenticationUtil.getAuthMethod(AuthenticationUtil.getCurrentSubject());
         if (am != null && am.equals(AuthMethod.ANON)) {
@@ -276,9 +288,8 @@ public abstract class ArtifactAction extends RestAction {
             throw new AccessControlException("permission denied");
         }
         
-        // TODO: remove this when baldur is functional
-        if (true) {
-            log.warn("allowing unrestricted write for development");
+        if (authenticateOnly) {
+            log.warn(InitDatabaseAction.DEV_AUTH_ONLY_KEY + "=true: allowing unrestricted access");
             return;
         }
         
@@ -293,7 +304,7 @@ public abstract class ArtifactAction extends RestAction {
                     granted.addAll(grant.getGroups());
                 }
             } catch (ResourceNotFoundException ex) {
-                log.error("failed to find granting service: " + ps, ex);
+                log.warn("failed to find granting service: " + ps + " -- cause: " + ex);
             }
         }
         if (granted.isEmpty()) {

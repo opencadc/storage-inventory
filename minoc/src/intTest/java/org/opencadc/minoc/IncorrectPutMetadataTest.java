@@ -67,8 +67,11 @@
 
 package org.opencadc.minoc;
 
+import ca.nrc.cadc.net.HttpDelete;
+import ca.nrc.cadc.net.HttpGet;
 import ca.nrc.cadc.net.HttpTransfer;
 import ca.nrc.cadc.net.HttpUpload;
+import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.util.Log4jInit;
 
 import java.io.ByteArrayInputStream;
@@ -95,6 +98,7 @@ public class IncorrectPutMetadataTest extends MinocTest {
     
     static {
         Log4jInit.setLevel("org.opencadc.minoc", Level.INFO);
+        Log4jInit.setLevel("ca.nrc.cadc.net", Level.INFO);
     }
     
     public IncorrectPutMetadataTest() {
@@ -108,20 +112,43 @@ public class IncorrectPutMetadataTest extends MinocTest {
             Subject.doAs(userSubject, new PrivilegedExceptionAction<Object>() {
                 public Object run() throws Exception {
             
-                    String data = "first artifact";
-                    byte[] bytes = data.getBytes();
-                    String incorrectData = "incorrect artifact";
+                    byte[] bytes = randomData(16384); // 16k
+                    final String incorrectData = "incorrect artifact";
                     URI artifactURI = URI.create("cadc:TEST/testUploadContentMD5_Mismatch");
                     URL artifactURL = new URL(filesURL + "/" + artifactURI.toString());
+                    
+                    // cleanup
+                    HttpDelete del = new HttpDelete(artifactURL, false);
+                    del.run();
+                    // verify
+                    HttpGet head = new HttpGet(artifactURL, false);
+                    head.setHeadOnly(true);
+                    try {
+                        head.prepare();
+                        Assert.fail("cleanup failed -- file exists: " + artifactURI);
+                    } catch (ResourceNotFoundException ok) {
+                        log.info("verify not found: " + artifactURL);
+                    }
                     
                     // put file
                     InputStream in = new ByteArrayInputStream(bytes);
                     HttpUpload put = new HttpUpload(in, artifactURL);
                     put.setRequestProperty(HttpTransfer.CONTENT_MD5, computeMD5(incorrectData.getBytes()));
-                    put.setRequestProperty(HttpTransfer.CONTENT_LENGTH, Long.toString((long) bytes.length));
+                    put.setRequestProperty(HttpTransfer.CONTENT_LENGTH, Long.toString(bytes.length));
                     put.run();
-                    Assert.assertNotNull(put.getThrowable());
+                    log.info("response code: " + put.getResponseCode() + " " + put.getThrowable());
+                    //log.info("throwable", put.getThrowable());
                     Assert.assertEquals("should be 412, precondition failed", 412, put.getResponseCode());
+            
+                    // verify
+                    head = new HttpGet(artifactURL, false);
+                    head.setHeadOnly(true);
+                    try {
+                        head.prepare();
+                        Assert.fail("put succeeded -- file exists: " + artifactURI);
+                    } catch (ResourceNotFoundException ok) {
+                        log.info("verify not found: " + artifactURL);
+                    }
             
                     return null;
                 }
@@ -140,19 +167,47 @@ public class IncorrectPutMetadataTest extends MinocTest {
             Subject.doAs(userSubject, new PrivilegedExceptionAction<Object>() {
                 public Object run() throws Exception {
             
-                    String data = "first artifact";
-                    byte[] bytes = data.getBytes();
+                    byte[] bytes = randomData(16384); // 16KiB
                     URI artifactURI = URI.create("cadc:TEST/testUploadContentLengthHeader_TooLarge");
                     URL artifactURL = new URL(filesURL + "/" + artifactURI.toString());
+                    
+                    // cleanup
+                    HttpDelete del = new HttpDelete(artifactURL, false);
+                    del.run();
+                    // verify
+                    HttpGet head = new HttpGet(artifactURL, false);
+                    head.setHeadOnly(true);
+                    try {
+                        head.prepare();
+                        Assert.fail("cleanup failed -- file exists: " + artifactURI);
+                    } catch (ResourceNotFoundException ok) {
+                        log.info("verify not found: " + artifactURL);
+                    }
                     
                     // put file
                     InputStream in = new ByteArrayInputStream(bytes);
                     HttpUpload put = new HttpUpload(in, artifactURL);
-                    put.setRequestProperty(HttpTransfer.CONTENT_LENGTH, Long.toString((long) bytes.length + 1L));
+                    put.setRequestProperty("X-Test-Method", "testUploadContentLengthHeader_TooLarge");
+                    put.setRequestProperty(HttpTransfer.CONTENT_LENGTH, Long.toString(bytes.length + 1L));
                     put.run();
+                    log.info("response code: " + put.getResponseCode() + " " + put.getThrowable());
                     Assert.assertNotNull(put.getThrowable());
-                    Assert.assertEquals("should be 412, precondition failed", 412, put.getResponseCode());
+                    
+                    // cannot verify the correct response code and exception because client side detects the
+                    // failure when using setFixedLengthStreamingMode
+                    //log.info("throwable", put.getThrowable());
+                    //Assert.assertEquals("should be 412, precondition failed", 412, put.getResponseCode());
             
+                    // verify
+                    head = new HttpGet(artifactURL, false);
+                    head.setHeadOnly(true);
+                    try {
+                        head.prepare();
+                        Assert.fail("put succeeded -- file exists: " + artifactURI);
+                    } catch (ResourceNotFoundException ok) {
+                        log.info("verify not found: " + artifactURL);
+                    }
+                    
                     return null;
                 }
             });
@@ -170,18 +225,46 @@ public class IncorrectPutMetadataTest extends MinocTest {
             Subject.doAs(userSubject, new PrivilegedExceptionAction<Object>() {
                 public Object run() throws Exception {
             
-                    String data = "first artifact";
-                    byte[] bytes = data.getBytes();
+                    byte[] bytes = randomData(16386); // 16k
                     URI artifactURI = URI.create("cadc:TEST/testUploadContentLengthHeader_TooSmall");
                     URL artifactURL = new URL(filesURL + "/" + artifactURI.toString());
+                    
+                    // cleanup
+                    HttpDelete del = new HttpDelete(artifactURL, false);
+                    del.run();
+                    // verify
+                    HttpGet head = new HttpGet(artifactURL, false);
+                    head.setHeadOnly(true);
+                    try {
+                        head.prepare();
+                        Assert.fail("cleanup failed -- file exists: " + artifactURI);
+                    } catch (ResourceNotFoundException ok) {
+                        log.info("verify not found: " + artifactURL);
+                    }
                     
                     // put file
                     InputStream in = new ByteArrayInputStream(bytes);
                     HttpUpload put = new HttpUpload(in, artifactURL);
-                    put.setRequestProperty(HttpTransfer.CONTENT_LENGTH, Long.toString((long) bytes.length + 1L));
+                    put.setRequestProperty(HttpTransfer.CONTENT_LENGTH, Long.toString(bytes.length + 1L));
+                    put.setRequestProperty("X-Test-Method", "testUploadContentLengthHeader_TooSmall");
                     put.run();
+                    log.info("response code: " + put.getResponseCode() + " " + put.getThrowable());
                     Assert.assertNotNull(put.getThrowable());
-                    Assert.assertEquals("should be 412, precondition failed", 412, put.getResponseCode());
+                    
+                    // cannot verify the correct response code and exception because client side detects the
+                    // failure when using setFixedLengthStreamingMode
+                    //log.info("throwable", put.getThrowable());
+                    //Assert.assertEquals("should be 412, precondition failed", 412, put.getResponseCode());
+            
+                    // verify
+                    head = new HttpGet(artifactURL, false);
+                    head.setHeadOnly(true);
+                    try {
+                        head.prepare();
+                        Assert.fail("put succeeded -- file exists: " + artifactURI);
+                    } catch (ResourceNotFoundException ok) {
+                        log.info("verify not found: " + artifactURL);
+                    }
             
                     return null;
                 }
@@ -205,14 +288,42 @@ public class IncorrectPutMetadataTest extends MinocTest {
                     URI artifactURI = URI.create("cadc:TEST/testUploadContentMD5_Correct_ContentLengthHeader_TooSmall");
                     URL artifactURL = new URL(filesURL + "/" + artifactURI.toString());
                     
+                    // cleanup
+                    HttpDelete del = new HttpDelete(artifactURL, false);
+                    del.run();
+                    // verify
+                    HttpGet head = new HttpGet(artifactURL, false);
+                    head.setHeadOnly(true);
+                    try {
+                        head.prepare();
+                        Assert.fail("cleanup failed -- file exists: " + artifactURI);
+                    } catch (ResourceNotFoundException ok) {
+                        log.info("verify not found: " + artifactURL);
+                    }
+                    
                     // put file
                     InputStream in = new ByteArrayInputStream(bytes);
                     HttpUpload put = new HttpUpload(in, artifactURL);
                     put.setRequestProperty(HttpTransfer.CONTENT_MD5, computeMD5(bytes));
                     put.setRequestProperty(HttpTransfer.CONTENT_LENGTH, Long.toString((long) bytes.length - 1L));
                     put.run();
+                    log.info("response code: " + put.getResponseCode() + " " + put.getThrowable());
                     Assert.assertNotNull(put.getThrowable());
-                    Assert.assertEquals("should be 400, precondition failed", 400, put.getResponseCode());
+                    
+                    // cannot verify the correct response code and exception because client side detects the
+                    // failure when using setFixedLengthStreamingMode
+                    //log.info("throwable", put.getThrowable());
+                    //Assert.assertEquals("should be 412, precondition failed", 412, put.getResponseCode());
+            
+                    // verify
+                    head = new HttpGet(artifactURL, false);
+                    head.setHeadOnly(true);
+                    try {
+                        head.prepare();
+                        Assert.fail("put succeeded -- file exists: " + artifactURI);
+                    } catch (ResourceNotFoundException ok) {
+                        log.info("verify not found: " + artifactURL);
+                    }
             
                     return null;
                 }
@@ -236,6 +347,19 @@ public class IncorrectPutMetadataTest extends MinocTest {
                     URI artifactURI = URI.create("cadc:TEST/testUpload_ContentMD5_ContentLength_Correct");
                     URL artifactURL = new URL(filesURL + "/" + artifactURI.toString());
                     
+                    // cleanup
+                    HttpDelete del = new HttpDelete(artifactURL, false);
+                    del.run();
+                    // verify
+                    HttpGet head = new HttpGet(artifactURL, false);
+                    head.setHeadOnly(true);
+                    try {
+                        head.prepare();
+                        Assert.fail("cleanup failed -- file exists: " + artifactURI);
+                    } catch (ResourceNotFoundException ok) {
+                        log.info("verify not found: " + artifactURL);
+                    }
+                    
                     // put file
                     InputStream in = new ByteArrayInputStream(bytes);
                     HttpUpload put = new HttpUpload(in, artifactURL);
@@ -243,8 +367,18 @@ public class IncorrectPutMetadataTest extends MinocTest {
                     put.setRequestProperty(HttpTransfer.CONTENT_LENGTH, Long.toString((long) bytes.length));
 
                     put.run();
+                    log.info("response code: " + put.getResponseCode() + " " + put.getThrowable());
                     Assert.assertNull(put.getThrowable());
                     Assert.assertEquals("should be 200, ok", 200, put.getResponseCode());
+                    
+                    // verify
+                    head = new HttpGet(artifactURL, false);
+                    head.setHeadOnly(true);
+                    try {
+                        head.prepare();
+                    } catch (Exception ok) {
+                        Assert.fail("verify failed: " + artifactURI);
+                    }
                     
                     return null;
                 }

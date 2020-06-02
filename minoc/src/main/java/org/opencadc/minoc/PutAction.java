@@ -73,12 +73,14 @@ import ca.nrc.cadc.io.ReadException;
 import ca.nrc.cadc.io.WriteException;
 import ca.nrc.cadc.net.IncorrectContentChecksumException;
 import ca.nrc.cadc.net.IncorrectContentLengthException;
+import ca.nrc.cadc.net.PreconditionFailedException;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.profiler.Profiler;
 import ca.nrc.cadc.rest.InlineContentException;
 import ca.nrc.cadc.rest.InlineContentHandler;
 
+import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
@@ -179,20 +181,35 @@ public class PutAction extends ArtifactAction {
 
         StorageMetadata artifactMetadata = null;
         
-        log.debug("writing new artifact to storage...");
+        log.debug("writing new artifact to " + storageAdapter.getClass().getName());
         try {
             artifactMetadata = storageAdapter.put(newArtifact, in);
             profiler.checkpoint("storageAdapter.put.ok");
-        } catch (ByteLimitExceededException 
-                | IncorrectContentChecksumException | IncorrectContentLengthException 
-                | ReadException | WriteException 
-                | StorageEngageException | TransientException e) {
+        } catch (ReadException ex) {
             profiler.checkpoint("storageAdapter.put.fail");
-            throw e;
+            if (contentLength != null) {
+                Throwable cause = ex.getCause();
+                while (cause != null) {
+                    if (cause instanceof EOFException) {
+                        throw new PreconditionFailedException("premature end-of-stream: expected content-length " + contentLength, cause);
+                    }
+                    cause = cause.getCause();
+                }
+            }
+            throw new IllegalArgumentException("read input failure", ex);
+        } catch (StorageEngageException | WriteException ex) {
+            profiler.checkpoint("storageAdapter.put.fail");
+            throw new RuntimeException("backend storage failure", ex);
+        } catch (ByteLimitExceededException | PreconditionFailedException 
+                | TransientException ex) {
+            profiler.checkpoint("storageAdapter.put.fail");
+            throw ex;
         }
+        log.debug("writing new artifact to " + storageAdapter.getClass().getName() + " OK");
         
         log.debug("wrote new artifact to storage");
         if (artifactMetadata.contentLastModified == null) {
+            // not provided by StorageAdapter
             artifactMetadata.contentLastModified = new Date();
         }
         
