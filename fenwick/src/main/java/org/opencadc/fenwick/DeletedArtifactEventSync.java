@@ -85,30 +85,66 @@ import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.tap.TapClient;
 import org.opencadc.tap.TapRowMapper;
 
+/**
+ * Class to query the DeletedArtifactEvent table using a TAP service
+ * and return an iterator over over the query results.
+ */
 public class DeletedArtifactEventSync {
 
     private static final Logger log = Logger.getLogger(DeletedArtifactEventSync.class);
 
-    private static final DateFormat dateFormat = DateUtil.getDateFormat(DateUtil.ISO_DATE_FORMAT, DateUtil.UTC);
-
     private static final String DELETED_ARTIFACT_QUERY =
         "SELECT id, lastModified, metaChecksum FROM inventory.DeletedArtifactEvent "
-            + "WHERE lastModified is not null AND lastModified >= '%s' order by lastModified";
+            + " %s order by lastModified";
 
     private final TapClient<DeletedArtifactEvent> tapClient;
-    private final Date startTime;
+    public Date startTime;
 
-    public DeletedArtifactEventSync(TapClient<DeletedArtifactEvent> tapClient, Date startTime) {
+    /**
+     * Constructor
+     *
+     * @param tapClient The TAP client.
+     */
+    public DeletedArtifactEventSync(TapClient<DeletedArtifactEvent> tapClient) {
         this.tapClient = tapClient;
-        this.startTime = startTime;
     }
 
+    /**
+     * Query the DeletedArtifactEvent table for rows with a lastModified date after the given start date,
+     * and return an iterator over the rows.
+     *
+     * @return Iterator over the query results.
+     * @throws InterruptedException thread interrupted
+     * @throws IOException failure to write or read the data stream
+     * @throws ResourceNotFoundException remote resource not found
+     * @throws TransientException temporary failure of TAP service: same call could work in future
+     */
     public ResourceIterator<DeletedArtifactEvent> getEvents()
         throws InterruptedException, IOException, ResourceNotFoundException, TransientException {
-        final String query = String.format(DELETED_ARTIFACT_QUERY, dateFormat.format(startTime));
+
+        String where;
+        if (this.startTime == null) {
+            where = "";
+        } else {
+            where = "WHERE lastModified >= '" + getDateFormat().format(this.startTime) +"'";
+        }
+        final String query = String.format(DELETED_ARTIFACT_QUERY, where);
+        log.debug("tap query: " + query);
         return tapClient.execute(query, new DeletedArtifactEventRowMapper());
     }
 
+    /**
+     * Get a DateFormat instance.
+     *
+     * @return ISO DateFormat in UTC.
+     */
+    protected DateFormat getDateFormat() {
+        return DateUtil.getDateFormat(DateUtil.ISO_DATE_FORMAT, DateUtil.UTC);
+    }
+
+    /**
+     * Class to map the query results to a DeletedArtifactEvent.
+     */
     static class DeletedArtifactEventRowMapper implements TapRowMapper<DeletedArtifactEvent> {
 
         @Override

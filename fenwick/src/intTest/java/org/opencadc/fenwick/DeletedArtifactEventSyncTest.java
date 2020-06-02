@@ -177,7 +177,8 @@ public class DeletedArtifactEventSyncTest {
             Calendar now = Calendar.getInstance();
             now.add(Calendar.DAY_OF_MONTH, -1);
             Date startTime = now.getTime();
-            DeletedArtifactEventSync sync = new DeletedArtifactEventSync(tapClient, startTime);
+            DeletedArtifactEventSync sync = new DeletedArtifactEventSync(tapClient);
+            sync.startTime = startTime;
 
             Subject.doAs(userSubject, new PrivilegedExceptionAction<Object>() {
 
