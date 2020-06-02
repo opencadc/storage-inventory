@@ -218,20 +218,18 @@ public class InventoryHarvester implements Runnable {
     private void syncDeletedStorageLocationEvents(final Date lastModified)
             throws ResourceNotFoundException, IOException, IllegalStateException, TransientException,
                    InterruptedException {
-        final Calendar calendar = Calendar.getInstance();
-        calendar.set(1970, Calendar.JANUARY, 1, 1, 0, 0);
-        calendar.set(Calendar.MILLISECOND, 0);
-
         final TapClient<DeletedStorageLocationEvent> deletedStorageLocationEventTapClient =
                 new TapClient<>(this.resourceID);
         final DeletedStorageLocationEventSync deletedStorageLocationEventSync =
-                new DeletedStorageLocationEventSync(deletedStorageLocationEventTapClient, (lastModified == null) ? calendar.getTime() : lastModified);
+                new DeletedStorageLocationEventSync(deletedStorageLocationEventTapClient);
+        deletedStorageLocationEventSync.startTime = lastModified;
+
         try (final ResourceIterator<DeletedStorageLocationEvent> deletedStorageLocationEventResourceIterator =
                      deletedStorageLocationEventSync.getEvents()) {
-            final ObsoleteStorageLocationDAO obsoleteStorageLocationDAO =
-                    new ObsoleteStorageLocationDAO(this.artifactDAO);
             deletedStorageLocationEventResourceIterator.forEachRemaining(deletedStorageLocationEvent -> {
-                obsoleteStorageLocationDAO.delete(deletedStorageLocationEvent.getID());
+                final Artifact artifact = this.artifactDAO.get(deletedStorageLocationEvent.getID());
+                artifact.storageLocation = null;
+                artifactDAO.put(artifact);
             });
         }
     }
@@ -239,12 +237,11 @@ public class InventoryHarvester implements Runnable {
     private void syncDeletedArtifactEvents(final Date lastModified)
             throws ResourceNotFoundException, IOException, IllegalStateException, TransientException,
                    InterruptedException {
-        final Calendar calendar = Calendar.getInstance();
-        calendar.set(1970, Calendar.JANUARY, 1, 1, 0, 0);
-        calendar.set(Calendar.MILLISECOND, 0);
         final TapClient<DeletedArtifactEvent> deletedArtifactEventTapClientTapClient = new TapClient<>(this.resourceID);
         final DeletedArtifactEventSync deletedArtifactEventSync =
-                new DeletedArtifactEventSync(deletedArtifactEventTapClientTapClient, (lastModified == null) ? calendar.getTime() : lastModified);
+                new DeletedArtifactEventSync(deletedArtifactEventTapClientTapClient);
+        deletedArtifactEventSync.startTime = lastModified;
+
         deletedArtifactEventSync.getEvents().forEachRemaining(deletedArtifactEvent -> {
             artifactDAO.delete(deletedArtifactEvent.getID());
         });
