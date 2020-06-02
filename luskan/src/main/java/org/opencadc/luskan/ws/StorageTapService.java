@@ -156,15 +156,15 @@ public class StorageTapService implements AvailabilityPlugin {
             cr.check();
 
             // TODO - These do not work for intTest unless the testing environment deploys these services.
-            String url = getServiceUrl(Standards.CRED_PROXY_10, Standards.VOSI_AVAILABILITY, AuthMethod.ANON);
+            String url = getAvailabilityForLocal(Standards.CRED_PROXY_10);
             CheckResource checkResource = new CheckWebService(url);
             //checkResource.check();
 
-            url = getServiceUrl(Standards.UMS_USERS_01, Standards.VOSI_AVAILABILITY, AuthMethod.ANON);
+            url = getAvailabilityForLocal(Standards.UMS_USERS_01);
             checkResource = new CheckWebService(url);
             //checkResource.check();
 
-            url = getServiceUrl(Standards.GMS_SEARCH_01, Standards.VOSI_AVAILABILITY, AuthMethod.ANON);
+            url = getAvailabilityForLocal(Standards.GMS_SEARCH_01);
             checkResource = new CheckWebService(url);
             checkResource.check();
 
@@ -187,7 +187,7 @@ public class StorageTapService implements AvailabilityPlugin {
         return new AvailabilityStatus(isGood, null, null, null, note);
     }
 
-    private String getServiceUrl(URI standardID, URI standard, AuthMethod authMethod)
+    private String getAvailabilityForLocal(URI standardID)
         throws ResourceNotFoundException {
         LocalAuthority localAuthority = new LocalAuthority();
         RegistryClient reg = new RegistryClient();
@@ -209,26 +209,27 @@ public class StorageTapService implements AvailabilityPlugin {
             throw new ResourceNotFoundException(message);
         }
 
-        Capability capability = capabilities.findCapability(standard);
+        Capability capability = capabilities.findCapability(Standards.VOSI_AVAILABILITY);
         if (capability == null) {
-            String message = String.format("standard %s not found in capabilities for resourceID %s, standardID %s",
-                                           standard, resourceID, standardID);
-            throw new ResourceNotFoundException(message);
+            String message =
+                String.format("service %s not does not provide %s", standardID, Standards.VOSI_AVAILABILITY);
+            throw new UnsupportedOperationException(message);
         }
 
-        Interface anInterface = capability.findInterface(authMethod);
+        Interface anInterface = capability.findInterface(AuthMethod.ANON);
         if (anInterface == null) {
             String message = String.format(
-                "AuthMethod %s not found in capability %s, standard %s, resourceID %s, standardID %s",
-                authMethod, capability, standard, resourceID, standardID);
-            throw new ResourceNotFoundException(message);
+                "unexpected: service %s capability %s does not support auth: %s",
+                standardID, capability, AuthMethod.ANON);
+            throw new RuntimeException(message);
         }
 
         AccessURL accessURL = anInterface.getAccessURL();
         if (accessURL == null) {
             String message = String.format(
                 "AccessURL not found in interface %s, capability %s, authMethod %s, standard %s, resourceID %s, "
-                    + "standardID %s", anInterface, capability, authMethod, standard, resourceID, standardID);
+                    + "standardID %s", anInterface, capability, AuthMethod.ANON, Standards.VOSI_AVAILABILITY,
+                resourceID, standardID);
             throw new ResourceNotFoundException(message);
         }
         return accessURL.getURL().toExternalForm();
