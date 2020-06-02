@@ -212,7 +212,7 @@ public class StorageTapService implements AvailabilityPlugin {
         Capability capability = capabilities.findCapability(Standards.VOSI_AVAILABILITY);
         if (capability == null) {
             String message =
-                String.format("service %s not does not provide %s", standardID, Standards.VOSI_AVAILABILITY);
+                String.format("service %s not does not provide %s", resourceID, Standards.VOSI_AVAILABILITY);
             throw new UnsupportedOperationException(message);
         }
 
@@ -220,19 +220,11 @@ public class StorageTapService implements AvailabilityPlugin {
         if (anInterface == null) {
             String message = String.format(
                 "unexpected: service %s capability %s does not support auth: %s",
-                standardID, capability, AuthMethod.ANON);
+                resourceID, capability, AuthMethod.ANON);
             throw new RuntimeException(message);
         }
 
-        AccessURL accessURL = anInterface.getAccessURL();
-        if (accessURL == null) {
-            String message = String.format(
-                "AccessURL not found in interface %s, capability %s, authMethod %s, standard %s, resourceID %s, "
-                    + "standardID %s", anInterface, capability, AuthMethod.ANON, Standards.VOSI_AVAILABILITY,
-                resourceID, standardID);
-            throw new ResourceNotFoundException(message);
-        }
-        return accessURL.getURL().toExternalForm();
+        return anInterface.getAccessURL().getURL().toExternalForm();
     }
 
     @Override
