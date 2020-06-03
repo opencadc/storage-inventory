@@ -228,8 +228,12 @@ public class InventoryHarvester implements Runnable {
                      deletedStorageLocationEventSync.getEvents()) {
             deletedStorageLocationEventResourceIterator.forEachRemaining(deletedStorageLocationEvent -> {
                 final Artifact artifact = this.artifactDAO.get(deletedStorageLocationEvent.getID());
-                artifact.storageLocation = null;
-                artifactDAO.put(artifact);
+                if (artifact != null) {
+                    artifact.storageLocation = null;
+                    artifactDAO.put(artifact);
+                } else {
+                    log.warn(String.format("Artifact %s does not exist locally.", deletedStorageLocationEvent.getID()));
+                }
             });
         }
     }
@@ -242,9 +246,8 @@ public class InventoryHarvester implements Runnable {
                 new DeletedArtifactEventSync(deletedArtifactEventTapClientTapClient);
         deletedArtifactEventSync.startTime = lastModified;
 
-        deletedArtifactEventSync.getEvents().forEachRemaining(deletedArtifactEvent -> {
-            artifactDAO.delete(deletedArtifactEvent.getID());
-        });
+        deletedArtifactEventSync.getEvents().forEachRemaining(deletedArtifactEvent ->
+                                                                      artifactDAO.delete(deletedArtifactEvent.getID()));
     }
 
     /**
