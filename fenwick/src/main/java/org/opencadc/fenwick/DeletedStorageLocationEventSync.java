@@ -93,10 +93,6 @@ public class DeletedStorageLocationEventSync {
 
     private static final Logger log = Logger.getLogger(DeletedStorageLocationEventSync.class);
 
-    private static final String DELETED_STORAGE_LOCATION_QUERY =
-            "SELECT id, lastModified, metaChecksum FROM inventory.DeletedStorageLocationEvent"
-                + " %s order by lastModified";
-
     private final TapClient<DeletedStorageLocationEvent> tapClient;
     public Date startTime;
 
@@ -106,6 +102,7 @@ public class DeletedStorageLocationEventSync {
      * @param tapClient The TAP client.
      */
     public DeletedStorageLocationEventSync(TapClient<DeletedStorageLocationEvent> tapClient) {
+        InventoryUtil.assertNotNull(DeletedStorageLocationEventSync.class, "tapClient", tapClient);
         this.tapClient = tapClient;
     }
 
@@ -122,15 +119,25 @@ public class DeletedStorageLocationEventSync {
     public ResourceIterator<DeletedStorageLocationEvent> getEvents()
             throws InterruptedException, IOException, ResourceNotFoundException, TransientException {
 
-        String where;
-        if (this.startTime == null) {
-            where = "";
-        } else {
-            where = "WHERE lastModified >= '" + getDateFormat().format(this.startTime) + "'";
+        return tapClient.execute(getTapQuery(), new DeletedStorageLocationEventRowMapper());
+    }
+
+    /**
+     * Build the TAP query to retrieve DeletedStorageLocationEvent rows.
+     *
+     * @return TAP query
+     */
+    protected String getTapQuery() {
+        StringBuilder query = new StringBuilder();
+        query.append("SELECT id, lastModified, metaChecksum FROM inventory.DeletedStorageLocationEvent");
+        if (this.startTime != null) {
+            query.append(" WHERE lastModified >= '");
+            query.append(getDateFormat().format(this.startTime));
+            query.append("'");
         }
-        final String query = String.format(DELETED_STORAGE_LOCATION_QUERY, where);
-        log.debug("tap query: " + query);
-        return tapClient.execute(query, new DeletedStorageLocationEventRowMapper());
+        query.append(" order by lastModified");
+        log.debug("Tap query: " + query.toString());
+        return query.toString();
     }
 
     /**
@@ -163,5 +170,3 @@ public class DeletedStorageLocationEventSync {
     }
 
 }
-
-

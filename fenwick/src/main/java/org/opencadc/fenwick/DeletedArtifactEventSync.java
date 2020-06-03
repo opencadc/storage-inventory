@@ -93,10 +93,6 @@ public class DeletedArtifactEventSync {
 
     private static final Logger log = Logger.getLogger(DeletedArtifactEventSync.class);
 
-    private static final String DELETED_ARTIFACT_QUERY =
-        "SELECT id, lastModified, metaChecksum FROM inventory.DeletedArtifactEvent "
-            + " %s order by lastModified";
-
     private final TapClient<DeletedArtifactEvent> tapClient;
     public Date startTime;
 
@@ -106,6 +102,7 @@ public class DeletedArtifactEventSync {
      * @param tapClient The TAP client.
      */
     public DeletedArtifactEventSync(TapClient<DeletedArtifactEvent> tapClient) {
+        InventoryUtil.assertNotNull(DeletedArtifactEventSync.class, "tapClient", tapClient);
         this.tapClient = tapClient;
     }
 
@@ -122,15 +119,25 @@ public class DeletedArtifactEventSync {
     public ResourceIterator<DeletedArtifactEvent> getEvents()
         throws InterruptedException, IOException, ResourceNotFoundException, TransientException {
 
-        String where;
-        if (this.startTime == null) {
-            where = "";
-        } else {
-            where = "WHERE lastModified >= '" + getDateFormat().format(this.startTime) + "'";
+        return tapClient.execute(getTapQuery(), new DeletedArtifactEventRowMapper());
+    }
+
+    /**
+     * Build the TAP query to retrieve DeletedStorageLocationEvent rows.
+     *
+     * @return TAP query
+     */
+    protected String getTapQuery() {
+        StringBuilder query = new StringBuilder();
+        query.append("SELECT id, lastModified, metaChecksum FROM inventory.DeletedArtifactEvent");
+        if (this.startTime != null) {
+            query.append(" WHERE lastModified >= '");
+            query.append(getDateFormat().format(this.startTime));
+            query.append("'");
         }
-        final String query = String.format(DELETED_ARTIFACT_QUERY, where);
-        log.debug("tap query: " + query);
-        return tapClient.execute(query, new DeletedArtifactEventRowMapper());
+        query.append(" order by lastModified");
+        log.debug("Tap query: " + query.toString());
+        return query.toString();
     }
 
     /**
