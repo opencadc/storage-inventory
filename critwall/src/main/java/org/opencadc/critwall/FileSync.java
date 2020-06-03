@@ -203,8 +203,10 @@ public class FileSync {
             }
 
             // HACK: temporarily keep running until all jobs are completed
-            log.debug("sleeping main thread so thread pool jobs can complete...");
-            Thread.sleep(10000L);
+            while (true) {
+                Thread.sleep(300 * 1000L); // 5 min
+                log.warn("main thread: sleeping forever!!");
+            }
 
         } catch (Exception e) {
             log.info("Thread pool error", e);
