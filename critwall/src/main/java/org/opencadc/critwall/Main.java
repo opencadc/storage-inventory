@@ -127,7 +127,6 @@ public class Main {
             Log4jInit.setLevel("org.opencadc.tap", cfg);
             Log4jInit.setLevel("org.opencadc.reg", cfg);
             Log4jInit.setLevel("org.opencadc.critwall", cfg);
-            Log4jInit.setLevel("java.util.concurrent", cfg);
 
             log.debug("log level: " + cfg);
             log.debug("properties: " + props.toString());
