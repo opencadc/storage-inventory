@@ -67,104 +67,86 @@
 
 package org.opencadc.critwall;
 
+import java.security.InvalidParameterException;
 import java.util.ArrayList;
-
+import java.util.Iterator;
 import java.util.concurrent.BlockingQueue;
 import org.apache.log4j.Logger;
 
 /**
- * Implementation of a thread pool executor. Provides both producer and consumer task blocking
- * if queue is full.
+ * Implementation of a thread pool executor.
+ * Thread pool is fixed size. At startup, threads are set to consume the contents of the BlockingQueue.
+ * Threads in the pool are blocked when trying to pull tasks from an empty queue. (see API for BlockingQueue.take().)
  */
-public class BlockingQueueThreadPool {
-    private static Logger log = Logger.getLogger(BlockingQueueThreadPool.class);
-    private String workerBasename = "BlockingQueueThreadPool.WorkerThread: ";
+public class ThreadPool {
+    private static Logger log = Logger.getLogger(ThreadPool.class);
 
-    private BlockingQueue<Runnable> taskQueue;
-
-    private ArrayList threads;
-    // Requested number of threads
-    private int nthreads;
-    // Current number of workers
-    private int numWorkers;
+    private final String poolBasename = ThreadPool.class.getName();
+    private final BlockingQueue<Runnable> taskQueue;
+    private final int nthreads;
+    private final ArrayList threads;
 
 
-    // TODO: currently queue size is outside this ctor, possibly
-    // should be inside so relative size of queue and thread pool can be managed in one place?
-    public BlockingQueueThreadPool(BlockingQueue<Runnable> blockingQueue, int nthreads) {
+    public ThreadPool(BlockingQueue<Runnable> blockingQueue, int nthreads) {
+
+        if (nthreads <= 0) {
+            String errMsg = "nthreads should > 1 (" + nthreads + ")";
+            log.error(errMsg);
+            throw new InvalidParameterException(errMsg);
+        }
+
         this.taskQueue = blockingQueue;
-        this.threads = new ArrayList(nthreads);
         this.nthreads = nthreads;
-        start();
-    }
+        this.threads = new ArrayList(nthreads);
 
-    public void addTask(Runnable task) {
-        try {
-            log.debug("queueing: " + task);
-            // put)() should block until there is room on the queue
-            taskQueue.put(task);
-        } catch (InterruptedException ie) {
-            // this is required because LinkedBlockingQueue allows
-            // for tasks (threads) waiting to be executed to be interrupted.
-            log.info("task interrupted");
-        }
-    }
-
-    public void terminate() {
-        log.debug("ThreadPool.terminate()");
-
-        // terminate thread pool members
-        numWorkers = 0;
-        synchronized (threads) { // vs sync block in WorkerThread.run() that calls threads.remove(this) after an interrupt
-            for (int i = 0; i < threads.size(); i++) {
-                log.debug("ThreadPool.terminate() interrupting WorkerThread " + i);
-                WorkerThread wt = (WorkerThread) threads.get(i);
-                synchronized (wt) {
-                    log.debug("ThreadPool.terminate(): interrupting " + wt.getName());
-                    wt.interrupt();
-                }
-            }
-        }
-
-        // pop remaining tasks from queue and cancel them
-        log.debug("ThreadPool.terminate() flushing queue");
-        // Q: how to flush BlockingQueue?
-        //            tasks.update(new QueueFlush());
-        log.debug("ThreadPool.terminate() DONE");
-    }
-
-    public void start() {
-        log.debug("BlockingQueueThreadPool: starting up");
-
-        log.debug("initial thread count: " + threads.size() + " requested size: " + nthreads + " num workers: " + numWorkers);
+        log.info(poolBasename + " - starting up");
+        log.debug("initial thread count: " + threads.size() + " requested size: " + nthreads);
 
         synchronized (threads) {
             while (threads.size() < nthreads) {
-                log.debug("adding worker thread");
-                WorkerThread t = new WorkerThread();
-                t.setPriority(Thread.MIN_PRIORITY); // TODO: what priority? (this is from DM:) mainly IO blocked anyway, so keep the UI thread happy
+                int threadNum = threads.size() + 1;
+                log.debug("adding worker thread " + threadNum);
+                WorkerThread t = new WorkerThread(threadNum);
+                t.setPriority(Thread.MIN_PRIORITY);
                 threads.add(t);
                 t.start();
             }
         }
+        log.debug("after pool startup - thread count: " + threads.size() + " requested size: " + nthreads);
+        log.debug(poolBasename + " - ctor done");
+    }
 
-        numWorkers = threads.size();
-        log.debug("after pool startup - thread count: " + threads.size() + " requested size: " + nthreads + " num workers: " + numWorkers);
+    public void terminate() {
+        log.debug(poolBasename + ".terminate() starting");
 
+        // terminate thread pool members
+        synchronized (threads) {
+            Iterator<WorkerThread> threadIter = threads.iterator();
+            while (threadIter.hasNext()) {
+                WorkerThread t = threadIter.next();
+                log.debug(poolBasename + ".terminate() interrupting WorkerThread " + t.getName());
+                synchronized (t) {
+                    log.debug(poolBasename + ".terminate(): interrupting " + t.getName());
+                    t.interrupt();
+                }
+            }
+        }
+
+        log.debug(poolBasename + ".terminate() DONE");
     }
 
     private class WorkerThread extends Thread {
         Runnable currentTask;
 
-        WorkerThread() {
+        WorkerThread(int threadNum) {
             super();
             setDaemon(true);
-            setName(workerBasename);
+            setName(poolBasename + "-" + threadNum);
         }
 
         // threads keep running as long as they are in the threads list
         public void run() {
-            log.debug(workerBasename + "START");
+            log.debug(poolBasename + " - START");
             boolean cont = true;
             while (cont) {
                 try {
@@ -177,44 +159,21 @@ public class BlockingQueueThreadPool {
                         cont = threads.contains(this);
                     }
                     if (cont) {
-                        log.debug(workerBasename + "still part of pool");
-                        // set thread name so thread dumps are intelligible
-                        setName(workerBasename + currentTask);
                         log.debug("running current task");
                         currentTask.run();
                         log.debug("finished running task");
-                    } else {
-                        log.debug(workerBasename + "no longer part of pool");
-                        synchronized (this) { // vs sync block in terminate()
-                            // make sure to clear interrupt flag from an interrupt() in stateChanged()
-                            // in case it comes after pop() and before threads.contains()
-                            interrupted();
-                            // we should quit, so put task back
-                            log.debug(workerBasename + "OOPS (put it back): " + tmp);
-                            taskQueue.put(tmp);  // will block if queue is full
-                            currentTask = null;
-                        }
                     }
                 } catch (InterruptedException ignore) {
-                    // put() was interrupted, let finally and while condition decide if we
+                    // take() was interrupted, let finally and while condition decide if we
                     // should loop or return
                     log.error("thread interrupted: " + ignore);
                 } finally {
-                    setName(workerBasename);
                     synchronized (this) {
                         currentTask = null;
                     }
-                    synchronized (threads) {
-                        if (threads.size() > numWorkers) {
-                            log.debug(workerBasename + "numWorkers=" + numWorkers + " threads.size() = " + threads.size());
-                            threads.remove(this);
-                        }
-                        cont = threads.contains(this);
-                    }
                 }
             }
-            log.debug(workerBasename + "DONE");
+            log.debug(poolBasename + " - END");
         }
     }
-
 }

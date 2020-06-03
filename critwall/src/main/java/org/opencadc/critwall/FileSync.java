@@ -74,11 +74,7 @@ import java.net.URI;
 import java.util.Iterator;
 import java.util.Map;
 
-import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.RejectedExecutionHandler;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
 import javax.naming.NamingException;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
@@ -98,8 +94,7 @@ public class FileSync {
     private final BucketSelector selector;
     private final int nthreads;
     private final StorageAdapter storageAdapter;
-    //    private final ThreadPoolExecutor executor;
-    private final BlockingQueueThreadPool threadPool;
+    private final ThreadPool threadPool;
     private final LinkedBlockingQueue<Runnable> jobQueue;
 
     /**
@@ -129,20 +124,6 @@ public class FileSync {
         this.selector = selector;
         this.nthreads = nthreads;
 
-        // Notes on queue and thread pool instances:
-        // - LinkedBlockingQueue (jobQueue) is the queue used in this producer/consumer implementation.
-        // - jobQueue will block on put() if queue capacity is reached, and on take() if queue is
-        //  empty (useful at thread pool startup)
-        // - FileSync (this file) is the producer that adds to jobQueue (using BlockingQueueThreadPool.addTask())
-        // - BlockingQueueThreadPool's worker threads are the consumers (nthreads total)
-
-        // Justification for not using ExecutorService in this case is it's too complex, and
-        // the default implementations don't provide the behaviour needed. (it uses 'offer' instead
-        // of 'put' under the covers.)
-
-        this.jobQueue = new LinkedBlockingQueue<Runnable>(this.nthreads * 2);
-        this.threadPool = new BlockingQueueThreadPool(this.jobQueue, this.nthreads);
-
         // For managing the artifact iterator FileSync loops over
         try {
             // Make FileSync ArtifactDAO instance
@@ -166,6 +147,18 @@ public class FileSync {
             throw new IllegalStateException("unable to access database: " + daoConfig.get("database"), ne);
         }
 
+        // Notes on queue and thread pool instances:
+        // - LinkedBlockingQueue (jobQueue) is the queue used in this producer/consumer implementation.
+        // - threadPool is the consumer, FileSync is the producer
+        // - jobQueue.put() will put a FileSyncJob where worker threads in threadPool can consume & run it
+        // - if queue capacity is reached, put() will block.
+
+        // Justification for not using ExecutorService in this case is it's too complex, and
+        // the default implementations don't provide the behaviour needed.
+
+        this.jobQueue = new LinkedBlockingQueue<Runnable>(this.nthreads * 2);
+        this.threadPool = new ThreadPool(this.jobQueue, this.nthreads);
+
         this.storageAdapter = localStorage;
 
         log.debug("FileSync ctor done");
@@ -187,9 +180,13 @@ public class FileSync {
             while (bucketSelector.hasNext()) {
                 String bucket = bucketSelector.next();
                 log.info("processing bucket " + bucket);
+                // TODO:  handle errors from this more sanely after they
+                // are available from the cadc-inventory-db API
                 Iterator<Artifact> unstoredArtifacts = artifactDAO.unstoredIterator(bucket);
 
                 while (unstoredArtifacts.hasNext()) {
+                    // TODO:  handle errors from this more sanely after they
+                    // are available from the cadc-inventory-db API
                     Artifact curArtifact = unstoredArtifacts.next();
                     currentArtifactInfo = "bucket: " + bucket + " artifact: " + curArtifact.getURI();
                     log.debug("processing: " + currentArtifactInfo);
@@ -199,16 +196,25 @@ public class FileSync {
 
                     log.debug("creating file sync job: " + curArtifact.getURI());
 
-                    threadPool.addTask(fsj);
+                    // blocks when queue capacity is reached
+                    jobQueue.put(fsj);
                     log.debug("added FileSyncJob to thread pool.");
-
                 }
             }
+
+            // HACK: temporarily keep running until all jobs are completed
+            log.debug("sleeping main thread so thread pool jobs can complete...");
+            Thread.sleep(10000L);
 
         } catch (Exception e) {
             log.info("Thread pool error", e);
             log.error("error processing list of artifacts, at: " + currentArtifactInfo);
         } finally {
+
+
+            // Clean up
+            this.threadPool.terminate();
+
             long elapsed = System.currentTimeMillis() - start;
             log.info("FINALLY - FileSync - elapsed ms: " + elapsed);
         }
