@@ -70,12 +70,11 @@
 package org.opencadc.inventory.storage.s3;
 
 import ca.nrc.cadc.io.ByteCountOutputStream;
-import ca.nrc.cadc.net.IncorrectContentChecksumException;
+import ca.nrc.cadc.io.ByteLimitExceededException;
 import ca.nrc.cadc.net.PreconditionFailedException;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.util.HexUtil;
 import ca.nrc.cadc.util.Log4jInit;
-
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -84,6 +83,7 @@ import java.net.URI;
 import java.security.DigestOutputStream;
 import java.security.MessageDigest;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -91,11 +91,8 @@ import java.util.Random;
 import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
-
 import nom.tam.fits.BasicHDU;
 import nom.tam.fits.Fits;
-
-import ca.nrc.cadc.io.ByteLimitExceededException;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.After;
@@ -111,7 +108,7 @@ import org.opencadc.inventory.storage.StorageMetadata;
  * @author pdowler
  */
 abstract class S3StorageAdapterTest {
-    private static final Logger LOGGER = Logger.getLogger(S3StorageAdapterTest.class);
+    private static final Logger log = Logger.getLogger(S3StorageAdapterTest.class);
     
     static {
         Log4jInit.setLevel("org.opencadc.inventory", Level.INFO);
@@ -146,140 +143,36 @@ abstract class S3StorageAdapterTest {
             URI expectedChecksum = URI.create("md5:" + HexUtil.toHex(md.digest()));
             na.contentChecksum = expectedChecksum;
             na.contentLength = (long) data.length;
-            LOGGER.debug("testPutGetDelete random data: " + data.length + " " + expectedChecksum);
+            log.debug("testPutGetDelete random data: " + data.length + " " + expectedChecksum);
             
-            LOGGER.debug("testPutGetDelete put: " + artifactURI);
+            log.debug("testPutGetDelete put: " + artifactURI);
             StorageMetadata sm = adapter.put(na, new ByteArrayInputStream(data));
-            LOGGER.info("testPutGetDelete put: " + artifactURI + " to " + sm.getStorageLocation());
+            log.info("testPutGetDelete put: " + artifactURI + " to " + sm.getStorageLocation());
             
             // verify data stored
-            LOGGER.debug("testPutGetDelete get: " + artifactURI);
+            log.debug("testPutGetDelete get: " + artifactURI);
             ByteArrayOutputStream bos = new ByteArrayOutputStream();
             adapter.get(sm.getStorageLocation(), bos);
             md.reset();
             byte[] actual = bos.toByteArray();
             md.update(actual);
             URI actualChecksum = URI.create("md5:" + HexUtil.toHex(md.digest()));
-            LOGGER.info("testPutGetDelete get: " + artifactURI + " " + actual.length + " " + actualChecksum);
+            log.info("testPutGetDelete get: " + artifactURI + " " + actual.length + " " + actualChecksum);
             Assert.assertEquals("length", (long) na.contentLength, actual.length);
             Assert.assertEquals("checksum", na.contentChecksum, actualChecksum);
 
-            LOGGER.debug("testPutGetDelete delete: " + sm.getStorageLocation());
+            log.debug("testPutGetDelete delete: " + sm.getStorageLocation());
             adapter.delete(sm.getStorageLocation());
             Assert.assertTrue("deleted", !adapter.exists(sm.getStorageLocation()));
-            LOGGER.info("testPutGetDelete deleted: " + sm.getStorageLocation());
+            log.info("testPutGetDelete deleted: " + sm.getStorageLocation());
         } catch (Exception ex) {
-            LOGGER.error("unexpected exception", ex);
+            log.error("unexpected exception", ex);
             Assert.fail("unexpected exception: " + ex);
         }
     }
     
     @Test
-    public void testPutGetDeleteWrongMD5() {
-        URI artifactURI = URI.create("cadc:TEST/testPutGetDeleteWrongMD5");
-        
-        try {
-            Random rnd = new Random();
-            byte[] data = new byte[1024];
-            rnd.nextBytes(data);
-            
-            NewArtifact na = new NewArtifact(artifactURI);
-            na.contentChecksum = URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"); // md5 of 0-length file
-            na.contentLength = (long) data.length;
-            LOGGER.debug("testPutGetDeleteWrongMD5 random data: " + data.length + " " +  na.contentChecksum);
-            
-            try {
-                LOGGER.debug("testPutGetDeleteWrongMD5 put: " + artifactURI);
-                StorageMetadata sm = adapter.put(na, new ByteArrayInputStream(data));
-                Assert.fail("testPutGetDeleteWrongMD5 put: " + artifactURI + " to " + sm.getStorageLocation());
-            } catch (PreconditionFailedException expected) {
-                LOGGER.info("testPutGetDeleteWrongMD5 caught: " + expected);
-            }
-            
-        } catch (Exception ex) {
-            LOGGER.error("unexpected exception", ex);
-            Assert.fail("unexpected exception: " + ex);
-        }
-    }
-    
-    @Test
-    public void testPutCheckDeleteLargeFileFail() {
-        URI artifactURI = URI.create("cadc:TEST/testPutCheckDeleteLargeFileFail");
-        
-        final NewArtifact na = new NewArtifact(artifactURI);
-        na.contentChecksum = URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"); // md5 of 0-length file
-        //na.contentLength = (long) 8 * 1024; // 8 KiB
-        //na.contentLength = (long) 8 * 1024 * 1024; // 8 MiB
-        na.contentLength = (long) 8 * 1024 * 1024 * 1024; // 8 GiB exceeds ceph/S3 limit of 5GiB
-            
-        try {
-            
-            LOGGER.debug("testPutCheckDeleteLargeFileFail file data: " + na.contentLength + " " + na.contentChecksum);
-            InputStream istream = getJunk(na.contentLength);
-            
-            LOGGER.info("testPutCheckDeleteLargeFileFail put: " + artifactURI + " " + na.contentLength);
-            StorageMetadata sm = adapter.put(na, istream);
-            LOGGER.info("testPutCheckDeleteLargeFileFail put: " + artifactURI + " to " + sm.getStorageLocation());
-            
-            // TODO: verify metadata captured without using iterator
-
-            LOGGER.debug("testPutCheckDeleteLargeFileFail delete: " + sm.getStorageLocation());
-            adapter.delete(sm.getStorageLocation());
-            Assert.assertTrue("deleted", !adapter.exists(sm.getStorageLocation()));
-            LOGGER.info("testPutCheckDeleteLargeFileFail deleted: " + sm.getStorageLocation());
-        } catch (ByteLimitExceededException expected) {
-            LOGGER.info("caught: " + expected);
-        } catch (Exception ex) {
-            LOGGER.error("unexpected exception", ex);
-            Assert.fail("unexpected exception: " + ex);
-        }
-    }
-    
-    private InputStream getJunk(long numBytes) {
-        Random rnd = new Random();
-        final byte[] data = new byte[1024];
-        rnd.nextBytes(data);
-        
-        return new InputStream() {
-            long tot = 0L;
-            
-            @Override
-            public int read() throws IOException {
-                throw new UnsupportedOperationException();
-            }
-            
-            @Override
-            public int read(byte[] bytes) throws IOException {
-                int ret = super.read(bytes, 0, bytes.length);
-                return ret;
-            }
-
-            @Override
-            public int read(byte[] bytes, int off, int len) throws IOException {
-                LOGGER.info("junk.read: off=" + off + " len=" + len + " ret=" + tot + " of " + numBytes);
-                if (len == 0) {
-                    return 0;
-                }
-                
-                if (tot >= numBytes) {
-                    return -1;
-                }
-                long rem = numBytes - tot;
-                int n = (int) (Math.min(len, rem) / 1024L);
-                int ret = n * 1024;
-                LOGGER.info("copy-to-buffer: " + ret);
-                for (int i = 0; i < n; i++) {
-                    int start = off * i;
-                    System.arraycopy(data, 0, bytes, start, data.length);
-                }
-                tot += ret;
-                return ret;
-            }
-        };
-    }
-    
-    @Test
-    public void testPutGetDeleteMinimal() {
+    public void testPutGetDeleteMinimal_S3_API_Limitation_FAIL() {
         URI artifactURI = URI.create("cadc:TEST/testPutGetDeleteMinimal");
         
         try {
@@ -303,33 +196,112 @@ abstract class S3StorageAdapterTest {
             //na.contentLength = (long) data.length - 1;  // Error Code: XAmzContentSHA256Mismatch
             //na.contentLength = (long) data.length + 1;  // hangs for ~2 min, Error while reading from stream.
             //na.contentLength = Long.MAX_VALUE;        // Error Code: SignatureDoesNotMatch
-            LOGGER.debug("testPutGetDeleteMinimal random data: " + data.length + " " + expectedChecksum);
+            log.debug("testPutGetDeleteMinimal random data: " + data.length + " " + expectedChecksum);
             
-            LOGGER.debug("testPutGetDeleteMinimal put: " + artifactURI);
+            log.debug("testPutGetDeleteMinimal put: " + artifactURI);
             StorageMetadata sm = adapter.put(na, new ByteArrayInputStream(data));
-            LOGGER.info("testPutGetDeleteMinimal put: " + artifactURI + " to " + sm.getStorageLocation());
+            log.info("testPutGetDeleteMinimal put: " + artifactURI + " to " + sm.getStorageLocation());
             
             // verify data stored
-            LOGGER.debug("testPutGetDeleteMinimal get: " + artifactURI);
+            log.debug("testPutGetDeleteMinimal get: " + artifactURI);
             ByteArrayOutputStream bos = new ByteArrayOutputStream();
             adapter.get(sm.getStorageLocation(), bos);
             byte[] actual = bos.toByteArray();
             md.update(actual);
             URI actualChecksum = URI.create("md5:" + HexUtil.toHex(md.digest()));
-            LOGGER.info("testPutGetDeleteMinimal get: " + artifactURI + " " + actual.length + " " + actualChecksum);
+            log.info("testPutGetDeleteMinimal get: " + artifactURI + " " + actual.length + " " + actualChecksum);
             Assert.assertEquals("length", (long) na.contentLength, actual.length);
             Assert.assertEquals("checksum", expectedChecksum, actualChecksum);
             
             // TODO: verify metadata captured without using iterator
             
-            LOGGER.debug("testPutGetDeleteMinimal delete: " + sm.getStorageLocation());
+            log.debug("testPutGetDeleteMinimal delete: " + sm.getStorageLocation());
             adapter.delete(sm.getStorageLocation());
             Assert.assertTrue("deleted", !adapter.exists(sm.getStorageLocation()));
-            LOGGER.info("testPutGetDeleteMinimal deleted: " + sm.getStorageLocation());
-        } catch (UnsupportedOperationException limitation) {
-            LOGGER.info("caught S3 API limitation: " + limitation);
+            log.info("testPutGetDeleteMinimal deleted: " + sm.getStorageLocation());
+        //} catch (UnsupportedOperationException limitation) {
+        //    log.warn("caught S3 API limitation: " + limitation);
         } catch (Exception ex) {
-            LOGGER.error("unexpected exception", ex);
+            log.error("unexpected exception", ex);
+            Assert.fail("unexpected exception: " + ex);
+        }
+    }
+    
+    @Test
+    public void testPutGetDeleteWrongMD5() {
+        URI artifactURI = URI.create("cadc:TEST/testPutGetDeleteWrongMD5");
+        
+        try {
+            Random rnd = new Random();
+            byte[] data = new byte[1024];
+            rnd.nextBytes(data);
+            
+            NewArtifact na = new NewArtifact(artifactURI);
+            na.contentChecksum = URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"); // md5 of 0-length file
+            na.contentLength = (long) data.length;
+            log.debug("testPutGetDeleteWrongMD5 random data: " + data.length + " " +  na.contentChecksum);
+            
+            try {
+                log.debug("testPutGetDeleteWrongMD5 put: " + artifactURI);
+                StorageMetadata sm = adapter.put(na, new ByteArrayInputStream(data));
+                Assert.fail("testPutGetDeleteWrongMD5 put: " + artifactURI + " to " + sm.getStorageLocation());
+            } catch (PreconditionFailedException expected) {
+                log.info("testPutGetDeleteWrongMD5 caught: " + expected);
+            }
+            
+        } catch (Exception ex) {
+            log.error("unexpected exception", ex);
+            Assert.fail("unexpected exception: " + ex);
+        }
+    }
+    
+    @Test
+    public void testPutLargeStreamReject() {
+        URI artifactURI = URI.create("cadc:TEST/testPutLargeStreamReject");
+        
+        final NewArtifact na = new NewArtifact(artifactURI);
+        
+        // ceph/S3 limit of 5GiB
+        long numBytes = (long) 6 * 1024 * 1024 * 1024; 
+        na.contentLength = numBytes;
+        na.contentChecksum = URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"); // md5 of 0-length file
+            
+        try {
+            InputStream istream = getInputStreamThatFails();
+            log.info("testPutCheckDeleteLargeStreamReject put: " + artifactURI + " " + numBytes);
+            StorageMetadata sm = adapter.put(na, istream);
+            Assert.fail("expected ByteLimitExceededException, got: " + sm);
+        } catch (ByteLimitExceededException expected) {
+            log.info("caught: " + expected);
+        } catch (Exception ex) {
+            log.error("unexpected exception", ex);
+            Assert.fail("unexpected exception: " + ex);
+        }
+    }
+    
+    @Test
+    public void testPutLargeStreamFail_S3_API_Limitation_FAIL() {
+        URI artifactURI = URI.create("cadc:TEST/testPutLargeStreamFail");
+        
+        final NewArtifact na = new NewArtifact(artifactURI);
+        
+        // ceph limit of 5GiB
+        long numBytes = (long) 6 * 1024 * 1024 * 1024; 
+            
+        try {
+            InputStream istream = getInputStreamOfRandomBytes(numBytes);
+            log.info("testPutCheckDeleteLargeStreamFail put: " + artifactURI + " " + numBytes);
+            StorageMetadata sm = adapter.put(na, istream);
+            
+            Assert.assertFalse("put should have failed, but object exists", adapter.exists(sm.getStorageLocation()));
+            
+            Assert.fail("expected ByteLimitExceededException, got: " + sm);
+        } catch (ByteLimitExceededException expected) {
+            log.info("caught: " + expected);
+        //} catch (UnsupportedOperationException limitation) {
+        //    log.warn("caught S3 API limitation: " + limitation);
+        } catch (Exception ex) {
+            log.error("unexpected exception", ex);
             Assert.fail("unexpected exception: " + ex);
         }
     }
@@ -346,7 +318,7 @@ abstract class S3StorageAdapterTest {
                 adapter.get(doesNotExist, bos);
                 Assert.fail("get: " + doesNotExist + " returned " + bos.size() + " bytes");
             } catch (ResourceNotFoundException expected) {
-                LOGGER.debug("caught expected: " + expected);
+                log.debug("caught expected: " + expected);
                 Assert.assertTrue(expected.getMessage().startsWith("not found: "));
             }
             
@@ -362,7 +334,7 @@ abstract class S3StorageAdapterTest {
             na.contentChecksum = URI.create("md5:" + HexUtil.toHex(md.digest()));
             na.contentLength = (long) data.length;
             StorageMetadata sm = adapter.put(na, new ByteArrayInputStream(data));
-            LOGGER.info("testPutGetDelete put: " + artifactURI + " to " + sm.getStorageLocation());
+            log.info("testPutGetDelete put: " + artifactURI + " to " + sm.getStorageLocation());
             
             doesNotExist.storageBucket = sm.getStorageLocation().storageBucket; // existing bucket
             bos.reset();
@@ -370,13 +342,13 @@ abstract class S3StorageAdapterTest {
                 adapter.get(doesNotExist, bos);
                 Assert.fail("get: " + doesNotExist + " returned " + bos.size() + " bytes");
             } catch (ResourceNotFoundException expected) {
-                LOGGER.debug("caught expected: " + expected);
+                log.debug("caught expected: " + expected);
                 Assert.assertTrue(expected.getMessage().startsWith("not found: "));
             }
             
             adapter.delete(sm.getStorageLocation());
         } catch (Exception ex) {
-            LOGGER.error("unexpected exception", ex);
+            log.error("unexpected exception", ex);
             Assert.fail("unexpected exception: " + ex);
         }
     }
@@ -401,17 +373,17 @@ abstract class S3StorageAdapterTest {
                 StorageMetadata sm = adapter.put(na, new ByteArrayInputStream(data));
                 Assert.assertNotNull(sm.artifactURI);
                 //Assert.assertNotNull(sm.contentLastModified);
-                LOGGER.debug("testIterator put: " + artifactURI + " to " + sm.getStorageLocation());
+                log.debug("testIterator put: " + artifactURI + " to " + sm.getStorageLocation());
                 expected.add(sm);
             }
-            LOGGER.info("testIterator created: " + expected.size());
+            log.info("testIterator created: " + expected.size());
             
             // full iterator
             List<StorageMetadata> actual = new ArrayList<>();
             Iterator<StorageMetadata> iter = adapter.iterator();
             while (iter.hasNext()) {
                 StorageMetadata sm = iter.next();
-                LOGGER.debug("found: " + sm.getStorageLocation() + " " + sm.getContentLength() + " " + sm.getContentChecksum());
+                log.debug("found: " + sm.getStorageLocation() + " " + sm.getContentLength() + " " + sm.getContentChecksum());
                 actual.add(sm);
             }
             
@@ -421,7 +393,7 @@ abstract class S3StorageAdapterTest {
             while (ei.hasNext()) {
                 StorageMetadata em = ei.next();
                 StorageMetadata am = ai.next();
-                LOGGER.debug("compare: " + em.getStorageLocation() + " vs " + am.getStorageLocation());
+                log.debug("compare: " + em.getStorageLocation() + " vs " + am.getStorageLocation());
                 Assert.assertEquals("order", em, am);
                 Assert.assertEquals("length", em.getContentLength(), am.getContentLength());
                 Assert.assertEquals("checksum", em.getContentChecksum(), am.getContentChecksum());
@@ -435,7 +407,7 @@ abstract class S3StorageAdapterTest {
             
             // rely on cleanup()
         } catch (Exception ex) {
-            LOGGER.error("unexpected exception", ex);
+            log.error("unexpected exception", ex);
             Assert.fail("unexpected exception: " + ex);
         }
     }
@@ -457,15 +429,15 @@ abstract class S3StorageAdapterTest {
                 na.contentChecksum = URI.create("md5:" + HexUtil.toHex(md.digest()));
                 na.contentLength = (long) data.length;
                 StorageMetadata sm = adapter.put(na, new ByteArrayInputStream(data));
-                LOGGER.debug("testList put: " + artifactURI + " to " + sm.getStorageLocation());
+                log.debug("testList put: " + artifactURI + " to " + sm.getStorageLocation());
                 expected.add(sm);
             }
-            LOGGER.info("testIteratorBucketPrefix created: " + expected.size());
+            log.info("testIteratorBucketPrefix created: " + expected.size());
             
             int found = 0;
             for (byte b = 0; b < 16; b++) {
                 String bpre = HexUtil.toHex(b).substring(1);
-                LOGGER.debug("bucket prefix: " + bpre);
+                log.debug("bucket prefix: " + bpre);
                 Iterator<StorageMetadata> i = adapter.iterator(bpre);
                 while (i.hasNext()) {
                     StorageMetadata sm = i.next();
@@ -476,7 +448,7 @@ abstract class S3StorageAdapterTest {
             Assert.assertEquals("found with bucketPrefix", expected.size(), found);
             
         } catch (Exception ex) {
-            LOGGER.error("unexpected exception", ex);
+            log.error("unexpected exception", ex);
             Assert.fail("unexpected exception: " + ex);
         }
     }
@@ -498,10 +470,10 @@ abstract class S3StorageAdapterTest {
                 na.contentChecksum = URI.create("md5:" + HexUtil.toHex(md.digest()));
                 na.contentLength = (long) data.length;
                 StorageMetadata sm = adapter.put(na, new ByteArrayInputStream(data));
-                LOGGER.debug("testList put: " + artifactURI + " to " + sm.getStorageLocation());
+                log.debug("testList put: " + artifactURI + " to " + sm.getStorageLocation());
                 expected.add(sm);
             }
-            LOGGER.info("testList created: " + expected.size());
+            log.info("testList created: " + expected.size());
             
             Set<StorageMetadata> actual = adapter.list(null);
             
@@ -511,14 +483,14 @@ abstract class S3StorageAdapterTest {
             while (ei.hasNext()) {
                 StorageMetadata em = ei.next();
                 StorageMetadata am = ai.next();
-                LOGGER.debug("compare: " + em.getStorageLocation() + " vs " + am.getStorageLocation());
+                log.debug("compare: " + em.getStorageLocation() + " vs " + am.getStorageLocation());
                 Assert.assertEquals("order", em, am);
                 Assert.assertEquals("length", em.getContentLength(), am.getContentLength());
                 Assert.assertEquals("checksum", em.getContentChecksum(), am.getContentChecksum());
             }
             
         } catch (Exception ex) {
-            LOGGER.error("unexpected exception", ex);
+            log.error("unexpected exception", ex);
             Assert.fail("unexpected exception: " + ex);
         }
     }
@@ -540,15 +512,15 @@ abstract class S3StorageAdapterTest {
                 na.contentChecksum = URI.create("md5:" + HexUtil.toHex(md.digest()));
                 na.contentLength = (long) data.length;
                 StorageMetadata sm = adapter.put(na, new ByteArrayInputStream(data));
-                LOGGER.debug("testList put: " + artifactURI + " to " + sm.getStorageLocation());
+                log.debug("testList put: " + artifactURI + " to " + sm.getStorageLocation());
                 expected.add(sm);
             }
-            LOGGER.info("testListBucketPrefix created: " + expected.size());
+            log.info("testListBucketPrefix created: " + expected.size());
             
             int found = 0;
             for (byte b = 0; b < 16; b++) {
                 String bpre = HexUtil.toHex(b).substring(1);
-                LOGGER.info("bucket prefix: " + bpre);
+                log.info("bucket prefix: " + bpre);
                 Set<StorageMetadata> bset = adapter.list(bpre);
                 Iterator<StorageMetadata> i = bset.iterator();
                 while (i.hasNext()) {
@@ -560,9 +532,73 @@ abstract class S3StorageAdapterTest {
             Assert.assertEquals("found with bucketPrefix", expected.size(), found);
             
         } catch (Exception ex) {
-            LOGGER.error("unexpected exception", ex);
+            log.error("unexpected exception", ex);
             Assert.fail("unexpected exception: " + ex);
         }
+    }
+    
+    private InputStream getInputStreamOfRandomBytes(long numBytes) {
+        
+        Random rnd = new Random();
+        byte val = (byte) rnd.nextInt(127);
+        
+        
+        return new InputStream() {
+            long tot = 0L;
+            long ncalls = 0L;
+            
+            @Override
+            public int read() throws IOException {
+                throw new UnsupportedOperationException();
+            }
+            
+            @Override
+            public int read(byte[] bytes) throws IOException {
+                int ret = super.read(bytes, 0, bytes.length);
+                return ret;
+            }
+
+            @Override
+            public int read(byte[] bytes, int off, int len) throws IOException {
+                if (len == 0) {
+                    return 0;
+                }
+                
+                if (tot >= numBytes) {
+                    return -1;
+                }
+                long rem = numBytes - tot;
+                long ret = Math.min(len, rem);
+                Arrays.fill(bytes, val);
+                tot += ret;
+                ncalls++;
+                if ((ncalls % 10000) == 0) {
+                    long mib = tot / (1024L * 1024L);
+                    log.info("output: " + mib + " MiB");
+                }
+                return (int) ret;
+            }
+        };
+    }
+    
+    private InputStream getInputStreamThatFails() {
+        return new InputStream() {
+            
+            @Override
+            public int read() throws IOException {
+                throw new RuntimeException("BUG: stream should not be read");
+            }
+            
+            @Override
+            public int read(byte[] bytes) throws IOException {
+                throw new RuntimeException("BUG: stream should not be read");
+            }
+
+            @Override
+            public int read(byte[] bytes, int off, int len) throws IOException {
+                throw new RuntimeException("BUG: stream should not be read");
+            }
+        };
     }
     
     private void ensureMEFTestFile() throws Exception {
@@ -603,8 +639,8 @@ abstract class S3StorageAdapterTest {
     }
     
     public void getHeaders() throws Exception {
-        LOGGER.info("Skip to headers...");
-        LOGGER.info("***");
+        log.info("Skip to headers...");
+        log.info("***");
         ensureMEFTestFile();
         final URI testURI = URI.create("cadc:TEST/getHeaders");
 
@@ -617,8 +653,8 @@ abstract class S3StorageAdapterTest {
 
         adapter.get(new StorageLocation(testURI), byteCountOutputStream, cutouts);
         byteCountOutputStream.close();
-        LOGGER.info("***");
-        LOGGER.info("Skip to headers done.");
+        log.info("***");
+        log.info("Skip to headers done.");
     }
 
     public void getCutouts() throws Exception {

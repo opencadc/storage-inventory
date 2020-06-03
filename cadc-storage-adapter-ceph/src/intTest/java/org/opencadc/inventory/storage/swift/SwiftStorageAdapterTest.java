@@ -125,7 +125,7 @@ public class SwiftStorageAdapterTest {
         }
     }
     
-    @Test
+    //@Test
     public void testNoOp() {
     }
     
@@ -262,16 +262,16 @@ public class SwiftStorageAdapterTest {
 
     @Test
     public void testPutLargeStreamReject() {
-        URI artifactURI = URI.create("cadc:TEST/testPutCheckDeleteLargeStreamReject");
+        URI artifactURI = URI.create("cadc:TEST/testPutLargeStreamReject");
         
         final NewArtifact na = new NewArtifact(artifactURI);
         
-        // ceph/S3 limit of 5GiB
+        // ceph limit of 5GiB
         long numBytes = (long) 6 * 1024 * 1024 * 1024; 
         na.contentLength = numBytes;
             
         try {
-            InputStream istream = getFailer();
+            InputStream istream = getInputStreamThatFails();
             log.info("testPutCheckDeleteLargeStreamReject put: " + artifactURI + " " + numBytes);
             StorageMetadata sm = adapter.put(na, istream);
             Assert.fail("expected ByteLimitExceededException, got: " + sm);
@@ -283,27 +283,22 @@ public class SwiftStorageAdapterTest {
         }
     }
     
-    @Test
+    // normally disabled because this has to actually upload ~5GiB of garbage before it fails
+    //@Test
     public void testPutLargeStreamFail() {
-        URI artifactURI = URI.create("cadc:TEST/testPutCheckDeleteLargeDataMinimal");
+        URI artifactURI = URI.create("cadc:TEST/testPutLargeStreamFail");
         
         final NewArtifact na = new NewArtifact(artifactURI);
         
-        // ceph/S3 limit of 5GiB
+        // ceph limit of 5GiB
         long numBytes = (long) 6 * 1024 * 1024 * 1024; 
             
         try {
-            InputStream istream = getJunk(numBytes);
+            InputStream istream = getInputStreamOfRandomBytes(numBytes);
             log.info("testPutCheckDeleteLargeStreamFail put: " + artifactURI + " " + numBytes);
             StorageMetadata sm = adapter.put(na, istream);
-            log.info("testPutCheckDeleteLargeStreamFail put: " + artifactURI + " to " + sm.getStorageLocation());
             
-            // TODO: verify metadata captured without using iterator
-
-            log.debug("testPutCheckDeleteLargeStreamFail delete: " + sm.getStorageLocation());
-            adapter.delete(sm.getStorageLocation());
-            Assert.assertTrue("deleted", !adapter.exists(sm.getStorageLocation()));
-            log.info("testPutCheckDeleteLargeStreamFail deleted: " + sm.getStorageLocation());
+            Assert.assertFalse("put should have failed, but object exists", adapter.exists(sm.getStorageLocation()));
             
             Assert.fail("expected ByteLimitExceededException, got: " + sm);
         } catch (ByteLimitExceededException expected) {
@@ -501,7 +496,7 @@ public class SwiftStorageAdapterTest {
     }
     
     
-    private InputStream getJunk(long numBytes) {
+    private InputStream getInputStreamOfRandomBytes(long numBytes) {
         
         Random rnd = new Random();
         byte val = (byte) rnd.nextInt(127);
@@ -545,7 +540,7 @@ public class SwiftStorageAdapterTest {
         };
     }
     
-    private InputStream getFailer() {
+    private InputStream getInputStreamThatFails() {
         return new InputStream() {
             
             @Override
@@ -555,8 +550,7 @@ public class SwiftStorageAdapterTest {
             
             @Override
             public int read(byte[] bytes) throws IOException {
-                int ret = super.read(bytes, 0, bytes.length);
-                return ret;
+                throw new RuntimeException("BUG: stream should not be read");
             }
 
             @Override

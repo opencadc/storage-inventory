@@ -222,50 +222,19 @@ public class SwiftStorageAdapter  implements StorageAdapter {
                 throw new IllegalStateException(sb.toString());
             }
            
-            URL authURL = new URL(suri);
-            
-            AccessProvider hack = new AuthenticationMethod.AccessProvider() {
-                @Override
-                public Access authenticate() {
-                    log.debug("AccessProvider.authenticate - START");
-                    ByteArrayOutputStream bos = new ByteArrayOutputStream();
-                    HttpGet login = new HttpGet(authURL, bos);
-                    login.setFollowRedirects(true);
-                    login.setRequestProperty("X-Auth-User", user);
-                    login.setRequestProperty("X-Auth-Key", key);
-                    login.run();
-                    log.debug("auth: " + login.getResponseCode() + " " + login.getContentType());
-                    if (login.getThrowable() != null) {
-                        throw new RuntimeException("auth failure", login.getThrowable());
-                    }
-                    String storageURL = login.getResponseHeader("X-Storage-Url");
-                    //String storageToken = login.getResponseHeader("X-Storage-Token");
-                    String authToken = login.getResponseHeader("X-Auth-Token");
-                    log.debug("storageURL: " + storageURL);
-                    //log.debug("storageToken: " + storageToken);
-                    log.debug("authToken: " + authToken);
-                    
-                    AccessWorkaroundHack ret = new AccessWorkaroundHack();
-                    ret.storageURL = storageURL.replace("http://", "https://").replace(":8080", "");
-                    ret.token = authToken;
-                    
-                    log.debug("AccessProvider.authenticate - DONE");
-                    return ret;
-                }
-            };
-            
             this.storageBucket = bn;
             this.storageBucketLength = Integer.parseInt(sbl);
             AccountConfig ac = new AccountConfig();
 
             // work around because uvic ceph auth returns wrong storage url
-            ac.setAccessProvider(hack);
-            ac.setAuthenticationMethod(AuthenticationMethod.EXTERNAL);
+            //URL authURL = new URL(suri);
+            //ac.setAccessProvider(new AccessProviderImpl(authURL, user, key));
+            //ac.setAuthenticationMethod(AuthenticationMethod.EXTERNAL);
             
-            //ac.setAuthenticationMethod(AuthenticationMethod.BASIC);
-            //ac.setUsername(user);
-            //ac.setPassword(key);
-            //ac.setAuthUrl(suri);
+            ac.setAuthenticationMethod(AuthenticationMethod.BASIC);
+            ac.setUsername(user);
+            ac.setPassword(key);
+            ac.setAuthUrl(suri);
             //ac.setTenantId("swift");
             
             this.client = new AccountFactory(ac).createAccount();
@@ -362,16 +331,6 @@ public class SwiftStorageAdapter  implements StorageAdapter {
         return ret;
     }
     
-    private InputStream toObjectInputStream(final StorageLocation storageLocation) throws ResourceNotFoundException {
-        String bucket = toInternalBucket(storageLocation).name;
-        String key = storageLocation.getStorageID().toASCIIString();
-        StoredObject obj = swiftContainer.getObject(key);
-        if (!obj.exists()) {
-            throw new ResourceNotFoundException("not found: " + storageLocation);
-        }
-        return obj.downloadObjectAsInputStream();
-    }
-
     private StorageMetadata toStorageMetadata(StorageLocation loc, URI md5, long contentLength, 
             final URI artifactURI, Date lastModified) {
         StorageMetadata storageMetadata = new StorageMetadata(loc, md5, contentLength);
@@ -394,7 +353,14 @@ public class SwiftStorageAdapter  implements StorageAdapter {
     public void get(StorageLocation storageLocation, OutputStream dest)
             throws ResourceNotFoundException, ReadException, WriteException, StorageEngageException {
         log.debug("get: " + storageLocation);
-        try (final InputStream inputStream = toObjectInputStream(storageLocation)) {
+        String bucket = toInternalBucket(storageLocation).name;
+        String key = storageLocation.getStorageID().toASCIIString();
+        StoredObject obj = swiftContainer.getObject(key);
+        if (!obj.exists()) {
+            throw new ResourceNotFoundException("not found: " + storageLocation);
+        }
+        
+        try (final InputStream inputStream = obj.downloadObjectAsInputStream()) {
             ThreadedIO tio = new ThreadedIO(BUFFER_SIZE_BYTES, 8);
             tio.ioLoop(dest, inputStream);
         } catch (ReadException | WriteException e) {
