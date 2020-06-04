@@ -51,8 +51,10 @@ org.opencadc.baldur.allowedUser = bar,ou=acme,o=example,c=com
 
 org.opencadc.baldur.entry = TEST ^cadc:TEST/.*
 TEST.anon = false
-TEST.readOnlyGroups = ivo://cadc.nrc.ca/gms?TestRead-1 ivo://cadc.nrc.ca/gms?TestRead-2
-TEST.readWriteGroups = ivo://cadc.nrc.ca/gms?TestWrite-1 ivo://cadc.nrc.ca/gms?TestWrite-2
+TEST.readOnlyGroups = ivo://cadc.nrc.ca/gms?TestRead-1
+TEST.readOnlyGroups = ivo://cadc.nrc.ca/gms?TestRead-2
+TEST.readWriteGroups = ivo://cadc.nrc.ca/gms?TestWrite-1 
+TEST.readWriteGroups = ivo://cadc.nrc.ca/gms?TestWrite-2
 ```
 
 In this example the expiry time is 60 seconds. 
@@ -61,10 +63,10 @@ In this example the expiry time is 60 seconds.
 
 Any artifact with a URI that matches `^cadc:TEST\\/.*`, the read grant will be:
 * anonymous read not allowed
-* readable by members of group TestRead and TestWrite
+* readable by members of group TestRead-1, TestRead-2, TestWrite-1, and TestWrite-2
 
 And the write grant will be:
-* writable by members of group TestWrite
+* writable by members of group TestWrite-1 and TestWrite-2
 
 When more that one entry matches an artifact URI, the grants are combined as follows into one grant:
 * if any of the matching entries allow anonymous read, anonymous read is allowed
@@ -86,8 +88,8 @@ org.opencadc.baldur.allowedUser = { user identity for baldur-test-auth.pem }
 
 org.opencadc.baldur.entry = test ^cadc:TEST/.*
 test.anon = true
-test.readOnlyGroups = ivo://cadc.nrc.ca/gms?TestRead
-test.readWriteGroups = ivo://cadc.nrc.ca/gms?TestWrite
+test.readOnlyGroups = ivo://cadc.nrc.ca/gms?Test-Read
+test.readWriteGroups = ivo://cadc.nrc.ca/gms?Test-Write
 ```
 
 ## building

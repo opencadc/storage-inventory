@@ -106,16 +106,16 @@ public class PermissionsConfig {
     private static final String KEY_READWRITE_GROUPS = ".readWriteGroups";
     private static final String KEY_GRANT_EXPIRY = "org.opencadc.baldur.grantExpiry";
     
-    private static Set<Principal> authPrincipals = new HashSet<Principal>();
-    private static List<PermissionEntry> entries = null;
-    private static Date expiryDate;
+    private Set<Principal> authPrincipals;
+    private List<PermissionEntry> entries;
+    private Date expiryDate;
     
     PermissionsConfig() {
         init();
     }
     
     Set<Principal> getAuthorizedPrincipals() {
-        return authPrincipals;
+        return this.authPrincipals;
     }
     
     Iterator<PermissionEntry> getMatchingEntries(URI artifactURI) {
@@ -123,119 +123,113 @@ public class PermissionsConfig {
     }
 
     Date getExpiryDate() {
-        return expiryDate;
+        return this.expiryDate;
     }
 
     /**
      * Read the permissions config.
-     * 
-     * @return The (possibly) cached permissions.
      */
     private void init() {
-        if (entries == null) {
-            log.debug("initializing permissions config");
-            PropertiesReader pr = new PropertiesReader(PERMISSIONS_PROPERTIES);
-            MultiValuedProperties allProps = pr.getAllProperties();
-            if (allProps == null) {
-                throw new IllegalStateException("failed to read permissions config from " + PERMISSIONS_PROPERTIES);
-            }
-            
-            // get the authorized users
-            // (TODO: Issue 41: https://github.com/opencadc/storage-inventory/issues/41)
-            List<String> authUsersConfig = allProps.getProperty(KEY_ALLOWED_USER);
-            if (authUsersConfig == null) {
-                throw new IllegalStateException("missing configurations for key " + KEY_ALLOWED_USER + " in: "
-                    + PERMISSIONS_PROPERTIES);
-            }
-            for (String dn : authUsersConfig) {
-                log.debug("authorized dn: " + dn);
-                authPrincipals.add(new X500Principal(dn));
-            }
-            if (authPrincipals.size() == 0) {
-                throw new IllegalStateException("no values for key " + KEY_ALLOWED_USER + " in " + PERMISSIONS_PROPERTIES);
-            }
-            
-            // get the permission entries
-            List<String> entryConfig = allProps.getProperty(KEY_ENTRY);
-            if (entryConfig == null || (entryConfig.size() == 0)) {
-                throw new IllegalStateException("no entries found in " + PERMISSIONS_PROPERTIES);
-            }
-            log.debug("reading permissions config with " + entryConfig.size() + " entries.");
-            List<PermissionEntry> tmp = new ArrayList<PermissionEntry>();
-            PermissionEntry next = null;
-            String name = null;
-            Pattern pattern = null;
-            for (String entry : entryConfig) {
-                // entry has format:  entry = name pattern
-                log.debug("reading permission entry: " + entry);
-                String[] namePattern = entry.split(" ");
-                if (namePattern.length != 2) {
-                    throw new IllegalStateException("invalid config line in " + PERMISSIONS_PROPERTIES
-                        + ": " + entry);
-                }
-                name = namePattern[0];
-                // compile the pattern
-                try {
-                    pattern = Pattern.compile(namePattern[1]);
-                } catch (Exception e) {
-                    throw new IllegalStateException("invalid uri matching pattern in " + PERMISSIONS_PROPERTIES
-                        + ": " + namePattern[1] + "(" + e.getMessage() + ")");
-                }
-                next = new PermissionEntry(name, pattern);
-                if (tmp.contains(next)) {
-                    throw new IllegalStateException("duplicate entry name [" + name + "] in " + PERMISSIONS_PROPERTIES);
-                }
-                
-                // get other properties for this entry
-                List<String> anonRead = allProps.getProperty(next.getName() + KEY_ANON_READ);
-                if (anonRead != null && !anonRead.isEmpty()) {
-                    if (anonRead.size() > 1) {
-                        throw new IllegalStateException("too many entries for " + next.getName() + KEY_ANON_READ);
-                    }
-                    next.anonRead = Boolean.parseBoolean(anonRead.get(0));
-                }
-                List<String> readOnlyGroups = allProps.getProperty(next.getName() + KEY_READONLY_GROUPS);
-                initAddGroups(readOnlyGroups, next.readOnlyGroups, next.getName() + KEY_READONLY_GROUPS);
-                List<String> readWriteGroups = allProps.getProperty(next.getName() + KEY_READWRITE_GROUPS);
-                initAddGroups(readWriteGroups, next.readWriteGroups, next.getName() + KEY_READWRITE_GROUPS);
-                tmp.add(next);
-                log.debug("Added permission entry: " + next);
-            }
-
-            // get the Grant timeout
-            List<String> timeout = allProps.getProperty(KEY_GRANT_EXPIRY);
-            if (timeout.size() == 0) {
-                throw new IllegalStateException("no values for key " + KEY_GRANT_EXPIRY + " in " + PERMISSIONS_PROPERTIES);
-            }
-            if (timeout.size() > 1) {
-                throw new IllegalStateException("multiple values for key " + KEY_GRANT_EXPIRY + " in "
-                    + PERMISSIONS_PROPERTIES + " where single value expected");
-            }
-            try {
-                expiryDate = calcExpiryDate(Integer.parseInt(timeout.get(0)));
-            } catch (NumberFormatException nfe) {
-                throw new IllegalStateException("invalid  number value for " + KEY_GRANT_EXPIRY + " in "
-                    + PERMISSIONS_PROPERTIES);
-            }
-
-            log.debug("permissions initialization complete.");
-            entries = tmp;
+        log.debug("initializing permissions config");
+        PropertiesReader pr = new PropertiesReader(PERMISSIONS_PROPERTIES);
+        MultiValuedProperties allProps = pr.getAllProperties();
+        if (allProps == null) {
+            throw new IllegalStateException("failed to read permissions config from " + PERMISSIONS_PROPERTIES);
         }
+
+        // get the authorized users
+        // (TODO: Issue 41: https://github.com/opencadc/storage-inventory/issues/41)
+        List<String> authUsersConfig = allProps.getProperty(KEY_ALLOWED_USER);
+        if (authUsersConfig == null) {
+            throw new IllegalStateException("missing configurations for key " + KEY_ALLOWED_USER + " in: "
+                + PERMISSIONS_PROPERTIES);
+        }
+
+        this.authPrincipals = new HashSet<Principal>();
+        for (String dn : authUsersConfig) {
+            log.debug("authorized dn: " + dn);
+            this.authPrincipals.add(new X500Principal(dn));
+        }
+        if (this.authPrincipals.size() == 0) {
+            throw new IllegalStateException("no values for key " + KEY_ALLOWED_USER + " in " + PERMISSIONS_PROPERTIES);
+        }
+
+        // get the permission entries
+        List<String> entryConfig = allProps.getProperty(KEY_ENTRY);
+        if (entryConfig == null || (entryConfig.size() == 0)) {
+            throw new IllegalStateException("no entries found in " + PERMISSIONS_PROPERTIES);
+        }
+        log.debug("reading permissions config with " + entryConfig.size() + " entries.");
+
+        this.entries = new ArrayList<PermissionEntry>();
+        PermissionEntry next = null;
+        String name = null;
+        Pattern pattern = null;
+        for (String entry : entryConfig) {
+            // entry has format:  entry = name pattern
+            log.debug("reading permission entry: " + entry);
+            String[] namePattern = entry.split(" ");
+            if (namePattern.length != 2) {
+                throw new IllegalStateException("invalid config line in " + PERMISSIONS_PROPERTIES
+                    + ": " + entry);
+            }
+            name = namePattern[0];
+            // compile the pattern
+            try {
+                pattern = Pattern.compile(namePattern[1]);
+            } catch (Exception e) {
+                throw new IllegalStateException("invalid uri matching pattern in " + PERMISSIONS_PROPERTIES
+                    + ": " + namePattern[1] + "(" + e.getMessage() + ")");
+            }
+            next = new PermissionEntry(name, pattern);
+            if (this.entries.contains(next)) {
+                throw new IllegalStateException("duplicate entry name [" + name + "] in " + PERMISSIONS_PROPERTIES);
+            }
+
+            // get other properties for this entry
+            List<String> anonRead = allProps.getProperty(next.getName() + KEY_ANON_READ);
+            if (anonRead != null && !anonRead.isEmpty()) {
+                if (anonRead.size() > 1) {
+                    throw new IllegalStateException("too many entries for " + next.getName() + KEY_ANON_READ);
+                }
+                next.anonRead = Boolean.parseBoolean(anonRead.get(0));
+            }
+            List<String> readOnlyGroups = allProps.getProperty(next.getName() + KEY_READONLY_GROUPS);
+            initAddGroups(readOnlyGroups, next.readOnlyGroups);
+            List<String> readWriteGroups = allProps.getProperty(next.getName() + KEY_READWRITE_GROUPS);
+            initAddGroups(readWriteGroups, next.readWriteGroups);
+            this.entries.add(next);
+            log.debug("Added permission entry: " + next);
+        }
+
+        // get the Grant timeout
+        List<String> timeout = allProps.getProperty(KEY_GRANT_EXPIRY);
+        if (timeout.size() == 0) {
+            throw new IllegalStateException("no values for key " + KEY_GRANT_EXPIRY + " in " + PERMISSIONS_PROPERTIES);
+        }
+        if (timeout.size() > 1) {
+            throw new IllegalStateException("multiple values for key " + KEY_GRANT_EXPIRY + " in "
+                + PERMISSIONS_PROPERTIES + " where single value expected");
+        }
+        try {
+            this.expiryDate = calcExpiryDate(Integer.parseInt(timeout.get(0)));
+        } catch (NumberFormatException nfe) {
+            throw new IllegalStateException("invalid  number value for " + KEY_GRANT_EXPIRY + " in "
+                + PERMISSIONS_PROPERTIES);
+        }
+
+        log.debug("permissions initialization complete.");
     }
 
     Date calcExpiryDate(int expiryTime) {
-        Calendar expiryDate = Calendar.getInstance();
-        expiryDate.add(Calendar.SECOND, expiryTime);
-        return expiryDate.getTime();
+        Calendar cal = Calendar.getInstance();
+        cal.add(Calendar.SECOND, expiryTime);
+        return cal.getTime();
     }
 
-    private void initAddGroups(List<String> configList, List<GroupURI> targetList, String key) {
-        if (configList != null && !configList.isEmpty()) {
-            if (configList.size() > 1) {
-                throw new IllegalStateException("too many entries for " + key);
-            }
-            String[] groups = configList.get(0).split(" ");
-            for (String group : groups) {
+    private void initAddGroups(List<String> groupList, List<GroupURI> targetList) {
+        if (groupList != null && !groupList.isEmpty()) {
+            for (String group : groupList) {
                 try {
                     targetList.add(new GroupURI(group));
                 } catch (Exception e) {
@@ -245,19 +239,7 @@ public class PermissionsConfig {
             }
         }
     }
-    
-    /**
-     * This method can be used if the cache needs to be cleared so new 
-     * config can be read.  Since initialization is done on construction
-     * a new PermissionsConfig instance is needed after this method is
-     * called.
-     */
-    static void clearCache() {
-        entries = null;
-        expiryDate = null;
-        authPrincipals.clear();
-    }
-    
+
     /**
      * Class that iterates over permission entries that match the
      * given artifact URI.

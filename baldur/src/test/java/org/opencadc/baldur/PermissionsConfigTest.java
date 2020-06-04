@@ -103,15 +103,15 @@ public class PermissionsConfigTest {
             
             // test match
             System.setProperty(PropertiesReader.CONFIG_DIR_SYSTEM_PROPERTY, "src/test/resources/testSingleEntry");
-            PermissionsConfig.clearCache();
             PermissionsConfig config = new PermissionsConfig();
             URI artifactURI = URI.create("cadc:TEST/file.fits");
 
-            X500Principal expectedUser = new X500Principal("CN=test,OU=cadc,O=hia,C=ca");
             Set<Principal> allowedUser = config.getAuthorizedPrincipals();
             Assert.assertFalse(allowedUser.isEmpty());
-            Assert.assertTrue(allowedUser.contains(expectedUser));
-            
+            Assert.assertEquals(2, allowedUser.size());
+            Assert.assertTrue(allowedUser.contains(new X500Principal("CN=foo,OU=cadc,O=hia,C=ca")));
+            Assert.assertTrue(allowedUser.contains(new X500Principal("CN=bar,OU=cadc,O=hia,C=ca")));
+
             Iterator<PermissionEntry> entryIterator = config.getMatchingEntries(artifactURI);
             List<PermissionEntry> entries = iteratorToList(entryIterator);
             Assert.assertNotNull(entries);
@@ -149,7 +149,6 @@ public class PermissionsConfigTest {
             Assert.assertTrue(writeGrant.getGroups().contains(readWriteGroup2));
             
             // test no match
-            PermissionsConfig.clearCache();
             config = new PermissionsConfig();
             artifactURI = URI.create("cadc:NOMATCH/file.fits");
             
@@ -171,7 +170,6 @@ public class PermissionsConfigTest {
         try {
             log.info("START - testMultipleMatches");
             System.setProperty(PropertiesReader.CONFIG_DIR_SYSTEM_PROPERTY, "src/test/resources/testMultipleMatches");
-            PermissionsConfig.clearCache();
             PermissionsConfig config = new PermissionsConfig();
             URI artifactURI = URI.create("TEST");
 
@@ -201,7 +199,6 @@ public class PermissionsConfigTest {
         try {
             log.info("START - testOverlappingPermissions");
             System.setProperty(PropertiesReader.CONFIG_DIR_SYSTEM_PROPERTY, "src/test/resources/testOverlappingPermissions");
-            PermissionsConfig.clearCache();
             PermissionsConfig config = new PermissionsConfig();
             URI artifactURI = URI.create("TEST");
 
@@ -256,7 +253,6 @@ public class PermissionsConfigTest {
             log.info("START - testMissingConfig");
             System.setProperty(PropertiesReader.CONFIG_DIR_SYSTEM_PROPERTY, "src/test/resources/testMissingConfig");
             try {
-                PermissionsConfig.clearCache();
                 new PermissionsConfig();
                 Assert.fail("should have received IllegalStateException");
             } catch (IllegalStateException e) {
@@ -277,7 +273,6 @@ public class PermissionsConfigTest {
             log.info("START - testEmptyConfig");
             System.setProperty(PropertiesReader.CONFIG_DIR_SYSTEM_PROPERTY, "src/test/resources/testEmptyConfig");
             try {
-                PermissionsConfig.clearCache();
                 new PermissionsConfig();
                 Assert.fail("should have received IllegalStateException");
             } catch (IllegalStateException e) {
@@ -299,7 +294,6 @@ public class PermissionsConfigTest {
             log.info("START - testDuplicateEntries");
             System.setProperty(PropertiesReader.CONFIG_DIR_SYSTEM_PROPERTY, "src/test/resources/testDuplicateEntries");
             try {
-                PermissionsConfig.clearCache();
                 new PermissionsConfig();
                 Assert.fail("should have received IllegalStateException");
             } catch (IllegalStateException e) {
@@ -321,7 +315,6 @@ public class PermissionsConfigTest {
             log.info("START - testDuplicatePermissions");
             System.setProperty(PropertiesReader.CONFIG_DIR_SYSTEM_PROPERTY, "src/test/resources/testDuplicatePermissions");
             try {
-                PermissionsConfig.clearCache();
                 new PermissionsConfig();
                 Assert.fail("should have received IllegalStateException");
             } catch (IllegalStateException e) {
@@ -334,73 +327,6 @@ public class PermissionsConfigTest {
         } finally {
             System.clearProperty(PropertiesReader.CONFIG_DIR_SYSTEM_PROPERTY);
             log.info("END - testDuplicatePermissions");
-        }
-    }
-
-    @Test
-    public void testMultipleAllowedUser() {
-        try {
-            log.info("START - testMultipleAllowedUser");
-
-            // test match
-            System.setProperty(PropertiesReader.CONFIG_DIR_SYSTEM_PROPERTY, "src/test/resources/testMultipleAllowedUser");
-            PermissionsConfig.clearCache();
-            PermissionsConfig config = new PermissionsConfig();
-            URI artifactURI = URI.create("cadc:TEST/file.fits");
-
-            Assert.assertNotNull(config.getExpiryDate());
-
-            X500Principal fooUser = new X500Principal("CN=foo,OU=cadc,O=hia,C=ca");
-            X500Principal barUser = new X500Principal("CN=bar,OU=cadc,O=hia,C=ca");
-            Set<Principal> allowedUser = config.getAuthorizedPrincipals();
-
-            Assert.assertEquals(2, allowedUser.size());
-            Assert.assertTrue(allowedUser.contains(fooUser));
-            Assert.assertTrue(allowedUser.contains(barUser));
-
-            Iterator<PermissionEntry> entryIterator = config.getMatchingEntries(artifactURI);
-            List<PermissionEntry> entries = iteratorToList(entryIterator);
-            Assert.assertNotNull(entries);
-            Assert.assertEquals(1, entries.size());
-            PermissionEntry entry = entries.get(0);
-            Assert.assertTrue(entry.anonRead);
-            Assert.assertEquals(1, entry.readOnlyGroups.size());
-            Assert.assertEquals(1, entry.readWriteGroups.size());
-            GroupURI readGroup1 = new GroupURI("ivo://cadc.nrc.ca/gms?group1");
-            GroupURI readWriteGroup1 = new GroupURI("ivo://cadc.nrc.ca/gms?group2");
-            Assert.assertTrue(entry.readOnlyGroups.contains(readGroup1));
-            Assert.assertTrue(entry.readWriteGroups.contains(readWriteGroup1));
-
-            ReadGrant readGrant = GetAction.getReadGrant(config, artifactURI);
-            Assert.assertNotNull(readGrant);
-            Assert.assertNotNull(readGrant.getExpiryDate());
-            Assert.assertEquals(config.getExpiryDate(), readGrant.getExpiryDate());
-            Assert.assertTrue(readGrant.isAnonymousAccess());
-            Assert.assertEquals(2, readGrant.getGroups().size());
-            Assert.assertTrue(readGrant.getGroups().contains(readGroup1));
-            Assert.assertTrue(readGrant.getGroups().contains(readWriteGroup1));
-            WriteGrant writeGrant = GetAction.getWriteGrant(config, artifactURI);
-            Assert.assertNotNull(writeGrant);
-            Assert.assertNotNull(writeGrant.getExpiryDate());
-            Assert.assertEquals(config.getExpiryDate(), writeGrant.getExpiryDate());
-            Assert.assertEquals(1, writeGrant.getGroups().size());
-            Assert.assertTrue(writeGrant.getGroups().contains(readWriteGroup1));
-
-            // test no match
-            PermissionsConfig.clearCache();
-            config = new PermissionsConfig();
-            artifactURI = URI.create("cadc:NOMATCH/file.fits");
-
-            entryIterator = config.getMatchingEntries(artifactURI);
-            entries = iteratorToList(entryIterator);
-            Assert.assertTrue(entries.isEmpty());
-
-        } catch (Exception unexpected) {
-            log.error("unexpected exception", unexpected);
-            Assert.fail("unexpected exception: " + unexpected);
-        } finally {
-            System.clearProperty(PropertiesReader.CONFIG_DIR_SYSTEM_PROPERTY);
-            log.info("END - testMultipleAllowedUser");
         }
     }
 

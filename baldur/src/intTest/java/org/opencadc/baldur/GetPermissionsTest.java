@@ -72,12 +72,14 @@ import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.util.Log4jInit;
 import java.net.URI;
 import java.net.URL;
+import java.net.URLEncoder;
 import java.security.AccessControlException;
 import java.security.PrivilegedExceptionAction;
 import javax.security.auth.Subject;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.opencadc.gms.GroupURI;
 import org.opencadc.inventory.permissions.Grant;
@@ -109,7 +111,8 @@ public class GetPermissionsTest extends BaldurTest {
     public void testAnonAccess() {
         try {
             log.info("start - testAnonAccess");
-            URL getPermissionsURL = new URL(certURL.toString() + "?OP=read&uri=" + artifactURI.toString());
+            String artifact = URLEncoder.encode(artifactURI.toString(), "UTF-8");
+            URL getPermissionsURL = new URL(certURL.toString() + "?OP=read&uri=" + artifact);
             HttpGet httpGet = new HttpGet(getPermissionsURL, true);
             try {
                 httpGet.prepare();
@@ -118,9 +121,9 @@ public class GetPermissionsTest extends BaldurTest {
             catch (AccessControlException expected) {
                 Assert.assertEquals(403,httpGet.getResponseCode());
             }
-        } catch (Throwable t) {
-            log.error("unexpected throwable", t);
-            Assert.fail("unexpected throwable: " + t);
+        } catch (Exception ex) {
+            log.error("unexpected exception", ex);
+            Assert.fail("unexpected exception: " + ex);
         } finally {
             log.info("end - testAnonAccess");
         }
@@ -132,7 +135,8 @@ public class GetPermissionsTest extends BaldurTest {
             log.info("start - testForbiddenAccess");
             Subject.doAs(noAuthSubject, new PrivilegedExceptionAction<Object>() {
                 public Object run() throws Exception {
-                    URL getPermissionsURL = new URL(certURL.toString() + "?OP=read&uri=" + artifactURI.toString());
+                    String artifact = URLEncoder.encode(artifactURI.toString(), "UTF-8");
+                    URL getPermissionsURL = new URL(certURL.toString() + "?OP=read&uri=" + artifact);
                     HttpGet httpGet = new HttpGet(getPermissionsURL, true);
                     try {
                         httpGet.prepare();
@@ -144,9 +148,9 @@ public class GetPermissionsTest extends BaldurTest {
                     return null;
                 }
             });
-        } catch (Throwable t) {
-            log.error("unexpected throwable", t);
-            Assert.fail("unexpected throwable: " + t);
+        } catch (Exception ex) {
+            log.error("unexpected exception", ex);
+            Assert.fail("unexpected exception: " + ex);
         } finally {
             log.info("end - testForbiddenAccess");
         }
@@ -158,7 +162,8 @@ public class GetPermissionsTest extends BaldurTest {
             log.info("start - testCorrectReadPermissions");
             Subject.doAs(authSubject, new PrivilegedExceptionAction<Object>() {
                 public Object run() throws Exception {
-                    URL getPermissionsURL = new URL(certURL.toString() + "?OP=read&uri=" + artifactURI.toString());
+                    String artifact = URLEncoder.encode(artifactURI.toString(), "UTF-8");
+                    URL getPermissionsURL = new URL(certURL.toString() + "?OP=read&uri=" + artifact);
                     HttpGet httpGet = new HttpGet(getPermissionsURL, true);
                     httpGet.prepare();
                     Assert.assertNull(httpGet.getThrowable());
@@ -169,18 +174,18 @@ public class GetPermissionsTest extends BaldurTest {
                     Assert.assertTrue(grant instanceof ReadGrant);
                     ReadGrant readGrant = (ReadGrant) grant;
                     Assert.assertEquals(artifactURI, readGrant.getArtifactURI());
-                    Assert.assertTrue("isAnon=" + readGrant.isAnonymousAccess(), readGrant.isAnonymousAccess());
+                    Assert.assertFalse("isAnon=" + readGrant.isAnonymousAccess(), readGrant.isAnonymousAccess());
                     Assert.assertEquals(2, readGrant.getGroups().size());
-                    GroupURI readGroup = new GroupURI("ivo://cadc.nrc.ca/gms?TestRead");
-                    GroupURI readWriteGroup = new GroupURI("ivo://cadc.nrc.ca/gms?TestWrite");
+                    GroupURI readGroup = new GroupURI("ivo://cadc.nrc.ca/gms?Test-Read");
+                    GroupURI readWriteGroup = new GroupURI("ivo://cadc.nrc.ca/gms?Test-Write");
                     Assert.assertTrue(readGrant.getGroups().contains(readGroup));
                     Assert.assertTrue(readGrant.getGroups().contains(readWriteGroup));
                     return null;
                 }
             });
-        } catch (Throwable t) {
-            log.error("unexpected throwable", t);
-            Assert.fail("unexpected throwable: " + t);
+        } catch (Exception ex) {
+            log.error("unexpected exception", ex);
+            Assert.fail("unexpected exception: " + ex);
         } finally {
             log.info("end - testCorrectReadPermissions");
         }
@@ -192,7 +197,8 @@ public class GetPermissionsTest extends BaldurTest {
             log.info("start - testCorrectWritePermissions");
             Subject.doAs(authSubject, new PrivilegedExceptionAction<Object>() {
                 public Object run() throws Exception {
-                    URL getPermissionsURL = new URL(certURL.toString() + "?OP=write&uri=" + artifactURI.toString());
+                    String artifact = URLEncoder.encode(artifactURI.toString(), "UTF-8");
+                    URL getPermissionsURL = new URL(certURL.toString() + "?OP=write&uri=" + artifact);
                     HttpGet httpGet = new HttpGet(getPermissionsURL, true);
                     httpGet.prepare();
                     Assert.assertNull(httpGet.getThrowable());
@@ -204,14 +210,14 @@ public class GetPermissionsTest extends BaldurTest {
                     WriteGrant writeGrant = (WriteGrant) grant;
                     Assert.assertEquals(artifactURI, writeGrant.getArtifactURI());
                     Assert.assertEquals(1, writeGrant.getGroups().size());
-                    GroupURI readWriteGroup = new GroupURI("ivo://cadc.nrc.ca/gms?TestWrite");
+                    GroupURI readWriteGroup = new GroupURI("ivo://cadc.nrc.ca/gms?Test-Write");
                     Assert.assertEquals(readWriteGroup, writeGrant.getGroups().get(0));
                     return null;
                 }
             });
-        } catch (Throwable t) {
-            log.error("unexpected throwable", t);
-            Assert.fail("unexpected throwable: " + t);
+        } catch (Exception ex) {
+            log.error("unexpected exception", ex);
+            Assert.fail("unexpected exception: " + ex);
         } finally {
             log.info("end - testCorrectWritePermissions");
         }
@@ -224,7 +230,8 @@ public class GetPermissionsTest extends BaldurTest {
             String notFoundArtifactURL = "notfound:this.file";
             Subject.doAs(authSubject, new PrivilegedExceptionAction<Object>() {
                 public Object run() throws Exception {
-                    URL getPermissionsURL = new URL(certURL.toString() + "?OP=read&uri=" + notFoundArtifactURL);
+                    String artifact = URLEncoder.encode(notFoundArtifactURL, "UTF-8");
+                    URL getPermissionsURL = new URL(certURL.toString() + "?OP=read&uri=" + artifact);
                     HttpGet httpGet = new HttpGet(getPermissionsURL, true);
                     try {
                         httpGet.prepare();
@@ -235,9 +242,9 @@ public class GetPermissionsTest extends BaldurTest {
                     return null;
                 }
             });
-        } catch (Throwable t) {
-            log.error("unexpected throwable", t);
-            Assert.fail("unexpected throwable: " + t);
+        } catch (Exception ex) {
+            log.error("unexpected exception", ex);
+            Assert.fail("unexpected exception: " + ex);
         } finally {
             log.info("end - testNoMatchReadPermissions");
         }
@@ -250,7 +257,8 @@ public class GetPermissionsTest extends BaldurTest {
             String notFoundArtifactURL = "notfound:this.file";
             Subject.doAs(authSubject, new PrivilegedExceptionAction<Object>() {
                 public Object run() throws Exception {
-                    URL getPermissionsURL = new URL(certURL.toString() + "?OP=write&uri=" + notFoundArtifactURL);
+                    String artifact = URLEncoder.encode(notFoundArtifactURL, "UTF-8");
+                    URL getPermissionsURL = new URL(certURL.toString() + "?OP=write&uri=" + artifact);
                     HttpGet httpGet = new HttpGet(getPermissionsURL, true);
                     try {
                         httpGet.prepare();
@@ -261,9 +269,9 @@ public class GetPermissionsTest extends BaldurTest {
                     return null;
                 }
             });
-        } catch (Throwable t) {
-            log.error("unexpected throwable", t);
-            Assert.fail("unexpected throwable: " + t);
+        } catch (Exception ex) {
+            log.error("unexpected exception", ex);
+            Assert.fail("unexpected exception: " + ex);
         } finally {
             log.info("end - testNoMatchWritePermissions");
         }
@@ -275,7 +283,8 @@ public class GetPermissionsTest extends BaldurTest {
             log.info("start - testInvalidOperation");
             Subject.doAs(authSubject, new PrivilegedExceptionAction<Object>() {
                 public Object run() throws Exception {
-                    URL getPermissionsURL = new URL(certURL.toString() + "?OP=nonsense&uri=" + artifactURI.toString());
+                    String artifact = URLEncoder.encode(artifactURI.toString(), "UTF-8");
+                    URL getPermissionsURL = new URL(certURL.toString() + "?OP=nonsense&uri=" + artifact);
                     HttpGet httpGet = new HttpGet(getPermissionsURL, true);
                     try {
                         httpGet.prepare();
@@ -286,9 +295,9 @@ public class GetPermissionsTest extends BaldurTest {
                     return null;
                 }
             });
-        } catch (Throwable t) {
-            log.error("unexpected throwable", t);
-            Assert.fail("unexpected throwable: " + t);
+        } catch (Exception ex) {
+            log.error("unexpected exception", ex);
+            Assert.fail("unexpected exception: " + ex);
         } finally {
             log.info("end - testInvalidOperation");
         }
@@ -300,7 +309,8 @@ public class GetPermissionsTest extends BaldurTest {
             log.info("start - testMissingOperation");
             Subject.doAs(authSubject, new PrivilegedExceptionAction<Object>() {
                 public Object run() throws Exception {
-                    URL getPermissionsURL = new URL(certURL.toString() + "?uri=" + artifactURI.toString());
+                    String artifact = URLEncoder.encode(artifactURI.toString(), "UTF-8");
+                    URL getPermissionsURL = new URL(certURL.toString() + "?uri=" + artifact);
                     HttpGet httpGet = new HttpGet(getPermissionsURL, true);
                     try {
                         httpGet.prepare();
@@ -311,9 +321,9 @@ public class GetPermissionsTest extends BaldurTest {
                     return null;
                 }
             });
-        } catch (Throwable t) {
-            log.error("unexpected throwable", t);
-            Assert.fail("unexpected throwable: " + t);
+        } catch (Exception ex) {
+            log.error("unexpected exception", ex);
+            Assert.fail("unexpected exception: " + ex);
         } finally {
             log.info("end - testMissingOperation");
         }
@@ -336,9 +346,9 @@ public class GetPermissionsTest extends BaldurTest {
                     return null;
                 }
             });
-        } catch (Throwable t) {
-            log.error("unexpected throwable", t);
-            Assert.fail("unexpected throwable: " + t);
+        } catch (Exception ex) {
+            log.error("unexpected exception", ex);
+            Assert.fail("unexpected exception: " + ex);
         } finally {
             log.info("end - testMissingURI");
         }
@@ -352,7 +362,8 @@ public class GetPermissionsTest extends BaldurTest {
             String invalidURI = "nonsense-uri";
             Subject.doAs(authSubject, new PrivilegedExceptionAction<Object>() {
                 public Object run() throws Exception {
-                    URL getPermissionsURL = new URL(certURL.toString() + "?OP=read&uri=" + invalidURI);
+                    String artifact = URLEncoder.encode(invalidURI, "UTF-8");
+                    URL getPermissionsURL = new URL(certURL.toString() + "?OP=read&uri=" + artifact);
                     HttpGet httpGet = new HttpGet(getPermissionsURL, true);
                     try {
                         httpGet.prepare();
@@ -363,9 +374,9 @@ public class GetPermissionsTest extends BaldurTest {
                     return null;
                 }
             });
-        } catch (Throwable t) {
-            log.error("unexpected throwable", t);
-            Assert.fail("unexpected throwable: " + t);
+        } catch (Exception ex) {
+            log.error("unexpected exception", ex);
+            Assert.fail("unexpected exception: " + ex);
         } finally {
             log.info("end - testInvalidArtifactURI");
         }
