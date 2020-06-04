@@ -67,7 +67,6 @@
 
 package org.opencadc.critwall;
 
-import java.security.InvalidParameterException;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.concurrent.BlockingQueue;
@@ -77,27 +76,23 @@ import org.apache.log4j.Logger;
  * Implementation of a thread pool executor.
  * Thread pool is fixed size. At startup, threads are set to consume the contents of the BlockingQueue.
  * Threads in the pool are blocked when trying to pull tasks from an empty queue. (see API for BlockingQueue.take().)
+ * Some jobs in the queue may be lost if the pool is terminated while working.
  */
 public class ThreadPool {
     private static Logger log = Logger.getLogger(ThreadPool.class);
 
     private final String poolBasename = ThreadPool.class.getName();
     private final BlockingQueue<Runnable> taskQueue;
-    private final int nthreads;
-    private final ArrayList threads;
-
+    private final ArrayList<WorkerThread> threads;
 
     public ThreadPool(BlockingQueue<Runnable> blockingQueue, int nthreads) {
 
         if (nthreads <= 0) {
-            String errMsg = "nthreads should > 1 (" + nthreads + ")";
-            log.error(errMsg);
-            throw new InvalidParameterException(errMsg);
+            throw new IllegalArgumentException("nthreads should > 1 (" + nthreads + ")");
         }
 
         this.taskQueue = blockingQueue;
-        this.nthreads = nthreads;
-        this.threads = new ArrayList(nthreads);
+        this.threads = new ArrayList<>(nthreads);
 
         log.info(poolBasename + " - starting up");
         log.debug("initial thread count: " + threads.size() + " requested size: " + nthreads);
@@ -106,7 +101,9 @@ public class ThreadPool {
             while (threads.size() < nthreads) {
                 int threadNum = threads.size() + 1;
                 log.debug("adding worker thread " + threadNum);
-                WorkerThread t = new WorkerThread(threadNum);
+                WorkerThread t = new WorkerThread();
+                t.setDaemon(true);
+                t.setName(poolBasename + "-" + threadNum);
                 t.setPriority(Thread.MIN_PRIORITY);
                 threads.add(t);
                 t.start();
@@ -125,10 +122,8 @@ public class ThreadPool {
             while (threadIter.hasNext()) {
                 WorkerThread t = threadIter.next();
                 log.debug(poolBasename + ".terminate() interrupting WorkerThread " + t.getName());
-                synchronized (t) {
-                    log.debug(poolBasename + ".terminate(): interrupting " + t.getName());
-                    t.interrupt();
-                }
+                threadIter.remove();
+                t.interrupt();
             }
         }
 
@@ -138,10 +133,8 @@ public class ThreadPool {
     private class WorkerThread extends Thread {
         Runnable currentTask;
 
-        WorkerThread(int threadNum) {
+        WorkerThread() {
             super();
-            setDaemon(true);
-            setName(poolBasename + "-" + threadNum);
         }
 
         // threads keep running as long as they are in the threads list
@@ -151,26 +144,16 @@ public class ThreadPool {
             while (cont) {
                 try {
                     log.debug("taking from taskQueue");
-                    Runnable tmp = taskQueue.take(); // should block on take from queue if queue empty
-                    synchronized (this) {
-                        currentTask = tmp;
-                    }
-                    synchronized (threads) {
-                        cont = threads.contains(this);
-                    }
-                    if (cont) {
-                        log.debug("running current task");
-                        currentTask.run();
-                        log.debug("finished running task");
-                    }
-                } catch (InterruptedException ignore) {
-                    // take() was interrupted, let finally and while condition decide if we
-                    // should loop or return
-                    log.error("thread interrupted: " + ignore);
-                } finally {
-                    synchronized (this) {
-                        currentTask = null;
-                    }
+                    Runnable task = taskQueue.take(); // should block on take from queue if queue empty
+                    log.debug("running current task");
+                    task.run();
+                    log.debug("finished running task");
+                } catch (InterruptedException ex) {
+                    // taskQueue.take() or the task.run() could throw this
+                    log.debug("thread interrupted: " + ex);
+                    return;
+                } catch (Exception ignore) {
+                    log.debug("poorly behaved task threw an exception.");
                 }
             }
             log.debug(poolBasename + " - END");
