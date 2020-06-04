@@ -62,55 +62,111 @@
  *  <http://www.gnu.org/licenses/>.      pas le cas, consultez :
  *                                       <http://www.gnu.org/licenses/>.
  *
+ *  : 5 $
+ *
  ************************************************************************
  */
 
-package org.opencadc.baldur;
+package org.opencadc.fenwick;
 
-import ca.nrc.cadc.auth.AuthMethod;
-import ca.nrc.cadc.auth.AuthenticationUtil;
-import ca.nrc.cadc.auth.SSLUtil;
-import ca.nrc.cadc.reg.Standards;
-import ca.nrc.cadc.reg.client.RegistryClient;
-import ca.nrc.cadc.util.FileUtil;
-import ca.nrc.cadc.util.Log4jInit;
-import java.io.File;
+import ca.nrc.cadc.date.DateUtil;
+import ca.nrc.cadc.io.ResourceIterator;
+import ca.nrc.cadc.net.ResourceNotFoundException;
+import ca.nrc.cadc.net.TransientException;
+import java.io.IOException;
 import java.net.URI;
-import java.net.URL;
-import javax.security.auth.Subject;
-import org.apache.log4j.Level;
+import java.text.DateFormat;
+import java.util.Date;
+import java.util.List;
+import java.util.UUID;
 import org.apache.log4j.Logger;
+import org.opencadc.inventory.DeletedStorageLocationEvent;
+import org.opencadc.inventory.InventoryUtil;
+import org.opencadc.tap.TapClient;
+import org.opencadc.tap.TapRowMapper;
 
 /**
- * Abstract integration test class with general setup and test support.
- * 
- * @author majorb
+ * Class to query the DeletedStorageLocationEvent table using a TAP service
+ * and return an iterator over over the query results.
  */
-public abstract class BaldurTest {
-    
-    private static final Logger log = Logger.getLogger(BaldurTest.class);
-    public static final URI BALDUR_SERVICE_ID = URI.create("ivo://cadc.nrc.ca/baldur");
-    
-    protected URL certURL;
-    protected Subject anonSubject;
-    protected Subject noAuthSubject;
-    protected Subject authSubject;
-    
-    static {
-        Log4jInit.setLevel("org.opencadc.baldur", Level.INFO);
+public class DeletedStorageLocationEventSync {
+
+    private static final Logger log = Logger.getLogger(DeletedStorageLocationEventSync.class);
+
+    private final TapClient<DeletedStorageLocationEvent> tapClient;
+    public Date startTime;
+
+    /**
+     * Constructor
+     *
+     * @param tapClient The TAP client.
+     */
+    public DeletedStorageLocationEventSync(TapClient<DeletedStorageLocationEvent> tapClient) {
+        InventoryUtil.assertNotNull(DeletedStorageLocationEventSync.class, "tapClient", tapClient);
+        this.tapClient = tapClient;
     }
-    
-    public BaldurTest() {
-        RegistryClient regClient = new RegistryClient();
-        certURL = regClient.getServiceURL(BALDUR_SERVICE_ID, Standards.SI_PERMISSIONS, AuthMethod.CERT);
-        log.info("certURL: " + certURL);
-        anonSubject = AuthenticationUtil.getAnonSubject();
-        File cert = FileUtil.getFileFromResource("baldur-test-auth.pem", BaldurTest.class);
-        authSubject = SSLUtil.createSubject(cert);
-        log.info("authSubject: " + authSubject);
-        cert = FileUtil.getFileFromResource("baldur-test-noauth.pem", BaldurTest.class);
-        noAuthSubject = SSLUtil.createSubject(cert);
-        log.info("noAuthSubject: " + noAuthSubject);
+
+    /**
+     * Query the DeletedStorageLocationEvent table for rows with a lastModified date after the given start date,
+     * and return an iterator over the rows.
+     *
+     * @return Iterator over the query results.
+     * @throws InterruptedException thread interrupted
+     * @throws IOException failure to write or read the data stream
+     * @throws ResourceNotFoundException remote resource not found
+     * @throws TransientException temporary failure of TAP service: same call could work in future
+     */
+    public ResourceIterator<DeletedStorageLocationEvent> getEvents()
+            throws InterruptedException, IOException, ResourceNotFoundException, TransientException {
+
+        return tapClient.execute(getTapQuery(), new DeletedStorageLocationEventRowMapper());
     }
-    
+
+    /**
+     * Build the TAP query to retrieve DeletedStorageLocationEvent rows.
+     *
+     * @return TAP query
+     */
+    protected String getTapQuery() {
+        StringBuilder query = new StringBuilder();
+        query.append("SELECT id, lastModified, metaChecksum FROM inventory.DeletedStorageLocationEvent");
+        if (this.startTime != null) {
+            query.append(" WHERE lastModified >= '");
+            query.append(getDateFormat().format(this.startTime));
+            query.append("'");
+        }
+        query.append(" order by lastModified");
+        log.debug("Tap query: " + query.toString());
+        return query.toString();
+    }
+
+    /**
+     * Get a DateFormat instance.
+     *
+     * @return ISO DateFormat in UTC.
+     */
+    protected DateFormat getDateFormat() {
+        return DateUtil.getDateFormat(DateUtil.ISO_DATE_FORMAT, DateUtil.UTC);
+    }
+
+    /**
+     * Class to map the query results to a DeletedStorageLocationEvent.
+     */
+    static class DeletedStorageLocationEventRowMapper implements TapRowMapper<DeletedStorageLocationEvent> {
+
+        @Override
+        public DeletedStorageLocationEvent mapRow(List<Object> row) {
+            int index = 0;
+            final UUID id = (UUID) row.get(index++);
+            final Date lastModified = (Date) row.get(index++);
+            final URI metaChecksum = (URI) row.get(index);
+
+            final DeletedStorageLocationEvent deletedStorageLocationEvent = new DeletedStorageLocationEvent(id);
+            InventoryUtil.assignLastModified(deletedStorageLocationEvent, lastModified);
+            InventoryUtil.assignMetaChecksum(deletedStorageLocationEvent, metaChecksum);
+
+            return deletedStorageLocationEvent;
+        }
+    }
+
 }

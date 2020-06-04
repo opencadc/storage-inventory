@@ -73,21 +73,17 @@ import ca.nrc.cadc.auth.AuthenticationUtil;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.rest.InlineContentHandler;
 import ca.nrc.cadc.rest.RestAction;
-
 import java.io.OutputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.security.AccessControlException;
 import java.security.Principal;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
-
 import javax.security.auth.Subject;
 import javax.security.auth.x500.X500Principal;
-
 import org.apache.log4j.Logger;
 import org.opencadc.gms.GroupURI;
 import org.opencadc.inventory.InventoryUtil;
@@ -157,7 +153,7 @@ public class GetAction extends RestAction {
             throw new IllegalArgumentException("invalid " + URI + " parameter, not a valid URI: " + uri);
         }
 
-        Grant grant = null;
+        Grant grant;
         switch (operation) {
             case read:
                 grant = getReadGrant(permissionsConfig, artifactURI);
@@ -176,19 +172,8 @@ public class GetAction extends RestAction {
         GrantWriter writer = new GrantWriter();
         writer.write(grant, out);
         out.flush();
-
     }
 
-    /**
-     * Calculate the expiry date of the grant for the given artifact URI.
-     *
-     * @return A Date.
-     */
-    private static Date getExpiryDate() {
-        // expires immediately
-        return new Date();
-    }
-    
     void authorize(PermissionsConfig permissionsConfig) {
         Subject subject = AuthenticationUtil.getCurrentSubject();
         if (subject != null) {
@@ -208,12 +193,13 @@ public class GetAction extends RestAction {
     /**
      * Get the read grant for the given Artifact URI. 
      *
+     * @param permissionsConfig The grant permissions.
      * @param artifactURI The Artifact URI.
      * @return The read grant information object for the artifact URI.
      */
     static ReadGrant getReadGrant(PermissionsConfig permissionsConfig, URI artifactURI)
         throws ResourceNotFoundException {
-        InventoryUtil.assertNotNull(PermissionsConfig.class, "artifactURI", artifactURI);
+        InventoryUtil.assertNotNull(GetAction.class, "artifactURI", artifactURI);
 
         Iterator<PermissionEntry> matchingEntries = permissionsConfig.getMatchingEntries(artifactURI);
         if (!matchingEntries.hasNext()) {
@@ -242,7 +228,7 @@ public class GetAction extends RestAction {
             }
         }
         
-        ReadGrant readGrant = new ReadGrant(artifactURI, getExpiryDate(), anonymousRead);
+        ReadGrant readGrant = new ReadGrant(artifactURI, permissionsConfig.getExpiryDate(), anonymousRead);
         readGrant.getGroups().addAll(groups);
         return readGrant;
     }
@@ -250,12 +236,13 @@ public class GetAction extends RestAction {
     /**
      * Get the write grant for the given Artifact URI. 
      *
+     * @param permissionsConfig The grant permissions.
      * @param artifactURI The Artifact URI.
      * @return The write grant information object for the artifact URI.
      */
     static WriteGrant getWriteGrant(PermissionsConfig permissionsConfig, URI artifactURI)
         throws ResourceNotFoundException {
-        InventoryUtil.assertNotNull(PermissionsConfig.class, "artifactURI", artifactURI);
+        InventoryUtil.assertNotNull(GetAction.class, "artifactURI", artifactURI);
 
         Iterator<PermissionEntry> matchingEntries = permissionsConfig.getMatchingEntries(artifactURI);
         if (!matchingEntries.hasNext()) {
@@ -274,7 +261,7 @@ public class GetAction extends RestAction {
                 }
             }
         }
-        WriteGrant writeGrant = new WriteGrant(artifactURI, getExpiryDate());
+        WriteGrant writeGrant = new WriteGrant(artifactURI, permissionsConfig.getExpiryDate());
         writeGrant.getGroups().addAll(groups);
         return writeGrant;
     }

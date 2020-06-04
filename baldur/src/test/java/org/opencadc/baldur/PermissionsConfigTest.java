@@ -73,10 +73,13 @@ import ca.nrc.cadc.util.Log4jInit;
 import ca.nrc.cadc.util.PropertiesReader;
 
 import java.net.URI;
+import java.security.Principal;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
+import java.util.Set;
+import javax.security.auth.x500.X500Principal;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
@@ -87,10 +90,10 @@ import org.opencadc.inventory.permissions.WriteGrant;
 
 
 public class PermissionsConfigTest {
-    private static final Logger log = Logger.getLogger(PermissionsConfig.class);
+    private static final Logger log = Logger.getLogger(PermissionsConfigTest.class);
 
     static {
-        Log4jInit.setLevel("org.opencadc.baldur", Level.DEBUG);
+        Log4jInit.setLevel("org.opencadc.baldur", Level.INFO);
     }
     
     @Test
@@ -100,10 +103,15 @@ public class PermissionsConfigTest {
             
             // test match
             System.setProperty(PropertiesReader.CONFIG_DIR_SYSTEM_PROPERTY, "src/test/resources/testSingleEntry");
-            PermissionsConfig.clearCache();
             PermissionsConfig config = new PermissionsConfig();
             URI artifactURI = URI.create("cadc:TEST/file.fits");
-            
+
+            Set<Principal> allowedUser = config.getAuthorizedPrincipals();
+            Assert.assertFalse(allowedUser.isEmpty());
+            Assert.assertEquals(2, allowedUser.size());
+            Assert.assertTrue(allowedUser.contains(new X500Principal("CN=foo,OU=cadc,O=hia,C=ca")));
+            Assert.assertTrue(allowedUser.contains(new X500Principal("CN=bar,OU=cadc,O=hia,C=ca")));
+
             Iterator<PermissionEntry> entryIterator = config.getMatchingEntries(artifactURI);
             List<PermissionEntry> entries = iteratorToList(entryIterator);
             Assert.assertNotNull(entries);
@@ -123,6 +131,8 @@ public class PermissionsConfigTest {
             
             ReadGrant readGrant = GetAction.getReadGrant(config, artifactURI);
             Assert.assertNotNull(readGrant);
+            Assert.assertNotNull(readGrant.getExpiryDate());
+            Assert.assertEquals(config.getExpiryDate(), readGrant.getExpiryDate());
             Assert.assertTrue(readGrant.isAnonymousAccess());
             Assert.assertEquals(4, readGrant.getGroups().size());
             Assert.assertTrue(readGrant.getGroups().contains(readGroup1));
@@ -132,12 +142,13 @@ public class PermissionsConfigTest {
             
             WriteGrant writeGrant = GetAction.getWriteGrant(config, artifactURI);
             Assert.assertNotNull(writeGrant);
+            Assert.assertNotNull(writeGrant.getExpiryDate());
+            Assert.assertEquals(config.getExpiryDate(), writeGrant.getExpiryDate());
             Assert.assertEquals(2, writeGrant.getGroups().size());
             Assert.assertTrue(writeGrant.getGroups().contains(readWriteGroup1));
             Assert.assertTrue(writeGrant.getGroups().contains(readWriteGroup2));
             
             // test no match
-            PermissionsConfig.clearCache();
             config = new PermissionsConfig();
             artifactURI = URI.create("cadc:NOMATCH/file.fits");
             
@@ -159,9 +170,15 @@ public class PermissionsConfigTest {
         try {
             log.info("START - testMultipleMatches");
             System.setProperty(PropertiesReader.CONFIG_DIR_SYSTEM_PROPERTY, "src/test/resources/testMultipleMatches");
-            PermissionsConfig.clearCache();
             PermissionsConfig config = new PermissionsConfig();
             URI artifactURI = URI.create("TEST");
+
+            Assert.assertNotNull(config.getExpiryDate());
+
+            X500Principal expectedUser = new X500Principal("CN=test,OU=cadc,O=hia,C=ca");
+            Set<Principal> allowedUser = config.getAuthorizedPrincipals();
+            Assert.assertEquals(1, allowedUser.size());
+            Assert.assertTrue(allowedUser.contains(expectedUser));
             
             Iterator<PermissionEntry> entryIterator = config.getMatchingEntries(artifactURI);
             List<PermissionEntry> entries = iteratorToList(entryIterator);
@@ -182,9 +199,15 @@ public class PermissionsConfigTest {
         try {
             log.info("START - testOverlappingPermissions");
             System.setProperty(PropertiesReader.CONFIG_DIR_SYSTEM_PROPERTY, "src/test/resources/testOverlappingPermissions");
-            PermissionsConfig.clearCache();
             PermissionsConfig config = new PermissionsConfig();
             URI artifactURI = URI.create("TEST");
+
+            Assert.assertNotNull(config.getExpiryDate());
+
+            X500Principal expectedUser = new X500Principal("CN=test,OU=cadc,O=hia,C=ca");
+            Set<Principal> allowedUser = config.getAuthorizedPrincipals();
+            Assert.assertEquals(1, allowedUser.size());
+            Assert.assertTrue(allowedUser.contains(expectedUser));
             
             Iterator<PermissionEntry> entryIterator = config.getMatchingEntries(artifactURI);
             List<PermissionEntry> entries = iteratorToList(entryIterator);
@@ -198,6 +221,8 @@ public class PermissionsConfigTest {
             
             ReadGrant readGrant = GetAction.getReadGrant(config, artifactURI);
             Assert.assertNotNull(readGrant);
+            Assert.assertNotNull(readGrant.getExpiryDate());
+            Assert.assertEquals(config.getExpiryDate(), readGrant.getExpiryDate());
             Assert.assertTrue(readGrant.isAnonymousAccess());
             Assert.assertEquals(4, readGrant.getGroups().size());
             Assert.assertTrue(readGrant.getGroups().contains(readGroup1));
@@ -207,6 +232,8 @@ public class PermissionsConfigTest {
             
             WriteGrant writeGrant = GetAction.getWriteGrant(config, artifactURI);
             Assert.assertNotNull(writeGrant);
+            Assert.assertNotNull(writeGrant.getExpiryDate());
+            Assert.assertEquals(config.getExpiryDate(), writeGrant.getExpiryDate());
             Assert.assertEquals(2, writeGrant.getGroups().size());
             Assert.assertTrue(writeGrant.getGroups().contains(readWriteGroup1));
             Assert.assertTrue(writeGrant.getGroups().contains(readWriteGroup2));
@@ -226,7 +253,6 @@ public class PermissionsConfigTest {
             log.info("START - testMissingConfig");
             System.setProperty(PropertiesReader.CONFIG_DIR_SYSTEM_PROPERTY, "src/test/resources/testMissingConfig");
             try {
-                PermissionsConfig.clearCache();
                 new PermissionsConfig();
                 Assert.fail("should have received IllegalStateException");
             } catch (IllegalStateException e) {
@@ -247,7 +273,6 @@ public class PermissionsConfigTest {
             log.info("START - testEmptyConfig");
             System.setProperty(PropertiesReader.CONFIG_DIR_SYSTEM_PROPERTY, "src/test/resources/testEmptyConfig");
             try {
-                PermissionsConfig.clearCache();
                 new PermissionsConfig();
                 Assert.fail("should have received IllegalStateException");
             } catch (IllegalStateException e) {
@@ -269,7 +294,6 @@ public class PermissionsConfigTest {
             log.info("START - testDuplicateEntries");
             System.setProperty(PropertiesReader.CONFIG_DIR_SYSTEM_PROPERTY, "src/test/resources/testDuplicateEntries");
             try {
-                PermissionsConfig.clearCache();
                 new PermissionsConfig();
                 Assert.fail("should have received IllegalStateException");
             } catch (IllegalStateException e) {
@@ -291,7 +315,6 @@ public class PermissionsConfigTest {
             log.info("START - testDuplicatePermissions");
             System.setProperty(PropertiesReader.CONFIG_DIR_SYSTEM_PROPERTY, "src/test/resources/testDuplicatePermissions");
             try {
-                PermissionsConfig.clearCache();
                 new PermissionsConfig();
                 Assert.fail("should have received IllegalStateException");
             } catch (IllegalStateException e) {
@@ -306,7 +329,7 @@ public class PermissionsConfigTest {
             log.info("END - testDuplicatePermissions");
         }
     }
-    
+
     private List<PermissionEntry> iteratorToList(Iterator<PermissionEntry> it) {
         List<PermissionEntry> list = new ArrayList<PermissionEntry>();
         it.forEachRemaining(list::add);
