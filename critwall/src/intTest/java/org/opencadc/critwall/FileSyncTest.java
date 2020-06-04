@@ -115,7 +115,7 @@ public class FileSyncTest {
         Log4jInit.setLevel("org.opencadc.inventory", Level.INFO);
         Log4jInit.setLevel("org.opencadc.inventory.db", Level.INFO);
         Log4jInit.setLevel("ca.nrc.cadc.db", Level.INFO);
-        Log4jInit.setLevel("org.opencadc.critwall", Level.DEBUG);
+        Log4jInit.setLevel("org.opencadc.critwall", Level.INFO);
         Log4jInit.setLevel("org.opencadc.inventory.storage.fs", Level.INFO);
     }
 

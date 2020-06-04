@@ -97,17 +97,15 @@ public class ThreadPool {
         log.info(poolBasename + " - starting up");
         log.debug("initial thread count: " + threads.size() + " requested size: " + nthreads);
 
-        synchronized (threads) {
-            while (threads.size() < nthreads) {
-                int threadNum = threads.size() + 1;
-                log.debug("adding worker thread " + threadNum);
-                WorkerThread t = new WorkerThread();
-                t.setDaemon(true);
-                t.setName(poolBasename + "-" + threadNum);
-                t.setPriority(Thread.MIN_PRIORITY);
-                threads.add(t);
-                t.start();
-            }
+        while (threads.size() < nthreads) {
+            int threadNum = threads.size() + 1;
+            log.debug("adding worker thread " + threadNum);
+            WorkerThread t = new WorkerThread();
+            t.setDaemon(true);
+            t.setName(poolBasename + "-" + threadNum);
+            t.setPriority(Thread.MIN_PRIORITY);
+            threads.add(t);
+            t.start();
         }
         log.debug("after pool startup - thread count: " + threads.size() + " requested size: " + nthreads);
         log.debug(poolBasename + " - ctor done");
@@ -117,14 +115,12 @@ public class ThreadPool {
         log.debug(poolBasename + ".terminate() starting");
 
         // terminate thread pool members
-        synchronized (threads) {
-            Iterator<WorkerThread> threadIter = threads.iterator();
-            while (threadIter.hasNext()) {
-                WorkerThread t = threadIter.next();
-                log.debug(poolBasename + ".terminate() interrupting WorkerThread " + t.getName());
-                threadIter.remove();
-                t.interrupt();
-            }
+        Iterator<WorkerThread> threadIter = threads.iterator();
+        while (threadIter.hasNext()) {
+            WorkerThread t = threadIter.next();
+            log.debug(poolBasename + ".terminate() interrupting WorkerThread " + t.getName());
+            threadIter.remove();
+            t.interrupt();
         }
 
         log.debug(poolBasename + ".terminate() DONE");
