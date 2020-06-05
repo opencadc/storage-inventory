@@ -81,7 +81,7 @@ public class TestUtil {
 
     static String SERVER = "CRITWALL_TEST";
     static String DATABASE = "cadctest";
-    static String SCHEMA = "inventory"
+    static String SCHEMA = "inventory";
 
     static String TABLE_PREFIX = null;
     
