@@ -128,7 +128,7 @@ public class FileSyncJob implements Runnable {
 
     @Override
     public void run() {
-
+        log.info("fileSyncJob start.");
         final List<URL> urlList;
         try {
             urlList = getdownloadURLs(this.locatorService, this.artifactID);
