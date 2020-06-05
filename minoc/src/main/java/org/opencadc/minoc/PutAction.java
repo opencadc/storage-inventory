@@ -176,6 +176,9 @@ public class PutAction extends ArtifactAction {
         final Profiler profiler = new Profiler(PutAction.class);
 
         InputStream in = (InputStream) syncInput.getContent(INLINE_CONTENT_TAG);
+        if (in == null) {
+            throw new ReadException("invalid input: no content");
+        }
 
         profiler.checkpoint("content.init");
 
