@@ -177,7 +177,7 @@ public class PutAction extends ArtifactAction {
 
         InputStream in = (InputStream) syncInput.getContent(INLINE_CONTENT_TAG);
         if (in == null) {
-            throw new ReadException("invalid input: no content");
+            throw new IllegalArgumentException("invalid input: no content");
         }
 
         profiler.checkpoint("content.init");
