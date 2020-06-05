@@ -32,6 +32,7 @@ dependencies {
     compile 'org.opencadc:cadc-rest:[1.0,2.0)'
 
     runtime 'org.opencadc:cadc-log:[1.1,)'
+    runtime 'org.opencadc:cadc-access-control:[1.0,2.0)'
 
     testCompile 'junit:junit:[4.0,)'
 

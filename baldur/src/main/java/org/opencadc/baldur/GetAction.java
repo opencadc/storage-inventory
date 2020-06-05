@@ -144,7 +144,7 @@ public class GetAction extends RestAction {
         if (uri == null) {
             throw new IllegalArgumentException("missing required parameter, " + URI);
         }
-        
+
         URI artifactURI;
         try {
             artifactURI = new URI(uri);
@@ -172,6 +172,8 @@ public class GetAction extends RestAction {
         GrantWriter writer = new GrantWriter();
         writer.write(grant, out);
         out.flush();
+
+        logInfo.setMessage(String.format("returned %s %s grant(s) for %s", grant.getGroups().size(), op, uri));
     }
 
     void authorize(PermissionsConfig permissionsConfig) {
