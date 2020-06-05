@@ -70,6 +70,7 @@ package org.opencadc.minoc;
 import ca.nrc.cadc.auth.AuthMethod;
 import ca.nrc.cadc.auth.AuthenticationUtil;
 import ca.nrc.cadc.auth.HttpPrincipal;
+import ca.nrc.cadc.cred.client.CredUtil;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.reg.Standards;
@@ -83,6 +84,9 @@ import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.security.AccessControlException;
+import java.security.PrivilegedActionException;
+import java.security.PrivilegedExceptionAction;
+import java.security.cert.CertificateException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -197,7 +201,7 @@ public abstract class ArtifactAction extends RestAction {
     }
     
     protected void initAndAuthorize(Class<? extends Grant> grantClass)
-        throws AccessControlException, IOException,
+        throws AccessControlException, CertificateException, IOException,
                ResourceNotFoundException, TransientException {
         
         init();
@@ -229,46 +233,43 @@ public abstract class ArtifactAction extends RestAction {
     }
         
     public void checkReadPermission()
-        throws AccessControlException, TransientException {
+        throws AccessControlException, CertificateException, TransientException {
         
         if (authenticateOnly) {
             log.warn(InitDatabaseAction.DEV_AUTH_ONLY_KEY + "=true: allowing unrestricted access");
             return;
         }
         
-        // TODO: could call multiple services in parallel
         Set<GroupURI> granted = new TreeSet<>();
-        for (URI ps : readGrantServices) {
-            try {
-                PermissionsClient pc = new PermissionsClient(ps);
-                ReadGrant grant = pc.getReadGrant(artifactURI);
-                if (grant != null) {
-                    if (grant.isAnonymousAccess()) {
-                        logInfo.setMessage("read grant: anonymous");
-                        return;
-                    }
-                    granted.addAll(grant.getGroups());
+        Subject ops = CredUtil.createOpsSubject();
+        try {
+            List<ReadGrant> grants = Subject.doAs(ops, new GetReadGrantsAction());
+            for (ReadGrant g : grants) {
+                if (g.isAnonymousAccess()) {
+                    logInfo.setMessage("read grant: anonymous");
+                    return;
                 }
-            } catch (ResourceNotFoundException ex) {
-                log.warn("failed to find granting service: " + ps + " -- cause: " + ex);
+                granted.addAll(g.getGroups());
             }
+        } catch (PrivilegedActionException ex) {
+            throw new RuntimeException("BUG: unexpected exception calling permissions service(s)", ex);
         }
+        
         if (granted.isEmpty()) {
             throw new AccessControlException("permission denied: no read grants for " + artifactURI);
         }
         
         // TODO: add profiling
-        // if the granted group list is small, it would be better to use GroupClient.isMember()
+        // if the granted group list is small, it is better to use GroupClient.isMember()
         // rather than getting all groups... experiment to determine threshold? 
         // unfortunately, the speed of GroupClient.getGroups() will depend on how many groups the
-        // caller belomgs to...
-        LocalAuthority loc = new LocalAuthority();
-        URI resourceID = loc.getServiceURI(Standards.GMS_SEARCH_01.toString());
-        GroupClient client = GroupUtil.getGroupClient(resourceID);
-        List<GroupURI> userGroups = client.getMemberships();
-        for (GroupURI gg : granted) {
-            for (GroupURI userGroup : userGroups) {
-                if (gg.equals(userGroup)) {
+        // caller belongs to... assume isMember() is better
+        if (CredUtil.checkCredentials()) {
+            LocalAuthority loc = new LocalAuthority();
+            URI resourceID = loc.getServiceURI(Standards.GMS_SEARCH_01.toString());
+            GroupClient client = GroupUtil.getGroupClient(resourceID);
+            for (GroupURI gg : granted) {
+                if (client.isMember(gg)) {
                     logInfo.setMessage("read grant: " + gg);
                     return;
                 }
@@ -279,8 +280,7 @@ public abstract class ArtifactAction extends RestAction {
     }
     
     public void checkWritePermission()
-        throws AccessControlException, TransientException {
-        log.warn("checkWritePermission: authenticateOnly = " + authenticateOnly);
+        throws AccessControlException, CertificateException, TransientException {
 
         AuthMethod am = AuthenticationUtil.getAuthMethod(AuthenticationUtil.getCurrentSubject());
         if (am != null && am.equals(AuthMethod.ANON)) {
@@ -294,19 +294,16 @@ public abstract class ArtifactAction extends RestAction {
         }
         
         Set<GroupURI> granted = new TreeSet<>();
-
-        // TODO: could call multiple services in parallel
-        for (URI ps : writeGrantServices) {
-            try {
-                PermissionsClient pc = new PermissionsClient(ps);
-                WriteGrant grant = pc.getWriteGrant(artifactURI);
-                if (grant != null) {
-                    granted.addAll(grant.getGroups());
-                }
-            } catch (ResourceNotFoundException ex) {
-                log.warn("failed to find granting service: " + ps + " -- cause: " + ex);
+        Subject ops = CredUtil.createOpsSubject();
+        try {
+            List<WriteGrant> grants = Subject.doAs(ops, new GetWriteGrantsAction());
+            for (WriteGrant g : grants) {
+                granted.addAll(g.getGroups());
             }
+        } catch (PrivilegedActionException ex) {
+            throw new RuntimeException("BUG: unexpected exception calling permissions service(s)", ex);
         }
+        
         if (granted.isEmpty()) {
             throw new AccessControlException("permission denied: no write grants for " + artifactURI);
         }
@@ -317,17 +314,65 @@ public abstract class ArtifactAction extends RestAction {
         // the speed of GroupClient.getGroups() will depend on how many groups the caller belongs to... 
         // for write permission we expect granted to be small and caller to be an operations or staff 
         // member so lots of memberships and few or 1 granted group: assume isMember() is better
-        LocalAuthority loc = new LocalAuthority();
-        URI resourceID = loc.getServiceURI(Standards.GMS_SEARCH_01.toString());
-        GroupClient client = GroupUtil.getGroupClient(resourceID);
-        for (GroupURI gg : granted) {
-            if (client.isMember(gg)) {
-                logInfo.setMessage("write grant: " + gg);
-                return;
+        if (CredUtil.checkCredentials()) {
+            LocalAuthority loc = new LocalAuthority();
+            URI resourceID = loc.getServiceURI(Standards.GMS_SEARCH_01.toString());
+            GroupClient client = GroupUtil.getGroupClient(resourceID);
+            for (GroupURI gg : granted) {
+                if (client.isMember(gg)) {
+                    logInfo.setMessage("write grant: " + gg);
+                    return;
+                }
             }
         }
         
         throw new AccessControlException("permission denied");
+    }
+    
+    private class GetReadGrantsAction implements PrivilegedExceptionAction<List<ReadGrant>> {
+        GetReadGrantsAction() {
+        }
+        
+        @Override
+        public List<ReadGrant> run() throws Exception {
+            // TODO: could call multiple services in parallel
+            List<ReadGrant> ret = new ArrayList<>();
+            for (URI ps : writeGrantServices) {
+                try {
+                    PermissionsClient pc = new PermissionsClient(ps);
+                    ReadGrant grant = pc.getReadGrant(artifactURI);
+                    if (grant != null) {
+                        ret.add(grant);
+                    }
+                } catch (ResourceNotFoundException ex) {
+                    log.warn("failed to find granting service: " + ps + " -- cause: " + ex);
+                }
+            }
+            return ret;
+        }
+    }
+    
+    private class GetWriteGrantsAction implements PrivilegedExceptionAction<List<WriteGrant>> {
+        GetWriteGrantsAction() {
+        }
+        
+        @Override
+        public List<WriteGrant> run() throws Exception {
+            // TODO: could call multiple services in parallel
+            List<WriteGrant> ret = new ArrayList<>();
+            for (URI ps : writeGrantServices) {
+                try {
+                    PermissionsClient pc = new PermissionsClient(ps);
+                    WriteGrant grant = pc.getWriteGrant(artifactURI);
+                    if (grant != null) {
+                        ret.add(grant);
+                    }
+                } catch (ResourceNotFoundException ex) {
+                    log.warn("failed to find granting service: " + ps + " -- cause: " + ex);
+                }
+            }
+            return ret;
+        }
     }
     
     /**
