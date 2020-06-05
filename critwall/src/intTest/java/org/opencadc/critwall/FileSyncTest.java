@@ -109,17 +109,13 @@ public class FileSyncTest {
     private static Map<String,Object> daoConfig;
     private static ConnectionConfig cc;
 
-    // Used in the different test suites to pass to the function that populates
-    // the test database.
-    TreeMap<Integer,Artifact> artifactMap = new TreeMap<Integer, Artifact>();
-
     private OpaqueFileSystemStorageAdapter oStorageAdapter;
 
     static {
         Log4jInit.setLevel("org.opencadc.inventory", Level.INFO);
         Log4jInit.setLevel("org.opencadc.inventory.db", Level.INFO);
         Log4jInit.setLevel("ca.nrc.cadc.db", Level.INFO);
-        Log4jInit.setLevel("org.opencadc.critwall", Level.DEBUG);
+        Log4jInit.setLevel("org.opencadc.critwall", Level.INFO);
         Log4jInit.setLevel("org.opencadc.inventory.storage.fs", Level.INFO);
     }
 
@@ -211,13 +207,10 @@ public class FileSyncTest {
         }
     }
 
-    @Test
-    public void testValidFileSync() {
-        String testDir = TEST_ROOT + File.separator + "testValidFileSync";
 
+    private TreeMap<Integer, Artifact> mkSmallDataset() {
+        TreeMap<Integer, Artifact> artifactMap = new TreeMap<Integer, Artifact>();
         try {
-            createTestDirectory(testDir);
-
             // set up 4-5 IRIS artifacts need: checksum, size, artifact uri.
             Artifact testArtifact = new Artifact(new URI("ad:IRIS/I429B4H0.fits"),
                 new URI("md5:e3922d47243563529f387ebdf00b66da"), new Date(),
@@ -243,66 +236,174 @@ public class FileSyncTest {
                 113116L);
             log.debug("putting test artifact 4 to database");
             artifactMap.put(4, testArtifact);
+        } catch (URISyntaxException uriex) {
+            Assert.fail("URI error: " + uriex);
+        }
 
-            createTestMetadata(artifactMap);
-            log.debug("created test metadata");
+        return artifactMap;
+    }
 
-            // iterate through stored metadata and see what the bucket is set to.
-            Iterator<Artifact> artIter = dao.unstoredIterator(null);
+    private TreeMap<Integer,Artifact> mkLargeDataset() {
+        log.info("making 16 element dataset");
+        // Used in the different test suites to pass to the function that populates
+        // the test database.
+        TreeMap<Integer,Artifact> artifactMap = new TreeMap<Integer, Artifact>();
+        try {
+            // generate a 4-item map
+            artifactMap = mkSmallDataset();
 
-            String bucket = "";
-            // todo: build unique map of buckets
-            while (artIter.hasNext()) {
-                Artifact a = artIter.next();
-                log.debug("artifact bucket: " + a.getBucket());
-                bucket = a.getBucket();
-            }
+            // Build on the small dataset
+            //            IRAS-25um
+            //            ad:IRIS/I422B4H0.fits ; md5:fd02b367a37f1ec989be20be40672fc5; 1008000
+            artifactMap.put(5, new Artifact(new URI("ad:IRIS/I422B4H0.fits"),
+                new URI("md5:fd02b367a37f1ec989be20be40672fc5"), new Date(),
+                1008000L));
 
-            // can't count on the computed buckets to be the same. :(
-            String bucketFirstChar = "a - f";
-            artIter = dao.unstoredIterator(bucketFirstChar);
-            log.debug("bucket: " + bucketFirstChar + " iterator hasNext: " + artIter.hasNext());
+            //            ad:IRIS/I422B1H0.fits; md5:bcaa00dd3c18332d60d2f25ba31030fb; 1008000
+            artifactMap.put(6, new Artifact(new URI("ad:IRIS/I422B1H0.fits"),
+                new URI("md5:bcaa00dd3c18332d60d2f25ba31030fb"), new Date(),
+                1008000L));
 
-            // probably should have something here or in the above function that tests that the
-            // data is actually written correctly.
+            //            ad:IRIS/I422B2H0.fits; md5:e7abb9f19fc3a28cdd926dd1e74abec7; 1008000
+            artifactMap.put(7, new Artifact(new URI("ad:IRIS/I422B2H0.fits"),
+                new URI("md5:e7abb9f19fc3a28cdd926dd1e74abec7"), new Date(),
+                1008000L));
 
-            OpaqueFileSystemStorageAdapter localStorage = new OpaqueFileSystemStorageAdapter(new File(testDir), 1);
-            log.debug("created storage adapter for test dir.");
+            //            ad:IRIS/I422B3H0.fits; md5:2cb35c6af7e7e4df1aac3e91d4a17628; 1008000
+            artifactMap.put(8, new Artifact(new URI("ad:IRIS/I422B3H0.fits"),
+                new URI("md5:2cb35c6af7e7e4df1aac3e91d4a17628"), new Date(),
+                1008000L));
 
-            int nthreads = 1;
-            log.debug("nthreads: " + nthreads);
+            //            ad:IRIS/I421B4H0.fits; md5:fd2f33f79aefc15a84f5dbfb6fa61179; 1008000;
+            artifactMap.put(9, new Artifact(new URI("ad:IRIS/I421B4H0.fits"),
+                new URI("md5:fd2f33f79aefc15a84f5dbfb6fa61179"), new Date(),
+                1008000L));
 
-            // Can't count on computed bucket, so use entire range to cover all
-            String goodRange = "0-f";
-            BucketSelector bucketSel = new BucketSelector(goodRange);
-            log.debug("bucket selector: " + bucketSel);
+            //            ad:IRIS/I421B1H0.fits; md5:e188c72cec7466e77371687eacef4188; 1008000;
+            artifactMap.put(10, new Artifact(new URI("ad:IRIS/I421B1H0.fits"),
+                new URI("md5:e188c72cec7466e77371687eacef4188"), new Date(),
+                1008000L));
 
-            URI locatorResourceID = new URI(TEST_RESOURCE_ID);
+            //            ad:IRIS/I421B2H0.fits; md5:50959fa149de2850f94513f3d5c1b2d8; 1008000;
+            artifactMap.put(11, new Artifact(new URI("ad:IRIS/I421B2H0.fits"),
+                new URI("md5:50959fa149de2850f94513f3d5c1b2d8"), new Date(),
+                1008000L));
 
-            FileSync doit = new FileSync(daoConfig, cc, localStorage, locatorResourceID, bucketSel, nthreads);
-            doit.run();
+            //            ad:IRIS/I421B3H0.fits; md5:e2617db27776cdf97840f727d9411dc0; 1008000;
+            artifactMap.put(12, new Artifact(new URI("ad:IRIS/I421B3H0.fits"),
+                new URI("md5:e2617db27776cdf97840f727d9411dc0"), new Date(),
+                1008000L));
 
-            // check job succeeded by checking storage locations of at least one of
-            // the artifacts from the map are not null
-            // for one or two of the artifacts
+            //            ad:IRIS/I420B4H0.fits; md5:29e647300f3fbb46d4406d1957f7f61c; 1008000;
+            artifactMap.put(13, new Artifact(new URI("ad:IRIS/I420B4H0.fits"),
+                new URI("md5:29e647300f3fbb46d4406d1957f7f61c"), new Date(),
+                1008000L));
 
-            for(Artifact arti : artifactMap.values()) {
-                Artifact thirdStoredArtifact = dao.get(arti.getURI());
-                log.debug("stored artifact: " + thirdStoredArtifact);
-                log.debug("stored artifact: " + thirdStoredArtifact.storageLocation);
-                Assert.assertNotNull("storage location of artifact should not be null.", thirdStoredArtifact.storageLocation);
+            //            ad:IRIS/I420B1H0.fits; md5:7c6bfc10301fb617ce95dc338448cd03;1008000;
+            artifactMap.put(14, new Artifact(new URI("ad:IRIS/I420B1H0.fits"),
+                new URI("md5:7c6bfc10301fb617ce95dc338448cd03"), new Date(),
+                1008000L));
 
-                // check for file on disk, throw away the bytes
-                FileOutputStream dest = new FileOutputStream("/dev/null");
-                log.debug("shunting to /dev/null");
-                localStorage.get(thirdStoredArtifact.storageLocation, dest);
-            }
+            //            ad:IRIS/I420B2H0.fits; md5:5a4b9bb5dfc64ba0564ece68821b7ea1; 1008000;
+            artifactMap.put(15, new Artifact(new URI("ad:IRIS/I420B2H0.fits"),
+                new URI("md5:5a4b9bb5dfc64ba0564ece68821b7ea1"), new Date(),
+                1008000L));
+
+            //            ad:IRIS/I420B3H0.fits; md5:65e71fad7cdbcb644922b89bc735f709; 1008000;
+            artifactMap.put(16, new Artifact(new URI("ad:IRIS/I420B3H0.fits"),
+                new URI("md5:65e71fad7cdbcb644922b89bc735f709"), new Date(),
+                1008000L));
+
+            log.info("done making 16 element dataset");
+
+        } catch (URISyntaxException uriex) {
+            Assert.fail("URI error: " + uriex);
+        }
+
+        return artifactMap;
+    }
+
+
+    public void fileSyncTestBody(int nthreads, String testDir, TreeMap<Integer,Artifact> artMap) throws Exception {
+
+        createTestMetadata(artMap);
+        log.debug("test metadata put to database");
+
+        OpaqueFileSystemStorageAdapter localStorage = new OpaqueFileSystemStorageAdapter(new File(testDir), 1);
+        log.debug("created storage adapter for test dir.");
+
+        log.debug("nthreads: " + nthreads);
+
+        // Can't count on computed bucket, so use entire range to cover all
+        String goodRange = "0-f";
+        BucketSelector bucketSel = new BucketSelector(goodRange);
+        log.debug("bucket selector: " + bucketSel);
+
+        URI locatorResourceID = new URI(TEST_RESOURCE_ID);
+
+        FileSync doit = new FileSync(daoConfig, cc, localStorage, locatorResourceID, bucketSel, nthreads);
+        doit.run();
+
+        // Check the storage locations, as these should get updated within a reasonable
+        // amount of timeA
+        Iterator artIter = dao.unstoredIterator(null);
+
+        while (artIter.hasNext()) {
+            log.debug("waiting for file sync jobs to update database");
+            Thread.sleep(1000);
+            artIter = dao.unstoredIterator(null);
+        }
+
+        // check job succeeded by checking storage locations of at least one of
+        // the artifacts from the map are not nullA
+        // for one or two of the artifacts
+
+        for(Artifact arti : artMap.values()) {
+            Artifact thirdStoredArtifact = dao.get(arti.getURI());
+            log.debug("stored artifact: " + thirdStoredArtifact);
+            log.debug("stored artifact: " + thirdStoredArtifact.storageLocation);
+            Assert.assertNotNull("storage location of artifact should not be null.", thirdStoredArtifact.storageLocation);
+
+            // check for file on disk, throw away the bytes
+            FileOutputStream dest = new FileOutputStream("/dev/null");
+            log.debug("shunting to /dev/null");
+            localStorage.get(thirdStoredArtifact.storageLocation, dest);
+        }
+
+    }
+
+    @Test
+    public void testValidFileSyncSmallSet() {
+        String testDir = TEST_ROOT + File.separator + "testValidFileSync";
+
+        try {
+            createTestDirectory(testDir);
+            TreeMap<Integer, Artifact> aMap = mkSmallDataset();
+            fileSyncTestBody(1, testDir, aMap);
+
 
         } catch (Exception unexpected) {
             Assert.fail("unexpected exception: " + unexpected);
             log.debug(unexpected);
         }
-        log.info("testValidJob - DONE");
+        log.info("testValidFileSync - DONE");
     }
+
+    @Test
+    public void testValidFileSyncLargeSet() {
+        String testDir = TEST_ROOT + File.separator + "testValidFileSyncLargeSet";
+
+        try {
+            createTestDirectory(testDir);
+            TreeMap<Integer, Artifact> aMap = mkLargeDataset();
+            fileSyncTestBody(2, testDir, aMap);
+
+        } catch (Exception unexpected) {
+            Assert.fail("unexpected exception: " + unexpected);
+            log.debug(unexpected);
+        }
+        log.info("testValidFileSyncLargeSet - DONE");
+    }
+
 
 }
