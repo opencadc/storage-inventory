@@ -39,6 +39,8 @@ paths:
           description: If the client does not provide credentials and anonymous access is disallowed.
         '403':
           description: If the client does not have permission.
+        '404':
+          description: If permissions are not found for the uri.
         '500':
           description: Internal error
         '503':

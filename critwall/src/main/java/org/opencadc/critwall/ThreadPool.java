@@ -65,52 +65,94 @@
  ************************************************************************
  */
 
-package org.opencadc.baldur;
+package org.opencadc.critwall;
 
-import ca.nrc.cadc.auth.AuthMethod;
-import ca.nrc.cadc.auth.AuthenticationUtil;
-import ca.nrc.cadc.auth.SSLUtil;
-import ca.nrc.cadc.reg.Standards;
-import ca.nrc.cadc.reg.client.RegistryClient;
-import ca.nrc.cadc.util.FileUtil;
-import ca.nrc.cadc.util.Log4jInit;
-import java.io.File;
-import java.net.URI;
-import java.net.URL;
-import javax.security.auth.Subject;
-import org.apache.log4j.Level;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.concurrent.BlockingQueue;
 import org.apache.log4j.Logger;
 
 /**
- * Abstract integration test class with general setup and test support.
- * 
- * @author majorb
+ * Implementation of a thread pool executor.
+ * Thread pool is fixed size. At startup, threads are set to consume the contents of the BlockingQueue.
+ * Threads in the pool are blocked when trying to pull tasks from an empty queue. (see API for BlockingQueue.take().)
+ * Some jobs in the queue may be lost if the pool is terminated while working.
  */
-public abstract class BaldurTest {
-    
-    private static final Logger log = Logger.getLogger(BaldurTest.class);
-    public static final URI BALDUR_SERVICE_ID = URI.create("ivo://cadc.nrc.ca/baldur");
-    
-    protected URL certURL;
-    protected Subject anonSubject;
-    protected Subject noAuthSubject;
-    protected Subject authSubject;
-    
-    static {
-        Log4jInit.setLevel("org.opencadc.baldur", Level.INFO);
+public class ThreadPool {
+    private static Logger log = Logger.getLogger(ThreadPool.class);
+
+    private final String poolBasename = ThreadPool.class.getName();
+    private final BlockingQueue<Runnable> taskQueue;
+    private final ArrayList<WorkerThread> threads;
+
+    public ThreadPool(BlockingQueue<Runnable> blockingQueue, int nthreads) {
+
+        if (nthreads <= 0) {
+            throw new IllegalArgumentException("nthreads should > 1 (" + nthreads + ")");
+        }
+
+        this.taskQueue = blockingQueue;
+        this.threads = new ArrayList<>(nthreads);
+
+        log.info(poolBasename + " - starting up");
+        log.debug("initial thread count: " + threads.size() + " requested size: " + nthreads);
+
+        while (threads.size() < nthreads) {
+            int threadNum = threads.size() + 1;
+            log.debug("adding worker thread " + threadNum);
+            WorkerThread t = new WorkerThread();
+            t.setDaemon(true);
+            t.setName(poolBasename + "-" + threadNum);
+            t.setPriority(Thread.MIN_PRIORITY);
+            threads.add(t);
+            t.start();
+        }
+        log.debug("after pool startup - thread count: " + threads.size() + " requested size: " + nthreads);
+        log.debug(poolBasename + " - ctor done");
     }
-    
-    public BaldurTest() {
-        RegistryClient regClient = new RegistryClient();
-        certURL = regClient.getServiceURL(BALDUR_SERVICE_ID, Standards.SI_PERMISSIONS, AuthMethod.CERT);
-        log.info("certURL: " + certURL);
-        anonSubject = AuthenticationUtil.getAnonSubject();
-        File cert = FileUtil.getFileFromResource("baldur-test-auth.pem", BaldurTest.class);
-        authSubject = SSLUtil.createSubject(cert);
-        log.info("authSubject: " + authSubject);
-        cert = FileUtil.getFileFromResource("baldur-test-noauth.pem", BaldurTest.class);
-        noAuthSubject = SSLUtil.createSubject(cert);
-        log.info("noAuthSubject: " + noAuthSubject);
+
+    public void terminate() {
+        log.debug(poolBasename + ".terminate() starting");
+
+        // terminate thread pool members
+        Iterator<WorkerThread> threadIter = threads.iterator();
+        while (threadIter.hasNext()) {
+            WorkerThread t = threadIter.next();
+            log.debug(poolBasename + ".terminate() interrupting WorkerThread " + t.getName());
+            threadIter.remove();
+            t.interrupt();
+        }
+
+        log.debug(poolBasename + ".terminate() DONE");
     }
-    
+
+    private class WorkerThread extends Thread {
+        Runnable currentTask;
+
+        WorkerThread() {
+            super();
+        }
+
+        // threads keep running as long as they are in the threads list
+        public void run() {
+            log.debug(poolBasename + " - START");
+            boolean cont = true;
+            while (cont) {
+                try {
+                    log.debug("taking from taskQueue");
+                    Runnable task = taskQueue.take(); // should block on take from queue if queue empty
+                    log.debug("running current task");
+                    task.run();
+                    log.debug("finished running task");
+                } catch (InterruptedException ex) {
+                    // taskQueue.take() or the task.run() could throw this
+                    log.debug("thread interrupted: " + ex);
+                    return;
+                } catch (Exception ignore) {
+                    log.debug("poorly behaved task threw an exception.");
+                }
+            }
+            log.debug(poolBasename + " - END");
+        }
+    }
 }
