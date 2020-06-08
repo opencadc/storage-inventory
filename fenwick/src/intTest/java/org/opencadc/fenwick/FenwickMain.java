@@ -73,7 +73,6 @@ import ca.nrc.cadc.db.DBConfig;
 import ca.nrc.cadc.db.DBUtil;
 import ca.nrc.cadc.util.Log4jInit;
 
-import java.io.File;
 import java.net.URI;
 import java.util.Iterator;
 import java.util.Map;
@@ -91,7 +90,6 @@ import org.opencadc.inventory.db.DeletedEventDAO;
 import org.opencadc.inventory.db.HarvestState;
 import org.opencadc.inventory.db.HarvestStateDAO;
 import org.opencadc.inventory.db.SQLGenerator;
-import org.opencadc.inventory.storage.StorageMetadata;
 
 
 public class FenwickMain {

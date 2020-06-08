@@ -80,8 +80,6 @@ import java.io.IOException;
 import java.net.URI;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.util.Calendar;
-import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -96,7 +94,6 @@ import org.opencadc.inventory.StorageSite;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.HarvestState;
 import org.opencadc.inventory.db.HarvestStateDAO;
-import org.opencadc.inventory.db.ObsoleteStorageLocationDAO;
 import org.opencadc.inventory.db.StorageSiteDAO;
 import org.opencadc.tap.TapClient;
 
@@ -205,84 +202,159 @@ public class InventoryHarvester implements Runnable {
      */
     private void doit() throws ResourceNotFoundException, IOException, IllegalStateException, TransientException,
                                InterruptedException, NoSuchAlgorithmException {
-        final HarvestState existingHarvestState = this.harvestStateDAO.get(Artifact.class.getName(), this.resourceID);
-        final HarvestState harvestState = (existingHarvestState == null)
-                                          ? new HarvestState(Artifact.class.getName(), this.resourceID)
-                                          : existingHarvestState;
-
-        syncDeletedStorageLocationEvents(harvestState.getLastModified());
-        syncDeletedArtifactEvents(harvestState.getLastModified());
-        syncArtifacts(harvestState);
+        final StorageSiteDAO storageSiteDAO = new StorageSiteDAO(this.artifactDAO);
+        final StorageSite storageSite;
+        if (trackSiteLocations) {
+            final TapClient<StorageSite> storageSiteTapClient = new TapClient<>(this.resourceID);
+            final StorageSiteSync storageSiteSync = new StorageSiteSync(storageSiteTapClient, storageSiteDAO);
+            storageSite = storageSiteSync.doit();
+        } else {
+            storageSite = null;
+        }
+        syncDeletedStorageLocationEvents(storageSite);
+        syncDeletedArtifactEvents();
+        syncArtifacts(storageSite);
     }
 
-    private void syncDeletedStorageLocationEvents(final Date lastModified)
+    /**
+     * Perform a sync for deleted storage locations.  This will be used by Global sites to sync from storage sites to
+     * indicate that an Artifact at the given storage site is no longer available.
+     * @param storageSite                The storage site obtained from the Storage Site sync.
+     * @throws ResourceNotFoundException For any missing required configuration that is missing.
+     * @throws IOException               For unreadable configuration files.
+     * @throws IllegalStateException     For any invalid configuration.
+     * @throws TransientException        temporary failure of TAP service: same call could work in future
+     * @throws InterruptedException      thread interrupted
+     */
+    private void syncDeletedStorageLocationEvents(final StorageSite storageSite)
             throws ResourceNotFoundException, IOException, IllegalStateException, TransientException,
                    InterruptedException {
+        final HarvestState existingHarvestState = this.harvestStateDAO.get(DeletedStorageLocationEvent.class.getName(),
+                                                                           this.resourceID);
+        final HarvestState harvestState = (existingHarvestState == null)
+                                          ? new HarvestState(DeletedStorageLocationEvent.class.getName(),
+                                                             this.resourceID)
+                                          : existingHarvestState;
+
         final TapClient<DeletedStorageLocationEvent> deletedStorageLocationEventTapClient =
                 new TapClient<>(this.resourceID);
         final DeletedStorageLocationEventSync deletedStorageLocationEventSync =
                 new DeletedStorageLocationEventSync(deletedStorageLocationEventTapClient);
-        deletedStorageLocationEventSync.startTime = lastModified;
+        deletedStorageLocationEventSync.startTime = harvestState.getLastModified();
 
+        final TransactionManager transactionManager = artifactDAO.getTransactionManager();
         try (final ResourceIterator<DeletedStorageLocationEvent> deletedStorageLocationEventResourceIterator =
                      deletedStorageLocationEventSync.getEvents()) {
-            deletedStorageLocationEventResourceIterator.forEachRemaining(deletedStorageLocationEvent -> {
+
+            while (deletedStorageLocationEventResourceIterator.hasNext()) {
+                final DeletedStorageLocationEvent deletedStorageLocationEvent =
+                        deletedStorageLocationEventResourceIterator.next();
+
+                transactionManager.startTransaction();
                 final Artifact artifact = this.artifactDAO.get(deletedStorageLocationEvent.getID());
                 if (artifact != null) {
-                    artifact.storageLocation = null;
-                    artifactDAO.put(artifact);
+                    final SiteLocation siteLocation = new SiteLocation(storageSite.getID());
+                    artifact.siteLocations.remove(siteLocation);
+                    artifactDAO.put(artifact, true);
+                    harvestState.curLastModified = deletedStorageLocationEvent.getLastModified();
+                    harvestStateDAO.put(harvestState);
                 } else {
-                    log.warn(String.format("Artifact %s does not exist locally.", deletedStorageLocationEvent.getID()));
+                    log.warn("Artifact " + deletedStorageLocationEvent.getID() + " does not exist locally.");
                 }
-            });
+                transactionManager.commitTransaction();
+            }
+        } catch (Exception exception) {
+            if (transactionManager.isOpen()) {
+                log.error("Exception in transaction.  Rolling back...");
+                transactionManager.rollbackTransaction();
+                log.error("Rollback: OK");
+            } else {
+                log.warn("No transaction started.");
+            }
+
+            throw exception;
         }
     }
 
-    private void syncDeletedArtifactEvents(final Date lastModified)
-            throws ResourceNotFoundException, IOException, IllegalStateException, TransientException,
-                   InterruptedException {
+    /**
+     * Perform a sync of the remote deleted artifact events.
+     *
+     * @throws ResourceNotFoundException For any missing required configuration that is missing.
+     * @throws IOException               For unreadable configuration files.
+     * @throws IllegalStateException     For any invalid configuration.
+     * @throws TransientException        temporary failure of TAP service: same call could work in future
+     * @throws InterruptedException      thread interrupted
+     */
+    private void syncDeletedArtifactEvents() throws ResourceNotFoundException, IOException, IllegalStateException,
+                                                    TransientException, InterruptedException {
+        final HarvestState existingHarvestState = this.harvestStateDAO.get(DeletedArtifactEvent.class.getName(),
+                                                                           this.resourceID);
+        final HarvestState harvestState = (existingHarvestState == null)
+                                                  ? new HarvestState(DeletedArtifactEvent.class.getName(),
+                                                                     this.resourceID)
+                                                  : existingHarvestState;
+
         final TapClient<DeletedArtifactEvent> deletedArtifactEventTapClientTapClient = new TapClient<>(this.resourceID);
         final DeletedArtifactEventSync deletedArtifactEventSync =
                 new DeletedArtifactEventSync(deletedArtifactEventTapClientTapClient);
-        deletedArtifactEventSync.startTime = lastModified;
+        deletedArtifactEventSync.startTime = harvestState.getLastModified();
 
-        deletedArtifactEventSync.getEvents().forEachRemaining(deletedArtifactEvent ->
-                                                                      artifactDAO.delete(deletedArtifactEvent.getID()));
+        final TransactionManager transactionManager = artifactDAO.getTransactionManager();
+
+        try (final ResourceIterator<DeletedArtifactEvent> deletedArtifactEventResourceIterator
+                     = deletedArtifactEventSync.getEvents()) {
+
+            while (deletedArtifactEventResourceIterator.hasNext()) {
+                final DeletedArtifactEvent deletedArtifactEvent = deletedArtifactEventResourceIterator.next();
+                transactionManager.startTransaction();
+                artifactDAO.delete(deletedArtifactEvent.getID());
+                harvestState.curLastModified = deletedArtifactEvent.getLastModified();
+                harvestStateDAO.put(harvestState);
+                transactionManager.commitTransaction();
+            }
+        } catch (Exception exception) {
+            if (transactionManager.isOpen()) {
+                log.error("Exception in transaction.  Rolling back...");
+                transactionManager.rollbackTransaction();
+                log.error("Rollback: OK");
+            } else {
+                log.warn("No transaction started.");
+            }
+
+            throw exception;
+        }
     }
 
     /**
      * Synchronize the artifacts found by the TAP (Luskan) query.  This method WILL modify the HarvestState and store it
      * for the next run.
      *
-     * @param harvestState      The HarvestState object w
+     * @param storageSite                The storage site obtained from the Storage Site sync.
      * @throws ResourceNotFoundException For any missing required configuration that is missing.
      * @throws IOException               For unreadable configuration files.
      * @throws IllegalStateException     For any invalid configuration.
+     * @throws NoSuchAlgorithmException  If the MessageDigest for synchronizing Artifacts cannot be used.
      * @throws TransientException        temporary failure of TAP service: same call could work in future
      * @throws InterruptedException      thread interrupted
-     * @throws NoSuchAlgorithmException  If the MessageDigest for synchronizing Artifacts cannot be used.
      */
-    private void syncArtifacts(final HarvestState harvestState)
-            throws ResourceNotFoundException, IOException, IllegalStateException, TransientException,
-                   InterruptedException, NoSuchAlgorithmException {
+    private void syncArtifacts(final StorageSite storageSite) throws ResourceNotFoundException, IOException,
+                                                                     IllegalStateException, NoSuchAlgorithmException,
+                                                                     InterruptedException, TransientException {
         final MessageDigest messageDigest = MessageDigest.getInstance("MD5");
-        final StorageSiteDAO storageSiteDAO = new StorageSiteDAO(this.artifactDAO);
-        final TapClient<StorageSite> storageSiteTapClient = new TapClient<>(this.resourceID);
-
-        final StorageSite storageSite;
-        if (trackSiteLocations) {
-            final StorageSiteSync storageSiteSync = new StorageSiteSync(storageSiteTapClient, storageSiteDAO);
-            storageSite = storageSiteSync.doit();
-        } else {
-            storageSite = null;
-        }
 
         final TapClient<Artifact> artifactTapClient = new TapClient<>(this.resourceID);
+
+        final HarvestState existingHarvestState = this.harvestStateDAO.get(Artifact.class.getName(), this.resourceID);
+        final HarvestState harvestState = (existingHarvestState == null)
+                                          ? new HarvestState(Artifact.class.getName(), this.resourceID)
+                                          : existingHarvestState;
+
         final ArtifactSync artifactSync = new ArtifactSync(artifactTapClient, harvestState.getLastModified());
         final List<String> artifactIncludeConstraints = this.selector.getConstraints();
         final Iterator<String> artifactIncludeConstraintIterator = artifactIncludeConstraints.iterator();
 
         final TransactionManager transactionManager = artifactDAO.getTransactionManager();
+
         try {
             boolean keepRunning = true;
 
@@ -295,16 +367,17 @@ public class InventoryHarvester implements Runnable {
                 }
 
                 try (final ResourceIterator<Artifact> artifactResourceIterator = artifactSync.iterator()) {
-                    artifactResourceIterator.forEachRemaining(artifact -> {
+                    while (artifactResourceIterator.hasNext()) {
+                        final Artifact artifact = artifactResourceIterator.next();
                         transactionManager.startTransaction();
 
                         final URI computedChecksum = artifact.computeMetaChecksum(messageDigest);
 
                         if (!artifact.getMetaChecksum().equals(computedChecksum)) {
                             throw new IllegalStateException(
-                                    String.format("Checksums for Artifact %s do not match.  "
-                                                  + "\nProvided: %s\nComputed: %s.",
-                                                  artifact.getURI(), artifact.getMetaChecksum(), computedChecksum));
+                                    "Checksums for Artifact " + artifact.getURI() + " do not match.  "
+                                    + "\nProvided: " + artifact.getMetaChecksum() + "\nComputed: "
+                                    + computedChecksum + ".");
                         }
 
                         Artifact currentArtifact = artifactDAO.get(artifact.getID());
@@ -326,7 +399,7 @@ public class InventoryHarvester implements Runnable {
                         harvestState.curLastModified = artifact.getLastModified();
                         harvestStateDAO.put(harvestState);
                         transactionManager.commitTransaction();
-                    });
+                    }
                 }
 
                 keepRunning = artifactIncludeConstraintIterator.hasNext();

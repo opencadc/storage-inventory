@@ -82,9 +82,9 @@ public class ArtifactSyncTest {
         final String resultOne = artifactSync.buildQuery();
 
         Assert.assertEquals("Wrong query.",
-                            "SELECT id, uri, contentchecksum, contentlastmodified, contentlength, contenttype, "
-                            + "contentencoding, lastmodified, metachecksum FROM inventory.Artifact  "
-                            + "ORDER BY lastmodified", resultOne);
+                            "SELECT id, uri, contentChecksum, contentLastModified, contentLength, contentType, "
+                            + "contentEncoding, lastModified, metaChecksum FROM inventory.Artifact "
+                            + "ORDER BY lastModified", resultOne);
     }
 
     @Test
@@ -97,10 +97,10 @@ public class ArtifactSyncTest {
         final String resultOne = artifactSync.buildQuery();
 
         Assert.assertEquals("Wrong query.",
-                            "SELECT id, uri, contentchecksum, contentlastmodified, contentlength, contenttype, "
-                            + "contentencoding, lastmodified, metachecksum FROM inventory.Artifact "
+                            "SELECT id, uri, contentChecksum, contentLastModified, contentLength, contentType, "
+                            + "contentEncoding, lastModified, metaChecksum FROM inventory.Artifact "
                             + "WHERE lastModified >= '1977-11-25 03:12:00.000' "
-                            + "ORDER BY lastmodified", resultOne);
+                            + "ORDER BY lastModified", resultOne);
     }
 
     @Test
@@ -115,11 +115,11 @@ public class ArtifactSyncTest {
         final String resultOne = artifactSync.buildQuery();
 
         Assert.assertEquals("Wrong query.",
-                            "SELECT id, uri, contentchecksum, contentlastmodified, contentlength, contenttype, "
-                            + "contentencoding, lastmodified, metachecksum FROM inventory.Artifact "
+                            "SELECT id, uri, contentChecksum, contentLastModified, contentLength, contentType, "
+                            + "contentEncoding, lastModified, metaChecksum FROM inventory.Artifact "
                             + "WHERE lastModified >= '1977-11-25 03:12:00.000' "
                             + "AND (uri LIKE 'ad:CFHT%') "
-                            + "ORDER BY lastmodified", resultOne);
+                            + "ORDER BY lastModified", resultOne);
     }
 
     @Test
@@ -130,9 +130,9 @@ public class ArtifactSyncTest {
         final String resultOne = artifactSync.buildQuery();
 
         Assert.assertEquals("Wrong query.",
-                            "SELECT id, uri, contentchecksum, contentlastmodified, contentlength, contenttype, "
-                            + "contentencoding, lastmodified, metachecksum FROM inventory.Artifact "
+                            "SELECT id, uri, contentChecksum, contentLastModified, contentLength, contentType, "
+                            + "contentEncoding, lastModified, metaChecksum FROM inventory.Artifact "
                             + "WHERE (uri LIKE 'ad:CFHT%' OR uri LIKE 'ad:MEGA%') "
-                            + "ORDER BY lastmodified", resultOne);
+                            + "ORDER BY lastModified", resultOne);
     }
 }

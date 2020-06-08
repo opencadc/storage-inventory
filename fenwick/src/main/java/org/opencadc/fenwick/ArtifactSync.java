@@ -78,7 +78,6 @@ import java.io.IOException;
 import java.net.URI;
 import java.util.Date;
 import java.util.List;
-import java.util.Objects;
 import java.util.TimeZone;
 import java.util.UUID;
 
@@ -96,12 +95,6 @@ import org.opencadc.tap.TapRowMapper;
 public class ArtifactSync {
 
     private static final Logger LOGGER = Logger.getLogger(ArtifactSync.class);
-
-    // First string replace is the date to verify, and the second is the constraint clause as set by the selector.
-    private static final String ARTIFACT_QUERY_TEMPLATE =
-            "SELECT id, uri, contentchecksum, contentlastmodified, contentlength, contenttype, "
-            + "contentencoding, lastmodified, metachecksum FROM inventory.Artifact %s "
-            + "ORDER BY lastmodified";
 
     private final TapClient<Artifact> tapClient;
     private final Date currLastModified;
@@ -144,11 +137,13 @@ public class ArtifactSync {
      * @return  String query.  Never null.
      */
     String buildQuery() {
-        final StringBuilder whereClause = new StringBuilder();
+        final StringBuilder query = new StringBuilder();
+        query.append("SELECT id, uri, contentChecksum, contentLastModified, contentLength, contentType, ")
+                   .append("contentEncoding, lastModified, metaChecksum FROM inventory.Artifact");
 
         if (this.currLastModified != null) {
             LOGGER.debug("\nInjecting lastModified date compare '" + this.currLastModified + "'\n");
-            whereClause.append("WHERE lastModified >= '")
+            query.append(" WHERE lastModified >= '")
                        .append(DateUtil.getDateFormat(DateUtil.ISO_DATE_FORMAT,
                                                       TimeZone.getDefault()).format(this.currLastModified))
                        .append("'");
@@ -157,16 +152,18 @@ public class ArtifactSync {
         if (StringUtil.hasText(this.includeClause)) {
             LOGGER.debug("\nInjecting clause '" + this.includeClause + "'\n");
 
-            if (whereClause.length() == 0) {
-                whereClause.append("WHERE ");
+            if (query.indexOf("WHERE") < 0) {
+                query.append(" WHERE ");
             } else {
-                whereClause.append(" AND ");
+                query.append(" AND ");
             }
 
-            whereClause.append("(").append(this.includeClause.trim()).append(")");
+            query.append("(").append(this.includeClause.trim()).append(")");
         }
 
-        return String.format(ARTIFACT_QUERY_TEMPLATE, whereClause.toString().trim());
+        query.append(" ORDER BY lastModified");
+
+        return query.toString();
     }
 
     private static final class ArtifactRowMapper implements TapRowMapper<Artifact> {
@@ -191,15 +188,9 @@ public class ArtifactSync {
                                                    (URI) row.get(index++),
                                                    (Date) row.get(index++),
                                                    (Long) row.get(index++));
-            final Object contentTypeObj = row.get(index++);
-            if (contentTypeObj != null) {
-                artifact.contentType = Objects.toString(contentTypeObj);
-            }
 
-            final Object contentEncodingObj = row.get(index++);
-            if (contentEncodingObj != null) {
-                artifact.contentEncoding = contentEncodingObj.toString();
-            }
+            artifact.contentType = (String) row.get(index++);
+            artifact.contentEncoding = (String) row.get(index++);
 
             InventoryUtil.assignLastModified(artifact, (Date) row.get(index++));
             InventoryUtil.assignMetaChecksum(artifact, (URI) row.get(index));
