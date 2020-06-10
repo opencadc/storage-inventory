@@ -71,99 +71,61 @@ package org.opencadc.fenwick;
 import ca.nrc.cadc.db.ConnectionConfig;
 import ca.nrc.cadc.db.DBConfig;
 import ca.nrc.cadc.db.DBUtil;
-import ca.nrc.cadc.util.Log4jInit;
 
-import java.net.URI;
-import java.util.Iterator;
 import java.util.Map;
 import java.util.TreeMap;
 
-import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
-import org.junit.Before;
-import org.junit.Test;
-import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.DeletedArtifactEvent;
 import org.opencadc.inventory.DeletedStorageLocationEvent;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.DeletedEventDAO;
-import org.opencadc.inventory.db.HarvestState;
-import org.opencadc.inventory.db.HarvestStateDAO;
 import org.opencadc.inventory.db.SQLGenerator;
+import org.opencadc.inventory.db.StorageSiteDAO;
+import org.opencadc.inventory.db.version.InitDatabase;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 
-public class FenwickMain {
-    private static final Logger LOGGER = Logger.getLogger(StorageSiteSyncTest.class);
-
-    static {
-        Log4jInit.setLevel("org.opencadc.inventory", Level.INFO);
-        Log4jInit.setLevel("org.opencadc.inventory.db", Level.DEBUG);
-        Log4jInit.setLevel("ca.nrc.cadc.db", Level.INFO);
-        Log4jInit.setLevel("org.opencadc.fenwick", Level.DEBUG);
-    }
+public class LuskanEnvironment {
+    private static final Logger LOGGER = Logger.getLogger(LuskanEnvironment.class);
 
     // The local inventory database DAOs.
-    private final ArtifactDAO artifactDAO = new ArtifactDAO();
-    private final DeletedEventDAO<DeletedArtifactEvent> deletedArtifactEventDAO = new DeletedEventDAO<>();
-    private final DeletedEventDAO<DeletedStorageLocationEvent> deletedStorageLocationEventDAO = new DeletedEventDAO<>();
-    private final HarvestStateDAO harvestStateDAO = new HarvestStateDAO();
+    final StorageSiteDAO storageSiteDAO = new StorageSiteDAO();
+    final ArtifactDAO artifactDAO = new ArtifactDAO();
+    final DeletedEventDAO<DeletedArtifactEvent> deletedArtifactEventDAO = new DeletedEventDAO<>();
+    final DeletedEventDAO<DeletedStorageLocationEvent> deletedStorageLocationEventDAO = new DeletedEventDAO<>();
+    final String jndiPath = "jdbc/LuskanEnvironment";
 
 
-    public FenwickMain() throws Exception {
-        DBConfig dbrc = new DBConfig();
-        ConnectionConfig cc = dbrc.getConnectionConfig(TestUtil.SERVER, TestUtil.DATABASE);
-        DBUtil.createJNDIDataSource("jdbc/FenwickIntTest", cc);
+    public LuskanEnvironment() throws Exception {
+        final DBConfig dbrc = new DBConfig();
+        final ConnectionConfig luskcanConnectionConfig = dbrc.getConnectionConfig(TestUtil.LUSKAN_SERVER,
+                                                                                  TestUtil.LUSKAN_DATABASE);
 
-        Map<String,Object> config = new TreeMap<String,Object>();
-        config.put(SQLGenerator.class.getName(), SQLGenerator.class);
-        config.put("jndiDataSourceName", "jdbc/FenwickIntTest");
-        config.put("database", TestUtil.DATABASE);
-        config.put("schema", TestUtil.SCHEMA);
+        DBUtil.createJNDIDataSource(jndiPath, luskcanConnectionConfig);
 
-        artifactDAO.setConfig(config);
-        deletedArtifactEventDAO.setConfig(config);
-        deletedStorageLocationEventDAO.setConfig(config);
-        harvestStateDAO.setConfig(config);
+        final Map<String, Object> daoConfig = new TreeMap<>();
+        daoConfig.put(SQLGenerator.class.getName(), SQLGenerator.class);
+        daoConfig.put("jndiDataSourceName", jndiPath);
+        daoConfig.put("database", TestUtil.LUSKAN_DATABASE);
+        daoConfig.put("schema", TestUtil.LUSKAN_SCHEMA);
+
+        storageSiteDAO.setConfig(daoConfig);
+        artifactDAO.setConfig(daoConfig);
+        deletedArtifactEventDAO.setConfig(daoConfig);
+        deletedStorageLocationEventDAO.setConfig(daoConfig);
+
+        new InitDatabase(DBUtil.findJNDIDataSource(jndiPath),
+                         (String) daoConfig.get("database"),
+                         (String) daoConfig.get("schema")).doInit();
     }
 
-    private void wipe_clean(Iterator<Artifact> artifactIterator) {
-        LOGGER.debug("wipe_clean running...");
-        int deletedArtifacts = 0;
-
-        while (artifactIterator.hasNext()) {
-            LOGGER.debug("something to remove...");
-            Artifact a = artifactIterator.next();
-            LOGGER.debug("deleting test uri: " + a.getURI() + " ID: " + a.getID());
-            artifactDAO.delete(a.getID());
-            deletedArtifacts++;
-        }
-
-        if (deletedArtifacts > 0) {
-            LOGGER.info("deleted " + deletedArtifacts + " artifacts");
-        }
-    }
-
-    @Before
-    public void cleanTestEnvironment() {
-        LOGGER.debug("cleaning stored artifacts...");
-        Iterator<Artifact> storedArtifacts = artifactDAO.storedIterator(null);
-        LOGGER.debug("got an iterator back: " + storedArtifacts);
-        wipe_clean(storedArtifacts);
-
-        LOGGER.debug("cleaning unstored artifacts...");
-        Iterator<Artifact> unstoredArtifacts = artifactDAO.unstoredIterator(null);
-        LOGGER.debug("got an iterator back: " + storedArtifacts);
-        wipe_clean(unstoredArtifacts);
-
-        final HarvestState existingHarvestState =
-                harvestStateDAO.get(Artifact.class.getName(), URI.create(TestUtil.LUSKAN_URI));
-        if (existingHarvestState != null) {
-            harvestStateDAO.delete(existingHarvestState.getID());
-        }
-    }
-
-    @Test
-    public void runThrough() throws Exception {
-        Main.main(new String[0]);
+    void cleanTestEnvironment() throws Exception {
+        final JdbcTemplate jdbcTemplate = new JdbcTemplate(DBUtil.findJNDIDataSource(jndiPath));
+        jdbcTemplate.execute("TRUNCATE TABLE " + TestUtil.LUSKAN_SCHEMA + ".deletedArtifactEvent");
+        jdbcTemplate.execute("TRUNCATE TABLE " + TestUtil.LUSKAN_SCHEMA + ".deletedStorageLocationEvent");
+        jdbcTemplate.execute("TRUNCATE TABLE " + TestUtil.LUSKAN_SCHEMA + ".storageSite");
+        jdbcTemplate.execute("TRUNCATE TABLE " + TestUtil.LUSKAN_SCHEMA + ".harvestState");
+        jdbcTemplate.execute("TRUNCATE TABLE " + TestUtil.LUSKAN_SCHEMA + ".Artifact");
     }
 }

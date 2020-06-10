@@ -200,8 +200,8 @@ public class InventoryHarvester implements Runnable {
      * @throws InterruptedException      thread interrupted
      * @throws NoSuchAlgorithmException  If the MessageDigest for synchronizing Artifacts cannot be used.
      */
-    private void doit() throws ResourceNotFoundException, IOException, IllegalStateException, TransientException,
-                               InterruptedException, NoSuchAlgorithmException {
+    void doit() throws ResourceNotFoundException, IOException, IllegalStateException, TransientException,
+                       InterruptedException, NoSuchAlgorithmException {
         final StorageSiteDAO storageSiteDAO = new StorageSiteDAO(this.artifactDAO);
         final StorageSite storageSite;
         if (trackSiteLocations) {
@@ -383,11 +383,6 @@ public class InventoryHarvester implements Runnable {
                         Artifact currentArtifact = artifactDAO.get(artifact.getID());
 
                         if (currentArtifact != null) {
-                            // trackSiteLocations is false if storageSite is null.
-                            if (storageSite != null) {
-                                currentArtifact.siteLocations.add(new SiteLocation(storageSite.getID()));
-                            }
-
                             currentArtifact.contentEncoding = artifact.contentEncoding;
                             currentArtifact.contentType = artifact.contentType;
                             currentArtifact.storageLocation = artifact.storageLocation;
@@ -395,8 +390,13 @@ public class InventoryHarvester implements Runnable {
                             currentArtifact = artifact;
                         }
 
+                        // trackSiteLocations is false if storageSite is null.
+                        if (storageSite != null) {
+                            currentArtifact.siteLocations.add(new SiteLocation(storageSite.getID()));
+                        }
+
                         artifactDAO.put(currentArtifact);
-                        harvestState.curLastModified = artifact.getLastModified();
+                        harvestState.curLastModified = currentArtifact.getLastModified();
                         harvestStateDAO.put(harvestState);
                         transactionManager.commitTransaction();
                     }
