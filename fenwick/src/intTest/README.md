@@ -3,7 +3,7 @@
 Integration tests can be run any time against a remote Luskan site with a local test inventory database.
 ## configuration
 A file called `intTest.properties` can be in the classpath (in `src/intTest/resources`) to override properties.  See the
-`cadc-inventory-db` project or the [org.opencadc.fenwick.TestUtil](java/org/opencadc/fenwick/TestUtil) class for more details.
+`cadc-inventory-db` project or the [org.opencadc.fenwick.TestUtil](java/org/opencadc/fenwick/TestUtil.java) class for more details.
 
 ### intTest.properties
 ```
