@@ -70,6 +70,7 @@ package org.opencadc.inventory.storage.fs;
 import java.io.File;
 import java.io.IOException;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -203,19 +204,22 @@ class OpaqueIterator implements Iterator<StorageMetadata> {
         
         try {
             // required
-            String cs = OpaqueFileSystemStorageAdapter.getFileAttribute(p, OpaqueFileSystemStorageAdapter.CHECKSUM_ATTR);
-            URI contentChecksum = URI.create(cs);
-            long contentLength = Files.size(p);
             StorageLocation sloc = new StorageLocation(storageID);
             sloc.storageBucket = storageBucket;
-            StorageMetadata ret = new StorageMetadata(sloc, contentChecksum, contentLength);
+            String csAttr = OpaqueFileSystemStorageAdapter.getFileAttribute(p, OpaqueFileSystemStorageAdapter.CHECKSUM_ATTR);
+            String aidAttr = OpaqueFileSystemStorageAdapter.getFileAttribute(p, OpaqueFileSystemStorageAdapter.ARTIFACTID_ATTR);
+            try {
+                URI contentChecksum = new URI(csAttr);
+                long contentLength = Files.size(p);
+                StorageMetadata ret = new StorageMetadata(sloc, contentChecksum, contentLength);
             
-            // optional
-            String aid = OpaqueFileSystemStorageAdapter.getFileAttribute(p, OpaqueFileSystemStorageAdapter.ARTIFACTID_ATTR);
-            ret.artifactURI = URI.create(aid);
-            ret.contentLastModified = new Date(Files.getLastModifiedTime(p).toMillis());
-
-            return ret;
+                // optional
+                ret.artifactURI = new URI(aidAttr);
+                ret.contentLastModified = new Date(Files.getLastModifiedTime(p).toMillis());
+                return ret;
+            } catch (URISyntaxException ex) {
+                return new StorageMetadata(sloc); // missing attrs: invalid stored object
+            }
         } catch (IOException ex) {
             throw new RuntimeException("failed to recreate StorageMetadata: " + storageBucket + "," + storageID, ex);
         }
