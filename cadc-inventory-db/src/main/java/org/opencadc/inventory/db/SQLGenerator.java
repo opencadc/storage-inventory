@@ -1076,7 +1076,7 @@ public class SQLGenerator {
             hasRow = rs.next();
             log.debug("ArtifactResultSetIterator: " + super.toString() + " ctor " + hasRow);
             if (!hasRow) {
-                log.warn("ArtifactResultSetIterator:  " + super.toString() + " ctor - setAutoCommit(true)");
+                log.debug("ArtifactResultSetIterator:  " + super.toString() + " ctor - setAutoCommit(true)");
                 con.setAutoCommit(true);
             }
         }
