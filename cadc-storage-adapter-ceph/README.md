@@ -7,9 +7,30 @@ The CEPH storage adapter supports various ways of communicating with a CEPH Clus
 
 ## configuration
 
+The following StorageAdapter implementations are provided:
+
+|fully qualified class name|description|
+|--------------------------|-----------|
+|org.opencadc.inventory.storage.swift.SwiftStorageAdapter|stores files with opaque keys in a single Swift container|
+|org.opencadc.inventory.storage.swift.S3StorageAdapterSB|stores files with opaque keys in a single S3 bucket|
+|org.opencadc.inventory.storage.swift.S3StorageAdapterMB|stores files with opaque keys in multiple S3 buckets|
+
+One of these class names will be used to configure critwall, minoc, and tantar at a storage site.
+
 ### cadc-storage-adapter-ceph.properties
 
-This library is configured via a properties file in `{user.home}/config`. All properties are required.
+This library is configured via a properties file in `{user.home}/config`. For developers doing testing, it is safe to include properties for both adapters in a single file but that's probably a confusing thing to do for deployment.
+
+For the SwiftStorageAdapter:
+```
+org.opencadc.inventory.storage.swift.SwiftStorageAdapter.bucketLength={length of generated StorageLocation.storageBucket}
+org.opencadc.inventory.storage.swift.SwiftStorageAdapter.bucketName={Swift container}
+org.opencadc.inventory.storage.swift.SwiftStorageAdapter.authEndpoint={Swift auth v1.0 endpoint}
+org.opencadc.inventory.storage.swift.SwiftStorageAdapter.username={Swift API username to authenticate}
+org.opencadc.inventory.storage.swift.SwiftStorageAdapter.key={Swift API key to authenticate}
+```
+
+For the S3StorageAdapter(s):
 ```
 org.opencadc.inventory.storage.s3.S3StorageAdapter.endpoint = {S3 REST API endpoint}
 org.opencadc.inventory.storage.s3.S3StorageAdapter.s3bucket = {S3 bucket name or prefix}
@@ -23,18 +44,13 @@ The same set of properties can be used to configure both S3StorageAdapter implem
 * the S3StorageAdapterSB will create/use a single S3 bucket named {s3bucket} directly and use the {storageBucket} as a key prefix
 * the S3StorageAdapterMB will create/use up to `16^n` S3 buckets with {s3bucket] as the prefix
 
-Clients using the StorageAdapter API will see no difference in behaviour. However: scalability and performance tests 
-will be used to determine if/when each implementation makes sense.
 
-### Test S3 
+## limitations
 
-Developers running the S3 integration tests must  provide values for the above Java system properties. Developers that are
-using a shared S3 backend should chose an s3bucket value that will never collide with other users of the system (e.g. {username}-test). 
+The S3StorageAdapter(s) cannot support put of a file without required metadata up front (contentLength and contentChecksum).
 
-To run the entire suite of integration tests against the currently deployed CEPH system, just run:
-```
-gradle {configure properties} intTest
-```
+All StorageAdapter implementations are limited to 5GiB file upload. Support for larger files requires using the S3 or Swift segmented upoad feature and a facade will preobably be added to the StorageAdapter API to support that.
+
 
 ### Test RADOS
 The RADOS integration tests are currently limited and disabled (skipped) because they require native packages provided by the operating system (librados and libradosstriper). 
