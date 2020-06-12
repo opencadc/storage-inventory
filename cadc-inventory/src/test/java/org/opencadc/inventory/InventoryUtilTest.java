@@ -67,10 +67,13 @@
 
 package org.opencadc.inventory;
 
+import ca.nrc.cadc.util.HexUtil;
 import ca.nrc.cadc.util.Log4jInit;
 
 import java.net.URI;
+import java.security.MessageDigest;
 import java.util.Comparator;
+import java.util.Random;
 import java.util.UUID;
 
 import org.apache.log4j.Level;
@@ -198,6 +201,101 @@ public class InventoryUtilTest {
                 log.info("caught expected: " + expected);
             }
 
+        } catch (Exception unexpected) {
+            log.error("unexpected exception", unexpected);
+            Assert.fail("unexpected exception: " + unexpected);
+        }
+    }
+    
+    @Test
+    public void testValidateChecksumURI() {
+        try {
+            Random rnd = new Random();
+            byte[] buf = new byte[1024];
+            
+            MessageDigest md = MessageDigest.getInstance("md5");
+            byte[] cs = md.digest(buf);
+            String hex = HexUtil.toHex(cs);
+            
+            URI valid = URI.create("md5:" + hex);
+            InventoryUtil.assertValidChecksumURI(InventoryUtilTest.class, "test", valid);
+            log.info("valid: " + valid);
+            
+            int n = valid.toASCIIString().length() - 2; // drop one byte
+            URI invalid = URI.create(valid.toASCIIString().substring(0, n));
+            try {
+                InventoryUtil.assertValidChecksumURI(InventoryUtilTest.class, "test", invalid);
+            } catch (IllegalArgumentException expected) {
+                log.info("caught expected: " + expected);
+            }
+            
+            md = MessageDigest.getInstance("sha-1");
+            cs = md.digest(buf);
+            hex = HexUtil.toHex(cs);
+            valid = URI.create("sha-1:" + hex);
+            InventoryUtil.assertValidChecksumURI(InventoryUtilTest.class, "test", valid);
+            log.info("valid: " + valid);
+            
+            n = valid.toASCIIString().length() - 2; // drop one byte
+            invalid = URI.create(valid.toASCIIString().substring(0, n));
+            try {
+                InventoryUtil.assertValidChecksumURI(InventoryUtilTest.class, "test", invalid);
+            } catch (IllegalArgumentException expected) {
+                log.info("caught expected: " + expected);
+            }
+            
+            md = MessageDigest.getInstance("sha-256");
+            cs = md.digest(buf);
+            hex = HexUtil.toHex(cs);
+            valid = URI.create("sha-256:" + hex);
+            InventoryUtil.assertValidChecksumURI(InventoryUtilTest.class, "test", valid);
+            log.info("valid: " + valid);
+            
+            n = valid.toASCIIString().length() - 2; // drop one byte
+            invalid = URI.create(valid.toASCIIString().substring(0, n));
+            try {
+                InventoryUtil.assertValidChecksumURI(InventoryUtilTest.class, "test", invalid);
+            } catch (IllegalArgumentException expected) {
+                log.info("caught expected: " + expected);
+            }
+            
+            md = MessageDigest.getInstance("sha-384");
+            cs = md.digest(buf);
+            hex = HexUtil.toHex(cs);
+            valid = URI.create("sha-384:" + hex);
+            InventoryUtil.assertValidChecksumURI(InventoryUtilTest.class, "test", valid);
+            log.info("valid: " + valid);
+            
+            n = valid.toASCIIString().length() - 2; // drop one byte
+            invalid = URI.create(valid.toASCIIString().substring(0, n));
+            try {
+                InventoryUtil.assertValidChecksumURI(InventoryUtilTest.class, "test", invalid);
+            } catch (IllegalArgumentException expected) {
+                log.info("caught expected: " + expected);
+            }
+            
+            md = MessageDigest.getInstance("sha-512");
+            cs = md.digest(buf);
+            hex = HexUtil.toHex(cs);
+            valid = URI.create("sha-512:" + hex);
+            InventoryUtil.assertValidChecksumURI(InventoryUtilTest.class, "test", valid);
+            log.info("valid: " + valid);
+            
+            n = valid.toASCIIString().length() - 2; // drop one byte
+            invalid = URI.create(valid.toASCIIString().substring(0, n));
+            try {
+                InventoryUtil.assertValidChecksumURI(InventoryUtilTest.class, "test", invalid);
+            } catch (IllegalArgumentException expected) {
+                log.info("caught expected: " + expected);
+            }
+            
+            invalid = URI.create("foo:" + hex);
+            try {
+                InventoryUtil.assertValidChecksumURI(InventoryUtilTest.class, "test", invalid);
+            } catch (IllegalArgumentException expected) {
+                log.info("caught expected: " + expected);
+            }
+            
         } catch (Exception unexpected) {
             log.error("unexpected exception", unexpected);
             Assert.fail("unexpected exception: " + unexpected);

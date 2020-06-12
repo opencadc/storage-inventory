@@ -147,16 +147,11 @@ public class FileSync {
             throw new IllegalStateException("unable to access database: " + daoConfig.get("database"), ne);
         }
 
-        // Notes on queue and thread pool instances:
-        // - LinkedBlockingQueue (jobQueue) is the queue used in this producer/consumer implementation.
-        // - threadPool is the consumer, FileSync is the producer
-        // - jobQueue.put() will put a FileSyncJob where worker threads in threadPool can consume & run it
-        // - if queue capacity is reached, put() will block.
+        // jobQueue is the queue used in this producer/consumer implementation.
+        // producer: FileSync uses jobQueue.put(); blocks if queue is full
+        // consumer: ThreadPool uses jobQueue.take(); blocks if queue is empty
 
-        // Justification for not using ExecutorService in this case is it's too complex, and
-        // the default implementations don't provide the behaviour needed.
-
-        this.jobQueue = new LinkedBlockingQueue<Runnable>(this.nthreads * 2);
+        this.jobQueue = new LinkedBlockingQueue<>(this.nthreads * 2);
         this.threadPool = new ThreadPool(this.jobQueue, this.nthreads);
 
         this.storageAdapter = localStorage;
@@ -166,17 +161,10 @@ public class FileSync {
 
 
     public void run() {
-        log.info("START - FileSync");
-        // TODO: any other metrics to collect? If critwall is intended
-        // to run forever, a start & end time aren't useful for checking
-        // performance. Maybe add time to process one iterator set? (one bucket?)
-        long start = System.currentTimeMillis();
-
+        log.info("FileSync START");
         Iterator<String> bucketSelector = selector.getBucketIterator();
         String currentArtifactInfo = "";
-        //        while (true) {
         try {
-
             while (bucketSelector.hasNext()) {
                 String bucket = bucketSelector.next();
                 log.info("processing bucket " + bucket);
@@ -193,51 +181,27 @@ public class FileSync {
 
                     FileSyncJob fsj = new FileSyncJob(curArtifact.getURI(), this.locatorService,
                         this.storageAdapter, this.jobArtifactDAO);
-
+                    
                     log.debug("creating file sync job: " + curArtifact.getURI());
-
-                    // blocks when queue capacity is reached
-                    jobQueue.put(fsj);
-                    log.debug("added FileSyncJob to thread pool.");
+                    jobQueue.put(fsj); // blocks when queue capacity is reached
                 }
             }
 
-            // HACK: temporarily keep running until all jobs are completed
+            // HACK: keep running so all jobs can complete
+            // TODO: manage idle and then restart first at bucket until serious failure
+            //       tricky bit: don't queue the same jobs multiple times, but do retry jobs that failed
             while (true) {
-                Thread.sleep(300 * 1000L); // 5 min
                 log.warn("main thread: sleeping forever!!");
+                Thread.sleep(300 * 1000L); // 5 min
             }
 
         } catch (Exception e) {
-            log.info("Thread pool error", e);
             log.error("error processing list of artifacts, at: " + currentArtifactInfo);
+            log.error("unexpected failure", e);
         } finally {
-
-
-            // Clean up
             this.threadPool.terminate();
-
-            long elapsed = System.currentTimeMillis() - start;
-            log.info("FINALLY - FileSync - elapsed ms: " + elapsed);
+            log.info("FileSync DONE");
         }
-        //}
     }
 
 }
-
-
-
-
-// general behaviour: (original notes from pdowler
-// - create a job queue
-// - create a thread pool to execute jobs (ta 13063)
-// - query inventory for Artifact with null StorageLocation and use Iterator<Artifact>
-//   to keep the queue finite in size (not empty, not huge)
-// job: transfer negotiation  (with global) + HttpGet with output to local StorageAdapter
-// - the job wrapper should balance HttpGet retries to a single URL and cycling through each
-//   negotiated URL (once)... so if more URLs to try, fewer retries each (separate task)
-// - if a job fails, just log it and move on
-
-// run until Iterator<Artifact> finishes:
-// - terminate?
-// - manage idle and run until serious failure?
