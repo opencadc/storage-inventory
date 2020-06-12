@@ -12,8 +12,8 @@ The following StorageAdapter implementations are provided:
 |fully qualified class name|description|
 |--------------------------|-----------|
 |org.opencadc.inventory.storage.swift.SwiftStorageAdapter|stores files with opaque keys in a single Swift container|
-|org.opencadc.inventory.storage.swift.S3StorageAdapterSB|stores files with opaque keys in a single S3 bucket|
-|org.opencadc.inventory.storage.swift.S3StorageAdapterMB|stores files with opaque keys in multiple S3 buckets|
+|org.opencadc.inventory.storage.s3.S3StorageAdapterSB|stores files with opaque keys in a single S3 bucket|
+|org.opencadc.inventory.storage.s3.S3StorageAdapterMB|stores files with opaque keys in multiple S3 buckets|
 
 One of these class names will be used to configure critwall, minoc, and tantar at a storage site.
 
