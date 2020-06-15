@@ -84,6 +84,7 @@ import ca.nrc.cadc.util.Log4jInit;
 
 import java.io.OutputStream;
 import java.util.List;
+import java.util.UUID;
 
 
 public class AbstractResolutionPolicyTest<T extends ResolutionPolicy> {
@@ -108,6 +109,10 @@ public class AbstractResolutionPolicyTest<T extends ResolutionPolicy> {
         logger.addAppender(testAppender);
 
         return logger;
+    }
+
+    String random16Bytes() {
+        return UUID.randomUUID().toString().replaceAll("-", "");
     }
 
     protected static final class TestEventListener implements ValidateEventListener {

@@ -93,8 +93,9 @@ public abstract class ResolutionPolicy {
      * @return          True if the metadata that verify the structure of the Entity differ.  False otherwise.
      */
     protected final boolean haveDifferentStructure(final Artifact artifact, final StorageMetadata storageMetadata) {
-        return !(artifact.getContentChecksum().equals(storageMetadata.getContentChecksum()))
-               || !(artifact.getContentLength().equals(storageMetadata.getContentLength()));
+        return !storageMetadata.isValid()
+               || (!(artifact.getContentChecksum().equals(storageMetadata.getContentChecksum()))
+                   || !(artifact.getContentLength().equals(storageMetadata.getContentLength())));
     }
 
     /**
