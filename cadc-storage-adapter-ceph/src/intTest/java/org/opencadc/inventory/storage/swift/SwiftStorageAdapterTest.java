@@ -68,6 +68,8 @@
 package org.opencadc.inventory.storage.swift;
 
 import ca.nrc.cadc.io.ByteLimitExceededException;
+import ca.nrc.cadc.io.ReadException;
+import ca.nrc.cadc.io.WriteException;
 import ca.nrc.cadc.net.PreconditionFailedException;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.util.HexUtil;
@@ -133,10 +135,42 @@ public class SwiftStorageAdapterTest {
     public void testResourceNotFound() {
         try {
             StorageLocation loc = adapter.generateStorageLocation();
-            ByteArrayOutputStream bos = new ByteArrayOutputStream();
-            adapter.get(loc, bos);
-            Assert.fail("expected ResourceNotFoundException, transferred " + bos.toByteArray().length + " bytes");
+            adapter.get(loc, TestUtil.getOutputStreamThatFails());
+            Assert.fail("expected ResourceNotFoundException: call succeeded");
         } catch (ResourceNotFoundException expected) {
+            log.info("caught expected: " + expected);
+        } catch (Exception unexpected) {
+            log.error("unexpected exception", unexpected);
+            Assert.fail("unexpected exception: " + unexpected);
+        }
+    }
+    
+    @Test
+    public void testPutReadFail() {
+        try {
+            URI artifactURI = URI.create("cadc:TEST/testPutReadFail");
+            NewArtifact na = new NewArtifact(artifactURI);
+            adapter.put(na, TestUtil.getInputStreamThatFails(true)); // provoke IOException
+            Assert.fail("expected ReadException: call succeeded");
+        } catch (ReadException expected) {
+            log.info("caught expected: " + expected);
+        } catch (Exception unexpected) {
+            log.error("unexpected exception", unexpected);
+            Assert.fail("unexpected exception: " + unexpected);
+        }
+    }
+    
+    @Test
+    public void testGetWriteFail() {
+        try {
+            URI artifactURI = URI.create("cadc:TEST/testPutReadFail");
+            NewArtifact na = new NewArtifact(artifactURI);
+            StorageMetadata sm = adapter.put(na, TestUtil.getInputStreamOfRandomBytes(8192));
+            Assert.assertNotNull(sm);
+            
+            adapter.get(sm.getStorageLocation(), TestUtil.getOutputStreamThatFails(true)); // provoke IOException
+            Assert.fail("expected WriteException: call succeeded");
+        } catch (WriteException expected) {
             log.info("caught expected: " + expected);
         } catch (Exception unexpected) {
             log.error("unexpected exception", unexpected);
@@ -164,6 +198,14 @@ public class SwiftStorageAdapterTest {
             log.debug("testPutGetDelete put: " + artifactURI);
             StorageMetadata sm = adapter.put(na, new ByteArrayInputStream(data));
             log.info("testPutGetDelete put: " + artifactURI + " to " + sm.getStorageLocation());
+            
+            // verify metadata
+            StorageMetadata persisted = adapter.getMeta(sm.getStorageLocation());
+            Assert.assertNotNull(persisted);
+            Assert.assertTrue("valid", persisted.isValid());
+            Assert.assertEquals(na.contentChecksum, persisted.getContentChecksum());
+            Assert.assertEquals(na.contentLength, persisted.getContentLength());
+            Assert.assertEquals(na.getArtifactURI(), persisted.artifactURI);
             
             // verify data stored
             log.debug("testPutGetDelete get: " + artifactURI);
@@ -209,7 +251,16 @@ public class SwiftStorageAdapterTest {
             StorageMetadata sm = adapter.put(na, new ByteArrayInputStream(data));
             log.info("testPutGetDeleteMinimal put: " + artifactURI + " to " + sm.getStorageLocation());
             
-            // verify data stored
+            // verify metadata
+            StorageMetadata persisted = adapter.getMeta(sm.getStorageLocation());
+            log.info("persisted: " + persisted);
+            Assert.assertNotNull(persisted);
+            Assert.assertTrue("valid", persisted.isValid());
+            Assert.assertEquals(expectedChecksum, persisted.getContentChecksum());
+            Assert.assertEquals(data.length, persisted.getContentLength().longValue());
+            Assert.assertEquals(na.getArtifactURI(), persisted.artifactURI);
+            
+            // verify data
             log.debug("testPutGetDeleteMinimal get: " + artifactURI);
             ByteArrayOutputStream bos = new ByteArrayOutputStream();
             adapter.get(sm.getStorageLocation(), bos);
@@ -219,8 +270,6 @@ public class SwiftStorageAdapterTest {
             log.info("testPutGetDeleteMinimal get: " + artifactURI + " " + actual.length + " " + actualChecksum);
             Assert.assertEquals("length", data.length, actual.length);
             Assert.assertEquals("checksum", expectedChecksum, actualChecksum);
-            
-            // TODO: verify metadata captured without using iterator
             
             log.debug("testPutGetDeleteMinimal delete: " + sm.getStorageLocation());
             adapter.delete(sm.getStorageLocation());
@@ -271,7 +320,7 @@ public class SwiftStorageAdapterTest {
         na.contentLength = numBytes;
             
         try {
-            InputStream istream = getInputStreamThatFails();
+            InputStream istream = TestUtil.getInputStreamThatFails();
             log.info("testPutCheckDeleteLargeStreamReject put: " + artifactURI + " " + numBytes);
             StorageMetadata sm = adapter.put(na, istream);
             Assert.fail("expected ByteLimitExceededException, got: " + sm);
@@ -294,7 +343,7 @@ public class SwiftStorageAdapterTest {
         long numBytes = (long) 6 * 1024 * 1024 * 1024; 
             
         try {
-            InputStream istream = getInputStreamOfRandomBytes(numBytes);
+            InputStream istream = TestUtil.getInputStreamOfRandomBytes(numBytes);
             log.info("testPutCheckDeleteLargeStreamFail put: " + artifactURI + " " + numBytes);
             StorageMetadata sm = adapter.put(na, istream);
             
@@ -311,23 +360,15 @@ public class SwiftStorageAdapterTest {
     
     @Test
     public void testIterator() {
-        
-        int iterNum = 66;
+        int iterNum = 13;
+        long datalen = 8192L;
         try {
-            MessageDigest md = MessageDigest.getInstance("MD5");
-            Random rnd = new Random();
-            byte[] data = new byte[1024];
-            
             SortedSet<StorageMetadata> expected = new TreeSet<>();
             for (int i = 0; i < iterNum; i++) {
                 URI artifactURI = URI.create("cadc:TEST/testIterator-" + i);
-                rnd.nextBytes(data);
                 NewArtifact na = new NewArtifact(artifactURI);
-                md.update(data);
-                // contentChecksum currently required for round-trip
-                na.contentChecksum = URI.create("md5:" + HexUtil.toHex(md.digest()));
-                na.contentLength = (long) data.length;
-                StorageMetadata sm = adapter.put(na, new ByteArrayInputStream(data));
+                na.contentLength = (long) datalen;
+                StorageMetadata sm = adapter.put(na, TestUtil.getInputStreamOfRandomBytes(datalen));
                 Assert.assertNotNull(sm.artifactURI);
                 //Assert.assertNotNull(sm.contentLastModified);
                 log.debug("testIterator put: " + artifactURI + " to " + sm.getStorageLocation());
@@ -371,22 +412,15 @@ public class SwiftStorageAdapterTest {
     
     @Test
     public void testIteratorBucketPrefix() {
-        
-        int iterNum = 66;
+        int iterNum = 13;
+        long datalen = 8192L;
         try {
-            MessageDigest md = MessageDigest.getInstance("MD5");
-            Random rnd = new Random();
-            byte[] data = new byte[1024];
-            
             SortedSet<StorageMetadata> expected = new TreeSet<>();
             for (int i = 0; i < iterNum; i++) {
                 URI artifactURI = URI.create("cadc:TEST/testIteratorBucketPrefix-" + i);
-                rnd.nextBytes(data);
                 NewArtifact na = new NewArtifact(artifactURI);
-                md.update(data);
-                na.contentChecksum = URI.create("md5:" + HexUtil.toHex(md.digest()));
-                na.contentLength = (long) data.length;
-                StorageMetadata sm = adapter.put(na, new ByteArrayInputStream(data));
+                na.contentLength = (long) datalen;
+                StorageMetadata sm = adapter.put(na,  TestUtil.getInputStreamOfRandomBytes(datalen));
                 log.debug("testList put: " + artifactURI + " to " + sm.getStorageLocation());
                 expected.add(sm);
             }
@@ -409,154 +443,5 @@ public class SwiftStorageAdapterTest {
             log.error("unexpected exception", ex);
             Assert.fail("unexpected exception: " + ex);
         }
-    }
-    
-    @Test
-    public void testList() {
-        
-        try {
-            MessageDigest md = MessageDigest.getInstance("MD5");
-            Random rnd = new Random();
-            byte[] data = new byte[1024];
-            
-            SortedSet<StorageMetadata> expected = new TreeSet<>();
-            for (int i = 0; i < 10; i++) {
-                URI artifactURI = URI.create("cadc:TEST/testList-" + i);
-                rnd.nextBytes(data);
-                NewArtifact na = new NewArtifact(artifactURI);
-                md.update(data);
-                na.contentChecksum = URI.create("md5:" + HexUtil.toHex(md.digest()));
-                na.contentLength = (long) data.length;
-                StorageMetadata sm = adapter.put(na, new ByteArrayInputStream(data));
-                log.debug("testList put: " + artifactURI + " to " + sm.getStorageLocation());
-                expected.add(sm);
-            }
-            log.info("testList created: " + expected.size());
-            
-            Set<StorageMetadata> actual = adapter.list(null);
-            
-            Assert.assertEquals("list.size", expected.size(), actual.size());
-            Iterator<StorageMetadata> ei = expected.iterator();
-            Iterator<StorageMetadata> ai = actual.iterator();
-            while (ei.hasNext()) {
-                StorageMetadata em = ei.next();
-                StorageMetadata am = ai.next();
-                log.debug("compare: " + em.getStorageLocation() + " vs " + am.getStorageLocation());
-                Assert.assertEquals("order", em, am);
-                Assert.assertEquals("length", em.getContentLength(), am.getContentLength());
-                Assert.assertEquals("checksum", em.getContentChecksum(), am.getContentChecksum());
-            }
-            
-        } catch (Exception ex) {
-            log.error("unexpected exception", ex);
-            Assert.fail("unexpected exception: " + ex);
-        }
-    }
-    
-    @Test
-    public void testListBucketPrefix() {
-        
-        try {
-            MessageDigest md = MessageDigest.getInstance("MD5");
-            Random rnd = new Random();
-            byte[] data = new byte[1024];
-            
-            SortedSet<StorageMetadata> expected = new TreeSet<>();
-            for (int i = 0; i < 10; i++) {
-                URI artifactURI = URI.create("cadc:TEST/testListBucketPrefix-" + i);
-                rnd.nextBytes(data);
-                NewArtifact na = new NewArtifact(artifactURI);
-                md.update(data);
-                na.contentChecksum = URI.create("md5:" + HexUtil.toHex(md.digest()));
-                na.contentLength = (long) data.length;
-                StorageMetadata sm = adapter.put(na, new ByteArrayInputStream(data));
-                log.debug("testList put: " + artifactURI + " to " + sm.getStorageLocation());
-                expected.add(sm);
-            }
-            log.info("testListBucketPrefix created: " + expected.size());
-            
-            int found = 0;
-            for (byte b = 0; b < 16; b++) {
-                String bpre = HexUtil.toHex(b).substring(1);
-                log.info("bucket prefix: " + bpre);
-                Set<StorageMetadata> bset = adapter.list(bpre);
-                Iterator<StorageMetadata> i = bset.iterator();
-                while (i.hasNext()) {
-                    StorageMetadata sm = i.next();
-                    Assert.assertTrue("prefix match", sm.getStorageLocation().storageBucket.startsWith(bpre));
-                    found++;
-                }
-            }
-            Assert.assertEquals("found with bucketPrefix", expected.size(), found);
-            
-        } catch (Exception ex) {
-            log.error("unexpected exception", ex);
-            Assert.fail("unexpected exception: " + ex);
-        }
-    }
-    
-    
-    private InputStream getInputStreamOfRandomBytes(long numBytes) {
-        
-        Random rnd = new Random();
-        byte val = (byte) rnd.nextInt(127);
-        
-        
-        return new InputStream() {
-            long tot = 0L;
-            long ncalls = 0L;
-            
-            @Override
-            public int read() throws IOException {
-                throw new UnsupportedOperationException();
-            }
-            
-            @Override
-            public int read(byte[] bytes) throws IOException {
-                int ret = super.read(bytes, 0, bytes.length);
-                return ret;
-            }
-
-            @Override
-            public int read(byte[] bytes, int off, int len) throws IOException {
-                if (len == 0) {
-                    return 0;
-                }
-                
-                if (tot >= numBytes) {
-                    return -1;
-                }
-                long rem = numBytes - tot;
-                long ret = Math.min(len, rem);
-                Arrays.fill(bytes, val);
-                tot += ret;
-                ncalls++;
-                if ((ncalls % 10000) == 0) {
-                    long mib = tot / (1024L * 1024L);
-                    log.info("output: " + mib + " MiB");
-                }
-                return (int) ret;
-            }
-        };
-    }
-    
-    private InputStream getInputStreamThatFails() {
-        return new InputStream() {
-            
-            @Override
-            public int read() throws IOException {
-                throw new RuntimeException("BUG: stream should not be read");
-            }
-            
-            @Override
-            public int read(byte[] bytes) throws IOException {
-                throw new RuntimeException("BUG: stream should not be read");
-            }
-
-            @Override
-            public int read(byte[] bytes, int off, int len) throws IOException {
-                throw new RuntimeException("BUG: stream should not be read");
-            }
-        };
     }
 }
