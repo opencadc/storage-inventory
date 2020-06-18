@@ -67,6 +67,7 @@
 
 package org.opencadc.inventory.storage.fs;
 
+import ca.nrc.cadc.io.MultiBufferIO;
 import ca.nrc.cadc.io.ReadException;
 import ca.nrc.cadc.io.ThreadedIO;
 import ca.nrc.cadc.io.WriteException;
@@ -80,6 +81,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.io.RandomAccessFile;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.ByteBuffer;
@@ -103,6 +105,7 @@ import java.util.UUID;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.StorageLocation;
+import org.opencadc.inventory.storage.ByteRange;
 import org.opencadc.inventory.storage.NewArtifact;
 import org.opencadc.inventory.storage.StorageAdapter;
 import org.opencadc.inventory.storage.StorageEngageException;
@@ -309,7 +312,7 @@ public class FileSystemStorageAdapter implements StorageAdapter {
         throws ResourceNotFoundException, ReadException, WriteException, StorageEngageException, TransientException {
         InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "storageLocation", storageLocation);
         InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "dest", dest);
-        log.debug("get storageID: " + storageLocation.getStorageID());
+        log.debug("get: " + storageLocation);
 
         Path path = createStorageLocationPath(storageLocation);
         if (!Files.exists(path)) {
@@ -324,9 +327,50 @@ public class FileSystemStorageAdapter implements StorageAdapter {
         } catch (IOException e) {
             throw new StorageEngageException("failed to create input stream to file system", e);
         }
-        ThreadedIO io = new ThreadedIO();
-        io.ioLoop(dest, source);
+
+        MultiBufferIO io = new MultiBufferIO();
+        try {
+            io.copy(source, dest);
+        } catch (InterruptedException ex) {
+            log.debug("get interrupted", ex);
+        }
     }
+
+    @Override
+    public void get(StorageLocation storageLocation, OutputStream dest, SortedSet<ByteRange> byteRanges) 
+        throws ResourceNotFoundException, ReadException, WriteException, StorageEngageException, TransientException {
+        InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "storageLocation", storageLocation);
+        InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "dest", dest);
+        InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "byteRanges", byteRanges);
+        log.debug("get: " + storageLocation + " " + byteRanges.size());
+
+        Path path = createStorageLocationPath(storageLocation);
+        if (!Files.exists(path)) {
+            throw new ResourceNotFoundException("not found: " + storageLocation.getStorageID());
+        }
+        if (!Files.isRegularFile(path)) {
+            throw new IllegalArgumentException("not found: " + storageLocation.getStorageID());
+        }
+        InputStream source = null;
+        try {
+            if (!byteRanges.isEmpty()) {
+                RandomAccessFile raf = new RandomAccessFile(path.toFile(), "r");
+                source = new PartialReadInputStream(raf, byteRanges);
+            } else {
+                source = Files.newInputStream(path, StandardOpenOption.READ);
+            }
+        } catch (IOException e) {
+            throw new StorageEngageException("failed to create input stream for stored file: " + storageLocation, e);
+        }
+        
+        MultiBufferIO io = new MultiBufferIO();
+        try {
+            io.copy(source, dest);
+        } catch (InterruptedException ex) {
+            log.debug("get interrupted", ex);
+        }
+    }
+    
     
     /**
      * Get from storage the artifact identified by storageLocation.
@@ -344,7 +388,7 @@ public class FileSystemStorageAdapter implements StorageAdapter {
     @Override
     public void get(StorageLocation storageLocation, OutputStream dest, Set<String> cutouts)
         throws ResourceNotFoundException, ReadException, WriteException, StorageEngageException, TransientException {
-        throw new UnsupportedOperationException("cutouts not supported");
+        throw new UnsupportedOperationException();
     }
     
     /**
@@ -405,8 +449,8 @@ public class FileSystemStorageAdapter implements StorageAdapter {
             OutputStream out = Files.newOutputStream(txnTarget, StandardOpenOption.WRITE, StandardOpenOption.CREATE_NEW);
             MessageDigest digest = MessageDigest.getInstance("MD5");
             DigestOutputStream digestOut = new DigestOutputStream(out, digest);
-            ThreadedIO threadedIO = new ThreadedIO();
-            threadedIO.ioLoop(digestOut, source);
+            MultiBufferIO io = new MultiBufferIO();
+            io.copy(source, digestOut);
             digestOut.flush();
 
             byte[] md5sum = digest.digest();
