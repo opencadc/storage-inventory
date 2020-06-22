@@ -69,10 +69,9 @@ package org.opencadc.inventory.storage.swift;
 
 import ca.nrc.cadc.io.ByteCountInputStream;
 import ca.nrc.cadc.io.ByteLimitExceededException;
+import ca.nrc.cadc.io.MultiBufferIO;
 import ca.nrc.cadc.io.ReadException;
-import ca.nrc.cadc.io.ThreadedIO;
 import ca.nrc.cadc.io.WriteException;
-import ca.nrc.cadc.net.HttpGet;
 import ca.nrc.cadc.net.IncorrectContentChecksumException;
 import ca.nrc.cadc.net.IncorrectContentLengthException;
 import ca.nrc.cadc.net.PreconditionFailedException;
@@ -80,7 +79,6 @@ import ca.nrc.cadc.net.ResourceAlreadyExistsException;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.util.HexUtil;
-import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
@@ -88,7 +86,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.SocketException;
 import java.net.URI;
-import java.net.URL;
+import java.net.URISyntaxException;
 import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -101,16 +99,16 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeMap;
-import java.util.TreeSet;
 import java.util.UUID;
 import org.apache.log4j.Logger;
 import org.javaswift.joss.client.factory.AccountConfig;
 import org.javaswift.joss.client.factory.AccountFactory;
 import org.javaswift.joss.client.factory.AuthenticationMethod;
-import org.javaswift.joss.client.factory.AuthenticationMethod.AccessProvider;
 import org.javaswift.joss.client.factory.TempUrlHashPrefixSource;
 import org.javaswift.joss.exception.CommandException;
 import org.javaswift.joss.exception.Md5ChecksumException;
+import org.javaswift.joss.headers.object.range.MidPartRange;
+import org.javaswift.joss.instructions.DownloadInstructions;
 import org.javaswift.joss.instructions.UploadInstructions;
 import org.javaswift.joss.model.Access;
 import org.javaswift.joss.model.Account;
@@ -119,6 +117,7 @@ import org.javaswift.joss.model.DirectoryOrObject;
 import org.javaswift.joss.model.StoredObject;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.StorageLocation;
+import org.opencadc.inventory.storage.ByteRange;
 import org.opencadc.inventory.storage.NewArtifact;
 import org.opencadc.inventory.storage.StorageAdapter;
 import org.opencadc.inventory.storage.StorageEngageException;
@@ -145,8 +144,14 @@ public class SwiftStorageAdapter  implements StorageAdapter {
     static final String KEY_SCHEME = "sb"; // same scheme as the S3StorageAdapterSB for now
     static final int BUFFER_SIZE_BYTES = 8192;
     static final String DEFAULT_CHECKSUM_ALGORITHM = "md5";
-    static final String CHECKSUM_KEY = "checksum";
-    static final String ARTIFACT_URI_KEY = "uri";
+    
+    // ceph or swift does all kinds of mangling of metadata keys (char substitution, truncation, case changes)
+    // javaswift lib seems to at least force keys in the Map to lower case to protect aginst some of it
+    static final String ARTIFACT_ID_ATTR = "org.opencadc.artifactid";
+    static final String CONTENT_CHECKSUM_ATTR = "org.opencadc.contentchecksum";
+    
+    private static final int CIRC_BUFFERS = 3;
+    private static final int CIRC_BUFFERSIZE = 64 * 1024;
 
     protected final int storageBucketLength;
     protected final String storageBucket;
@@ -246,43 +251,6 @@ public class SwiftStorageAdapter  implements StorageAdapter {
         }
     }
 
-    private static class AccessWorkaroundHack implements Access {
-
-        private String token;
-        private String storageURL;
-        
-        @Override
-        public void setPreferredRegion(String string) {
-            //ignore
-        }
-
-        @Override
-        public String getToken() {
-            return token;
-        }
-
-        @Override
-        public String getInternalURL() {
-            return null;
-        }
-
-        @Override
-        public String getPublicURL() {
-            return storageURL;
-        }
-
-        @Override
-        public boolean isTenantSupplied() {
-            return true; // via {username}:{tenant}
-        }
-
-        @Override
-        public String getTempUrlPrefix(TempUrlHashPrefixSource tuhps) {
-            return null;
-        }
-        
-    }
-    
     private void init() {
         this.swiftContainer = client.getContainer(internalBucket.name);
         if (swiftContainer.exists()) {
@@ -353,16 +321,20 @@ public class SwiftStorageAdapter  implements StorageAdapter {
     public void get(StorageLocation storageLocation, OutputStream dest)
             throws ResourceNotFoundException, ReadException, WriteException, StorageEngageException {
         log.debug("get: " + storageLocation);
-        String bucket = toInternalBucket(storageLocation).name;
+        //String bucket = toInternalBucket(storageLocation).name;
         String key = storageLocation.getStorageID().toASCIIString();
         StoredObject obj = swiftContainer.getObject(key);
         if (!obj.exists()) {
             throw new ResourceNotFoundException("not found: " + storageLocation);
         }
         
-        try (final InputStream inputStream = obj.downloadObjectAsInputStream()) {
-            ThreadedIO tio = new ThreadedIO(BUFFER_SIZE_BYTES, 8);
-            tio.ioLoop(dest, inputStream);
+        try (final InputStream source = obj.downloadObjectAsInputStream()) {
+            //ThreadedIO tio = new ThreadedIO(BUFFER_SIZE_BYTES, 8);
+            //tio.ioLoop(dest, inputStream);
+            MultiBufferIO io = new MultiBufferIO(CIRC_BUFFERS, CIRC_BUFFERSIZE);
+            io.copy(source, dest);
+        } catch (InterruptedException ex) {
+            log.debug("get interrupted", ex);
         } catch (ReadException | WriteException e) {
             // Handle before the IOException below so it's not wrapped into that catch.
             throw e;
@@ -371,6 +343,45 @@ public class SwiftStorageAdapter  implements StorageAdapter {
         }
     }
 
+    @Override
+    public void get(StorageLocation storageLocation, OutputStream dest, SortedSet<ByteRange> byteRanges) 
+        throws ResourceNotFoundException, ReadException, WriteException, StorageEngageException, TransientException {
+        log.debug("get: " + storageLocation);
+        //String bucket = toInternalBucket(storageLocation).name;
+        String key = storageLocation.getStorageID().toASCIIString();
+        StoredObject obj = swiftContainer.getObject(key);
+        if (!obj.exists()) {
+            throw new ResourceNotFoundException("not found: " + storageLocation);
+        }
+        
+        DownloadInstructions di = new DownloadInstructions();
+        if (!byteRanges.isEmpty()) {
+            Iterator<ByteRange> iter = byteRanges.iterator();
+            ByteRange br = iter.next();
+            if (iter.hasNext()) {
+                throw new UnsupportedOperationException("multiple byte ranges not supported");
+            }
+            
+            long endPos = br.getOffset() + br.getLength() - 1L; // RFC7233 range is inclusive
+            //di.setRange(new MidPartRange(br.getOffset(), endPos)); // published javaswift 0.10.4 constructor: MidPartRange(int, int)
+            di.setRange(new JossRangeWorkaround(br.getOffset(), endPos));
+        }
+        try (final InputStream source = obj.downloadObjectAsInputStream(di)) {
+            //ThreadedIO tio = new ThreadedIO(BUFFER_SIZE_BYTES, 8);
+            //tio.ioLoop(dest, inputStream);
+            MultiBufferIO io = new MultiBufferIO(CIRC_BUFFERS, CIRC_BUFFERSIZE);
+            io.copy(source, dest);
+        } catch (InterruptedException ex) {
+            log.debug("get interrupted", ex);
+        } catch (ReadException | WriteException e) {
+            // Handle before the IOException below so it's not wrapped into that catch.
+            throw e;
+        } catch (IOException ex) {
+            throw new ReadException("close stream failure", ex);
+        }
+    }
+    
+    
     /**
      * Get from storage the artifact identified by storageLocation with cutout specifications. Currently needs full
      * implementation.
@@ -437,12 +448,13 @@ public class SwiftStorageAdapter  implements StorageAdapter {
             if (newArtifact.contentChecksum != null) {
                 alg = newArtifact.contentChecksum.getScheme(); // TODO: try sha1 in here
             }
-            MessageDigest md = MessageDigest.getInstance(DEFAULT_CHECKSUM_ALGORITHM);
-            DigestInputStream dis = new DigestInputStream(source, md);
-            ByteCountInputStream bcis = new ByteCountInputStream(dis);
+            TrapFailInputStream trap = new TrapFailInputStream(source);
+            ByteCountInputStream bcis = new ByteCountInputStream(trap);
+            DigestInputStream dis = new DigestInputStream(bcis, MessageDigest.getInstance(DEFAULT_CHECKSUM_ALGORITHM));
+            
 
             StoredObject obj = swiftContainer.getObject(loc.getStorageID().toASCIIString());
-            UploadInstructions up = new UploadInstructions(bcis);
+            UploadInstructions up = new UploadInstructions(dis);
             if (newArtifact.contentChecksum != null && "MD5".equalsIgnoreCase(newArtifact.contentChecksum.getScheme())) {
                 up.setMd5(newArtifact.contentChecksum.getSchemeSpecificPart());
             }
@@ -453,14 +465,17 @@ public class SwiftStorageAdapter  implements StorageAdapter {
                 if (bcis.getByteCount() >= CEPH_UPLOAD_LIMIT && hasWriteFailSocketException(ex)) {
                     throw new ByteLimitExceededException("put exceeds size limit (" + CEPH_UPLOAD_LIMIT_MSG + ") for simple stream", CEPH_UPLOAD_LIMIT);
                 }
+                if (trap.fail != null) {
+                    throw new ReadException("read from input stream failed", trap.fail);
+                }
                 throw ex;
             }
             
-            String etag = obj.getEtag();
-            String slm = obj.getLastModified();
-            log.debug("after upload: etag=" + etag + " len=" + obj.getContentLength());
+            //String etag = obj.getEtag();
+            //String slm = obj.getLastModified();
+            //log.debug("after upload: etag=" + etag + " len=" + obj.getContentLength());
                     
-            final URI contentChecksum = URI.create(DEFAULT_CHECKSUM_ALGORITHM + ":" + HexUtil.toHex(md.digest()));
+            final URI contentChecksum = URI.create(DEFAULT_CHECKSUM_ALGORITHM + ":" + HexUtil.toHex(dis.getMessageDigest().digest()));
             
             if (newArtifact.contentChecksum != null && !contentChecksum.equals(newArtifact.contentChecksum)) {
                 obj.delete();
@@ -475,8 +490,8 @@ public class SwiftStorageAdapter  implements StorageAdapter {
             final Date lastModified = obj.getLastModifiedAsDate();
             
             Map<String,Object> metadata = new TreeMap<>();
-            metadata.put(ARTIFACT_URI_KEY, newArtifact.getArtifactURI().toASCIIString());
-            metadata.put(CHECKSUM_KEY, contentChecksum.toASCIIString());
+            metadata.put(ARTIFACT_ID_ATTR, newArtifact.getArtifactURI().toASCIIString());
+            metadata.put(CONTENT_CHECKSUM_ATTR, contentChecksum.toASCIIString());
             obj.setMetadata(metadata);
             //obj.saveMetadata();
             
@@ -486,6 +501,81 @@ public class SwiftStorageAdapter  implements StorageAdapter {
             throw new PreconditionFailedException("checksum mismatch: " + newArtifact.contentChecksum + " did not match content");
         } catch (NoSuchAlgorithmException ex) {
             throw new RuntimeException("failed to create MessageDigest: " + DEFAULT_CHECKSUM_ALGORITHM);
+        }
+    }
+    
+    private static class TrapFailInputStream extends InputStream {
+        IOException fail;
+        final InputStream istream;
+
+        public TrapFailInputStream(InputStream istream) {
+            this.istream = istream;
+        }
+        
+        @Override
+        public int read() throws IOException {
+            try {
+                return istream.read();
+            } catch (IOException ex) {
+                this.fail = ex;
+                throw ex;
+            }
+        }
+
+        @Override
+        public int read(byte[] bytes) throws IOException {
+            try {
+                return istream.read(bytes);
+            } catch (IOException ex) {
+                this.fail = ex;
+                throw ex;
+            }
+        }
+        
+        @Override
+        public int read(byte[] bytes, int off, int len) throws IOException {
+            try {
+                return istream.read(bytes, off, len);
+            } catch (IOException ex) {
+                this.fail = ex;
+                throw ex;
+            }
+        }
+    }
+    
+    // method used in integration tests to verify put
+    StorageMetadata getMeta(StorageLocation storageLocation)
+        throws ResourceNotFoundException, StorageEngageException {
+        log.debug("getMeta: " + storageLocation);
+        String key = storageLocation.getStorageID().toASCIIString();
+        StoredObject obj = swiftContainer.getObject(key);
+        if (!obj.exists()) {
+            throw new ResourceNotFoundException("not found: " + storageLocation);
+        }
+        return objectToStorageMetadata(obj);
+    }
+    
+    // also used by iterator
+    private StorageMetadata objectToStorageMetadata(StoredObject obj) {
+        final StorageLocation loc = toExternal(internalBucket, obj.getName());
+        try {
+            Map<String,Object> meta = obj.getMetadata();
+            String scs = (String) meta.get(CONTENT_CHECKSUM_ATTR);
+            String auri = (String) meta.get(ARTIFACT_ID_ATTR);
+
+            if (scs == null || auri == null) {
+                // put failed to set metadata after writing the file: invalid
+                //log.warn("found invalid: " + loc);
+                return new StorageMetadata(loc);
+            }
+
+            URI md5 = new URI(scs);
+            URI artifactURI = new URI(auri);
+
+            return toStorageMetadata(loc, md5, obj.getContentLength(), artifactURI, obj.getLastModifiedAsDate());
+        } catch (IllegalArgumentException | IllegalStateException | URISyntaxException ex) {
+            //log.warn("found invalid: " + loc, ex);
+            return new StorageMetadata(loc);
         }
     }
 
@@ -554,25 +644,6 @@ public class SwiftStorageAdapter  implements StorageAdapter {
         return new StorageMetadataIterator(bucketPrefix);
     }
 
-    /**
-     * Get the set of items in the given bucket.
-     *
-     * @param storageBucket Only iterate over items in this bucket.
-     * @return An iterator over an ordered list of items in this storage bucket.
-     *
-     * @throws StorageEngageException If the adapter failed to interact with storage.
-     * @throws TransientException If an unexpected, temporary exception occurred.
-     */
-    public SortedSet<StorageMetadata> list(String storageBucket)
-            throws StorageEngageException, TransientException {
-        SortedSet<StorageMetadata> ret = new TreeSet<>();
-        Iterator<StorageMetadata> i = iterator(storageBucket);
-        while (i.hasNext()) {
-            ret.add(i.next());
-        }
-        return ret;
-    }
-    
     private class StorageMetadataIterator implements Iterator<StorageMetadata> {
 
         private static final int BATCH_SIZE = 1000;
@@ -625,27 +696,7 @@ public class SwiftStorageAdapter  implements StorageAdapter {
             log.debug("next: name=" + obj.getName() + " len=" + obj.getContentLength());
             this.nextMarkerKey = obj.getName();
             
-            try {
-                final StorageLocation loc = toExternal(internalBucket, obj.getName());
-            
-                Map<String,Object> meta = obj.getMetadata();
-                String scs = (String) meta.get(CHECKSUM_KEY);
-                String auri = (String) meta.get(ARTIFACT_URI_KEY);
-
-                if (scs == null || auri == null) {
-                    // put failed to set metadata after writing the file: invalid
-                    log.debug("found invalid: " + loc);
-                    return new StorageMetadata(new StorageLocation(URI.create("invalid:" + obj.getName())));
-                }
-
-                URI md5 = URI.create(scs);
-                URI artifactURI = URI.create(auri);
-
-                return toStorageMetadata(loc, md5, obj.getContentLength(), artifactURI, obj.getLastModifiedAsDate());
-            } catch (IllegalStateException ex) {
-                // this form is sufficient be used for delete
-                return new StorageMetadata(new StorageLocation(URI.create("invalid:" + obj.getName())));
-            }
+            return objectToStorageMetadata(obj);
         }
         
     }
