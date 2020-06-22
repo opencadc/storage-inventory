@@ -92,22 +92,29 @@ public class StorageIsAlwaysRight extends ResolutionPolicy {
     public void resolve(final Artifact artifact, final StorageMetadata storageMetadata) throws Exception {
         if (artifact == null) {
             // The Inventory has a file that does not exist in storage.  This is most unusual.
-            reporter.report(String.format("Adding Artifact %s as per policy.", storageMetadata.getStorageLocation()));
+            reporter.report("Adding Artifact " + storageMetadata.getStorageLocation() + " as per policy.");
 
             validateEventListener.createArtifact(storageMetadata);
         } else if (storageMetadata == null) {
-            reporter.report(String.format("Removing Unknown Artifact %s as per policy.", artifact.storageLocation));
+            reporter.report("Removing Unknown Artifact " + artifact.storageLocation + " as per policy.");
             validateEventListener.delete(artifact);
         } else {
             // Check metadata for discrepancies.
             if (haveDifferentStructure(artifact, storageMetadata)) {
-                // Then prefer the Storage Metadata.
-                reporter.report(String.format("Replacing Artifact %s as per policy.", artifact.storageLocation));
+                // The metadata differs, but for valid reasons (update).
+                if (storageMetadata.isValid()) {
+                    // Then prefer the Storage Metadata.
+                    reporter.report("Replacing Artifact " + artifact.storageLocation + " as per policy.");
 
-                validateEventListener.replaceArtifact(artifact, storageMetadata);
+                    validateEventListener.replaceArtifact(artifact, storageMetadata);
+                } else {
+                    // If storage is always right, but it has no metadata, then leave it for someone to manually fix.
+                    reporter.report("Corrupt or invalid Storage Metadata (" + storageMetadata.getStorageLocation()
+                                    + ").  Skipping as per policy.");
+                }
             } else {
-                reporter.report(String.format("Storage Metadata %s is valid as per policy.",
-                                              storageMetadata.getStorageLocation()));
+                reporter.report("Storage Metadata " + storageMetadata.getStorageLocation()
+                                + " is valid as per policy.");
             }
         }
     }

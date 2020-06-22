@@ -160,11 +160,14 @@ public class InventoryIsAlwaysRightTest extends AbstractResolutionPolicyTest<Inv
         final List<String> outputLines = Arrays.asList(new String(output.toByteArray()).split("\n"));
         System.out.println(String.format("Message lines are \n\n%s\n\n", outputLines));
 
-        assertListContainsMessage(outputLines, "Replacing File StorageLocation[s3:989877] as per policy.");
-        Assert.assertTrue("Should have called resetArtifact.",
+        assertListContainsMessage(outputLines,
+                                  "Corrupt or invalid Storage Metadata (StorageLocation[s3:989877]).  "
+                                  + "Removing as per policy.");
+
+        Assert.assertTrue("Should only have called deleteStorageMetadata.",
                           !testEventListener.deleteArtifactCalled
                           && !testEventListener.addArtifactCalled
-                          && testEventListener.resetArtifactCalled
+                          && !testEventListener.resetArtifactCalled
                           && testEventListener.deleteStorageMetadataCalled
                           && !testEventListener.replaceArtifactCalled);
     }

@@ -95,7 +95,10 @@ public class RecoverFromStorage extends ResolutionPolicy {
      */
     @Override
     public void resolve(final Artifact artifact, final StorageMetadata storageMetadata) throws Exception {
-        if (artifact == null) {
+        if (!storageMetadata.isValid()) {
+            reporter.report("Corrupt or invalid Storage Metadata (" + storageMetadata.getStorageLocation()
+                            + ").  Skipping as per policy.");
+        } else if (artifact == null) {
             reporter.report(String.format("Adding Artifact %s as per policy.", storageMetadata.getStorageLocation()));
             validateEventListener.createArtifact(storageMetadata);
         } else {
