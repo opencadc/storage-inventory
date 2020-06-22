@@ -250,43 +250,6 @@ public class SwiftStorageAdapter  implements StorageAdapter {
         }
     }
 
-    private static class AccessWorkaroundHack implements Access {
-
-        private String token;
-        private String storageURL;
-        
-        @Override
-        public void setPreferredRegion(String string) {
-            //ignore
-        }
-
-        @Override
-        public String getToken() {
-            return token;
-        }
-
-        @Override
-        public String getInternalURL() {
-            return null;
-        }
-
-        @Override
-        public String getPublicURL() {
-            return storageURL;
-        }
-
-        @Override
-        public boolean isTenantSupplied() {
-            return true; // via {username}:{tenant}
-        }
-
-        @Override
-        public String getTempUrlPrefix(TempUrlHashPrefixSource tuhps) {
-            return null;
-        }
-        
-    }
-    
     private void init() {
         this.swiftContainer = client.getContainer(internalBucket.name);
         if (swiftContainer.exists()) {
@@ -398,8 +361,9 @@ public class SwiftStorageAdapter  implements StorageAdapter {
                 throw new UnsupportedOperationException("multiple byte ranges not supported");
             }
             
-            long endPos = br.getOffset() + br.getLength() - 1L;
-            di.setRange(new MidPartRange((int) br.getOffset(), (int) endPos)); // HACK: javaswift API uses int!!!
+            long endPos = br.getOffset() + br.getLength() - 1L; // RFC7233 range is inclusive
+            //di.setRange(new MidPartRange(br.getOffset(), endPos)); // published javaswift 0.10.4 constructor: MidPartRange(int, int)
+            di.setRange(new JossRangeWorkaround(br.getOffset(), endPos));
         }
         try (final InputStream source = obj.downloadObjectAsInputStream(di)) {
             //ThreadedIO tio = new ThreadedIO(BUFFER_SIZE_BYTES, 8);

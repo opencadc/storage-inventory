@@ -65,80 +65,33 @@
 ************************************************************************
 */
 
-package org.opencadc.inventory.storage;
+package org.opencadc.inventory.storage.swift;
 
-import ca.nrc.cadc.util.HashUtil;
 import org.apache.log4j.Logger;
+import org.javaswift.joss.headers.object.range.AbstractRange;
 
 /**
- * Single byte range expressed as an offset (starting position) and length.
+ * Temporary replacement for org.javaswift.joss.headers.object.range.MidPartRange
+ * because the constructor: MidPartRange(int, int).
  * 
  * @author pdowler
  */
-public class ByteRange implements Comparable<ByteRange> {
-    private static final Logger log = Logger.getLogger(ByteRange.class);
+public class JossRangeWorkaround extends AbstractRange {
+    private static final Logger log = Logger.getLogger(JossRangeWorkaround.class);
 
-    private final long offset;
-    private final long length;
-    
-    /**
-     * Byte range expresses as an offset and length.
-     * 
-     * @param offset byte offset (starting position), must be 0 or positive
-     * @param length number of bytes, must be positive
-     */
-    public ByteRange(long offset, long length) { 
-        if (offset < 0 || length <= 0) {
-            throw new IllegalArgumentException("invalid byte range: " + offset + "/" + length);
-        }
-        this.offset = offset;
-        this.length = length;
+    public JossRangeWorkaround(long startPos, long endPos) {
+        super(startPos, endPos);
     }
 
-    public long getOffset() {
-        return offset;
+    @Override
+    public long getFrom(int byteArrayLength) {
+        return offset; // startPos
     }
 
-    public long getLength() {
-        return length;
+    @Override
+    public long getTo(int byteArrayLength) {
+        return length; // endPos
     }
     
-    public boolean contains(long pos) {
-        return offset <= pos && pos < (offset + length);
-    }
-
-    @Override
-    public int compareTo(ByteRange r) {
-        if (offset + length < r.offset) {
-            return -1;
-        }
-        if (r.offset + r.length < offset) {
-            return 1;
-        }
-        if (offset == r.offset && length == r.length) {
-            return 0;
-        }
-        throw new IllegalArgumentException("cannot order overlapping: " + this + " vs " + r);
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (o instanceof ByteRange) {
-            ByteRange rhs = (ByteRange) o;
-            return (offset == rhs.offset && length == rhs.length);
-        }
-        return false;
-    }
-
-    @Override
-    public int hashCode() {
-        int ret = HashUtil.hash(HashUtil.SEED, offset);
-        ret = HashUtil.hash(ret, length);
-        return ret;
-    }
     
-    @Override
-    public String toString() {
-        return ByteRange.class.getSimpleName() + "[" + offset + "," + length + "]";
-    }
 }
