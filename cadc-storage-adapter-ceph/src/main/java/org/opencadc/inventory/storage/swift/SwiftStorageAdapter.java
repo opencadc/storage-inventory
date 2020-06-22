@@ -86,6 +86,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.SocketException;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -564,18 +565,17 @@ public class SwiftStorageAdapter  implements StorageAdapter {
 
             if (scs == null || auri == null) {
                 // put failed to set metadata after writing the file: invalid
-                log.warn("found invalid: " + loc);
-                return new StorageMetadata(new StorageLocation(URI.create("invalid:" + obj.getName())));
+                //log.warn("found invalid: " + loc);
+                return new StorageMetadata(loc);
             }
 
-            URI md5 = URI.create(scs);
-            URI artifactURI = URI.create(auri);
+            URI md5 = new URI(scs);
+            URI artifactURI = new URI(auri);
 
             return toStorageMetadata(loc, md5, obj.getContentLength(), artifactURI, obj.getLastModifiedAsDate());
-        } catch (IllegalStateException ex) {
-            // this form is sufficient be used for delete
-            log.warn("found invalid: " + loc, ex);
-            return new StorageMetadata(new StorageLocation(URI.create("invalid:" + obj.getName())));
+        } catch (IllegalArgumentException | IllegalStateException | URISyntaxException ex) {
+            //log.warn("found invalid: " + loc, ex);
+            return new StorageMetadata(loc);
         }
     }
 
