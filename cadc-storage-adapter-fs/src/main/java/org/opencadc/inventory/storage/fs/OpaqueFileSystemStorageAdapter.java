@@ -67,8 +67,8 @@
 
 package org.opencadc.inventory.storage.fs;
 
+import ca.nrc.cadc.io.MultiBufferIO;
 import ca.nrc.cadc.io.ReadException;
-import ca.nrc.cadc.io.ThreadedIO;
 import ca.nrc.cadc.io.WriteException;
 import ca.nrc.cadc.net.IncorrectContentChecksumException;
 import ca.nrc.cadc.net.IncorrectContentLengthException;
@@ -77,13 +77,12 @@ import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.util.HexUtil;
 import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.util.PropertiesReader;
-
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.io.RandomAccessFile;
 import java.net.URI;
-import java.net.URISyntaxException;
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.nio.file.FileSystem;
@@ -103,10 +102,10 @@ import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.UUID;
-
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.StorageLocation;
+import org.opencadc.inventory.storage.ByteRange;
 import org.opencadc.inventory.storage.NewArtifact;
 import org.opencadc.inventory.storage.StorageAdapter;
 import org.opencadc.inventory.storage.StorageEngageException;
@@ -152,6 +151,8 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
     private static final String CONTENT_FOLDER = "content";
 
     private static final String MD5_CHECKSUM_SCHEME = "md5";
+    private static final int CIRC_BUFFERS = 3;
+    private static final int CIRC_BUFFERSIZE = 64 * 1024;
     
     final Path txnPath;
     final Path contentPath;
@@ -263,9 +264,9 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
     @Override
     public void get(StorageLocation storageLocation, OutputStream dest)
         throws ResourceNotFoundException, ReadException, WriteException, StorageEngageException, TransientException {
-        InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "storageLocation", storageLocation);
-        InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "dest", dest);
-        log.debug("get storageID: " + storageLocation.getStorageID());
+        InventoryUtil.assertNotNull(OpaqueFileSystemStorageAdapter.class, "storageLocation", storageLocation);
+        InventoryUtil.assertNotNull(OpaqueFileSystemStorageAdapter.class, "dest", dest);
+        log.debug("get: " + storageLocation);
 
         Path path = storageLocationToPath(storageLocation);
         if (!Files.exists(path)) {
@@ -280,8 +281,59 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
         } catch (IOException e) {
             throw new StorageEngageException("failed to create input stream for stored file: " + storageLocation, e);
         }
-        ThreadedIO io = new ThreadedIO();
-        io.ioLoop(dest, source);
+
+        MultiBufferIO io = new MultiBufferIO(CIRC_BUFFERS, CIRC_BUFFERSIZE);
+        try {
+            io.copy(source, dest);
+        } catch (InterruptedException ex) {
+            log.debug("get interrupted", ex);
+        }
+    }
+    
+    /**
+     * Get parts of a stored object specified by one or more byte ranges.
+     * 
+     * @param storageLocation the object to read
+     * @param dest the output stream
+     * @param byteRanges one or more byte ranges ordered to only seek forward
+     * @throws ResourceNotFoundException
+     * @throws ReadException
+     * @throws WriteException
+     * @throws StorageEngageException
+     * @throws TransientException 
+     */
+    public void get(StorageLocation storageLocation, OutputStream dest, SortedSet<ByteRange> byteRanges)
+        throws ResourceNotFoundException, ReadException, WriteException, StorageEngageException, TransientException {
+        InventoryUtil.assertNotNull(OpaqueFileSystemStorageAdapter.class, "storageLocation", storageLocation);
+        InventoryUtil.assertNotNull(OpaqueFileSystemStorageAdapter.class, "dest", dest);
+        InventoryUtil.assertNotNull(OpaqueFileSystemStorageAdapter.class, "byteRanges", byteRanges);
+        log.debug("get: " + storageLocation + " " + byteRanges.size());
+
+        Path path = storageLocationToPath(storageLocation);
+        if (!Files.exists(path)) {
+            throw new ResourceNotFoundException("not found: " + storageLocation);
+        }
+        if (!Files.isRegularFile(path)) {
+            throw new IllegalArgumentException("not a file: " + storageLocation);
+        }
+        InputStream source = null;
+        try {
+            if (!byteRanges.isEmpty()) {
+                RandomAccessFile raf = new RandomAccessFile(path.toFile(), "r");
+                source = new PartialReadInputStream(raf, byteRanges);
+            } else {
+                source = Files.newInputStream(path, StandardOpenOption.READ);
+            }
+        } catch (IOException e) {
+            throw new StorageEngageException("failed to create input stream for stored file: " + storageLocation, e);
+        }
+        
+        MultiBufferIO io = new MultiBufferIO(CIRC_BUFFERS, CIRC_BUFFERSIZE);
+        try {
+            io.copy(source, dest);
+        } catch (InterruptedException ex) {
+            log.debug("get interrupted", ex);
+        }
     }
     
     /**
@@ -353,15 +405,14 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
         Long length = null;
         
         try {
-            OutputStream out = Files.newOutputStream(txnTarget, StandardOpenOption.WRITE, StandardOpenOption.CREATE_NEW);
-            MessageDigest digest = MessageDigest.getInstance("MD5");
-            DigestOutputStream digestOut = new DigestOutputStream(out, digest);
-            ThreadedIO threadedIO = new ThreadedIO();
-            threadedIO.ioLoop(digestOut, source);
-            digestOut.flush();
+            DigestOutputStream out = new DigestOutputStream(
+                Files.newOutputStream(txnTarget, StandardOpenOption.WRITE, StandardOpenOption.CREATE_NEW), 
+                MessageDigest.getInstance("MD5"));
+            MultiBufferIO io = new MultiBufferIO();
+            io.copy(source, out);
+            out.flush();
 
-            byte[] md5sum = digest.digest();
-            String md5Val = HexUtil.toHex(md5sum);
+            String md5Val = HexUtil.toHex(out.getMessageDigest().digest());
             checksum = URI.create(MD5_CHECKSUM_SCHEME + ":" + md5Val);
             log.debug("calculated md5sum: " + checksum);
             length = Files.size(txnTarget);

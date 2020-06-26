@@ -69,8 +69,8 @@
 package org.opencadc.inventory.storage.s3;
 
 import ca.nrc.cadc.io.ByteLimitExceededException;
+import ca.nrc.cadc.io.MultiBufferIO;
 import ca.nrc.cadc.io.ReadException;
-import ca.nrc.cadc.io.ThreadedIO;
 import ca.nrc.cadc.io.WriteException;
 import ca.nrc.cadc.net.IncorrectContentChecksumException;
 import ca.nrc.cadc.net.IncorrectContentLengthException;
@@ -79,7 +79,6 @@ import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.util.HexUtil;
 import ca.nrc.cadc.util.StringUtil;
-
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
@@ -93,21 +92,18 @@ import java.time.Instant;
 import java.util.Base64;
 import java.util.Date;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.SortedSet;
-import java.util.TreeSet;
-
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.StorageLocation;
+import org.opencadc.inventory.storage.ByteRange;
 import org.opencadc.inventory.storage.NewArtifact;
 import org.opencadc.inventory.storage.StorageAdapter;
 import org.opencadc.inventory.storage.StorageEngageException;
 import org.opencadc.inventory.storage.StorageMetadata;
-
 import software.amazon.awssdk.auth.credentials.AwsCredentials;
 import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
 import software.amazon.awssdk.awscore.exception.AwsErrorDetails;
@@ -319,6 +315,8 @@ abstract class S3StorageAdapter implements StorageAdapter {
      *
      * @param storageLocation The storage location containing storageID and storageBucket.
      * @param dest The destination stream.
+     * 
+     * @throws java.lang.InterruptedException if thread receives an interrupt
      * @throws ResourceNotFoundException If the artifact could not be found.
      * @throws ReadException If the storage system failed to stream.
      * @throws WriteException If writing failed.
@@ -326,11 +324,11 @@ abstract class S3StorageAdapter implements StorageAdapter {
      */
     @Override
     public void get(StorageLocation storageLocation, OutputStream dest)
-            throws ResourceNotFoundException, ReadException, WriteException, StorageEngageException {
+            throws InterruptedException, ResourceNotFoundException, ReadException, WriteException, StorageEngageException {
         LOGGER.debug("get: " + storageLocation);
         try (final InputStream inputStream = toObjectInputStream(storageLocation)) {
-            ThreadedIO tio = new ThreadedIO(BUFFER_SIZE_BYTES, 8);
-            tio.ioLoop(dest, inputStream);
+            MultiBufferIO tio = new MultiBufferIO();
+            tio.copy(inputStream, dest);
         } catch (NoSuchBucketException | NoSuchKeyException e) {
             throw new ResourceNotFoundException("not found: " + storageLocation);
         } catch (S3Exception | SdkClientException e) {
@@ -343,24 +341,12 @@ abstract class S3StorageAdapter implements StorageAdapter {
         }
     }
 
-    /**
-     * Get from storage the artifact identified by storageLocation with cutout specifications. Currently needs full
-     * implementation.
-     * TODO
-     * TODO Complete the implementation to check for an astronomy file (i.e. FITS, HDF5), and determine what cutout
-     * TODO system to use.
-     * TODO
-     * TODO jenkinsd 2020.01.09
-     * TODO
-     *
-     * @param storageLocation The storage location containing storageID and storageBucket.
-     * @param dest The destination stream.
-     * @param cutouts Cutouts to be applied to the artifact
-     * @throws ResourceNotFoundException If the artifact could not be found.
-     * @throws ReadException If the storage system failed to stream.
-     * @throws WriteException If writing failed.
-     * @throws StorageEngageException If the adapter failed to interact with storage.
-     */
+    @Override
+    public void get(StorageLocation storageLocation, OutputStream dest, SortedSet<ByteRange> byteRanges) 
+        throws InterruptedException, ResourceNotFoundException, ReadException, WriteException, StorageEngageException, TransientException {
+        throw new UnsupportedOperationException();
+    }
+
     @Override
     public void get(StorageLocation storageLocation, OutputStream dest, Set<String> cutouts)
             throws ResourceNotFoundException, ReadException, WriteException, StorageEngageException {
@@ -711,24 +697,5 @@ abstract class S3StorageAdapter implements StorageAdapter {
         //optionalNextMarkerKey.ifPresent(listBuilder::marker);
 
         return s3client.listObjects(listBuilder.build());
-    }
-
-    /**
-     * Get the set of items in the given bucket.
-     *
-     * @param storageBucket Only iterate over items in this bucket.
-     * @return An iterator over an ordered list of items in this storage bucket.
-     *
-     * @throws StorageEngageException If the adapter failed to interact with storage.
-     * @throws TransientException If an unexpected, temporary exception occurred.
-     */
-    public SortedSet<StorageMetadata> list(String storageBucket)
-            throws StorageEngageException, TransientException {
-        SortedSet<StorageMetadata> ret = new TreeSet<>();
-        Iterator<StorageMetadata> i = iterator(storageBucket);
-        while (i.hasNext()) {
-            ret.add(i.next());
-        }
-        return ret;
     }
 }

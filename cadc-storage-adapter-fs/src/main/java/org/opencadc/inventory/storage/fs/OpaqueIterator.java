@@ -71,6 +71,7 @@ import java.io.File;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.nio.file.FileSystemException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -203,12 +204,12 @@ class OpaqueIterator implements Iterator<StorageMetadata> {
         log.debug("createStorageMetadata: " + storageBucket + "," + storageID);
         
         try {
-            // required
             StorageLocation sloc = new StorageLocation(storageID);
             sloc.storageBucket = storageBucket;
-            String csAttr = OpaqueFileSystemStorageAdapter.getFileAttribute(p, OpaqueFileSystemStorageAdapter.CHECKSUM_ATTR);
-            String aidAttr = OpaqueFileSystemStorageAdapter.getFileAttribute(p, OpaqueFileSystemStorageAdapter.ARTIFACTID_ATTR);
             try {
+                String csAttr = OpaqueFileSystemStorageAdapter.getFileAttribute(p, OpaqueFileSystemStorageAdapter.CHECKSUM_ATTR);
+                String aidAttr = OpaqueFileSystemStorageAdapter.getFileAttribute(p, OpaqueFileSystemStorageAdapter.ARTIFACTID_ATTR);
+            
                 URI contentChecksum = new URI(csAttr);
                 long contentLength = Files.size(p);
                 StorageMetadata ret = new StorageMetadata(sloc, contentChecksum, contentLength);
@@ -217,7 +218,7 @@ class OpaqueIterator implements Iterator<StorageMetadata> {
                 ret.artifactURI = new URI(aidAttr);
                 ret.contentLastModified = new Date(Files.getLastModifiedTime(p).toMillis());
                 return ret;
-            } catch (URISyntaxException ex) {
+            } catch (FileSystemException | URISyntaxException ex) {
                 return new StorageMetadata(sloc); // missing attrs: invalid stored object
             }
         } catch (IOException ex) {
