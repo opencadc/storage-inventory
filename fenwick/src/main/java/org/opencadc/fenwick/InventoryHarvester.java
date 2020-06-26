@@ -80,6 +80,7 @@ import java.io.IOException;
 import java.net.URI;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -240,9 +241,10 @@ public class InventoryHarvester implements Runnable {
                 new TapClient<>(this.resourceID);
         final DeletedStorageLocationEventSync deletedStorageLocationEventSync =
                 new DeletedStorageLocationEventSync(deletedStorageLocationEventTapClient);
-        deletedStorageLocationEventSync.startTime = harvestState.getLastModified();
+        deletedStorageLocationEventSync.startTime = harvestState.curLastModified;
 
         final TransactionManager transactionManager = artifactDAO.getTransactionManager();
+        final Date previousCurLastModified = harvestState.curLastModified;
         try (final ResourceIterator<DeletedStorageLocationEvent> deletedStorageLocationEventResourceIterator =
                      deletedStorageLocationEventSync.getEvents()) {
 
@@ -264,6 +266,9 @@ public class InventoryHarvester implements Runnable {
                 transactionManager.commitTransaction();
             }
         } catch (Exception exception) {
+            // Reset the harvest state date.
+            harvestState.curLastModified = previousCurLastModified;
+
             if (transactionManager.isOpen()) {
                 log.error("Exception in transaction.  Rolling back...");
                 transactionManager.rollbackTransaction();
@@ -297,9 +302,10 @@ public class InventoryHarvester implements Runnable {
         final TapClient<DeletedArtifactEvent> deletedArtifactEventTapClientTapClient = new TapClient<>(this.resourceID);
         final DeletedArtifactEventSync deletedArtifactEventSync =
                 new DeletedArtifactEventSync(deletedArtifactEventTapClientTapClient);
-        deletedArtifactEventSync.startTime = harvestState.getLastModified();
+        deletedArtifactEventSync.startTime = harvestState.curLastModified;
 
         final TransactionManager transactionManager = artifactDAO.getTransactionManager();
+        final Date previousCurLastModified = harvestState.curLastModified;
 
         try (final ResourceIterator<DeletedArtifactEvent> deletedArtifactEventResourceIterator
                      = deletedArtifactEventSync.getEvents()) {
@@ -313,6 +319,9 @@ public class InventoryHarvester implements Runnable {
                 transactionManager.commitTransaction();
             }
         } catch (Exception exception) {
+            // Reset the harvest state date.
+            harvestState.curLastModified = previousCurLastModified;
+
             if (transactionManager.isOpen()) {
                 log.error("Exception in transaction.  Rolling back...");
                 transactionManager.rollbackTransaction();
@@ -349,11 +358,12 @@ public class InventoryHarvester implements Runnable {
                                           ? new HarvestState(Artifact.class.getName(), this.resourceID)
                                           : existingHarvestState;
 
-        final ArtifactSync artifactSync = new ArtifactSync(artifactTapClient, harvestState.getLastModified());
+        final ArtifactSync artifactSync = new ArtifactSync(artifactTapClient, harvestState.curLastModified);
         final List<String> artifactIncludeConstraints = this.selector.getConstraints();
         final Iterator<String> artifactIncludeConstraintIterator = artifactIncludeConstraints.iterator();
 
         final TransactionManager transactionManager = artifactDAO.getTransactionManager();
+        final Date previousCurLastModified = harvestState.curLastModified;
 
         try {
             boolean keepRunning = true;
@@ -369,6 +379,7 @@ public class InventoryHarvester implements Runnable {
                 try (final ResourceIterator<Artifact> artifactResourceIterator = artifactSync.iterator()) {
                     while (artifactResourceIterator.hasNext()) {
                         final Artifact artifact = artifactResourceIterator.next();
+                        log.debug("START: Process Artifact " + artifact.getURI());
                         transactionManager.startTransaction();
 
                         final URI computedChecksum = artifact.computeMetaChecksum(messageDigest);
@@ -399,12 +410,15 @@ public class InventoryHarvester implements Runnable {
                         harvestState.curLastModified = currentArtifact.getLastModified();
                         harvestStateDAO.put(harvestState);
                         transactionManager.commitTransaction();
+                        log.debug("END: Process Artifact " + artifact.getURI() + ".");
                     }
                 }
 
                 keepRunning = artifactIncludeConstraintIterator.hasNext();
             }
         } catch (Exception exception) {
+            // Reset the harvest state date.
+            harvestState.curLastModified = previousCurLastModified;
             if (transactionManager.isOpen()) {
                 log.error("Exception in transaction.  Rolling back...");
                 transactionManager.rollbackTransaction();
