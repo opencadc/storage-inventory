@@ -93,6 +93,7 @@ import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.SiteLocation;
 import org.opencadc.inventory.StorageSite;
 import org.opencadc.inventory.db.ArtifactDAO;
+import org.opencadc.inventory.db.DeletedEventDAO;
 import org.opencadc.inventory.db.HarvestState;
 import org.opencadc.inventory.db.HarvestStateDAO;
 import org.opencadc.inventory.db.StorageSiteDAO;
@@ -237,6 +238,8 @@ public class InventoryHarvester implements Runnable {
                                                              this.resourceID)
                                           : existingHarvestState;
 
+        final DeletedEventDAO<DeletedStorageLocationEvent> deletedStorageLocationEventDeletedEventDAO =
+                new DeletedEventDAO<>(this.artifactDAO);
         final TapClient<DeletedStorageLocationEvent> deletedStorageLocationEventTapClient =
                 new TapClient<>(this.resourceID);
         final DeletedStorageLocationEventSync deletedStorageLocationEventSync =
@@ -256,6 +259,7 @@ public class InventoryHarvester implements Runnable {
                 final Artifact artifact = this.artifactDAO.get(deletedStorageLocationEvent.getID());
                 if (artifact != null) {
                     final SiteLocation siteLocation = new SiteLocation(storageSite.getID());
+                    deletedStorageLocationEventDeletedEventDAO.put(deletedStorageLocationEvent);
                     artifact.siteLocations.remove(siteLocation);
                     artifactDAO.put(artifact, true);
                     harvestState.curLastModified = deletedStorageLocationEvent.getLastModified();
@@ -302,6 +306,8 @@ public class InventoryHarvester implements Runnable {
         final TapClient<DeletedArtifactEvent> deletedArtifactEventTapClientTapClient = new TapClient<>(this.resourceID);
         final DeletedArtifactEventSync deletedArtifactEventSync =
                 new DeletedArtifactEventSync(deletedArtifactEventTapClientTapClient);
+        final DeletedEventDAO<DeletedArtifactEvent> deletedArtifactEventDeletedEventDAO =
+                new DeletedEventDAO<>(this.artifactDAO);
         deletedArtifactEventSync.startTime = harvestState.curLastModified;
 
         final TransactionManager transactionManager = artifactDAO.getTransactionManager();
@@ -313,6 +319,7 @@ public class InventoryHarvester implements Runnable {
             while (deletedArtifactEventResourceIterator.hasNext()) {
                 final DeletedArtifactEvent deletedArtifactEvent = deletedArtifactEventResourceIterator.next();
                 transactionManager.startTransaction();
+                deletedArtifactEventDeletedEventDAO.put(deletedArtifactEvent);
                 artifactDAO.delete(deletedArtifactEvent.getID());
                 harvestState.curLastModified = deletedArtifactEvent.getLastModified();
                 harvestStateDAO.put(harvestState);
