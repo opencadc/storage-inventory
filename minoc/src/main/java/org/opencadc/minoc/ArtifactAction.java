@@ -79,7 +79,6 @@ import ca.nrc.cadc.rest.InlineContentHandler;
 import ca.nrc.cadc.rest.RestAction;
 import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.util.PropertiesReader;
-
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -94,9 +93,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
-
 import javax.security.auth.Subject;
-
 import org.apache.log4j.Logger;
 import org.opencadc.gms.GroupClient;
 import org.opencadc.gms.GroupURI;
@@ -105,12 +102,12 @@ import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.SQLGenerator;
-import org.opencadc.inventory.permissions.Grant;
-import org.opencadc.inventory.permissions.PermissionsClient;
-import org.opencadc.inventory.permissions.ReadGrant;
-import org.opencadc.inventory.permissions.TokenUtil;
-import org.opencadc.inventory.permissions.WriteGrant;
 import org.opencadc.inventory.storage.StorageAdapter;
+import org.opencadc.permissions.Grant;
+import org.opencadc.permissions.ReadGrant;
+import org.opencadc.permissions.TokenUtil;
+import org.opencadc.permissions.WriteGrant;
+import org.opencadc.permissions.client.PermissionsClient;
 
 /**
  * Abstract class for performing tasks all action classes have in common,

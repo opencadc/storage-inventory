@@ -103,14 +103,14 @@ public abstract class BaldurTest {
     public BaldurTest() {
         RegistryClient regClient = new RegistryClient();
         certURL = regClient.getServiceURL(BALDUR_SERVICE_ID, Standards.SI_PERMISSIONS, AuthMethod.CERT);
-        log.info("certURL: " + certURL);
+        log.debug("certURL: " + certURL);
         anonSubject = AuthenticationUtil.getAnonSubject();
         File cert = FileUtil.getFileFromResource("baldur-test-auth.pem", BaldurTest.class);
         authSubject = SSLUtil.createSubject(cert);
-        log.info("authSubject: " + authSubject);
+        log.debug("authSubject: " + authSubject);
         cert = FileUtil.getFileFromResource("baldur-test-noauth.pem", BaldurTest.class);
         noAuthSubject = SSLUtil.createSubject(cert);
-        log.info("noAuthSubject: " + noAuthSubject);
+        log.debug("noAuthSubject: " + noAuthSubject);
     }
     
 }
