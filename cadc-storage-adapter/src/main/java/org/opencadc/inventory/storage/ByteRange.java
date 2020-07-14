@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2019.                            (c) 2019.
+*  (c) 2020.                            (c) 2020.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -65,58 +65,80 @@
 ************************************************************************
 */
 
-package org.opencadc.minoc;
+package org.opencadc.inventory.storage;
 
-import ca.nrc.cadc.rest.SyncOutput;
+import ca.nrc.cadc.util.HashUtil;
 import org.apache.log4j.Logger;
-import org.opencadc.inventory.Artifact;
-import org.opencadc.inventory.InventoryUtil;
-import org.opencadc.permissions.ReadGrant;
 
 /**
- * Interface with storage and inventory to get the metadata of an artifact.
- *
- * @author majorb
+ * Single byte range expressed as an offset (starting position) and length.
+ * 
+ * @author pdowler
  */
-public class HeadAction extends ArtifactAction {
-    
-    private static final Logger log = Logger.getLogger(HeadAction.class);
+public class ByteRange implements Comparable<ByteRange> {
+    private static final Logger log = Logger.getLogger(ByteRange.class);
 
+    private final long offset;
+    private final long length;
+    
     /**
-     * Default, no-arg constructor.
+     * Byte range expresses as an offset and length.
+     * 
+     * @param offset byte offset (starting position), must be 0 or positive
+     * @param length number of bytes, must be positive
      */
-    public HeadAction() {
-        super();
+    public ByteRange(long offset, long length) { 
+        if (offset < 0 || length <= 0) {
+            throw new IllegalArgumentException("invalid byte range: " + offset + "/" + length);
+        }
+        this.offset = offset;
+        this.length = length;
     }
 
-    /**
-     * Return the artifact metadata as repsonse headers.
-     */
+    public long getOffset() {
+        return offset;
+    }
+
+    public long getLength() {
+        return length;
+    }
+    
+    public boolean contains(long pos) {
+        return offset <= pos && pos < (offset + length);
+    }
+
     @Override
-    public void doAction() throws Exception {
-        
-        initAndAuthorize(ReadGrant.class);
-        
-        Artifact artifact = getArtifact(artifactURI);
-        setHeaders(artifact, syncOutput);
-    }
-    
-    /**
-     * Set the HTTP response headers for an artifact.
-     * @param artifact The artifact with metadata
-     * @param syncOutput The target response
-     */
-    public static void setHeaders(Artifact artifact, SyncOutput syncOutput) {
-        syncOutput.setHeader("Content-MD5", artifact.getContentChecksum().getSchemeSpecificPart());
-        syncOutput.setHeader("Content-Length", artifact.getContentLength());
-        String filename = InventoryUtil.computeArtifactFilename(artifact.getURI());
-        syncOutput.setHeader("Content-Disposition", "attachment; filename=" + filename);
-        if (artifact.contentEncoding != null) {
-            syncOutput.setHeader("Content-Encoding", artifact.contentEncoding);
+    public int compareTo(ByteRange r) {
+        if (offset + length < r.offset) {
+            return -1;
         }
-        if (artifact.contentType != null) {
-            syncOutput.setHeader("Content-Type", artifact.contentType);
+        if (r.offset + r.length < offset) {
+            return 1;
         }
+        if (offset == r.offset && length == r.length) {
+            return 0;
+        }
+        throw new IllegalArgumentException("cannot order overlapping: " + this + " vs " + r);
     }
 
+    @Override
+    public boolean equals(Object o) {
+        if (o instanceof ByteRange) {
+            ByteRange rhs = (ByteRange) o;
+            return (offset == rhs.offset && length == rhs.length);
+        }
+        return false;
+    }
+
+    @Override
+    public int hashCode() {
+        int ret = HashUtil.hash(HashUtil.SEED, offset);
+        ret = HashUtil.hash(ret, length);
+        return ret;
+    }
+    
+    @Override
+    public String toString() {
+        return ByteRange.class.getSimpleName() + "[" + offset + "," + length + "]";
+    }
 }

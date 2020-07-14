@@ -86,11 +86,10 @@ import javax.security.auth.Subject;
 import javax.security.auth.x500.X500Principal;
 import org.apache.log4j.Logger;
 import org.opencadc.gms.GroupURI;
-import org.opencadc.inventory.InventoryUtil;
-import org.opencadc.inventory.permissions.Grant;
-import org.opencadc.inventory.permissions.ReadGrant;
-import org.opencadc.inventory.permissions.WriteGrant;
-import org.opencadc.inventory.permissions.xml.GrantWriter;
+import org.opencadc.permissions.Grant;
+import org.opencadc.permissions.ReadGrant;
+import org.opencadc.permissions.WriteGrant;
+import org.opencadc.permissions.xml.GrantWriter;
 
 /**
  * Class to handle the retrieving of read-only or read-write permissions
@@ -102,8 +101,8 @@ public class GetAction extends RestAction {
     
     private static final Logger log = Logger.getLogger(GetAction.class);
 
-    private static final String OP = "OP";
-    private static final String URI = "URI";
+    private static final String PARAM_OP = "OP";
+    private static final String PARAM_ID = "ID";
     
     public enum Operation {
         read, 
@@ -122,44 +121,42 @@ public class GetAction extends RestAction {
     @Override
     public void doAction() throws Exception {
 
-        // Check if the calling user is authorized to make the request.
         PermissionsConfig permissionsConfig = new PermissionsConfig();
-        authorize(permissionsConfig);
+        authorizeRequest(permissionsConfig);
         
-        String op = syncInput.getParameter(OP);
-        String uri = syncInput.getParameter(URI);
-        log.debug(OP + ": " + op);
-        log.debug(URI + ": " + uri);
+        String op = syncInput.getParameter(PARAM_OP);
+        String sid = syncInput.getParameter(PARAM_ID);
+        log.debug(PARAM_OP + ": " + op);
+        log.debug(PARAM_ID + ": " + sid);
         
         if (op == null) {
-            throw new IllegalArgumentException("missing required parameter, " + OP);
+            throw new IllegalArgumentException("missing required parameter, " + PARAM_OP);
         }
         Operation operation = null;
         try {
             operation = Operation.valueOf(op);
         } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("invalid " + OP + " parameter, must be "
+            throw new IllegalArgumentException("invalid " + PARAM_OP + " parameter, must be "
                 + Operation.read  + " or " + Operation.write);
         }
-        if (uri == null) {
-            throw new IllegalArgumentException("missing required parameter, " + URI);
+        if (sid == null) {
+            throw new IllegalArgumentException("missing required parameter, " + PARAM_ID);
         }
 
-        URI artifactURI;
+        URI assetID;
         try {
-            artifactURI = new URI(uri);
-            InventoryUtil.validateArtifactURI(GetAction.class, artifactURI);
+            assetID = new URI(sid);
         } catch (URISyntaxException e) {
-            throw new IllegalArgumentException("invalid " + URI + " parameter, not a valid URI: " + uri);
+            throw new IllegalArgumentException("invalid " + PARAM_ID + " parameter, not a valid URI: " + sid);
         }
 
         Grant grant;
         switch (operation) {
             case read:
-                grant = getReadGrant(permissionsConfig, artifactURI);
+                grant = getReadGrant(permissionsConfig, assetID);
                 break;
             case write:
-                grant = getWriteGrant(permissionsConfig, artifactURI);
+                grant = getWriteGrant(permissionsConfig, assetID);
                 break;
             default:
                 throw new IllegalStateException("unknown operation: " + operation);
@@ -173,39 +170,45 @@ public class GetAction extends RestAction {
         writer.write(grant, out);
         out.flush();
 
-        logInfo.setMessage(String.format("returned %s %s grant(s) for %s", grant.getGroups().size(), op, uri));
+        logInfo.setMessage(String.format("returned %s %s grant(s) for %s", grant.getGroups().size(), op, assetID));
     }
 
-    void authorize(PermissionsConfig permissionsConfig) {
+    /**
+     * Check that the caller (current subject) is authorized to get grants.
+     * 
+     * @param permissionsConfig 
+     */
+    protected void authorizeRequest(PermissionsConfig permissionsConfig) {
         Subject subject = AuthenticationUtil.getCurrentSubject();
         if (subject != null) {
             Set<X500Principal> principals = subject.getPrincipals(X500Principal.class);
             for (Principal p : principals) {
-                log.debug("checking user dn " + p);
                 for (Principal authorizedUser : permissionsConfig.getAuthorizedPrincipals()) {
+                    log.debug("authorize: " + p + " vs " + authorizedUser);
                     if (AuthenticationUtil.equals(authorizedUser, p)) {
                         return;
                     }
                 }
             }
         }
-        throw new AccessControlException("forbidden");
+        throw new AccessControlException("permission denied");
     }
     
     /**
      * Get the read grant for the given Artifact URI. 
      *
      * @param permissionsConfig The grant permissions.
-     * @param artifactURI The Artifact URI.
+     * @param assetID The Artifact URI.
      * @return The read grant information object for the artifact URI.
+     * @throws ca.nrc.cadc.net.ResourceNotFoundException if the assetID is not recognised
      */
-    static ReadGrant getReadGrant(PermissionsConfig permissionsConfig, URI artifactURI)
+    protected ReadGrant getReadGrant(PermissionsConfig permissionsConfig, URI assetID)
         throws ResourceNotFoundException {
-        InventoryUtil.assertNotNull(GetAction.class, "artifactURI", artifactURI);
+        assertNotNull(GetAction.class, "assetID", assetID);
 
-        Iterator<PermissionEntry> matchingEntries = permissionsConfig.getMatchingEntries(artifactURI);
+        Iterator<PermissionEntry> matchingEntries = permissionsConfig.getMatchingEntries(assetID);
         if (!matchingEntries.hasNext()) {
-            throw new ResourceNotFoundException("not found: read grant for " + artifactURI.toASCIIString());
+            throw new ResourceNotFoundException("not found: read grant for " + assetID.toASCIIString());
         }
 
         boolean anonymousRead = false;
@@ -230,7 +233,7 @@ public class GetAction extends RestAction {
             }
         }
         
-        ReadGrant readGrant = new ReadGrant(artifactURI, permissionsConfig.getExpiryDate(), anonymousRead);
+        ReadGrant readGrant = new ReadGrant(assetID, permissionsConfig.getExpiryDate(), anonymousRead);
         readGrant.getGroups().addAll(groups);
         return readGrant;
     }
@@ -239,16 +242,17 @@ public class GetAction extends RestAction {
      * Get the write grant for the given Artifact URI. 
      *
      * @param permissionsConfig The grant permissions.
-     * @param artifactURI The Artifact URI.
+     * @param assetID The Artifact URI.
      * @return The write grant information object for the artifact URI.
+     * @throws ca.nrc.cadc.net.ResourceNotFoundException if the assetID is not recognised
      */
-    static WriteGrant getWriteGrant(PermissionsConfig permissionsConfig, URI artifactURI)
+    protected WriteGrant getWriteGrant(PermissionsConfig permissionsConfig, URI assetID)
         throws ResourceNotFoundException {
-        InventoryUtil.assertNotNull(GetAction.class, "artifactURI", artifactURI);
+        assertNotNull(GetAction.class, "assetID", assetID);
 
-        Iterator<PermissionEntry> matchingEntries = permissionsConfig.getMatchingEntries(artifactURI);
+        Iterator<PermissionEntry> matchingEntries = permissionsConfig.getMatchingEntries(assetID);
         if (!matchingEntries.hasNext()) {
-            throw new ResourceNotFoundException("not found: write grant for " + artifactURI.toASCIIString());
+            throw new ResourceNotFoundException("not found: write grant for " + assetID.toASCIIString());
         }
 
         List<GroupURI> groups = new ArrayList<GroupURI>();
@@ -263,9 +267,14 @@ public class GetAction extends RestAction {
                 }
             }
         }
-        WriteGrant writeGrant = new WriteGrant(artifactURI, permissionsConfig.getExpiryDate());
+        WriteGrant writeGrant = new WriteGrant(assetID, permissionsConfig.getExpiryDate());
         writeGrant.getGroups().addAll(groups);
         return writeGrant;
     }
 
+    private static void assertNotNull(Class caller, String name, Object test) {
+        if (test == null) {
+            throw new IllegalArgumentException("invalid " + caller.getSimpleName() + "." + name + ": null");
+        }
+    }
 }

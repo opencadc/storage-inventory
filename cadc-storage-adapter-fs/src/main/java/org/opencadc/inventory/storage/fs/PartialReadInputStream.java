@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2019.                            (c) 2019.
+*  (c) 2020.                            (c) 2020.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -65,58 +65,71 @@
 ************************************************************************
 */
 
-package org.opencadc.minoc;
+package org.opencadc.inventory.storage.fs;
 
-import ca.nrc.cadc.rest.SyncOutput;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.RandomAccessFile;
+import java.util.Iterator;
+import java.util.SortedSet;
 import org.apache.log4j.Logger;
-import org.opencadc.inventory.Artifact;
-import org.opencadc.inventory.InventoryUtil;
-import org.opencadc.permissions.ReadGrant;
+import org.opencadc.inventory.storage.ByteRange;
 
 /**
- * Interface with storage and inventory to get the metadata of an artifact.
  *
- * @author majorb
+ * @author pdowler
  */
-public class HeadAction extends ArtifactAction {
-    
-    private static final Logger log = Logger.getLogger(HeadAction.class);
+public class PartialReadInputStream extends InputStream {
+    private static final Logger log = Logger.getLogger(PartialReadInputStream.class);
 
-    /**
-     * Default, no-arg constructor.
-     */
-    public HeadAction() {
-        super();
+    private final RandomAccessFile file;
+    private final Iterator<ByteRange> iter;
+    private ByteRange cur;
+    
+    public PartialReadInputStream(RandomAccessFile file, SortedSet<ByteRange> ranges) { 
+        this.file = file;
+        this.iter = ranges.iterator();
+    }
+    
+    private void prepareToRead() throws IOException {
+        if (cur != null && !cur.contains(file.getFilePointer())) {
+            //log.warn("end: " + file.getFilePointer() + " !in " + cur);
+            cur = null;
+        }
+        if (cur == null) {
+            this.cur = null;
+            if (iter.hasNext()) {
+                this.cur = iter.next();
+                //log.warn("seek to cur: " + cur);
+                file.seek(cur.getOffset());
+            }
+        }
     }
 
-    /**
-     * Return the artifact metadata as repsonse headers.
-     */
     @Override
-    public void doAction() throws Exception {
-        
-        initAndAuthorize(ReadGrant.class);
-        
-        Artifact artifact = getArtifact(artifactURI);
-        setHeaders(artifact, syncOutput);
-    }
-    
-    /**
-     * Set the HTTP response headers for an artifact.
-     * @param artifact The artifact with metadata
-     * @param syncOutput The target response
-     */
-    public static void setHeaders(Artifact artifact, SyncOutput syncOutput) {
-        syncOutput.setHeader("Content-MD5", artifact.getContentChecksum().getSchemeSpecificPart());
-        syncOutput.setHeader("Content-Length", artifact.getContentLength());
-        String filename = InventoryUtil.computeArtifactFilename(artifact.getURI());
-        syncOutput.setHeader("Content-Disposition", "attachment; filename=" + filename);
-        if (artifact.contentEncoding != null) {
-            syncOutput.setHeader("Content-Encoding", artifact.contentEncoding);
+    public int read() throws IOException {
+        prepareToRead();
+        if (cur == null) {
+            return -1; // EOF
         }
-        if (artifact.contentType != null) {
-            syncOutput.setHeader("Content-Type", artifact.contentType);
-        }
+        return file.read();
     }
 
+    @Override
+    public int read(byte[] bytes) throws IOException {
+        return read(bytes, 0, bytes.length);
+    }
+    
+    @Override
+    public int read(byte[] bytes, int offset, int len) throws IOException {
+        prepareToRead();
+        if (cur == null) {
+            return -1; // EOF
+        }
+        long endPos = cur.getOffset() + cur.getLength();
+        int remainingBytes = (int) (endPos - file.getFilePointer());
+        int num = Math.min(len, remainingBytes);
+        return file.read(bytes, offset, num);
+    }
+    
 }

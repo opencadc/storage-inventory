@@ -79,13 +79,12 @@ import javax.security.auth.Subject;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.opencadc.gms.GroupURI;
-import org.opencadc.inventory.permissions.Grant;
-import org.opencadc.inventory.permissions.ReadGrant;
-import org.opencadc.inventory.permissions.WriteGrant;
-import org.opencadc.inventory.permissions.xml.GrantReader;
+import org.opencadc.permissions.Grant;
+import org.opencadc.permissions.ReadGrant;
+import org.opencadc.permissions.WriteGrant;
+import org.opencadc.permissions.xml.GrantReader;
 
 /**
  * Test HTTP GET to baldur
@@ -97,7 +96,7 @@ public class GetPermissionsTest extends BaldurTest {
     private static final Logger log = Logger.getLogger(GetPermissionsTest.class);
     
     // This URI matches the single entry in baldur-permissions-config.pem
-    URI artifactURI = URI.create("cadc:TEST/file.fits");
+    URI assetID = URI.create("cadc:TEST/file.fits");
     
     static {
         Log4jInit.setLevel("org.opencadc.baldur", Level.INFO);
@@ -111,8 +110,8 @@ public class GetPermissionsTest extends BaldurTest {
     public void testAnonAccess() {
         try {
             log.info("start - testAnonAccess");
-            String artifact = URLEncoder.encode(artifactURI.toString(), "UTF-8");
-            URL getPermissionsURL = new URL(certURL.toString() + "?OP=read&uri=" + artifact);
+            String artifact = URLEncoder.encode(assetID.toString(), "UTF-8");
+            URL getPermissionsURL = new URL(certURL.toString() + "?OP=read&ID=" + artifact);
             HttpGet httpGet = new HttpGet(getPermissionsURL, true);
             try {
                 httpGet.prepare();
@@ -135,14 +134,13 @@ public class GetPermissionsTest extends BaldurTest {
             log.info("start - testForbiddenAccess");
             Subject.doAs(noAuthSubject, new PrivilegedExceptionAction<Object>() {
                 public Object run() throws Exception {
-                    String artifact = URLEncoder.encode(artifactURI.toString(), "UTF-8");
-                    URL getPermissionsURL = new URL(certURL.toString() + "?OP=read&uri=" + artifact);
+                    String artifact = URLEncoder.encode(assetID.toString(), "UTF-8");
+                    URL getPermissionsURL = new URL(certURL.toString() + "?OP=read&ID=" + artifact);
                     HttpGet httpGet = new HttpGet(getPermissionsURL, true);
                     try {
                         httpGet.prepare();
                         Assert.fail("anon get should have thrown AccessControlException");
-                    }
-                    catch (AccessControlException expected) {
+                    } catch (AccessControlException expected) {
                         Assert.assertEquals(403,httpGet.getResponseCode());
                     }
                     return null;
@@ -162,8 +160,8 @@ public class GetPermissionsTest extends BaldurTest {
             log.info("start - testCorrectReadPermissions");
             Subject.doAs(authSubject, new PrivilegedExceptionAction<Object>() {
                 public Object run() throws Exception {
-                    String artifact = URLEncoder.encode(artifactURI.toString(), "UTF-8");
-                    URL getPermissionsURL = new URL(certURL.toString() + "?OP=read&uri=" + artifact);
+                    String artifact = URLEncoder.encode(assetID.toString(), "UTF-8");
+                    URL getPermissionsURL = new URL(certURL.toString() + "?OP=read&ID=" + artifact);
                     HttpGet httpGet = new HttpGet(getPermissionsURL, true);
                     httpGet.prepare();
                     Assert.assertNull(httpGet.getThrowable());
@@ -173,8 +171,8 @@ public class GetPermissionsTest extends BaldurTest {
                     Grant grant = grantReader.read(httpGet.getInputStream());
                     Assert.assertTrue(grant instanceof ReadGrant);
                     ReadGrant readGrant = (ReadGrant) grant;
-                    Assert.assertEquals(artifactURI, readGrant.getArtifactURI());
-                    Assert.assertFalse("isAnon=" + readGrant.isAnonymousAccess(), readGrant.isAnonymousAccess());
+                    Assert.assertEquals(assetID, readGrant.getAssetID());
+                    Assert.assertTrue("isAnon=" + readGrant.isAnonymousAccess(), readGrant.isAnonymousAccess());
                     Assert.assertEquals(2, readGrant.getGroups().size());
                     GroupURI readGroup = new GroupURI("ivo://cadc.nrc.ca/gms?Test-Read");
                     GroupURI readWriteGroup = new GroupURI("ivo://cadc.nrc.ca/gms?Test-Write");
@@ -197,8 +195,8 @@ public class GetPermissionsTest extends BaldurTest {
             log.info("start - testCorrectWritePermissions");
             Subject.doAs(authSubject, new PrivilegedExceptionAction<Object>() {
                 public Object run() throws Exception {
-                    String artifact = URLEncoder.encode(artifactURI.toString(), "UTF-8");
-                    URL getPermissionsURL = new URL(certURL.toString() + "?OP=write&uri=" + artifact);
+                    String artifact = URLEncoder.encode(assetID.toString(), "UTF-8");
+                    URL getPermissionsURL = new URL(certURL.toString() + "?OP=write&ID=" + artifact);
                     HttpGet httpGet = new HttpGet(getPermissionsURL, true);
                     httpGet.prepare();
                     Assert.assertNull(httpGet.getThrowable());
@@ -208,7 +206,7 @@ public class GetPermissionsTest extends BaldurTest {
                     Grant grant = grantReader.read(httpGet.getInputStream());
                     Assert.assertTrue(grant instanceof WriteGrant);
                     WriteGrant writeGrant = (WriteGrant) grant;
-                    Assert.assertEquals(artifactURI, writeGrant.getArtifactURI());
+                    Assert.assertEquals(assetID, writeGrant.getAssetID());
                     Assert.assertEquals(1, writeGrant.getGroups().size());
                     GroupURI readWriteGroup = new GroupURI("ivo://cadc.nrc.ca/gms?Test-Write");
                     Assert.assertEquals(readWriteGroup, writeGrant.getGroups().get(0));
@@ -231,7 +229,7 @@ public class GetPermissionsTest extends BaldurTest {
             Subject.doAs(authSubject, new PrivilegedExceptionAction<Object>() {
                 public Object run() throws Exception {
                     String artifact = URLEncoder.encode(notFoundArtifactURL, "UTF-8");
-                    URL getPermissionsURL = new URL(certURL.toString() + "?OP=read&uri=" + artifact);
+                    URL getPermissionsURL = new URL(certURL.toString() + "?OP=read&ID=" + artifact);
                     HttpGet httpGet = new HttpGet(getPermissionsURL, true);
                     try {
                         httpGet.prepare();
@@ -258,7 +256,7 @@ public class GetPermissionsTest extends BaldurTest {
             Subject.doAs(authSubject, new PrivilegedExceptionAction<Object>() {
                 public Object run() throws Exception {
                     String artifact = URLEncoder.encode(notFoundArtifactURL, "UTF-8");
-                    URL getPermissionsURL = new URL(certURL.toString() + "?OP=write&uri=" + artifact);
+                    URL getPermissionsURL = new URL(certURL.toString() + "?OP=write&ID=" + artifact);
                     HttpGet httpGet = new HttpGet(getPermissionsURL, true);
                     try {
                         httpGet.prepare();
@@ -283,8 +281,8 @@ public class GetPermissionsTest extends BaldurTest {
             log.info("start - testInvalidOperation");
             Subject.doAs(authSubject, new PrivilegedExceptionAction<Object>() {
                 public Object run() throws Exception {
-                    String artifact = URLEncoder.encode(artifactURI.toString(), "UTF-8");
-                    URL getPermissionsURL = new URL(certURL.toString() + "?OP=nonsense&uri=" + artifact);
+                    String artifact = URLEncoder.encode(assetID.toString(), "UTF-8");
+                    URL getPermissionsURL = new URL(certURL.toString() + "?OP=nonsense&ID=" + artifact);
                     HttpGet httpGet = new HttpGet(getPermissionsURL, true);
                     try {
                         httpGet.prepare();
@@ -309,8 +307,8 @@ public class GetPermissionsTest extends BaldurTest {
             log.info("start - testMissingOperation");
             Subject.doAs(authSubject, new PrivilegedExceptionAction<Object>() {
                 public Object run() throws Exception {
-                    String artifact = URLEncoder.encode(artifactURI.toString(), "UTF-8");
-                    URL getPermissionsURL = new URL(certURL.toString() + "?uri=" + artifact);
+                    String artifact = URLEncoder.encode(assetID.toString(), "UTF-8");
+                    URL getPermissionsURL = new URL(certURL.toString() + "?ID=" + artifact);
                     HttpGet httpGet = new HttpGet(getPermissionsURL, true);
                     try {
                         httpGet.prepare();
@@ -355,15 +353,15 @@ public class GetPermissionsTest extends BaldurTest {
     }
 
     @Test
-    public void testInvalidArtifactURI() {
+    public void testInvalidURI() {
         try {
-            log.info("start - testInvalidArtifactURI");
+            log.info("start - testInvalidURI");
             
-            String invalidURI = "nonsense-uri";
+            String invalidURI = "foo bar";
             Subject.doAs(authSubject, new PrivilegedExceptionAction<Object>() {
                 public Object run() throws Exception {
                     String artifact = URLEncoder.encode(invalidURI, "UTF-8");
-                    URL getPermissionsURL = new URL(certURL.toString() + "?OP=read&uri=" + artifact);
+                    URL getPermissionsURL = new URL(certURL.toString() + "?OP=read&ID=" + artifact);
                     HttpGet httpGet = new HttpGet(getPermissionsURL, true);
                     try {
                         httpGet.prepare();
@@ -378,7 +376,7 @@ public class GetPermissionsTest extends BaldurTest {
             log.error("unexpected exception", ex);
             Assert.fail("unexpected exception: " + ex);
         } finally {
-            log.info("end - testInvalidArtifactURI");
+            log.info("end - testInvalidURI");
         }
     }
     

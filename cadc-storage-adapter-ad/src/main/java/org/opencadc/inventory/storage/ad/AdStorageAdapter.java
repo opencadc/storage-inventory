@@ -72,10 +72,9 @@ package org.opencadc.inventory.storage.ad;
 import ca.nrc.cadc.auth.AuthMethod;
 import ca.nrc.cadc.auth.AuthenticationUtil;
 import ca.nrc.cadc.io.ByteLimitExceededException;
+import ca.nrc.cadc.io.MultiBufferIO;
 import ca.nrc.cadc.io.ReadException;
-import ca.nrc.cadc.io.ThreadedIO;
 import ca.nrc.cadc.io.WriteException;
-
 import ca.nrc.cadc.net.HttpGet;
 import ca.nrc.cadc.net.IncorrectContentChecksumException;
 import ca.nrc.cadc.net.IncorrectContentLengthException;
@@ -91,20 +90,17 @@ import ca.nrc.cadc.util.StringUtil;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-
 import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URL;
-
 import java.util.Iterator;
 import java.util.Set;
 import java.util.SortedSet;
-
 import javax.security.auth.Subject;
-
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.StorageLocation;
+import org.opencadc.inventory.storage.ByteRange;
 import org.opencadc.inventory.storage.NewArtifact;
 import org.opencadc.inventory.storage.StorageAdapter;
 import org.opencadc.inventory.storage.StorageEngageException;
@@ -130,7 +126,7 @@ public class AdStorageAdapter implements StorageAdapter {
     public AdStorageAdapter(){}
 
     /**
-     * Get from storage the artifact identified by storageLocation.
+     * Get the artifact identified by storageLocation from storage.
      * 
      * @param storageLocation The storage location containing storageID and storageBucket.
      * @param dest The destination stream.
@@ -141,6 +137,7 @@ public class AdStorageAdapter implements StorageAdapter {
      * @throws StorageEngageException If the adapter failed to interact with storage.
      * @throws TransientException If an unexpected, temporary exception occurred. 
      */
+    @Override
     public void get(StorageLocation storageLocation, OutputStream dest)
         throws ResourceNotFoundException, ReadException, WriteException, StorageEngageException, TransientException {
 
@@ -151,8 +148,8 @@ public class AdStorageAdapter implements StorageAdapter {
             boolean followRedirects = true;
             HttpGet get = new HttpGet(sourceURL, followRedirects);
             get.prepare();
-            ThreadedIO tio = new ThreadedIO();
-            tio.ioLoop(dest, get.getInputStream());
+            MultiBufferIO tio = new MultiBufferIO();
+            tio.copy(get.getInputStream(), dest);
 
         } catch (ByteLimitExceededException | ResourceAlreadyExistsException unexpected) {
             log.debug("error type: " + unexpected.getClass());
@@ -163,11 +160,11 @@ public class AdStorageAdapter implements StorageAdapter {
     }
 
     /**
-     * Get from storage the artifact identified by storageLocation.
+     * Get the artifact identified by storageLocation from storage.
      * 
      * @param storageLocation The storage location containing storageID and storageBucket.
      * @param dest The destination stream.
-     * @param operations operations to be applied to the artifact
+     * @param byteRanges set of byte ranges to read
      * 
      * @throws ResourceNotFoundException If the artifact could not be found.
      * @throws ReadException If the storage system failed to stream.
@@ -175,23 +172,31 @@ public class AdStorageAdapter implements StorageAdapter {
      * @throws StorageEngageException If the adapter failed to interact with storage.
      * @throws TransientException If an unexpected, temporary exception occurred. 
      */
+    @Override
+    public void get(StorageLocation storageLocation, OutputStream dest, SortedSet<ByteRange> byteRanges)
+        throws ResourceNotFoundException, ReadException, WriteException, StorageEngageException, TransientException {
+        throw new UnsupportedOperationException("not supported");
+    }
+    
+    /**
+     * Get with operations not supported.
+     * @param storageLocation
+     * @param dest
+     * @param operations
+     * @throws ResourceNotFoundException
+     * @throws ReadException
+     * @throws WriteException
+     * @throws StorageEngageException
+     * @throws TransientException 
+     */
+    @Override
     public void get(StorageLocation storageLocation, OutputStream dest, Set<String> operations)
         throws ResourceNotFoundException, ReadException, WriteException, StorageEngageException, TransientException {
         throw new UnsupportedOperationException("not supported");
     }
     
     /**
-     * Write an artifact to storage. The returned storage location will be used for future get and 
-     * delete calls. If the storage implementation overwrites a previously used StorageLocation, it must
-     * perform an atomic replace and leave the previously stored bytes in tact if the put fails. The storage
-     * implementation may always write to a new storage location (e.g. generated unique storageID); in this case,
-     * the caller is responsible for keeping track of and cleaning up previously stored objects (the previous 
-     * StorageLocation of an Artifact). 
-     * The value of storageBucket in the returned StorageMetadata and StorageLocation can be used to
-     * retrieve batches of artifacts in some of the iterator signatures defined in this interface.
-     * Batches of artifacts can be listed by bucket in two of the iterator methods in this interface.
-     * If storageBucket is null then the caller will not be able perform bucket-based batch
-     * validation through the iterator methods.
+     * Write not supported.
      * 
      * @param newArtifact The holds information about the incoming artifact.  If the contentChecksum
      *     and contentLength are set, they will be used to validate the bytes received.
@@ -207,6 +212,7 @@ public class AdStorageAdapter implements StorageAdapter {
      * @throws StorageEngageException If the adapter failed to interact with storage.
      * @throws TransientException If an unexpected, temporary exception occurred.
      */
+    @Override
     public StorageMetadata put(NewArtifact newArtifact, InputStream source)
         throws IncorrectContentChecksumException, IncorrectContentLengthException, ReadException,
             WriteException, StorageEngageException, TransientException {
@@ -214,7 +220,8 @@ public class AdStorageAdapter implements StorageAdapter {
     }
         
     /**
-     * Delete from storage the artifact identified by storageLocation.
+     * Delete not supported.
+     * 
      * @param storageLocation Identifies the artifact to delete.
      * 
      * @throws ResourceNotFoundException If the artifact could not be found.
@@ -222,18 +229,20 @@ public class AdStorageAdapter implements StorageAdapter {
      * @throws StorageEngageException If the adapter failed to interact with storage.
      * @throws TransientException If an unexpected, temporary exception occurred. 
      */
+    @Override
     public void delete(StorageLocation storageLocation)
         throws ResourceNotFoundException, IOException, StorageEngageException, TransientException {
         throw new UnsupportedOperationException("not supported");
     }
     
     /**
-     * Iterator of items ordered by their storageIDs.
+     * Complete iterator not supported.
      * @return An iterator over an ordered list of items in storage.
      * 
      * @throws StorageEngageException If the adapter failed to interact with storage.
      * @throws TransientException If an unexpected, temporary exception occurred. 
      */
+    @Override
     public Iterator<StorageMetadata> iterator()
         throws StorageEngageException, TransientException {
         throw new UnsupportedOperationException("not supported");
@@ -247,6 +256,7 @@ public class AdStorageAdapter implements StorageAdapter {
      * @throws StorageEngageException If the adapter failed to interact with storage.
      * @throws TransientException If an unexpected, temporary exception occurred. 
      */
+    @Override
     public Iterator<StorageMetadata> iterator(String storageBucket)
         throws StorageEngageException, TransientException {
         InventoryUtil.assertNotNull(AdStorageQuery.class, "storageBucket", storageBucket);
@@ -276,24 +286,6 @@ public class AdStorageAdapter implements StorageAdapter {
         return new AdStorageIterator(storageMetadataIterator);
     }
 
-    /**
-     * Get a set of  of items in the given bucket.
-     * @param storageBucket the bucket to list
-     * @return An iterator over an ordered list of items in this storage bucket.
-     * 
-     * @throws StorageEngageException If the adapter failed to interact with storage.
-     * @throws TransientException If an unexpected, temporary exception occurred. 
-     */
-    public SortedSet<StorageMetadata> list(String storageBucket)
-        throws StorageEngageException, TransientException {
-        throw new UnsupportedOperationException("not supported");
-    }
-
-    /**
-     * Produce a data web service URL from the URI provided.
-     * @param uri
-     * @return
-     */
     private URL toURL(URI uri) {
         try {
             Subject subject = AuthenticationUtil.getCurrentSubject();

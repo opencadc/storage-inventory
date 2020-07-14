@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2019.                            (c) 2019.
+*  (c) 2020.                            (c) 2020.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -65,58 +65,33 @@
 ************************************************************************
 */
 
-package org.opencadc.minoc;
+package org.opencadc.inventory.storage.swift;
 
-import ca.nrc.cadc.rest.SyncOutput;
 import org.apache.log4j.Logger;
-import org.opencadc.inventory.Artifact;
-import org.opencadc.inventory.InventoryUtil;
-import org.opencadc.permissions.ReadGrant;
+import org.javaswift.joss.headers.object.range.AbstractRange;
 
 /**
- * Interface with storage and inventory to get the metadata of an artifact.
- *
- * @author majorb
+ * Temporary replacement for org.javaswift.joss.headers.object.range.MidPartRange
+ * because the constructor: MidPartRange(int, int).
+ * 
+ * @author pdowler
  */
-public class HeadAction extends ArtifactAction {
-    
-    private static final Logger log = Logger.getLogger(HeadAction.class);
+public class JossRangeWorkaround extends AbstractRange {
+    private static final Logger log = Logger.getLogger(JossRangeWorkaround.class);
 
-    /**
-     * Default, no-arg constructor.
-     */
-    public HeadAction() {
-        super();
+    public JossRangeWorkaround(long startPos, long endPos) {
+        super(startPos, endPos);
     }
 
-    /**
-     * Return the artifact metadata as repsonse headers.
-     */
     @Override
-    public void doAction() throws Exception {
-        
-        initAndAuthorize(ReadGrant.class);
-        
-        Artifact artifact = getArtifact(artifactURI);
-        setHeaders(artifact, syncOutput);
-    }
-    
-    /**
-     * Set the HTTP response headers for an artifact.
-     * @param artifact The artifact with metadata
-     * @param syncOutput The target response
-     */
-    public static void setHeaders(Artifact artifact, SyncOutput syncOutput) {
-        syncOutput.setHeader("Content-MD5", artifact.getContentChecksum().getSchemeSpecificPart());
-        syncOutput.setHeader("Content-Length", artifact.getContentLength());
-        String filename = InventoryUtil.computeArtifactFilename(artifact.getURI());
-        syncOutput.setHeader("Content-Disposition", "attachment; filename=" + filename);
-        if (artifact.contentEncoding != null) {
-            syncOutput.setHeader("Content-Encoding", artifact.contentEncoding);
-        }
-        if (artifact.contentType != null) {
-            syncOutput.setHeader("Content-Type", artifact.contentType);
-        }
+    public long getFrom(int byteArrayLength) {
+        return offset; // startPos
     }
 
+    @Override
+    public long getTo(int byteArrayLength) {
+        return length; // endPos
+    }
+    
+    
 }

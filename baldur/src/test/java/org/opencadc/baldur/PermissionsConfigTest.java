@@ -71,13 +71,11 @@ package org.opencadc.baldur;
 
 import ca.nrc.cadc.util.Log4jInit;
 import ca.nrc.cadc.util.PropertiesReader;
-
 import java.net.URI;
 import java.security.Principal;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
-
 import java.util.Set;
 import javax.security.auth.x500.X500Principal;
 import org.apache.log4j.Level;
@@ -85,8 +83,8 @@ import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.Test;
 import org.opencadc.gms.GroupURI;
-import org.opencadc.inventory.permissions.ReadGrant;
-import org.opencadc.inventory.permissions.WriteGrant;
+import org.opencadc.permissions.ReadGrant;
+import org.opencadc.permissions.WriteGrant;
 
 
 public class PermissionsConfigTest {
@@ -104,7 +102,7 @@ public class PermissionsConfigTest {
             // test match
             System.setProperty(PropertiesReader.CONFIG_DIR_SYSTEM_PROPERTY, "src/test/resources/testSingleEntry");
             PermissionsConfig config = new PermissionsConfig();
-            URI artifactURI = URI.create("cadc:TEST/file.fits");
+            URI assetID = URI.create("cadc:TEST/file.fits");
 
             Set<Principal> allowedUser = config.getAuthorizedPrincipals();
             Assert.assertFalse(allowedUser.isEmpty());
@@ -112,7 +110,7 @@ public class PermissionsConfigTest {
             Assert.assertTrue(allowedUser.contains(new X500Principal("CN=foo,OU=cadc,O=hia,C=ca")));
             Assert.assertTrue(allowedUser.contains(new X500Principal("CN=bar,OU=cadc,O=hia,C=ca")));
 
-            Iterator<PermissionEntry> entryIterator = config.getMatchingEntries(artifactURI);
+            Iterator<PermissionEntry> entryIterator = config.getMatchingEntries(assetID);
             List<PermissionEntry> entries = iteratorToList(entryIterator);
             Assert.assertNotNull(entries);
             Assert.assertEquals(1, entries.size());
@@ -129,7 +127,9 @@ public class PermissionsConfigTest {
             Assert.assertTrue(entry.readWriteGroups.contains(readWriteGroup1));
             Assert.assertTrue(entry.readWriteGroups.contains(readWriteGroup2));
             
-            ReadGrant readGrant = GetAction.getReadGrant(config, artifactURI);
+            final GetAction action = new GetAction();
+            
+            ReadGrant readGrant = action.getReadGrant(config, assetID);
             Assert.assertNotNull(readGrant);
             Assert.assertNotNull(readGrant.getExpiryDate());
             Assert.assertEquals(config.getExpiryDate(), readGrant.getExpiryDate());
@@ -140,7 +140,7 @@ public class PermissionsConfigTest {
             Assert.assertTrue(readGrant.getGroups().contains(readWriteGroup1));
             Assert.assertTrue(readGrant.getGroups().contains(readWriteGroup2));
             
-            WriteGrant writeGrant = GetAction.getWriteGrant(config, artifactURI);
+            WriteGrant writeGrant = action.getWriteGrant(config, assetID);
             Assert.assertNotNull(writeGrant);
             Assert.assertNotNull(writeGrant.getExpiryDate());
             Assert.assertEquals(config.getExpiryDate(), writeGrant.getExpiryDate());
@@ -150,9 +150,9 @@ public class PermissionsConfigTest {
             
             // test no match
             config = new PermissionsConfig();
-            artifactURI = URI.create("cadc:NOMATCH/file.fits");
+            assetID = URI.create("cadc:NOMATCH/file.fits");
             
-            entryIterator = config.getMatchingEntries(artifactURI);
+            entryIterator = config.getMatchingEntries(assetID);
             entries = iteratorToList(entryIterator);
             Assert.assertTrue(entries.isEmpty());
             
@@ -171,7 +171,7 @@ public class PermissionsConfigTest {
             log.info("START - testMultipleMatches");
             System.setProperty(PropertiesReader.CONFIG_DIR_SYSTEM_PROPERTY, "src/test/resources/testMultipleMatches");
             PermissionsConfig config = new PermissionsConfig();
-            URI artifactURI = URI.create("TEST");
+            URI assetID = URI.create("TEST");
 
             Assert.assertNotNull(config.getExpiryDate());
 
@@ -180,7 +180,7 @@ public class PermissionsConfigTest {
             Assert.assertEquals(1, allowedUser.size());
             Assert.assertTrue(allowedUser.contains(expectedUser));
             
-            Iterator<PermissionEntry> entryIterator = config.getMatchingEntries(artifactURI);
+            Iterator<PermissionEntry> entryIterator = config.getMatchingEntries(assetID);
             List<PermissionEntry> entries = iteratorToList(entryIterator);
             Assert.assertNotNull(entries);
             Assert.assertEquals(2, entries.size());
@@ -200,7 +200,7 @@ public class PermissionsConfigTest {
             log.info("START - testOverlappingPermissions");
             System.setProperty(PropertiesReader.CONFIG_DIR_SYSTEM_PROPERTY, "src/test/resources/testOverlappingPermissions");
             PermissionsConfig config = new PermissionsConfig();
-            URI artifactURI = URI.create("TEST");
+            URI assetID = URI.create("TEST");
 
             Assert.assertNotNull(config.getExpiryDate());
 
@@ -209,7 +209,7 @@ public class PermissionsConfigTest {
             Assert.assertEquals(1, allowedUser.size());
             Assert.assertTrue(allowedUser.contains(expectedUser));
             
-            Iterator<PermissionEntry> entryIterator = config.getMatchingEntries(artifactURI);
+            Iterator<PermissionEntry> entryIterator = config.getMatchingEntries(assetID);
             List<PermissionEntry> entries = iteratorToList(entryIterator);
             Assert.assertNotNull(entries);
             Assert.assertEquals(2, entries.size());
@@ -219,7 +219,9 @@ public class PermissionsConfigTest {
             GroupURI readWriteGroup1 = new GroupURI("ivo://cadc.nrc.ca/gms?group2");
             GroupURI readWriteGroup2 = new GroupURI("ivo://cadc.nrc.ca/gms?group4");
             
-            ReadGrant readGrant = GetAction.getReadGrant(config, artifactURI);
+            final GetAction action = new GetAction();
+            
+            ReadGrant readGrant = action.getReadGrant(config, assetID);
             Assert.assertNotNull(readGrant);
             Assert.assertNotNull(readGrant.getExpiryDate());
             Assert.assertEquals(config.getExpiryDate(), readGrant.getExpiryDate());
@@ -230,7 +232,7 @@ public class PermissionsConfigTest {
             Assert.assertTrue(readGrant.getGroups().contains(readWriteGroup1));
             Assert.assertTrue(readGrant.getGroups().contains(readWriteGroup2));
             
-            WriteGrant writeGrant = GetAction.getWriteGrant(config, artifactURI);
+            WriteGrant writeGrant = action.getWriteGrant(config, assetID);
             Assert.assertNotNull(writeGrant);
             Assert.assertNotNull(writeGrant.getExpiryDate());
             Assert.assertEquals(config.getExpiryDate(), writeGrant.getExpiryDate());

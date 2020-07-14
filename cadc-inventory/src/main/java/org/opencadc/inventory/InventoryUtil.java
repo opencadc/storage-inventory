@@ -232,7 +232,7 @@ public abstract class InventoryUtil {
             assertValidPathComponent(null, "scheme-specific-part", c);
         }
     }
-
+    
     /**
      * Find storage site by unique id.
      *
@@ -292,6 +292,7 @@ public abstract class InventoryUtil {
      * @param u the URI
      */
     public static void assignMetaChecksum(Entity ce, URI u) {
+        assertValidChecksumURI(InventoryUtil.class, "assignMetaChecksum", u);
         try {
             Field f = Entity.class.getDeclaredField("metaChecksum");
             f.setAccessible(true);
@@ -359,17 +360,60 @@ public abstract class InventoryUtil {
      * @throws IllegalArgumentException if the value is invalid
      */
     public static void assertValidChecksumURI(Class caller, String name, URI uri) {
-        String scheme = uri.getScheme();
+        String alg = uri.getScheme();
         String sval = uri.getSchemeSpecificPart();
-        if (scheme == null || sval == null) {
+        if (alg == null || sval == null) {
             throw new IllegalArgumentException("invalid " + caller.getSimpleName() + "." + name + ": "
                 + uri + "reason: expected <algorithm>:<hex value>");
         }
+        byte[] b;
         try {
-            byte[] b = HexUtil.toBytes(sval); // TODO: could check algorithm vs length here
+            b = HexUtil.toBytes(sval);
         } catch (IllegalArgumentException ex) {
-            throw new IllegalArgumentException("invalid " + caller.getSimpleName() + "." + name + ": "
-                + uri + " contains invalid hex chars -- expected <algorithm>:<hex value>");
+            throw new IllegalArgumentException("invalid Artifact.contentChecksum: " 
+                + uri + " contains invalid hex chars, expected <algorithm>:<hex value>");
         }
+        
+        if ("md5".equals(alg)) {
+            if (b.length != 16) {
+                throw new IllegalArgumentException("invalid checksum URI: " + uri 
+                        + " found " + b.length + " bytes, expected 16");
+            }
+            return;
+        }
+        
+        if ("sha-1".equals(alg)) {
+            if (b.length != 20) {
+                throw new IllegalArgumentException("invalid checksum URI: " + uri 
+                        + " found " + b.length + " bytes, expected 20");
+            }
+            return;
+        } 
+        
+        if ("sha-256".equals(alg)) {
+            if (b.length != 32) {
+                throw new IllegalArgumentException("invalid checksum URI: " + uri 
+                        + " found " + b.length + " bytes, expected 32");
+            }
+            return;
+        }
+        
+        if ("sha-384".equals(alg)) {
+            if (b.length != 48) {
+                throw new IllegalArgumentException("invalid checksum URI: " + uri 
+                        + " found " + b.length + " bytes, expected 48");
+            }
+            return;
+        }
+        
+        if ("sha-512".equals(alg)) {
+            if (b.length != 64) {
+                throw new IllegalArgumentException("invalid checksum URI: " + uri 
+                        + " found " + b.length + " bytes, expected 64");
+            }
+            return;
+        }
+        
+        throw new IllegalArgumentException("invalid checksum URI: " + uri + " unsupported algorithm");
     }
 }

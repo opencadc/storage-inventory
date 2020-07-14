@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2019.                            (c) 2019.
+*  (c) 2020.                            (c) 2020.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -109,9 +109,9 @@ import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.DeletedEventDAO;
 import org.opencadc.inventory.db.SQLGenerator;
 import org.opencadc.inventory.db.StorageSiteDAO;
-import org.opencadc.inventory.permissions.PermissionsClient;
-import org.opencadc.inventory.permissions.ReadGrant;
-import org.opencadc.inventory.permissions.TokenUtil;
+import org.opencadc.permissions.ReadGrant;
+import org.opencadc.permissions.TokenUtil;
+import org.opencadc.permissions.client.PermissionsClient;
 
 /**
  * Given a transfer request object return a transfer response object with all

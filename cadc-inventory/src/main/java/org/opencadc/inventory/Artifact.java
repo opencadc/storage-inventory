@@ -139,9 +139,11 @@ public class Artifact extends Entity {
         InventoryUtil.assertNotNull(Artifact.class, "contentChecksum", contentChecksum);
         InventoryUtil.assertNotNull(Artifact.class, "contentLastModified", contentLastModified);
         InventoryUtil.assertNotNull(Artifact.class, "contentLength", contentLength);
+        InventoryUtil.assertValidChecksumURI(Artifact.class, "contentChecksum", contentChecksum);
         if (contentLength <= 0L) {
             throw new IllegalArgumentException("invalid " + Artifact.class.getSimpleName() + ".contentLength: " + contentLength);
         }
+        
         this.uri = uri;
         this.contentChecksum = contentChecksum;
         this.contentLastModified = contentLastModified;

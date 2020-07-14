@@ -69,6 +69,7 @@
 
 package org.opencadc.baldur;
 
+import ca.nrc.cadc.auth.AuthenticationUtil;
 import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.util.PropertiesReader;
 import java.net.URI;
@@ -102,8 +103,8 @@ public class PermissionsConfig {
     private static final String KEY_ALLOWED_USER = "org.opencadc.baldur.allowedUser";
     private static final String KEY_ENTRY = "org.opencadc.baldur.entry";
     private static final String KEY_ANON_READ = ".anon";
-    private static final String KEY_READONLY_GROUPS = ".readOnlyGroups";
-    private static final String KEY_READWRITE_GROUPS = ".readWriteGroups";
+    private static final String KEY_READONLY_GROUP = ".readOnlyGroup";
+    private static final String KEY_READWRITE_GROUP = ".readWriteGroup";
     private static final String KEY_GRANT_EXPIRY = "org.opencadc.baldur.grantExpiry";
     
     private Set<Principal> authPrincipals;
@@ -148,7 +149,7 @@ public class PermissionsConfig {
         this.authPrincipals = new HashSet<Principal>();
         for (String dn : authUsersConfig) {
             log.debug("authorized dn: " + dn);
-            this.authPrincipals.add(new X500Principal(dn));
+            this.authPrincipals.add(new X500Principal(AuthenticationUtil.canonizeDistinguishedName(dn)));
         }
         if (this.authPrincipals.size() == 0) {
             throw new IllegalStateException("no values for key " + KEY_ALLOWED_USER + " in " + PERMISSIONS_PROPERTIES);
@@ -194,9 +195,9 @@ public class PermissionsConfig {
                 }
                 next.anonRead = Boolean.parseBoolean(anonRead.get(0));
             }
-            List<String> readOnlyGroups = allProps.getProperty(next.getName() + KEY_READONLY_GROUPS);
+            List<String> readOnlyGroups = allProps.getProperty(next.getName() + KEY_READONLY_GROUP);
             initAddGroups(readOnlyGroups, next.readOnlyGroups);
-            List<String> readWriteGroups = allProps.getProperty(next.getName() + KEY_READWRITE_GROUPS);
+            List<String> readWriteGroups = allProps.getProperty(next.getName() + KEY_READWRITE_GROUP);
             initAddGroups(readWriteGroups, next.readWriteGroups);
             this.entries.add(next);
             log.debug("Added permission entry: " + next);
