@@ -26,8 +26,8 @@ org.opencadc.baldur.allowedGroup = {groupURI}
 # - followed by entry-specific permission keys with a space separated list of group identifiers
 org.opencadc.baldur.entry = {entry name} {regular expression}
 {entry name}.anon = {true|false}
-{entry name}.readOnlyGroups = {group URI} ...
-{entry name}.readWriteGroups = {group URI} ...
+{entry name}.readOnlyGroup = {group URI} ...
+{entry name}.readWriteGroup = {group URI} ...
 ```
 `org.opencadc.baldur.grantExpiry` is used to calculate the expiry date of a grant. The value is an integer in seconds. The expiry date of a grant is: (the current time when a grant is issued + the number of seconds given by the expiryTime).
 
@@ -35,12 +35,11 @@ org.opencadc.baldur.entry = {entry name} {regular expression}
 
 `org.opencadc.baldur.allowedGroup` specifies the group(s) whose members have authorization to make calls to the service. The value is a list of group identifiers (e.g. ivo://cadc.nrc.ca/gms?CADC), one line per group.
 
-The `{entry name}.anon` flag specifies that all users (including anonymous) can get matching artifacts (default: false).
+The `{entry name}.anon` flag specifies that all users (including anonymous) can get matching assets (default: false).
 
-The `{entry name}.readOnlyGroups` list specifies the group(s) that can get matching artifacts (default: empty list).
+The `{entry name}.readOnlyGroup` entries specifies the group(s) that can get matching assets (default: empty list).
 
-The `{entry name}.readWriteGroups` list specifies the group(s) that can get/put/update/delete matching artifacts (default:
-empty list).
+The `{entry name}.readWriteGroup` entries specifies the group(s) that can get/put/update/delete matching assets (default: empty list).
 
 ### example baldur.properites entry section:
 ```
@@ -51,10 +50,10 @@ org.opencadc.baldur.allowedUser = bar,ou=acme,o=example,c=com
 
 org.opencadc.baldur.entry = TEST ^cadc:TEST/.*
 TEST.anon = false
-TEST.readOnlyGroups = ivo://cadc.nrc.ca/gms?TestRead-1
-TEST.readOnlyGroups = ivo://cadc.nrc.ca/gms?TestRead-2
-TEST.readWriteGroups = ivo://cadc.nrc.ca/gms?TestWrite-1 
-TEST.readWriteGroups = ivo://cadc.nrc.ca/gms?TestWrite-2
+TEST.readOnlyGroup = ivo://cadc.nrc.ca/gms?TestRead-1
+TEST.readOnlyGroup = ivo://cadc.nrc.ca/gms?TestRead-2
+TEST.readWriteGroup = ivo://cadc.nrc.ca/gms?TestWrite-1 
+TEST.readWriteGroup = ivo://cadc.nrc.ca/gms?TestWrite-2
 ```
 
 In this example the expiry time is 60 seconds. 
