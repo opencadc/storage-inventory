@@ -68,12 +68,10 @@
 package org.opencadc.minoc;
 
 import ca.nrc.cadc.io.WriteException;
-
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.StorageLocation;
-import org.opencadc.inventory.db.ArtifactDAO;
-import org.opencadc.inventory.permissions.ReadGrant;
+import org.opencadc.permissions.ReadGrant;
 
 /**
  * Interface with storage and inventory to get an artifact.
