@@ -2,6 +2,8 @@
 create table <schema>.StorageSite (
     resourceID varchar(512) not null,
     name varchar(32) not null,
+    allowRead boolean not null,
+    allowWrite boolean not null,
     
     id uuid not null primary key,
     lastModified timestamp not null,

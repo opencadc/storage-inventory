@@ -161,6 +161,8 @@ public class SQLGenerator {
         cols = new String[] {
             "resourceID", // first column is logical key
             "name",
+            "allowRead", 
+            "allowWrite",
             "lastModified",
             "metaChecksum",
             "id" // last column is always PK
@@ -750,6 +752,8 @@ public class SQLGenerator {
             int col = 1;
             prep.setString(col++, value.getResourceID().toASCIIString());
             prep.setString(col++, value.getName());
+            prep.setBoolean(col++, value.getAllowRead());
+            prep.setBoolean(col++, value.getAllowWrite());
             
             prep.setTimestamp(col++, new Timestamp(value.getLastModified().getTime()), utc);
             prep.setString(col++, value.getMetaChecksum().toASCIIString());
@@ -1215,11 +1219,13 @@ public class SQLGenerator {
             int col = 1;
             final URI resourceID = Util.getURI(rs, col++);
             final String name = rs.getString(col++);
+            final boolean allowRead = rs.getBoolean(col++);
+            final boolean allowWrite = rs.getBoolean(col++);
             final Date lastModified = Util.getDate(rs, col++, utc);
             final URI metaChecksum = Util.getURI(rs, col++);
             final UUID id = Util.getUUID(rs, col++);
             
-            StorageSite s = new StorageSite(id, resourceID, name);
+            StorageSite s = new StorageSite(id, resourceID, name, allowRead, allowWrite);
             InventoryUtil.assignLastModified(s, lastModified);
             InventoryUtil.assignMetaChecksum(s, metaChecksum);
             return s;
