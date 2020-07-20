@@ -356,7 +356,7 @@
             <attribute>
                 <vodml-id>StorageSite.allowRead</vodml-id>
                 <name>allowRead</name>
-                <description>site is configured to allow callers to GET files</description>
+                <description>site is configured to allow callers to get metadata and/or content of files</description>
                 <datatype>
                     <vodml-ref>ivoa:boolean</vodml-ref>
                 </datatype>
@@ -368,7 +368,7 @@
             <attribute>
                 <vodml-id>StorageSite.allowWrite</vodml-id>
                 <name>allowWrite</name>
-                <description>site is configured to allow callers to PUT and DELETE files</description>
+                <description>site is configured to allow callers to write and delete files and modify file metadata</description>
                 <datatype>
                     <vodml-ref>ivoa:boolean</vodml-ref>
                 </datatype>
