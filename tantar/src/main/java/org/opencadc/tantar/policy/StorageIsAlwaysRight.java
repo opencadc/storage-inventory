@@ -115,7 +115,7 @@ public class StorageIsAlwaysRight extends ResolutionPolicy {
                     validateEventListener.replaceArtifact(artifact, storageMetadata);
                 } else {
                     // If storage is always right, but it has no metadata, then leave it for someone to manually fix.
-                    reporter.report("Corrupt or invalid Storage Metadata (" + storageMetadata.getStorageLocation()
+                    reporter.report("Invalid Storage Metadata (" + storageMetadata.getStorageLocation()
                                     + ").  Skipping as per policy.");
                 }
             } else {

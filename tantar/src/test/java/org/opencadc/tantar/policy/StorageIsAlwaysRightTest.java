@@ -135,7 +135,7 @@ public class StorageIsAlwaysRightTest extends AbstractResolutionPolicyTest<Stora
         System.out.println(String.format("Message lines are \n\n%s\n\n", outputLines));
 
         assertListContainsMessage(outputLines,
-                                  "Corrupt or invalid Storage Metadata (StorageLocation[s3:989877]).  "
+                                  "Invalid Storage Metadata (StorageLocation[s3:989877]).  "
                                   + "Skipping as per policy.");
 
         Assert.assertTrue("Should not have called any operation.",

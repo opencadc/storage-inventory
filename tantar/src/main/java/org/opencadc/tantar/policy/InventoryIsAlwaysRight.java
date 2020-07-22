@@ -98,6 +98,11 @@ public class InventoryIsAlwaysRight extends ResolutionPolicy {
             reporter.report("Resetting Artifact " + artifact.storageLocation + " as per policy.");
 
             validateEventListener.markAsNew(artifact);
+        } else if (!storageMetadata.isValid()) {
+            reporter.report("Invalid Storage Metadata (" + storageMetadata.getStorageLocation() + ").  "
+                            + "Replacing as per policy.");
+            validateEventListener.delete(storageMetadata);
+            validateEventListener.markAsNew(artifact);
         } else if (artifact == null) {
             reporter.report("Removing Unknown File " + storageMetadata.getStorageLocation() + " as per policy.");
 
@@ -105,19 +110,11 @@ public class InventoryIsAlwaysRight extends ResolutionPolicy {
         } else {
             // Check metadata for discrepancies.
             if (haveDifferentStructure(artifact, storageMetadata)) {
-                // The metadata differs, but for valid reasons (update).
-                if (storageMetadata.isValid()) {
-                    // Then prefer the Artifact.
-                    reporter.report("Replacing File " + storageMetadata.getStorageLocation() + " as per policy.");
+                // Prefer the Artifact if it differs from the Storage Metadata.
+                reporter.report("Replacing File " + storageMetadata.getStorageLocation() + " as per policy.");
 
-                    validateEventListener.delete(storageMetadata);
-                    validateEventListener.markAsNew(artifact);
-                } else {
-                    // The inventory reports that this Storage Metadata is corrupt or invalid.  Remove it.
-                    reporter.report("Corrupt or invalid Storage Metadata (" + storageMetadata.getStorageLocation()
-                                    + ").  Removing as per policy.");
-                    validateEventListener.delete(storageMetadata);
-                }
+                validateEventListener.delete(storageMetadata);
+                validateEventListener.markAsNew(artifact);
             } else {
                 reporter.report("Artifact " + artifact.storageLocation + " is valid as per policy.");
             }
