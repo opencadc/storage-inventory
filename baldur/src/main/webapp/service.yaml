@@ -8,10 +8,10 @@ basePath: '/baldur'
 paths:
   /perms:
     parameters:
-      - name: URI
+      - name: ID
         in: query
         type: string
-        description: The artifact URI.
+        description: The asset identifier
         required: true
       - name: OP
         in: query
@@ -20,7 +20,7 @@ paths:
         type: string
         enum: [read, write]
     get:
-      description: Get the permissions for the file identified by the uri parameter, returning either read or write permissions based on the op parameter.
+      description: Get the permissions for the asset identified by the ID parameter, returning either read or write permissions based on the op parameter.
       tags:
         - Artifact permissions
       summary: Get file permissions.
