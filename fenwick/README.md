@@ -33,6 +33,18 @@ org.opencadc.fenwick.ArtifactSelector={fully qualified classname of ArtifactSele
 Querying the remote query service (luskan) requires permission. `fenwick` uses this certificate file located
 in /config to authenticate.
 
+### SQL includes
+When the `org.opencadc.fenwick.IncludeArtifacts` ArtifactSelector is specified, an SQL file specifying the included Artifacts is required 
+in the `/config/include` folder.  The single clause in the SQL file *MUST* begin with the `WHERE` keyword.
+
+> `artifact-include.sql`
+```sql
+WHERE uri LIKE '%SOME CONDITION%'
+```
+
+Will restrict the included Artifacts to _only_ those that match the SQL condition.
+
+
 ## building it
 ```
 gradle clean build
