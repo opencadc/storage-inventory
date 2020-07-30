@@ -238,6 +238,8 @@ public class InventoryHarvester implements Runnable {
                                                              this.resourceID)
                                           : existingHarvestState;
 
+        final DeletedEventDAO<DeletedStorageLocationEvent> deletedStorageLocationEventDeletedEventDAO =
+                new DeletedEventDAO<>(this.artifactDAO);
         final TapClient<DeletedStorageLocationEvent> deletedStorageLocationEventTapClient =
                 new TapClient<>(this.resourceID);
         final DeletedStorageLocationEventSync deletedStorageLocationEventSync =
@@ -257,6 +259,7 @@ public class InventoryHarvester implements Runnable {
                 final Artifact artifact = this.artifactDAO.get(deletedStorageLocationEvent.getID());
                 if (artifact != null) {
                     final SiteLocation siteLocation = new SiteLocation(storageSite.getID());
+                    deletedStorageLocationEventDeletedEventDAO.put(deletedStorageLocationEvent);
                     artifact.siteLocations.remove(siteLocation);
                     artifactDAO.put(artifact, true);
                     harvestState.curLastModified = deletedStorageLocationEvent.getLastModified();
