@@ -95,25 +95,28 @@ public class InventoryIsAlwaysRight extends ResolutionPolicy {
             // happen in the case where all files are managed by the inventory but an intervention outside of the
             // Storage Inventory caused a file to disappear.  The file may not have been fully uploaded to begin with
             // either.
-            reporter.report(String.format("Resetting Artifact %s as per policy.", artifact.storageLocation));
+            reporter.report("Resetting Artifact " + artifact.storageLocation + " as per policy.");
 
             validateEventListener.markAsNew(artifact);
+        } else if (!storageMetadata.isValid()) {
+            reporter.report("Invalid Storage Metadata (" + storageMetadata.getStorageLocation() + ").  "
+                            + "Replacing as per policy.");
+            validateEventListener.delete(storageMetadata);
+            validateEventListener.markAsNew(artifact);
         } else if (artifact == null) {
-            reporter.report(String.format("Removing Unknown File %s as per policy.",
-                                          storageMetadata.getStorageLocation()));
+            reporter.report("Removing Unknown File " + storageMetadata.getStorageLocation() + " as per policy.");
 
             validateEventListener.delete(storageMetadata);
         } else {
             // Check metadata for discrepancies.
             if (haveDifferentStructure(artifact, storageMetadata)) {
-                // Then prefer the Artifact.
-                reporter.report(String.format("Replacing File %s as per policy.",
-                                              storageMetadata.getStorageLocation()));
+                // Prefer the Artifact if it differs from the Storage Metadata.
+                reporter.report("Replacing File " + storageMetadata.getStorageLocation() + " as per policy.");
 
                 validateEventListener.delete(storageMetadata);
                 validateEventListener.markAsNew(artifact);
             } else {
-                reporter.report(String.format("Artifact %s is valid as per policy.", artifact.storageLocation));
+                reporter.report("Artifact " + artifact.storageLocation + " is valid as per policy.");
             }
         }
     }

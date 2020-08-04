@@ -81,6 +81,7 @@ import java.util.Comparator;
 import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
+import java.util.UUID;
 import javax.security.auth.Subject;
 
 import org.apache.log4j.Level;
@@ -117,18 +118,19 @@ public class BucketValidatorTest {
 
         // **** Create the Inventory content.
         final List<Artifact> testArtifactList = new ArrayList<>();
+        final URI artifactOneContentChecksum = URI.create("md5:" + random16Bytes());
         final Artifact artifactOne =
-                new Artifact(URI.create("cadc:TESTBUCKET/myfile88.fits"), URI.create("md5:8899"), new Date(), 88L);
+                new Artifact(URI.create("cadc:TESTBUCKET/myfile88.fits"), artifactOneContentChecksum, new Date(), 88L);
         artifactOne.storageLocation = new StorageLocation(URI.create("ad:123456"));
         testArtifactList.add(artifactOne);
 
         final Artifact artifactTwo =
-                new Artifact(URI.create("cadc:TESTBUCKET/myfile99.fits"), URI.create("md5:9900"), new Date(), 99L);
+                new Artifact(URI.create("cadc:TESTBUCKET/myfile99.fits"), URI.create("md5:" + random16Bytes()), new Date(), 99L);
         artifactTwo.storageLocation = new StorageLocation(URI.create("ceph:7890AB"));
         testArtifactList.add(artifactTwo);
 
         final Artifact artifactThree =
-                new Artifact(URI.create("cadc:TESTBUCKET/myfile100.fits"), URI.create("md5:10001"), new Date(),
+                new Artifact(URI.create("cadc:TESTBUCKET/myfile100.fits"), URI.create("md5:" + random16Bytes()), new Date(),
                              100L);
         artifactThree.storageLocation = new StorageLocation(URI.create("s3:CDEF00"));
         testArtifactList.add(artifactThree);
@@ -139,15 +141,15 @@ public class BucketValidatorTest {
         // **** Create the Storage Adapter content.
         final List<StorageMetadata> testStorageMetadataList = new ArrayList<>();
         testStorageMetadataList.add(new StorageMetadata(new StorageLocation(URI.create("ad:123456")),
-                                                        URI.create("md5:8899"), 88L));
+                                                        artifactOneContentChecksum, 88L));
         testStorageMetadataList.get(0).contentLastModified = artifactOne.getLastModified();
 
         testStorageMetadataList.add(new StorageMetadata(new StorageLocation(URI.create("ceph:78787878")),
-                                                        URI.create("md5:0055998"), 99L));
+                                                        URI.create("md5:" + random16Bytes()), 99L));
 
         testStorageMetadataList.add(
                 new StorageMetadata(new StorageLocation(URI.create("s3:CDEF00")),
-                                    URI.create("md5:2222"), 100L));
+                                    URI.create("md5:" + random16Bytes()), 100L));
         testStorageMetadataList.sort(Comparator.comparing(StorageMetadata::getStorageLocation));
         // **** End Create the Storage Adapter content.
 
@@ -202,17 +204,17 @@ public class BucketValidatorTest {
         // **** Create the Inventory content.
         final List<Artifact> testArtifactList = new ArrayList<>();
         final Artifact artifactOne =
-                new Artifact(URI.create("cadc:TESTBUCKET/myfile88.fits"), URI.create("md5:8899"), new Date(), 88L);
+                new Artifact(URI.create("cadc:TESTBUCKET/myfile88.fits"), URI.create("md5:" + random16Bytes()), new Date(), 88L);
         artifactOne.storageLocation = new StorageLocation(URI.create("ad:123456"));
         testArtifactList.add(artifactOne);
 
         final Artifact artifactTwo =
-                new Artifact(URI.create("cadc:TESTBUCKET/myfile99.fits"), URI.create("md5:9900"), new Date(), 99L);
+                new Artifact(URI.create("cadc:TESTBUCKET/myfile99.fits"), URI.create("md5:" + random16Bytes()), new Date(), 99L);
         artifactTwo.storageLocation = new StorageLocation(URI.create("ceph:7890AB"));
         testArtifactList.add(artifactTwo);
 
         final Artifact artifactThree =
-                new Artifact(URI.create("cadc:TESTBUCKET/myfile100.fits"), URI.create("md5:10001"), new Date(),
+                new Artifact(URI.create("cadc:TESTBUCKET/myfile100.fits"), URI.create("md5:" + random16Bytes()), new Date(),
                              100L);
         artifactThree.storageLocation = new StorageLocation(URI.create("s3:CDEF00"));
         testArtifactList.add(artifactThree);
@@ -264,18 +266,19 @@ public class BucketValidatorTest {
 
         // **** Create the Inventory content.
         final List<Artifact> testArtifactList = new ArrayList<>();
+        final URI artifactOneContentChecksum = URI.create("md5:" + random16Bytes());
         final Artifact artifactOne =
-                new Artifact(URI.create("cadc:TESTBUCKET/myfile88.fits"), URI.create("md5:8899"), new Date(), 88L);
+                new Artifact(URI.create("cadc:TESTBUCKET/myfile88.fits"), artifactOneContentChecksum, new Date(), 88L);
         artifactOne.storageLocation = new StorageLocation(URI.create("ad:123456"));
         testArtifactList.add(artifactOne);
 
         final Artifact artifactTwo =
-                new Artifact(URI.create("cadc:TESTBUCKET/myfile99.fits"), URI.create("md5:9900"), new Date(), 99L);
+                new Artifact(URI.create("cadc:TESTBUCKET/myfile99.fits"), URI.create("md5:" + random16Bytes()), new Date(), 99L);
         artifactTwo.storageLocation = new StorageLocation(URI.create("ceph:7890AB"));
         testArtifactList.add(artifactTwo);
 
         final Artifact artifactThree =
-                new Artifact(URI.create("cadc:TESTBUCKET/myfile100.fits"), URI.create("md5:10001"), new Date(),
+                new Artifact(URI.create("cadc:TESTBUCKET/myfile100.fits"), URI.create("md5:" + random16Bytes()), new Date(),
                              100L);
         artifactThree.storageLocation = new StorageLocation(URI.create("s3:CDEF00"));
         testArtifactList.add(artifactThree);
@@ -286,15 +289,15 @@ public class BucketValidatorTest {
         // **** Create the Storage Adapter content.
         final List<StorageMetadata> testStorageMetadataList = new ArrayList<>();
         testStorageMetadataList.add(new StorageMetadata(new StorageLocation(URI.create("ad:123456")),
-                                                        URI.create("md5:8899"), 88L));
+                                                        artifactOneContentChecksum, 88L));
         testStorageMetadataList.get(0).contentLastModified = artifactOne.getLastModified();
 
         testStorageMetadataList.add(new StorageMetadata(new StorageLocation(URI.create("ceph:78787878")),
-                                                        URI.create("md5:0055998"), 99L));
+                                                        URI.create("md5:" + random16Bytes()), 99L));
 
         testStorageMetadataList.add(
                 new StorageMetadata(new StorageLocation(URI.create("s3:CDEF00")),
-                                    URI.create("md5:2222"), 100L));
+                                    URI.create("md5:" + random16Bytes()), 100L));
         testStorageMetadataList.sort(Comparator.comparing(StorageMetadata::getStorageLocation));
         // **** End Create the Storage Adapter content.
 
@@ -349,14 +352,14 @@ public class BucketValidatorTest {
         // **** Create the Storage Adapter content.
         final List<StorageMetadata> testStorageMetadataList = new ArrayList<>();
         testStorageMetadataList.add(new StorageMetadata(new StorageLocation(URI.create("ad:123456")),
-                                                        URI.create("md5:8899"), 88L));
+                                                        URI.create("md5:" + random16Bytes()), 88L));
 
         testStorageMetadataList.add(new StorageMetadata(new StorageLocation(URI.create("ad:78787878")),
-                                                        URI.create("md5:0055998"), 99L));
+                                                        URI.create("md5:" + random16Bytes()), 99L));
 
         testStorageMetadataList.add(
                 new StorageMetadata(new StorageLocation(URI.create("ad:CDEF00")),
-                                    URI.create("md5:2222"), 100L));
+                                    URI.create("md5:" + random16Bytes()), 100L));
         testStorageMetadataList.sort(Comparator.comparing(StorageMetadata::getStorageLocation));
         // **** End Create the Storage Adapter content.
 
@@ -405,14 +408,14 @@ public class BucketValidatorTest {
         // **** Create the Storage Adapter content.
         final List<StorageMetadata> testStorageMetadataList = new ArrayList<>();
         testStorageMetadataList.add(new StorageMetadata(new StorageLocation(URI.create("ad:123456")),
-                                                        URI.create("md5:8899"), 88L));
+                                                        URI.create("md5:" + random16Bytes()), 88L));
 
         testStorageMetadataList.add(new StorageMetadata(new StorageLocation(URI.create("ad:78787878")),
-                                                        URI.create("md5:0055998"), 99L));
+                                                        URI.create("md5:" + random16Bytes()), 99L));
 
         testStorageMetadataList.add(
                 new StorageMetadata(new StorageLocation(URI.create("ad:CDEF00")),
-                                    URI.create("md5:2222"), 100L));
+                                    URI.create("md5:" + random16Bytes()), 100L));
         testStorageMetadataList.sort(Comparator.comparing(StorageMetadata::getStorageLocation));
         // **** End Create the Storage Adapter content.
 
@@ -460,5 +463,9 @@ public class BucketValidatorTest {
         logger.addAppender(testAppender);
 
         return logger;
+    }
+
+    String random16Bytes() {
+        return UUID.randomUUID().toString().replaceAll("-", "");
     }
 }
