@@ -85,16 +85,20 @@ public class StorageSite extends Entity implements Comparable<StorageSite> {
 
     private URI resourceID;
     private String name;
+    private boolean allowRead;
+    private boolean allowWrite;
     
     /**
      * Create a new StorageSite.
      * 
      * @param resourceID IVOA resourceID
      * @param name display name
+     * @param allowRead site allows HEAD and GET
+     * @param allowWrite site allows DELETE and PUT
      */
-    public StorageSite(URI resourceID, String name) {
+    public StorageSite(URI resourceID, String name, boolean allowRead, boolean allowWrite) {
         super();
-        init(resourceID, name);
+        init(resourceID, name, allowRead, allowWrite);
     }
     
     /**
@@ -103,17 +107,21 @@ public class StorageSite extends Entity implements Comparable<StorageSite> {
      * @param id entity ID
      * @param resourceID IVOA resourceID
      * @param name display name
+     * @param allowRead site allows HEAD and GET
+     * @param allowWrite site allows DELETE and PUT
      */
-    public StorageSite(UUID id, URI resourceID, String name) {
+    public StorageSite(UUID id, URI resourceID, String name, boolean allowRead, boolean allowWrite) {
         super(id);
-        init(resourceID, name);
+        init(resourceID, name, allowRead, allowWrite);
     }
     
-    private void init(URI resourceID, String name) {
+    private void init(URI resourceID, String name, boolean allowRead, boolean allowWrite) {
         InventoryUtil.assertNotNull(StorageSite.class, "resourceID", resourceID);
         InventoryUtil.assertNotNull(StorageSite.class, "name", name);
         this.resourceID = resourceID;
         this.name = name;
+        this.allowRead = allowRead;
+        this.allowWrite = allowWrite;
     }
 
     /**
@@ -132,6 +140,24 @@ public class StorageSite extends Entity implements Comparable<StorageSite> {
      */
     public String getName() {
         return name;
+    }
+
+    /**
+     * Get the allowRead state of the site.
+     * 
+     * @return true if the site allows read
+     */
+    public boolean getAllowRead() {
+        return allowRead;
+    }
+
+    /**
+     * Get the allowWrite state of the site.
+     * 
+     * @return true if the site allows writes
+     */
+    public boolean getAllowWrite() {
+        return allowWrite;
     }
 
     /**
@@ -154,6 +180,24 @@ public class StorageSite extends Entity implements Comparable<StorageSite> {
         this.name = name;
     }
 
+    /**
+     * Change the allowRead state of the site.
+     * 
+     * @param allowRead site allows read operations
+     */
+    public void setAllowRead(boolean allowRead) {
+        this.allowRead = allowRead;
+    }
+
+    /**
+     * Change the allowWrite state of the site.
+     * 
+     * @param allowWrite site allows write operations
+     */
+    public void setAllowWrite(boolean allowWrite) {
+        this.allowWrite = allowWrite;
+    }
+    
     /**
      * Compares Site.resourceID values.
      * 

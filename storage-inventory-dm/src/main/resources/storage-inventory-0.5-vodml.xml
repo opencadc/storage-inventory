@@ -57,7 +57,7 @@
     <uri/>
     <title>Storage Inventory Data Model</title>
     <author>Patrick Dowler, Canadian Astronomy Data Centre</author>
-    <version>0.4</version>
+    <version>0.5</version>
     <lastModified>2019-07-22T15:00:00</lastModified>
     
     <import>
@@ -347,6 +347,30 @@
                 <description>common (display) name of a site</description>
                 <datatype>
                     <vodml-ref>ivoa:string</vodml-ref>
+                </datatype>
+                <multiplicity>
+                    <minOccurs>1</minOccurs>
+                    <maxOccurs>1</maxOccurs>
+                </multiplicity>
+            </attribute>
+            <attribute>
+                <vodml-id>StorageSite.allowRead</vodml-id>
+                <name>allowRead</name>
+                <description>site is configured to allow callers to get metadata and/or content of files</description>
+                <datatype>
+                    <vodml-ref>ivoa:boolean</vodml-ref>
+                </datatype>
+                <multiplicity>
+                    <minOccurs>1</minOccurs>
+                    <maxOccurs>1</maxOccurs>
+                </multiplicity>
+            </attribute>
+            <attribute>
+                <vodml-id>StorageSite.allowWrite</vodml-id>
+                <name>allowWrite</name>
+                <description>site is configured to allow callers to write and delete files and modify file metadata</description>
+                <datatype>
+                    <vodml-ref>ivoa:boolean</vodml-ref>
                 </datatype>
                 <multiplicity>
                     <minOccurs>1</minOccurs>

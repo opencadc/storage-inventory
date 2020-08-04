@@ -259,20 +259,20 @@ public class EntityTest {
         final String name2 = "flibble";
                 
         try {
-            StorageSite ok = new StorageSite(resourceID, name);
+            StorageSite ok = new StorageSite(resourceID, name, true, true);
             log.info("created: " + ok);
             Assert.assertEquals(resourceID, ok.getResourceID());
             Assert.assertEquals(name, ok.getName());
 
             UUID id = UUID.randomUUID();
-            StorageSite recon = new StorageSite(id, resourceID, name);
+            StorageSite recon = new StorageSite(id, resourceID, name, true, true);
             log.info("created: " + recon);
             Assert.assertEquals(id, recon.getID());
             Assert.assertEquals(resourceID, recon.getResourceID());
             Assert.assertEquals(name, recon.getName());
 
             // rename
-            StorageSite ren = new StorageSite(resourceID, name);
+            StorageSite ren = new StorageSite(resourceID, name, true, true);
             log.info("created: " + ren);
             ren.setResourceID(resourceID2);
             Assert.assertEquals(resourceID2, ren.getResourceID());
@@ -283,14 +283,14 @@ public class EntityTest {
             
             recon.setResourceID(resourceID);
             try {
-                StorageSite invalid = new StorageSite(null, name);
+                StorageSite invalid = new StorageSite(null, name, true, true);
                 Assert.fail("created: " + invalid);
             } catch (IllegalArgumentException expected) {
                 log.info("expected: " + expected);
             }
             
             try {
-                StorageSite invalid = new StorageSite(resourceID, null);
+                StorageSite invalid = new StorageSite(resourceID, null, true, true);
                 Assert.fail("created: " + invalid);
             } catch (IllegalArgumentException expected) {
                 log.info("expected: " + expected);
