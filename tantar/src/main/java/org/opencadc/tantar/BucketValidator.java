@@ -657,13 +657,7 @@ public class BucketValidator implements ValidateEventListener {
                 if (artifactIterator.hasNext()) {
                     return true;
                 } else if (bucketPrefixIterator.hasNext()) {
-                    try {
-                        artifactIterator =
-                                Subject.doAs(runUser, (PrivilegedExceptionAction<ResourceIterator<Artifact>>) () ->
-                                                               iteratorDAO.storedIterator(bucketPrefixIterator.next()));
-                    } catch (PrivilegedActionException exception) {
-                        throw new IllegalStateException(exception);
-                    }
+                    artifactIterator = iteratorDAO.storedIterator(bucketPrefixIterator.next());
                     return hasNext();
                 } else {
                     return false;
