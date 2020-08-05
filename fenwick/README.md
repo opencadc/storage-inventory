@@ -1,4 +1,4 @@
-# Storage Inventoty metadata-sync process (fenwick)
+# Storage Inventory metadata-sync process (fenwick)
 
 Process to sync metadata changes between storage sites and global inventory(ies). This process runs in
 incremental mode (single process running continuously to update a local inventory database). 

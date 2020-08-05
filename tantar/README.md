@@ -13,8 +13,8 @@ Additionally, a `cadcproxy.pem` file _may_ be required in the `/config` director
 ```
 org.opencadc.tantar.logging = {info|debug}
 
-# set the bucket  or bucket prefix that tantar will validate
-org.opencadc.tantar.bucket = {bucketname}
+# set the bucket prefix(es) that tantar will validate
+org.opencadc.tantar.buckets = {bucket prefix or range of bucket prefixes}
 
 # set the policy to resolve conflicts of files
 org.opencadc.tantar.policy.ResolutionPolicy = {fully-qualified-classname of implementation}
