@@ -366,8 +366,8 @@ public class StorageSiteSyncTest {
         public ResourceIteratorMultipleSites() {
             final List<StorageSite> storageSiteList = new ArrayList<>();
 
-            storageSiteList.add(new StorageSite(URI.create("ivo://test/siteone"), "Test Site One."));
-            storageSiteList.add(new StorageSite(URI.create("ivo://test/sitetwo"), "Test Site Two."));
+            storageSiteList.add(new StorageSite(URI.create("ivo://test/siteone"), "Test Site One.", true, false));
+            storageSiteList.add(new StorageSite(URI.create("ivo://test/sitetwo"), "Test Site Two.", true, true));
 
             sourceIterator = storageSiteList.iterator();
         }

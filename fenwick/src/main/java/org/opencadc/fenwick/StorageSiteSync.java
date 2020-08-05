@@ -104,8 +104,9 @@ import org.opencadc.tap.TapClient;
 public class StorageSiteSync {
     private static final Logger log = Logger.getLogger(StorageSiteSync.class);
 
+    // column order folllowing model declarations
     private static final String STORAGE_SITE_QUERY =
-            "SELECT name, id, resourceid, lastmodified, metachecksum FROM inventory.storagesite";
+            "SELECT resourceid, name, allowRead, allowWrite, id, lastmodified, metachecksum FROM inventory.storagesite";
 
     private final TapClient<StorageSite> tapClient;
     private final StorageSiteDAO storageSiteDAO;
@@ -190,10 +191,14 @@ public class StorageSiteSync {
                                                              InterruptedException {
         return tapClient.execute(STORAGE_SITE_QUERY, row -> {
             int index = 0;
-            final String name = row.get(index++).toString();
-            final UUID id = (UUID) row.get(index++);
+            // column order folllowing model declarations
             final URI resourceID = (URI) row.get(index++);
-            final StorageSite storageSite = new StorageSite(id, resourceID, name);
+            final String name = row.get(index++).toString();
+            final boolean allowRead = (Boolean) row.get(index++);
+            final boolean allowWrite = (Boolean) row.get(index++);
+            final UUID id = (UUID) row.get(index++);
+            
+            final StorageSite storageSite = new StorageSite(id, resourceID, name, allowRead, allowWrite);
 
             InventoryUtil.assignLastModified(storageSite, (Date) row.get(index++));
             InventoryUtil.assignMetaChecksum(storageSite, (URI) row.get(index));
