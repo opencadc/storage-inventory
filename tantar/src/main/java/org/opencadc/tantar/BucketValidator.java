@@ -72,11 +72,13 @@ package org.opencadc.tantar;
 import ca.nrc.cadc.db.ConnectionConfig;
 import ca.nrc.cadc.db.DBUtil;
 import ca.nrc.cadc.db.TransactionManager;
+import ca.nrc.cadc.io.ResourceIterator;
 import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.profiler.Profiler;
 import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.util.StringUtil;
 
+import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
 import java.util.Date;
 import java.util.HashMap;
@@ -100,6 +102,7 @@ import org.opencadc.inventory.db.SQLGenerator;
 import org.opencadc.inventory.storage.StorageAdapter;
 import org.opencadc.inventory.storage.StorageEngageException;
 import org.opencadc.inventory.storage.StorageMetadata;
+import org.opencadc.inventory.util.BucketSelector;
 import org.opencadc.tantar.policy.ResolutionPolicy;
 
 
@@ -114,7 +117,7 @@ public class BucketValidator implements ValidateEventListener {
 
     private static final String APPLICATION_CONFIG_KEY_PREFIX = "org.opencadc.tantar";
 
-    private final String bucket;
+    private final BucketSelector bucketSelector;
     private final StorageAdapter storageAdapter;
     private final Subject runUser;
     private final boolean reportOnlyFlag;
@@ -148,11 +151,14 @@ public class BucketValidator implements ValidateEventListener {
                             StorageAdapter.class.getCanonicalName()));
         }
 
-        this.bucket = properties.getFirstPropertyValue(String.format("%s.bucket", APPLICATION_CONFIG_KEY_PREFIX));
-        if (!StringUtil.hasLength(bucket)) {
+        final String bucketRange =
+                properties.getFirstPropertyValue(String.format("%s.buckets", APPLICATION_CONFIG_KEY_PREFIX));
+        if (!StringUtil.hasLength(bucketRange)) {
             throw new IllegalStateException(String.format("Bucket is mandatory.  Please set the %s property.",
-                                                          String.format("%s.bucket",
+                                                          String.format("%s.buckets",
                                                                         APPLICATION_CONFIG_KEY_PREFIX)));
+        } else {
+            this.bucketSelector = new BucketSelector(bucketRange.trim());
         }
 
         final String configuredReportOnly =
@@ -227,7 +233,7 @@ public class BucketValidator implements ValidateEventListener {
     /**
      * Complete constructor.  Useful for unit testing.
      *
-     * @param bucket           The bucket key to query.
+     * @param bucketSelector           The bucket key to query.
      * @param storageAdapter   The StorageAdapter instance to interact with a Site.
      * @param runUser          The Subject to run as when iterating over the Site's StorageMetadata.
      * @param reportOnlyFlag   Whether to take action or not.  Default is false.
@@ -235,10 +241,10 @@ public class BucketValidator implements ValidateEventListener {
      * @param artifactDAO      The Transactional artifact DAO for CRUD operations.
      * @param iteratorDAO      The bare artifact DAO for iterating.
      */
-    BucketValidator(final String bucket, final StorageAdapter storageAdapter, final Subject runUser,
+    BucketValidator(final BucketSelector bucketSelector, final StorageAdapter storageAdapter, final Subject runUser,
                     final boolean reportOnlyFlag, final ResolutionPolicy resolutionPolicy,
                     final ArtifactDAO artifactDAO, final ArtifactDAO iteratorDAO) {
-        this.bucket = bucket.trim();
+        this.bucketSelector = bucketSelector;
         this.storageAdapter = storageAdapter;
         this.runUser = runUser;
         this.reportOnlyFlag = reportOnlyFlag;
@@ -343,7 +349,7 @@ public class BucketValidator implements ValidateEventListener {
 
                 final DeletedStorageLocationEvent deletedStorageLocationEvent =
                         new DeletedStorageLocationEvent(resetArtifact.getID());
-                final DeletedEventDAO deletedEventDAO = new DeletedEventDAO(artifactDAO);
+                final DeletedEventDAO<DeletedStorageLocationEvent> deletedEventDAO = new DeletedEventDAO<>(artifactDAO);
                 deletedEventDAO.put(deletedStorageLocationEvent);
 
                 artifactDAO.put(resetArtifact, true);
@@ -427,7 +433,7 @@ public class BucketValidator implements ValidateEventListener {
                 LOGGER.debug("Start transaction.");
                 transactionManager.startTransaction();
 
-                final DeletedEventDAO deletedEventDAO = new DeletedEventDAO(artifactDAO);
+                final DeletedEventDAO<DeletedArtifactEvent> deletedEventDAO = new DeletedEventDAO<>(artifactDAO);
                 final DeletedArtifactEvent deletedArtifactEvent = new DeletedArtifactEvent(artifact.getID());
 
                 artifactDAO.delete(artifact.getID());
@@ -515,7 +521,8 @@ public class BucketValidator implements ValidateEventListener {
                 artifactDAO.delete(artifact.getID());
 
                 final DeletedArtifactEvent deletedArtifactEvent = new DeletedArtifactEvent(artifact.getID());
-                final DeletedEventDAO deletedArtifactEventDeletedEventDAO = new DeletedEventDAO(artifactDAO);
+                final DeletedEventDAO<DeletedArtifactEvent> deletedArtifactEventDeletedEventDAO =
+                        new DeletedEventDAO<>(artifactDAO);
                 deletedArtifactEventDeletedEventDAO.put(deletedArtifactEvent);
 
                 // Create a replacement Artifact with information from the StorageMetadata, as it's assumed to hold
@@ -598,10 +605,36 @@ public class BucketValidator implements ValidateEventListener {
      * @throws TransientException     If an unexpected, temporary exception occurred.
      */
     Iterator<StorageMetadata> iterateStorage() throws Exception {
-        LOGGER.debug(String.format("Getting iterator for %s", bucket));
-        return Subject.doAs(runUser,
-                            (PrivilegedExceptionAction<Iterator<StorageMetadata>>) () -> storageAdapter
-                                    .iterator(bucket));
+        LOGGER.debug(String.format("Getting iterator for %s", this.bucketSelector));
+        return new Iterator<StorageMetadata>() {
+            final Iterator<String> bucketPrefixIterator = bucketSelector.getBucketIterator();
+
+            // The bucket range should have at least one value, so calling next() should be safe here.
+            Iterator<StorageMetadata> storageMetadataIterator = storageAdapter.iterator(bucketPrefixIterator.next());
+
+            @Override
+            public boolean hasNext() {
+                if (storageMetadataIterator.hasNext()) {
+                    return true;
+                } else if (bucketPrefixIterator.hasNext()) {
+                    try {
+                        storageMetadataIterator =
+                                Subject.doAs(runUser, (PrivilegedExceptionAction<Iterator<StorageMetadata>>) () ->
+                                                                  storageAdapter.iterator(bucketPrefixIterator.next()));
+                    } catch (PrivilegedActionException exception) {
+                        throw new IllegalStateException(exception);
+                    }
+                    return hasNext();
+                } else {
+                    return false;
+                }
+            }
+
+            @Override
+            public StorageMetadata next() {
+                return storageMetadataIterator.next();
+            }
+        };
     }
 
     /**
@@ -613,6 +646,28 @@ public class BucketValidator implements ValidateEventListener {
      * @return Iterator instance of Artifact objects
      */
     Iterator<Artifact> iterateInventory() {
-        return iteratorDAO.storedIterator(bucket);
+        return new Iterator<Artifact>() {
+            final Iterator<String> bucketPrefixIterator = bucketSelector.getBucketIterator();
+
+            // The bucket range should have at least one value, so calling next() should be safe here.
+            ResourceIterator<Artifact> artifactIterator = iteratorDAO.storedIterator(bucketPrefixIterator.next());
+
+            @Override
+            public boolean hasNext() {
+                if (artifactIterator.hasNext()) {
+                    return true;
+                } else if (bucketPrefixIterator.hasNext()) {
+                    artifactIterator = iteratorDAO.storedIterator(bucketPrefixIterator.next());
+                    return hasNext();
+                } else {
+                    return false;
+                }
+            }
+
+            @Override
+            public Artifact next() {
+                return artifactIterator.next();
+            }
+        };
     }
 }

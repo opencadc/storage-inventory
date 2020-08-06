@@ -65,7 +65,7 @@
 ************************************************************************
 */
 
-package org.opencadc.critwall;
+package org.opencadc.inventory.util;
 
 import java.util.Iterator;
 import java.util.TreeSet;
@@ -80,7 +80,7 @@ public class BucketSelector {
     private static final int MAX_PREFIX_LENGTH = 1;
     private final String rangeMin;
     private final String rangeMax;
-    private final TreeSet<String> bucketList = new TreeSet<String>();
+    private final TreeSet<String> bucketList = new TreeSet<>();
 
     public Iterator<String> getBucketIterator() {
         return bucketList.iterator();
@@ -129,7 +129,7 @@ public class BucketSelector {
         }
 
         // order of range must be sane
-        if (max != -1 && max < min) {
+        if (max < min) {
             throw new IllegalArgumentException("invalid prefix range (min - max): " + rangeMin + " - " + rangeMax);
         }
 
@@ -142,7 +142,7 @@ public class BucketSelector {
         // that the bucketList iterator will return.
         for (int i = min; i <= max; i++) {
             bucketList.add(Character.toString(Artifact.URI_BUCKET_CHARS.charAt(i)));
-            log.debug("added " + Character.toString(Artifact.URI_BUCKET_CHARS.charAt(i)));
+            log.debug("added " + Artifact.URI_BUCKET_CHARS.charAt(i));
         }
     }
 
@@ -151,4 +151,3 @@ public class BucketSelector {
         return "BucketSelector[" + rangeMin + "," + rangeMax + "]";
     }
 }
-

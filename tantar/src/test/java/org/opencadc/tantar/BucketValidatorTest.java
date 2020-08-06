@@ -93,6 +93,7 @@ import org.junit.Assert;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.storage.StorageMetadata;
+import org.opencadc.inventory.util.BucketSelector;
 import org.opencadc.tantar.policy.InventoryIsAlwaysRight;
 import org.opencadc.tantar.policy.RecoverFromStorage;
 import org.opencadc.tantar.policy.StorageIsAlwaysRight;
@@ -120,17 +121,17 @@ public class BucketValidatorTest {
         final List<Artifact> testArtifactList = new ArrayList<>();
         final URI artifactOneContentChecksum = URI.create("md5:" + random16Bytes());
         final Artifact artifactOne =
-                new Artifact(URI.create("cadc:TESTBUCKET/myfile88.fits"), artifactOneContentChecksum, new Date(), 88L);
+                new Artifact(URI.create("cadc:a/myfile88.fits"), artifactOneContentChecksum, new Date(), 88L);
         artifactOne.storageLocation = new StorageLocation(URI.create("ad:123456"));
         testArtifactList.add(artifactOne);
 
         final Artifact artifactTwo =
-                new Artifact(URI.create("cadc:TESTBUCKET/myfile99.fits"), URI.create("md5:" + random16Bytes()), new Date(), 99L);
+                new Artifact(URI.create("cadc:b/myfile99.fits"), URI.create("md5:" + random16Bytes()), new Date(), 99L);
         artifactTwo.storageLocation = new StorageLocation(URI.create("ceph:7890AB"));
         testArtifactList.add(artifactTwo);
 
         final Artifact artifactThree =
-                new Artifact(URI.create("cadc:TESTBUCKET/myfile100.fits"), URI.create("md5:" + random16Bytes()), new Date(),
+                new Artifact(URI.create("cadc:c/myfile100.fits"), URI.create("md5:" + random16Bytes()), new Date(),
                              100L);
         artifactThree.storageLocation = new StorageLocation(URI.create("s3:CDEF00"));
         testArtifactList.add(artifactThree);
@@ -156,7 +157,7 @@ public class BucketValidatorTest {
         final TestEventListener testEventListener = new TestEventListener();
 
         final BucketValidator testSubject =
-                new BucketValidator("TESTBUCKET", null,
+                new BucketValidator(new BucketSelector("a-c"), null,
                                     new Subject(), true, new InventoryIsAlwaysRight(testEventListener, reporter),
                                     null, null) {
                     @Override
@@ -179,7 +180,7 @@ public class BucketValidatorTest {
 
         final List<String> outputLines =
                 Arrays.asList(new String(byteArrayOutputStream.toByteArray()).split("\n"));
-        System.out.println(String.format("Message lines are \n\n%s\n\n", outputLines));
+        System.out.printf("Message lines are \n\n%s\n\n%n", outputLines);
         assertListContainsMessage(outputLines,
                                   "Removing Unknown File StorageLocation[ceph:78787878] as per policy.");
         assertListContainsMessage(outputLines,
@@ -204,17 +205,17 @@ public class BucketValidatorTest {
         // **** Create the Inventory content.
         final List<Artifact> testArtifactList = new ArrayList<>();
         final Artifact artifactOne =
-                new Artifact(URI.create("cadc:TESTBUCKET/myfile88.fits"), URI.create("md5:" + random16Bytes()), new Date(), 88L);
+                new Artifact(URI.create("cadc:a/myfile88.fits"), URI.create("md5:" + random16Bytes()), new Date(), 88L);
         artifactOne.storageLocation = new StorageLocation(URI.create("ad:123456"));
         testArtifactList.add(artifactOne);
 
         final Artifact artifactTwo =
-                new Artifact(URI.create("cadc:TESTBUCKET/myfile99.fits"), URI.create("md5:" + random16Bytes()), new Date(), 99L);
+                new Artifact(URI.create("cadc:c/myfile99.fits"), URI.create("md5:" + random16Bytes()), new Date(), 99L);
         artifactTwo.storageLocation = new StorageLocation(URI.create("ceph:7890AB"));
         testArtifactList.add(artifactTwo);
 
         final Artifact artifactThree =
-                new Artifact(URI.create("cadc:TESTBUCKET/myfile100.fits"), URI.create("md5:" + random16Bytes()), new Date(),
+                new Artifact(URI.create("cadc:b/myfile100.fits"), URI.create("md5:" + random16Bytes()), new Date(),
                              100L);
         artifactThree.storageLocation = new StorageLocation(URI.create("s3:CDEF00"));
         testArtifactList.add(artifactThree);
@@ -225,7 +226,7 @@ public class BucketValidatorTest {
         final TestEventListener testEventListener = new TestEventListener();
 
         final BucketValidator testSubject =
-                new BucketValidator("TESTBUCKET", null,
+                new BucketValidator(new BucketSelector("a-c"), null,
                                     new Subject(), true, new InventoryIsAlwaysRight(testEventListener, reporter),
                                     null, null) {
                     @Override
@@ -243,7 +244,7 @@ public class BucketValidatorTest {
 
         final List<String> outputLines =
                 Arrays.asList(new String(byteArrayOutputStream.toByteArray()).split("\n"));
-        System.out.println(String.format("Message lines are \n\n%s\n\n", outputLines));
+        System.out.printf("Message lines are \n\n%s\n\n%n", outputLines);
         assertListContainsMessage(outputLines,
                                   "Resetting Artifact StorageLocation[ad:123456] as per policy.");
         assertListContainsMessage(outputLines,
@@ -268,17 +269,17 @@ public class BucketValidatorTest {
         final List<Artifact> testArtifactList = new ArrayList<>();
         final URI artifactOneContentChecksum = URI.create("md5:" + random16Bytes());
         final Artifact artifactOne =
-                new Artifact(URI.create("cadc:TESTBUCKET/myfile88.fits"), artifactOneContentChecksum, new Date(), 88L);
+                new Artifact(URI.create("cadc:c/myfile88.fits"), artifactOneContentChecksum, new Date(), 88L);
         artifactOne.storageLocation = new StorageLocation(URI.create("ad:123456"));
         testArtifactList.add(artifactOne);
 
         final Artifact artifactTwo =
-                new Artifact(URI.create("cadc:TESTBUCKET/myfile99.fits"), URI.create("md5:" + random16Bytes()), new Date(), 99L);
+                new Artifact(URI.create("cadc:a/myfile99.fits"), URI.create("md5:" + random16Bytes()), new Date(), 99L);
         artifactTwo.storageLocation = new StorageLocation(URI.create("ceph:7890AB"));
         testArtifactList.add(artifactTwo);
 
         final Artifact artifactThree =
-                new Artifact(URI.create("cadc:TESTBUCKET/myfile100.fits"), URI.create("md5:" + random16Bytes()), new Date(),
+                new Artifact(URI.create("cadc:b/myfile100.fits"), URI.create("md5:" + random16Bytes()), new Date(),
                              100L);
         artifactThree.storageLocation = new StorageLocation(URI.create("s3:CDEF00"));
         testArtifactList.add(artifactThree);
@@ -304,7 +305,7 @@ public class BucketValidatorTest {
         final TestEventListener testEventListener = new TestEventListener();
 
         final BucketValidator testSubject =
-                new BucketValidator("TESTBUCKET", null,
+                new BucketValidator(new BucketSelector("a-c"), null,
                                     new Subject(), true, new StorageIsAlwaysRight(testEventListener, reporter),
                                     null, null) {
                     @Override
@@ -327,7 +328,7 @@ public class BucketValidatorTest {
 
         final List<String> outputLines =
                 Arrays.asList(new String(byteArrayOutputStream.toByteArray()).split("\n"));
-        System.out.println(String.format("Message lines are \n\n%s\n\n", outputLines));
+        System.out.printf("Message lines are \n\n%s\n\n%n", outputLines);
         assertListContainsMessage(outputLines,
                                   "Adding Artifact StorageLocation[ceph:78787878] as per policy.");
         assertListContainsMessage(outputLines,
@@ -366,7 +367,7 @@ public class BucketValidatorTest {
         final TestEventListener testEventListener = new TestEventListener();
 
         final BucketValidator testSubject =
-                new BucketValidator("TESTBUCKET", null,
+                new BucketValidator(new BucketSelector("a-c"), null,
                                     new Subject(), true, new StorageIsAlwaysRight(testEventListener, reporter),
                                     null, null) {
                     @Override
@@ -384,7 +385,7 @@ public class BucketValidatorTest {
 
         final List<String> outputLines =
                 Arrays.asList(new String(byteArrayOutputStream.toByteArray()).split("\n"));
-        System.out.println(String.format("Message lines are \n\n%s\n\n", outputLines));
+        System.out.printf("Message lines are \n\n%s\n\n%n", outputLines);
         assertListContainsMessage(outputLines,
                                   "Adding Artifact StorageLocation[ad:123456] as per policy.");
         assertListContainsMessage(outputLines,
@@ -422,7 +423,7 @@ public class BucketValidatorTest {
         final TestEventListener testEventListener = new TestEventListener();
 
         final BucketValidator testSubject =
-                new BucketValidator("TESTBUCKET", null,
+                new BucketValidator(new BucketSelector("a-c"), null,
                                     new Subject(), true, new RecoverFromStorage(testEventListener, reporter),
                                     null, null) {
                     @Override
@@ -440,7 +441,7 @@ public class BucketValidatorTest {
 
         final List<String> outputLines =
                 Arrays.asList(new String(byteArrayOutputStream.toByteArray()).split("\n"));
-        System.out.println(String.format("Message lines are \n\n%s\n\n", outputLines));
+        System.out.printf("Message lines are \n\n%s\n\n%n", outputLines);
         assertListContainsMessage(outputLines,
                                   "Adding Artifact StorageLocation[ad:123456] as per policy.");
         assertListContainsMessage(outputLines,
