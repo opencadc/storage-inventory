@@ -78,7 +78,6 @@ import java.io.IOException;
 import java.io.LineNumberReader;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
 
@@ -103,7 +102,7 @@ public class IncludeArtifacts implements ArtifactSelector {
      */
     public IncludeArtifacts() {
         // Read in the configuration file, and create a usable Map from it.
-        final File homeConfigDirectory = new File(String.format("%s/config/include", System.getProperty("user.home")));
+        final File homeConfigDirectory = new File(System.getProperty("user.home") + "/config/include");
         selectorConfigDir = homeConfigDirectory.toPath();
     }
 
@@ -116,7 +115,7 @@ public class IncludeArtifacts implements ArtifactSelector {
      * <p>include-date.sql
      * <code>
      *     -- Comments are OK and ignored!
-     *     WHERE lastmodified &gt; 2020-03-03 AND lastmodified &lt; 2020-03-30
+     *     WHERE lastModified &gt; 2020-03-03 AND lastModified &lt; 2020-03-30
      * </code>
      *
      * <p>include-uri.sql
@@ -129,7 +128,7 @@ public class IncludeArtifacts implements ArtifactSelector {
      * <p>The *.sql files are parsed and ANDed together to form the WHERE clause for the query to select desired
      * Artifacts:
      * <code>
-     *     WHERE (lastmodified &gt; 2020-03-03 AND lastmodified &lt; 2020-03-30)
+     *     WHERE (lastModified &gt; 2020-03-03 AND lastModified &lt; 2020-03-30)
      *     AND (uri like 'ad:TEST%' OR uri like 'ad:CADC%')
      * </code>
      *
@@ -144,10 +143,9 @@ public class IncludeArtifacts implements ArtifactSelector {
         final List<String> whereClauses = new ArrayList<>();
         loadClauses(whereClauses);
         if (whereClauses.isEmpty()) {
-            throw new IllegalStateException(
-                    String.format("No usable SQL filter files located in %s.  Ensure there is at least one file "
-                                  + "with the .sql extension whose content begins with the keyword 'WHERE'.",
-                                  selectorConfigDir));
+            throw new IllegalStateException("No usable SQL filter files located in " + selectorConfigDir
+                                            + ".  Ensure there is at least one file "
+                                            + "with the .sql extension whose content begins with the keyword 'WHERE'.");
         }
         return whereClauses;
     }
@@ -170,7 +168,7 @@ public class IncludeArtifacts implements ArtifactSelector {
         if (configurationDirFile.isDirectory() && configurationDirFile.canRead()) {
             final File[] fileListing = Objects.requireNonNull(
                     configurationDirFile.listFiles(pathname -> pathname.getName().toLowerCase().endsWith(".sql")));
-            log.debug(String.format("Found %d files.", fileListing.length));
+            log.debug("Found " + fileListing.length + " files.");
             if (fileListing.length > 0) {
                 for (final File f : fileListing) {
                     boolean validWhereClauseFound = false;
@@ -191,8 +189,8 @@ public class IncludeArtifacts implements ArtifactSelector {
                                 if (line.regionMatches(true, 0, "WHERE", 0, "WHERE".length())) {
                                     if (validWhereClauseFound) {
                                         throw new IllegalStateException(
-                                                String.format("A valid WHERE clause is already present (line %d).",
-                                                              lineNumberReader.getLineNumber()));
+                                                "A valid WHERE clause is already present (line "
+                                                + lineNumberReader.getLineNumber() + ").");
                                     }
 
                                     validWhereClauseFound = true;
@@ -208,11 +206,9 @@ public class IncludeArtifacts implements ArtifactSelector {
                                     if (validWhereClauseFound) {
                                         clauseBuilder.append(" ").append(line);
                                     } else {
-                                        throw new IllegalStateException(
-                                                String.format(
-                                                        "The first clause found in %s (line %d) MUST be start with "
-                                                        + "the WHERE keyword.", f.getName(),
-                                                        lineNumberReader.getLineNumber()));
+                                        throw new IllegalStateException("The first clause found in " + f.getName()
+                                                                        + " (line " + lineNumberReader.getLineNumber()
+                                                                        + ") MUST be start with the WHERE keyword.");
                                     }
                                 }
                             }
@@ -224,11 +220,10 @@ public class IncludeArtifacts implements ArtifactSelector {
                     }
                 }
             } else {
-                throw new ResourceNotFoundException(
-                        String.format("No SQL (.sql) files found in %s.", selectorConfigDir));
+                throw new ResourceNotFoundException("No SQL (.sql) files found in " + selectorConfigDir + ".");
             }
         } else {
-            throw new IOException(String.format("Directory %s is not found or not readable.", selectorConfigDir));
+            throw new IOException("Directory " + selectorConfigDir + " is not found or not readable.");
         }
     }
 }

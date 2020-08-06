@@ -69,9 +69,6 @@
 
 package org.opencadc.fenwick;
 
-import static org.opencadc.fenwick.TestUtil.DATABASE;
-import static org.opencadc.fenwick.TestUtil.SCHEMA;
-
 import ca.nrc.cadc.auth.SSLUtil;
 import ca.nrc.cadc.db.ConnectionConfig;
 import ca.nrc.cadc.db.DBConfig;
@@ -118,14 +115,15 @@ public class DeletedStorageLocationEventSyncTest {
 
     public DeletedStorageLocationEventSyncTest() throws Exception {
         final DBConfig dbConfig = new DBConfig();
-        final ConnectionConfig cc = dbConfig.getConnectionConfig(TestUtil.SERVER, DATABASE);
+        final ConnectionConfig cc = dbConfig.getConnectionConfig(TestUtil.LUSKAN_SERVER,
+                                                                 TestUtil.LUSKAN_DATABASE);
         DBUtil.createJNDIDataSource("jdbc/DeletedEventSyncTest", cc);
 
         final Map<String, Object> config = new TreeMap<>();
         config.put(SQLGenerator.class.getName(), SQLGenerator.class);
         config.put("jndiDataSourceName", "jdbc/DeletedEventSyncTest");
-        config.put("database", DATABASE);
-        config.put("schema", SCHEMA);
+        config.put("database", TestUtil.LUSKAN_DATABASE);
+        config.put("schema", TestUtil.LUSKAN_SCHEMA);
 
         deletedEventDAO.setConfig(config);
     }
@@ -134,7 +132,7 @@ public class DeletedStorageLocationEventSyncTest {
     public void setup() throws SQLException {
         log.info("deleting events...");
         DataSource ds = deletedEventDAO.getDataSource();
-        String sql = String.format("delete from %s.DeletedStorageLocationEvent", SCHEMA);
+        String sql = String.format("delete from %s.deletedStorageLocationEvent", TestUtil.LUSKAN_SCHEMA);
         ds.getConnection().createStatement().execute(sql);
         log.info("deleting events... OK");
     }
@@ -172,7 +170,7 @@ public class DeletedStorageLocationEventSyncTest {
         try {
             log.info("testGetEventsNoneFound");
             Subject userSubject = SSLUtil.createSubject(PROXY_PEM);
-            TapClient<DeletedStorageLocationEvent> tapClient = new TapClient<>(URI.create(TestUtil.LUSKAN_URI));
+            TapClient<DeletedStorageLocationEvent> tapClient = new TapClient<>(TestUtil.LUSKAN_URI);
 
             Calendar now = Calendar.getInstance();
             now.add(Calendar.DAY_OF_MONTH, -1);
