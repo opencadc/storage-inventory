@@ -73,6 +73,7 @@ import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.util.PropertiesReader;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
@@ -88,8 +89,8 @@ import org.opencadc.inventory.storage.StorageAdapter;
  *
  * @author pdowler
  */
-public class InitDatabaseAction extends InitAction {
-    private static final Logger log = Logger.getLogger(InitDatabaseAction.class);
+public class MinocInitAction extends InitAction {
+    private static final Logger log = Logger.getLogger(MinocInitAction.class);
     
     static final String JNDI_DATASOURCE = "jdbc/inventory"; // context.xml
     
@@ -114,7 +115,7 @@ public class InitDatabaseAction extends InitAction {
     private URI resourceID;
     private Map<String,Object> daoConfig;
 
-    public InitDatabaseAction() { 
+    public MinocInitAction() { 
         super();
     }
 
@@ -140,7 +141,7 @@ public class InitDatabaseAction extends InitAction {
         boolean ok = true;
 
         String rid = mvp.getFirstPropertyValue(RESOURCE_ID_KEY);
-        sb.append("\n\t" + InitDatabaseAction.RESOURCE_ID_KEY + ": ");
+        sb.append("\n\t" + MinocInitAction.RESOURCE_ID_KEY + ": ");
         if (rid == null) {
             sb.append("MISSING");
             ok = false;
@@ -149,7 +150,7 @@ public class InitDatabaseAction extends InitAction {
         }
 
         String sac = mvp.getFirstPropertyValue(SA_KEY);
-        sb.append("\n\t").append(InitDatabaseAction.SA_KEY).append(": ");
+        sb.append("\n\t").append(MinocInitAction.SA_KEY).append(": ");
         if (sac == null) {
             sb.append("MISSING");
             ok = false;
@@ -159,7 +160,7 @@ public class InitDatabaseAction extends InitAction {
 
         String sqlgen = mvp.getFirstPropertyValue(SQLGEN_KEY);
         Class sqlGenClass = null;
-        sb.append("\n\t").append(InitDatabaseAction.SQLGEN_KEY).append(": ");
+        sb.append("\n\t").append(MinocInitAction.SQLGEN_KEY).append(": ");
         if (sqlgen == null) {
             sb.append("MISSING");
             ok = false;
@@ -174,7 +175,7 @@ public class InitDatabaseAction extends InitAction {
         }
 
         String schema = mvp.getFirstPropertyValue(SCHEMA_KEY);
-        sb.append("\n\t").append(InitDatabaseAction.SCHEMA_KEY).append(": ");
+        sb.append("\n\t").append(MinocInitAction.SCHEMA_KEY).append(": ");
         if (schema == null) {
             sb.append("MISSING");
             ok = false;
@@ -195,8 +196,8 @@ public class InitDatabaseAction extends InitAction {
             Map<String,Object> ret = new TreeMap<>();
             Class clz = Class.forName(cname);
             ret.put(SQLGenerator.class.getName(), clz);
-            ret.put("jndiDataSourceName", InitDatabaseAction.JNDI_DATASOURCE);
-            ret.put("schema", props.getFirstPropertyValue(InitDatabaseAction.SCHEMA_KEY));
+            ret.put("jndiDataSourceName", MinocInitAction.JNDI_DATASOURCE);
+            ret.put("schema", props.getFirstPropertyValue(MinocInitAction.SCHEMA_KEY));
             //config.put("database", null);
             return ret;
         } catch (ClassNotFoundException ex) {
@@ -249,13 +250,18 @@ public class InitDatabaseAction extends InitAction {
         }
 
         if (curlist.isEmpty()) {
-            StorageSite self = new StorageSite(resourceID, name);
+            boolean allowRead = !props.getProperty(READ_GRANTS_KEY).isEmpty();
+            boolean allowWrite = !props.getProperty(WRITE_GRANTS_KEY).isEmpty();
+            StorageSite self = new StorageSite(resourceID, name, allowRead, allowWrite);
             ssdao.put(self);
         } else if (curlist.size() == 1) {
-
             StorageSite cur = curlist.iterator().next();
+            boolean allowRead = !props.getProperty(READ_GRANTS_KEY).isEmpty();
+            boolean allowWrite = !props.getProperty(WRITE_GRANTS_KEY).isEmpty();
             cur.setResourceID(resourceID);
             cur.setName(name);
+            cur.setAllowRead(allowRead);
+            cur.setAllowWrite(allowWrite);
             ssdao.put(cur);
         } else {
             throw new IllegalStateException("BUG: found " + curlist.size() + " StorageSite entries");
