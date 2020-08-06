@@ -1,4 +1,3 @@
-
 /*
  ************************************************************************
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
@@ -67,45 +66,66 @@
  ************************************************************************
  */
 
-package org.opencadc.tantar.policy;
+package org.opencadc.fenwick;
 
-import org.opencadc.inventory.Artifact;
-import org.opencadc.inventory.storage.StorageMetadata;
-import org.opencadc.tantar.Reporter;
-import org.opencadc.tantar.ValidateEventListener;
+import ca.nrc.cadc.db.ConnectionConfig;
+import ca.nrc.cadc.db.DBConfig;
+import ca.nrc.cadc.db.DBUtil;
+
+import java.util.Map;
+import java.util.TreeMap;
+
+import org.apache.log4j.Logger;
+import org.opencadc.inventory.DeletedArtifactEvent;
+import org.opencadc.inventory.DeletedStorageLocationEvent;
+import org.opencadc.inventory.db.ArtifactDAO;
+import org.opencadc.inventory.db.DeletedEventDAO;
+import org.opencadc.inventory.db.SQLGenerator;
+import org.opencadc.inventory.db.StorageSiteDAO;
+import org.opencadc.inventory.db.version.InitDatabase;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 
-/**
- * Policy to ensure that a recovery from Storage (in the event of a disaster or a new site is brought online) will
- * dictate what goes into the Inventory Database.
- */
-public class RecoverFromStorage extends ResolutionPolicy {
+public class LuskanEnvironment {
+    private static final Logger LOGGER = Logger.getLogger(LuskanEnvironment.class);
 
-    public RecoverFromStorage(ValidateEventListener validateEventListener, Reporter reporter) {
-        super(validateEventListener, reporter);
+    // The local inventory database DAOs.
+    final StorageSiteDAO storageSiteDAO = new StorageSiteDAO();
+    final ArtifactDAO artifactDAO = new ArtifactDAO();
+    final DeletedEventDAO<DeletedArtifactEvent> deletedArtifactEventDAO = new DeletedEventDAO<>();
+    final DeletedEventDAO<DeletedStorageLocationEvent> deletedStorageLocationEventDAO = new DeletedEventDAO<>();
+    final String jndiPath = "jdbc/LuskanEnvironment";
+
+
+    public LuskanEnvironment() throws Exception {
+        final DBConfig dbrc = new DBConfig();
+        final ConnectionConfig luskcanConnectionConfig = dbrc.getConnectionConfig(TestUtil.LUSKAN_SERVER,
+                                                                                  TestUtil.LUSKAN_DATABASE);
+
+        DBUtil.createJNDIDataSource(jndiPath, luskcanConnectionConfig);
+
+        final Map<String, Object> daoConfig = new TreeMap<>();
+        daoConfig.put(SQLGenerator.class.getName(), SQLGenerator.class);
+        daoConfig.put("jndiDataSourceName", jndiPath);
+        daoConfig.put("database", TestUtil.LUSKAN_DATABASE);
+        daoConfig.put("schema", TestUtil.LUSKAN_SCHEMA);
+
+        storageSiteDAO.setConfig(daoConfig);
+        artifactDAO.setConfig(daoConfig);
+        deletedArtifactEventDAO.setConfig(daoConfig);
+        deletedStorageLocationEventDAO.setConfig(daoConfig);
+
+        new InitDatabase(DBUtil.findJNDIDataSource(jndiPath),
+                         (String) daoConfig.get("database"),
+                         (String) daoConfig.get("schema")).doInit();
     }
 
-    /**
-     * Use the logic of this Policy to correct a conflict caused by the two given items.  Only the Artifact can be
-     * null; it will be assumed that the given StorageMetadata is never null.
-     *
-     * @param artifact        The Artifact to use in deciding.  Can be null.
-     * @param storageMetadata The StorageMetadata to use in deciding.  Never null.
-     * @throws Exception For any unknown error that should be passed up.
-     */
-    @Override
-    public void resolve(final Artifact artifact, final StorageMetadata storageMetadata) throws Exception {
-        if (!storageMetadata.isValid()) {
-            reporter.report("Invalid Storage Metadata (" + storageMetadata.getStorageLocation()
-                            + ").  Skipping as per policy.");
-        } else if (artifact == null) {
-            reporter.report(String.format("Adding Artifact %s as per policy.", storageMetadata.getStorageLocation()));
-            validateEventListener.createArtifact(storageMetadata);
-        } else {
-            // This scenario is for an incomplete previous run.  Treat the Artifact as corrupt and set it back to the
-            // StorageMetadata's values.
-            reporter.report(String.format("Updating Artifact %s as per policy.", storageMetadata.getStorageLocation()));
-            validateEventListener.updateArtifact(artifact, storageMetadata);
-        }
+    void cleanTestEnvironment() throws Exception {
+        final JdbcTemplate jdbcTemplate = new JdbcTemplate(DBUtil.findJNDIDataSource(jndiPath));
+        jdbcTemplate.execute("TRUNCATE TABLE " + TestUtil.LUSKAN_SCHEMA + ".deletedArtifactEvent");
+        jdbcTemplate.execute("TRUNCATE TABLE " + TestUtil.LUSKAN_SCHEMA + ".deletedStorageLocationEvent");
+        jdbcTemplate.execute("TRUNCATE TABLE " + TestUtil.LUSKAN_SCHEMA + ".storageSite");
+        jdbcTemplate.execute("TRUNCATE TABLE " + TestUtil.LUSKAN_SCHEMA + ".harvestState");
+        jdbcTemplate.execute("TRUNCATE TABLE " + TestUtil.LUSKAN_SCHEMA + ".Artifact");
     }
 }

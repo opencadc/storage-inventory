@@ -68,6 +68,7 @@
 
 package org.opencadc.fenwick;
 
+import ca.nrc.cadc.date.DateUtil;
 import ca.nrc.cadc.io.ResourceIterator;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
@@ -77,6 +78,7 @@ import java.io.IOException;
 import java.net.URI;
 import java.util.Date;
 import java.util.List;
+import java.util.TimeZone;
 import java.util.UUID;
 
 import org.apache.log4j.Logger;
@@ -94,12 +96,6 @@ public class ArtifactSync {
 
     private static final Logger LOGGER = Logger.getLogger(ArtifactSync.class);
 
-    // First string replace is the date to verify, and the second is the constraint clause as set by the selector.
-    private static final String ARTIFACT_QUERY_TEMPLATE =
-            "SELECT id, uri, contentchecksum, contentlastmodified, contentlength, contenttype, "
-            + "contentencoding, lastmodified, metachecksum FROM inventory.Artifact WHERE lastModified >= '%s' %s "
-            + "ORDER BY lastmodified";
-
     private final TapClient<Artifact> tapClient;
     private final Date currLastModified;
 
@@ -110,7 +106,7 @@ public class ArtifactSync {
      * Complete constructor.
      *
      * @param tapClient        The TapClient to interface with a site's TAP (Luskan) service.
-     * @param currLastModified The last modified date to start the query at.
+     * @param currLastModified The last modified date to start the query at.  First run this will be null.
      */
     public ArtifactSync(final TapClient<Artifact> tapClient, final Date currLastModified) {
         this.tapClient = tapClient;
@@ -131,14 +127,43 @@ public class ArtifactSync {
     public ResourceIterator<Artifact> iterator()
             throws ResourceNotFoundException, IOException, IllegalStateException, TransientException,
                    InterruptedException {
-        LOGGER.debug("\nInjecting clause '" + includeClause + "'\n");
-        final String query = String.format(ARTIFACT_QUERY_TEMPLATE, currLastModified,
-                                           StringUtil.hasText(this.includeClause)
-                                           ? "AND (" + this.includeClause.trim() + ")"
-                                           : "");
-
+        final String query = buildQuery();
         LOGGER.debug("\nExecuting query '" + query + "'\n");
         return tapClient.execute(query, new ArtifactRowMapper());
+    }
+
+    /**
+     * Assemble the WHERE clause and return the full query.  Very useful for testing separately.
+     * @return  String query.  Never null.
+     */
+    String buildQuery() {
+        final StringBuilder query = new StringBuilder();
+        query.append("SELECT id, uri, contentChecksum, contentLastModified, contentLength, contentType, ")
+                   .append("contentEncoding, lastModified, metaChecksum FROM inventory.Artifact");
+
+        if (this.currLastModified != null) {
+            LOGGER.debug("\nInjecting lastModified date compare '" + this.currLastModified + "'\n");
+            query.append(" WHERE lastModified >= '")
+                       .append(DateUtil.getDateFormat(DateUtil.ISO_DATE_FORMAT,
+                                                      TimeZone.getDefault()).format(this.currLastModified))
+                       .append("'");
+        }
+
+        if (StringUtil.hasText(this.includeClause)) {
+            LOGGER.debug("\nInjecting clause '" + this.includeClause + "'\n");
+
+            if (query.indexOf("WHERE") < 0) {
+                query.append(" WHERE ");
+            } else {
+                query.append(" AND ");
+            }
+
+            query.append("(").append(this.includeClause.trim()).append(")");
+        }
+
+        query.append(" ORDER BY lastModified");
+
+        return query.toString();
     }
 
     private static final class ArtifactRowMapper implements TapRowMapper<Artifact> {
@@ -163,11 +188,12 @@ public class ArtifactSync {
                                                    (URI) row.get(index++),
                                                    (Date) row.get(index++),
                                                    (Long) row.get(index++));
-            artifact.contentType = row.get(index++).toString();
-            artifact.contentEncoding = row.get(index++).toString();
 
-            InventoryUtil.assignMetaChecksum(artifact, (URI) row.get(index++));
-            InventoryUtil.assignLastModified(artifact, (Date) row.get(index));
+            artifact.contentType = (String) row.get(index++);
+            artifact.contentEncoding = (String) row.get(index++);
+
+            InventoryUtil.assignLastModified(artifact, (Date) row.get(index++));
+            InventoryUtil.assignMetaChecksum(artifact, (URI) row.get(index));
 
             return artifact;
         }

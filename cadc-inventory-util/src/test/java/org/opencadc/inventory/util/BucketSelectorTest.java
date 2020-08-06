@@ -64,7 +64,7 @@
  *
  ************************************************************************
  */
-package org.opencadc.critwall;
+package org.opencadc.inventory.util;
 
 import ca.nrc.cadc.util.Log4jInit;
 import java.util.Iterator;
@@ -83,7 +83,7 @@ public class BucketSelectorTest {
     private static final Logger log = Logger.getLogger(BucketSelectorTest.class);
 
     static {
-        Log4jInit.setLevel("org.opencadc.critwall", Level.DEBUG);
+        Log4jInit.setLevel("org.opencadc.inventory.util", Level.DEBUG);
     }
 
     public BucketSelectorTest() { }

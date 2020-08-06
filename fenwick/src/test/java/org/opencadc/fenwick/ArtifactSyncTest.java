@@ -1,4 +1,3 @@
-
 /*
  ************************************************************************
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
@@ -67,45 +66,73 @@
  ************************************************************************
  */
 
-package org.opencadc.tantar.policy;
+package org.opencadc.fenwick;
 
-import org.opencadc.inventory.Artifact;
-import org.opencadc.inventory.storage.StorageMetadata;
-import org.opencadc.tantar.Reporter;
-import org.opencadc.tantar.ValidateEventListener;
+import org.junit.Assert;
+import org.junit.Test;
+
+import java.util.Calendar;
 
 
-/**
- * Policy to ensure that a recovery from Storage (in the event of a disaster or a new site is brought online) will
- * dictate what goes into the Inventory Database.
- */
-public class RecoverFromStorage extends ResolutionPolicy {
+public class ArtifactSyncTest {
 
-    public RecoverFromStorage(ValidateEventListener validateEventListener, Reporter reporter) {
-        super(validateEventListener, reporter);
+    @Test
+    public void testBuildQueryNoLastModifiedDate() throws Exception {
+        final ArtifactSync artifactSync = new ArtifactSync(null, null);
+        final String resultOne = artifactSync.buildQuery();
+
+        Assert.assertEquals("Wrong query.",
+                            "SELECT id, uri, contentChecksum, contentLastModified, contentLength, contentType, "
+                            + "contentEncoding, lastModified, metaChecksum FROM inventory.Artifact "
+                            + "ORDER BY lastModified", resultOne);
     }
 
-    /**
-     * Use the logic of this Policy to correct a conflict caused by the two given items.  Only the Artifact can be
-     * null; it will be assumed that the given StorageMetadata is never null.
-     *
-     * @param artifact        The Artifact to use in deciding.  Can be null.
-     * @param storageMetadata The StorageMetadata to use in deciding.  Never null.
-     * @throws Exception For any unknown error that should be passed up.
-     */
-    @Override
-    public void resolve(final Artifact artifact, final StorageMetadata storageMetadata) throws Exception {
-        if (!storageMetadata.isValid()) {
-            reporter.report("Invalid Storage Metadata (" + storageMetadata.getStorageLocation()
-                            + ").  Skipping as per policy.");
-        } else if (artifact == null) {
-            reporter.report(String.format("Adding Artifact %s as per policy.", storageMetadata.getStorageLocation()));
-            validateEventListener.createArtifact(storageMetadata);
-        } else {
-            // This scenario is for an incomplete previous run.  Treat the Artifact as corrupt and set it back to the
-            // StorageMetadata's values.
-            reporter.report(String.format("Updating Artifact %s as per policy.", storageMetadata.getStorageLocation()));
-            validateEventListener.updateArtifact(artifact, storageMetadata);
-        }
+    @Test
+    public void testBuildQueryWithLastModifiedDate() throws Exception {
+        final Calendar calendar = Calendar.getInstance();
+        calendar.set(1977, Calendar.NOVEMBER, 25, 3, 12, 0);
+        calendar.set(Calendar.MILLISECOND, 0);
+
+        final ArtifactSync artifactSync = new ArtifactSync(null, calendar.getTime());
+        final String resultOne = artifactSync.buildQuery();
+
+        Assert.assertEquals("Wrong query.",
+                            "SELECT id, uri, contentChecksum, contentLastModified, contentLength, contentType, "
+                            + "contentEncoding, lastModified, metaChecksum FROM inventory.Artifact "
+                            + "WHERE lastModified >= '1977-11-25 03:12:00.000' "
+                            + "ORDER BY lastModified", resultOne);
+    }
+
+    @Test
+    public void testBuildQueryWithLastModifiedDateAndInclude() throws Exception {
+        final Calendar calendar = Calendar.getInstance();
+        calendar.set(1977, Calendar.NOVEMBER, 25, 3, 12, 0);
+        calendar.set(Calendar.MILLISECOND, 0);
+
+        final ArtifactSync artifactSync = new ArtifactSync(null, calendar.getTime());
+        artifactSync.includeClause = "uri LIKE 'ad:CFHT%'";
+
+        final String resultOne = artifactSync.buildQuery();
+
+        Assert.assertEquals("Wrong query.",
+                            "SELECT id, uri, contentChecksum, contentLastModified, contentLength, contentType, "
+                            + "contentEncoding, lastModified, metaChecksum FROM inventory.Artifact "
+                            + "WHERE lastModified >= '1977-11-25 03:12:00.000' "
+                            + "AND (uri LIKE 'ad:CFHT%') "
+                            + "ORDER BY lastModified", resultOne);
+    }
+
+    @Test
+    public void testBuildQueryWithNoLastModifiedAndInclude() throws Exception {
+        final ArtifactSync artifactSync = new ArtifactSync(null, null);
+        artifactSync.includeClause = "uri LIKE 'ad:CFHT%' OR uri LIKE 'ad:MEGA%'";
+
+        final String resultOne = artifactSync.buildQuery();
+
+        Assert.assertEquals("Wrong query.",
+                            "SELECT id, uri, contentChecksum, contentLastModified, contentLength, contentType, "
+                            + "contentEncoding, lastModified, metaChecksum FROM inventory.Artifact "
+                            + "WHERE (uri LIKE 'ad:CFHT%' OR uri LIKE 'ad:MEGA%') "
+                            + "ORDER BY lastModified", resultOne);
     }
 }

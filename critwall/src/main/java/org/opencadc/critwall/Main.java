@@ -83,6 +83,8 @@ import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.db.SQLGenerator;
 import org.opencadc.inventory.storage.StorageAdapter;
+import org.opencadc.inventory.util.BucketSelector;
+
 
 /**
  * Main entry point for critwall.
