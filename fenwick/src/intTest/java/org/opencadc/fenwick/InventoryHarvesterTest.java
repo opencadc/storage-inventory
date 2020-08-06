@@ -274,7 +274,7 @@ public class InventoryHarvesterTest {
 
         final UUID storageSiteUUID = UUID.randomUUID();
         luskanEnvironment.storageSiteDAO.put(new StorageSite(storageSiteUUID, URI.create("cadc:TEST/siteone"),
-                                                             "Test Site"));
+                                                             "Test Site", true, false));
 
         calendar.set(2007, Calendar.SEPTEMBER, 18, 1, 13, 0);
         final Artifact artifactOne = new Artifact(URI.create("cadc:TEST/fileone.ext"), URI.create("md5:8989"),
@@ -558,7 +558,7 @@ public class InventoryHarvesterTest {
 
         final UUID storageSiteUUID = UUID.randomUUID();
         luskanEnvironment.storageSiteDAO.put(new StorageSite(storageSiteUUID, URI.create("cadc:INTTEST/siteone"),
-                                                             "Int Test Site"));
+                                                             "Int Test Site", true, false));
 
         calendar.set(2007, Calendar.SEPTEMBER, 18, 1, 13, 0);
         final Artifact artifactOne = new Artifact(URI.create("cadc:INTTEST/fileone.ext"), URI.create("md5:8989"),
