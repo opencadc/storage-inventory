@@ -69,10 +69,16 @@ package org.opencadc.fenwick;
 
 import org.apache.log4j.Logger;
 
+import ca.nrc.cadc.auth.SSLUtil;
 import ca.nrc.cadc.util.FileUtil;
 
+import javax.security.auth.Subject;
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.FileReader;
+import java.io.IOException;
+import java.net.URI;
+import java.util.MissingResourceException;
 import java.util.Properties;
 
 
@@ -82,12 +88,13 @@ import java.util.Properties;
  */
 public class TestUtil {
     private static final Logger log = Logger.getLogger(TestUtil.class);
-
-    static String SERVER = "INVENTORY_TEST";
-    static String DATABASE = "cadctest";
-    static String SCHEMA = "inventory";
-    static String TABLE_PREFIX = null;
-    static String LUSKAN_URI = "ivo://cadc.nrc.ca/luskan";
+    static String INVENTORY_SERVER = "INVENTORY_TEST";
+    static String INVENTORY_DATABASE = "cadctest";
+    static String INVENTORY_SCHEMA = "inventory";
+    static String LUSKAN_SERVER = "LUSKAN_TEST";
+    static String LUSKAN_SCHEMA = "inventory";
+    static String LUSKAN_DATABASE = "cadctest";
+    static URI LUSKAN_URI = URI.create("ivo://cadc.nrc.ca/luskan");
 
     static {
         try {
@@ -96,28 +103,42 @@ public class TestUtil {
                 Properties props = new Properties();
                 props.load(new FileReader(opt));
 
-                if (props.containsKey("server")) {
-                    SERVER = props.getProperty("server").trim();
+                if (props.containsKey("inventoryServer")) {
+                    INVENTORY_SERVER = props.getProperty("inventoryServer").trim();
                 }
-                if (props.containsKey("database")) {
-                    DATABASE = props.getProperty("database").trim();
+                if (props.containsKey("inventoryDatabase")) {
+                    INVENTORY_DATABASE = props.getProperty("inventoryDatabase").trim();
                 }
-                if (props.containsKey("schema")) {
-                    SCHEMA = props.getProperty("schema").trim();
+                if (props.containsKey("inventorySchema")) {
+                    INVENTORY_SCHEMA = props.getProperty("inventorySchema").trim();
                 }
-                if (props.containsKey("tablePrefix")) {
-                    TABLE_PREFIX = props.getProperty("tablePrefix").trim();
+                if (props.containsKey("luskanServer")) {
+                    LUSKAN_SERVER = props.getProperty("luskanServer").trim();
+                }
+                if (props.containsKey("luskanSchema")) {
+                    LUSKAN_SCHEMA = props.getProperty("luskanSchema").trim();
+                }
+                if (props.containsKey("luskanDatabase")) {
+                    LUSKAN_DATABASE = props.getProperty("luskanDatabase").trim();
                 }
                 if (props.containsKey("luskanURI")) {
-                    LUSKAN_URI = props.getProperty("luskanURI").trim();
+                    LUSKAN_URI = URI.create(props.getProperty("luskanURI").trim());
                 }
             }
-            log.debug("intTest database config: " + SERVER + " " + DATABASE + " " + SCHEMA + " " + TABLE_PREFIX);
-        } catch (Exception oops) {
-            log.debug("failed to load/read optional db config", oops);
+        } catch (MissingResourceException | FileNotFoundException noFileException) {
+            log.debug("No intTest.properties supplied.  Using defaults.");
+        } catch (IOException oops) {
+            throw new RuntimeException(oops.getMessage(), oops);
         }
+
+        log.debug("intTest database config: " + INVENTORY_SERVER + " " + INVENTORY_DATABASE + " "
+                  + INVENTORY_SCHEMA);
     }
     
     private TestUtil() { 
+    }
+
+    static Subject getConfiguredSubject() {
+        return SSLUtil.createSubject(new File(System.getProperty("user.home") + "/.ssl/cadcproxy.pem"));
     }
 }

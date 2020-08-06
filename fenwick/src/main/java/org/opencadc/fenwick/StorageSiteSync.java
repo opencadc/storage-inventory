@@ -69,7 +69,6 @@
 package org.opencadc.fenwick;
 
 import ca.nrc.cadc.auth.NotAuthenticatedException;
-import ca.nrc.cadc.db.TransactionManager;
 import ca.nrc.cadc.io.ByteLimitExceededException;
 import ca.nrc.cadc.io.ResourceIterator;
 import ca.nrc.cadc.net.ResourceNotFoundException;
@@ -80,19 +79,12 @@ import java.net.URI;
 import java.security.AccessControlException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.util.ArrayList;
 import java.util.Date;
-import java.util.Iterator;
-import java.util.List;
 import java.util.UUID;
 
 import org.apache.log4j.Logger;
-import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.InventoryUtil;
-import org.opencadc.inventory.SiteLocation;
 import org.opencadc.inventory.StorageSite;
-import org.opencadc.inventory.db.ObsoleteStorageLocation;
-import org.opencadc.inventory.db.ObsoleteStorageLocationDAO;
 import org.opencadc.inventory.db.StorageSiteDAO;
 import org.opencadc.tap.TapClient;
 
@@ -165,6 +157,7 @@ public class StorageSiteSync {
                                       metaChecksum, computedMetaChecksum));
             }
 
+            log.debug("Found Storage Site " + storageSite.getResourceID());
             // Update the local inventory database values for this Storage Site.
             storageSiteDAO.put(storageSite);
         } catch (NoSuchAlgorithmException e) {
@@ -197,7 +190,7 @@ public class StorageSiteSync {
             final boolean allowRead = (Boolean) row.get(index++);
             final boolean allowWrite = (Boolean) row.get(index++);
             final UUID id = (UUID) row.get(index++);
-            
+
             final StorageSite storageSite = new StorageSite(id, resourceID, name, allowRead, allowWrite);
 
             InventoryUtil.assignLastModified(storageSite, (Date) row.get(index++));

@@ -81,6 +81,7 @@ import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.storage.StorageAdapter;
+import org.opencadc.inventory.util.BucketSelector;
 
 
 public class FileSync {

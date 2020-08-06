@@ -67,18 +67,22 @@
 
 package org.opencadc.fenwick;
 
+import ca.nrc.cadc.auth.RunnableAction;
+import ca.nrc.cadc.auth.SSLUtil;
 import ca.nrc.cadc.db.ConnectionConfig;
 import ca.nrc.cadc.db.DBUtil;
 import ca.nrc.cadc.util.Log4jInit;
 import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.util.PropertiesReader;
 
+import java.io.File;
 import java.net.URI;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import javax.naming.NamingException;
+import javax.security.auth.Subject;
 
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
@@ -105,6 +109,7 @@ public class Main {
     private static final String QUERY_SERVICE_CONFIG_KEY = CONFIG_PREFIX + ".queryService";
     private static final String TRACK_SITE_LOCATIONS_CONFIG_KEY = CONFIG_PREFIX + ".trackSiteLocations";
     private static final String ARTIFACT_SELECTOR_CONFIG_KEY = ArtifactSelector.class.getName();
+    private static final String CERTIFICATE_FILE_LOCATION = System.getProperty("user.home") + "/.ssl/cadcproxy.pem";
 
     // Used to verify configuration items.  See the README for descriptions.
     private static final String[] MANDATORY_PROPERTY_KEYS = {
@@ -136,6 +141,7 @@ public class Main {
 
             final String configuredLogging = props.getFirstPropertyValue(LOGGING_KEY);
             Log4jInit.setLevel("org.opencadc.fenwick", Level.toLevel(configuredLogging.toUpperCase()));
+            Log4jInit.setLevel("org.opencadc.inventory", Level.toLevel(configuredLogging.toUpperCase()));
 
             // DAO Configuration
             final Map<String, Object> daoConfig = new TreeMap<>();
@@ -170,8 +176,10 @@ public class Main {
             final String configuredTrackSiteLocations = props.getFirstPropertyValue(TRACK_SITE_LOCATIONS_CONFIG_KEY);
             final boolean trackSiteLocations = Boolean.parseBoolean(configuredTrackSiteLocations);
 
-            InventoryHarvester doit = new InventoryHarvester(daoConfig, resourceID, selector, trackSiteLocations);
-            doit.run();
+            final Subject subject = SSLUtil.createSubject(new File(CERTIFICATE_FILE_LOCATION));
+            final InventoryHarvester doit = new InventoryHarvester(daoConfig, resourceID, selector, trackSiteLocations);
+
+            Subject.doAs(subject, new RunnableAction(doit));
             System.exit(0);
         } catch (Throwable unexpected) {
             log.fatal("Unexpected failure", unexpected);
