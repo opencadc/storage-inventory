@@ -70,9 +70,7 @@ package org.opencadc.raven;
 import ca.nrc.cadc.auth.AuthMethod;
 import ca.nrc.cadc.auth.AuthenticationUtil;
 import ca.nrc.cadc.net.ResourceNotFoundException;
-import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.reg.Standards;
-import ca.nrc.cadc.reg.client.LocalAuthority;
 import ca.nrc.cadc.reg.client.RegistryClient;
 import ca.nrc.cadc.rest.InlineContentException;
 import ca.nrc.cadc.rest.InlineContentHandler;
@@ -90,17 +88,12 @@ import java.io.InputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
-import java.security.AccessControlException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
-import java.util.TreeSet;
 import org.apache.log4j.Logger;
-import org.opencadc.gms.GroupClient;
-import org.opencadc.gms.GroupURI;
-import org.opencadc.gms.GroupUtil;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.SiteLocation;
@@ -109,10 +102,10 @@ import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.DeletedEventDAO;
 import org.opencadc.inventory.db.SQLGenerator;
 import org.opencadc.inventory.db.StorageSiteDAO;
+import org.opencadc.inventory.util.PermissionsCheck;
 import org.opencadc.permissions.ReadGrant;
 import org.opencadc.permissions.TokenUtil;
 import org.opencadc.permissions.WriteGrant;
-import org.opencadc.permissions.client.PermissionsClient;
 
 /**
  * Given a transfer request object return a transfer response object with all
@@ -246,12 +239,11 @@ public class PostAction extends RestAction {
             throw new ResourceNotFoundException(artifactURI.toString());
         }
 
-        // TODO: checkReadPermission and checkWritePermission are identical in minoc so move to a
-        //       service utility library rather than implement here
+        PermissionsCheck permissionsCheck = new PermissionsCheck(artifactURI, this.authenticateOnly, this.logInfo);
         if (direction.equals(Direction.pullFromVoSpace)) {
-            checkReadPermission(artifactURI);
+            permissionsCheck.checkReadPermission(this.readGrantServices);
         } else {
-            checkWritePermissions(artifactURI);
+            permissionsCheck.checkWritePermission(this.writeGrantServices);
         }
         
         // get the user for logging
@@ -310,99 +302,6 @@ public class PostAction extends RestAction {
         
         TransferWriter transferWriter = new TransferWriter();
         transferWriter.write(transfer, syncOutput.getOutputStream());
-    }
-    
-    private void checkReadPermission(URI artifactURI) throws AccessControlException, TransientException {
-
-        if (authenticateOnly) {
-            log.warn(DEV_AUTH_ONLY_KEY + "=true: allowing unrestricted access");
-            return;
-        }
-
-        // TODO: could call multiple services in parallel
-        Set<GroupURI> granted = new TreeSet<>();
-        for (URI ps : readGrantServices) {
-            try {
-                PermissionsClient pc = new PermissionsClient(ps);
-                ReadGrant grant = pc.getReadGrant(artifactURI);
-                if (grant != null) {
-                    if (grant.isAnonymousAccess()) {
-                        logInfo.setMessage("read grant: anonymous");
-                        return;
-                    }
-                    granted.addAll(grant.getGroups());
-                }
-            } catch (ResourceNotFoundException ex) {
-                log.warn("failed to find granting service: " + ps + " -- cause: " + ex);
-            }
-        }
-        if (granted.isEmpty()) {
-            throw new AccessControlException("permission denied: no read grants for " + artifactURI);
-        }
-
-        // TODO: add profiling
-        // if the granted group list is small, it would be better to use GroupClient.isMember()
-        // rather than getting all groups... experiment to determine threshold?
-        // unfortunately, the speed of GroupClient.getGroups() will also depend on how many groups the
-        // caller belongs to...
-        LocalAuthority loc = new LocalAuthority();
-        URI resourceID = loc.getServiceURI(Standards.GMS_SEARCH_01.toString());
-        GroupClient client = GroupUtil.getGroupClient(resourceID);
-        List<GroupURI> userGroups = client.getMemberships();
-        for (GroupURI gg : granted) {
-            for (GroupURI userGroup : userGroups) {
-                if (gg.equals(userGroup)) {
-                    logInfo.setMessage("read grant: " + gg);
-                    return;
-                }
-            }
-        }
-
-        throw new AccessControlException("read permission denied");
-    }
-
-    private void checkWritePermissions(URI artifactURI) throws AccessControlException, TransientException {
-        if (authenticateOnly) {
-            log.warn(DEV_AUTH_ONLY_KEY + "=true: allowing unrestricted access");
-            return;
-        }
-
-        // TODO: could call multiple services in parallel
-        Set<GroupURI> granted = new TreeSet<>();
-        for (URI ps : writeGrantServices) {
-            try {
-                PermissionsClient pc = new PermissionsClient(ps);
-                WriteGrant grant = pc.getWriteGrant(artifactURI);
-                if (grant != null) {
-                    granted.addAll(grant.getGroups());
-                }
-            } catch (ResourceNotFoundException ex) {
-                log.warn("failed to find granting service: " + ps + " -- cause: " + ex);
-            }
-        }
-        if (granted.isEmpty()) {
-            throw new AccessControlException("permission denied: no write grants for " + artifactURI);
-        }
-
-        // TODO: add profiling
-        // if the granted group list is small, it would be better to use GroupClient.isMember()
-        // rather than getting all groups... experiment to determine threshold?
-        // unfortunately, the speed of GroupClient.getGroups() will also depend on how many groups the
-        // caller belongs to...
-        LocalAuthority loc = new LocalAuthority();
-        URI resourceID = loc.getServiceURI(Standards.GMS_SEARCH_01.toString());
-        GroupClient client = GroupUtil.getGroupClient(resourceID);
-        List<GroupURI> userGroups = client.getMemberships();
-        for (GroupURI gg : granted) {
-            for (GroupURI userGroup : userGroups) {
-                if (gg.equals(userGroup)) {
-                    logInfo.setMessage("write grant: " + gg);
-                    return;
-                }
-            }
-        }
-
-        throw new AccessControlException("read permission denied");
     }
 
     protected DeletedEventDAO getDeletedEventDAO(ArtifactDAO src) {
