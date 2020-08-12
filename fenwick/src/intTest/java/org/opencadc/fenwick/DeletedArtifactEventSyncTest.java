@@ -148,7 +148,7 @@ public class DeletedArtifactEventSyncTest {
 
             UUID uuid = UUID.randomUUID();
             Date lasModified = new Date();
-            URI metaChecksum = new URI("foo://bar/baz");
+            URI metaChecksum = URI.create("md5:d41d8cd98f00b204e9800998ecf8427e");
 
             List<Object> row = new ArrayList<>();
             row.add(uuid);

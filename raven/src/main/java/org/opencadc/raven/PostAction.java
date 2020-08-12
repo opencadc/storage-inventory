@@ -111,6 +111,7 @@ import org.opencadc.inventory.db.SQLGenerator;
 import org.opencadc.inventory.db.StorageSiteDAO;
 import org.opencadc.permissions.ReadGrant;
 import org.opencadc.permissions.TokenUtil;
+import org.opencadc.permissions.WriteGrant;
 import org.opencadc.permissions.client.PermissionsClient;
 
 /**
@@ -210,7 +211,6 @@ public class PostAction extends RestAction {
 
     /**
      * Perform transfer negotiation.
-     * TODO: add support for write negotiation (pushToVoSpace and PROTOCOL_HTTPS_PUT)
      */
     @Override
     public void doAction() throws Exception {
@@ -220,13 +220,19 @@ public class PostAction extends RestAction {
         Transfer transfer = reader.read(in, null);
         
         log.debug("transfer request: " + transfer);
-        if (!Direction.pullFromVoSpace.equals(transfer.getDirection())) {
+        Direction direction = transfer.getDirection();
+        if (!Direction.pullFromVoSpace.equals(direction) && !Direction.pushToVoSpace.equals(direction)) {
             throw new IllegalArgumentException("direction not supported: " + transfer.getDirection());
         }
         
         // only support https over anonymous auth method for now
         // TODO: if the protocol includes an auth method that the storage site supports, generate a non-token URL
-        Protocol supportedProtocol = new Protocol(VOS.PROTOCOL_HTTPS_GET);
+        Protocol supportedProtocol;
+        if (direction.equals(Direction.pullFromVoSpace)) {
+            supportedProtocol = new Protocol(VOS.PROTOCOL_HTTPS_GET);
+        } else {
+            supportedProtocol = new Protocol(VOS.PROTOCOL_HTTPS_PUT);
+        }
         if (!transfer.getProtocols().contains(supportedProtocol)) {
             throw new UnsupportedOperationException("no supported protocols (require https with anon security method)");
         }
@@ -239,12 +245,14 @@ public class PostAction extends RestAction {
         if (artifact == null) {
             throw new ResourceNotFoundException(artifactURI.toString());
         }
-        
-        // TODO: checkReadPermission for pullFromVoSpace/GET
-        // TODO: checkWritePermission for pushToVoSpace/PUT
+
         // TODO: checkReadPermission and checkWritePermission are identical in minoc so move to a
         //       service utility library rather than implement here
-        checkReadPermission(artifactURI);
+        if (direction.equals(Direction.pullFromVoSpace)) {
+            checkReadPermission(artifactURI);
+        } else {
+            checkWritePermissions(artifactURI);
+        }
         
         // get the user for logging
         String user = AuthMethod.ANON.toString();
@@ -258,11 +266,16 @@ public class PostAction extends RestAction {
         
         // gather all copies of the artifact
         if (artifact.siteLocations.isEmpty()) {
-            throw new ResourceNotFoundException("no copies");
+            throw new ResourceNotFoundException("no sitelocation's found");
         }
         
         // create an auth token
-        String authToken = TokenUtil.generateToken(artifactURI, ReadGrant.class, user);
+        String authToken;
+        if (direction.equals(Direction.pullFromVoSpace)) {
+            authToken = TokenUtil.generateToken(artifactURI, ReadGrant.class, user);
+        } else {
+            authToken = TokenUtil.generateToken(artifactURI, WriteGrant.class, user);
+        }
         
         RegistryClient regClient = new RegistryClient();
         StorageSiteDAO storageSiteDAO = new StorageSiteDAO(artifactDAO);
@@ -277,6 +290,9 @@ public class PostAction extends RestAction {
         // produce URLs to each of the copies
         for (SiteLocation site : artifact.siteLocations) {
             storageSite = storageSiteDAO.get(site.getSiteID());
+            if (direction.equals(Direction.pushToVoSpace) && !storageSite.getAllowWrite()) {
+                continue;
+            }
             resourceID = storageSite.getResourceID();
             baseURL = regClient.getServiceURL(resourceID, Standards.SI_FILES, AuthMethod.ANON);
             log.debug("base url for site " + site.toString() + ": " + baseURL);
@@ -337,6 +353,50 @@ public class PostAction extends RestAction {
             for (GroupURI userGroup : userGroups) {
                 if (gg.equals(userGroup)) {
                     logInfo.setMessage("read grant: " + gg);
+                    return;
+                }
+            }
+        }
+
+        throw new AccessControlException("read permission denied");
+    }
+
+    private void checkWritePermissions(URI artifactURI) throws AccessControlException, TransientException {
+        if (authenticateOnly) {
+            log.warn(DEV_AUTH_ONLY_KEY + "=true: allowing unrestricted access");
+            return;
+        }
+
+        // TODO: could call multiple services in parallel
+        Set<GroupURI> granted = new TreeSet<>();
+        for (URI ps : writeGrantServices) {
+            try {
+                PermissionsClient pc = new PermissionsClient(ps);
+                WriteGrant grant = pc.getWriteGrant(artifactURI);
+                if (grant != null) {
+                    granted.addAll(grant.getGroups());
+                }
+            } catch (ResourceNotFoundException ex) {
+                log.warn("failed to find granting service: " + ps + " -- cause: " + ex);
+            }
+        }
+        if (granted.isEmpty()) {
+            throw new AccessControlException("permission denied: no write grants for " + artifactURI);
+        }
+
+        // TODO: add profiling
+        // if the granted group list is small, it would be better to use GroupClient.isMember()
+        // rather than getting all groups... experiment to determine threshold?
+        // unfortunately, the speed of GroupClient.getGroups() will also depend on how many groups the
+        // caller belongs to...
+        LocalAuthority loc = new LocalAuthority();
+        URI resourceID = loc.getServiceURI(Standards.GMS_SEARCH_01.toString());
+        GroupClient client = GroupUtil.getGroupClient(resourceID);
+        List<GroupURI> userGroups = client.getMemberships();
+        for (GroupURI gg : granted) {
+            for (GroupURI userGroup : userGroups) {
+                if (gg.equals(userGroup)) {
+                    logInfo.setMessage("write grant: " + gg);
                     return;
                 }
             }

@@ -110,7 +110,7 @@ public class NegotiationTest extends RavenTest {
     public NegotiationTest() throws Exception {
         super();
     }
-    
+
     @Test
     public void testGetAllCopies() {
         try {
@@ -131,7 +131,7 @@ public class NegotiationTest extends RavenTest {
                     StorageSite site2 = new StorageSite(resourceID2, "site2", true, true);
 
                     URI artifactURI = URI.create("cadc:TEST/" + UUID.randomUUID() + ".fits");
-                    URI checksum = URI.create("md5:testvalue");
+                    URI checksum = URI.create("md5:d41d8cd98f00b204e9800998ecf8427e");
                     Artifact artifact = new Artifact(artifactURI, checksum, new Date(), 1L);
 
                     try {
@@ -181,9 +181,86 @@ public class NegotiationTest extends RavenTest {
                 }
             });
             
-        } catch (Throwable t) {
-            log.error("unexpected throwable", t);
-            Assert.fail("unexpected throwable: " + t);
+        } catch (Exception e) {
+            log.error("unexpected exception", e);
+            Assert.fail("unexpected exception: " + e);
+        } finally {
+            System.clearProperty(PropertiesReader.CONFIG_DIR_SYSTEM_PROPERTY);
+        }
+    }
+
+    @Test
+    public void testPUT() {
+        try {
+            System.setProperty(PropertiesReader.CONFIG_DIR_SYSTEM_PROPERTY, "build/resources/test");
+
+            Subject.doAs(userSubject, new PrivilegedExceptionAction<Object>() {
+                public Object run() throws Exception {
+
+                    URI resourceID1 = URI.create("ivo://negotiation-test-site1");
+                    URI resourceID2 = URI.create("ivo://negotiation-test-site2");
+
+                    ArtifactDAO artifactDAO = new ArtifactDAO();
+                    artifactDAO.setConfig(config);
+                    StorageSiteDAO siteDAO = new StorageSiteDAO();
+                    siteDAO.setConfig(config);
+                    StorageSite site1 = new StorageSite(resourceID1, "site1", true, true);
+                    StorageSite site2 = new StorageSite(resourceID2, "site2", true, false);
+
+                    URI artifactURI = URI.create("cadc:TEST/" + UUID.randomUUID() + ".fits");
+                    URI checksum = URI.create("md5:d41d8cd98f00b204e9800998ecf8427e");
+                    Artifact artifact = new Artifact(artifactURI, checksum, new Date(), 1L);
+
+                    try {
+                        siteDAO.put(site1);
+                        siteDAO.put(site2);
+
+                        SiteLocation location1 = new SiteLocation(site1.getID());
+                        SiteLocation location2 = new SiteLocation(site2.getID());
+
+                        Protocol protocol = new Protocol(VOS.PROTOCOL_HTTPS_PUT);
+                        Transfer transfer = new Transfer(
+                            artifactURI, Direction.pushToVoSpace, Arrays.asList(protocol));
+                        transfer.version = VOS.VOSPACE_21;
+
+                        artifactDAO.put(artifact);
+
+                        // test that there are no copies available
+                        try {
+                            negotiate(transfer);
+                            Assert.fail("should have received file not found exception");
+                        } catch (ResourceNotFoundException e) {
+                            // expected
+                        }
+
+                        artifact.siteLocations.add(location1);
+                        artifactDAO.put(artifact, true);
+
+                        // test that there's one copy
+                        Transfer response = negotiate(transfer);
+                        Assert.assertEquals(1, response.getAllEndpoints().size());
+
+                        artifact.siteLocations.add(location2);
+                        artifactDAO.put(artifact, true);
+
+                        // test that there's still one copy
+                        response = negotiate(transfer);
+                        Assert.assertEquals(1, response.getAllEndpoints().size());
+
+                        return null;
+
+                    } finally {
+                        // cleanup sites
+                        siteDAO.delete(site1.getID());
+                        siteDAO.delete(site2.getID());
+                        artifactDAO.delete(artifact.getID());
+                    }
+                }
+            });
+
+        } catch (Exception e) {
+            log.error("unexpected exception", e);
+            Assert.fail("unexpected exception: " + e);
         } finally {
             System.clearProperty(PropertiesReader.CONFIG_DIR_SYSTEM_PROPERTY);
         }

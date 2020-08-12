@@ -157,8 +157,8 @@ public class StorageSiteSyncTest {
         final JdbcTemplate jdbcTemplate = new JdbcTemplate(DBUtil.findJNDIDataSource(luskanEnvironment.jndiPath));
         Assert.assertTrue("Should have updated peacefully.",
                           jdbcTemplate.update("UPDATE " + TestUtil.LUSKAN_SCHEMA + "." + "storageSite "
-                                              + "SET metaChecksum = 'md5:7777777' WHERE resourceID = "
-                                              + "'cadc:TESTSITE/one_1'") > 0);
+                                      + "SET metaChecksum = 'md5:d41d8cd98f00b204e9800998ecf8427e' WHERE resourceID = "
+                                      + "'cadc:TESTSITE/one_1'") > 0);
 
         final StorageSiteSync storageSiteSync = new StorageSiteSync(tapClient, inventoryEnvironment.storageSiteDAO);
 
@@ -171,8 +171,8 @@ public class StorageSiteSyncTest {
             // Good.
             final URI expectedChecksum = storageSite.computeMetaChecksum(messageDigest);
             Assert.assertEquals("Wrong error message.",
-                                "Discovered Storage Site checksum (md5:7777777) does not "
-                                + "match computed value (" + expectedChecksum + ").",
+                                "Discovered Storage Site checksum (md5:d41d8cd98f00b204e9800998ecf8427e) "
+                                + "does not match computed value (" + expectedChecksum + ").",
                                 e.getMessage());
         }
     }

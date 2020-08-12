@@ -161,14 +161,16 @@ public class InventoryHarvesterTest {
         final Calendar calendar = Calendar.getInstance();
         calendar.set(2007, Calendar.SEPTEMBER, 18, 1, 13, 0);
 
-        final Artifact artifactOne = new Artifact(URI.create("cadc:TEST/fileone.ext"), URI.create("md5:8989"),
+        final Artifact artifactOne = new Artifact(URI.create("cadc:TEST/fileone.ext"),
+                                                  URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"),
                                                   calendar.getTime(), 8989L);
         final URI artifactOneMetaChecksum = artifactOne.computeMetaChecksum(messageDigest);
         luskanEnvironment.artifactDAO.put(artifactOne);
 
         calendar.set(2012, Calendar.NOVEMBER, 17, 8, 13, 0);
 
-        final Artifact artifactTwo = new Artifact(URI.create("cadc:TEST/filetwo.ext"), URI.create("md5:89898"),
+        final Artifact artifactTwo = new Artifact(URI.create("cadc:TEST/filetwo.ext"),
+                                                  URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"),
                                                   calendar.getTime(), 89898L);
         messageDigest.reset();
         final URI artifactTwoMetaChecksum = artifactTwo.computeMetaChecksum(messageDigest);
@@ -178,7 +180,8 @@ public class InventoryHarvesterTest {
         calendar.set(2010, Calendar.JULY, 9, 0, 22, 0);
         final UUID artifactThreeID = UUID.randomUUID();
         final Artifact artifactThree = new Artifact(artifactThreeID,
-                                                    URI.create("cadc:TEST/filethree.ext"), URI.create("md5:98989"),
+                                                    URI.create("cadc:TEST/filethree.ext"),
+                                                    URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"),
                                                     calendar.getTime(), 98989L);
         inventoryEnvironment.artifactDAO.put(artifactThree);
 
@@ -277,7 +280,8 @@ public class InventoryHarvesterTest {
                                                              "Test Site", true, false));
 
         calendar.set(2007, Calendar.SEPTEMBER, 18, 1, 13, 0);
-        final Artifact artifactOne = new Artifact(URI.create("cadc:TEST/fileone.ext"), URI.create("md5:8989"),
+        final Artifact artifactOne = new Artifact(URI.create("cadc:TEST/fileone.ext"),
+                                                  URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"),
                                                   calendar.getTime(), 8989L);
         final URI artifactOneMetaChecksum = artifactOne.computeMetaChecksum(messageDigest);
 
@@ -286,7 +290,8 @@ public class InventoryHarvesterTest {
         messageDigest.reset();
         calendar.set(2019, Calendar.AUGUST, 9, 15, 13, 0);
         final URI artifactTwoStorageLocationID = URI.create("cadc:TEST/location/1");
-        final Artifact artifactTwo = new Artifact(URI.create("cadc:TEST/filetwo.ext"), URI.create("md5:89898"),
+        final Artifact artifactTwo = new Artifact(URI.create("cadc:TEST/filetwo.ext"),
+                                                  URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"),
                                                   calendar.getTime(), 89898L);
         artifactTwo.storageLocation = new StorageLocation(artifactTwoStorageLocationID);
         final URI artifactTwoMetaChecksum = artifactTwo.computeMetaChecksum(messageDigest);
@@ -301,7 +306,8 @@ public class InventoryHarvesterTest {
         calendar.set(2010, Calendar.JULY, 9, 0, 22, 0);
         final UUID artifactThreeID = UUID.randomUUID();
         final Artifact artifactThree = new Artifact(artifactThreeID,
-                                                    URI.create("cadc:TEST/filethree.ext"), URI.create("md5:98989"),
+                                                    URI.create("cadc:TEST/filethree.ext"),
+                                                    URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"),
                                                     calendar.getTime(), 98989L);
         inventoryEnvironment.artifactDAO.put(artifactThree);
 
@@ -497,13 +503,15 @@ public class InventoryHarvesterTest {
         final Calendar calendar = Calendar.getInstance();
         calendar.set(2007, Calendar.SEPTEMBER, 18, 1, 13, 0);
 
-        final Artifact artifactOne = new Artifact(URI.create("cadc:TEST/fileone.ext"), URI.create("md5:8989"),
+        final Artifact artifactOne = new Artifact(URI.create("cadc:TEST/fileone.ext"),
+                                                  URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"),
                                                   calendar.getTime(), 8989L);
         luskanEnvironment.artifactDAO.put(artifactOne);
 
         calendar.set(2012, Calendar.NOVEMBER, 17, 8, 13, 0);
 
-        final Artifact artifactTwo = new Artifact(URI.create("cadc:INTTEST/filetwo.ext"), URI.create("md5:89898"),
+        final Artifact artifactTwo = new Artifact(URI.create("cadc:INTTEST/filetwo.ext"),
+                                                  URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"),
                                                   calendar.getTime(), 89898L);
         final URI artifactTwoMetaChecksum = artifactTwo.computeMetaChecksum(messageDigest);
         luskanEnvironment.artifactDAO.put(artifactTwo);
@@ -561,18 +569,21 @@ public class InventoryHarvesterTest {
                                                              "Int Test Site", true, false));
 
         calendar.set(2007, Calendar.SEPTEMBER, 18, 1, 13, 0);
-        final Artifact artifactOne = new Artifact(URI.create("cadc:INTTEST/fileone.ext"), URI.create("md5:8989"),
+        final Artifact artifactOne = new Artifact(URI.create("cadc:INTTEST/fileone.ext"),
+                                                  URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"),
                                                   calendar.getTime(), 8989L);
         final URI artifactOneMetaChecksum = artifactOne.computeMetaChecksum(messageDigest);
         luskanEnvironment.artifactDAO.put(artifactOne);
 
         calendar.set(2012, Calendar.NOVEMBER, 17, 8, 13, 0);
-        final Artifact artifactTwo = new Artifact(URI.create("cadc:TEST/filetwo.ext"), URI.create("md5:89898"),
+        final Artifact artifactTwo = new Artifact(URI.create("cadc:TEST/filetwo.ext"),
+                                                  URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"),
                                                   calendar.getTime(), 89898L);
         luskanEnvironment.artifactDAO.put(artifactTwo);
 
         calendar.set(2009, Calendar.OCTOBER, 31, 21, 0, 0);
-        final Artifact artifactThree = new Artifact(URI.create("cadc:INTTEST/filethree.ext"), URI.create("md5:98989"),
+        final Artifact artifactThree = new Artifact(URI.create("cadc:INTTEST/filethree.ext"),
+                                                    URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"),
                                                   calendar.getTime(), 98989L);
         messageDigest.reset();
         final URI artifactThreeMetaChecksum = artifactThree.computeMetaChecksum(messageDigest);
