@@ -69,7 +69,6 @@ package org.opencadc.raven;
 
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.util.Log4jInit;
-import ca.nrc.cadc.util.PropertiesReader;
 import ca.nrc.cadc.vos.Direction;
 import ca.nrc.cadc.vos.Protocol;
 import ca.nrc.cadc.vos.Transfer;
@@ -114,9 +113,6 @@ public class NegotiationTest extends RavenTest {
     @Test
     public void testGetAllCopies() {
         try {
-            
-            System.setProperty(PropertiesReader.CONFIG_DIR_SYSTEM_PROPERTY, "build/resources/test");
-            
             Subject.doAs(userSubject, new PrivilegedExceptionAction<Object>() {
                 public Object run() throws Exception {
                     
@@ -180,20 +176,15 @@ public class NegotiationTest extends RavenTest {
                     }
                 }
             });
-            
         } catch (Exception e) {
             log.error("unexpected exception", e);
             Assert.fail("unexpected exception: " + e);
-        } finally {
-            System.clearProperty(PropertiesReader.CONFIG_DIR_SYSTEM_PROPERTY);
         }
     }
 
     @Test
     public void testPUT() {
         try {
-            System.setProperty(PropertiesReader.CONFIG_DIR_SYSTEM_PROPERTY, "build/resources/test");
-
             Subject.doAs(userSubject, new PrivilegedExceptionAction<Object>() {
                 public Object run() throws Exception {
 
@@ -257,12 +248,9 @@ public class NegotiationTest extends RavenTest {
                     }
                 }
             });
-
         } catch (Exception e) {
             log.error("unexpected exception", e);
             Assert.fail("unexpected exception: " + e);
-        } finally {
-            System.clearProperty(PropertiesReader.CONFIG_DIR_SYSTEM_PROPERTY);
         }
     }
     
