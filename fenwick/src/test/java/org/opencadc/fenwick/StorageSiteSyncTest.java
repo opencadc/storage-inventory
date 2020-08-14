@@ -92,8 +92,8 @@ public class StorageSiteSyncTest {
     @Test
     public void testStorageSiteMultiple() throws Exception {
         final List<StorageSite> storageSiteList = new ArrayList<>();
-        storageSiteList.add(new StorageSite(URI.create("test:org.opencadc/SITE1"), "Site One"));
-        storageSiteList.add(new StorageSite(URI.create("test:org.opencadc/SITE2"), "Site Two"));
+        storageSiteList.add(new StorageSite(URI.create("test:org.opencadc/SITE1"), "Site One", true, false));
+        storageSiteList.add(new StorageSite(URI.create("test:org.opencadc/SITE2"), "Site Two", true, true));
 
         final StorageSiteSync testSubject = new StorageSiteSync(null, null) {
             /**

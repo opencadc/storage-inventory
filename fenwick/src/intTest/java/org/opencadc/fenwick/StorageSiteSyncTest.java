@@ -69,11 +69,17 @@
 package org.opencadc.fenwick;
 
 import ca.nrc.cadc.db.DBUtil;
+import ca.nrc.cadc.io.ResourceIterator;
 import ca.nrc.cadc.util.Log4jInit;
 
+import java.io.IOException;
 import java.net.URI;
 import java.security.MessageDigest;
 import java.security.PrivilegedExceptionAction;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.List;
 import java.util.Set;
 import javax.security.auth.Subject;
 
@@ -82,6 +88,7 @@ import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
+import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.StorageSite;
 import org.opencadc.tap.TapClient;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -117,7 +124,7 @@ public class StorageSiteSyncTest {
         final TapClient<StorageSite> tapClient = new TapClient<>(TestUtil.LUSKAN_URI);
 
         final StorageSite storageSite = new StorageSite(URI.create("cadc:TESTSITE/one"),
-                                                        StorageSiteSyncTest.class.getSimpleName());
+                                                        StorageSiteSyncTest.class.getSimpleName(), true, false);
         luskanEnvironment.storageSiteDAO.put(storageSite);
 
         Assert.assertTrue("Sites should be empty.", inventoryEnvironment.storageSiteDAO.list().isEmpty());
@@ -144,7 +151,7 @@ public class StorageSiteSyncTest {
         Assert.assertTrue("Sites should be empty.", inventoryEnvironment.storageSiteDAO.list().isEmpty());
 
         final StorageSite storageSite = new StorageSite(URI.create("cadc:TESTSITE/one_1"),
-                                                        StorageSiteSyncTest.class.getSimpleName());
+                                                        StorageSiteSyncTest.class.getSimpleName(), true, false);
         luskanEnvironment.storageSiteDAO.put(storageSite);
 
         final JdbcTemplate jdbcTemplate = new JdbcTemplate(DBUtil.findJNDIDataSource(luskanEnvironment.jndiPath));
@@ -177,11 +184,11 @@ public class StorageSiteSyncTest {
                 new StorageSiteSync(tapClient, inventoryEnvironment.storageSiteDAO);
 
         final StorageSite storageSite = new StorageSite(URI.create("cadc:TESTSITE/one_1"),
-                                                        StorageSiteSyncTest.class.getSimpleName());
+                                                        StorageSiteSyncTest.class.getSimpleName(), true, false);
         luskanEnvironment.storageSiteDAO.put(storageSite);
 
         final StorageSite secondStorageSite = new StorageSite(URI.create("cadc:TESTSITE/uh-oh"),
-                                                              StorageSiteSyncTest.class.getSimpleName() + "_2");
+                                                              StorageSiteSyncTest.class.getSimpleName() + "_2", true, false);
         luskanEnvironment.storageSiteDAO.put(secondStorageSite);
 
         try {
@@ -212,6 +219,82 @@ public class StorageSiteSyncTest {
         } catch (IllegalStateException e) {
             // Good.
             Assert.assertEquals("Wrong error message.", "No storage sites available to sync.", e.getMessage());
+        }
+    }
+
+    /**
+     * Intercept the next method to modify the checksum.
+     */
+    private static class ResourceIteratorModifiedChecksum implements ResourceIterator<StorageSite> {
+        final Iterator<StorageSite> sourceIterator;
+        public ResourceIteratorModifiedChecksum(final StorageSite storageSite) {
+            sourceIterator = Collections.singletonList(storageSite).iterator();
+        }
+
+        @Override
+        public void close() throws IOException { }
+
+        @Override
+        public boolean hasNext() {
+            return sourceIterator.hasNext();
+        }
+
+        @Override
+        public StorageSite next() {
+            // Altering the checksum should throw an exception
+            final StorageSite storageSite = sourceIterator.next();
+            InventoryUtil.assignMetaChecksum(storageSite, URI.create("md5:889900"));
+            return storageSite;
+        }
+    }
+
+    /**
+     * Intercept the query and return multiple sites.
+     */
+    private static class ResourceIteratorMultipleSites implements ResourceIterator<StorageSite> {
+        final Iterator<StorageSite> sourceIterator;
+        public ResourceIteratorMultipleSites() {
+            final List<StorageSite> storageSiteList = new ArrayList<>();
+
+            storageSiteList.add(new StorageSite(URI.create("ivo://test/siteone"), "Test Site One.", true, false));
+            storageSiteList.add(new StorageSite(URI.create("ivo://test/sitetwo"), "Test Site Two.", true, true));
+
+            sourceIterator = storageSiteList.iterator();
+        }
+
+        @Override
+        public void close() throws IOException { }
+
+        @Override
+        public boolean hasNext() {
+            return sourceIterator.hasNext();
+        }
+
+        @Override
+        public StorageSite next() {
+            return sourceIterator.next();
+        }
+    }
+
+    /**
+     * Intercept the query and return no sites.
+     */
+    private static class ResourceIteratorEmptySites implements ResourceIterator<StorageSite> {
+        final Iterator<StorageSite> sourceIterator = Collections.emptyIterator();
+        public ResourceIteratorEmptySites() {
+        }
+
+        @Override
+        public void close() throws IOException { }
+
+        @Override
+        public boolean hasNext() {
+            return sourceIterator.hasNext();
+        }
+
+        @Override
+        public StorageSite next() {
+            return sourceIterator.next();
         }
     }
 }

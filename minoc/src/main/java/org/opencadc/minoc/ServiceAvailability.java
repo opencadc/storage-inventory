@@ -134,8 +134,8 @@ public class ServiceAvailability implements AvailabilityPlugin {
         String note = "service is accepting requests";
         
         try {
-            MultiValuedProperties props = InitDatabaseAction.getConfig();
-            Map<String,Object> config = InitDatabaseAction.getDaoConfig(props);
+            MultiValuedProperties props = MinocInitAction.getConfig();
+            Map<String,Object> config = MinocInitAction.getDaoConfig(props);
             ArtifactDAO dao = new ArtifactDAO();
             dao.setConfig(config); // connectivity tested
             

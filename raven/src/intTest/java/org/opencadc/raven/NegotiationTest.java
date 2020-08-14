@@ -127,8 +127,8 @@ public class NegotiationTest extends RavenTest {
                     artifactDAO.setConfig(config);
                     StorageSiteDAO siteDAO = new StorageSiteDAO();
                     siteDAO.setConfig(config);
-                    StorageSite site1 = new StorageSite(resourceID1, "site1");
-                    StorageSite site2 = new StorageSite(resourceID2, "site2");
+                    StorageSite site1 = new StorageSite(resourceID1, "site1", true, true);
+                    StorageSite site2 = new StorageSite(resourceID2, "site2", true, true);
 
                     URI artifactURI = URI.create("cadc:TEST/" + UUID.randomUUID() + ".fits");
                     URI checksum = URI.create("md5:testvalue");

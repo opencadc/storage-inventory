@@ -142,50 +142,50 @@ public abstract class ArtifactAction extends RestAction {
 
     protected ArtifactAction() {
         super();
-        MultiValuedProperties props = InitDatabaseAction.getConfig();
+        MultiValuedProperties props = MinocInitAction.getConfig();
 
-        List<String> readGrants = props.getProperty(InitDatabaseAction.READ_GRANTS_KEY);
+        List<String> readGrants = props.getProperty(MinocInitAction.READ_GRANTS_KEY);
         if (readGrants != null) {
             for (String s : readGrants) {
                 try {
                     URI u = new URI(s);
                     readGrantServices.add(u);
                 } catch (URISyntaxException ex) {
-                    throw new IllegalStateException("invalid config: " + InitDatabaseAction.READ_GRANTS_KEY + "=" + s + " must be a valid URI");
+                    throw new IllegalStateException("invalid config: " + MinocInitAction.READ_GRANTS_KEY + "=" + s + " must be a valid URI");
                 }
             }
         }
 
-        List<String> writeGrants = props.getProperty(InitDatabaseAction.WRITE_GRANTS_KEY);
+        List<String> writeGrants = props.getProperty(MinocInitAction.WRITE_GRANTS_KEY);
         if (writeGrants != null) {
             for (String s : writeGrants) {
                 try {
                     URI u = new URI(s);
                     writeGrantServices.add(u);
                 } catch (URISyntaxException ex) {
-                    throw new IllegalStateException("invalid config: " + InitDatabaseAction.WRITE_GRANTS_KEY + "=" + s + " must be a valid URI");
+                    throw new IllegalStateException("invalid config: " + MinocInitAction.WRITE_GRANTS_KEY + "=" + s + " must be a valid URI");
                 }
             }
         }
         
-        String ao = props.getFirstPropertyValue(InitDatabaseAction.DEV_AUTH_ONLY_KEY);
+        String ao = props.getFirstPropertyValue(MinocInitAction.DEV_AUTH_ONLY_KEY);
         if (ao != null) {
             try {
                 this.authenticateOnly = Boolean.valueOf(ao);
                 log.warn("(configuration) authenticateOnly = " + authenticateOnly);
             } catch (Exception ex) {
-                throw new IllegalStateException("invalid config: " + InitDatabaseAction.DEV_AUTH_ONLY_KEY + "=" + ao + " must be true|false or not set");
+                throw new IllegalStateException("invalid config: " + MinocInitAction.DEV_AUTH_ONLY_KEY + "=" + ao + " must be true|false or not set");
             }
         } else {
             authenticateOnly = false;
         }
         
         
-        Map<String, Object> config = InitDatabaseAction.getDaoConfig(props);
+        Map<String, Object> config = MinocInitAction.getDaoConfig(props);
         this.artifactDAO = new ArtifactDAO();
         artifactDAO.setConfig(config); // connectivity tested
 
-        this.storageAdapter = InventoryUtil.loadPlugin(props.getFirstPropertyValue(InitDatabaseAction.SA_KEY));
+        this.storageAdapter = InventoryUtil.loadPlugin(props.getFirstPropertyValue(MinocInitAction.SA_KEY));
     }
 
     /**
@@ -233,7 +233,7 @@ public abstract class ArtifactAction extends RestAction {
         throws AccessControlException, CertificateException, TransientException {
         
         if (authenticateOnly) {
-            log.warn(InitDatabaseAction.DEV_AUTH_ONLY_KEY + "=true: allowing unrestricted access");
+            log.warn(MinocInitAction.DEV_AUTH_ONLY_KEY + "=true: allowing unrestricted access");
             return;
         }
         
@@ -286,7 +286,7 @@ public abstract class ArtifactAction extends RestAction {
         }
         
         if (authenticateOnly) {
-            log.warn(InitDatabaseAction.DEV_AUTH_ONLY_KEY + "=true: allowing unrestricted access");
+            log.warn(MinocInitAction.DEV_AUTH_ONLY_KEY + "=true: allowing unrestricted access");
             return;
         }
         
@@ -492,7 +492,7 @@ public abstract class ArtifactAction extends RestAction {
     static Map<String, Object> getDaoConfig(MultiValuedProperties props) {
         Map<String, Object> config = new HashMap<String, Object>();
         Class cls = null;
-        List<String> sqlGenList = props.getProperty(InitDatabaseAction.SQLGEN_KEY);
+        List<String> sqlGenList = props.getProperty(MinocInitAction.SQLGEN_KEY);
         if (sqlGenList != null && sqlGenList.size() > 0) {
             try {
                 String sqlGenClass = sqlGenList.get(0);
@@ -506,11 +506,11 @@ public abstract class ArtifactAction extends RestAction {
             cls = SQLGenerator.class;
         }
 
-        config.put(InitDatabaseAction.SQLGEN_KEY, cls);
-        config.put("jndiDataSourceName", InitDatabaseAction.JNDI_DATASOURCE);
-        List<String> schemaList = props.getProperty(InitDatabaseAction.SCHEMA_KEY);
+        config.put(MinocInitAction.SQLGEN_KEY, cls);
+        config.put("jndiDataSourceName", MinocInitAction.JNDI_DATASOURCE);
+        List<String> schemaList = props.getProperty(MinocInitAction.SCHEMA_KEY);
         if (schemaList == null || schemaList.size() < 1) {
-            throw new IllegalStateException("a value for " + InitDatabaseAction.SCHEMA_KEY
+            throw new IllegalStateException("a value for " + MinocInitAction.SCHEMA_KEY
                 + " is needed in minoc.properties");
         }
         config.put("schema", schemaList.get(0));

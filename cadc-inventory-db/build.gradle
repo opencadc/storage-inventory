@@ -18,14 +18,14 @@ sourceCompatibility = 1.8
 
 group = 'org.opencadc'
 
-version = '0.8.1'
+version = '0.9'
 
 mainClassName = 'org.opencadc.inventory.db.version.Main'
 
 dependencies {
     compile 'log4j:log4j:[1.2,)'
     compile 'org.opencadc:cadc-util:[1.3.5,)'
-    compile 'org.opencadc:cadc-inventory:[0.7.3,)'
+    compile 'org.opencadc:cadc-inventory:[0.8,)'
 
     testCompile 'junit:junit:[4.0,)'
     
