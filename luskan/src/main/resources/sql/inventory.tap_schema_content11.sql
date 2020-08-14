@@ -57,7 +57,9 @@ insert into tap_schema.columns11 (table_name,column_name,utype,description,unit,
 ( 'inventory.StorageSite', 'name', 'si:StorageSite.name', 'Name of the storage site', NULL, 'char','32*',NULL, 1, 0, 1, 2 ),
 ( 'inventory.StorageSite', 'id', 'si:StorageSite.id', 'primary key', NULL, 'char','36','uuid', 1, 1, 1, 3 ),
 ( 'inventory.StorageSite', 'lastModified', 'si:StorageSite.lastModified', 'timestamp of the file at location', NULL, 'char','23*','timestamp', 1, 1, 1, 4 ),
-( 'inventory.StorageSite', 'metaChecksum', 'si:StorageSite.metaChecksum', 'checksum of the file at location', NULL, 'char','136*','uri', 1, 0, 1, 5 )
+( 'inventory.StorageSite', 'metaChecksum', 'si:StorageSite.metaChecksum', 'checksum of the file at location', NULL, 'char','136*','uri', 1, 0, 1, 5 ),
+( 'inventory.StorageSite', 'allowRead', 'si:StorageSite.allowRead', 'storage site allows HEAD and GET', NULL, 'boolean', NULL, NULL, 1, 0, 1, 6 ),
+( 'inventory.StorageSite', 'allowWrite', 'si:StorageSite.allowWrite', 'storage site allows DELETE and PUT', NULL, 'boolean', NULL, NULL, 1, 0, 1, 7 )
 ;
 
 insert into tap_schema.columns11 (table_name,column_name,utype,description,unit,datatype,arraysize,xtype,principal,indexed,std,column_index) values
