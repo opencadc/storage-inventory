@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2020.                            (c) 2030.
+*  (c) 2020.                            (c) 2020.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -65,95 +65,41 @@
 ************************************************************************
 */
 
-package org.opencadc.inventory.db.version;
+package org.opencadc.luskan;
 
-import ca.nrc.cadc.db.ConnectionConfig;
-import ca.nrc.cadc.db.DBConfig;
 import ca.nrc.cadc.db.DBUtil;
-import ca.nrc.cadc.util.ArgumentMap;
-import ca.nrc.cadc.util.Log4jInit;
-import java.io.IOException;
-import java.util.List;
+import ca.nrc.cadc.rest.InitAction;
+import ca.nrc.cadc.tap.schema.InitDatabaseTS;
+import ca.nrc.cadc.uws.server.impl.InitDatabaseUWS;
 import javax.sql.DataSource;
-import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 
 /**
- * Place holder for manual call to force InitDatase.
- * 
+ *
  * @author pdowler
  */
-public class Main implements Runnable {
-    private static final Logger log = Logger.getLogger(Main.class);
+public class LuskanInitAction extends InitAction {
+    private static final Logger log = Logger.getLogger(LuskanInitAction.class);
 
-    public static void main(String[] args) {
-        try {
-            ArgumentMap am = new ArgumentMap(args);
-            Log4jInit.setLevel("ca.nrc.cadc", Level.WARN);
-            Log4jInit.setLevel("org.opencadc", Level.WARN);
-            if (am.isSet("d") || am.isSet("debug")) {
-                Log4jInit.setLevel("org.opencadc.inventory", Level.DEBUG);
-                Log4jInit.setLevel("ca.nrc.cadc.db", Level.DEBUG);
-            } else if (am.isSet("v") || am.isSet("verbose")) {
-                Log4jInit.setLevel("org.opencadc.inventory", Level.INFO);
-                Log4jInit.setLevel("ca.nrc.cadc.db", Level.INFO);
-            }
+    public LuskanInitAction() { 
+    }
 
-            if (am.isSet("h") || am.isSet("help")) {
-                usage();
-                return;
-            }
-            
-            List<String> ss = am.getPositionalArgs();
-            if (ss.size() != 3) {
-                log.error("missing required commandline args");
-                usage();
-                System.exit(1);
-            }
-            
-            Main m = new Main(ss.get(0), ss.get(1), ss.get(2));
-            m.run();
-            
-        } catch (Throwable unexpected) {
-            log.error("unexpected error", unexpected);
-            System.exit(2);
-        }
-    }
-    
-    private static void usage() {
-        System.out.println("usage: cadc-inventory-db [-v|--verbose|-d|--debug] <server> <database> <schema>");
-    }
-    
-    private final String server;
-    private final String database;
-    private final String schema;
-    
-    private Main(String server, String database, String schema) {
-        this.server = server;
-        this.database = database;
-        this.schema = schema;
-    }
-    
-    public void run() {
+    @Override
+    public void doInit() {
         try {
-            DBConfig dbrc = new DBConfig();
-            ConnectionConfig cc = dbrc.getConnectionConfig(server, database);
-            String driver = cc.getDriver();
-            if (driver == null) {
-                throw new RuntimeException("failed to find JDBC driver for " + server + "," + database);
-            }
-            DataSource ds = DBUtil.getDataSource(cc);
-            log.info("target: " + server + " " + database + " " + schema);
+            DataSource tapadm = DBUtil.findJNDIDataSource("jdbc/tapadm");
+            InitDatabaseTS tsi = new InitDatabaseTS(tapadm, null, "tap_schema");
+            tsi.doInit();
+
+            DataSource uws = DBUtil.findJNDIDataSource("jdbc/tapadm");
+            InitDatabaseUWS uwsi = new InitDatabaseUWS(uws, null, "uws");
+            uwsi.doInit();
             
-            InitDatabase init = new InitDatabase(ds, database, schema);
-            boolean result = init.doInit();
-            if (result) {
-                log.info("init: complete");
-            } else {
-                log.info("init: no-op");
-            }
-        } catch (IOException ex) {
-            throw new RuntimeException("failed to read connection info from $HOME/.dbrc", ex);
+            // create the TAP schema
+            InitLuskanSchemaContent lsc = new InitLuskanSchemaContent(tapadm, null, "tap_schema");
+            lsc.doInit();
+        } catch (Exception ex) {
+            throw new RuntimeException("INIT FAIL", ex);
         }
     }
 }
