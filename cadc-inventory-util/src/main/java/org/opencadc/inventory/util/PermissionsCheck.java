@@ -230,6 +230,7 @@ public class PermissionsCheck {
 
         URI artifactURI;
         private List<URI> readGrantServices;
+
         GetReadGrantsAction(URI artifactURI, List<URI> readGrantServices) {
             this.artifactURI = artifactURI;
             this.readGrantServices = readGrantServices;
@@ -258,6 +259,7 @@ public class PermissionsCheck {
 
         URI artifactURI;
         List<URI> writeGrantServices;
+        
         GetWriteGrantsAction(URI artifactURI, List<URI> writeGrantServices) {
             this.artifactURI = artifactURI;
             this.writeGrantServices = writeGrantServices;
