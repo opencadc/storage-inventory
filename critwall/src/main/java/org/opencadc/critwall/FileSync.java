@@ -67,6 +67,7 @@
 
 package org.opencadc.critwall;
 
+import ca.nrc.cadc.auth.AuthenticationUtil;
 import ca.nrc.cadc.db.ConnectionConfig;
 import ca.nrc.cadc.db.DBUtil;
 
@@ -76,6 +77,8 @@ import java.util.Map;
 
 import java.util.concurrent.LinkedBlockingQueue;
 import javax.naming.NamingException;
+import javax.security.auth.Subject;
+
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.InventoryUtil;
@@ -182,8 +185,10 @@ public class FileSync {
 
                     FileSyncJob fsj = new FileSyncJob(curArtifact.getURI(), this.locatorService,
                         this.storageAdapter, this.jobArtifactDAO);
+                    final Subject currentUser = AuthenticationUtil.getCurrentSubject();
+                    fsj.setOwner(currentUser);
                     
-                    log.debug("creating file sync job: " + curArtifact.getURI());
+                    log.debug("creating file sync job " + curArtifact.getURI() + " as " + currentUser.getPrincipals());
                     jobQueue.put(fsj); // blocks when queue capacity is reached
                 }
             }
