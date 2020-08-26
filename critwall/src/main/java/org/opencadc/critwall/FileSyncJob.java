@@ -68,7 +68,6 @@
 package org.opencadc.critwall;
 
 import ca.nrc.cadc.auth.AuthMethod;
-import ca.nrc.cadc.auth.AuthenticationUtil;
 import ca.nrc.cadc.io.WriteException;
 import ca.nrc.cadc.net.FileContent;
 import ca.nrc.cadc.net.HttpGet;
@@ -91,13 +90,11 @@ import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URL;
-import java.security.AccessControlContext;
-import java.security.AccessController;
 import java.security.PrivilegedAction;
-import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import javax.security.auth.Subject;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.InventoryUtil;
@@ -107,8 +104,6 @@ import org.opencadc.inventory.storage.StorageAdapter;
 
 import org.opencadc.inventory.storage.StorageEngageException;
 import org.opencadc.inventory.storage.StorageMetadata;
-
-import javax.security.auth.Subject;
 
 
 public class FileSyncJob implements Runnable {

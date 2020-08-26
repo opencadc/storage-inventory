@@ -78,18 +78,19 @@ import ca.nrc.cadc.util.StringUtil;
 import java.io.File;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.security.AccessControlContext;
+import java.security.AccessController;
 import java.security.PrivilegedExceptionAction;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
+import javax.security.auth.Subject;
 
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.db.SQLGenerator;
 import org.opencadc.inventory.storage.StorageAdapter;
 import org.opencadc.inventory.util.BucketSelector;
-
-import javax.security.auth.Subject;
 
 
 /**
@@ -242,10 +243,9 @@ public class Main {
                  * Performs the computation.  This method will be called by
                  * {@code AccessController.doPrivileged} after enabling privileges.
                  *
-                 * @return a class-dependent value that may represent the results of the
-                 * computation.  Each class that implements
-                 * {@code PrivilegedExceptionAction} should document what
-                 * (if anything) this value represents.
+                 * @return  a class-dependent value that may represent the results of the computation.  Each class that
+                 *      implements
+                 * {@code PrivilegedExceptionAction} should document what (if anything) this value represents.
                  *
                  * @throws Exception an exceptional condition has occurred.  Each class
                  *                   that implements {@code PrivilegedExceptionAction} should
