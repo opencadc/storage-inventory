@@ -67,12 +67,9 @@
 
 package org.opencadc.fenwick;
 
-import org.apache.log4j.Logger;
-
 import ca.nrc.cadc.auth.SSLUtil;
 import ca.nrc.cadc.util.FileUtil;
-
-import javax.security.auth.Subject;
+import ca.nrc.cadc.util.HexUtil;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
@@ -80,7 +77,12 @@ import java.io.IOException;
 import java.net.URI;
 import java.util.MissingResourceException;
 import java.util.Properties;
-
+import java.util.UUID;
+import javax.security.auth.Subject;
+import org.apache.log4j.Logger;
+import org.opencadc.inventory.DeletedArtifactEvent;
+import org.opencadc.inventory.DeletedStorageLocationEvent;
+import org.opencadc.inventory.db.DeletedEventDAO;
 
 /**
  *
@@ -88,13 +90,15 @@ import java.util.Properties;
  */
 public class TestUtil {
     private static final Logger log = Logger.getLogger(TestUtil.class);
-    static String INVENTORY_SERVER = "INVENTORY_TEST";
+    static String INVENTORY_SERVER = "FENWICK_TEST";
     static String INVENTORY_DATABASE = "cadctest";
     static String INVENTORY_SCHEMA = "inventory";
     static String LUSKAN_SERVER = "LUSKAN_TEST";
     static String LUSKAN_SCHEMA = "inventory";
     static String LUSKAN_DATABASE = "cadctest";
     static URI LUSKAN_URI = URI.create("ivo://cadc.nrc.ca/luskan");
+    
+    static String ZERO_BYTES_MD5 = "md5:d41d8cd98f00b204e9800998ecf8427e";
 
     static {
         try {
@@ -140,5 +144,22 @@ public class TestUtil {
 
     static Subject getConfiguredSubject() {
         return SSLUtil.createSubject(new File(System.getProperty("user.home") + "/.ssl/cadcproxy.pem"));
+    }
+    
+    static URI getRandomMD5() {
+        UUID uuid = UUID.randomUUID();
+        return URI.create("md5:" + HexUtil.toHex(uuid.getMostSignificantBits()) + HexUtil.toHex(uuid.getLeastSignificantBits()));
+    }
+    
+    public static class DeletedArtifactEventDAO extends DeletedEventDAO<DeletedArtifactEvent> {
+        public DeletedArtifactEvent get(UUID id) {
+            return super.get(DeletedArtifactEvent.class, id);
+        }
+    }
+    
+    public static class DeletedStorageLocationEventDAO extends DeletedEventDAO<DeletedStorageLocationEvent> {
+        public  DeletedStorageLocationEvent get(UUID id) {
+            return super.get(DeletedStorageLocationEvent.class, id);
+        }
     }
 }
