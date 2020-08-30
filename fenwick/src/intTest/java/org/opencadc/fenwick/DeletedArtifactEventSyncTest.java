@@ -69,8 +69,10 @@
 
 package org.opencadc.fenwick;
 
-import static org.opencadc.fenwick.TestUtil.DATABASE;
-import static org.opencadc.fenwick.TestUtil.SCHEMA;
+import static org.opencadc.fenwick.TestUtil.INVENTORY_DATABASE;
+import static org.opencadc.fenwick.TestUtil.INVENTORY_SCHEMA;
+import static org.opencadc.fenwick.TestUtil.LUSKAN_DATABASE;
+import static org.opencadc.fenwick.TestUtil.LUSKAN_SCHEMA;
 
 import ca.nrc.cadc.auth.SSLUtil;
 import ca.nrc.cadc.db.ConnectionConfig;
@@ -118,14 +120,14 @@ public class DeletedArtifactEventSyncTest {
 
     public DeletedArtifactEventSyncTest() throws Exception {
         final DBConfig dbConfig = new DBConfig();
-        final ConnectionConfig cc = dbConfig.getConnectionConfig(TestUtil.SERVER, DATABASE);
+        final ConnectionConfig cc = dbConfig.getConnectionConfig(TestUtil.LUSKAN_SERVER, LUSKAN_DATABASE);
         DBUtil.createJNDIDataSource("jdbc/DeletedEventSyncTest", cc);
 
         final Map<String, Object> config = new TreeMap<>();
         config.put(SQLGenerator.class.getName(), SQLGenerator.class);
         config.put("jndiDataSourceName", "jdbc/DeletedEventSyncTest");
-        config.put("database", DATABASE);
-        config.put("schema", SCHEMA);
+        config.put("database", LUSKAN_DATABASE);
+        config.put("schema", LUSKAN_SCHEMA);
 
         deletedEventDAO.setConfig(config);
     }
@@ -134,7 +136,7 @@ public class DeletedArtifactEventSyncTest {
     public void setup() throws SQLException {
         log.info("deleting events...");
         DataSource ds = deletedEventDAO.getDataSource();
-        String sql = String.format("delete from %s.DeletedArtifactEvent", SCHEMA);
+        String sql = String.format("delete from %s.DeletedArtifactEvent", LUSKAN_SCHEMA);
         ds.getConnection().createStatement().execute(sql);
         log.info("deleting events... OK");
     }
@@ -172,7 +174,7 @@ public class DeletedArtifactEventSyncTest {
         try {
             log.info("testGetEvents");
             Subject userSubject = SSLUtil.createSubject(PROXY_PEM);
-            TapClient<DeletedArtifactEvent> tapClient = new TapClient<>(URI.create(TestUtil.LUSKAN_URI));
+            TapClient<DeletedArtifactEvent> tapClient = new TapClient<>(TestUtil.LUSKAN_URI);
 
             Calendar now = Calendar.getInstance();
             now.add(Calendar.DAY_OF_MONTH, -1);

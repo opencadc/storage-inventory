@@ -1,4 +1,3 @@
-
 /*
  ************************************************************************
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
@@ -69,30 +68,19 @@
 
 package org.opencadc.fenwick;
 
-import ca.nrc.cadc.auth.NotAuthenticatedException;
-import ca.nrc.cadc.auth.SSLUtil;
-import ca.nrc.cadc.db.ConnectionConfig;
-import ca.nrc.cadc.db.DBConfig;
 import ca.nrc.cadc.db.DBUtil;
-import ca.nrc.cadc.io.ByteLimitExceededException;
 import ca.nrc.cadc.io.ResourceIterator;
-import ca.nrc.cadc.net.ResourceNotFoundException;
-import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.util.Log4jInit;
 
-import java.io.File;
 import java.io.IOException;
 import java.net.URI;
-import java.security.AccessControlException;
 import java.security.MessageDigest;
 import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
-import java.util.TreeMap;
 import javax.security.auth.Subject;
 
 import org.apache.log4j.Level;
@@ -100,17 +88,14 @@ import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
-import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.StorageSite;
-import org.opencadc.inventory.db.ArtifactDAO;
-import org.opencadc.inventory.db.SQLGenerator;
-import org.opencadc.inventory.db.StorageSiteDAO;
 import org.opencadc.tap.TapClient;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 
 public class StorageSiteSyncTest {
-    private static final File PROXY_PEM = new File(System.getProperty("user.home") + "/.ssl/cadcproxy.pem");
+
     private static final Logger LOGGER = Logger.getLogger(StorageSiteSyncTest.class);
 
     static {
@@ -119,175 +104,97 @@ public class StorageSiteSyncTest {
         Log4jInit.setLevel("org.opencadc.fenwick", Level.DEBUG);
     }
 
-    private final StorageSiteDAO storageSiteDAO = new StorageSiteDAO();
-    private final ArtifactDAO artifactDAO = new ArtifactDAO();
+    private final InventoryEnvironment inventoryEnvironment = new InventoryEnvironment();
+    private final LuskanEnvironment luskanEnvironment = new LuskanEnvironment();
+    private final Subject testUser = TestUtil.getConfiguredSubject();
 
     public StorageSiteSyncTest() throws Exception {
-        final DBConfig dbConfig = new DBConfig();
-        final ConnectionConfig cc = dbConfig.getConnectionConfig(TestUtil.SERVER, TestUtil.DATABASE);
-        DBUtil.createJNDIDataSource("jdbc/StorageSiteSyncTest", cc);
 
-        final Map<String,Object> config = new TreeMap<>();
-        config.put(SQLGenerator.class.getName(), SQLGenerator.class);
-        config.put("jndiDataSourceName", "jdbc/StorageSiteSyncTest");
-        config.put("database", TestUtil.DATABASE);
-        config.put("schema", TestUtil.SCHEMA);
-
-        storageSiteDAO.setConfig(config);
-        artifactDAO.setConfig(config);
-    }
-
-    private void wipe_clean(ResourceIterator<Artifact> artifactIterator) throws Exception {
-        while (artifactIterator.hasNext()) {
-            Artifact a = artifactIterator.next();
-            LOGGER.debug("deleting test uri: " + a.getURI() + " ID: " + a.getID());
-            artifactDAO.delete(a.getID());
-        }
     }
 
     @Before
     public void cleanTestEnvironment() throws Exception {
-        LOGGER.debug("cleaning stored artifacts...");
-        ResourceIterator<Artifact> storedArtifacts = artifactDAO.storedIterator(null);
-        wipe_clean(storedArtifacts);
-        storedArtifacts.close();
-
-        LOGGER.debug("cleaning unstored artifacts...");
-        ResourceIterator<Artifact> unstoredArtifacts = artifactDAO.unstoredIterator(null);
-        wipe_clean(unstoredArtifacts);
-        unstoredArtifacts.close();
-
-        LOGGER.debug("Wiping Storage Sites.");
-        for (final StorageSite storageSite : storageSiteDAO.list()) {
-            LOGGER.debug(String.format("Removing storage site '%s'.", storageSite.getName()));
-            storageSiteDAO.delete(storageSite.getID());
-        }
+        inventoryEnvironment.cleanTestEnvironment();
+        luskanEnvironment.cleanTestEnvironment();
     }
 
     @Test
     public void intTestSiteSyncOK() throws Exception {
         final MessageDigest messageDigest = MessageDigest.getInstance("MD5");
-        final Subject subject = SSLUtil.createSubject(PROXY_PEM);
-        final TapClient<StorageSite> tapClient = new TapClient<>(URI.create(TestUtil.LUSKAN_URI));
+        final TapClient<StorageSite> tapClient = new TapClient<>(TestUtil.LUSKAN_URI);
 
-        Assert.assertTrue("Sites should be empty.", storageSiteDAO.list().isEmpty());
+        final StorageSite storageSite = new StorageSite(URI.create("cadc:TESTSITE/one"),
+                                                        StorageSiteSyncTest.class.getSimpleName(), true, false);
+        luskanEnvironment.storageSiteDAO.put(storageSite);
 
-        final StorageSiteSync storageSiteSync = new StorageSiteSync(tapClient, storageSiteDAO);
-        Subject.doAs(subject, (PrivilegedExceptionAction<StorageSite>) storageSiteSync::doit);
+        Assert.assertTrue("Sites should be empty.", inventoryEnvironment.storageSiteDAO.list().isEmpty());
 
-        //
-        // Test one
-        //
-        final Set<StorageSite> storageSiteSet = storageSiteDAO.list();
+        final StorageSiteSync storageSiteSync = new StorageSiteSync(tapClient, inventoryEnvironment.storageSiteDAO);
+        Subject.doAs(testUser, (PrivilegedExceptionAction<StorageSite>) storageSiteSync::doit);
+
+        final Set<StorageSite> storageSiteSet = inventoryEnvironment.storageSiteDAO.list();
         Assert.assertEquals("Should be a single site.", 1, storageSiteSet.size());
 
         final StorageSite[] storageSites = storageSiteSet.toArray(new StorageSite[0]);
         final URI expectedChecksum = storageSites[0].computeMetaChecksum(messageDigest);
-        Assert.assertEquals("Wrong site name.", "minoc", storageSites[0].getName());
-        Assert.assertEquals("Wrong site resource ID.", URI.create("ivo://cadc.nrc.ca/minoc"),
+        Assert.assertEquals("Wrong site name.", StorageSiteSyncTest.class.getSimpleName(), storageSites[0].getName());
+        Assert.assertEquals("Wrong site resource ID.", URI.create("cadc:TESTSITE/one"),
                             storageSites[0].getResourceID());
         Assert.assertEquals("Wrong checksum.", expectedChecksum, storageSites[0].getMetaChecksum());
-    }
-
-    @Test
-    public void intTestSiteSyncIdempotent() throws Exception {
-        final MessageDigest messageDigest = MessageDigest.getInstance("MD5");
-        final Subject subject = SSLUtil.createSubject(PROXY_PEM);
-        final TapClient<StorageSite> tapClient = new TapClient<>(URI.create(TestUtil.LUSKAN_URI));
-
-        Assert.assertTrue("Sites should be empty.", storageSiteDAO.list().isEmpty());
-
-        final StorageSiteSync storageSiteSync = new StorageSiteSync(tapClient, storageSiteDAO);
-        Subject.doAs(subject, (PrivilegedExceptionAction<StorageSite>) storageSiteSync::doit);
-
-        final Set<StorageSite> storageSiteSet = storageSiteDAO.list();
-        Assert.assertEquals("Should be a single site.", 1, storageSiteSet.size());
-
-        final StorageSite[] storageSites = storageSiteSet.toArray(new StorageSite[0]);
-        final URI expectedChecksum = storageSites[0].computeMetaChecksum(messageDigest);
-        Assert.assertEquals("Wrong site name.", "minoc", storageSites[0].getName());
-        Assert.assertEquals("Wrong site resource ID.", URI.create("ivo://cadc.nrc.ca/minoc"),
-                            storageSites[0].getResourceID());
-        Assert.assertEquals("Wrong checksum.", expectedChecksum, storageSites[0].getMetaChecksum());
-
-        // PUT it again.
-        Subject.doAs(subject, (PrivilegedExceptionAction<StorageSite>) storageSiteSync::doit);
-
-        final Set<StorageSite> storageSiteSetVerify = storageSiteDAO.list();
-        Assert.assertEquals("Should be a single site.", 1, storageSiteSetVerify.size());
-
-        final StorageSite[] storageSitesVerify = storageSiteSetVerify.toArray(new StorageSite[0]);
-        Assert.assertEquals("Wrong site name.", "minoc", storageSitesVerify[0].getName());
-        Assert.assertEquals("Wrong site resource ID.", URI.create("ivo://cadc.nrc.ca/minoc"),
-                            storageSitesVerify[0].getResourceID());
-        Assert.assertEquals("Wrong checksum.", expectedChecksum, storageSitesVerify[0].getMetaChecksum());
     }
 
     @Test
     public void intTestSiteSyncChecksumError() throws Exception {
         final MessageDigest messageDigest = MessageDigest.getInstance("MD5");
-        final Subject subject = SSLUtil.createSubject(PROXY_PEM);
-        final TapClient<StorageSite> tapClient = new TapClient<>(URI.create(TestUtil.LUSKAN_URI));
+        final TapClient<StorageSite> tapClient = new TapClient<>(TestUtil.LUSKAN_URI);
 
-        Assert.assertTrue("Sites should be empty.", storageSiteDAO.list().isEmpty());
+        Assert.assertTrue("Sites should be empty.", inventoryEnvironment.storageSiteDAO.list().isEmpty());
 
-        final StorageSiteSync storageSiteSync = new StorageSiteSync(tapClient, storageSiteDAO);
-        Subject.doAs(subject, (PrivilegedExceptionAction<StorageSite>) storageSiteSync::doit);
+        final StorageSite storageSite = new StorageSite(URI.create("cadc:TESTSITE/one_1"),
+                                                        StorageSiteSyncTest.class.getSimpleName(), true, false);
+        luskanEnvironment.storageSiteDAO.put(storageSite);
 
-        // Read in the new Storage Site.  There should only be one.
-        final Set<StorageSite> storageSiteSet = storageSiteDAO.list();
-        final StorageSite storageSite = storageSiteSet.toArray(new StorageSite[0])[0];
+        final JdbcTemplate jdbcTemplate = new JdbcTemplate(DBUtil.findJNDIDataSource(luskanEnvironment.jndiPath));
+        Assert.assertTrue("Should have updated peacefully.",
+                          jdbcTemplate.update("UPDATE " + TestUtil.LUSKAN_SCHEMA + "." + "storageSite "
+                                              + "SET metaChecksum = 'md5:7777777' WHERE resourceID = "
+                                              + "'cadc:TESTSITE/one_1'") > 0);
 
-        // ****************
-        // Error conditions
-        // ****************
-
-        //
-        // Test three
-        //
-        final StorageSiteSync storageSiteSyncChecksumError = new StorageSiteSync(tapClient, storageSiteDAO) {
-            @Override
-            ResourceIterator<StorageSite> queryStorageSites()
-                    throws AccessControlException, ResourceNotFoundException, ByteLimitExceededException,
-                           NotAuthenticatedException, IllegalArgumentException, TransientException, IOException,
-                           InterruptedException {
-                return new ResourceIteratorModifiedChecksum(storageSite);
-            }
-        };
+        final StorageSiteSync storageSiteSync = new StorageSiteSync(tapClient, inventoryEnvironment.storageSiteDAO);
 
         try {
             // Should throw an error.
             //
-            Subject.doAs(subject, (PrivilegedExceptionAction<StorageSite>) storageSiteSyncChecksumError::doit);
+            Subject.doAs(testUser, (PrivilegedExceptionAction<StorageSite>) storageSiteSync::doit);
             Assert.fail("Should throw IllegalStateException.");
         } catch (IllegalStateException e) {
             // Good.
             final URI expectedChecksum = storageSite.computeMetaChecksum(messageDigest);
             Assert.assertEquals("Wrong error message.",
-                                String.format("Discovered Storage Site checksum (md5:889900) does not "
-                                              + "match computed value (%s).", expectedChecksum),
+                                "Discovered Storage Site checksum (md5:7777777) does not "
+                                + "match computed value (" + expectedChecksum + ").",
                                 e.getMessage());
         }
     }
 
     @Test
     public void intTestSiteSyncMultiple() throws Exception {
-        final Subject subject = SSLUtil.createSubject(PROXY_PEM);
-        final TapClient<StorageSite> tapClient = new TapClient<>(URI.create(TestUtil.LUSKAN_URI));
-        final StorageSiteSync storageSiteSyncMultipleSitesError = new StorageSiteSync(tapClient, storageSiteDAO) {
-            @Override
-            ResourceIterator<StorageSite> queryStorageSites()
-                    throws AccessControlException, ResourceNotFoundException, ByteLimitExceededException,
-                           NotAuthenticatedException, IllegalArgumentException, TransientException, IOException,
-                           InterruptedException {
-                return new ResourceIteratorMultipleSites();
-            }
-        };
+        final TapClient<StorageSite> tapClient = new TapClient<>(TestUtil.LUSKAN_URI);
+        final StorageSiteSync storageSiteSyncMultipleSitesError =
+                new StorageSiteSync(tapClient, inventoryEnvironment.storageSiteDAO);
+
+        final StorageSite storageSite = new StorageSite(URI.create("cadc:TESTSITE/one_1"),
+                                                        StorageSiteSyncTest.class.getSimpleName(), true, false);
+        luskanEnvironment.storageSiteDAO.put(storageSite);
+
+        final StorageSite secondStorageSite = new StorageSite(URI.create("cadc:TESTSITE/uh-oh"),
+                                                              StorageSiteSyncTest.class.getSimpleName() + "_2", true, false);
+        luskanEnvironment.storageSiteDAO.put(secondStorageSite);
 
         try {
             // Should throw an error.
             //
-            Subject.doAs(subject, (PrivilegedExceptionAction<StorageSite>) storageSiteSyncMultipleSitesError::doit);
+            Subject.doAs(testUser, (PrivilegedExceptionAction<StorageSite>) storageSiteSyncMultipleSitesError::doit);
             Assert.fail("Should throw IllegalStateException.");
         } catch (IllegalStateException e) {
             // Good.
@@ -295,36 +202,19 @@ public class StorageSiteSyncTest {
         }
     }
 
-    /**
-     * Test StorageSite synchronization.
-     * Test four: Ensure a failed execution if multiple sites are found.
-     * Test five: Ensure a failed execution if no sites are found.
-     *
-     */
     @Test
     public void intTestSiteSyncNoSitesFound() throws Exception {
-        final Subject subject = SSLUtil.createSubject(PROXY_PEM);
-        final TapClient<StorageSite> tapClient = new TapClient<>(URI.create(TestUtil.LUSKAN_URI));
+        final TapClient<StorageSite> tapClient = new TapClient<>(TestUtil.LUSKAN_URI);
 
-        Assert.assertTrue("Sites should be empty.", storageSiteDAO.list().isEmpty());
+        Assert.assertTrue("Sites should be empty.", inventoryEnvironment.storageSiteDAO.list().isEmpty());
 
-        final StorageSiteSync storageSiteSync = new StorageSiteSync(tapClient, storageSiteDAO);
-        Subject.doAs(subject, (PrivilegedExceptionAction<StorageSite>) storageSiteSync::doit);
-
-        final StorageSiteSync storageSiteSyncEmptySitesError = new StorageSiteSync(tapClient, storageSiteDAO) {
-            @Override
-            ResourceIterator<StorageSite> queryStorageSites()
-                    throws AccessControlException, ResourceNotFoundException, ByteLimitExceededException,
-                           NotAuthenticatedException, IllegalArgumentException, TransientException, IOException,
-                           InterruptedException {
-                return new ResourceIteratorEmptySites();
-            }
-        };
+        final StorageSiteSync storageSiteSyncEmptySitesError =
+                new StorageSiteSync(tapClient, inventoryEnvironment.storageSiteDAO);
 
         try {
             // Should throw an error.
             //
-            Subject.doAs(subject, (PrivilegedExceptionAction<StorageSite>) storageSiteSyncEmptySitesError::doit);
+            Subject.doAs(testUser, (PrivilegedExceptionAction<StorageSite>) storageSiteSyncEmptySitesError::doit);
             Assert.fail("Should throw IllegalStateException.");
         } catch (IllegalStateException e) {
             // Good.
@@ -366,8 +256,8 @@ public class StorageSiteSyncTest {
         public ResourceIteratorMultipleSites() {
             final List<StorageSite> storageSiteList = new ArrayList<>();
 
-            storageSiteList.add(new StorageSite(URI.create("ivo://test/siteone"), "Test Site One."));
-            storageSiteList.add(new StorageSite(URI.create("ivo://test/sitetwo"), "Test Site Two."));
+            storageSiteList.add(new StorageSite(URI.create("ivo://test/siteone"), "Test Site One.", true, false));
+            storageSiteList.add(new StorageSite(URI.create("ivo://test/sitetwo"), "Test Site Two.", true, true));
 
             sourceIterator = storageSiteList.iterator();
         }

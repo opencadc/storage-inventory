@@ -1,4 +1,4 @@
-# Storage Inventoty metadata-sync process (fenwick)
+# Storage Inventory metadata-sync process (fenwick)
 
 Process to sync metadata changes between storage sites and global inventory(ies). This process runs in
 incremental mode (single process running continuously to update a local inventory database). 
@@ -32,6 +32,18 @@ org.opencadc.fenwick.ArtifactSelector={fully qualified classname of ArtifactSele
 ### cadcproxy.pem
 Querying the remote query service (luskan) requires permission. `fenwick` uses this certificate file located
 in /config to authenticate.
+
+### SQL includes
+When the `org.opencadc.fenwick.IncludeArtifacts` ArtifactSelector is specified, an SQL file specifying the included Artifacts is required 
+in the `/config/include` folder.  The single clause in the SQL file *MUST* begin with the `WHERE` keyword.
+
+> `artifact-include.sql`
+```sql
+WHERE uri LIKE '%SOME CONDITION%'
+```
+
+Will restrict the included Artifacts to _only_ those that match the SQL condition.
+
 
 ## building it
 ```

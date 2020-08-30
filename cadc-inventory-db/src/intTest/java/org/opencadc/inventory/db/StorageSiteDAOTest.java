@@ -132,9 +132,9 @@ public class StorageSiteDAOTest {
     }
     
     @Test
-    public void testGetPutDelete() {
+    public void testPutGetUpdateDelete() {
         try {
-            StorageSite expected = new StorageSite(URI.create("ivo://cadc.nrc.ca/site1"), "Site-1");
+            StorageSite expected = new StorageSite(URI.create("ivo://cadc.nrc.ca/site1"), "Site-1", true, false);
             log.info("expected: " + expected);
             
             StorageSite notFound = dao.get(expected.getID());
@@ -154,9 +154,28 @@ public class StorageSiteDAOTest {
             Assert.assertNotNull(fid);
             Assert.assertEquals(expected.getResourceID(), fid.getResourceID());
             Assert.assertEquals(expected.getName(), fid.getName());
+            Assert.assertEquals(expected.getAllowRead(), fid.getAllowRead());
+            Assert.assertEquals(expected.getAllowWrite(), fid.getAllowWrite());
             URI mcs1 = fid.computeMetaChecksum(MessageDigest.getInstance("MD5"));
-            Assert.assertEquals("round trip metachecksum", expected.getMetaChecksum(), mcs1);
+            Assert.assertEquals("round trip metachecksum", fid.getMetaChecksum(), mcs1);
             
+            // update
+            fid.setResourceID(URI.create("ivo://cadc.nrc.ca/area51"));
+            fid.setName("Area 51");
+            fid.setAllowRead(false);
+            fid.setAllowWrite(true);
+            dao.put(fid);
+            
+            StorageSite a51 = dao.get(expected.getID());
+            Assert.assertNotNull(fid);
+            Assert.assertEquals(fid.getResourceID(), a51.getResourceID());
+            Assert.assertEquals(fid.getName(), a51.getName());
+            Assert.assertEquals(fid.getAllowRead(), a51.getAllowRead());
+            Assert.assertEquals(fid.getAllowWrite(), a51.getAllowWrite());
+            URI mcs2 = a51.computeMetaChecksum(MessageDigest.getInstance("MD5"));
+            Assert.assertEquals("round trip metachecksum", a51.getMetaChecksum(), mcs2);
+            
+            // delete
             dao.delete(expected.getID());
             StorageSite deleted = dao.get(expected.getID());
             Assert.assertNull(deleted);
@@ -170,7 +189,7 @@ public class StorageSiteDAOTest {
     @Test
     public void testCopyConstructor() {
         try {
-            StorageSite expected = new StorageSite(URI.create("ivo://cadc.nrc.ca/site1"), "Site-1");
+            StorageSite expected = new StorageSite(URI.create("ivo://cadc.nrc.ca/site1"), "Site-1", false, false);
             log.info("expected: " + expected);
             
             StorageSite notFound = dao.get(expected.getID());
@@ -208,10 +227,10 @@ public class StorageSiteDAOTest {
     @Test
     public void testList() {
         try {
-            StorageSite s1 = new StorageSite(URI.create("ivo://cadc.nrc.ca/site1"), "Site-1");
-            StorageSite s2 = new StorageSite(URI.create("ivo://cadc.nrc.ca/site2"), "Site-2");
-            StorageSite s3 = new StorageSite(URI.create("ivo://cadc.nrc.ca/site3"), "Site-3");
-            StorageSite s4 = new StorageSite(URI.create("ivo://cadc.nrc.ca/site4"), "Site-4");
+            StorageSite s1 = new StorageSite(URI.create("ivo://cadc.nrc.ca/site1"), "Site-1", false, false);
+            StorageSite s2 = new StorageSite(URI.create("ivo://cadc.nrc.ca/site2"), "Site-2", true, false);
+            StorageSite s3 = new StorageSite(URI.create("ivo://cadc.nrc.ca/site3"), "Site-3", false, true);
+            StorageSite s4 = new StorageSite(URI.create("ivo://cadc.nrc.ca/site4"), "Site-4", true, true);
             
             Set<StorageSite> sites = dao.list();
             Assert.assertNotNull(sites);
