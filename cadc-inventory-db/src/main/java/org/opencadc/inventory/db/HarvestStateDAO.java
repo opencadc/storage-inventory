@@ -80,9 +80,9 @@ import org.springframework.jdbc.core.JdbcTemplate;
 public class HarvestStateDAO extends AbstractDAO<HarvestState> {
     private static final Logger log = Logger.getLogger(HarvestStateDAO.class);
 
-    // only usabe by itself for testing
+    // only usable by itself for testing
     public HarvestStateDAO() { 
-        super();
+        super(true);
     }
     
     public HarvestStateDAO(AbstractDAO src) {
