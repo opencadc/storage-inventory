@@ -138,8 +138,8 @@ public class NegotiationTest extends RavenTest {
                         siteDAO.put(site1);
                         siteDAO.put(site2);
                         
-                        SiteLocation location1 = new SiteLocation(site1.getID());
-                        SiteLocation location2 = new SiteLocation(site2.getID());
+                        final SiteLocation location1 = new SiteLocation(site1.getID());
+                        final SiteLocation location2 = new SiteLocation(site2.getID());
                         
                         Protocol protocol = new Protocol(VOS.PROTOCOL_HTTPS_GET);
                         Transfer transfer = new Transfer(
@@ -156,15 +156,16 @@ public class NegotiationTest extends RavenTest {
                             // expected
                         }
                         
-                        artifact.siteLocations.add(location1);
-                        artifactDAO.put(artifact, true);
+                        artifactDAO.addSiteLocation(artifact, location1);
+                        artifact = artifactDAO.get(artifact.getID());
                         
                         // test that there's one copy
                         Transfer response = negotiate(transfer);
                         Assert.assertEquals(1, response.getAllEndpoints().size());
                         
-                        artifact.siteLocations.add(location2);
-                        artifactDAO.put(artifact, true);
+                        
+                        artifactDAO.addSiteLocation(artifact, location2);
+                        artifact = artifactDAO.get(artifact.getID());
                         
                         // test that there are now two copies
                         response = negotiate(transfer);
