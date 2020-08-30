@@ -77,7 +77,11 @@ import org.opencadc.inventory.Entity;
  */
 public class DeletedEventDAO<T extends Entity> extends AbstractDAO<T> {
     public DeletedEventDAO() { 
-        super();
+        super(true);
+    }
+
+    public DeletedEventDAO(boolean origin) {
+        super(origin);
     }
 
     public DeletedEventDAO(AbstractDAO<?> dao) {

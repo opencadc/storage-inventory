@@ -93,8 +93,10 @@ public class Main implements Runnable {
             Log4jInit.setLevel("org.opencadc", Level.WARN);
             if (am.isSet("d") || am.isSet("debug")) {
                 Log4jInit.setLevel("org.opencadc.inventory", Level.DEBUG);
+                Log4jInit.setLevel("ca.nrc.cadc.db", Level.DEBUG);
             } else if (am.isSet("v") || am.isSet("verbose")) {
                 Log4jInit.setLevel("org.opencadc.inventory", Level.INFO);
+                Log4jInit.setLevel("ca.nrc.cadc.db", Level.INFO);
             }
 
             if (am.isSet("h") || am.isSet("help")) {

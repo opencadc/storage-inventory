@@ -91,8 +91,6 @@ import java.util.Random;
 import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
-import nom.tam.fits.BasicHDU;
-import nom.tam.fits.Fits;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.After;
@@ -515,98 +513,5 @@ abstract class S3StorageAdapterTest {
                 throw new RuntimeException("BUG: stream should not be read");
             }
         };
-    }
-    
-    private void ensureMEFTestFile() throws Exception {
-        throw new UnsupportedOperationException("not implemented");
-        /*
-        final long expectedContentLength = 312151680L;
-        try (final S3Client s3Client = S3Client.builder()
-                                               .endpointOverride(ENDPOINT)
-                                               .region(Region.of(REGION))
-                                               .build()) {
-            try {
-                s3Client.headObject(HeadObjectRequest.builder().bucket(BUCKET_NAME).key(MEF_OBJECT_ID).build());
-                LOGGER.info(String.format("Test file %s/%s exists.", BUCKET_NAME, MEF_OBJECT_ID));
-            } catch (NoSuchKeyException e) {
-                LOGGER.info("*********");
-                LOGGER.info(String.format("Test file (%s/%s) does not exist.  Uploading file from VOSpace...",
-                                          BUCKET_NAME, MEF_OBJECT_ID));
-                LOGGER.info("*********");
-
-                final URL sourceURL = new URL("https://www.cadc-ccda.hia-iha.nrc-cnrc.gc" +
-                                              ".ca/files/vault/CADCtest/Public/test-megaprime.fits.fz");
-
-
-                try (final InputStream inputStream = openStream(sourceURL)) {
-                    s3Client.putObject(PutObjectRequest.builder()
-                                                       .bucket(BUCKET_NAME)
-                                                       .key(MEF_OBJECT_ID)
-                                                       .build(),
-                                       RequestBody.fromInputStream(inputStream, expectedContentLength));
-                }
-
-                LOGGER.info("*********");
-                LOGGER.info(String.format("Test file (%s/%s) uploaded.", BUCKET_NAME, MEF_OBJECT_ID));
-                LOGGER.info("*********");
-            }
-        }
-        */
-    }
-    
-    public void getHeaders() throws Exception {
-        log.info("Skip to headers...");
-        log.info("***");
-        ensureMEFTestFile();
-        final URI testURI = URI.create("cadc:TEST/getHeaders");
-
-        final ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-        final DigestOutputStream digestOutputStream = new DigestOutputStream(outputStream, MessageDigest.getInstance("MD5"));
-        final ByteCountOutputStream byteCountOutputStream = new ByteCountOutputStream(digestOutputStream);
-
-        final Set<String> cutouts = new HashSet<>();
-        cutouts.add("fhead");
-
-        adapter.get(new StorageLocation(testURI), byteCountOutputStream, cutouts);
-        byteCountOutputStream.close();
-        log.info("***");
-        log.info("Skip to headers done.");
-    }
-
-    public void getCutouts() throws Exception {
-        final URI testURI = URI.create("cadc:TEST/getCutouts");
-        //final long expectedByteCount = 159944L;
-        //final URI expectedChecksum = URI.create("md5:7c6372a8d20da28b54b6b50ce36f9195");
-
-        final ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-        final DigestOutputStream digestOutputStream = new DigestOutputStream(outputStream, MessageDigest.getInstance("MD5"));
-        final ByteCountOutputStream byteCountOutputStream = new ByteCountOutputStream(digestOutputStream);
-        final MessageDigest messageDigest = digestOutputStream.getMessageDigest();
-
-        final Set<String> cutouts = new HashSet<>();
-        //cutouts.add("[SCI,10][80:220,100:150]");
-        //cutouts.add("[1][10:16,70:90]");
-        //cutouts.add("[106][8:32,88:112]");
-        //cutouts.add("[126]");
-
-        adapter.get(new StorageLocation(testURI), byteCountOutputStream, cutouts);
-        byteCountOutputStream.close();
-
-        //Assert.assertEquals("Wrong byte count.", expectedByteCount, byteCountOutputStream.getByteCount());
-        //Assert.assertEquals("Wrong checksum.", expectedChecksum,
-        //                    URI.create(String.format("%s:%s", messageDigest.getAlgorithm().toLowerCase(),
-        //                                             new BigInteger(1, messageDigest.digest()).toString(16))));
-
-        final ByteArrayInputStream byteArrayInputStream = new ByteArrayInputStream(outputStream.toByteArray());
-        final Fits fitsFile = new Fits();
-        fitsFile.read(byteArrayInputStream);
-
-        Assert.assertEquals("Wrong number of HDUs.", 1, fitsFile.getNumberOfHDUs());
-
-        final BasicHDU<?> hdu1 = fitsFile.getHDU(0);
-        //final BasicHDU<?> hdu106 = fitsFile.getHDU(1);
-        //final BasicHDU<?> hdu126 = fitsFile.getHDU(2);
-
-        byteArrayInputStream.close();
     }
 }

@@ -200,7 +200,7 @@ public class FileSyncTest {
 
     private void createTestMetadata(TreeMap<Integer,Artifact> artifactMap) {
         for(Artifact arti : artifactMap.values()) {
-            dao.put(arti, true);
+            dao.put(arti);
             log.debug("putting test artifact " + arti.getURI() + " to database");
         }
     }

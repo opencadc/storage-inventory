@@ -69,9 +69,14 @@ package org.opencadc.inventory.db;
 
 import ca.nrc.cadc.io.ResourceIterator;
 import java.net.URI;
+import java.util.Date;
 import java.util.UUID;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
+import org.opencadc.inventory.Entity;
+import org.opencadc.inventory.InventoryUtil;
+import org.opencadc.inventory.SiteLocation;
+import org.opencadc.inventory.StorageLocation;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
@@ -82,9 +87,13 @@ public class ArtifactDAO extends AbstractDAO<Artifact> {
     private static final Logger log = Logger.getLogger(ArtifactDAO.class);
 
     public ArtifactDAO() {
-        super();
+        super(true);
     }
 
+    public ArtifactDAO(boolean origin) {
+        super(origin);
+    }
+    
     public ArtifactDAO(AbstractDAO dao) {
         super(dao);
     }
@@ -113,12 +122,41 @@ public class ArtifactDAO extends AbstractDAO<Artifact> {
             log.debug("get: " + uri + " " + dt + "ms");
         }
     }
-    
+
     // delete an artifact, all SiteLocation(s), and StorageLocation
     // caller must also fire an appropriate event via DeletedEventDAO in same txn
     // unless performing this delete in reaction to such an event
     public void delete(UUID id) {
         super.delete(Artifact.class, id);
+    }
+    
+    public void setStorageLocation(Artifact a, StorageLocation loc) {
+        if (!origin) {
+            throw new IllegalStateException("cannot update Artifact.storageLocation with origin=false");
+        }
+        a.storageLocation = loc;
+        boolean timestampUpdate = loc != null;
+        put(a, true, timestampUpdate);
+    }
+    
+    public void addSiteLocation(Artifact a, SiteLocation loc) {
+        if (origin) {
+            throw new IllegalStateException("cannot update Artifact.siteLocation(s) with origin=true");
+        }
+        if (!a.siteLocations.contains(loc)) {
+            a.siteLocations.add(loc);
+            put(a, true, false);
+        }
+    }
+    
+    public void removeSiteLocation(Artifact a, SiteLocation loc) {
+        if (origin) {
+            throw new IllegalStateException("cannot update Artifact.siteLocation(s) with origin=true");
+        }
+        if (a.siteLocations.contains(loc)) {
+            a.siteLocations.remove(loc);
+            put(a, true, false);
+        }
     }
     
     /**

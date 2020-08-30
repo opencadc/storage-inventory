@@ -92,6 +92,7 @@ import org.opencadc.inventory.SiteLocation;
 import org.opencadc.inventory.StorageSite;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.StorageSiteDAO;
+import org.opencadc.inventory.db.version.InitDatabase;
 
 /**
  * Test transfer negotiation.
@@ -107,8 +108,17 @@ public class NegotiationTest extends RavenTest {
         Log4jInit.setLevel("ca.nrc.cadc.db", Level.INFO);
     }
     
+    ArtifactDAO artifactDAO;
+    StorageSiteDAO siteDAO;
+    
     public NegotiationTest() throws Exception {
         super();
+        this.artifactDAO = new ArtifactDAO(false);
+        artifactDAO.setConfig(config);
+        this.siteDAO = new StorageSiteDAO(artifactDAO);
+        
+        InitDatabase init = new InitDatabase(artifactDAO.getDataSource(), DATABASE, SCHEMA);
+        init.doInit();
     }
     
     @Test
@@ -123,23 +133,20 @@ public class NegotiationTest extends RavenTest {
                     URI resourceID1 = URI.create("ivo://negotiation-test-site1");
                     URI resourceID2 = URI.create("ivo://negotiation-test-site2");
                     
-                    ArtifactDAO artifactDAO = new ArtifactDAO();
-                    artifactDAO.setConfig(config);
-                    StorageSiteDAO siteDAO = new StorageSiteDAO();
-                    siteDAO.setConfig(config);
+                    
                     StorageSite site1 = new StorageSite(resourceID1, "site1", true, true);
                     StorageSite site2 = new StorageSite(resourceID2, "site2", true, true);
 
                     URI artifactURI = URI.create("cadc:TEST/" + UUID.randomUUID() + ".fits");
-                    URI checksum = URI.create("md5:testvalue");
+                    URI checksum = URI.create("md5:b026324c6904b2a9cb4b88d6d61c81d1");
                     Artifact artifact = new Artifact(artifactURI, checksum, new Date(), 1L);
 
                     try {
                         siteDAO.put(site1);
                         siteDAO.put(site2);
                         
-                        SiteLocation location1 = new SiteLocation(site1.getID());
-                        SiteLocation location2 = new SiteLocation(site2.getID());
+                        final SiteLocation location1 = new SiteLocation(site1.getID());
+                        final SiteLocation location2 = new SiteLocation(site2.getID());
                         
                         Protocol protocol = new Protocol(VOS.PROTOCOL_HTTPS_GET);
                         Transfer transfer = new Transfer(
@@ -156,15 +163,16 @@ public class NegotiationTest extends RavenTest {
                             // expected
                         }
                         
-                        artifact.siteLocations.add(location1);
-                        artifactDAO.put(artifact, true);
+                        artifactDAO.addSiteLocation(artifact, location1);
+                        artifact = artifactDAO.get(artifact.getID());
                         
                         // test that there's one copy
                         Transfer response = negotiate(transfer);
                         Assert.assertEquals(1, response.getAllEndpoints().size());
                         
-                        artifact.siteLocations.add(location2);
-                        artifactDAO.put(artifact, true);
+                        
+                        artifactDAO.addSiteLocation(artifact, location2);
+                        artifact = artifactDAO.get(artifact.getID());
                         
                         // test that there are now two copies
                         response = negotiate(transfer);
