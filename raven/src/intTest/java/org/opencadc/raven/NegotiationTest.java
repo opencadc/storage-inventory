@@ -92,6 +92,7 @@ import org.opencadc.inventory.SiteLocation;
 import org.opencadc.inventory.StorageSite;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.StorageSiteDAO;
+import org.opencadc.inventory.db.version.InitDatabase;
 
 /**
  * Test transfer negotiation.
@@ -107,8 +108,17 @@ public class NegotiationTest extends RavenTest {
         Log4jInit.setLevel("ca.nrc.cadc.db", Level.INFO);
     }
     
+    ArtifactDAO artifactDAO;
+    StorageSiteDAO siteDAO;
+    
     public NegotiationTest() throws Exception {
         super();
+        this.artifactDAO = new ArtifactDAO(false);
+        artifactDAO.setConfig(config);
+        this.siteDAO = new StorageSiteDAO(artifactDAO);
+        
+        InitDatabase init = new InitDatabase(artifactDAO.getDataSource(), DATABASE, SCHEMA);
+        init.doInit();
     }
     
     @Test
@@ -123,15 +133,12 @@ public class NegotiationTest extends RavenTest {
                     URI resourceID1 = URI.create("ivo://negotiation-test-site1");
                     URI resourceID2 = URI.create("ivo://negotiation-test-site2");
                     
-                    ArtifactDAO artifactDAO = new ArtifactDAO();
-                    artifactDAO.setConfig(config);
-                    StorageSiteDAO siteDAO = new StorageSiteDAO();
-                    siteDAO.setConfig(config);
+                    
                     StorageSite site1 = new StorageSite(resourceID1, "site1", true, true);
                     StorageSite site2 = new StorageSite(resourceID2, "site2", true, true);
 
                     URI artifactURI = URI.create("cadc:TEST/" + UUID.randomUUID() + ".fits");
-                    URI checksum = URI.create("md5:testvalue");
+                    URI checksum = URI.create("md5:b026324c6904b2a9cb4b88d6d61c81d1");
                     Artifact artifact = new Artifact(artifactURI, checksum, new Date(), 1L);
 
                     try {
