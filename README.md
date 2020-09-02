@@ -8,7 +8,7 @@ This is the storage inventory data model and architecture documentation.
 These are libraries used in multiple services and applications.
 
 # baldur
-This is an implementation of the cadc-storage-permissions service API.
+This is an implementation of the cadc-permissions service API.
 
 # critwall
 This is an implementation of the file-sync process that runs at a storage site and downloads files.
