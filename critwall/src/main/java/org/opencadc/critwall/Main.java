@@ -67,17 +67,25 @@
 
 package org.opencadc.critwall;
 
+import ca.nrc.cadc.auth.RunnableAction;
+import ca.nrc.cadc.auth.SSLUtil;
 import ca.nrc.cadc.db.ConnectionConfig;
 import ca.nrc.cadc.util.Log4jInit;
 
 import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.util.PropertiesReader;
 import ca.nrc.cadc.util.StringUtil;
+
+import java.io.File;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.security.AccessControlContext;
+import java.security.AccessController;
+import java.security.PrivilegedExceptionAction;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
+import javax.security.auth.Subject;
 
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
@@ -101,6 +109,7 @@ public class Main {
     private static final String NTHREADS_CONFIG_KEY = CONFIG_PREFIX + ".threads";
     private static final String LOCATOR_SERVICE_CONFIG_KEY = CONFIG_PREFIX + ".locatorService";
     private static final String LOGGING_CONFIG_KEY = CONFIG_PREFIX + ".logging";
+    private static final String CERTIFICATE_FILE_LOCATION = System.getProperty("user.home") + "/.ssl/cadcproxy.pem";
 
     public static void main(String[] args) {
         try {
@@ -192,13 +201,13 @@ public class Main {
             daoConfig.put("database", dbUrl);
 
             try {
-                daoConfig.put(SQLGENERATOR_CONFIG_KEY, (Class<SQLGenerator>)Class.forName(generatorName));
+                daoConfig.put(SQLGENERATOR_CONFIG_KEY, Class.forName(generatorName));
             } catch (Exception ex) {
                 throw new IllegalStateException("cannot instantiate SQLGenerator: " + generatorName, ex);
             }
             log.debug("SQL generator class made");
 
-            StorageAdapter localStorage = null;
+            final StorageAdapter localStorage;
             try {
                 Class c = Class.forName(adapterClass);
                 Object o = c.newInstance();
@@ -209,7 +218,7 @@ public class Main {
             }
             log.debug("storage adapter: " + localStorage);
 
-            URI locatorService = null;
+            final URI locatorService;
             try {
                 locatorService = new URI(locatorSourceStr);
             } catch (URISyntaxException us) {
@@ -229,8 +238,15 @@ public class Main {
                 "org.postgresql.Driver",
                 dbUrl);
 
-            FileSync doit = new FileSync(daoConfig, cc, localStorage, locatorService, bucketSel, nthreads);
-            doit.run();
+            final FileSync doit = new FileSync(daoConfig, cc, localStorage, locatorService, bucketSel, nthreads);
+            final File certFile = new File(CERTIFICATE_FILE_LOCATION);
+            if (certFile.exists()) {
+                final Subject subject = SSLUtil.createSubject(certFile);
+                Subject.doAs(subject, new RunnableAction(doit::run));
+            } else {
+                doit.run();
+            }
+
             System.exit(0);
         } catch (Throwable unexpected) {
             log.error("failure", unexpected);
