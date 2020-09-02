@@ -67,6 +67,7 @@
 
 package org.opencadc.critwall;
 
+import ca.nrc.cadc.auth.AuthenticationUtil;
 import ca.nrc.cadc.db.ConnectionConfig;
 import ca.nrc.cadc.db.DBUtil;
 
@@ -76,6 +77,8 @@ import java.util.Map;
 
 import java.util.concurrent.LinkedBlockingQueue;
 import javax.naming.NamingException;
+import javax.security.auth.Subject;
+
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.InventoryUtil;
@@ -160,7 +163,6 @@ public class FileSync {
         log.debug("FileSync ctor done");
     }
 
-
     public void run() {
         log.info("FileSync START");
         Iterator<String> bucketSelector = selector.getBucketIterator();
@@ -181,9 +183,11 @@ public class FileSync {
                     log.debug("processing: " + currentArtifactInfo);
 
                     FileSyncJob fsj = new FileSyncJob(curArtifact.getURI(), this.locatorService,
-                        this.storageAdapter, this.jobArtifactDAO);
-                    
-                    log.debug("creating file sync job: " + curArtifact.getURI());
+                                                      this.storageAdapter, this.jobArtifactDAO);
+                    final Subject currentUser = AuthenticationUtil.getCurrentSubject();
+                    fsj.setOwner(currentUser);
+
+                    log.debug("creating file sync job " + curArtifact.getURI() + " as " + currentUser.getPrincipals());
                     jobQueue.put(fsj); // blocks when queue capacity is reached
                 }
             }
@@ -195,7 +199,6 @@ public class FileSync {
                 log.warn("main thread: sleeping forever!!");
                 Thread.sleep(300 * 1000L); // 5 min
             }
-
         } catch (Exception e) {
             log.error("error processing list of artifacts, at: " + currentArtifactInfo);
             log.error("unexpected failure", e);
@@ -204,5 +207,4 @@ public class FileSync {
             log.info("FileSync DONE");
         }
     }
-
 }

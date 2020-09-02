@@ -68,6 +68,7 @@
 package org.opencadc.critwall;
 
 import ca.nrc.cadc.auth.AuthMethod;
+import ca.nrc.cadc.auth.RunnableAction;
 import ca.nrc.cadc.io.WriteException;
 import ca.nrc.cadc.net.FileContent;
 import ca.nrc.cadc.net.HttpGet;
@@ -90,9 +91,11 @@ import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URL;
+import java.security.PrivilegedAction;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import javax.security.auth.Subject;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.InventoryUtil;
@@ -103,6 +106,7 @@ import org.opencadc.inventory.storage.StorageAdapter;
 import org.opencadc.inventory.storage.StorageEngageException;
 import org.opencadc.inventory.storage.StorageMetadata;
 
+
 public class FileSyncJob implements Runnable {
     private static final Logger log = Logger.getLogger(FileSyncJob.class);
 
@@ -112,6 +116,8 @@ public class FileSyncJob implements Runnable {
     private final URI artifactID;
     private final URI locatorService;
     private final StorageAdapter storageAdapter;
+    private Subject owner;
+
 
     public FileSyncJob(URI artifactID, URI locatorServiceID, StorageAdapter storageAdapter, ArtifactDAO artifactDAO) {
         InventoryUtil.assertNotNull(FileSyncJob.class, "artifactID", artifactID);
@@ -126,16 +132,28 @@ public class FileSyncJob implements Runnable {
         this.artifactDAO = artifactDAO;
     }
 
+    public void setOwner(final Subject owner) {
+        this.owner = owner;
+    }
+
     @Override
     public void run() {
         log.info("fileSyncJob start.");
-        final List<URL> urlList;
+        if (this.owner == null) {
+            doSync();
+        } else {
+            Subject.doAs(this.owner, new RunnableAction(this::doSync));
+        }
+    }
+
+    private void doSync() {
+        log.info("doSync start.");
+        final List<URL> urlList = new ArrayList<>();
         try {
-            urlList = getdownloadURLs(this.locatorService, this.artifactID);
+            urlList.addAll(getDownloadURLs(this.locatorService, this.artifactID));
         } catch (Exception e) {
             // fail - nothing can be done without the list, negotiation cannot be retried
-            log.error("transfer negotiation failed.");
-            return;
+            log.error("transfer negotiation failed.", e);
         }
         log.debug("endpoints returned: " + urlList);
 
@@ -167,7 +185,7 @@ public class FileSyncJob implements Runnable {
         } catch (IllegalStateException ise) {
             log.info(ise.getMessage());
         } catch (StorageEngageException | InterruptedException
-                | WriteException | IllegalArgumentException syncError) {
+                         | WriteException | IllegalArgumentException syncError) {
             log.error("artifact sync error for " + this.artifactID + ": " + syncError.getMessage());
         }
     }
@@ -175,8 +193,8 @@ public class FileSyncJob implements Runnable {
     /**
      * Use transfer service at resource URI to get list of download URLs for the artifact.
      *
-     * @param resource
-     * @param artifact
+     * @param resource      The URI Resource to look up.
+     * @param artifact      The URI of the Artifact.
      * @return list of URLs from transfer service
      * @throws IOException
      * @throws InterruptedException
@@ -185,19 +203,19 @@ public class FileSyncJob implements Runnable {
      * @throws TransientException
      * @throws TransferParsingException
      */
-    private List<URL> getdownloadURLs(URI resource, URI artifact)
+    private List<URL> getDownloadURLs(URI resource, URI artifact)
         throws IOException, InterruptedException,
         ResourceAlreadyExistsException, ResourceNotFoundException,
         TransientException, TransferParsingException {
 
         RegistryClient regClient = new RegistryClient();
         log.debug("resource id: " + resource);
-        URL transferURL = regClient.getServiceURL(resource, Standards.VOSPACE_SYNC_21, AuthMethod.CERT);
+        URL transferURL = regClient.getServiceURL(resource, Standards.SI_LOCATE, AuthMethod.CERT);
         log.debug("certURL: " + transferURL);
 
         // Ask for all protocols available back, and the server will
         // give you URLs for the ones it allows.
-        List<Protocol> protocolList = new ArrayList<Protocol>();
+        List<Protocol> protocolList = new ArrayList<>();
         Protocol httpsCert = new Protocol(VOS.PROTOCOL_HTTPS_GET);
 
         log.debug("protocols: " + httpsCert);
@@ -222,14 +240,14 @@ public class FileSyncJob implements Runnable {
         List<String> urlStrList = t.getAllEndpoints();
         log.debug("endpoints returned: " + urlStrList);
 
-        List<URL> urlList = new ArrayList<URL>();
+        List<URL> urlList = new ArrayList<>();
 
         // Create URL list to return
-        for (int i = 0; i < urlStrList.size(); i++) {
+        for (final String s : urlStrList) {
             try {
-                urlList.add(new URL(urlStrList.get(i)));
+                urlList.add(new URL(s));
             } catch (MalformedURLException mue) {
-                log.info("malformed URL returned from transfer negotiation: " + urlStrList.get(i) + " skipping... ");
+                log.info("malformed URL returned from transfer negotiation: " + s + " skipping... ");
             }
         }
 
@@ -238,7 +256,7 @@ public class FileSyncJob implements Runnable {
 
     /**
      * Go through contents of urlIterator, attempting to sync the artifact.
-     * @param urlIterator
+     * @param urlIterator   Iterator over transfer URLs discovered.
      * @return success: return Storage Metadata from first successful sync
      *         fail: return null if all URLs failed | throw if failure is fatal (internal)
      * @throws StorageEngageException
