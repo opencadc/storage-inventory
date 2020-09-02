@@ -68,6 +68,7 @@
 package org.opencadc.critwall;
 
 import ca.nrc.cadc.auth.AuthMethod;
+import ca.nrc.cadc.auth.RunnableAction;
 import ca.nrc.cadc.io.WriteException;
 import ca.nrc.cadc.net.FileContent;
 import ca.nrc.cadc.net.HttpGet;
@@ -141,22 +142,18 @@ public class FileSyncJob implements Runnable {
         if (this.owner == null) {
             doSync();
         } else {
-            Subject.doAs(this.owner, (PrivilegedAction<Void>) () -> {
-                doSync();
-                return null;
-            });
+            Subject.doAs(this.owner, new RunnableAction(this::doSync));
         }
     }
 
     private void doSync() {
         log.info("doSync start.");
-        final List<URL> urlList;
+        final List<URL> urlList = new ArrayList<>();
         try {
-            urlList = getDownloadURLs(this.locatorService, this.artifactID);
+            urlList.addAll(getDownloadURLs(this.locatorService, this.artifactID));
         } catch (Exception e) {
             // fail - nothing can be done without the list, negotiation cannot be retried
-            log.error("transfer negotiation failed.");
-            throw new RuntimeException(e);
+            log.error("transfer negotiation failed.", e);
         }
         log.debug("endpoints returned: " + urlList);
 

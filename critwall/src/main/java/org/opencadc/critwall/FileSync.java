@@ -163,7 +163,6 @@ public class FileSync {
         log.debug("FileSync ctor done");
     }
 
-
     public void run() {
         log.info("FileSync START");
         Iterator<String> bucketSelector = selector.getBucketIterator();
@@ -184,10 +183,10 @@ public class FileSync {
                     log.debug("processing: " + currentArtifactInfo);
 
                     FileSyncJob fsj = new FileSyncJob(curArtifact.getURI(), this.locatorService,
-                        this.storageAdapter, this.jobArtifactDAO);
+                                                      this.storageAdapter, this.jobArtifactDAO);
                     final Subject currentUser = AuthenticationUtil.getCurrentSubject();
                     fsj.setOwner(currentUser);
-                    
+
                     log.debug("creating file sync job " + curArtifact.getURI() + " as " + currentUser.getPrincipals());
                     jobQueue.put(fsj); // blocks when queue capacity is reached
                 }
@@ -200,7 +199,6 @@ public class FileSync {
                 log.warn("main thread: sleeping forever!!");
                 Thread.sleep(300 * 1000L); // 5 min
             }
-
         } catch (Exception e) {
             log.error("error processing list of artifacts, at: " + currentArtifactInfo);
             log.error("unexpected failure", e);
@@ -209,5 +207,4 @@ public class FileSync {
             log.info("FileSync DONE");
         }
     }
-
 }

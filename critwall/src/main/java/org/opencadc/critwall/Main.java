@@ -67,6 +67,7 @@
 
 package org.opencadc.critwall;
 
+import ca.nrc.cadc.auth.RunnableAction;
 import ca.nrc.cadc.auth.SSLUtil;
 import ca.nrc.cadc.db.ConnectionConfig;
 import ca.nrc.cadc.util.Log4jInit;
@@ -237,30 +238,14 @@ public class Main {
                 "org.postgresql.Driver",
                 dbUrl);
 
-            final Subject subject = SSLUtil.createSubject(new File(CERTIFICATE_FILE_LOCATION));
-            Subject.doAs(subject, new PrivilegedExceptionAction<Void>() {
-                /**
-                 * Performs the computation.  This method will be called by
-                 * {@code AccessController.doPrivileged} after enabling privileges.
-                 *
-                 * @return  a class-dependent value that may represent the results of the computation.  Each class that
-                 *      implements
-                 * {@code PrivilegedExceptionAction} should document what (if anything) this value represents.
-                 *
-                 * @throws Exception an exceptional condition has occurred.  Each class
-                 *                   that implements {@code PrivilegedExceptionAction} should
-                 *                   document the exceptions that its run method can throw.
-                 * @see AccessController#doPrivileged(PrivilegedExceptionAction)
-                 * @see AccessController#doPrivileged(PrivilegedExceptionAction, AccessControlContext)
-                 */
-                @Override
-                public Void run() throws Exception {
-                    FileSync doit = new FileSync(daoConfig, cc, localStorage, locatorService, bucketSel, nthreads);
-                    doit.run();
-
-                    return null;
-                }
-            });
+            final FileSync doit = new FileSync(daoConfig, cc, localStorage, locatorService, bucketSel, nthreads);
+            final File certFile = new File(CERTIFICATE_FILE_LOCATION);
+            if (certFile.exists()) {
+                final Subject subject = SSLUtil.createSubject(certFile);
+                Subject.doAs(subject, new RunnableAction(doit::run));
+            } else {
+                doit.run();
+            }
 
             System.exit(0);
         } catch (Throwable unexpected) {
