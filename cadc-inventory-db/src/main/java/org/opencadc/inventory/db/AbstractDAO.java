@@ -94,7 +94,7 @@ import org.springframework.jdbc.core.RowMapper;
 /**
  *
  * @author pdowler
- * @param <T>
+ * @param <T> type of object to persist
  */
 public abstract class AbstractDAO<T extends Entity> {
 
@@ -170,7 +170,6 @@ public abstract class AbstractDAO<T extends Entity> {
     
     /**
      * Configuration parameters:
-     * </p>
      * <ul>
      * <li>String jndiDataSourceName
      * <li>String database (currently unused)
@@ -178,7 +177,7 @@ public abstract class AbstractDAO<T extends Entity> {
      * <li>Class  org.opencadc.inventory.db.SQLGenerator
      * </ul>
      * 
-     * @param config 
+     * @param config map with the required configuration
      */
     public void setConfig(Map<String, Object> config) {
         Class<?> genClass = (Class<?>) config.get(SQLGenerator.class.getName());
