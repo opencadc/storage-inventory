@@ -85,8 +85,7 @@ public class TapSchemaDAOImpl  extends TapSchemaDAO {
     }
     
     @Override
-    protected List<FunctionDesc> getFunctionDescs()
-    {
+    protected List<FunctionDesc> getFunctionDescs() {
         List<FunctionDesc> ret = super.getFunctionDescs();
 
         ret.add(new FunctionDesc("now", TapDataType.TIMESTAMP));
