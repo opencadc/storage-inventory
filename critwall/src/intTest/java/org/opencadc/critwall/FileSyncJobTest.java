@@ -197,7 +197,6 @@ public class FileSyncJobTest {
     @Test
     public void testValidJob() {
         String testDir = TEST_ROOT + File.separator + "testValidJob";
-        UUID artifactUUID = null;
 
         try {
             createTestDirectory(testDir);
@@ -213,17 +212,13 @@ public class FileSyncJobTest {
                 1008000L);
 
             log.debug("putting test artifact to database");
-            dao.put(artifactToUpdate, true);
-            // verify something was done
-            artifactUUID = artifactToUpdate.getID();
-            Assert.assertNotNull(artifactUUID);
-            log.debug("test artifact stored: UUID is " + artifactUUID.toString());
+            dao.put(artifactToUpdate);
 
             FileSyncJob fsj = new FileSyncJob(artifactID, resourceID, sa, dao);
             fsj.run();
 
             // check job succeeded by trying to get artifact by location
-            Artifact storedArtifact = dao.get(artifactID);
+            Artifact storedArtifact = dao.get(artifactToUpdate.getID());
             Assert.assertNotNull("storage location of artifact should not be null.", storedArtifact.storageLocation);
 
             // check for file on disk, throw away the bytes
@@ -241,7 +236,6 @@ public class FileSyncJobTest {
     @Test
     public void testInvalidJobBadChecksum() {
         final String testDir = TEST_ROOT + File.separator + "testValidJobBadChecksum";
-        UUID artifactUUID = null;
 
         try {
             createTestDirectory(testDir);
@@ -258,18 +252,14 @@ public class FileSyncJobTest {
                 1008000L);
 
             log.debug("putting test artifact to database");
-            dao.put(artifactToUpdate, true);
-            // verify something was done
-            artifactUUID = artifactToUpdate.getID();
-            Assert.assertNotNull(artifactUUID);
-            log.debug("test artifact stored: UUID is " + artifactUUID.toString());
+            dao.put(artifactToUpdate);
 
             FileSyncJob fsj = new FileSyncJob(artifactID, resourceID, sa, dao);
             fsj.run();
 
             log.debug("finished run in failure test.");
             // check job failed by verifying that storage location not set
-            Artifact storedArtifact = dao.get(artifactID);
+            Artifact storedArtifact = dao.get(artifactToUpdate.getID());
             Assert.assertNull(storedArtifact.storageLocation);
 
         } catch (Exception unexpected) {
@@ -282,7 +272,6 @@ public class FileSyncJobTest {
     @Test
     public void testInvalidJobBadContentLen() {
         final String testDir = TEST_ROOT + File.separator + "testInvalidJobBadContentLen";
-        UUID artifactUUID = null;
 
         try {
             createTestDirectory(testDir);
@@ -299,18 +288,14 @@ public class FileSyncJobTest {
                 2000000L);
 
             log.debug("putting test artifact to database");
-            dao.put(artifactToUpdate, true);
-            // verify something was done
-            artifactUUID = artifactToUpdate.getID();
-            Assert.assertNotNull(artifactUUID);
-            log.debug("test artifact stored: UUID is " + artifactUUID.toString());
+            dao.put(artifactToUpdate);
 
             FileSyncJob fsj = new FileSyncJob(artifactID, resourceID, sa, dao);
             fsj.run();
 
             log.debug("finished run in failure test.");
             // check job failed by verifying that storage location not set
-            Artifact storedArtifact = dao.get(artifactID);
+            Artifact storedArtifact = dao.get(artifactToUpdate.getID());
             Assert.assertNull(storedArtifact.storageLocation);
 
         } catch (Exception unexpected) {
@@ -324,7 +309,6 @@ public class FileSyncJobTest {
     @Test
     public void testStorageLocationNotNull() {
         final String testDir = TEST_ROOT + File.separator + "testStorageLocationNotNull";
-        UUID artifactUUID = null;
 
         try {
             createTestDirectory(testDir);
@@ -344,12 +328,8 @@ public class FileSyncJobTest {
             artifactToUpdate.storageLocation = testLocation;
 
             log.debug("putting test artifact to database");
-            dao.put(artifactToUpdate, true);
+            dao.put(artifactToUpdate);
             
-            // verify something was done
-            artifactUUID = artifactToUpdate.getID();
-            Assert.assertNotNull(artifactUUID);
-            log.debug("test artifact stored: UUID is " + artifactUUID.toString());
 
             FileSyncJob fsj = new FileSyncJob(artifactID, resourceID, sa, dao);
             fsj.run();
@@ -357,7 +337,7 @@ public class FileSyncJobTest {
             log.debug("successfully finished FileSyncJob run in test.");
 
             // check job fdid nothing to the storageLocation
-            Artifact storedArtifact = dao.get(artifactID);
+            Artifact storedArtifact = dao.get(artifactToUpdate.getID());
             Assert.assertEquals(testLocation, storedArtifact.storageLocation);
 
         } catch (Exception unexpected) {

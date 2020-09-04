@@ -351,19 +351,12 @@ public class BucketValidator implements ValidateEventListener {
                 LOGGER.debug("Start transaction.");
                 transactionManager.startTransaction();
 
-                final Artifact resetArtifact = new Artifact(artifact.getID(), artifact.getURI(),
-                                                            artifact.getContentChecksum(), new Date(),
-                                                            artifact.getContentLength());
-                resetArtifact.contentType = artifact.contentType;
-                resetArtifact.contentEncoding = artifact.contentEncoding;
-                resetArtifact.storageLocation = null;
-
                 final DeletedStorageLocationEvent deletedStorageLocationEvent =
-                        new DeletedStorageLocationEvent(resetArtifact.getID());
+                        new DeletedStorageLocationEvent(artifact.getID());
                 final DeletedEventDAO<DeletedStorageLocationEvent> deletedEventDAO = new DeletedEventDAO<>(artifactDAO);
                 deletedEventDAO.put(deletedStorageLocationEvent);
 
-                artifactDAO.put(resetArtifact, true);
+                artifactDAO.setStorageLocation(artifact, null);
 
                 transactionManager.commitTransaction();
             } catch (Exception e) {
@@ -488,7 +481,7 @@ public class BucketValidator implements ValidateEventListener {
                 try {
                     LOGGER.debug("Start transaction.");
                     transactionManager.startTransaction();
-                    artifactDAO.put(artifact, false);
+                    artifactDAO.put(artifact);
                     transactionManager.commitTransaction();
                 } catch (Exception e) {
                     LOGGER.error(String.format("Failed to create Artifact %s.", artifact.getURI()), e);

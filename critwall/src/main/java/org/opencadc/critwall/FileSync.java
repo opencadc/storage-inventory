@@ -187,7 +187,7 @@ public class FileSync {
                     final Subject currentUser = AuthenticationUtil.getCurrentSubject();
                     fsj.setOwner(currentUser);
 
-                    log.debug("creating file sync job " + curArtifact.getURI() + " as " + currentUser.getPrincipals());
+                    log.debug("creating file sync job " + curArtifact.getURI());
                     jobQueue.put(fsj); // blocks when queue capacity is reached
                 }
             }

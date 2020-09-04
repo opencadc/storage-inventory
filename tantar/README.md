@@ -1,4 +1,4 @@
-# Storage Inventoty file-validate process (tantar)
+# Storage Inventory file-validate process (tantar)
 
 Process to ensure validity of the information stored in the inventory database and back end storage at a storage site is
 correct. This process is intended to be run periodically at a storage site to keep the site in a valid state.

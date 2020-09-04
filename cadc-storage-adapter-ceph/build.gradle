@@ -25,12 +25,6 @@ dependencies {
     compile 'org.opencadc:cadc-inventory:[0.7,)'
     compile 'org.opencadc:cadc-storage-adapter:[0.7,)'
 
-    // Java FITS library.
-    compile 'gov.nasa.gsfc.heasarc:nom-tam-fits:[1,2)'
-
-    // RADOS Java Library from Ceph
-    //compile 'com.ceph:rados:0.6.0-SNAPSHOT'
-
     // swift API
     //compile 'org.javaswift:joss:0.10.4-pdowler'
     compile 'org.javaswift:joss:0.10.4'

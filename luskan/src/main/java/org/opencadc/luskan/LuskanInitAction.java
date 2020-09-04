@@ -65,56 +65,41 @@
 ************************************************************************
 */
 
-package org.opencadc.inventory.db;
+package org.opencadc.luskan;
 
-import java.util.UUID;
+import ca.nrc.cadc.db.DBUtil;
+import ca.nrc.cadc.rest.InitAction;
+import ca.nrc.cadc.tap.schema.InitDatabaseTS;
+import ca.nrc.cadc.uws.server.impl.InitDatabaseUWS;
+import javax.sql.DataSource;
 import org.apache.log4j.Logger;
-import org.opencadc.inventory.Artifact;
-import org.opencadc.inventory.StorageLocation;
-import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
- * Store ObsoleteStorageLocation in database.
- * 
+ *
  * @author pdowler
  */
-public class ObsoleteStorageLocationDAO extends AbstractDAO<ObsoleteStorageLocation> {
-    private static final Logger log = Logger.getLogger(ObsoleteStorageLocationDAO.class);
+public class LuskanInitAction extends InitAction {
+    private static final Logger log = Logger.getLogger(LuskanInitAction.class);
 
-    public ObsoleteStorageLocationDAO() {
-        super(true);
+    public LuskanInitAction() { 
     }
-    
-    public ObsoleteStorageLocationDAO(AbstractDAO src) {
-        super(src);
-    }
-    
-    public ObsoleteStorageLocation get(UUID id) {
-        return super.get(ObsoleteStorageLocation.class, id);
-    }
-    
-    public ObsoleteStorageLocation get(StorageLocation loc) {
-        if (loc == null) {
-            throw new IllegalArgumentException("location cannot be null");
-        }
-        checkInit();
-        log.debug("GET: " + loc);
-        long t = System.currentTimeMillis();
 
+    @Override
+    public void doInit() {
         try {
-            JdbcTemplate jdbc = new JdbcTemplate(dataSource);
-            
-            SQLGenerator.ObsoleteStorageLocationGet get = ( SQLGenerator.ObsoleteStorageLocationGet) gen.getEntityGet(ObsoleteStorageLocation.class);
-            get.setLocation(loc);
-            ObsoleteStorageLocation o = get.execute(jdbc);
-            return o;
-        } finally {
-            long dt = System.currentTimeMillis() - t;
-            log.debug("GET: " + loc + " " + dt + "ms");
-        }
-    }
+            DataSource tapadm = DBUtil.findJNDIDataSource("jdbc/tapadm");
+            InitDatabaseTS tsi = new InitDatabaseTS(tapadm, null, "tap_schema");
+            tsi.doInit();
 
-    public void delete(UUID id) {
-        super.delete(ObsoleteStorageLocation.class, id);
+            DataSource uws = DBUtil.findJNDIDataSource("jdbc/tapadm");
+            InitDatabaseUWS uwsi = new InitDatabaseUWS(uws, null, "uws");
+            uwsi.doInit();
+            
+            // create the TAP schema
+            InitLuskanSchemaContent lsc = new InitLuskanSchemaContent(tapadm, null, "tap_schema");
+            lsc.doInit();
+        } catch (Exception ex) {
+            throw new RuntimeException("INIT FAIL", ex);
+        }
     }
 }

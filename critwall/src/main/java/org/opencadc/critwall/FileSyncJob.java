@@ -173,8 +173,7 @@ public class FileSyncJob implements Runnable {
 
                     // Update curArtifact with new storage location
                     Artifact curArtifact = this.artifactDAO.get(this.artifactID);
-                    curArtifact.storageLocation = storageMeta.getStorageLocation();
-                    this.artifactDAO.put(curArtifact, true);
+                    this.artifactDAO.setStorageLocation(curArtifact, storageMeta.getStorageLocation());
                     log.debug("updated artifact storage location" + curArtifact.storageLocation);
                     break;
                 }
