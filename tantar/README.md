@@ -49,6 +49,6 @@ docker run -t tantar:latest /bin/bash
 
 ## running it
 ```
-docker run -r --user nobody:nobody -v /path/to/external/config:/config:ro --name tantar tantar:latest
+docker run -r --user opencadc:opencadc -v /path/to/external/config:/config:ro --name tantar tantar:latest
 ```
-
+Note: opencadc user is in the latest cadc-java image.
