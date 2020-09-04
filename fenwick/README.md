@@ -58,6 +58,6 @@ docker run -it fenwick:latest /bin/bash
 
 ## running it
 ```
-docker run --user nobody:nobody -v /path/to/external/config:/config:ro --name fenwick fenwick:latest
+docker run --user opencadc:opencadc -v /path/to/external/config:/config:ro --name fenwick fenwick:latest
 ```
-
+Note: opencadc user is in the latest cadc-java image.
