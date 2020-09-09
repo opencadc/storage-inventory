@@ -67,6 +67,7 @@
 
 package org.opencadc.critwall;
 
+import ca.nrc.cadc.auth.AuthenticationUtil;
 import ca.nrc.cadc.auth.RunnableAction;
 import ca.nrc.cadc.auth.SSLUtil;
 import ca.nrc.cadc.db.ConnectionConfig;
@@ -238,15 +239,13 @@ public class Main {
                 "org.postgresql.Driver",
                 dbUrl);
 
-            final FileSync doit = new FileSync(daoConfig, cc, localStorage, locatorService, bucketSel, nthreads);
+            FileSync doit = new FileSync(daoConfig, cc, localStorage, locatorService, bucketSel, nthreads);
+            Subject subject = AuthenticationUtil.getAnonSubject();
             final File certFile = new File(CERTIFICATE_FILE_LOCATION);
             if (certFile.exists()) {
-                final Subject subject = SSLUtil.createSubject(certFile);
-                Subject.doAs(subject, new RunnableAction(doit::run));
-            } else {
-                doit.run();
+                subject = SSLUtil.createSubject(certFile);
             }
-
+            Subject.doAs(subject, new RunnableAction(doit));
             System.exit(0);
         } catch (Throwable unexpected) {
             log.error("failure", unexpected);

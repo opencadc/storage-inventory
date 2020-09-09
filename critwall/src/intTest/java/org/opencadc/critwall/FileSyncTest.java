@@ -340,6 +340,7 @@ public class FileSyncTest {
         URI locatorResourceID = new URI(TEST_RESOURCE_ID);
 
         FileSync doit = new FileSync(daoConfig, cc, localStorage, locatorResourceID, bucketSel, nthreads);
+        doit.testRunOnce = true;
         doit.run();
 
         // Check the storage locations, as these should get updated within a reasonable
@@ -371,13 +372,30 @@ public class FileSyncTest {
     }
 
     @Test
-    public void testValidFileSyncSmallSet() {
+    public void testValidFileSyncSmallSet1() {
         String testDir = TEST_ROOT + File.separator + "testValidFileSync";
 
         try {
             createTestDirectory(testDir);
-            TreeMap<Integer, Artifact> aMap = mkSmallDataset();
-            fileSyncTestBody(1, testDir, aMap);
+            TreeMap<Integer, Artifact> work = mkSmallDataset();
+            fileSyncTestBody(1, testDir, work);
+
+
+        } catch (Exception unexpected) {
+            Assert.fail("unexpected exception: " + unexpected);
+            log.debug(unexpected);
+        }
+        log.info("testValidFileSync - DONE");
+    }
+    
+    @Test
+    public void testValidFileSyncSmallSet4() {
+        String testDir = TEST_ROOT + File.separator + "testValidFileSync";
+
+        try {
+            createTestDirectory(testDir);
+            TreeMap<Integer, Artifact> work = mkSmallDataset();
+            fileSyncTestBody(1, testDir, work);
 
 
         } catch (Exception unexpected) {
@@ -388,13 +406,13 @@ public class FileSyncTest {
     }
 
     @Test
-    public void testValidFileSyncLargeSet() {
+    public void testValidFileSyncLargeSet2() {
         String testDir = TEST_ROOT + File.separator + "testValidFileSyncLargeSet";
 
         try {
             createTestDirectory(testDir);
-            TreeMap<Integer, Artifact> aMap = mkLargeDataset();
-            fileSyncTestBody(2, testDir, aMap);
+            TreeMap<Integer, Artifact> work = mkLargeDataset();
+            fileSyncTestBody(2, testDir, work);
 
         } catch (Exception unexpected) {
             Assert.fail("unexpected exception: " + unexpected);

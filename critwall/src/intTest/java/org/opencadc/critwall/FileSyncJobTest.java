@@ -109,9 +109,9 @@ public class FileSyncJobTest {
 
     static {
         Log4jInit.setLevel("org.opencadc.inventory", Level.INFO);
-        Log4jInit.setLevel("org.opencadc.inventory.db", Level.DEBUG);
+        Log4jInit.setLevel("org.opencadc.inventory.db", Level.INFO);
         Log4jInit.setLevel("ca.nrc.cadc.db", Level.INFO);
-        Log4jInit.setLevel("org.opencadc.critwall", Level.DEBUG);
+        Log4jInit.setLevel("org.opencadc.critwall", Level.INFO);
         Log4jInit.setLevel("org.opencadc.inventory.storage.fs", Level.INFO);
     }
 
@@ -261,7 +261,7 @@ public class FileSyncJobTest {
             // check job failed by verifying that storage location not set
             Artifact storedArtifact = dao.get(artifactToUpdate.getID());
             Assert.assertNull(storedArtifact.storageLocation);
-
+            
         } catch (Exception unexpected) {
             log.debug("unexpected exception: " + unexpected);
             Assert.fail("unexpected exception");

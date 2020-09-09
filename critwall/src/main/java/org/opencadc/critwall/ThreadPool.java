@@ -125,6 +125,19 @@ public class ThreadPool {
 
         log.debug(poolBasename + ".terminate() DONE");
     }
+    
+    // this is a bit of a hack and could incorrectly return true
+    // - if called while a thread is in take()
+    // - but FileSync only calls it when taskQueue is empty so currently: OK
+    public boolean getAllThreadsIdle() {
+        boolean ret = true;
+        Iterator<WorkerThread> threadIter = threads.iterator();
+        while (threadIter.hasNext()) {
+            WorkerThread t = threadIter.next();
+            ret = ret && t.idle();
+        }
+        return ret;
+    }
 
     private class WorkerThread extends Thread {
         Runnable currentTask;
@@ -133,6 +146,10 @@ public class ThreadPool {
             super();
         }
 
+        boolean idle() {
+            return currentTask == null;
+        }
+        
         // threads keep running as long as they are in the threads list
         public void run() {
             log.debug(poolBasename + " - START");
@@ -140,9 +157,10 @@ public class ThreadPool {
             while (cont) {
                 try {
                     log.debug("taking from taskQueue");
-                    Runnable task = taskQueue.take(); // should block on take from queue if queue empty
+                    currentTask = null;
+                    currentTask = taskQueue.take(); // should block on take from queue if queue empty
                     log.debug("running current task");
-                    task.run();
+                    currentTask.run();
                     log.debug("finished running task");
                 } catch (InterruptedException ex) {
                     // taskQueue.take() or the task.run() could throw this
@@ -150,6 +168,8 @@ public class ThreadPool {
                     return;
                 } catch (Exception ignore) {
                     log.debug("poorly behaved task threw an exception.");
+                } finally {
+                    currentTask = null;
                 }
             }
             log.debug(poolBasename + " - END");
