@@ -79,6 +79,7 @@ import ca.nrc.cadc.tap.parser.navigator.ExpressionNavigator;
 import ca.nrc.cadc.tap.parser.navigator.FromItemNavigator;
 import ca.nrc.cadc.tap.parser.navigator.ReferenceNavigator;
 import ca.nrc.cadc.tap.parser.navigator.SelectNavigator;
+import ca.nrc.cadc.util.MultiValuedProperties;
 import net.sf.jsqlparser.util.deparser.SelectDeParser;
 import org.apache.log4j.Logger;
 
@@ -115,6 +116,12 @@ public class AdqlQueryImpl extends AdqlQuery {
         TableNameReferenceConverter tnrc = new TableNameReferenceConverter(tnc.map);
         super.navigatorList.add(new SelectNavigator(new ExpressionNavigator(), tnrc, tnc));
 
+        // add IS NOT NULL constraint for artifact.sitelocations when querying storage sites
+        MultiValuedProperties properties = getProperties();
+        String isStorageSite = properties.getFirstPropertyValue(InitLuskanSchemaContent.STORAGE_SITE_KEY);
+        if (isStorageSite != null) {
+            super.navigatorList.add(new SiteLocationsConverter());
+        }
     }
 
     @Override
@@ -127,5 +134,9 @@ public class AdqlQueryImpl extends AdqlQuery {
         String sql = super.getSQL();
         log.debug("SQL:\n" + sql);
         return sql;
+    }
+
+    protected MultiValuedProperties getProperties() {
+        return InitLuskanSchemaContent.getConfig();
     }
 }

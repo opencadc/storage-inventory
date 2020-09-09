@@ -3,7 +3,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2019.                            (c) 2019.
+ *  (c) 2020.                            (c) 2020.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -62,122 +62,57 @@
  *  <http://www.gnu.org/licenses/>.      pas le cas, consultez :
  *                                       <http://www.gnu.org/licenses/>.
  *
+ *  : 5 $
+ *
  ************************************************************************
  */
 
 package org.opencadc.luskan;
 
-import ca.nrc.cadc.db.version.InitDatabase;
-
-import ca.nrc.cadc.util.MultiValuedProperties;
-import ca.nrc.cadc.util.PropertiesReader;
-import java.net.URL;
-import javax.sql.DataSource;
+import ca.nrc.cadc.tap.parser.navigator.ExpressionNavigator;
+import ca.nrc.cadc.tap.parser.navigator.FromItemNavigator;
+import ca.nrc.cadc.tap.parser.navigator.ReferenceNavigator;
+import ca.nrc.cadc.tap.parser.navigator.SelectNavigator;
+import net.sf.jsqlparser.expression.Expression;
+import net.sf.jsqlparser.expression.Parenthesis;
+import net.sf.jsqlparser.expression.operators.conditional.AndExpression;
+import net.sf.jsqlparser.expression.operators.relational.IsNullExpression;
+import net.sf.jsqlparser.schema.Column;
+import net.sf.jsqlparser.schema.Table;
+import net.sf.jsqlparser.statement.select.PlainSelect;
 import org.apache.log4j.Logger;
 
 /**
- * This class automates adding/updating the description of CAOM tables and views
- * in the tap_schema. This class assumes that it can re-use the tap_schema.ModelVersion
- * table (usually created by InitDatabaseTS in cadc-tap-schema library) and does
- * not try to create it.  The init includes base CAOM tables and IVOA views (ObsCore++),
- * but <em>does not include</em> aggregate (simple or materialised) views. The service
- * operator must create simple views manually or implement a mechanism to create and
- * update materialised views periodically.
- *
- * @author pdowler
+ * Injects a `inventory.storagesite IS NOT NULL` into a WHERE clause.
  */
-public class InitLuskanSchemaContent extends InitDatabase {
-    private static final Logger log = Logger.getLogger(InitLuskanSchemaContent.class);
+public class SiteLocationsConverter extends SelectNavigator {
+    private static final Logger log = Logger.getLogger(SiteLocationsConverter.class);
 
-    public static final String MODEL_NAME = "luskan-schema";
-    public static final String MODEL_VERSION = "0.5.2";
-    public static final String PREV_MODEL_VERSION = "0.5.1";
-
-    // config keys
-    private static final String LUSKAN_KEY = InitLuskanSchemaContent.class.getPackage().getName();
-    static final String URI_KEY = LUSKAN_KEY + ".resourceID";
-    static final String TMPDIR_KEY = LUSKAN_KEY + ".resultsDir";
-    static final String STORAGE_SITE_KEY = LUSKAN_KEY + ".isStorageSite";
-
-    // the SQL is tightly coupled to cadc-tap-schema table names (for TAP-1.1)
-    static String[] CREATE_SQL = new String[] {
-        "inventory.tap_schema_content11.sql"
-    };
-
-    // upgrade is normally the same as create since SQL is idempotent
-    static String[] UPGRADE_SQL = new String[] {
-        "inventory.tap_schema_content11.sql"
-    };
-
-    MultiValuedProperties props;
-
-    /**
-     * Constructor. The schema argument is used to query the ModelVersion table
-     * as {schema}.ModelVersion.
-     *
-     * @param dataSource connection with write permission to tap_schema tables
-     * @param database   database name (should be null if not needed in SQL)
-     * @param schema     schema name (usually tap_schema)
-     */
-    public InitLuskanSchemaContent(DataSource dataSource, String database, String schema) {
-        super(dataSource, database, schema, MODEL_NAME, MODEL_VERSION, PREV_MODEL_VERSION);
-        for (String s : CREATE_SQL) {
-            createSQL.add(s);
-        }
-
-        for (String s : UPGRADE_SQL) {
-            upgradeSQL.add(s);
-        }
+    public SiteLocationsConverter() {
+        super(new ExpressionNavigator(), new ReferenceNavigator(), new FromItemNavigator());
     }
 
     @Override
-    public boolean doInit() {
-        boolean ret = super.doInit();
-        this.props = getConfig();
-        return ret;
-    }
-
-    /**
-     * Read config file and verify that all required entries are present.
-     *
-     * @return MultiValuedProperties containing the application config
-     * @throws IllegalStateException if required config items are missing
-     */
-    static MultiValuedProperties getConfig() {
-        PropertiesReader r = new PropertiesReader("luskan.properties");
-        MultiValuedProperties props = r.getAllProperties();
-
-        StringBuilder sb = new StringBuilder();
-        sb.append("incomplete config: ");
-        boolean ok = true;
-
-        String suri = props.getFirstPropertyValue(URI_KEY);
-        sb.append("\n\t").append(URI_KEY);
-        if (suri == null) {
-            sb.append("MISSING");
-            ok = false;
+    public void visit(PlainSelect ps) {
+        log.debug("visit(PlainSelect) " + ps);
+        Expression isNotNullExpression = isNotNullExpression();
+        Expression where = ps.getWhere();
+        if (where == null) {
+            ps.setWhere(isNotNullExpression);
         } else {
-            sb.append("OK");
+            Parenthesis parenthesis = new Parenthesis(where);
+            Expression and = new AndExpression(parenthesis, isNotNullExpression);
+            ps.setWhere(and);
         }
-
-        String srd = props.getFirstPropertyValue(TMPDIR_KEY);
-        sb.append("\n\t").append(TMPDIR_KEY);
-        if (srd == null) {
-            sb.append("MISSING");
-            ok = false;
-        } else {
-            sb.append("OK");
-        }
-
-        if (!ok) {
-            throw new IllegalStateException(sb.toString());
-        }
-
-        return props;
     }
 
-    @Override
-    protected URL findSQL(String fname) {
-        return InitLuskanSchemaContent.class.getClassLoader().getResource("sql/" + fname);
+    private Expression isNotNullExpression() {
+        Table artifact = new Table("inventory", "artifact");
+        Column sitelocations = new Column(artifact, "sitelocations");
+        IsNullExpression isNullExpression = new IsNullExpression();
+        isNullExpression.setLeftExpression(sitelocations);
+        isNullExpression.setNot(true);
+        return new Parenthesis(isNullExpression);
     }
+
 }
