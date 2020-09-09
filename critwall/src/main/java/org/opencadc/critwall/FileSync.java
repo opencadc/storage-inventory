@@ -67,13 +67,17 @@
 
 package org.opencadc.critwall;
 
+import ca.nrc.cadc.auth.AuthMethod;
 import ca.nrc.cadc.auth.AuthenticationUtil;
+import ca.nrc.cadc.auth.SSLUtil;
+import ca.nrc.cadc.auth.X509CertificateChain;
 import ca.nrc.cadc.db.ConnectionConfig;
 import ca.nrc.cadc.db.DBUtil;
 
 import ca.nrc.cadc.io.ResourceIterator;
 import ca.nrc.cadc.vosi.AvailabilityClient;
 import ca.nrc.cadc.vosi.AvailabilityStatus;
+import java.io.File;
 import java.net.URI;
 import java.util.Iterator;
 import java.util.Map;
@@ -186,6 +190,8 @@ public class FileSync implements Runnable {
                     Thread.sleep(10 * poll);
                     status = loc.getAvailability();
                 }
+                
+                // TODO: load updated subject(cert) for jobs here? or inside FileSyncJob itself?
                 
                 long startQ = System.currentTimeMillis();
                 long num = 0L;

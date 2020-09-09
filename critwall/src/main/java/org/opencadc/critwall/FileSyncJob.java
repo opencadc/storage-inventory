@@ -222,11 +222,9 @@ public class FileSyncJob implements Runnable {
         // Ask for all protocols available back, and the server will
         // give you URLs for the ones it allows.
         List<Protocol> protocolList = new ArrayList<>();
-        if (AuthMethod.ANON.equals(am)) {
-            // should always ask for these
-            protocolList.add(new Protocol(VOS.PROTOCOL_HTTPS_GET));
-            protocolList.add(new Protocol(VOS.PROTOCOL_HTTP_GET));
-        } else {
+        protocolList.add(new Protocol(VOS.PROTOCOL_HTTPS_GET));
+        protocolList.add(new Protocol(VOS.PROTOCOL_HTTP_GET));
+        if (!AuthMethod.ANON.equals(am)) {
             Protocol httpsAuth = new Protocol(VOS.PROTOCOL_HTTPS_GET);
             httpsAuth.setSecurityMethod(Standards.getSecurityMethod(am));
             protocolList.add(httpsAuth);
