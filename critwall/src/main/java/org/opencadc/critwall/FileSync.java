@@ -71,6 +71,7 @@ import ca.nrc.cadc.auth.AuthenticationUtil;
 import ca.nrc.cadc.db.ConnectionConfig;
 import ca.nrc.cadc.db.DBUtil;
 
+import ca.nrc.cadc.io.ResourceIterator;
 import ca.nrc.cadc.vosi.AvailabilityClient;
 import ca.nrc.cadc.vosi.AvailabilityStatus;
 import java.net.URI;
@@ -192,23 +193,27 @@ public class FileSync implements Runnable {
                 while (bucketSelector.hasNext()) {
                     String bucket = bucketSelector.next();
                     
-                    // TODO:  handle errors from this more sanely after they
-                    // are available from the cadc-inventory-db API
-                    Iterator<Artifact> unstoredArtifacts = artifactDAO.unstoredIterator(bucket);
+                    
                     log.debug("FileSync.QUERY bucket=" + bucket);
-                    while (unstoredArtifacts.hasNext()) {
+                    try (final ResourceIterator<Artifact> unstoredArtifacts = artifactDAO.unstoredIterator(bucket)) {
+                        while (unstoredArtifacts.hasNext()) {
+                            // TODO:  handle errors from this more sanely after they
+                            // are available from the cadc-inventory-db API
+                            Artifact curArtifact = unstoredArtifacts.next();
+                            log.debug("create job: " + curArtifact.getURI());
+                            FileSyncJob fsj = new FileSyncJob(curArtifact.getURI(), this.locatorService,
+                                                              this.storageAdapter, this.jobArtifactDAO);
+                            final Subject currentUser = AuthenticationUtil.getCurrentSubject();
+                            fsj.setOwner(currentUser);
+
+                            jobQueue.put(fsj); // blocks when queue capacity is reached
+                            log.info("FileSync.CREATE: " + curArtifact.getURI());
+                            num++;
+                        }
+                    } catch (Exception qex) {
                         // TODO:  handle errors from this more sanely after they
                         // are available from the cadc-inventory-db API
-                        Artifact curArtifact = unstoredArtifacts.next();
-                        log.debug("create job: " + curArtifact.getURI());
-                        FileSyncJob fsj = new FileSyncJob(curArtifact.getURI(), this.locatorService,
-                                                          this.storageAdapter, this.jobArtifactDAO);
-                        final Subject currentUser = AuthenticationUtil.getCurrentSubject();
-                        fsj.setOwner(currentUser);
-
-                        jobQueue.put(fsj); // blocks when queue capacity is reached
-                        log.info("FileSync.CREATE: " + curArtifact.getURI());
-                        num++;
+                        throw qex;
                     }
                     
                 }
