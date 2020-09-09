@@ -124,17 +124,22 @@ public class AdStorageQuery {
             try {
                 contentChecksum = new URI(MD5_ENCODING_SCHEME + i.next());
             } catch (URISyntaxException u) {
-                throw new IllegalArgumentException("checksum error: " + storageID.toString() + ": " + u.getMessage());
+                log.error("checksum error: " + storageID.toString() + ": " + u.getMessage());
             }
 
             // archive_files.fileSize
             Long contentLength = (Long) i.next();
             if (contentLength == null) {
-                throw new IllegalArgumentException("content length error (null): " + storageID.toString());
+                log.error("content length error (null): " + storageID.toString());
             }
 
-            // Build StorageMetadata object - this will throw errors if anything that should be set isn't
-            StorageMetadata ret = new StorageMetadata(sl, contentChecksum, contentLength);
+            // Build StorageMetadata object
+            StorageMetadata ret;
+            if (contentChecksum == null || (contentLength == null || contentLength == 0)) {
+                ret = new StorageMetadata(sl);
+            } else {
+                ret = new StorageMetadata(sl, contentChecksum, contentLength);
+            }
             
             ret.artifactURI = storageID;
 
