@@ -71,7 +71,8 @@ import ca.nrc.cadc.auth.AuthenticationUtil;
 import ca.nrc.cadc.db.ConnectionConfig;
 import ca.nrc.cadc.db.DBUtil;
 
-import ca.nrc.cadc.net.TransientException;
+import ca.nrc.cadc.vosi.AvailabilityClient;
+import ca.nrc.cadc.vosi.AvailabilityStatus;
 import java.net.URI;
 import java.util.Iterator;
 import java.util.Map;
@@ -176,6 +177,14 @@ public class FileSync implements Runnable {
         boolean ok = true;
         while (ok) {
             try {
+                AvailabilityClient loc = new AvailabilityClient(locatorService);
+                AvailabilityStatus status = loc.getAvailability();
+                while (!status.isAvailable()) {
+                    log.warn("FileSync.LOCATOR_STATUS available=false msg=" + status.getNote());
+                    Thread.sleep(10 * poll);
+                    status = loc.getAvailability();
+                }
+                
                 long startQ = System.currentTimeMillis();
                 long num = 0L;
                 log.info("FileSync.QUERY START");
