@@ -118,10 +118,6 @@ public class FileSyncJob implements Runnable {
     private final StorageAdapter storageAdapter;
     private Subject owner;
     
-    // test support
-    Exception fail;
-
-
     public FileSyncJob(URI artifactID, URI locatorServiceID, StorageAdapter storageAdapter, ArtifactDAO artifactDAO) {
         InventoryUtil.assertNotNull(FileSyncJob.class, "artifactID", artifactID);
         InventoryUtil.assertNotNull(FileSyncJob.class, "locatorServiceID", locatorServiceID);
@@ -153,13 +149,19 @@ public class FileSyncJob implements Runnable {
         log.info("FileSyncJob.START " + artifactID);
         long start = System.currentTimeMillis();
         boolean success = false;
+        String msg = "";
         
         try {
             List<URL> urlList;
             try {
                 urlList = getDownloadURLs(this.locatorService, this.artifactID);
+                if (urlList.isEmpty()) {
+                    msg = " locator returned 0 URLs";
+                    return;
+                }
             } catch (Exception ex) {
-                log.error("transfer negotiation failed: " + artifactID, ex);
+                log.debug("transfer negotiation failed: " + artifactID, ex);
+                msg = " transfer negotiation failed: " + artifactID + " (" + ex + ")";
                 return;
             }
 
@@ -180,14 +182,17 @@ public class FileSyncJob implements Runnable {
 
                     Thread.sleep(RETRY_DELAY[retryCount++]);
                 }
-            } catch (IllegalArgumentException | IllegalStateException | InterruptedException 
+            } catch (IllegalStateException ex) {
+                log.debug("artifact sync aborted: " + this.artifactID, ex);
+                msg = " artifact sync aborted: " + this.artifactID + " (" + ex + ")";
+            } catch (IllegalArgumentException | InterruptedException 
                     | StorageEngageException | WriteException ex) {
                 log.debug("artifact sync error: " + this.artifactID, ex);
-                this.fail = ex;
+                msg = " artifact sync error: " + this.artifactID + " (" + ex + ")";
             }
         } finally {
             long dt = System.currentTimeMillis() - start;
-            log.info("FileSyncJob.END " + artifactID + " dt=" + dt + " success=" + success);
+            log.info("FileSyncJob.END " + artifactID + " dt=" + dt + " success=" + success + msg);
         }
     }
 
@@ -295,7 +300,7 @@ public class FileSyncJob implements Runnable {
                 if (curArtifact.storageLocation != null) {
                     // artifact has been acted on since this FileSyncJob
                     // instance started and it was null
-                    throw new IllegalStateException("storage location is not null (artifact was acted on during FileSyncJob run): " + this.artifactID);
+                    throw new IllegalStateException("storageLocation updated since FileSyncJob was created: " + this.artifactID);
                 }
 
                 // Note: the storage adapter 'put' below does checksum and content length
@@ -304,17 +309,15 @@ public class FileSyncJob implements Runnable {
                 String getContentMD5 = get.getContentMD5();
                 if (getContentMD5 != null
                     && !getContentMD5.equals(curArtifact.getContentChecksum().getSchemeSpecificPart())) {
-                    throw new PreconditionFailedException("mismatched content checksum. " + this.artifactID);
+                    throw new PreconditionFailedException("contentChecksum mismatch: " + this.artifactID);
                 }
 
                 long getContentLen = get.getContentLength();
                 if (getContentLen != -1
                     && getContentLen != curArtifact.getContentLength()) {
-                    throw new PreconditionFailedException("mismatched content length. " + this.artifactID
+                    throw new PreconditionFailedException("contentLength mismatch: " + this.artifactID
                         + " artifact: " + curArtifact.getContentLength() + " header: " + getContentLen);
                 }
-
-                log.debug("artifact checksum and content length match, continue to put.");
 
                 NewArtifact a = new NewArtifact(this.artifactID);
                 a.contentChecksum = curArtifact.getContentChecksum();
