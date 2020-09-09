@@ -124,13 +124,13 @@ public class AdStorageQuery {
             try {
                 contentChecksum = new URI(MD5_ENCODING_SCHEME + i.next());
             } catch (URISyntaxException u) {
-                log.error("checksum error: " + storageID.toString() + ": " + u.getMessage());
+                log.info("checksum error: " + storageID.toString() + ": " + u.getMessage());
             }
 
             // archive_files.fileSize
             Long contentLength = (Long) i.next();
             if (contentLength == null) {
-                log.error("content length error (null): " + storageID.toString());
+                log.info("content length error (null): " + storageID.toString());
             }
 
             // Build StorageMetadata object
