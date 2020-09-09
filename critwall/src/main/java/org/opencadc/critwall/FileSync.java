@@ -171,6 +171,7 @@ public class FileSync implements Runnable {
     public void run() {
         Iterator<String> bucketSelector = selector.getBucketIterator();
         long poll = 30 * 1000L; // 30 sec
+        long recheck = 120 * 1000L; // 120 sec
         if (testRunOnce) {
             poll = 100L;
         }
@@ -240,9 +241,16 @@ public class FileSync implements Runnable {
             } catch (Exception e) {
                 log.error("fatal error - terminating", e);
                 ok = false;
-            } finally {
-                this.threadPool.terminate();
+            }
+            if (ok) {
+                try {
+                    log.info("FileSync.SLEEP dt=" + recheck);
+                    Thread.sleep(recheck);
+                } catch (InterruptedException ex) {
+                    ok = false;
+                }
             }
         }
+        this.threadPool.terminate();
     }
 }
