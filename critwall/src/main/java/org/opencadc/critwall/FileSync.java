@@ -67,17 +67,13 @@
 
 package org.opencadc.critwall;
 
-import ca.nrc.cadc.auth.AuthMethod;
 import ca.nrc.cadc.auth.AuthenticationUtil;
-import ca.nrc.cadc.auth.SSLUtil;
-import ca.nrc.cadc.auth.X509CertificateChain;
 import ca.nrc.cadc.db.ConnectionConfig;
 import ca.nrc.cadc.db.DBUtil;
 
 import ca.nrc.cadc.io.ResourceIterator;
+import ca.nrc.cadc.vosi.Availability;
 import ca.nrc.cadc.vosi.AvailabilityClient;
-import ca.nrc.cadc.vosi.AvailabilityStatus;
-import java.io.File;
 import java.net.URI;
 import java.util.Iterator;
 import java.util.Map;
@@ -183,12 +179,12 @@ public class FileSync implements Runnable {
         boolean ok = true;
         while (ok) {
             try {
-                AvailabilityClient loc = new AvailabilityClient(locatorService);
-                AvailabilityStatus status = loc.getAvailability();
-                while (!status.isAvailable()) {
-                    log.warn("FileSync.LOCATOR_STATUS available=false msg=" + status.getNote());
+                AvailabilityClient acl = new AvailabilityClient(locatorService);
+                Availability a = acl.getAvailability();
+                while (!a.isAvailable()) {
+                    log.warn("FileSync.LOCATOR_STATUS available=false msg=" + a.note);
                     Thread.sleep(10 * poll);
-                    status = loc.getAvailability();
+                    a = acl.getAvailability();
                 }
                 
                 // TODO: load updated subject(cert) for jobs here? or inside FileSyncJob itself?

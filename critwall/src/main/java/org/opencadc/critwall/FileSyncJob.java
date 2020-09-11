@@ -224,16 +224,15 @@ public class FileSyncJob implements Runnable {
         }
         log.debug("certURL: " + transferURL);
 
-        // Ask for all protocols available back, and the server will
-        // give you URLs for the ones it allows.
+        // HACK: limit request due to raven bug
         List<Protocol> protocolList = new ArrayList<>();
         protocolList.add(new Protocol(VOS.PROTOCOL_HTTPS_GET));
-        protocolList.add(new Protocol(VOS.PROTOCOL_HTTP_GET));
-        if (!AuthMethod.ANON.equals(am)) {
-            Protocol httpsAuth = new Protocol(VOS.PROTOCOL_HTTPS_GET);
-            httpsAuth.setSecurityMethod(Standards.getSecurityMethod(am));
-            protocolList.add(httpsAuth);
-        }
+        //protocolList.add(new Protocol(VOS.PROTOCOL_HTTP_GET));
+        //if (!AuthMethod.ANON.equals(am)) {
+        //    Protocol httpsAuth = new Protocol(VOS.PROTOCOL_HTTPS_GET);
+        //    httpsAuth.setSecurityMethod(Standards.getSecurityMethod(am));
+        //    protocolList.add(httpsAuth);
+        //}
 
         Transfer transfer = new Transfer(artifact, Direction.pullFromVoSpace, protocolList);
         transfer.version = VOS.VOSPACE_21;
