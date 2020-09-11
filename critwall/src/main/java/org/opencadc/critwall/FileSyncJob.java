@@ -116,9 +116,9 @@ public class FileSyncJob implements Runnable {
     private final URI artifactID;
     private final URI locatorService;
     private final StorageAdapter storageAdapter;
-    private Subject owner;
+    private final Subject subject;
     
-    public FileSyncJob(URI artifactID, URI locatorServiceID, StorageAdapter storageAdapter, ArtifactDAO artifactDAO) {
+    public FileSyncJob(URI artifactID, URI locatorServiceID, StorageAdapter storageAdapter, ArtifactDAO artifactDAO, Subject subject) {
         InventoryUtil.assertNotNull(FileSyncJob.class, "artifactID", artifactID);
         InventoryUtil.assertNotNull(FileSyncJob.class, "locatorServiceID", locatorServiceID);
         InventoryUtil.assertNotNull(FileSyncJob.class, "storageAdapter", storageAdapter);
@@ -129,20 +129,12 @@ public class FileSyncJob implements Runnable {
         this.storageAdapter = storageAdapter;
 
         this.artifactDAO = artifactDAO;
-    }
-
-    public void setOwner(final Subject owner) {
-        this.owner = owner;
+        this.subject = subject;
     }
 
     @Override
     public void run() {
-        log.debug("fileSyncJob start.");
-        if (this.owner == null) {
-            doSync();
-        } else {
-            Subject.doAs(this.owner, new RunnableAction(this::doSync));
-        }
+        Subject.doAs(subject, new RunnableAction(this::doSync));
     }
 
     private void doSync() {

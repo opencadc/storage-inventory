@@ -67,12 +67,15 @@
 
 package org.opencadc.critwall;
 
+import ca.nrc.cadc.auth.AuthenticationUtil;
 import ca.nrc.cadc.db.ConnectionConfig;
 import ca.nrc.cadc.db.DBConfig;
 import ca.nrc.cadc.db.DBUtil;
+import ca.nrc.cadc.util.Log4jInit;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.attribute.FileAttribute;
@@ -83,21 +86,18 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
-import java.util.UUID;
+import javax.security.auth.Subject;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
+import org.junit.Assert;
 import org.junit.Before;
+import org.junit.Test;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.SQLGenerator;
 import org.opencadc.inventory.storage.StorageMetadata;
 import org.opencadc.inventory.storage.fs.OpaqueFileSystemStorageAdapter;
-import ca.nrc.cadc.util.Log4jInit;
-import java.net.URI;
-import org.junit.Assert;
-import org.junit.Test;
-
 
 public class FileSyncJobTest {
     private static final Logger log = Logger.getLogger(FileSyncJobTest.class);
@@ -116,6 +116,7 @@ public class FileSyncJobTest {
     }
 
     private ArtifactDAO dao = new ArtifactDAO();
+    private Subject anonSubject = AuthenticationUtil.getAnonSubject();
 
     public FileSyncJobTest() throws Exception {
         try {
@@ -214,7 +215,7 @@ public class FileSyncJobTest {
             log.debug("putting test artifact to database");
             dao.put(artifactToUpdate);
 
-            FileSyncJob fsj = new FileSyncJob(artifactID, resourceID, sa, dao);
+            FileSyncJob fsj = new FileSyncJob(artifactID, resourceID, sa, dao, anonSubject);
             fsj.run();
 
             // check job succeeded by trying to get artifact by location
@@ -254,7 +255,7 @@ public class FileSyncJobTest {
             log.debug("putting test artifact to database");
             dao.put(artifactToUpdate);
 
-            FileSyncJob fsj = new FileSyncJob(artifactID, resourceID, sa, dao);
+            FileSyncJob fsj = new FileSyncJob(artifactID, resourceID, sa, dao, anonSubject);
             fsj.run();
 
             log.debug("finished run in failure test.");
@@ -290,7 +291,7 @@ public class FileSyncJobTest {
             log.debug("putting test artifact to database");
             dao.put(artifactToUpdate);
 
-            FileSyncJob fsj = new FileSyncJob(artifactID, resourceID, sa, dao);
+            FileSyncJob fsj = new FileSyncJob(artifactID, resourceID, sa, dao, anonSubject);
             fsj.run();
 
             log.debug("finished run in failure test.");
@@ -331,7 +332,7 @@ public class FileSyncJobTest {
             dao.put(artifactToUpdate);
             
 
-            FileSyncJob fsj = new FileSyncJob(artifactID, resourceID, sa, dao);
+            FileSyncJob fsj = new FileSyncJob(artifactID, resourceID, sa, dao, anonSubject);
             fsj.run();
 
             log.debug("successfully finished FileSyncJob run in test.");

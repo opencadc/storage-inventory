@@ -67,9 +67,12 @@
 
 package org.opencadc.critwall;
 
+import ca.nrc.cadc.auth.AuthenticationUtil;
+import ca.nrc.cadc.auth.RunnableAction;
 import ca.nrc.cadc.db.ConnectionConfig;
 import ca.nrc.cadc.db.DBConfig;
 import ca.nrc.cadc.db.DBUtil;
+import ca.nrc.cadc.io.ResourceIterator;
 import ca.nrc.cadc.util.Log4jInit;
 import java.io.File;
 import java.io.FileOutputStream;
@@ -87,6 +90,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 
+import javax.security.auth.Subject;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
@@ -107,8 +111,6 @@ public class FileSyncTest {
     private static Map<String,Object> daoConfig;
     private static ConnectionConfig cc;
 
-    private OpaqueFileSystemStorageAdapter oStorageAdapter;
-
     static {
         Log4jInit.setLevel("org.opencadc.inventory", Level.INFO);
         Log4jInit.setLevel("org.opencadc.inventory.db", Level.INFO);
@@ -117,8 +119,10 @@ public class FileSyncTest {
         Log4jInit.setLevel("org.opencadc.inventory.storage.fs", Level.INFO);
     }
 
+    private OpaqueFileSystemStorageAdapter oStorageAdapter;
     private ArtifactDAO dao = new ArtifactDAO();
     private ArtifactDAO jobDao = new ArtifactDAO();
+    private Subject anonSubject = AuthenticationUtil.getAnonSubject();
 
     public FileSyncTest() throws Exception {
         daoConfig = new TreeMap<String,Object>();
@@ -340,8 +344,8 @@ public class FileSyncTest {
         URI locatorResourceID = new URI(TEST_RESOURCE_ID);
 
         FileSync doit = new FileSync(daoConfig, cc, localStorage, locatorResourceID, bucketSel, nthreads);
-        doit.testRunOnce = true;
-        doit.run();
+        doit.testRunLoops = 1;
+        Subject.doAs(anonSubject, new RunnableAction(doit));
 
         // Check the storage locations, as these should get updated within a reasonable
         // amount of timeA
@@ -421,5 +425,49 @@ public class FileSyncTest {
         log.info("testValidFileSyncLargeSet - DONE");
     }
 
+    @Test
+    public void testRetryOnRepeatedQuery() {
+        String testDir = TEST_ROOT + File.separator + "testRetryOnRepeatedQuery";
+        try {
+            createTestDirectory(testDir);
+            Artifact testArtifact = new Artifact(new URI("ad:IRIS/no-such-file.fits"),
+                new URI("md5:e3922d47243563529f387ebdf00b66da"), new Date(),
+                1008000L);
+            dao.put(testArtifact);
+            
+            OpaqueFileSystemStorageAdapter localStorage = new OpaqueFileSystemStorageAdapter(new File(testDir), 1);
+            BucketSelector bucketSel = new BucketSelector(testArtifact.getBucket().substring(0,1));
+            URI locatorResourceID = new URI(TEST_RESOURCE_ID);
 
+            // make sure FileSyncJob actually fails to update
+            FileSync doit = new FileSync(daoConfig, cc, localStorage, locatorResourceID, bucketSel, 1);
+            doit.testRunLoops = 1;
+            Subject.doAs(anonSubject, new RunnableAction(doit));
+            
+            boolean found = false;
+            int num = 0;
+            try (ResourceIterator<Artifact> iter = dao.unstoredIterator(testArtifact.getBucket())) {
+                while (iter.hasNext()) {
+                    Artifact unstored = iter.next();
+                    num++;
+                    if (testArtifact.getID().equals(unstored.getID())) {
+                        found = true;
+                    }
+                }
+            }
+            Assert.assertTrue(found);
+            Assert.assertEquals(1, num);
+            
+            // now with loops
+            doit = new FileSync(daoConfig, cc, localStorage, locatorResourceID, bucketSel, 1);
+            doit.testRunLoops = 4; 
+            Subject.doAs(anonSubject, new RunnableAction(doit));
+            
+        } catch (Exception unexpected) {
+            log.info("unexpected exception", unexpected);
+            Assert.fail("unexpected exception: " + unexpected);
+            
+        }
+        log.info("testValidFileSyncLargeSet - DONE");
+    }
 }

@@ -105,7 +105,7 @@ public class FileSync implements Runnable {
     private final LinkedBlockingQueue<Runnable> jobQueue;
     
     // test usage only
-    boolean testRunOnce = false;
+    int testRunLoops = 0; // default: forever
 
     /**
      * Constructor.
@@ -170,13 +170,16 @@ public class FileSync implements Runnable {
     }
 
     public void run() {
-        Iterator<String> bucketSelector = selector.getBucketIterator();
+        // poll time while watching job queue to empty
         long poll = 30 * 1000L; // 30 sec
-        long recheck = 120 * 1000L; // 120 sec
-        if (testRunOnce) {
+        if (testRunLoops > 0) {
             poll = 100L;
         }
+        // idle time from when jobs finish until next query
+        long idle = 10 * poll;
+        
         boolean ok = true;
+        long loopCount = 0;
         while (ok) {
             try {
                 AvailabilityClient acl = new AvailabilityClient(locatorService);
@@ -188,14 +191,15 @@ public class FileSync implements Runnable {
                 }
                 
                 // TODO: load updated subject(cert) for jobs here? or inside FileSyncJob itself?
+                loopCount++;
                 
                 long startQ = System.currentTimeMillis();
                 long num = 0L;
                 log.info("FileSync.QUERY START");
-                while (bucketSelector.hasNext()) {
-                    String bucket = bucketSelector.next();
-                    
-                    
+                final Subject currentUser = AuthenticationUtil.getCurrentSubject();
+                Iterator<String> bi = selector.getBucketIterator();
+                while (bi.hasNext()) {
+                    String bucket = bi.next();
                     log.debug("FileSync.QUERY bucket=" + bucket);
                     try (final ResourceIterator<Artifact> unstoredArtifacts = artifactDAO.unstoredIterator(bucket)) {
                         while (unstoredArtifacts.hasNext()) {
@@ -204,9 +208,7 @@ public class FileSync implements Runnable {
                             Artifact curArtifact = unstoredArtifacts.next();
                             log.debug("create job: " + curArtifact.getURI());
                             FileSyncJob fsj = new FileSyncJob(curArtifact.getURI(), this.locatorService,
-                                                              this.storageAdapter, this.jobArtifactDAO);
-                            final Subject currentUser = AuthenticationUtil.getCurrentSubject();
-                            fsj.setOwner(currentUser);
+                                                              this.storageAdapter, this.jobArtifactDAO, currentUser);
 
                             jobQueue.put(fsj); // blocks when queue capacity is reached
                             log.info("FileSync.CREATE: " + curArtifact.getURI());
@@ -227,20 +229,20 @@ public class FileSync implements Runnable {
                     if (jobQueue.isEmpty()) {
                         // look more closely at state of thread pool
                         if (threadPool.getAllThreadsIdle()) {
-                            log.info("queue empty; jobs complete");
+                            log.debug("queue empty; jobs complete");
                             waiting = false;
                         } else {
-                            log.info("queue empty; jobs running...");
+                            log.info("FileSync.POLL dt=" + poll);
                             Thread.sleep(poll);
                         }
                     } else {
-                        log.info("queue contains jobs...");
+                        log.info("FileSync.POLL dt=" + poll);
                         Thread.sleep(poll);
                     }
                     
                 }
-                if (testRunOnce) {
-                    log.warn("TEST MODE: testRunOnce=true... terminating!");
+                if (testRunLoops > 0 && loopCount >= testRunLoops) {
+                    log.warn("TEST MODE: testRunLoops=" + testRunLoops + " ... terminating!");
                     ok = false;
                 }
             //} catch (TransientException ex) {
@@ -251,8 +253,8 @@ public class FileSync implements Runnable {
             }
             if (ok) {
                 try {
-                    log.info("FileSync.SLEEP dt=" + recheck);
-                    Thread.sleep(recheck);
+                    log.info("FileSync.IDLE dt=" + idle);
+                    Thread.sleep(idle);
                 } catch (InterruptedException ex) {
                     ok = false;
                 }
