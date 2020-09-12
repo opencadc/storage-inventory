@@ -216,7 +216,7 @@ public class FileSyncJob implements Runnable {
         }
         log.debug("certURL: " + transferURL);
 
-        // HACK: limit request due to raven bug
+        // request all protocols that can be used
         List<Protocol> protocolList = new ArrayList<>();
         protocolList.add(new Protocol(VOS.PROTOCOL_HTTPS_GET));
         protocolList.add(new Protocol(VOS.PROTOCOL_HTTP_GET));
