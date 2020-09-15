@@ -71,6 +71,9 @@ import ca.nrc.cadc.auth.AuthenticationUtil;
 import ca.nrc.cadc.db.ConnectionConfig;
 import ca.nrc.cadc.db.DBUtil;
 
+import ca.nrc.cadc.io.ResourceIterator;
+import ca.nrc.cadc.vosi.Availability;
+import ca.nrc.cadc.vosi.AvailabilityClient;
 import java.net.URI;
 import java.util.Iterator;
 import java.util.Map;
@@ -87,7 +90,7 @@ import org.opencadc.inventory.storage.StorageAdapter;
 import org.opencadc.inventory.util.BucketSelector;
 
 
-public class FileSync {
+public class FileSync implements Runnable {
     private static final Logger log = Logger.getLogger(FileSync.class);
 
     private static final int MAX_THREADS = 16;
@@ -100,6 +103,9 @@ public class FileSync {
     private final StorageAdapter storageAdapter;
     private final ThreadPool threadPool;
     private final LinkedBlockingQueue<Runnable> jobQueue;
+    
+    // test usage only
+    int testRunLoops = 0; // default: forever
 
     /**
      * Constructor.
@@ -164,47 +170,96 @@ public class FileSync {
     }
 
     public void run() {
-        log.info("FileSync START");
-        Iterator<String> bucketSelector = selector.getBucketIterator();
-        String currentArtifactInfo = "";
-        try {
-            while (bucketSelector.hasNext()) {
-                String bucket = bucketSelector.next();
-                log.info("processing bucket " + bucket);
-                // TODO:  handle errors from this more sanely after they
-                // are available from the cadc-inventory-db API
-                Iterator<Artifact> unstoredArtifacts = artifactDAO.unstoredIterator(bucket);
+        // poll time while watching job queue to empty
+        long poll = 30 * 1000L; // 30 sec
+        if (testRunLoops > 0) {
+            poll = 100L;
+        }
+        // idle time from when jobs finish until next query
+        long idle = 10 * poll;
+        
+        boolean ok = true;
+        long loopCount = 0;
+        while (ok) {
+            try {
+                AvailabilityClient acl = new AvailabilityClient(locatorService);
+                Availability a = acl.getAvailability();
+                while (!a.isAvailable()) {
+                    log.warn("FileSync.LOCATOR_STATUS available=false msg=" + a.note);
+                    Thread.sleep(10 * poll);
+                    a = acl.getAvailability();
+                }
+                
+                // TODO: load updated subject(cert) for jobs here? or inside FileSyncJob itself?
+                loopCount++;
+                
+                long startQ = System.currentTimeMillis();
+                long num = 0L;
+                log.info("FileSync.QUERY START");
+                final Subject currentUser = AuthenticationUtil.getCurrentSubject();
+                Iterator<String> bi = selector.getBucketIterator();
+                while (bi.hasNext()) {
+                    String bucket = bi.next();
+                    log.debug("FileSync.QUERY bucket=" + bucket);
+                    try (final ResourceIterator<Artifact> unstoredArtifacts = artifactDAO.unstoredIterator(bucket)) {
+                        while (unstoredArtifacts.hasNext()) {
+                            // TODO:  handle errors from this more sanely after they
+                            // are available from the cadc-inventory-db API
+                            Artifact curArtifact = unstoredArtifacts.next();
+                            log.debug("create job: " + curArtifact.getURI());
+                            FileSyncJob fsj = new FileSyncJob(curArtifact.getURI(), this.locatorService,
+                                                              this.storageAdapter, this.jobArtifactDAO, currentUser);
 
-                while (unstoredArtifacts.hasNext()) {
-                    // TODO:  handle errors from this more sanely after they
-                    // are available from the cadc-inventory-db API
-                    Artifact curArtifact = unstoredArtifacts.next();
-                    currentArtifactInfo = "bucket: " + bucket + " artifact: " + curArtifact.getURI();
-                    log.debug("processing: " + currentArtifactInfo);
-
-                    FileSyncJob fsj = new FileSyncJob(curArtifact.getURI(), this.locatorService,
-                                                      this.storageAdapter, this.jobArtifactDAO);
-                    final Subject currentUser = AuthenticationUtil.getCurrentSubject();
-                    fsj.setOwner(currentUser);
-
-                    log.debug("creating file sync job " + curArtifact.getURI());
-                    jobQueue.put(fsj); // blocks when queue capacity is reached
+                            jobQueue.put(fsj); // blocks when queue capacity is reached
+                            log.info("FileSync.CREATE: " + curArtifact.getURI());
+                            num++;
+                        }
+                    } catch (Exception qex) {
+                        // TODO:  handle errors from this more sanely after they
+                        // are available from the cadc-inventory-db API
+                        throw qex;
+                    }
+                    
+                }
+                long dtQ = System.currentTimeMillis() - startQ;
+                log.info("FileSync.QUERY END dt=" + dtQ + " num=" + num);
+                
+                boolean waiting = true;
+                while (waiting) {
+                    if (jobQueue.isEmpty()) {
+                        // look more closely at state of thread pool
+                        if (threadPool.getAllThreadsIdle()) {
+                            log.debug("queue empty; jobs complete");
+                            waiting = false;
+                        } else {
+                            log.info("FileSync.POLL dt=" + poll);
+                            Thread.sleep(poll);
+                        }
+                    } else {
+                        log.info("FileSync.POLL dt=" + poll);
+                        Thread.sleep(poll);
+                    }
+                    
+                }
+                if (testRunLoops > 0 && loopCount >= testRunLoops) {
+                    log.warn("TEST MODE: testRunLoops=" + testRunLoops + " ... terminating!");
+                    ok = false;
+                }
+            //} catch (TransientException ex) {
+            //    log.error("transient error - continuing", ex);
+            } catch (Exception e) {
+                log.error("fatal error - terminating", e);
+                ok = false;
+            }
+            if (ok) {
+                try {
+                    log.info("FileSync.IDLE dt=" + idle);
+                    Thread.sleep(idle);
+                } catch (InterruptedException ex) {
+                    ok = false;
                 }
             }
-
-            // HACK: keep running so all jobs can complete
-            // TODO: manage idle and then restart first at bucket until serious failure
-            //       tricky bit: don't queue the same jobs multiple times, but do retry jobs that failed
-            while (true) {
-                log.warn("main thread: sleeping forever!!");
-                Thread.sleep(300 * 1000L); // 5 min
-            }
-        } catch (Exception e) {
-            log.error("error processing list of artifacts, at: " + currentArtifactInfo);
-            log.error("unexpected failure", e);
-        } finally {
-            this.threadPool.terminate();
-            log.info("FileSync DONE");
         }
+        this.threadPool.terminate();
     }
 }
