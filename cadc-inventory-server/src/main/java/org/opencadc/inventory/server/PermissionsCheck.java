@@ -65,7 +65,7 @@
  ************************************************************************
  */
 
-package org.opencadc.inventory.util;
+package org.opencadc.inventory.server;
 
 import ca.nrc.cadc.auth.AuthMethod;
 import ca.nrc.cadc.auth.AuthenticationUtil;

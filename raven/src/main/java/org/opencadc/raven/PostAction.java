@@ -102,7 +102,7 @@ import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.DeletedEventDAO;
 import org.opencadc.inventory.db.SQLGenerator;
 import org.opencadc.inventory.db.StorageSiteDAO;
-import org.opencadc.inventory.util.PermissionsCheck;
+import org.opencadc.inventory.server.PermissionsCheck;
 import org.opencadc.permissions.ReadGrant;
 import org.opencadc.permissions.TokenUtil;
 import org.opencadc.permissions.WriteGrant;

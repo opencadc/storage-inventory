@@ -199,10 +199,6 @@ public class NegotiationTest extends RavenTest {
                     URI resourceID1 = URI.create("ivo://negotiation-test-site1");
                     URI resourceID2 = URI.create("ivo://negotiation-test-site2");
 
-                    ArtifactDAO artifactDAO = new ArtifactDAO();
-                    artifactDAO.setConfig(config);
-                    StorageSiteDAO siteDAO = new StorageSiteDAO();
-                    siteDAO.setConfig(config);
                     StorageSite site1 = new StorageSite(resourceID1, "site1", true, true);
                     StorageSite site2 = new StorageSite(resourceID2, "site2", true, false);
 
