@@ -235,6 +235,7 @@ public class StorageSiteSyncTest {
      */
     private static class ResourceIteratorModifiedChecksum implements ResourceIterator<StorageSite> {
         final Iterator<StorageSite> sourceIterator;
+        
         public ResourceIteratorModifiedChecksum(final StorageSite storageSite) {
             sourceIterator = Collections.singletonList(storageSite).iterator();
         }
@@ -261,6 +262,7 @@ public class StorageSiteSyncTest {
      */
     private static class ResourceIteratorMultipleSites implements ResourceIterator<StorageSite> {
         final Iterator<StorageSite> sourceIterator;
+        
         public ResourceIteratorMultipleSites() {
             final List<StorageSite> storageSiteList = new ArrayList<>();
 
@@ -289,6 +291,7 @@ public class StorageSiteSyncTest {
      */
     private static class ResourceIteratorEmptySites implements ResourceIterator<StorageSite> {
         final Iterator<StorageSite> sourceIterator = Collections.emptyIterator();
+        
         public ResourceIteratorEmptySites() {
         }
 
