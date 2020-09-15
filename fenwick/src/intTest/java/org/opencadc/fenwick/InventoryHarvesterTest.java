@@ -191,6 +191,7 @@ public class InventoryHarvesterTest {
         if (track) {
             artifactOne.storageLocation = new StorageLocation(URI.create("cadc:TEST/location/1"));
         }
+
         luskanEnvironment.artifactDAO.put(artifactOne);
         Thread.sleep(20L);
         
