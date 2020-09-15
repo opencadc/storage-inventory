@@ -89,10 +89,12 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.UUID;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.InventoryUtil;
@@ -210,7 +212,7 @@ public class PostAction extends RestAction {
         
         TransferReader reader = new TransferReader();
         InputStream in = (InputStream) syncInput.getContent(INLINE_CONTENT_TAG);
-        Transfer transfer = reader.read(in, null);
+        final Transfer transfer = reader.read(in, null);
         
         log.debug("transfer request: " + transfer);
         Direction direction = transfer.getDirection();
@@ -218,20 +220,6 @@ public class PostAction extends RestAction {
             throw new IllegalArgumentException("direction not supported: " + transfer.getDirection());
         }
         
-        // only support https over anonymous auth method for now
-        // TODO: if the protocol includes an auth method that the storage site supports, generate a non-token URL
-        Protocol supportedProtocol;
-        if (direction.equals(Direction.pullFromVoSpace)) {
-            supportedProtocol = new Protocol(VOS.PROTOCOL_HTTPS_GET);
-        } else {
-            supportedProtocol = new Protocol(VOS.PROTOCOL_HTTPS_PUT);
-        }
-        if (!transfer.getProtocols().contains(supportedProtocol)) {
-            throw new UnsupportedOperationException("no supported protocols (require https with anon security method)");
-        }
-        transfer.getProtocols().clear();
-        
-        // ensure artifact uri is valid and exists
         URI artifactURI = transfer.getTarget();
         InventoryUtil.validateArtifactURI(PostAction.class, artifactURI);
         Artifact artifact = artifactDAO.get(artifactURI);
@@ -271,41 +259,69 @@ public class PostAction extends RestAction {
         
         RegistryClient regClient = new RegistryClient();
         StorageSiteDAO storageSiteDAO = new StorageSiteDAO(artifactDAO);
-        StorageSite storageSite = null;
-        URI resourceID = null;
-        URL baseURL = null;
-        String endpointURL = null;
+        Set<StorageSite> sites = storageSiteDAO.list(); // this set could be cached
         
-        // TODO: Cache the full list of storage sites (using storageSiteDAO.list())
-        // and check for updates to that list periodically (every 5 min or so)
-        
-        // produce URLs to each of the copies
+        // produce URLs to each of the copies for each of the protocols
+        List<Protocol> protos = new ArrayList<>();
         for (SiteLocation site : artifact.siteLocations) {
-            storageSite = storageSiteDAO.get(site.getSiteID());
-            if (direction.equals(Direction.pushToVoSpace) && !storageSite.getAllowWrite()) {
-                continue;
-            }
-            resourceID = storageSite.getResourceID();
-            baseURL = regClient.getServiceURL(resourceID, Standards.SI_FILES, AuthMethod.ANON);
-            log.debug("base url for site " + site.toString() + ": " + baseURL);
-            if (baseURL != null) {
-                endpointURL = baseURL.toString() + "/" + authToken + "/" + artifactURI.toString();
-                Protocol p = new Protocol(supportedProtocol.getUri());
-                if (transfer.version == VOS.VOSPACE_21) {
-                    p.setSecurityMethod(Standards.SECURITY_METHOD_ANON);
+            StorageSite storageSite = getSite(sites, site.getSiteID());
+            for (Protocol proto : transfer.getProtocols()) {
+                if ((direction.equals(Direction.pullFromVoSpace) && storageSite.getAllowRead())
+                        || (direction.equals(Direction.pushToVoSpace) && storageSite.getAllowWrite())) {
+                    URI resourceID = storageSite.getResourceID();
+                    AuthMethod am = AuthMethod.ANON;
+                    if (proto.getSecurityMethod() != null) {
+                        am = Standards.getAuthMethod(proto.getSecurityMethod());
+                    }
+                    URL baseURL = regClient.getServiceURL(resourceID, Standards.SI_FILES, am);
+                    log.debug("base url for site " + site.toString() + ": " + baseURL);
+                    if (baseURL != null && protocolCompat(proto, baseURL)) {
+                        StringBuilder sb = new StringBuilder();
+                        sb.append(baseURL.toExternalForm()).append("/");
+                        if (AuthMethod.ANON.equals(am)) {
+                            sb.append(authToken).append("/");
+                        }
+                        sb.append(artifactURI.toASCIIString());
+                        Protocol p = new Protocol(proto.getUri());
+                        if (transfer.version == VOS.VOSPACE_21) {
+                            p.setSecurityMethod(proto.getSecurityMethod());
+                        }
+                        p.setEndpoint(sb.toString());
+                        protos.add(p);
+                        log.debug("added: " + p);
+                    }
                 }
-                p.setEndpoint(endpointURL);
-                transfer.getProtocols().add(p);
-                log.debug("added endpoint url: " + endpointURL);
             }
         }
         
+        // TODO: sort protocols as caller will try them in order until success
+        // - depends on client and site proximity
+        // - sort pre-auth before non-pre-auth because we already did the permission check
+        
+        Transfer ret = new Transfer(artifactURI, direction, protos);
+        ret.version = VOS.VOSPACE_21;
+                        
         TransferWriter transferWriter = new TransferWriter();
-        transferWriter.write(transfer, syncOutput.getOutputStream());
+        transferWriter.write(ret, syncOutput.getOutputStream());
     }
-
-    protected DeletedEventDAO getDeletedEventDAO(ArtifactDAO src) {
-        return new DeletedEventDAO(src);
+    
+    private StorageSite getSite(Set<StorageSite> sites, UUID id) {
+        for (StorageSite s : sites) {
+            if (s.getID().equals(id)) {
+                return s;
+            }
+        }
+        throw new IllegalStateException("BUG: could not find StorageSite with id=" +  id);
+    }
+    
+    private boolean protocolCompat(Protocol p, URL u) {
+        if ("https".equals(u.getProtocol())) {
+            return VOS.PROTOCOL_HTTPS_GET.equals(p.getUri()) || VOS.PROTOCOL_HTTPS_PUT.equals(p.getUri());
+        }
+        if ("http".equals(u.getProtocol())) {
+            return VOS.PROTOCOL_HTTP_GET.equals(p.getUri()) || VOS.PROTOCOL_HTTP_PUT.equals(p.getUri());
+        }
+        return false;
     }
 
     /**

@@ -3,7 +3,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2019.                            (c) 2019.
+ *  (c) 2020.                            (c) 2020.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -68,6 +68,7 @@
 package org.opencadc.raven;
 
 import ca.nrc.cadc.net.ResourceNotFoundException;
+import ca.nrc.cadc.reg.Standards;
 import ca.nrc.cadc.util.Log4jInit;
 import ca.nrc.cadc.vos.Direction;
 import ca.nrc.cadc.vos.Protocol;
@@ -75,9 +76,11 @@ import ca.nrc.cadc.vos.Transfer;
 import ca.nrc.cadc.vos.VOS;
 
 import java.net.URI;
+import java.net.URL;
 import java.security.PrivilegedExceptionAction;
-import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.Date;
+import java.util.List;
 import java.util.UUID;
 
 import javax.security.auth.Subject;
@@ -121,7 +124,7 @@ public class NegotiationTest extends RavenTest {
     }
 
     @Test
-    public void testGetAllCopies() {
+    public void testGET() {
         try {
             Subject.doAs(userSubject, new PrivilegedExceptionAction<Object>() {
                 public Object run() throws Exception {
@@ -144,9 +147,13 @@ public class NegotiationTest extends RavenTest {
                         final SiteLocation location1 = new SiteLocation(site1.getID());
                         final SiteLocation location2 = new SiteLocation(site2.getID());
                         
-                        Protocol protocol = new Protocol(VOS.PROTOCOL_HTTPS_GET);
-                        Transfer transfer = new Transfer(
-                            artifactURI, Direction.pullFromVoSpace, Arrays.asList(protocol));
+                        List<Protocol> protos = new ArrayList<>();
+                        
+                        // https+anon means raven has to do auth check and add pre-auth token
+                        Protocol p = new Protocol(VOS.PROTOCOL_HTTPS_GET);
+                        protos.add(p);
+                        
+                        Transfer transfer = new Transfer(artifactURI, Direction.pullFromVoSpace, protos);
                         transfer.version = VOS.VOSPACE_21;
                         
                         artifactDAO.put(artifact);
@@ -166,6 +173,16 @@ public class NegotiationTest extends RavenTest {
                         Transfer response = negotiate(transfer);
                         Assert.assertEquals(1, response.getAllEndpoints().size());
                         
+                        // verify that pre-auth is present in URL, sort of
+                        String surl = response.getAllEndpoints().get(0);
+                        URL url = new URL(surl);
+                        String path = url.getPath().substring(1);
+                        log.debug("path: " + path);
+
+                        String[] elems = path.split("/");
+                        // path: minoc/endpoint/{pre-auth}/cadc:TEST/{uuid}.fits == 5
+                        Assert.assertEquals(5, elems.length);
+                        Assert.assertEquals("cadc:TEST", elems[3]);
                         
                         artifactDAO.addSiteLocation(artifact, location2);
                         artifact = artifactDAO.get(artifact.getID());
@@ -210,11 +227,12 @@ public class NegotiationTest extends RavenTest {
                         siteDAO.put(site1);
                         siteDAO.put(site2);
 
+                        List<Protocol> protos = new ArrayList<>();
+                        // https+anon means raven has to do auth check and add pre-auth token
+                        Protocol p = new Protocol(VOS.PROTOCOL_HTTPS_PUT);
+                        protos.add(p);
                         
-
-                        Protocol protocol = new Protocol(VOS.PROTOCOL_HTTPS_PUT);
-                        Transfer transfer = new Transfer(
-                            artifactURI, Direction.pushToVoSpace, Arrays.asList(protocol));
+                        Transfer transfer = new Transfer(artifactURI, Direction.pushToVoSpace, protos);
                         transfer.version = VOS.VOSPACE_21;
 
                         artifactDAO.put(artifact);
@@ -233,6 +251,16 @@ public class NegotiationTest extends RavenTest {
                         // test that there's one copy
                         Transfer response = negotiate(transfer);
                         Assert.assertEquals(1, response.getAllEndpoints().size());
+                        
+                        String surl = response.getAllEndpoints().get(0);
+                        URL url = new URL(surl);
+                        String path = url.getPath().substring(1);
+                        log.debug("path: " + path);
+
+                        String[] elems = path.split("/");
+                        // path: minoc/endpoint/{pre-auth}/cadc:TEST/{uuid}.fits == 5
+                        Assert.assertEquals(5, elems.length);
+                        Assert.assertEquals("cadc:TEST", elems[3]);
 
                         SiteLocation location2 = new SiteLocation(site2.getID());
                         artifactDAO.addSiteLocation(artifact, location2);
@@ -257,4 +285,102 @@ public class NegotiationTest extends RavenTest {
         }
     }
     
+    
+    @Test
+    public void testMultiProtocol() {
+        List<Protocol> protos = new ArrayList<>();
+        // https+anon
+        Protocol p = new Protocol(VOS.PROTOCOL_HTTPS_GET);
+        protos.add(p);
+
+        // https+cert
+        p = new Protocol(VOS.PROTOCOL_HTTPS_GET);
+        p.setSecurityMethod(Standards.SECURITY_METHOD_CERT);
+        protos.add(p);
+
+        // https+cookie
+        p = new Protocol(VOS.PROTOCOL_HTTPS_GET);
+        p.setSecurityMethod(Standards.SECURITY_METHOD_COOKIE);
+        protos.add(p);
+
+        // http+anon
+        p = new Protocol(VOS.PROTOCOL_HTTP_GET);
+        protos.add(p);
+        
+        // http+cookie
+        p = new Protocol(VOS.PROTOCOL_HTTP_GET);
+        p.setSecurityMethod(Standards.SECURITY_METHOD_COOKIE);
+        protos.add(p);
+        
+        // sshfs
+        p = new Protocol(VOS.PROTOCOL_SSHFS);
+        protos.add(p);
+                        
+        try {
+            Subject.doAs(userSubject, new PrivilegedExceptionAction<Object>() {
+                public Object run() throws Exception {
+
+                    URI resourceID1 = URI.create("ivo://negotiation-test-site1");
+                    StorageSite site1 = new StorageSite(resourceID1, "site1", true, true);
+
+                    URI artifactURI = URI.create("cadc:TEST/" + UUID.randomUUID() + ".fits");
+                    URI checksum = URI.create("md5:d41d8cd98f00b204e9800998ecf8427e");
+                    Artifact artifact = new Artifact(artifactURI, checksum, new Date(), 1L);
+
+                    try {
+                        siteDAO.put(site1);
+
+                        Transfer transfer = new Transfer(artifactURI, Direction.pullFromVoSpace, protos);
+                        transfer.version = VOS.VOSPACE_21;
+
+                        artifactDAO.put(artifact);
+                        
+                        SiteLocation location1 = new SiteLocation(site1.getID());
+                        artifactDAO.addSiteLocation(artifact, location1);
+
+                        Transfer response = negotiate(transfer);
+                        
+                        // expect: 3 https supported, no http
+                        Assert.assertEquals("protos supported", 3, response.getAllEndpoints().size());
+                        
+                        for (Protocol ap : response.getProtocols()) {
+                            String surl = ap.getEndpoint();
+                            log.info("endpoint: " + surl + " " + ap.getSecurityMethod());
+                            URL url = new URL(surl);
+                            
+                            if (VOS.PROTOCOL_HTTPS_GET.equals(ap.getUri())) {
+                                Assert.assertEquals("https", url.getProtocol());
+                            } else if (VOS.PROTOCOL_HTTP_GET.equals(ap.getUri())) {
+                                Assert.assertEquals("http", url.getProtocol());
+                            } else {
+                                Assert.fail("unexpected response protocol: " + ap.getUri());
+                            }
+                            
+                            String path = url.getPath().substring(1);
+                            String[] elems = path.split("/");
+                            // path: minoc/endpoint/{pre-auth}/cadc:TEST/{uuid}.fits == 5
+                            
+                            if (ap.getSecurityMethod() == null) {
+                                Assert.assertEquals("pre-auth required", 5, elems.length); // pre-auth required
+                                Assert.assertEquals("cadc:TEST", elems[3]);
+                            } else {
+                                Assert.assertEquals("pre-auth absent", 4, elems.length); // pre-auth absent: caller authenticates to files service
+                                Assert.assertEquals("cadc:TEST", elems[2]);
+                            }
+                        }
+
+                        return null;
+
+                    } finally {
+                        // cleanup sites
+                        siteDAO.delete(site1.getID());
+                        artifactDAO.delete(artifact.getID());
+                    }
+                }
+            });
+        } catch (Exception e) {
+            log.error("unexpected exception", e);
+            Assert.fail("unexpected exception: " + e);
+        }
+    }
 }
