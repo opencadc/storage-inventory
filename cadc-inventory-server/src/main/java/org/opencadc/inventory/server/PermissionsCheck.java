@@ -79,6 +79,7 @@ import java.net.URI;
 import java.security.AccessControlException;
 import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
+import java.security.cert.CertificateException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -152,19 +153,25 @@ public class PermissionsCheck {
         // rather than getting all groups... experiment to determine threshold?
         // unfortunately, the speed of GroupClient.getGroups() will also depend on how many groups the
         // caller belongs to...
-        LocalAuthority loc = new LocalAuthority();
-        URI resourceID = loc.getServiceURI(Standards.GMS_SEARCH_01.toString());
-        GroupClient client = GroupUtil.getGroupClient(resourceID);
-        List<GroupURI> userGroups = client.getMemberships();
-        for (GroupURI gg : granted) {
-            for (GroupURI userGroup : userGroups) {
-                if (gg.equals(userGroup)) {
-                    this.logInfo.setMessage("read grant: " + gg);
-                    return;
+        try {
+            if (CredUtil.checkCredentials()) {
+                LocalAuthority loc = new LocalAuthority();
+                URI resourceID = loc.getServiceURI(Standards.GMS_SEARCH_01.toString());
+                GroupClient client = GroupUtil.getGroupClient(resourceID);
+                List<GroupURI> userGroups = client.getMemberships();
+                for (GroupURI gg : granted) {
+                    for (GroupURI userGroup : userGroups) {
+                        if (gg.equals(userGroup)) {
+                            this.logInfo.setMessage("read grant: " + gg);
+                            return;
+                        }
+                    }
                 }
             }
+        } catch (CertificateException ex) {
+            throw new AccessControlException("read permission denied (invalid delegated client certificate)");
         }
-
+        
         throw new AccessControlException("read permission denied");
     }
 
@@ -210,17 +217,23 @@ public class PermissionsCheck {
         // rather than getting all groups... experiment to determine threshold?
         // unfortunately, the speed of GroupClient.getGroups() will also depend on how many groups the
         // caller belongs to...
-        LocalAuthority loc = new LocalAuthority();
-        URI resourceID = loc.getServiceURI(Standards.GMS_SEARCH_01.toString());
-        GroupClient client = GroupUtil.getGroupClient(resourceID);
-        List<GroupURI> userGroups = client.getMemberships();
-        for (GroupURI gg : granted) {
-            for (GroupURI userGroup : userGroups) {
-                if (gg.equals(userGroup)) {
-                    this.logInfo.setMessage("write grant: " + gg);
-                    return;
+        try {
+            if (CredUtil.checkCredentials()) {
+                LocalAuthority loc = new LocalAuthority();
+                URI resourceID = loc.getServiceURI(Standards.GMS_SEARCH_01.toString());
+                GroupClient client = GroupUtil.getGroupClient(resourceID);
+                List<GroupURI> userGroups = client.getMemberships();
+                for (GroupURI gg : granted) {
+                    for (GroupURI userGroup : userGroups) {
+                        if (gg.equals(userGroup)) {
+                            this.logInfo.setMessage("write grant: " + gg);
+                            return;
+                        }
+                    }
                 }
             }
+        } catch (CertificateException ex) {
+            throw new AccessControlException("read permission denied (invalid delegated client certificate)");
         }
 
         throw new AccessControlException("read permission denied");
