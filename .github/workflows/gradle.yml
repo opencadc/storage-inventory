@@ -28,6 +28,9 @@ jobs:
     - name: build and test cadc-inventory-util
       run: cd cadc-inventory-util && gradle --info clean build javadoc checkstyleMain install
       
+    - name: build and test cadc-inventory-server
+      run: cd cadc-inventory-server && gradle --info clean build javadoc checkstyleMain install
+      
     - name: build and test cadc-storage-adapter
       run: cd cadc-storage-adapter && gradle --info clean build javadoc checkstyleMain install
       

@@ -65,56 +65,32 @@
 ************************************************************************
 */
 
-package org.opencadc.inventory.db;
+package org.opencadc.luskan;
 
-import java.util.UUID;
+import ca.nrc.cadc.tap.schema.FunctionDesc;
+import ca.nrc.cadc.tap.schema.TapDataType;
+import ca.nrc.cadc.tap.schema.TapSchemaDAO;
+import java.util.List;
 import org.apache.log4j.Logger;
-import org.opencadc.inventory.Artifact;
-import org.opencadc.inventory.StorageLocation;
-import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
- * Store ObsoleteStorageLocation in database.
- * 
+ *
  * @author pdowler
  */
-public class ObsoleteStorageLocationDAO extends AbstractDAO<ObsoleteStorageLocation> {
-    private static final Logger log = Logger.getLogger(ObsoleteStorageLocationDAO.class);
+public class TapSchemaDAOImpl  extends TapSchemaDAO {
+    private static final Logger log = Logger.getLogger(TapSchemaDAOImpl.class);
 
-    public ObsoleteStorageLocationDAO() {
-        super(true);
+    public TapSchemaDAOImpl() {
+        super();
     }
     
-    public ObsoleteStorageLocationDAO(AbstractDAO src) {
-        super(src);
-    }
-    
-    public ObsoleteStorageLocation get(UUID id) {
-        return super.get(ObsoleteStorageLocation.class, id);
-    }
-    
-    public ObsoleteStorageLocation get(StorageLocation loc) {
-        if (loc == null) {
-            throw new IllegalArgumentException("location cannot be null");
-        }
-        checkInit();
-        log.debug("GET: " + loc);
-        long t = System.currentTimeMillis();
+    @Override
+    protected List<FunctionDesc> getFunctionDescs() {
+        List<FunctionDesc> ret = super.getFunctionDescs();
 
-        try {
-            JdbcTemplate jdbc = new JdbcTemplate(dataSource);
-            
-            SQLGenerator.ObsoleteStorageLocationGet get = ( SQLGenerator.ObsoleteStorageLocationGet) gen.getEntityGet(ObsoleteStorageLocation.class);
-            get.setLocation(loc);
-            ObsoleteStorageLocation o = get.execute(jdbc);
-            return o;
-        } finally {
-            long dt = System.currentTimeMillis() - t;
-            log.debug("GET: " + loc + " " + dt + "ms");
-        }
-    }
-
-    public void delete(UUID id) {
-        super.delete(ObsoleteStorageLocation.class, id);
+        ret.add(new FunctionDesc("now", TapDataType.TIMESTAMP));
+        ret.add(new FunctionDesc("split_part", TapDataType.STRING));
+        
+        return ret;
     }
 }

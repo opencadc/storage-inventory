@@ -70,9 +70,7 @@ package org.opencadc.raven;
 import ca.nrc.cadc.auth.AuthMethod;
 import ca.nrc.cadc.auth.AuthenticationUtil;
 import ca.nrc.cadc.net.ResourceNotFoundException;
-import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.reg.Standards;
-import ca.nrc.cadc.reg.client.LocalAuthority;
 import ca.nrc.cadc.reg.client.RegistryClient;
 import ca.nrc.cadc.rest.InlineContentException;
 import ca.nrc.cadc.rest.InlineContentHandler;
@@ -90,17 +88,14 @@ import java.io.InputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
-import java.security.AccessControlException;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
-import java.util.TreeSet;
+import java.util.UUID;
 import org.apache.log4j.Logger;
-import org.opencadc.gms.GroupClient;
-import org.opencadc.gms.GroupURI;
-import org.opencadc.gms.GroupUtil;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.SiteLocation;
@@ -109,9 +104,10 @@ import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.DeletedEventDAO;
 import org.opencadc.inventory.db.SQLGenerator;
 import org.opencadc.inventory.db.StorageSiteDAO;
+import org.opencadc.inventory.server.PermissionsCheck;
 import org.opencadc.permissions.ReadGrant;
 import org.opencadc.permissions.TokenUtil;
-import org.opencadc.permissions.client.PermissionsClient;
+import org.opencadc.permissions.WriteGrant;
 
 /**
  * Given a transfer request object return a transfer response object with all
@@ -210,41 +206,33 @@ public class PostAction extends RestAction {
 
     /**
      * Perform transfer negotiation.
-     * TODO: add support for write negotiation (pushToVoSpace and PROTOCOL_HTTPS_PUT)
      */
     @Override
     public void doAction() throws Exception {
         
         TransferReader reader = new TransferReader();
         InputStream in = (InputStream) syncInput.getContent(INLINE_CONTENT_TAG);
-        Transfer transfer = reader.read(in, null);
+        final Transfer transfer = reader.read(in, null);
         
         log.debug("transfer request: " + transfer);
-        if (!Direction.pullFromVoSpace.equals(transfer.getDirection())) {
+        Direction direction = transfer.getDirection();
+        if (!Direction.pullFromVoSpace.equals(direction) && !Direction.pushToVoSpace.equals(direction)) {
             throw new IllegalArgumentException("direction not supported: " + transfer.getDirection());
         }
         
-        // only support https over anonymous auth method for now
-        // TODO: if the protocol includes an auth method that the storage site supports, generate a non-token URL
-        Protocol supportedProtocol = new Protocol(VOS.PROTOCOL_HTTPS_GET);
-        if (!transfer.getProtocols().contains(supportedProtocol)) {
-            throw new UnsupportedOperationException("no supported protocols (require https with anon security method)");
-        }
-        transfer.getProtocols().clear();
-        
-        // ensure artifact uri is valid and exists
         URI artifactURI = transfer.getTarget();
         InventoryUtil.validateArtifactURI(PostAction.class, artifactURI);
         Artifact artifact = artifactDAO.get(artifactURI);
         if (artifact == null) {
             throw new ResourceNotFoundException(artifactURI.toString());
         }
-        
-        // TODO: checkReadPermission for pullFromVoSpace/GET
-        // TODO: checkWritePermission for pushToVoSpace/PUT
-        // TODO: checkReadPermission and checkWritePermission are identical in minoc so move to a
-        //       service utility library rather than implement here
-        checkReadPermission(artifactURI);
+
+        PermissionsCheck permissionsCheck = new PermissionsCheck(artifactURI, this.authenticateOnly, this.logInfo);
+        if (direction.equals(Direction.pullFromVoSpace)) {
+            permissionsCheck.checkReadPermission(this.readGrantServices);
+        } else {
+            permissionsCheck.checkWritePermission(this.writeGrantServices);
+        }
         
         // get the user for logging
         String user = AuthMethod.ANON.toString();
@@ -258,95 +246,82 @@ public class PostAction extends RestAction {
         
         // gather all copies of the artifact
         if (artifact.siteLocations.isEmpty()) {
-            throw new ResourceNotFoundException("no copies");
+            throw new ResourceNotFoundException("no sitelocation's found");
         }
         
         // create an auth token
-        String authToken = TokenUtil.generateToken(artifactURI, ReadGrant.class, user);
+        String authToken;
+        if (direction.equals(Direction.pullFromVoSpace)) {
+            authToken = TokenUtil.generateToken(artifactURI, ReadGrant.class, user);
+        } else {
+            authToken = TokenUtil.generateToken(artifactURI, WriteGrant.class, user);
+        }
         
         RegistryClient regClient = new RegistryClient();
         StorageSiteDAO storageSiteDAO = new StorageSiteDAO(artifactDAO);
-        StorageSite storageSite = null;
-        URI resourceID = null;
-        URL baseURL = null;
-        String endpointURL = null;
+        Set<StorageSite> sites = storageSiteDAO.list(); // this set could be cached
         
-        // TODO: Cache the full list of storage sites (using storageSiteDAO.list())
-        // and check for updates to that list periodically (every 5 min or so)
-        
-        // produce URLs to each of the copies
+        // produce URLs to each of the copies for each of the protocols
+        List<Protocol> protos = new ArrayList<>();
         for (SiteLocation site : artifact.siteLocations) {
-            storageSite = storageSiteDAO.get(site.getSiteID());
-            resourceID = storageSite.getResourceID();
-            baseURL = regClient.getServiceURL(resourceID, Standards.SI_FILES, AuthMethod.ANON);
-            log.debug("base url for site " + site.toString() + ": " + baseURL);
-            if (baseURL != null) {
-                endpointURL = baseURL.toString() + "/" + authToken + "/" + artifactURI.toString();
-                Protocol p = new Protocol(supportedProtocol.getUri());
-                if (transfer.version == VOS.VOSPACE_21) {
-                    p.setSecurityMethod(Standards.SECURITY_METHOD_ANON);
+            StorageSite storageSite = getSite(sites, site.getSiteID());
+            for (Protocol proto : transfer.getProtocols()) {
+                if ((direction.equals(Direction.pullFromVoSpace) && storageSite.getAllowRead())
+                        || (direction.equals(Direction.pushToVoSpace) && storageSite.getAllowWrite())) {
+                    URI resourceID = storageSite.getResourceID();
+                    AuthMethod am = AuthMethod.ANON;
+                    if (proto.getSecurityMethod() != null) {
+                        am = Standards.getAuthMethod(proto.getSecurityMethod());
+                    }
+                    URL baseURL = regClient.getServiceURL(resourceID, Standards.SI_FILES, am);
+                    log.debug("base url for site " + site.toString() + ": " + baseURL);
+                    if (baseURL != null && protocolCompat(proto, baseURL)) {
+                        StringBuilder sb = new StringBuilder();
+                        sb.append(baseURL.toExternalForm()).append("/");
+                        if (AuthMethod.ANON.equals(am)) {
+                            sb.append(authToken).append("/");
+                        }
+                        sb.append(artifactURI.toASCIIString());
+                        Protocol p = new Protocol(proto.getUri());
+                        if (transfer.version == VOS.VOSPACE_21) {
+                            p.setSecurityMethod(proto.getSecurityMethod());
+                        }
+                        p.setEndpoint(sb.toString());
+                        protos.add(p);
+                        log.debug("added: " + p);
+                    }
                 }
-                p.setEndpoint(endpointURL);
-                transfer.getProtocols().add(p);
-                log.debug("added endpoint url: " + endpointURL);
             }
         }
         
+        // TODO: sort protocols as caller will try them in order until success
+        // - depends on client and site proximity
+        // - sort pre-auth before non-pre-auth because we already did the permission check
+        
+        Transfer ret = new Transfer(artifactURI, direction, protos);
+        ret.version = VOS.VOSPACE_21;
+                        
         TransferWriter transferWriter = new TransferWriter();
-        transferWriter.write(transfer, syncOutput.getOutputStream());
+        transferWriter.write(ret, syncOutput.getOutputStream());
     }
     
-    private void checkReadPermission(URI artifactURI) throws AccessControlException, TransientException {
-
-        if (authenticateOnly) {
-            log.warn(DEV_AUTH_ONLY_KEY + "=true: allowing unrestricted access");
-            return;
-        }
-
-        // TODO: could call multiple services in parallel
-        Set<GroupURI> granted = new TreeSet<>();
-        for (URI ps : readGrantServices) {
-            try {
-                PermissionsClient pc = new PermissionsClient(ps);
-                ReadGrant grant = pc.getReadGrant(artifactURI);
-                if (grant != null) {
-                    if (grant.isAnonymousAccess()) {
-                        logInfo.setMessage("read grant: anonymous");
-                        return;
-                    }
-                    granted.addAll(grant.getGroups());
-                }
-            } catch (ResourceNotFoundException ex) {
-                log.warn("failed to find granting service: " + ps + " -- cause: " + ex);
+    private StorageSite getSite(Set<StorageSite> sites, UUID id) {
+        for (StorageSite s : sites) {
+            if (s.getID().equals(id)) {
+                return s;
             }
         }
-        if (granted.isEmpty()) {
-            throw new AccessControlException("permission denied: no read grants for " + artifactURI);
-        }
-
-        // TODO: add profiling
-        // if the granted group list is small, it would be better to use GroupClient.isMember()
-        // rather than getting all groups... experiment to determine threshold?
-        // unfortunately, the speed of GroupClient.getGroups() will also depend on how many groups the
-        // caller belongs to...
-        LocalAuthority loc = new LocalAuthority();
-        URI resourceID = loc.getServiceURI(Standards.GMS_SEARCH_01.toString());
-        GroupClient client = GroupUtil.getGroupClient(resourceID);
-        List<GroupURI> userGroups = client.getMemberships();
-        for (GroupURI gg : granted) {
-            for (GroupURI userGroup : userGroups) {
-                if (gg.equals(userGroup)) {
-                    logInfo.setMessage("read grant: " + gg);
-                    return;
-                }
-            }
-        }
-
-        throw new AccessControlException("read permission denied");
+        throw new IllegalStateException("BUG: could not find StorageSite with id=" +  id);
     }
-
-    protected DeletedEventDAO getDeletedEventDAO(ArtifactDAO src) {
-        return new DeletedEventDAO(src);
+    
+    private boolean protocolCompat(Protocol p, URL u) {
+        if ("https".equals(u.getProtocol())) {
+            return VOS.PROTOCOL_HTTPS_GET.equals(p.getUri()) || VOS.PROTOCOL_HTTPS_PUT.equals(p.getUri());
+        }
+        if ("http".equals(u.getProtocol())) {
+            return VOS.PROTOCOL_HTTP_GET.equals(p.getUri()) || VOS.PROTOCOL_HTTP_PUT.equals(p.getUri());
+        }
+        return false;
     }
 
     /**

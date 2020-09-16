@@ -31,8 +31,8 @@ org.opencadc.minoc.db.schema={schema}
 ```
 The following optional keys configure minoc to use external service(s) to obtain grant information in order
 to perform authorization checks:
-# permission granting service settings (optional)
 ```
+# permission granting services (optional)
 org.opencadc.minoc.readGrantProvider={resourceID of a permission granting service}
 org.opencadc.minoc.writeGrantProvider={resourceID of a permission granting service}
 ```

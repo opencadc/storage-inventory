@@ -76,7 +76,6 @@ import java.util.Map;
 import java.util.TreeMap;
 
 import org.apache.log4j.Logger;
-import org.opencadc.inventory.DeletedArtifactEvent;
 import org.opencadc.inventory.DeletedStorageLocationEvent;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.DeletedEventDAO;
@@ -91,8 +90,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 public class InventoryEnvironment {
     final StorageSiteDAO storageSiteDAO = new StorageSiteDAO();
     final ArtifactDAO artifactDAO = new ArtifactDAO();
-    final DeletedEventDAO<DeletedArtifactEvent> deletedArtifactEventDAO = new DeletedEventDAO<>();
-    final DeletedEventDAO<DeletedStorageLocationEvent> deletedStorageLocationEventDAO = new DeletedEventDAO<>();
+    final TestUtil.DeletedArtifactEventDAO deletedArtifactEventDAO = new TestUtil.DeletedArtifactEventDAO();
+    final TestUtil.DeletedStorageLocationEventDAO deletedStorageLocationEventDAO = new TestUtil.DeletedStorageLocationEventDAO();
     final HarvestStateDAO harvestStateDAO = new HarvestStateDAO();
     final Map<String, Object> daoConfig = new TreeMap<>();
     final String jndiPath = "jdbc/InventoryEnvironment";

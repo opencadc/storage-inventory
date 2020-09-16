@@ -134,25 +134,19 @@ public class StorageTapService implements AvailabilityPlugin {
                 return new AvailabilityStatus(false, null, null, null, RestAction.STATE_READ_ONLY_MSG);
             }
 
-            DataSource tapadm = DBUtil.findJNDIDataSource("jdbc/tapadm");
-            InitDatabaseTS tsi = new InitDatabaseTS(tapadm, null, "tap_schema");
-            tsi.doInit();
-
-            DataSource uws = DBUtil.findJNDIDataSource("jdbc/tapadm");
-            InitDatabaseUWS uwsi = new InitDatabaseUWS(uws, null, "uws");
-            uwsi.doInit();
-
             // check for a certficate needed to perform network ops
             CheckCertificate checkCert = new CheckCertificate(SERVOPS_PEM_FILE);
             checkCert.check();
             log.info("cert check ok");
 
-            // create the TAP schema
-            InitLuskanSchemaContent lsc = new InitLuskanSchemaContent(tapadm, null, "tap_schema");
-            lsc.doInit();
-
-            // run a couple of queries
+            // check connection pools
             CheckResource cr = new CheckDataSource("jdbc/tapuser", TAP_TEST);
+            cr.check();
+            
+            cr = new CheckDataSource("jdbc/tapadm", TAP_TEST);
+            cr.check();
+            
+            cr = new CheckDataSource("jdbc/tapadm", UWS_TEST);
             cr.check();
 
             // TODO - These do not work for intTest unless the testing environment deploys these services.

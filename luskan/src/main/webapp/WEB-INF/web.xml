@@ -95,6 +95,10 @@
         <servlet-name>TempStorageServlet</servlet-name>
         <servlet-class>ca.nrc.cadc.rest.RestServlet</servlet-class>
         <init-param>
+            <param-name>init</param-name>
+            <param-value>org.opencadc.luskan.LuskanInitAction</param-value>
+        </init-param>
+        <init-param>
             <param-name>get</param-name>
             <param-value>org.opencadc.luskan.TempStorageGetAction</param-value>
         </init-param>

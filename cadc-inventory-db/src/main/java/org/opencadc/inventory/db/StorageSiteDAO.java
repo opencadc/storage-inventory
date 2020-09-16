@@ -81,7 +81,11 @@ public class StorageSiteDAO extends AbstractDAO<StorageSite> {
     private static final Logger log = Logger.getLogger(StorageSiteDAO.class);
 
     public StorageSiteDAO() { 
-        super();
+        super(true);
+    }
+
+    public StorageSiteDAO(boolean origin) {
+        super(origin);
     }
 
     public StorageSiteDAO(AbstractDAO dao) {
