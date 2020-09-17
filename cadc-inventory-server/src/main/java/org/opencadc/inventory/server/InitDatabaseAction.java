@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2019.                            (c) 2019.
+*  (c) 2020.                            (c) 2020.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -65,58 +65,52 @@
 ************************************************************************
 */
 
-package org.opencadc.minoc;
+package org.operncadc.inventory.server;
 
-import ca.nrc.cadc.rest.SyncOutput;
+import ca.nrc.cadc.db.DBUtil;
+import ca.nrc.cadc.rest.InitAction;
+import java.util.Map;
+import java.util.TreeMap;
+import javax.sql.DataSource;
 import org.apache.log4j.Logger;
-import org.opencadc.inventory.Artifact;
-import org.opencadc.inventory.InventoryUtil;
-import org.opencadc.permissions.ReadGrant;
+import org.opencadc.inventory.db.version.InitDatabase;
 
 /**
- * Interface with storage and inventory to get the metadata of an artifact.
- *
- * @author majorb
+ * Base class for storage service database initialisation.
+ * 
+ * @author pdowler
  */
-public class HeadAction extends ArtifactAction {
-    
-    private static final Logger log = Logger.getLogger(HeadAction.class);
+public abstract class InitDatabaseAction extends InitAction {
+    private static final Logger log = Logger.getLogger(InitDatabaseAction.class);
 
-    /**
-     * Default, no-arg constructor.
-     */
-    public HeadAction() {
-        super();
+    protected final Map<String,Object> daoConfig = new TreeMap<>();
+    
+    protected InitDatabaseAction() {
     }
 
-    /**
-     * Return the artifact metadata as repsonse headers.
-     */
     @Override
-    public void doAction() throws Exception {
-        
-        initAndAuthorize(ReadGrant.class);
-        
-        Artifact artifact = getArtifact(artifactURI);
-        setHeaders(artifact, syncOutput);
+    public void doInit() {
+        initDaoConfig();
+        initDatabase();
     }
     
     /**
-     * Set the HTTP response headers for an artifact.
-     * @param artifact The artifact with metadata
-     * @param syncOutput The target response
+     * Add content to the (protected) daoConfig map.
      */
-    public static void setHeaders(Artifact artifact, SyncOutput syncOutput) {
-        syncOutput.setHeader("Content-MD5", artifact.getContentChecksum().getSchemeSpecificPart());
-        syncOutput.setHeader("Content-Length", artifact.getContentLength());
-        String filename = InventoryUtil.computeArtifactFilename(artifact.getURI());
-        syncOutput.setHeader("Content-Disposition", "attachment; filename=\"" + filename + "\"");
-        if (artifact.contentEncoding != null) {
-            syncOutput.setHeader("Content-Encoding", artifact.contentEncoding);
-        }
-        if (artifact.contentType != null) {
-            syncOutput.setHeader("Content-Type", artifact.contentType);
+    protected abstract void initDaoConfig();
+    
+    private void initDatabase() {
+        log.info("initDatabase: START");
+        try {
+            String jndiDataSourceName = (String) daoConfig.get("jndiDataSourceName");
+            String database = (String) daoConfig.get("database");
+            String schema = (String) daoConfig.get("schema");
+            DataSource ds = DBUtil.findJNDIDataSource(jndiDataSourceName);
+            InitDatabase init = new InitDatabase(ds, database, schema);
+            init.doInit();
+            log.info("initDatabase: " + jndiDataSourceName + " " + schema + " OK");
+        } catch (Exception ex) {
+            throw new IllegalStateException("check/init database failed", ex);
         }
     }
-
 }
