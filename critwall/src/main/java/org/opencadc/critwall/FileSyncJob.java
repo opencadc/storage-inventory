@@ -156,10 +156,11 @@ public class FileSyncJob implements Runnable {
                 msg = " transfer negotiation failed: " + artifactID + " (" + ex + ")";
                 return;
             }
-
+            
             int retryCount = 0;
             try {
                 while (!urlList.isEmpty() && retryCount < RETRY_DELAY.length) {
+                    log.info("FileSyncJob.SYNC " + artifactID + " urls=" + urlList.size() + " attempt=" + retryCount);
                     log.debug("attempt " + retryCount + " to sync artifact " + this.artifactID);
                     StorageMetadata storageMeta = syncArtifact(urlList);
 
@@ -173,6 +174,9 @@ public class FileSyncJob implements Runnable {
                     }
 
                     Thread.sleep(RETRY_DELAY[retryCount++]);
+                }
+                if (!success) {
+                    msg = " no more URLs to try";
                 }
             } catch (IllegalStateException ex) {
                 log.debug("artifact sync aborted: " + this.artifactID, ex);
