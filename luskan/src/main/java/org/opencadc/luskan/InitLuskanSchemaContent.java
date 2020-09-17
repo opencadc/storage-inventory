@@ -70,7 +70,6 @@ package org.opencadc.luskan;
 import ca.nrc.cadc.db.version.InitDatabase;
 
 import ca.nrc.cadc.util.MultiValuedProperties;
-import ca.nrc.cadc.util.PropertiesReader;
 import java.net.URL;
 import javax.sql.DataSource;
 import org.apache.log4j.Logger;
@@ -92,12 +91,6 @@ public class InitLuskanSchemaContent extends InitDatabase {
     public static final String MODEL_NAME = "luskan-schema";
     public static final String MODEL_VERSION = "0.5.2";
     public static final String PREV_MODEL_VERSION = "0.5.1";
-
-    // config keys
-    private static final String LUSKAN_KEY = InitLuskanSchemaContent.class.getPackage().getName();
-    static final String URI_KEY = LUSKAN_KEY + ".resourceID";
-    static final String TMPDIR_KEY = LUSKAN_KEY + ".resultsDir";
-    static final String STORAGE_SITE_KEY = LUSKAN_KEY + ".isStorageSite";
 
     // the SQL is tightly coupled to cadc-tap-schema table names (for TAP-1.1)
     static String[] CREATE_SQL = new String[] {
@@ -133,47 +126,8 @@ public class InitLuskanSchemaContent extends InitDatabase {
     @Override
     public boolean doInit() {
         boolean ret = super.doInit();
-        this.props = getConfig();
+        this.props = LuskanConfig.getConfig();
         return ret;
-    }
-
-    /**
-     * Read config file and verify that all required entries are present.
-     *
-     * @return MultiValuedProperties containing the application config
-     * @throws IllegalStateException if required config items are missing
-     */
-    static MultiValuedProperties getConfig() {
-        PropertiesReader r = new PropertiesReader("luskan.properties");
-        MultiValuedProperties props = r.getAllProperties();
-
-        StringBuilder sb = new StringBuilder();
-        sb.append("incomplete config: ");
-        boolean ok = true;
-
-        String suri = props.getFirstPropertyValue(URI_KEY);
-        sb.append("\n\t").append(URI_KEY);
-        if (suri == null) {
-            sb.append("MISSING");
-            ok = false;
-        } else {
-            sb.append("OK");
-        }
-
-        String srd = props.getFirstPropertyValue(TMPDIR_KEY);
-        sb.append("\n\t").append(TMPDIR_KEY);
-        if (srd == null) {
-            sb.append("MISSING");
-            ok = false;
-        } else {
-            sb.append("OK");
-        }
-
-        if (!ok) {
-            throw new IllegalStateException(sb.toString());
-        }
-
-        return props;
     }
 
     @Override

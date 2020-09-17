@@ -69,103 +69,55 @@
 
 package org.opencadc.luskan;
 
-import ca.nrc.cadc.tap.TapQuery;
-import ca.nrc.cadc.tap.schema.TapSchema;
-import ca.nrc.cadc.util.Log4jInit;
 import ca.nrc.cadc.util.MultiValuedProperties;
-import ca.nrc.cadc.uws.Parameter;
-import java.util.ArrayList;
-import java.util.List;
-import org.apache.log4j.Level;
-import org.apache.log4j.Logger;
-import org.junit.Assert;
-import org.junit.Test;
+import ca.nrc.cadc.util.PropertiesReader;
 
-public class SiteLocationsConverterTest {
-    private static final Logger log = Logger.getLogger(SiteLocationsConverterTest.class);
+public class LuskanConfig {
 
-    static {
-        Log4jInit.setLevel("org.opencadc.luskan", Level.INFO);
-    }
+    // config keys
+    private static final String LUSKAN_KEY = LuskanConfig.class.getPackage().getName();
+    static final String URI_KEY = LUSKAN_KEY + ".resourceID";
+    static final String TMPDIR_KEY = LUSKAN_KEY + ".resultsDir";
+    static final String STORAGE_SITE_KEY = LUSKAN_KEY + ".isStorageSite";
 
-    private static final TapSchema tapSchema = TestUtil.loadTapSchema();
+    public LuskanConfig() { }
 
-    private static final String selectList =
-        "inventory.artifact.uri, inventory.artifact.uribucket, inventory.artifact.contentchecksum, "
-            + "inventory.artifact.contentLastmodified, inventory.artifact.contentlength, "
-            + "inventory.artifact.contenttype, inventory.artifact.contentencoding, inventory.artifact.lastmodified, "
-            + "inventory.artifact.metachecksum, inventory.artifact.id ";
-    private static final String fromClause = "FROM inventory.artifact";
-    private static final String isNotNullConstraint = "(inventory.artifact.sitelocations IS NOT NULL)";
+    /**
+     * Read config file and verify that all required entries are present.
+     *
+     * @return MultiValuedProperties containing the application config
+     * @throws IllegalStateException if required config items are missing
+     */
+    static MultiValuedProperties getConfig() {
+        PropertiesReader r = new PropertiesReader("luskan.properties");
+        MultiValuedProperties props = r.getAllProperties();
 
-    @Test
-    public void testSelectAll() {
-        String query = "select * from inventory.artifact";
-        String expected = "SELECT " + selectList + fromClause;
-        doTest(query, expected, null);
-    }
+        StringBuilder sb = new StringBuilder();
+        sb.append("incomplete config: ");
+        boolean ok = true;
 
-    @Test
-    public void testSelectColumns() {
-        String query = "select uri, lastmodified from inventory.artifact";
-        String expected = "SELECT uri, lastModified " + fromClause + " WHERE " + isNotNullConstraint;
-        doTest(query, expected, "true");
-    }
-
-    @Test
-    public void testSelectColumnWithAlias() {
-        String query = "select uri as \"foo\" from inventory.artifact";
-        String expected = "SELECT uri as \"foo\" " + fromClause + " WHERE " + isNotNullConstraint;
-        doTest(query, expected, "true");
-    }
-
-    @Test
-    public void testSelectWithWhere() {
-        String query = "select uri from inventory.artifact where uribucket = 1";
-        String expected = "SELECT uri " + fromClause + " WHERE (uribucket = 1) and " + isNotNullConstraint;
-        doTest(query, expected, "true");
-    }
-
-    private void doTest(final String query, final String expected, final String isStorageSite) {
-        try {
-            TestUtil.job.getParameterList().clear();
-            List<Parameter> params = new ArrayList<Parameter>();
-            params.add(new Parameter("QUERY", query));
-            log.debug("query: " + query);
-            TapQuery tq = new TestQuery(isStorageSite);
-            tq.setTapSchema(tapSchema);
-            TestUtil.job.getParameterList().addAll(params);
-            tq.setJob(TestUtil.job);
-            log.debug("expected: " + expected);
-            String sql = tq.getSQL();
-
-            sql = sql.toLowerCase();
-            Assert.assertTrue(sql.equalsIgnoreCase(expected));
-        } catch (Exception e) {
-            log.error("unexpected exception", e);
-            Assert.fail();
-        } finally {
-            TestUtil.job.getParameterList().clear();
-        }
-    }
-
-    private static class TestQuery extends AdqlQueryImpl {
-
-        private final String isStorageSite;
-        public TestQuery(String isStorageSite) {
-            this.isStorageSite = isStorageSite;
+        String suri = props.getFirstPropertyValue(URI_KEY);
+        sb.append("\n\t").append(URI_KEY);
+        if (suri == null) {
+            sb.append("MISSING");
+            ok = false;
+        } else {
+            sb.append("OK");
         }
 
-        @Override
-        protected MultiValuedProperties getProperties() {
-            return new MultiValuedProperties() {
-                @Override
-                public String getFirstPropertyValue(String value) {
-                    return isStorageSite;
-                }
-            };
+        String srd = props.getFirstPropertyValue(TMPDIR_KEY);
+        sb.append("\n\t").append(TMPDIR_KEY);
+        if (srd == null) {
+            sb.append("MISSING");
+            ok = false;
+        } else {
+            sb.append("OK");
         }
-    }
 
+        if (!ok) {
+            throw new IllegalStateException(sb.toString());
+        }
+
+        return props;
+    }
 }
-

@@ -79,36 +79,49 @@ import net.sf.jsqlparser.expression.operators.conditional.AndExpression;
 import net.sf.jsqlparser.expression.operators.relational.IsNullExpression;
 import net.sf.jsqlparser.schema.Column;
 import net.sf.jsqlparser.schema.Table;
+import net.sf.jsqlparser.statement.select.FromItem;
 import net.sf.jsqlparser.statement.select.PlainSelect;
 import org.apache.log4j.Logger;
 
 /**
- * Injects a `inventory.storagesite IS NOT NULL` into a WHERE clause.
+ * Injects a `inventory.storagelocation_storageid IS NOT NULL` into a WHERE clause.
  */
-public class SiteLocationsConverter extends SelectNavigator {
-    private static final Logger log = Logger.getLogger(SiteLocationsConverter.class);
+public class StorageLocationConverter extends SelectNavigator {
+    private static final Logger log = Logger.getLogger(StorageLocationConverter.class);
 
-    public SiteLocationsConverter() {
+    public StorageLocationConverter() {
         super(new ExpressionNavigator(), new ReferenceNavigator(), new FromItemNavigator());
     }
 
     @Override
     public void visit(PlainSelect ps) {
         log.debug("visit(PlainSelect) " + ps);
-        Expression isNotNullExpression = isNotNullExpression();
-        Expression where = ps.getWhere();
-        if (where == null) {
-            ps.setWhere(isNotNullExpression);
-        } else {
-            Parenthesis parenthesis = new Parenthesis(where);
-            Expression and = new AndExpression(parenthesis, isNotNullExpression);
-            ps.setWhere(and);
+        FromItem fromItem = ps.getFromItem();
+        if (fromItem instanceof Table) {
+            Table table = (Table) fromItem;
+            if (!table.getWholeTableName().equalsIgnoreCase("inventory.artifact")) {
+                return;
+            }
+            Expression isNotNullExpression = isNotNullExpression(table);
+            Expression where = ps.getWhere();
+            if (where == null) {
+                ps.setWhere(isNotNullExpression);
+            } else {
+                Parenthesis parenthesis = new Parenthesis(where);
+                Expression and = new AndExpression(parenthesis, isNotNullExpression);
+                ps.setWhere(and);
+            }
         }
     }
 
-    private Expression isNotNullExpression() {
-        Table artifact = new Table("inventory", "artifact");
-        Column sitelocations = new Column(artifact, "sitelocations");
+    private Expression isNotNullExpression(Table table) {
+        Table artifact;
+        if (table.getAlias() != null) {
+            artifact = new Table(null, table.getAlias());
+        } else {
+            artifact = table;
+        }
+        Column sitelocations = new Column(artifact, "storagelocation_storageid");
         IsNullExpression isNullExpression = new IsNullExpression();
         isNullExpression.setLeftExpression(sitelocations);
         isNullExpression.setNot(true);

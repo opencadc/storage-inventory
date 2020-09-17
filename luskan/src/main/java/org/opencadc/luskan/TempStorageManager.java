@@ -109,10 +109,10 @@ public class TempStorageManager implements ResultStore, UWSInlineContentHandler 
 
     public TempStorageManager() {
         try {
-            MultiValuedProperties props = InitLuskanSchemaContent.getConfig();
+            MultiValuedProperties props = LuskanConfig.getConfig();
 
-            String suri = props.getFirstPropertyValue(InitLuskanSchemaContent.URI_KEY);
-            log.info("system property: " + InitLuskanSchemaContent.URI_KEY + " = " + suri);
+            String suri = props.getFirstPropertyValue(LuskanConfig.URI_KEY);
+            log.info("system property: " + LuskanConfig.URI_KEY + " = " + suri);
             URI luskan = new URI(suri);
             
             RegistryClient regClient = new RegistryClient();
@@ -122,7 +122,7 @@ public class TempStorageManager implements ResultStore, UWSInlineContentHandler 
             this.baseResultsURL = serviceURL.toExternalForm() + "/results";
             log.info("resultsURL: " + baseResultsURL);
 
-            String srd = props.getFirstPropertyValue(InitLuskanSchemaContent.TMPDIR_KEY);
+            String srd = props.getFirstPropertyValue(LuskanConfig.TMPDIR_KEY);
             this.resultsDir = new File(srd);
             resultsDir.mkdirs();
             log.info("resultsDir: " + resultsDir.getCanonicalPath());

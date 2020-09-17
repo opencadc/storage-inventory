@@ -116,11 +116,11 @@ public class AdqlQueryImpl extends AdqlQuery {
         TableNameReferenceConverter tnrc = new TableNameReferenceConverter(tnc.map);
         super.navigatorList.add(new SelectNavigator(new ExpressionNavigator(), tnrc, tnc));
 
-        // add IS NOT NULL constraint for artifact.sitelocations when querying storage sites
+        // add IS NOT NULL constraint for artifact.storagelocation_storageid when querying storage sites
         MultiValuedProperties properties = getProperties();
-        String isStorageSite = properties.getFirstPropertyValue(InitLuskanSchemaContent.STORAGE_SITE_KEY);
+        String isStorageSite = properties.getFirstPropertyValue(LuskanConfig.STORAGE_SITE_KEY);
         if (isStorageSite != null) {
-            super.navigatorList.add(new SiteLocationsConverter());
+            super.navigatorList.add(new StorageLocationConverter());
         }
     }
 
@@ -137,6 +137,6 @@ public class AdqlQueryImpl extends AdqlQuery {
     }
 
     protected MultiValuedProperties getProperties() {
-        return InitLuskanSchemaContent.getConfig();
+        return LuskanConfig.getConfig();
     }
 }
