@@ -71,9 +71,9 @@ import ca.nrc.cadc.db.DBUtil;
 import ca.nrc.cadc.rest.InitAction;
 import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.util.PropertiesReader;
+import java.io.File;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
@@ -104,6 +104,7 @@ public class MinocInitAction extends InitAction {
     
     static final String SA_KEY = StorageAdapter.class.getName();
     
+    static final String PUBKEYFILE_KEY = MINOC_KEY + ".publicKeyFile";
     static final String READ_GRANTS_KEY = MINOC_KEY + ".readGrantProvider";
     static final String WRITE_GRANTS_KEY = MINOC_KEY + ".writeGrantProvider";
     
@@ -181,6 +182,21 @@ public class MinocInitAction extends InitAction {
             ok = false;
         } else {
             sb.append("OK");
+        }
+        
+        String pubkeyFileName = mvp.getFirstPropertyValue(PUBKEYFILE_KEY);
+        sb.append("\n\t").append(MinocInitAction.PUBKEYFILE_KEY).append(": ");
+        if (pubkeyFileName == null) {
+            sb.append("MISSING");
+            ok = false;
+        } else {
+            File pk = new File(System.getProperty("user.home") + "/config/" + pubkeyFileName);
+            if (!pk.exists()) {
+                sb.append(" NOT FOUND " + pk.getAbsolutePath());
+                ok = false;
+            } else {
+                sb.append("OK");
+            }
         }
 
         if (!ok) {

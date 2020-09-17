@@ -292,7 +292,7 @@ public abstract class InventoryUtil {
      * @param u the URI
      */
     public static void assignMetaChecksum(Entity ce, URI u) {
-        assertValidChecksumURI(InventoryUtil.class, "assignMetaChecksum", u);
+        assertValidChecksumURI(InventoryUtil.class, "metaChecksum", u);
         try {
             Field f = Entity.class.getDeclaredField("metaChecksum");
             f.setAccessible(true);
@@ -370,8 +370,8 @@ public abstract class InventoryUtil {
         try {
             b = HexUtil.toBytes(sval);
         } catch (IllegalArgumentException ex) {
-            throw new IllegalArgumentException("invalid Artifact.contentChecksum: " 
-                + uri + " contains invalid hex chars, expected <algorithm>:<hex value>");
+            throw new IllegalArgumentException("invalid checksum URI: " 
+                + uri + " contains invalid hex value, expected <algorithm>:<hex value>");
         }
         
         if ("md5".equals(alg)) {
