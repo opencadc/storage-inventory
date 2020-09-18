@@ -105,6 +105,12 @@ public class AdStorageQuery {
 
     class AdStorageMetadataRowMapper implements TapRowMapper<StorageMetadata> {
 
+        private StorageMetadata currentRow;
+
+        public AdStorageMetadataRowMapper() {
+            this.currentRow = null;
+        }
+
         @Override
         public StorageMetadata mapRow(List<Object> row) {
             Iterator i = row.iterator();
@@ -114,10 +120,6 @@ public class AdStorageQuery {
 
             // archive_files.uri
             URI storageID = (URI) i.next();
-
-            // Set up StorageLocation object first
-            StorageLocation sl = new StorageLocation(storageID);
-            sl.storageBucket = storageBucket;
 
             // archive_files.contentMD5 is just the hex value
             URI contentChecksum = null;
@@ -133,31 +135,47 @@ public class AdStorageQuery {
                 log.info("content length error (null): " + storageID.toString());
             }
 
-            // Build StorageMetadata object
-            StorageMetadata ret;
-            if (contentChecksum == null || (contentLength == null || contentLength == 0)) {
-                ret = new StorageMetadata(sl);
-            } else {
-                ret = new StorageMetadata(sl, contentChecksum, contentLength);
-            }
-            
-            ret.artifactURI = storageID;
-
-            // Set optional values into ret at this point - allowed to be null
             // archive_files.contentEncoding
             String contentEncoding = (String) i.next();
-            ret.contentEncoding = contentEncoding;
 
             // archive_files.contentType
             String contentType = (String) i.next();
-            ret.contentType = contentType;
 
             // archive_files.ingestDate
             Date contentLastModified = (Date) i.next();
-            ret.contentLastModified = contentLastModified;
-            log.debug("StorageMetadata: " + ret);
 
-            return ret;
+            // check for null uri(storageID) and log error
+            if (storageID == null) {
+                String sb =
+                    "ERROR: uri=null in ad.archive_files for archiveName=" + storageBucket
+                        + ",contentMD5=" + contentChecksum + ",fileSize=" + contentLength
+                        + ",contentEncoding=" + contentEncoding + ",contentType=" + contentType
+                        + ",ingestDate=" + contentLastModified;
+                log.error(sb);
+                return this.currentRow;
+            }
+
+            // Set up StorageLocation object first
+            StorageLocation storageLocation = new StorageLocation(storageID);
+            storageLocation.storageBucket = storageBucket;
+
+            // Build StorageMetadata object
+            StorageMetadata storageMetadata;
+            if (contentChecksum == null || (contentLength == null || contentLength == 0)) {
+                storageMetadata = new StorageMetadata(storageLocation);
+            } else {
+                storageMetadata = new StorageMetadata(storageLocation, contentChecksum, contentLength);
+            }
+            storageMetadata.artifactURI = storageID;
+
+            // Set optional values into ret at this point - allowed to be null
+            storageMetadata.contentEncoding = contentEncoding;
+            storageMetadata.contentType = contentType;
+            storageMetadata.contentLastModified = contentLastModified;
+            this.currentRow = storageMetadata;
+
+            log.debug("StorageMetadata: " + storageMetadata);
+            return storageMetadata;
         }
     }
 
