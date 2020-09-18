@@ -185,6 +185,9 @@ public class FileSyncJob implements Runnable {
                     | StorageEngageException | WriteException ex) {
                 log.debug("artifact sync error: " + this.artifactID, ex);
                 msg = " artifact sync error: " + this.artifactID + " (" + ex + ")";
+            } catch (Exception ex) {
+                log.debug("unexpected fail: " + this.artifactID, ex);
+                msg = " unexpected sync error: " + this.artifactID + " (" + ex + ")";
             }
         } finally {
             long dt = System.currentTimeMillis() - start;
