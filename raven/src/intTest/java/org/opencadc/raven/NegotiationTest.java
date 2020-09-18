@@ -163,9 +163,10 @@ public class NegotiationTest extends RavenTest {
                             negotiate(transfer);
                             Assert.fail("should have received file not found exception");
                         } catch (ResourceNotFoundException e) {
-                            // expected
+                            log.info("caught expected: " + e);
                         }
                         
+                        log.info("add: " + location1);
                         artifactDAO.addSiteLocation(artifact, location1);
                         artifact = artifactDAO.get(artifact.getID());
                         
@@ -184,6 +185,7 @@ public class NegotiationTest extends RavenTest {
                         Assert.assertEquals(5, elems.length);
                         Assert.assertEquals("cadc:TEST", elems[3]);
                         
+                        log.info("add: " + location2);
                         artifactDAO.addSiteLocation(artifact, location2);
                         artifact = artifactDAO.get(artifact.getID());
                         
