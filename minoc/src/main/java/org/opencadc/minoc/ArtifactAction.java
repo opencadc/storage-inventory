@@ -75,6 +75,7 @@ import ca.nrc.cadc.rest.InlineContentHandler;
 import ca.nrc.cadc.rest.RestAction;
 import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.util.PropertiesReader;
+import java.io.File;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -96,7 +97,7 @@ import org.opencadc.inventory.server.PermissionsCheck;
 import org.opencadc.inventory.storage.StorageAdapter;
 import org.opencadc.permissions.Grant;
 import org.opencadc.permissions.ReadGrant;
-import org.opencadc.permissions.TokenUtil;
+import org.opencadc.permissions.TokenTool;
 import org.opencadc.permissions.WriteGrant;
 
 /**
@@ -117,6 +118,7 @@ public abstract class ArtifactAction extends RestAction {
     // immutable state set in constructor
     protected final ArtifactDAO artifactDAO;
     protected final StorageAdapter storageAdapter;
+    protected final File publicKey;
     protected final List<URI> readGrantServices = new ArrayList<>();
     protected final List<URI> writeGrantServices = new ArrayList<>();
     
@@ -128,6 +130,7 @@ public abstract class ArtifactAction extends RestAction {
         this.artifactDAO = null;
         this.storageAdapter = null;
         this.authenticateOnly = false;
+        this.publicKey = null;
     }
 
     protected ArtifactAction() {
@@ -176,6 +179,9 @@ public abstract class ArtifactAction extends RestAction {
         artifactDAO.setConfig(config); // connectivity tested
 
         this.storageAdapter = InventoryUtil.loadPlugin(props.getFirstPropertyValue(MinocInitAction.SA_KEY));
+        
+        String pubkeyFileName = props.getFirstPropertyValue(MinocInitAction.PUBKEYFILE_KEY);
+        this.publicKey = new File(System.getProperty("user.home") + "/config/" + pubkeyFileName);
     }
 
     /**
@@ -196,8 +202,8 @@ public abstract class ArtifactAction extends RestAction {
         // do authorization (with token or subject)
         Subject subject = AuthenticationUtil.getCurrentSubject();
         if (authToken != null) {
-            String tokenUser = TokenUtil.validateToken(
-                authToken, artifactURI, grantClass);
+            TokenTool tk = new TokenTool(publicKey);
+            String tokenUser = tk.validateToken(authToken, artifactURI, grantClass);
             subject.getPrincipals().clear();
             subject.getPrincipals().add(new HttpPrincipal(tokenUser));
             logInfo.setSubject(subject);

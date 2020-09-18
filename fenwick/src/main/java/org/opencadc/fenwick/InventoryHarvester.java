@@ -397,13 +397,18 @@ public class InventoryHarvester implements Runnable {
                                     + " provided=" + artifact.getMetaChecksum() + " actual=" + computedChecksum);
                         }
 
+                        // TODO: acquire update lock on current artifact and get it again, move startTransaction
+                        Artifact currentArtifact = artifactDAO.get(artifact.getID());
                         if (storageSite != null) {
-                            // trackSiteLocations is false
+                            // trackSiteLocations: merge SiteLocation(s)
                             artifact.siteLocations.add(new SiteLocation(storageSite.getID()));
-                            Artifact currentArtifact = artifactDAO.get(artifact.getID());
-                            // TODO: acquire update lock on current artifact and get it again, move startTransaction
                             if (currentArtifact != null) {
                                 artifact.siteLocations.addAll(currentArtifact.siteLocations);
+                            }
+                        } else {
+                            // storage site: keep StorageLocation
+                            if (currentArtifact != null) {
+                                artifact.storageLocation = currentArtifact.storageLocation;
                             }
                         }
 

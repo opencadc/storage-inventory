@@ -21,12 +21,6 @@ war {
     from(System.getenv('RPS') + '/resources/') {
         include 'swagger-ui/'
     }
-    // expect a private key in this location
-    from(System.getenv('A') + '/etc/') {
-        include 'DelegationTokenKey.priv'
-        rename 'DelegationTokenKey.priv', 'InventoryPriv.key'
-        into 'WEB-INF/classes'
-    }
 }
 
 dependencies {
@@ -41,8 +35,7 @@ dependencies {
     compile 'org.opencadc:cadc-inventory:[0.1,)'
     compile 'org.opencadc:cadc-inventory-db:[0.9.1,1.0)'
     compile 'org.opencadc:cadc-inventory-server:[0.1.1,)'
-    compile 'org.opencadc:cadc-permissions:[0.2,)'
-    compile 'org.opencadc:cadc-permissions-client:[0.2,)'
+    compile 'org.opencadc:cadc-permissions:[0.3,)'
     compile 'org.opencadc:cadc-vos:[1.1.8,)'
 
     runtime 'org.opencadc:cadc-access-control:[1.1.1,2.0)'
