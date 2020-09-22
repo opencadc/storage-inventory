@@ -69,10 +69,8 @@ package org.opencadc.luskan;
 
 import ca.nrc.cadc.db.version.InitDatabase;
 
-import ca.nrc.cadc.util.MultiValuedProperties;
 import java.net.URL;
 import javax.sql.DataSource;
-import org.apache.log4j.Logger;
 
 /**
  * This class automates adding/updating the description of CAOM tables and views
@@ -86,7 +84,6 @@ import org.apache.log4j.Logger;
  * @author pdowler
  */
 public class InitLuskanSchemaContent extends InitDatabase {
-    private static final Logger log = Logger.getLogger(InitLuskanSchemaContent.class);
 
     public static final String MODEL_NAME = "luskan-schema";
     public static final String MODEL_VERSION = "0.5.2";
@@ -101,8 +98,6 @@ public class InitLuskanSchemaContent extends InitDatabase {
     static String[] UPGRADE_SQL = new String[] {
         "inventory.tap_schema_content11.sql"
     };
-
-    MultiValuedProperties props;
 
     /**
      * Constructor. The schema argument is used to query the ModelVersion table
@@ -121,13 +116,6 @@ public class InitLuskanSchemaContent extends InitDatabase {
         for (String s : UPGRADE_SQL) {
             upgradeSQL.add(s);
         }
-    }
-
-    @Override
-    public boolean doInit() {
-        boolean ret = super.doInit();
-        this.props = LuskanConfig.getConfig();
-        return ret;
     }
 
     @Override

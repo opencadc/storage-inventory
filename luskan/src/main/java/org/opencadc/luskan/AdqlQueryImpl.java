@@ -136,6 +136,7 @@ public class AdqlQueryImpl extends AdqlQuery {
         return sql;
     }
 
+    // Separate method to allow overriding in unit tests to pass in properties.
     protected MultiValuedProperties getProperties() {
         return LuskanConfig.getConfig();
     }

@@ -69,10 +69,13 @@
 
 package org.opencadc.luskan;
 
+import ca.nrc.cadc.tap.parser.ParserUtil;
 import ca.nrc.cadc.tap.parser.navigator.ExpressionNavigator;
 import ca.nrc.cadc.tap.parser.navigator.FromItemNavigator;
 import ca.nrc.cadc.tap.parser.navigator.ReferenceNavigator;
 import ca.nrc.cadc.tap.parser.navigator.SelectNavigator;
+import java.util.ArrayList;
+import java.util.List;
 import net.sf.jsqlparser.expression.Expression;
 import net.sf.jsqlparser.expression.Parenthesis;
 import net.sf.jsqlparser.expression.operators.conditional.AndExpression;
@@ -80,6 +83,7 @@ import net.sf.jsqlparser.expression.operators.relational.IsNullExpression;
 import net.sf.jsqlparser.schema.Column;
 import net.sf.jsqlparser.schema.Table;
 import net.sf.jsqlparser.statement.select.FromItem;
+import net.sf.jsqlparser.statement.select.Join;
 import net.sf.jsqlparser.statement.select.PlainSelect;
 import org.apache.log4j.Logger;
 
@@ -96,25 +100,40 @@ public class StorageLocationConverter extends SelectNavigator {
     @Override
     public void visit(PlainSelect ps) {
         log.debug("visit(PlainSelect) " + ps);
-        FromItem fromItem = ps.getFromItem();
-        if (fromItem instanceof Table) {
-            Table table = (Table) fromItem;
-            if (!table.getWholeTableName().equalsIgnoreCase("inventory.artifact")) {
-                return;
-            }
-            Expression isNotNullExpression = isNotNullExpression(table);
-            Expression where = ps.getWhere();
-            if (where == null) {
-                ps.setWhere(isNotNullExpression);
-            } else {
-                Parenthesis parenthesis = new Parenthesis(where);
-                Expression and = new AndExpression(parenthesis, isNotNullExpression);
-                ps.setWhere(and);
-            }
+        super.visit(ps);
+
+        Expression constraint = createConstraint(ps);
+        if (constraint == null) {
+            return;
+        }
+
+        Expression where = ps.getWhere();
+        if (where == null) {
+            ps.setWhere(constraint);
+        } else {
+            ps.setWhere(new AndExpression(new Parenthesis(where), constraint));
         }
     }
 
-    private Expression isNotNullExpression(Table table) {
+    private Expression createConstraint(PlainSelect ps) {
+        Expression constraint = null;
+        List<Table> tables = ParserUtil.getFromTableList(ps);
+        for (Table table : tables) {
+            // Only add the constraint to the inventory.artifact table
+            if (!table.getWholeTableName().equalsIgnoreCase("inventory.artifact")) {
+                continue;
+            }
+            Expression isNull = createIsNullConstraint(table);
+            if (constraint == null) {
+                constraint = isNull;
+            } else {
+                constraint = new AndExpression(constraint, isNull);
+            }
+        }
+        return constraint;
+    }
+
+    private Expression createIsNullConstraint(Table table) {
         Table artifact;
         if (table.getAlias() != null) {
             artifact = new Table(null, table.getAlias());

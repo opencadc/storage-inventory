@@ -79,7 +79,6 @@ import java.util.List;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
-import org.junit.Ignore;
 import org.junit.Test;
 
 public class StorageLocationConverterTest {
@@ -89,62 +88,49 @@ public class StorageLocationConverterTest {
         Log4jInit.setLevel("org.opencadc.luskan", Level.INFO);
     }
 
-    private static final TapSchema tapSchema = TestUtil.loadTapSchema();
+    private static final TapSchema tapSchema = TestUtil.mockTapSchema();
 
-    @Test
-    public void testSchemaName() {
-        String query = "select column_name from tap_schema.columns11";
-        String expected = "SELECT column_name FROM tap_schema.columns11";
-        doTest(query, expected, null);
-    }
-
-    @Test
-    public void testSchemaAndTableName() {
-        String query = "select lastModified from inventory.storagesite";
-        String expected = "SELECT lastModified FROM inventory.storagesite";
-        doTest(query, expected, null);
-    }
-
+    // Not a storage location site, should not append the is null constraint
     @Test
     public void testSelectWithoutStorageLocation() {
-        String query = "select uri from inventory.artifact";
-        String expected = "SELECT uri FROM inventory.artifact";
+        String query = "select id from inventory.artifact";
+        String expected = "SELECT id FROM inventory.artifact";
         doTest(query, expected, null);
     }
 
+    // Not the inventory.artifact table, should not append the is null constraint
     @Test
-    public void testSelectWithStorageLocation() {
-        String query = "select uri from inventory.artifact";
-        String expected = "SELECT uri FROM inventory.artifact WHERE (inventory.artifact.storagelocation_storageid IS NOT NULL)";
+    public void testSchemaAndTableName() {
+        String query = "select id from inventory.storagesite";
+        String expected = "SELECT id FROM inventory.storagesite";
         doTest(query, expected, "true");
     }
 
     @Test
-    public void testSelectColumns() {
-        String query = "select uri, lastmodified from inventory.artifact";
-        String expected = "SELECT uri, lastmodified FROM inventory.artifact WHERE (inventory.artifact.storagelocation_storageid IS NOT NULL)";
+    public void testSelectWithStorageLocation() {
+        String query = "select id from inventory.artifact";
+        String expected = "SELECT id FROM inventory.artifact WHERE (inventory.artifact.storagelocation_storageid IS NOT NULL)";
         doTest(query, expected, "true");
     }
 
     @Test
     public void testSelectWithTableAlias() {
-        String query = "select uri from inventory.artifact a";
-        String expected = "SELECT uri from inventory.artifact AS a WHERE (a.storagelocation_storageid IS NOT NULL)";
+        String query = "select id from inventory.artifact a";
+        String expected = "SELECT id from inventory.artifact AS a WHERE (a.storagelocation_storageid IS NOT NULL)";
         doTest(query, expected, "true");
     }
 
     @Test
     public void testSelectWithTableJoin() {
-        String query = "select a.uri from inventory.artifact a join inventory.artifact b on a.id = b.id";
-        String expected = "SELECT a.uri from inventory.artifact AS a JOIN inventory.artifact AS b on a.id = b.id WHERE (a.storagelocation_storageid IS NOT NULL)";
+        String query = "select a.contentLength from inventory.artifact a join inventory.artifact b on a.id = b.id";
+        String expected = "SELECT a.contentLength from inventory.artifact AS a JOIN inventory.artifact AS b on a.id = b.id WHERE (a.storagelocation_storageid IS NOT NULL) AND (b.storagelocation_storageid IS NOT NULL)";
         doTest(query, expected, "true");
     }
-    //FROM inventory.Artifact a join inventory.Artifact b on a.id=b.id
 
     @Test
     public void testSelectWithWhere() {
-        String query = "select uri from inventory.artifact where contentLength <= 1024";
-        String expected = "SELECT uri from inventory.artifact WHERE (contentLength <= 1024) and (inventory.artifact.storagelocation_storageid IS NOT NULL)";
+        String query = "select id from inventory.artifact where contentLength <= 1024";
+        String expected = "SELECT id from inventory.artifact WHERE (contentLength <= 1024) and (inventory.artifact.storagelocation_storageid IS NOT NULL)";
         doTest(query, expected, "true");
     }
 
