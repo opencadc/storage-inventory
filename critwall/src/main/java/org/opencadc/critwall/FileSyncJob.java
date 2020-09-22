@@ -70,6 +70,7 @@ package org.opencadc.critwall;
 import ca.nrc.cadc.auth.AuthMethod;
 import ca.nrc.cadc.auth.AuthenticationUtil;
 import ca.nrc.cadc.auth.RunnableAction;
+import ca.nrc.cadc.io.ByteLimitExceededException;
 import ca.nrc.cadc.io.ReadException;
 import ca.nrc.cadc.io.WriteException;
 import ca.nrc.cadc.net.FileContent;
@@ -181,10 +182,12 @@ public class FileSyncJob implements Runnable {
             } catch (IllegalStateException ex) {
                 log.debug("artifact sync aborted: " + this.artifactID, ex);
                 msg = " artifact sync aborted: " + this.artifactID + " (" + ex + ")";
-            } catch (IllegalArgumentException | InterruptedException 
-                    | StorageEngageException | WriteException ex) {
+            } catch (IllegalArgumentException | InterruptedException | StorageEngageException | WriteException ex) {
                 log.debug("artifact sync error: " + this.artifactID, ex);
                 msg = " artifact sync error: " + this.artifactID + " (" + ex + ")";
+            } catch (Exception ex) {
+                log.debug("unexpected fail: " + this.artifactID, ex);
+                msg = " unexpected sync error: " + this.artifactID + " (" + ex + ")";
             }
         } finally {
             long dt = System.currentTimeMillis() - start;
@@ -274,7 +277,7 @@ public class FileSyncJob implements Runnable {
      * @throws IllegalArgumentException
      */
     private StorageMetadata syncArtifact(List<URL> urls)
-        throws StorageEngageException, InterruptedException, WriteException, IllegalArgumentException {
+        throws ByteLimitExceededException, StorageEngageException, InterruptedException, WriteException, IllegalArgumentException {
 
         StorageMetadata storageMeta = null;
         Iterator<URL> urlIterator = urls.iterator();
@@ -322,16 +325,17 @@ public class FileSyncJob implements Runnable {
                 log.debug("storage meta returned: " + storageMeta.getStorageLocation());
                 return storageMeta;
 
-            } catch (WriteException wre) {
+            } catch (ByteLimitExceededException | WriteException ex) {
                 // IOException will capture this if not explicitly caught and rethrown
-                throw wre;
-            } catch (TransientException | IOException te) {
-                // ReadException will be caught under the IOException
+                log.error("FileSyncJob.FAIL fatal: " + ex);
+                throw ex;
+            } catch (IOException | TransientException ex) {
+                // includes ReadException
                 // - prepare or put throwing this error
                 // - will move to next url
-                log.debug("transient exception", te);
-            } catch (ResourceNotFoundException | ResourceAlreadyExistsException | PreconditionFailedException badURL) {
-                log.debug("removing URL " + u + " from list: " + badURL.getMessage());
+                log.error("FileSyncJob.FAIL transient: " + ex);
+            } catch (ResourceNotFoundException | ResourceAlreadyExistsException | PreconditionFailedException ex) {
+                log.error("FileSyncJob.FAIL remove " + u + " reason: " + ex);
                 urlIterator.remove();
             }
         }

@@ -242,11 +242,7 @@ public class PostAction extends RestAction {
         
         URI artifactURI = transfer.getTarget();
         InventoryUtil.validateArtifactURI(PostAction.class, artifactURI);
-        Artifact artifact = artifactDAO.get(artifactURI);
-        if (artifact == null) {
-            throw new ResourceNotFoundException(artifactURI.toString());
-        }
-
+        
         PermissionsCheck permissionsCheck = new PermissionsCheck(artifactURI, this.authenticateOnly, this.logInfo);
         if (direction.equals(Direction.pullFromVoSpace)) {
             permissionsCheck.checkReadPermission(this.readGrantServices);
@@ -264,11 +260,6 @@ public class PostAction extends RestAction {
             }
         }
         
-        // gather all copies of the artifact
-        if (artifact.siteLocations.isEmpty()) {
-            throw new ResourceNotFoundException("no sitelocation's found");
-        }
-        
         String authToken = null;
         // create an auth token
         TokenTool tk = new TokenTool(publicKeyFile, privateKeyFile);
@@ -278,12 +269,42 @@ public class PostAction extends RestAction {
             authToken = tk.generateToken(artifactURI, WriteGrant.class, user);
         }
         
+        List<Protocol> protos = null;
+        if (Direction.pullFromVoSpace.equals(direction)) {
+            protos = doPullFrom(artifactURI, transfer, authToken);
+        } else {
+            protos = doPushTo(artifactURI, transfer, authToken);
+        }
+        
+        // TODO: sort protocols as caller will try them in order until success
+        // - depends on client and site proximity
+        // - sort pre-auth before non-pre-auth because we already did the permission check
+        
+        Transfer ret = new Transfer(artifactURI, direction, protos);
+        ret.version = VOS.VOSPACE_21;
+                        
+        TransferWriter transferWriter = new TransferWriter();
+        transferWriter.write(ret, syncOutput.getOutputStream());
+    }
+    
+    private List<Protocol> doPullFrom(URI artifactURI, Transfer transfer, String authToken) throws ResourceNotFoundException, IOException {
         RegistryClient regClient = new RegistryClient();
         StorageSiteDAO storageSiteDAO = new StorageSiteDAO(artifactDAO);
         Set<StorageSite> sites = storageSiteDAO.list(); // this set could be cached
         
-        // produce URLs to each of the copies for each of the protocols
         List<Protocol> protos = new ArrayList<>();
+        Artifact artifact = artifactDAO.get(artifactURI);
+        if (artifact == null) {
+            throw new ResourceNotFoundException(artifactURI.toString());
+        }
+
+        // TODO: this can currently happen but maybe should not: 
+        // --- when the last siteLocation is removed, the artifact should be deleted?
+        if (artifact.siteLocations.isEmpty()) {
+            throw new ResourceNotFoundException("TBD: no copies available");
+        }
+
+        // produce URLs to each of the copies for each of the protocols
         for (SiteLocation site : artifact.siteLocations) {
             StorageSite storageSite = getSite(sites, site.getSiteID());
             Capability filesCap = null;
@@ -298,9 +319,7 @@ public class PostAction extends RestAction {
             }
             if (filesCap != null) {
                 for (Protocol proto : transfer.getProtocols()) {
-                    if ((direction.equals(Direction.pullFromVoSpace) && storageSite.getAllowRead())
-                            || (direction.equals(Direction.pushToVoSpace) && storageSite.getAllowWrite())) {
-                        
+                    if (storageSite.getAllowRead()) {
                         URI sec = proto.getSecurityMethod();
                         if (sec == null) {
                             sec = Standards.SECURITY_METHOD_ANON;
@@ -324,25 +343,80 @@ public class PostAction extends RestAction {
                                 protos.add(p);
                                 log.debug("added: " + p);
                             } else {
-                                log.debug("reject protocol: " + proto + " reason: no compatible URL protocol");
+                                log.debug("reject protocol: " + proto 
+                                        + " reason: no compatible URL protocol");
                             }
                         } else {
-                            log.debug("reject protocol: " + proto + " reason: unsupported security method: " + proto.getSecurityMethod());
+                            log.debug("reject protocol: " + proto 
+                                    + " reason: unsupported security method: " + proto.getSecurityMethod());
                         }
                     }
                 }
             }
         }
         
-        // TODO: sort protocols as caller will try them in order until success
-        // - depends on client and site proximity
-        // - sort pre-auth before non-pre-auth because we already did the permission check
+        return protos;
+    }
+    
+    private List<Protocol> doPushTo(URI artifactURI, Transfer transfer, String authToken) throws IOException {
+        RegistryClient regClient = new RegistryClient();
+        StorageSiteDAO storageSiteDAO = new StorageSiteDAO(artifactDAO);
+        Set<StorageSite> sites = storageSiteDAO.list(); // this set could be cached
         
-        Transfer ret = new Transfer(artifactURI, direction, protos);
-        ret.version = VOS.VOSPACE_21;
-                        
-        TransferWriter transferWriter = new TransferWriter();
-        transferWriter.write(ret, syncOutput.getOutputStream());
+        List<Protocol> protos = new ArrayList<>();
+        // produce URLs for all writable sites
+        for (StorageSite storageSite : sites) {
+            //log.warn("PUT: " + storageSite);
+            Capability filesCap = null;
+            try {
+                Capabilities caps = regClient.getCapabilities(storageSite.getResourceID());
+                filesCap = caps.findCapability(Standards.SI_FILES);
+                if (filesCap == null) {
+                    log.warn("service: " + storageSite.getResourceID() + " does not provide " + Standards.SI_FILES);
+                }
+            } catch (ResourceNotFoundException ex) {
+                log.warn("failed to find service: " + storageSite.getResourceID());
+            }
+            if (filesCap != null) {
+                for (Protocol proto : transfer.getProtocols()) {
+                    //log.warn("PUT: " + storageSite + " proto: " + proto);
+                    if (storageSite.getAllowWrite()) {
+                        URI sec = proto.getSecurityMethod();
+                        if (sec == null) {
+                            sec = Standards.SECURITY_METHOD_ANON;
+                        }
+                        Interface iface = filesCap.findInterface(sec);
+                        log.debug("PUT: " + storageSite + " proto: " + proto + " iface: " + iface);
+                        if (iface != null) {
+                            URL baseURL = iface.getAccessURL().getURL();
+                            //log.debug("base url for site " + storageSite.getResourceID() + ": " + baseURL);
+                            if (protocolCompat(proto, baseURL)) {
+                                StringBuilder sb = new StringBuilder();
+                                sb.append(baseURL.toExternalForm()).append("/");
+                                if (proto.getSecurityMethod() == null || Standards.SECURITY_METHOD_ANON.equals(proto.getSecurityMethod())) {
+                                    sb.append(authToken).append("/");
+                                }
+                                sb.append(artifactURI.toASCIIString());
+                                Protocol p = new Protocol(proto.getUri());
+                                if (transfer.version == VOS.VOSPACE_21) {
+                                    p.setSecurityMethod(proto.getSecurityMethod());
+                                }
+                                p.setEndpoint(sb.toString());
+                                protos.add(p);
+                                log.debug("added: " + p);
+                            } else {
+                                log.debug("PUT: " + storageSite + "PUT: reject protocol: " + proto 
+                                        + " reason: no compatible URL protocol");
+                            }
+                        } else {
+                            log.debug("PUT: " + storageSite + "PUT: reject protocol: " + proto 
+                                    + " reason: unsupported security method: " + proto.getSecurityMethod());
+                        }
+                    }
+                }
+            }
+        }
+        return protos;
     }
     
     private StorageSite getSite(Set<StorageSite> sites, UUID id) {
