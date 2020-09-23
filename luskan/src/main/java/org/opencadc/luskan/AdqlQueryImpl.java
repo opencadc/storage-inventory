@@ -79,6 +79,7 @@ import ca.nrc.cadc.tap.parser.navigator.ExpressionNavigator;
 import ca.nrc.cadc.tap.parser.navigator.FromItemNavigator;
 import ca.nrc.cadc.tap.parser.navigator.ReferenceNavigator;
 import ca.nrc.cadc.tap.parser.navigator.SelectNavigator;
+import ca.nrc.cadc.util.MultiValuedProperties;
 import net.sf.jsqlparser.util.deparser.SelectDeParser;
 import org.apache.log4j.Logger;
 
@@ -115,6 +116,12 @@ public class AdqlQueryImpl extends AdqlQuery {
         TableNameReferenceConverter tnrc = new TableNameReferenceConverter(tnc.map);
         super.navigatorList.add(new SelectNavigator(new ExpressionNavigator(), tnrc, tnc));
 
+        // add IS NOT NULL constraint for artifact.storagelocation_storageid when querying storage sites
+        MultiValuedProperties properties = getProperties();
+        boolean isStorageSite = Boolean.parseBoolean(properties.getFirstPropertyValue(LuskanConfig.STORAGE_SITE_KEY));
+        if (isStorageSite) {
+            super.navigatorList.add(new StorageLocationConverter());
+        }
     }
 
     @Override
@@ -127,5 +134,10 @@ public class AdqlQueryImpl extends AdqlQuery {
         String sql = super.getSQL();
         log.debug("SQL:\n" + sql);
         return sql;
+    }
+
+    // Separate method to allow overriding in unit tests to pass in properties.
+    protected MultiValuedProperties getProperties() {
+        return LuskanConfig.getConfig();
     }
 }
