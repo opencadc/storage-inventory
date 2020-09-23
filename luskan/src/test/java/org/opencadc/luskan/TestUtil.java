@@ -3,7 +3,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2019.                            (c) 2019.
+ *  (c) 2020.                            (c) 2020.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -62,64 +62,62 @@
  *  <http://www.gnu.org/licenses/>.      pas le cas, consultez :
  *                                       <http://www.gnu.org/licenses/>.
  *
+ *  : 5 $
+ *
  ************************************************************************
  */
 
 package org.opencadc.luskan;
 
-import ca.nrc.cadc.db.version.InitDatabase;
+import ca.nrc.cadc.tap.schema.ColumnDesc;
+import ca.nrc.cadc.tap.schema.SchemaDesc;
+import ca.nrc.cadc.tap.schema.TableDesc;
+import ca.nrc.cadc.tap.schema.TapDataType;
+import ca.nrc.cadc.tap.schema.TapSchema;
+import ca.nrc.cadc.uws.Job;
 
-import java.net.URL;
-import javax.sql.DataSource;
+public class TestUtil {
 
-/**
- * This class automates adding/updating the description of CAOM tables and views
- * in the tap_schema. This class assumes that it can re-use the tap_schema.ModelVersion
- * table (usually created by InitDatabaseTS in cadc-tap-schema library) and does
- * not try to create it.  The init includes base CAOM tables and IVOA views (ObsCore++),
- * but <em>does not include</em> aggregate (simple or materialised) views. The service
- * operator must create simple views manually or implement a mechanism to create and
- * update materialised views periodically.
- *
- * @author pdowler
- */
-public class InitLuskanSchemaContent extends InitDatabase {
+    public static TapSchema mockTapSchema() {
+        TapSchema tapSchema = new TapSchema();
 
-    public static final String MODEL_NAME = "luskan-schema";
-    public static final String MODEL_VERSION = "0.5.2";
-    public static final String PREV_MODEL_VERSION = "0.5.1";
+        // inventory schema
+        String schemaName = "inventory";
+        SchemaDesc schemaDesc = new SchemaDesc(schemaName);
+        tapSchema.getSchemaDescs().add(schemaDesc);
 
-    // the SQL is tightly coupled to cadc-tap-schema table names (for TAP-1.1)
-    static String[] CREATE_SQL = new String[] {
-        "inventory.tap_schema_content11.sql"
-    };
+        String tableName = schemaName + ".Artifact";
+        TableDesc tableDesc = new TableDesc(schemaName, tableName);
+        schemaDesc.getTableDescs().add(tableDesc);
+        tableDesc.getColumnDescs().add(new ColumnDesc(tableName, "id", new TapDataType("char", "36", "uuid")));
+        tableDesc.getColumnDescs().add(new ColumnDesc(tableName, "contentLength", TapDataType.LONG));
 
-    // upgrade is normally the same as create since SQL is idempotent
-    static String[] UPGRADE_SQL = new String[] {
-        "inventory.tap_schema_content11.sql"
-    };
+        // inventory.StorageSite
+        tableName = schemaName + ".StorageSite";
+        tableDesc = new TableDesc(schemaName, tableName);
+        schemaDesc.getTableDescs().add(tableDesc);
+        tableDesc.getColumnDescs().add(new ColumnDesc(tableName, "id", new TapDataType("char", "36", "uuid")));
 
-    /**
-     * Constructor. The schema argument is used to query the ModelVersion table
-     * as {schema}.ModelVersion.
-     *
-     * @param dataSource connection with write permission to tap_schema tables
-     * @param database   database name (should be null if not needed in SQL)
-     * @param schema     schema name (usually tap_schema)
-     */
-    public InitLuskanSchemaContent(DataSource dataSource, String database, String schema) {
-        super(dataSource, database, schema, MODEL_NAME, MODEL_VERSION, PREV_MODEL_VERSION);
-        for (String s : CREATE_SQL) {
-            createSQL.add(s);
-        }
+        // inventory.DeletedArtifactEvent
+        tableName = schemaName + ".DeletedArtifactEvent";
+        tableDesc = new TableDesc(schemaName, tableName);
+        schemaDesc.getTableDescs().add(tableDesc);
+        tableDesc.getColumnDescs().add(new ColumnDesc(tableName, "id", new TapDataType("char", "36", "uuid")));
 
-        for (String s : UPGRADE_SQL) {
-            upgradeSQL.add(s);
-        }
+        // inventory.DeletedStorageLocationEvent
+        tableName = schemaName + ".DeletedStorageLocationEvent";
+        tableDesc = new TableDesc(schemaName, tableName);
+        schemaDesc.getTableDescs().add(tableDesc);
+        tableDesc.getColumnDescs().add(new ColumnDesc(tableName, "id", new TapDataType("char", "36", "uuid")));
+
+        return tapSchema;
     }
 
-    @Override
-    protected URL findSQL(String fname) {
-        return InitLuskanSchemaContent.class.getClassLoader().getResource("sql/" + fname);
-    }
+    static Job job = new Job() {
+        @Override
+        public String getID() {
+            return "internal-test-jobID";
+        }
+    };
+
 }

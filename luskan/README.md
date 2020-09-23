@@ -34,6 +34,10 @@ luskan.uws.url=jdbc:postgresql://{server}/{database}
 # service identity
 org.opencadc.luskan.resourceID=ivo://{authority}/{name}
 org.opencadc.luskan.resultsDir={absolute path to directory for async results}
+
+# true if luskan is running on a storage site, false or not set if
+# running on a global site
+org.opencadc.luskan.isStorageSite={true|false}
 ```
 
 ### LocalAuthority.properties
