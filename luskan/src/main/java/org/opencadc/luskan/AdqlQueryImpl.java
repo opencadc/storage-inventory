@@ -118,8 +118,8 @@ public class AdqlQueryImpl extends AdqlQuery {
 
         // add IS NOT NULL constraint for artifact.storagelocation_storageid when querying storage sites
         MultiValuedProperties properties = getProperties();
-        String isStorageSite = properties.getFirstPropertyValue(LuskanConfig.STORAGE_SITE_KEY);
-        if (isStorageSite != null) {
+        boolean isStorageSite = Boolean.parseBoolean(properties.getFirstPropertyValue(LuskanConfig.STORAGE_SITE_KEY));
+        if (isStorageSite) {
             super.navigatorList.add(new StorageLocationConverter());
         }
     }

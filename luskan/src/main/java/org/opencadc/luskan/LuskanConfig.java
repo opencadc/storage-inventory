@@ -114,6 +114,15 @@ public class LuskanConfig {
             sb.append("OK");
         }
 
+        String ssk = props.getFirstPropertyValue(STORAGE_SITE_KEY);
+        sb.append("\n\t").append(STORAGE_SITE_KEY);
+        if (ssk == null) {
+            sb.append("MISSING");
+            ok = false;
+        } else {
+            sb.append("OK");
+        }
+
         if (!ok) {
             throw new IllegalStateException(sb.toString());
         }
