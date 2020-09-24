@@ -71,8 +71,12 @@ package org.opencadc.luskan;
 
 import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.util.PropertiesReader;
+import java.net.URI;
+import java.net.URISyntaxException;
+import org.apache.log4j.Logger;
 
 public class LuskanConfig {
+    private static final Logger log = Logger.getLogger(LuskanConfig.class);
 
     // config keys
     private static final String LUSKAN_KEY = LuskanConfig.class.getPackage().getName();
@@ -80,7 +84,25 @@ public class LuskanConfig {
     static final String TMPDIR_KEY = LUSKAN_KEY + ".resultsDir";
     static final String STORAGE_SITE_KEY = LUSKAN_KEY + ".isStorageSite";
 
-    public LuskanConfig() { }
+    public LuskanConfig() {
+
+    }
+
+    /**
+     * Verify the config file is valid and the resourceID value is a valid URI.
+     */
+    public static void initConfig() {
+        log.info("initConfig: START");
+        MultiValuedProperties props = getConfig();
+        String rid = props.getFirstPropertyValue(URI_KEY);
+
+        try {
+            new URI(rid);
+            log.info("initConfig: OK");
+        } catch (URISyntaxException ex) {
+            throw new IllegalStateException("invalid config: " + URI_KEY + " must be a valid URI");
+        }
+    }
 
     /**
      * Read config file and verify that all required entries are present.
@@ -99,28 +121,28 @@ public class LuskanConfig {
         String suri = props.getFirstPropertyValue(URI_KEY);
         sb.append("\n\t").append(URI_KEY);
         if (suri == null) {
-            sb.append("MISSING");
+            sb.append(" MISSING");
             ok = false;
         } else {
-            sb.append("OK");
+            sb.append(" OK");
         }
 
         String srd = props.getFirstPropertyValue(TMPDIR_KEY);
         sb.append("\n\t").append(TMPDIR_KEY);
         if (srd == null) {
-            sb.append("MISSING");
+            sb.append(" MISSING");
             ok = false;
         } else {
-            sb.append("OK");
+            sb.append(" OK");
         }
 
         String ssk = props.getFirstPropertyValue(STORAGE_SITE_KEY);
         sb.append("\n\t").append(STORAGE_SITE_KEY);
         if (ssk == null) {
-            sb.append("MISSING");
+            sb.append(" MISSING");
             ok = false;
         } else {
-            sb.append("OK");
+            sb.append(" OK");
         }
 
         if (!ok) {

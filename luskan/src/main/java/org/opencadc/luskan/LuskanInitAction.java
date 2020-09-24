@@ -87,6 +87,8 @@ public class LuskanInitAction extends InitAction {
     @Override
     public void doInit() {
         try {
+            LuskanConfig.initConfig();
+
             DataSource tapadm = DBUtil.findJNDIDataSource("jdbc/tapadm");
             InitDatabaseTS tsi = new InitDatabaseTS(tapadm, null, "tap_schema");
             tsi.doInit();
