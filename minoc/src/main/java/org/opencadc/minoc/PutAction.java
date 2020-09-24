@@ -264,7 +264,7 @@ public class PutAction extends ArtifactAction {
             profiler.checkpoint("artifactDAO.put.ok");
             log.debug("put artifact in database: " + artifactURI);
             
-            if (existing != null) {
+            if (existing != null && existing.storageLocation != null) {
                 if (!artifact.storageLocation.equals(existing.storageLocation)) {
                     newOSL = new ObsoleteStorageLocation(existing.storageLocation);
                     locDAO.put(newOSL);

@@ -75,7 +75,6 @@ import ca.nrc.cadc.reg.Standards;
 import ca.nrc.cadc.reg.client.RegistryClient;
 import ca.nrc.cadc.tap.ResultStore;
 import ca.nrc.cadc.util.MultiValuedProperties;
-import ca.nrc.cadc.util.PropertiesReader;
 import ca.nrc.cadc.uws.Job;
 import ca.nrc.cadc.uws.server.RandomStringGenerator;
 import ca.nrc.cadc.uws.web.InlineContentException;
@@ -101,9 +100,6 @@ import org.apache.log4j.Logger;
 public class TempStorageManager implements ResultStore, UWSInlineContentHandler {
 
     private static final Logger log = Logger.getLogger(TempStorageManager.class);
-
-    private static final String URI_KEY = TempStorageManager.class.getPackage().getName() + ".resourceID";
-    private static final String TMPDIR_KEY = TempStorageManager.class.getPackage().getName() + ".resultsDir";
     
     private final File resultsDir;
     private String baseResultsURL;
@@ -113,36 +109,10 @@ public class TempStorageManager implements ResultStore, UWSInlineContentHandler 
 
     public TempStorageManager() {
         try {
-            PropertiesReader pr = new PropertiesReader("luskan.properties");
-            MultiValuedProperties props = pr.getAllProperties();
-            
-            StringBuilder sb = new StringBuilder();
-            sb.append("incomplete config: ");
-            boolean ok = true;
-            
-            String suri = props.getFirstPropertyValue(URI_KEY);
-            sb.append("\n\t").append(URI_KEY);
-            if (suri == null) {
-                sb.append("MISSING");
-                ok = false;
-            } else {
-                sb.append("OK");
-            }
-            
-            String srd = props.getFirstPropertyValue(TMPDIR_KEY);
-            sb.append("\n\t").append(TMPDIR_KEY);
-            if (srd == null) {
-                sb.append("MISSING");
-                ok = false;
-            } else {
-                sb.append("OK");
-            }
-            
-            if (!ok) {
-                throw new IllegalStateException(sb.toString());
-            }
-            
-            log.info("system property: " + URI_KEY + " = " + suri);
+            MultiValuedProperties props = LuskanConfig.getConfig();
+
+            String suri = props.getFirstPropertyValue(LuskanConfig.URI_KEY);
+            log.info("system property: " + LuskanConfig.URI_KEY + " = " + suri);
             URI luskan = new URI(suri);
             
             RegistryClient regClient = new RegistryClient();
@@ -151,7 +121,8 @@ public class TempStorageManager implements ResultStore, UWSInlineContentHandler 
             // NOTE: "results" is used in the servlet mapping in web.xml
             this.baseResultsURL = serviceURL.toExternalForm() + "/results";
             log.info("resultsURL: " + baseResultsURL);
-            
+
+            String srd = props.getFirstPropertyValue(LuskanConfig.TMPDIR_KEY);
             this.resultsDir = new File(srd);
             resultsDir.mkdirs();
             log.info("resultsDir: " + resultsDir.getCanonicalPath());

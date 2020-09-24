@@ -81,6 +81,7 @@ import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 import javax.security.auth.Subject;
@@ -88,6 +89,7 @@ import javax.security.auth.Subject;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
+import org.junit.Before;
 import org.junit.Test;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.SiteLocation;
@@ -121,6 +123,14 @@ public class NegotiationTest extends RavenTest {
         
         InitDatabase init = new InitDatabase(artifactDAO.getDataSource(), DATABASE, SCHEMA);
         init.doInit();
+    }
+    
+    @Before
+    public void cleanup() {
+        Set<StorageSite> sites = siteDAO.list();
+        for (StorageSite s : sites) {
+            siteDAO.delete(s.getID());
+        }
     }
 
     @Test
@@ -163,9 +173,10 @@ public class NegotiationTest extends RavenTest {
                             negotiate(transfer);
                             Assert.fail("should have received file not found exception");
                         } catch (ResourceNotFoundException e) {
-                            // expected
+                            log.info("caught expected: " + e);
                         }
                         
+                        log.info("add: " + location1);
                         artifactDAO.addSiteLocation(artifact, location1);
                         artifact = artifactDAO.get(artifact.getID());
                         
@@ -184,6 +195,7 @@ public class NegotiationTest extends RavenTest {
                         Assert.assertEquals(5, elems.length);
                         Assert.assertEquals("cadc:TEST", elems[3]);
                         
+                        log.info("add: " + location2);
                         artifactDAO.addSiteLocation(artifact, location2);
                         artifact = artifactDAO.get(artifact.getID());
                         
@@ -213,19 +225,14 @@ public class NegotiationTest extends RavenTest {
             Subject.doAs(userSubject, new PrivilegedExceptionAction<Object>() {
                 public Object run() throws Exception {
 
-                    URI resourceID1 = URI.create("ivo://negotiation-test-site1");
-                    URI resourceID2 = URI.create("ivo://negotiation-test-site2");
-
-                    StorageSite site1 = new StorageSite(resourceID1, "site1", true, true);
-                    StorageSite site2 = new StorageSite(resourceID2, "site2", true, false);
+                    StorageSite site1 = new StorageSite(URI.create("ivo://negotiation-test-site1"), "site1", true, false);
+                    StorageSite site2 = new StorageSite(URI.create("ivo://negotiation-test-site2"), "site2", true, true);
+                    StorageSite site3 = new StorageSite(URI.create("ivo://negotiation-test-site3"), "site3", true, true);
 
                     URI artifactURI = URI.create("cadc:TEST/" + UUID.randomUUID() + ".fits");
-                    URI checksum = URI.create("md5:d41d8cd98f00b204e9800998ecf8427e");
-                    Artifact artifact = new Artifact(artifactURI, checksum, new Date(), 1L);
 
                     try {
-                        siteDAO.put(site1);
-                        siteDAO.put(site2);
+                        siteDAO.put(site1); // not writable
 
                         List<Protocol> protos = new ArrayList<>();
                         // https+anon means raven has to do auth check and add pre-auth token
@@ -235,22 +242,15 @@ public class NegotiationTest extends RavenTest {
                         Transfer transfer = new Transfer(artifactURI, Direction.pushToVoSpace, protos);
                         transfer.version = VOS.VOSPACE_21;
 
-                        artifactDAO.put(artifact);
-
-                        // test that there are no copies available
-                        try {
-                            negotiate(transfer);
-                            Assert.fail("should have received file not found exception");
-                        } catch (ResourceNotFoundException e) {
-                            // expected
-                        }
-
-                        SiteLocation location1 = new SiteLocation(site1.getID());
-                        artifactDAO.addSiteLocation(artifact, location1);
-
-                        // test that there's one copy
+                        // test that there's one place to put
                         Transfer response = negotiate(transfer);
-                        Assert.assertEquals(1, response.getAllEndpoints().size());
+                        Assert.assertEquals(0, response.getAllEndpoints().size());
+                        
+                        siteDAO.put(site2); // writable
+                        siteDAO.put(site3); // writable
+                        
+                        response = negotiate(transfer);
+                        Assert.assertEquals(2, response.getAllEndpoints().size());
                         
                         String surl = response.getAllEndpoints().get(0);
                         URL url = new URL(surl);
@@ -262,20 +262,13 @@ public class NegotiationTest extends RavenTest {
                         Assert.assertEquals(5, elems.length);
                         Assert.assertEquals("cadc:TEST", elems[3]);
 
-                        SiteLocation location2 = new SiteLocation(site2.getID());
-                        artifactDAO.addSiteLocation(artifact, location2);
-
-                        // test that there's still one copy
-                        response = negotiate(transfer);
-                        Assert.assertEquals(1, response.getAllEndpoints().size());
-
                         return null;
 
                     } finally {
                         // cleanup sites
                         siteDAO.delete(site1.getID());
                         siteDAO.delete(site2.getID());
-                        artifactDAO.delete(artifact.getID());
+                        siteDAO.delete(site3.getID());
                     }
                 }
             });
