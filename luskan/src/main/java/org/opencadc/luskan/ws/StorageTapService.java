@@ -95,8 +95,7 @@ import java.util.NoSuchElementException;
 import javax.sql.DataSource;
 import org.apache.log4j.Logger;
 
-import org.opencadc.luskan.InitLuskanSchemaContent;
-
+import org.opencadc.luskan.LuskanConfig;
 
 /**
  *
@@ -126,6 +125,8 @@ public class StorageTapService implements AvailabilityPlugin {
         boolean isGood = true;
         String note = "service is accepting queries";
         try {
+            LuskanConfig.initConfig();
+
             String state = getState();
             if (RestAction.STATE_OFFLINE.equals(state)) {
                 return new AvailabilityStatus(false, null, null, null, RestAction.STATE_OFFLINE_MSG);
