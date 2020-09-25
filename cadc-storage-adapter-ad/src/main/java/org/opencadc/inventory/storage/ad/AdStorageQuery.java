@@ -105,11 +105,7 @@ public class AdStorageQuery {
 
     class AdStorageMetadataRowMapper implements TapRowMapper<StorageMetadata> {
 
-        private StorageMetadata currentRow;
-
-        public AdStorageMetadataRowMapper() {
-            this.currentRow = null;
-        }
+        public AdStorageMetadataRowMapper() { }
 
         @Override
         public StorageMetadata mapRow(List<Object> row) {
@@ -126,13 +122,13 @@ public class AdStorageQuery {
             try {
                 contentChecksum = new URI(MD5_ENCODING_SCHEME + i.next());
             } catch (URISyntaxException u) {
-                log.info("checksum error: " + storageID.toString() + ": " + u.getMessage());
+                log.debug("checksum error: " + storageID.toString() + ": " + u.getMessage());
             }
 
             // archive_files.fileSize
             Long contentLength = (Long) i.next();
             if (contentLength == null) {
-                log.info("content length error (null): " + storageID.toString());
+                log.debug("content length error (null): " + storageID.toString());
             }
 
             // archive_files.contentEncoding
@@ -152,7 +148,7 @@ public class AdStorageQuery {
                         + ",contentEncoding=" + contentEncoding + ",contentType=" + contentType
                         + ",ingestDate=" + contentLastModified;
                 log.error(sb);
-                return this.currentRow;
+                return null;
             }
 
             // Set up StorageLocation object first
@@ -172,7 +168,6 @@ public class AdStorageQuery {
             storageMetadata.contentEncoding = contentEncoding;
             storageMetadata.contentType = contentType;
             storageMetadata.contentLastModified = contentLastModified;
-            this.currentRow = storageMetadata;
 
             log.debug("StorageMetadata: " + storageMetadata);
             return storageMetadata;

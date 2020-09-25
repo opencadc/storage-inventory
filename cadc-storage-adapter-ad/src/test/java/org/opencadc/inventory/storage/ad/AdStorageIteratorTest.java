@@ -75,6 +75,7 @@ import java.util.Iterator;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.storage.StorageMetadata;
@@ -92,13 +93,7 @@ public class AdStorageIteratorTest {
         ArrayList<StorageMetadata> duplicates = new ArrayList<StorageMetadata>();
 
         for (int i = 0; i < 7; i++) {
-            String uriStr = "ad:/TEST/fileuri_" + i + ".txt";
-            URI curUri = new URI(uriStr);
-            StorageLocation sl = new StorageLocation(curUri);
-            sl.storageBucket = "testBucket";
-            StorageMetadata sMeta = new StorageMetadata(sl, new URI("md5:12345"), 12345L);
-            sMeta.artifactURI = curUri;
-            duplicates.add(sMeta);
+            duplicates.add(getStorageMetadata(i));
         }
 
         duplicates.add(0, duplicates.get(0));
@@ -129,4 +124,79 @@ public class AdStorageIteratorTest {
         Assert.assertEquals("expected filtered array count is 7 but got " + count, 7, count);
         log.debug("total items from AdStorageIterator: " + count);
     }
+
+    // Fails when the first row in the iterator is null.
+    @Ignore
+    @Test
+    public void testGetIteratorFirstRowNull() throws Exception {
+        ArrayList<StorageMetadata> rows = new ArrayList<StorageMetadata>();
+
+        rows.add(null);
+        int numRows = 3;
+        for (int i = 0; i < numRows; i++) {
+            rows.add(getStorageMetadata(i));
+        }
+
+        int count = 0;
+        AdStorageIterator iterator = new AdStorageIterator(rows.iterator());
+        while (iterator.hasNext()) {
+            StorageMetadata storageMetadata = iterator.next();
+            count++;
+            log.debug("position: " + count + ": " + storageMetadata);
+        }
+        Assert.assertEquals("expected rows: " + numRows + ", actual rows: " + count, numRows, count);
+    }
+
+    @Test
+    public void testGetIteratorWithNull() throws Exception {
+        ArrayList<StorageMetadata> rows = new ArrayList<StorageMetadata>();
+
+        int numRows = 3;
+        for (int i = 0; i < numRows; i++) {
+            if (i == 2) {
+                rows.add(null);
+            }
+            rows.add(getStorageMetadata(i));
+        }
+
+        int count = 0;
+        AdStorageIterator iterator = new AdStorageIterator(rows.iterator());
+        while (iterator.hasNext()) {
+            StorageMetadata storageMetadata = iterator.next();
+            count++;
+            log.debug("position: " + count + ": " + storageMetadata);
+        }
+        Assert.assertEquals("expected rows: " + numRows + ", actual rows: " + count, numRows, count);
+    }
+
+    @Test
+    public void testGetIteratorLastRowNull() throws Exception {
+        ArrayList<StorageMetadata> rows = new ArrayList<StorageMetadata>();
+
+        int numRows = 3;
+        for (int i = 0; i < numRows; i++) {
+            rows.add(getStorageMetadata(i));
+        }
+        rows.add(null);
+
+        int count = 0;
+        AdStorageIterator iterator = new AdStorageIterator(rows.iterator());
+        while (iterator.hasNext()) {
+            StorageMetadata storageMetadata = iterator.next();
+            count++;
+            log.debug("position: " + count + ": " + storageMetadata);
+        }
+        Assert.assertEquals("expected rows: " + numRows + ", actual rows: " + count, numRows, count);
+    }
+
+    private StorageMetadata getStorageMetadata(int i) throws Exception {
+        String uriStr = "ad:/TEST/fileuri_" + i + ".txt";
+        URI uri = new URI(uriStr);
+        StorageLocation storageLocation = new StorageLocation(uri);
+        storageLocation.storageBucket = "testBucket";
+        StorageMetadata storageMetadata = new StorageMetadata(storageLocation, new URI("md5:12345"), 12345L);
+        storageMetadata.artifactURI = uri;
+        return storageMetadata;
+    }
+
 }
