@@ -117,6 +117,7 @@ public class InventoryHarvester implements Runnable {
     private final ArtifactSelector selector;
     private final boolean trackSiteLocations;
     private final HarvestStateDAO harvestStateDAO;
+    private int errorCount = 0;
 
     /**
      * Constructor.
@@ -181,6 +182,26 @@ public class InventoryHarvester implements Runnable {
                 // ... this value and the reprocess-last-N-seconds should be related
                 long dt = 60 * 1000L;
                 Thread.sleep(dt);
+            } catch (IllegalArgumentException ex) {
+                // Be careful here.  This IllegalArgumentException is being caught to work around a mysterious
+                // case where TCP connections are simply dropped and the incoming stream of data is invalid.
+                // This catch will allow Fenwick to restart its processing.
+                // jenkinsd 2020.09.25
+                final String message = ex.getMessage().trim();
+                if (!message.startsWith("wrong number of columns")) {
+                    log.error("\n\n*******\n");
+                    log.error("Caught IllegalArgumentException - " + message + " (" + ++errorCount + ")");
+                    log.error("Ignoring error as presumed to be a dropped connection before fully reading the stream.");
+                    log.error("\n*******\n");
+                } else if (!message.startsWith("invalid checksum URI:")) {
+                    log.error("\n\n*******\n");
+                    log.error("Caught IllegalArgumentException - " + message + " (" + ++errorCount + ")");
+                    log.error("Ignoring error as presumed to be a dropped connection before fully reading the stream.");
+                    log.error("CAUTION! - This could be an actual mad MD5 checksum! Logging this to provide an audit.");
+                    log.error("\n*******\n");
+                } else {
+                    throw ex;
+                }
             } catch (InterruptedException ex) {
                 throw new RuntimeException("interrupted", ex);
             } catch (Exception ex) {
@@ -413,8 +434,9 @@ public class InventoryHarvester implements Runnable {
                         }
 
                         transactionManager.startTransaction();
-                        
-                        log.info("PUT: " + artifact.getID() + " " + artifact.getURI() + " " + df.format(artifact.getLastModified()));
+
+                        log.info("PUT: " + artifact.getID() + " " + artifact.getURI() + " " +
+                                 df.format(artifact.getLastModified()));
                         artifactDAO.put(artifact);
                         harvestState.curLastModified = artifact.getLastModified();
                         harvestStateDAO.put(harvestState);
