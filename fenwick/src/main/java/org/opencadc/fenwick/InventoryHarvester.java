@@ -435,8 +435,8 @@ public class InventoryHarvester implements Runnable {
 
                         transactionManager.startTransaction();
 
-                        log.info("PUT: " + artifact.getID() + " " + artifact.getURI() + " " +
-                                 df.format(artifact.getLastModified()));
+                        log.info("PUT: " + artifact.getID() + " " + artifact.getURI() + " "
+                                 + df.format(artifact.getLastModified()));
                         artifactDAO.put(artifact);
                         harvestState.curLastModified = artifact.getLastModified();
                         harvestStateDAO.put(harvestState);
