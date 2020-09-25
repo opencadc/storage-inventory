@@ -3,7 +3,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2019.                            (c) 2019.
+ *  (c) 2020.                            (c) 2020.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -62,64 +62,89 @@
  *  <http://www.gnu.org/licenses/>.      pas le cas, consultez :
  *                                       <http://www.gnu.org/licenses/>.
  *
+ *  : 5 $
+ *
  ************************************************************************
  */
 
 package org.opencadc.luskan;
 
-import ca.nrc.cadc.db.version.InitDatabase;
-
-import java.net.URL;
-import javax.sql.DataSource;
+import ca.nrc.cadc.tap.parser.ParserUtil;
+import ca.nrc.cadc.tap.parser.navigator.ExpressionNavigator;
+import ca.nrc.cadc.tap.parser.navigator.FromItemNavigator;
+import ca.nrc.cadc.tap.parser.navigator.ReferenceNavigator;
+import ca.nrc.cadc.tap.parser.navigator.SelectNavigator;
+import java.util.ArrayList;
+import java.util.List;
+import net.sf.jsqlparser.expression.Expression;
+import net.sf.jsqlparser.expression.Parenthesis;
+import net.sf.jsqlparser.expression.operators.conditional.AndExpression;
+import net.sf.jsqlparser.expression.operators.relational.IsNullExpression;
+import net.sf.jsqlparser.schema.Column;
+import net.sf.jsqlparser.schema.Table;
+import net.sf.jsqlparser.statement.select.FromItem;
+import net.sf.jsqlparser.statement.select.Join;
+import net.sf.jsqlparser.statement.select.PlainSelect;
+import org.apache.log4j.Logger;
 
 /**
- * This class automates adding/updating the description of CAOM tables and views
- * in the tap_schema. This class assumes that it can re-use the tap_schema.ModelVersion
- * table (usually created by InitDatabaseTS in cadc-tap-schema library) and does
- * not try to create it.  The init includes base CAOM tables and IVOA views (ObsCore++),
- * but <em>does not include</em> aggregate (simple or materialised) views. The service
- * operator must create simple views manually or implement a mechanism to create and
- * update materialised views periodically.
- *
- * @author pdowler
+ * Injects a `inventory.storagelocation_storageid IS NOT NULL` into a WHERE clause.
  */
-public class InitLuskanSchemaContent extends InitDatabase {
+public class StorageLocationConverter extends SelectNavigator {
+    private static final Logger log = Logger.getLogger(StorageLocationConverter.class);
 
-    public static final String MODEL_NAME = "luskan-schema";
-    public static final String MODEL_VERSION = "0.5.2";
-    public static final String PREV_MODEL_VERSION = "0.5.1";
-
-    // the SQL is tightly coupled to cadc-tap-schema table names (for TAP-1.1)
-    static String[] CREATE_SQL = new String[] {
-        "inventory.tap_schema_content11.sql"
-    };
-
-    // upgrade is normally the same as create since SQL is idempotent
-    static String[] UPGRADE_SQL = new String[] {
-        "inventory.tap_schema_content11.sql"
-    };
-
-    /**
-     * Constructor. The schema argument is used to query the ModelVersion table
-     * as {schema}.ModelVersion.
-     *
-     * @param dataSource connection with write permission to tap_schema tables
-     * @param database   database name (should be null if not needed in SQL)
-     * @param schema     schema name (usually tap_schema)
-     */
-    public InitLuskanSchemaContent(DataSource dataSource, String database, String schema) {
-        super(dataSource, database, schema, MODEL_NAME, MODEL_VERSION, PREV_MODEL_VERSION);
-        for (String s : CREATE_SQL) {
-            createSQL.add(s);
-        }
-
-        for (String s : UPGRADE_SQL) {
-            upgradeSQL.add(s);
-        }
+    public StorageLocationConverter() {
+        super(new ExpressionNavigator(), new ReferenceNavigator(), new FromItemNavigator());
     }
 
     @Override
-    protected URL findSQL(String fname) {
-        return InitLuskanSchemaContent.class.getClassLoader().getResource("sql/" + fname);
+    public void visit(PlainSelect ps) {
+        log.debug("visit(PlainSelect) " + ps);
+        super.visit(ps);
+
+        Expression constraint = createConstraint(ps);
+        if (constraint == null) {
+            return;
+        }
+
+        Expression where = ps.getWhere();
+        if (where == null) {
+            ps.setWhere(constraint);
+        } else {
+            ps.setWhere(new AndExpression(new Parenthesis(where), constraint));
+        }
     }
+
+    private Expression createConstraint(PlainSelect ps) {
+        Expression constraint = null;
+        List<Table> tables = ParserUtil.getFromTableList(ps);
+        for (Table table : tables) {
+            // Only add the constraint to the inventory.artifact table
+            if (!table.getWholeTableName().equalsIgnoreCase("inventory.artifact")) {
+                continue;
+            }
+            Expression isNull = createIsNullConstraint(table);
+            if (constraint == null) {
+                constraint = isNull;
+            } else {
+                constraint = new AndExpression(constraint, isNull);
+            }
+        }
+        return constraint;
+    }
+
+    private Expression createIsNullConstraint(Table table) {
+        Table artifact;
+        if (table.getAlias() != null) {
+            artifact = new Table(null, table.getAlias());
+        } else {
+            artifact = table;
+        }
+        Column sitelocations = new Column(artifact, "storagelocation_storageid");
+        IsNullExpression isNullExpression = new IsNullExpression();
+        isNullExpression.setLeftExpression(sitelocations);
+        isNullExpression.setNot(true);
+        return new Parenthesis(isNullExpression);
+    }
+
 }
