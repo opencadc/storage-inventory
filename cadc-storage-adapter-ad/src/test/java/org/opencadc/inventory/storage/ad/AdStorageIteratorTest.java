@@ -124,9 +124,7 @@ public class AdStorageIteratorTest {
         Assert.assertEquals("expected filtered array count is 7 but got " + count, 7, count);
         log.debug("total items from AdStorageIterator: " + count);
     }
-
-    // Fails when the first row in the iterator is null.
-    @Ignore
+    
     @Test
     public void testGetIteratorFirstRowNull() throws Exception {
         ArrayList<StorageMetadata> rows = new ArrayList<StorageMetadata>();
@@ -151,9 +149,13 @@ public class AdStorageIteratorTest {
     public void testGetIteratorWithNull() throws Exception {
         ArrayList<StorageMetadata> rows = new ArrayList<StorageMetadata>();
 
-        int numRows = 3;
+        int numRows = 6;
         for (int i = 0; i < numRows; i++) {
             if (i == 2) {
+                rows.add(null);
+            }
+            if (i == 4) {
+                rows.add(null);
                 rows.add(null);
             }
             rows.add(getStorageMetadata(i));
