@@ -16,7 +16,7 @@ verify the upload before the commit.
 
 upload request:
 ```
-HTTP PUT
+HTTP PUT /minoc/files/{Artifact.uri}
 X-Put-Txn=true
 Content-Length={number of bytes} (optional)
 Content-MD5={MD5 checksum} (optional)
@@ -33,7 +33,7 @@ Content-MD5=
 
 get current state:
 ```
-HTTP HEAD
+HTTP HEAD /minoc/files/{Artifact.uri}
 X-Put-Txn={transaction id}
 ```
 
@@ -41,7 +41,7 @@ response: same as above
 
 commit transaction:
 ```
-HTTP PUT
+HTTP PUT /minoc/files/{Artifact.uri}
 X-Put-Txn={transaction id}
 ```
 
@@ -54,7 +54,7 @@ Content-MD5=
 
 abort transaction:
 ```
-HTTP DELETE
+HTTP DELETE /minoc/files/{Artifact.uri}
 X-Put-Txn={transaction id}
 ```
 successful abort:
@@ -78,7 +78,7 @@ response: as above; intermediate metadata for the content that was stored
 
 append more content:
 ```
-HTTP PUT
+HTTP PUT /minoc/files/{Artifact.uri}
 X-Put-Txn={transaction id}
 {body}
 ```
@@ -93,7 +93,7 @@ Content-MD5=
 
 get current state:
 ```
-HTTP HEAD
+HTTP HEAD /minoc/files/{Artifact.uri}
 X-Put-Txn={transaction id}
 ```
 
@@ -107,7 +107,7 @@ Content-MD5=
 
 commit and abort: as above
 
-This pattern defines one feature: PUT can append more content by uploading more 
+This pattern defines one feature: PUT can append by uploading more 
 content in the same transaction.
 
 TBD: In the context of large files (~5GiB) the Content-Length header in the initial request 
