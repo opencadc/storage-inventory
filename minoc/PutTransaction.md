@@ -6,6 +6,20 @@ committed if pre-conditions are satisfied:
 * content length matches value provided at start (optional)
 * content checksum matches value provided at start (optional)
 
+## PUT
+upload request:
+```
+HTTP PUT /minoc/files/{Artifact.uri}
+Content-Length={number of bytes} (optional)
+Content-MD5={MD5 checksum} (optional)
+{body}
+```
+successful response:
+```
+201 (Created)
+Content-Length=
+Content-MD5=
+```
 
 ## PUT with Transaction
 
@@ -22,7 +36,6 @@ Content-Length={number of bytes} (optional)
 Content-MD5={MD5 checksum} (optional)
 {body}
 ```
-
 successful response:
 ```
 202 (Accepted)
@@ -36,7 +49,6 @@ get current state:
 HTTP HEAD /minoc/files/{Artifact.uri}
 X-Put-Txn={transaction id}
 ```
-
 response: same as above
 
 commit transaction:
@@ -44,8 +56,7 @@ commit transaction:
 HTTP PUT /minoc/files/{Artifact.uri}
 X-Put-Txn={transaction id}
 ```
-
-successful commit:
+successful commit response:
 ```
 201 (Created)
 Content-Length=
@@ -57,7 +68,7 @@ abort transaction:
 HTTP DELETE /minoc/files/{Artifact.uri}
 X-Put-Txn={transaction id}
 ```
-successful abort:
+successful abort response:
 ```
 204 (No Content)
 ```
