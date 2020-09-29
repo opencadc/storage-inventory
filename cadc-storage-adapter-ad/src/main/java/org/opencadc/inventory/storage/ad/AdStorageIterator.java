@@ -79,7 +79,7 @@ public class AdStorageIterator implements Iterator<StorageMetadata> {
 
     public AdStorageIterator(Iterator<StorageMetadata> sourceIterator) {
         this.sourceIterator = sourceIterator;
-        if (sourceIterator.hasNext()) {
+        while (this.nextItem == null && sourceIterator.hasNext()) {
             this.nextItem = sourceIterator.next();
         }
     }
