@@ -86,7 +86,7 @@ before retrying will behave in a predictable way.
 
 ## Put with Transaction and Resume
 
-upload request: as above but Content-Length required?
+upload request: as above
 
 response: as above; intermediate metadata for the content that was stored
 
