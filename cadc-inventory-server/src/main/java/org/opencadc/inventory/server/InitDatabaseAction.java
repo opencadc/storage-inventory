@@ -65,56 +65,52 @@
 ************************************************************************
 */
 
-package org.opencadc.inventory.db;
+package org.operncadc.inventory.server;
 
-import java.util.UUID;
+import ca.nrc.cadc.db.DBUtil;
+import ca.nrc.cadc.rest.InitAction;
+import java.util.Map;
+import java.util.TreeMap;
+import javax.sql.DataSource;
 import org.apache.log4j.Logger;
-import org.opencadc.inventory.Artifact;
-import org.opencadc.inventory.StorageLocation;
-import org.springframework.jdbc.core.JdbcTemplate;
+import org.opencadc.inventory.db.version.InitDatabase;
 
 /**
- * Store ObsoleteStorageLocation in database.
+ * Base class for storage service database initialisation.
  * 
  * @author pdowler
  */
-public class ObsoleteStorageLocationDAO extends AbstractDAO<ObsoleteStorageLocation> {
-    private static final Logger log = Logger.getLogger(ObsoleteStorageLocationDAO.class);
+public abstract class InitDatabaseAction extends InitAction {
+    private static final Logger log = Logger.getLogger(InitDatabaseAction.class);
 
-    public ObsoleteStorageLocationDAO() {
-        super(true);
-    }
+    protected final Map<String,Object> daoConfig = new TreeMap<>();
     
-    public ObsoleteStorageLocationDAO(AbstractDAO src) {
-        super(src);
+    protected InitDatabaseAction() {
     }
-    
-    public ObsoleteStorageLocation get(UUID id) {
-        return super.get(ObsoleteStorageLocation.class, id);
-    }
-    
-    public ObsoleteStorageLocation get(StorageLocation loc) {
-        if (loc == null) {
-            throw new IllegalArgumentException("location cannot be null");
-        }
-        checkInit();
-        log.debug("GET: " + loc);
-        long t = System.currentTimeMillis();
 
+    @Override
+    public void doInit() {
+        initDaoConfig();
+        initDatabase();
+    }
+    
+    /**
+     * Add content to the (protected) daoConfig map.
+     */
+    protected abstract void initDaoConfig();
+    
+    private void initDatabase() {
+        log.info("initDatabase: START");
         try {
-            JdbcTemplate jdbc = new JdbcTemplate(dataSource);
-            
-            SQLGenerator.ObsoleteStorageLocationGet get = ( SQLGenerator.ObsoleteStorageLocationGet) gen.getEntityGet(ObsoleteStorageLocation.class);
-            get.setLocation(loc);
-            ObsoleteStorageLocation o = get.execute(jdbc);
-            return o;
-        } finally {
-            long dt = System.currentTimeMillis() - t;
-            log.debug("GET: " + loc + " " + dt + "ms");
+            String jndiDataSourceName = (String) daoConfig.get("jndiDataSourceName");
+            String database = (String) daoConfig.get("database");
+            String schema = (String) daoConfig.get("schema");
+            DataSource ds = DBUtil.findJNDIDataSource(jndiDataSourceName);
+            InitDatabase init = new InitDatabase(ds, database, schema);
+            init.doInit();
+            log.info("initDatabase: " + jndiDataSourceName + " " + schema + " OK");
+        } catch (Exception ex) {
+            throw new IllegalStateException("check/init database failed", ex);
         }
-    }
-
-    public void delete(UUID id) {
-        super.delete(ObsoleteStorageLocation.class, id);
     }
 }

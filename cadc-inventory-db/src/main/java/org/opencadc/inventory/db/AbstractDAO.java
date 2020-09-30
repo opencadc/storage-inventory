@@ -94,7 +94,7 @@ import org.springframework.jdbc.core.RowMapper;
 /**
  *
  * @author pdowler
- * @param <T>
+ * @param <T> type of object to persist
  */
 public abstract class AbstractDAO<T extends Entity> {
 
@@ -104,8 +104,10 @@ public abstract class AbstractDAO<T extends Entity> {
     protected DataSource dataSource;
     protected TransactionManager txnManager;
     protected MessageDigest digest;
+    protected final boolean origin;
 
-    protected AbstractDAO() {
+    protected AbstractDAO(boolean origin) {
+        this.origin = origin;
         try {
             this.digest = MessageDigest.getInstance("MD5");
         } catch (NoSuchAlgorithmException ex) {
@@ -117,10 +119,10 @@ public abstract class AbstractDAO<T extends Entity> {
      * Copy configuration from argument DAO. This uses the same DataSource and TransactionManager
      * so calls to this and another DAO participate in the same transaction.
      * 
-     * @param dao another DAO to copy config from
+     * @param dao another DAO to copy/share configuration
      */
     protected AbstractDAO(AbstractDAO dao) {
-        this();
+        this(dao.origin);
         this.gen = dao.getSQLGenerator();
         this.dataSource = dao.getDataSource();
         this.txnManager = dao.getTransactionManager();
@@ -166,6 +168,17 @@ public abstract class AbstractDAO<T extends Entity> {
         return ret;
     }
     
+    /**
+     * Configuration parameters:
+     * <ul>
+     * <li>String jndiDataSourceName
+     * <li>String database (currently unused)
+     * <li>String schema
+     * <li>Class  org.opencadc.inventory.db.SQLGenerator
+     * </ul>
+     * 
+     * @param config map with the required configuration
+     */
     public void setConfig(Map<String, Object> config) {
         Class<?> genClass = (Class<?>) config.get(SQLGenerator.class.getName());
         if (genClass == null) {
@@ -263,15 +276,15 @@ public abstract class AbstractDAO<T extends Entity> {
     }
     
     public void put(T val) {
-        put(val, false);
+        put(val, false, false);
     }
     
-    public void put(T val, boolean forceUpdate) {
+    protected void put(T val, boolean extendedUpdate, boolean timestampUpdate) {
         if (val == null) {
             throw new IllegalArgumentException("entity cannot be null");
         }
         checkInit();
-        log.debug("PUT: " + val.getID() + " force=" + forceUpdate);
+        log.debug("PUT: " + val.getID() + " force=" + extendedUpdate);
         long t = System.currentTimeMillis();
 
         try {
@@ -281,8 +294,8 @@ public abstract class AbstractDAO<T extends Entity> {
             Entity cur = get.execute(jdbc);
             Date now = getCurrentTime();
             boolean update = cur != null;
-            boolean delta = updateEntity(val, cur, now, forceUpdate);
-            if (delta) {
+            boolean delta = updateEntity(val, cur, now, timestampUpdate);
+            if (delta || extendedUpdate) {
                 EntityPut put = gen.getEntityPut(val.getClass(), update);
                 put.setValue(val);
                 put.execute(jdbc);
@@ -314,39 +327,30 @@ public abstract class AbstractDAO<T extends Entity> {
         }
     }
     
-    /**
-     * 
-     * @param entity entity to persist
-     * @param cur entity state in database
-     * @param now current timestamp from time source (database)
-     * @param forceUpdate force update of the Entity.lastModified timestamp
-     * @return true if a database change must be performed
-     */
-    protected boolean updateEntity(Entity entity, Entity cur, Date now, boolean forceUpdate) {
+    // assign metaChecksum and update lastModified
+    private boolean updateEntity(T entity, Entity cur, Date now, boolean timestampUpdate) {
         log.debug("updateEntity: " + entity);
-
+        
         digest.reset(); // just in case
         InventoryUtil.assignMetaChecksum(entity, entity.computeMetaChecksum(digest));
         
-        Date dd = entity.getLastModified();
-        
-        boolean delta;
-        if (cur == null || forceUpdate) {
-            // new
+        boolean delta = false;
+        if (cur == null) {
             delta = true;
         } else {
-            // update
+            // metadata change
             delta = !entity.getMetaChecksum().equals(cur.getMetaChecksum());
-            if (dd == null || dd.before(cur.getLastModified())) {
-                dd = cur.getLastModified();  // don't go backwards
-            } 
-        }
-        if ((delta) && (dd == null || dd.before(now))) {
-            dd = now;
         }
         
-        InventoryUtil.assignLastModified(entity, dd);
+        if ((origin && delta) || (origin && timestampUpdate) || entity.getLastModified() == null) {
+            InventoryUtil.assignLastModified(entity, now);
+        }
         
+        if (cur != null && !cur.getLastModified().equals(entity.getLastModified())) {
+            // timestamp update
+            delta = true;
+        }
+
         return delta;
     }
 }

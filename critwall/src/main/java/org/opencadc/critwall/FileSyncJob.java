@@ -68,6 +68,10 @@
 package org.opencadc.critwall;
 
 import ca.nrc.cadc.auth.AuthMethod;
+import ca.nrc.cadc.auth.AuthenticationUtil;
+import ca.nrc.cadc.auth.RunnableAction;
+import ca.nrc.cadc.io.ByteLimitExceededException;
+import ca.nrc.cadc.io.ReadException;
 import ca.nrc.cadc.io.WriteException;
 import ca.nrc.cadc.net.FileContent;
 import ca.nrc.cadc.net.HttpGet;
@@ -93,15 +97,16 @@ import java.net.URL;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import javax.security.auth.Subject;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.storage.NewArtifact;
 import org.opencadc.inventory.storage.StorageAdapter;
-
 import org.opencadc.inventory.storage.StorageEngageException;
 import org.opencadc.inventory.storage.StorageMetadata;
+
 
 public class FileSyncJob implements Runnable {
     private static final Logger log = Logger.getLogger(FileSyncJob.class);
@@ -112,8 +117,9 @@ public class FileSyncJob implements Runnable {
     private final URI artifactID;
     private final URI locatorService;
     private final StorageAdapter storageAdapter;
-
-    public FileSyncJob(URI artifactID, URI locatorServiceID, StorageAdapter storageAdapter, ArtifactDAO artifactDAO) {
+    private final Subject subject;
+    
+    public FileSyncJob(URI artifactID, URI locatorServiceID, StorageAdapter storageAdapter, ArtifactDAO artifactDAO, Subject subject) {
         InventoryUtil.assertNotNull(FileSyncJob.class, "artifactID", artifactID);
         InventoryUtil.assertNotNull(FileSyncJob.class, "locatorServiceID", locatorServiceID);
         InventoryUtil.assertNotNull(FileSyncJob.class, "storageAdapter", storageAdapter);
@@ -124,59 +130,76 @@ public class FileSyncJob implements Runnable {
         this.storageAdapter = storageAdapter;
 
         this.artifactDAO = artifactDAO;
+        this.subject = subject;
     }
 
     @Override
     public void run() {
-        log.info("fileSyncJob start.");
-        final List<URL> urlList;
+        Subject.doAs(subject, new RunnableAction(this::doSync));
+    }
+
+    private void doSync() {
+        log.info("FileSyncJob.START " + artifactID);
+        long start = System.currentTimeMillis();
+        boolean success = false;
+        String msg = "";
+        
         try {
-            urlList = getdownloadURLs(this.locatorService, this.artifactID);
-        } catch (Exception e) {
-            // fail - nothing can be done without the list, negotiation cannot be retried
-            log.error("transfer negotiation failed.");
-            return;
-        }
-        log.debug("endpoints returned: " + urlList);
-
-        int retryCount = 0;
-        Iterator<URL> urlIterator = urlList.iterator();
-
-        try {
-            while (retryCount < RETRY_DELAY.length) {
-                log.debug("attempt " + retryCount + " to sync artifact " + this.artifactID);
-                StorageMetadata storageMeta = syncArtifact(urlIterator);
-
-                // sync succeeded - update storage location
-                if (storageMeta != null) {
-                    log.debug(storageMeta.getContentChecksum());
-                    log.debug(storageMeta.contentLastModified);
-                    log.debug(storageMeta.getContentLength());
-
-                    // Update curArtifact with new storage location
-                    Artifact curArtifact = this.artifactDAO.get(this.artifactID);
-                    curArtifact.storageLocation = storageMeta.getStorageLocation();
-                    this.artifactDAO.put(curArtifact, true);
-                    log.debug("updated artifact storage location" + curArtifact.storageLocation);
-                    break;
+            List<URL> urlList;
+            try {
+                urlList = getDownloadURLs(this.locatorService, this.artifactID);
+                if (urlList.isEmpty()) {
+                    msg = " locator returned 0 URLs";
+                    return;
                 }
-
-                Thread.sleep(RETRY_DELAY[retryCount++]);
-
+            } catch (Exception ex) {
+                log.debug("transfer negotiation failed: " + artifactID, ex);
+                msg = " transfer negotiation failed: " + artifactID + " (" + ex + ")";
+                return;
             }
-        } catch (IllegalStateException ise) {
-            log.info(ise.getMessage());
-        } catch (StorageEngageException | InterruptedException
-                | WriteException | IllegalArgumentException syncError) {
-            log.error("artifact sync error for " + this.artifactID + ": " + syncError.getMessage());
+            
+            int retryCount = 0;
+            try {
+                while (!urlList.isEmpty() && retryCount < RETRY_DELAY.length) {
+                    log.info("FileSyncJob.SYNC " + artifactID + " urls=" + urlList.size() + " attempt=" + retryCount);
+                    log.debug("attempt " + retryCount + " to sync artifact " + this.artifactID);
+                    StorageMetadata storageMeta = syncArtifact(urlList);
+
+                    // sync succeeded - update storage location
+                    if (storageMeta != null) {
+                        Artifact curArtifact = this.artifactDAO.get(this.artifactID);
+                        this.artifactDAO.setStorageLocation(curArtifact, storageMeta.getStorageLocation());
+                        log.debug("updated artifact storage location" + curArtifact.storageLocation);
+                        success = true;
+                        break;
+                    }
+
+                    Thread.sleep(RETRY_DELAY[retryCount++]);
+                }
+                if (!success) {
+                    msg = " no more URLs to try";
+                }
+            } catch (IllegalStateException ex) {
+                log.debug("artifact sync aborted: " + this.artifactID, ex);
+                msg = " artifact sync aborted: " + this.artifactID + " (" + ex + ")";
+            } catch (IllegalArgumentException | InterruptedException | StorageEngageException | WriteException ex) {
+                log.debug("artifact sync error: " + this.artifactID, ex);
+                msg = " artifact sync error: " + this.artifactID + " (" + ex + ")";
+            } catch (Exception ex) {
+                log.debug("unexpected fail: " + this.artifactID, ex);
+                msg = " unexpected sync error: " + this.artifactID + " (" + ex + ")";
+            }
+        } finally {
+            long dt = System.currentTimeMillis() - start;
+            log.info("FileSyncJob.END " + artifactID + " dt=" + dt + " success=" + success + msg);
         }
     }
 
     /**
      * Use transfer service at resource URI to get list of download URLs for the artifact.
      *
-     * @param resource
-     * @param artifact
+     * @param resource      The URI Resource to look up.
+     * @param artifact      The URI of the Artifact.
      * @return list of URLs from transfer service
      * @throws IOException
      * @throws InterruptedException
@@ -185,23 +208,30 @@ public class FileSyncJob implements Runnable {
      * @throws TransientException
      * @throws TransferParsingException
      */
-    private List<URL> getdownloadURLs(URI resource, URI artifact)
+    private List<URL> getDownloadURLs(URI resource, URI artifact)
         throws IOException, InterruptedException,
         ResourceAlreadyExistsException, ResourceNotFoundException,
         TransientException, TransferParsingException {
 
         RegistryClient regClient = new RegistryClient();
+        Subject subject = AuthenticationUtil.getCurrentSubject();
+        AuthMethod am = AuthenticationUtil.getAuthMethodFromCredentials(subject);
         log.debug("resource id: " + resource);
-        URL transferURL = regClient.getServiceURL(resource, Standards.VOSPACE_SYNC_21, AuthMethod.CERT);
+        URL transferURL = regClient.getServiceURL(resource, Standards.SI_LOCATE, am);
+        if (transferURL == null) {
+            transferURL = regClient.getServiceURL(resource, Standards.VOSPACE_SYNC_21, am);
+        }
         log.debug("certURL: " + transferURL);
 
-        // Ask for all protocols available back, and the server will
-        // give you URLs for the ones it allows.
-        List<Protocol> protocolList = new ArrayList<Protocol>();
-        Protocol httpsCert = new Protocol(VOS.PROTOCOL_HTTPS_GET);
-
-        log.debug("protocols: " + httpsCert);
-        protocolList.add(httpsCert);
+        // request all protocols that can be used
+        List<Protocol> protocolList = new ArrayList<>();
+        protocolList.add(new Protocol(VOS.PROTOCOL_HTTPS_GET));
+        protocolList.add(new Protocol(VOS.PROTOCOL_HTTP_GET));
+        if (!AuthMethod.ANON.equals(am)) {
+            Protocol httpsAuth = new Protocol(VOS.PROTOCOL_HTTPS_GET);
+            httpsAuth.setSecurityMethod(Standards.getSecurityMethod(am));
+            protocolList.add(httpsAuth);
+        }
 
         Transfer transfer = new Transfer(artifact, Direction.pullFromVoSpace, protocolList);
         transfer.version = VOS.VOSPACE_21;
@@ -222,14 +252,14 @@ public class FileSyncJob implements Runnable {
         List<String> urlStrList = t.getAllEndpoints();
         log.debug("endpoints returned: " + urlStrList);
 
-        List<URL> urlList = new ArrayList<URL>();
+        List<URL> urlList = new ArrayList<>();
 
         // Create URL list to return
-        for (int i = 0; i < urlStrList.size(); i++) {
+        for (final String s : urlStrList) {
             try {
-                urlList.add(new URL(urlStrList.get(i)));
+                urlList.add(new URL(s));
             } catch (MalformedURLException mue) {
-                log.info("malformed URL returned from transfer negotiation: " + urlStrList.get(i) + " skipping... ");
+                log.info("malformed URL returned from transfer negotiation: " + s + " skipping... ");
             }
         }
 
@@ -238,7 +268,7 @@ public class FileSyncJob implements Runnable {
 
     /**
      * Go through contents of urlIterator, attempting to sync the artifact.
-     * @param urlIterator
+     * @param urlIterator   Iterator over transfer URLs discovered.
      * @return success: return Storage Metadata from first successful sync
      *         fail: return null if all URLs failed | throw if failure is fatal (internal)
      * @throws StorageEngageException
@@ -246,77 +276,71 @@ public class FileSyncJob implements Runnable {
      * @throws WriteException
      * @throws IllegalArgumentException
      */
-    private StorageMetadata syncArtifact(Iterator<URL> urlIterator)
-        throws StorageEngageException, InterruptedException, WriteException, IllegalArgumentException {
+    private StorageMetadata syncArtifact(List<URL> urls)
+        throws ByteLimitExceededException, StorageEngageException, InterruptedException, WriteException, IllegalArgumentException {
 
         StorageMetadata storageMeta = null;
+        Iterator<URL> urlIterator = urls.iterator();
 
-        if (urlIterator.hasNext()) {
-            while (urlIterator.hasNext()) {
-                URL u = urlIterator.next();
-                log.debug("trying " + u);
+        while (urlIterator.hasNext()) {
+            URL u = urlIterator.next();
+            log.debug("trying " + u);
 
-                try {
-                    ByteArrayOutputStream dest = new ByteArrayOutputStream();
-                    HttpGet get = new HttpGet(u, dest);
-                    get.prepare();
+            try {
+                ByteArrayOutputStream dest = new ByteArrayOutputStream();
+                HttpGet get = new HttpGet(u, dest);
+                get.prepare();
 
-                    // Check content checksum and length to verify this
-                    // artifact can be synced currently
-                    Artifact curArtifact = this.artifactDAO.get(this.artifactID);
+                // Check content checksum and length to verify this
+                // artifact can be synced currently
+                Artifact curArtifact = this.artifactDAO.get(this.artifactID);
 
-                    if (curArtifact.storageLocation != null) {
-                        // artifact has been acted on since this FileSyncJob
-                        // instance started and it was null
-                        throw new IllegalStateException("storage location is not null (artifact was acted on during FileSyncJob run): " + this.artifactID);
-                    }
-
-                    // Note: the storage adapter 'put' below does checksum and content length
-                    // checks, but only after downloading the entire file.
-                    // Making the checks here is more efficient.
-                    String getContentMD5 = get.getContentMD5();
-                    if (getContentMD5 != null
-                        && !getContentMD5.equals(curArtifact.getContentChecksum().getSchemeSpecificPart())) {
-                        throw new PreconditionFailedException("mismatched content checksum. " + this.artifactID);
-                    }
-
-                    long getContentLen = get.getContentLength();
-                    if (getContentLen != -1
-                        && getContentLen != curArtifact.getContentLength()) {
-                        throw new PreconditionFailedException("mismatched content length. " + this.artifactID);
-                    }
-
-                    log.debug("artifact checksum and content length match, continue to put.");
-
-                    NewArtifact a = new NewArtifact(this.artifactID);
-                    a.contentChecksum = curArtifact.getContentChecksum();
-                    a.contentLength = curArtifact.getContentLength();
-
-                    storageMeta = this.storageAdapter.put(a, get.getInputStream());
-                    log.debug("storage meta returned: " + storageMeta.getStorageLocation());
-                    return storageMeta;
-
-                } catch (WriteException wre) {
-                    // IOException will capture this if not explicitly caught
-                    log.info("write error for storage adapter put: " + wre.getMessage());
-                    throw wre;
-                } catch (TransientException | IOException te) {
-                    // ReadException will be caught under the IOException
-                    // - prepare or put throwing this error
-                    // - will move to next url
-                    log.info("transient exception." + te.getMessage());
-
-                } catch (ResourceNotFoundException | ResourceAlreadyExistsException | PreconditionFailedException badURL) {
-                    log.info("removing URL " + u + " from list: " + badURL.getMessage());
-                    urlIterator.remove();
+                if (curArtifact.storageLocation != null) {
+                    // artifact has been acted on since this FileSyncJob
+                    // instance started and it was null
+                    throw new IllegalStateException("storageLocation updated since FileSyncJob was created: " + this.artifactID);
                 }
-            }
-        } else {
-            // no valid URLs are left in the iterator
-            throw new IllegalArgumentException("No valid URLs found.");
-        }
 
-        return storageMeta;
+                // Note: the storage adapter 'put' below does checksum and content length
+                // checks, but only after downloading the entire file.
+                // Making the checks here is more efficient.
+                String getContentMD5 = get.getContentMD5();
+                if (getContentMD5 != null
+                    && !getContentMD5.equals(curArtifact.getContentChecksum().getSchemeSpecificPart())) {
+                    throw new PreconditionFailedException("contentChecksum mismatch: " + this.artifactID);
+                }
+
+                long getContentLen = get.getContentLength();
+                if (getContentLen != -1
+                    && getContentLen != curArtifact.getContentLength()) {
+                    throw new PreconditionFailedException("contentLength mismatch: " + this.artifactID
+                        + " artifact: " + curArtifact.getContentLength() + " header: " + getContentLen);
+                }
+
+                NewArtifact a = new NewArtifact(this.artifactID);
+                a.contentChecksum = curArtifact.getContentChecksum();
+                a.contentLength = curArtifact.getContentLength();
+
+                storageMeta = this.storageAdapter.put(a, get.getInputStream());
+                log.debug("storage meta returned: " + storageMeta.getStorageLocation());
+                return storageMeta;
+
+            } catch (ByteLimitExceededException | WriteException ex) {
+                // IOException will capture this if not explicitly caught and rethrown
+                log.error("FileSyncJob.FAIL fatal: " + ex);
+                throw ex;
+            } catch (IOException | TransientException ex) {
+                // includes ReadException
+                // - prepare or put throwing this error
+                // - will move to next url
+                log.error("FileSyncJob.FAIL transient: " + ex);
+            } catch (ResourceNotFoundException | ResourceAlreadyExistsException | PreconditionFailedException ex) {
+                log.error("FileSyncJob.FAIL remove " + u + " reason: " + ex);
+                urlIterator.remove();
+            }
+        }
+        
+        return null;
     }
 
 }

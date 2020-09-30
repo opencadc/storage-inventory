@@ -67,6 +67,8 @@
 
 package org.opencadc.fenwick;
 
+import ca.nrc.cadc.date.DateUtil;
+import ca.nrc.cadc.db.DBUtil;
 import ca.nrc.cadc.db.TransactionManager;
 import ca.nrc.cadc.io.ResourceIterator;
 import ca.nrc.cadc.net.ResourceNotFoundException;
@@ -80,11 +82,12 @@ import java.io.IOException;
 import java.net.URI;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.util.Date;
+import java.text.DateFormat;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
+import javax.sql.DataSource;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.DeletedArtifactEvent;
@@ -97,6 +100,7 @@ import org.opencadc.inventory.db.DeletedEventDAO;
 import org.opencadc.inventory.db.HarvestState;
 import org.opencadc.inventory.db.HarvestStateDAO;
 import org.opencadc.inventory.db.StorageSiteDAO;
+import org.opencadc.inventory.db.version.InitDatabase;
 import org.opencadc.tap.TapClient;
 
 
@@ -127,12 +131,24 @@ public class InventoryHarvester implements Runnable {
         InventoryUtil.assertNotNull(InventoryHarvester.class, "daoConfig", daoConfig);
         InventoryUtil.assertNotNull(InventoryHarvester.class, "resourceID", resourceID);
         InventoryUtil.assertNotNull(InventoryHarvester.class, "selector", selector);
-        this.artifactDAO = new ArtifactDAO();
+        this.artifactDAO = new ArtifactDAO(false);
         artifactDAO.setConfig(daoConfig);
         this.resourceID = resourceID;
         this.selector = selector;
         this.trackSiteLocations = trackSiteLocations;
         this.harvestStateDAO = new HarvestStateDAO(artifactDAO);
+        
+        try {
+            String jndiDataSourceName = (String) daoConfig.get("jndiDataSourceName");
+            String database = (String) daoConfig.get("database");
+            String schema = (String) daoConfig.get("schema");
+            DataSource ds = DBUtil.findJNDIDataSource(jndiDataSourceName);
+            InitDatabase init = new InitDatabase(ds, database, schema);
+            init.doInit();
+            log.info("initDatabase: " + jndiDataSourceName + " " + schema + " OK");
+        } catch (Exception ex) {
+            throw new IllegalStateException("check/init database failed", ex);
+        }
 
         try {
             RegistryClient rc = new RegistryClient();
@@ -174,10 +190,7 @@ public class InventoryHarvester implements Runnable {
     }
 
     // use TapClient to get remote StorageSite record and store it locally
-    // - only global inventory needs to track remote StorageSite(s); should be exactly one (minoc) record at a
-    // storage site
-    // - could be a harmless simplification to ignore the fact that storage sites don't need to sync other
-    // StorageSite records from global
+    // - only global inventory needs to track remote StorageSite(s); should be exactly one (minoc) record at a storage site
     // - keep the StorageSite UUID for creating SiteLocation objects below
 
     // get tracked progress (latest timestamp seen from any iterator)
@@ -259,8 +272,7 @@ public class InventoryHarvester implements Runnable {
                 if (artifact != null && storageSite != null) {
                     final SiteLocation siteLocation = new SiteLocation(storageSite.getID());
                     deletedStorageLocationEventDeletedEventDAO.put(deletedStorageLocationEvent);
-                    artifact.siteLocations.remove(siteLocation);
-                    artifactDAO.put(artifact, true);
+                    artifactDAO.removeSiteLocation(artifact, siteLocation);
                     harvestState.curLastModified = deletedStorageLocationEvent.getLastModified();
                     harvestStateDAO.put(harvestState);
                 } else {
@@ -334,8 +346,7 @@ public class InventoryHarvester implements Runnable {
     }
 
     /**
-     * Synchronize the artifacts found by the TAP (Luskan) query.  This method WILL modify the HarvestState and store it
-     * for the next run.
+     * Synchronize the artifacts found by the TAP (Luskan) query.
      *
      * @param storageSite                The storage site obtained from the Storage Site sync.
      * @throws ResourceNotFoundException For any missing required configuration that is missing.
@@ -349,6 +360,7 @@ public class InventoryHarvester implements Runnable {
                                                                      IllegalStateException, NoSuchAlgorithmException,
                                                                      InterruptedException, TransientException {
         final MessageDigest messageDigest = MessageDigest.getInstance("MD5");
+        DateFormat df = DateUtil.getDateFormat(DateUtil.IVOA_DATE_FORMAT, DateUtil.UTC);
 
         final TapClient<Artifact> artifactTapClient = new TapClient<>(this.resourceID);
 
@@ -378,34 +390,33 @@ public class InventoryHarvester implements Runnable {
                     while (artifactResourceIterator.hasNext()) {
                         final Artifact artifact = artifactResourceIterator.next();
                         log.debug("START: Process Artifact " + artifact.getURI());
-                        transactionManager.startTransaction();
 
                         final URI computedChecksum = artifact.computeMetaChecksum(messageDigest);
-
                         if (!artifact.getMetaChecksum().equals(computedChecksum)) {
-                            throw new IllegalStateException(
-                                    "Checksums for Artifact " + artifact.getURI() + " do not match.  "
-                                    + "\nProvided: " + artifact.getMetaChecksum() + "\nComputed: "
-                                    + computedChecksum + ".");
+                            throw new IllegalStateException("checksum mismatch: " + artifact.getID() + " " + artifact.getURI()
+                                    + " provided=" + artifact.getMetaChecksum() + " actual=" + computedChecksum);
                         }
 
+                        // TODO: acquire update lock on current artifact and get it again, move startTransaction
                         Artifact currentArtifact = artifactDAO.get(artifact.getID());
-
-                        if (currentArtifact != null) {
-                            currentArtifact.contentEncoding = artifact.contentEncoding;
-                            currentArtifact.contentType = artifact.contentType;
-                            currentArtifact.storageLocation = artifact.storageLocation;
-                        } else {
-                            currentArtifact = artifact;
-                        }
-
-                        // trackSiteLocations is false if storageSite is null.
                         if (storageSite != null) {
-                            currentArtifact.siteLocations.add(new SiteLocation(storageSite.getID()));
+                            // trackSiteLocations: merge SiteLocation(s)
+                            artifact.siteLocations.add(new SiteLocation(storageSite.getID()));
+                            if (currentArtifact != null) {
+                                artifact.siteLocations.addAll(currentArtifact.siteLocations);
+                            }
+                        } else {
+                            // storage site: keep StorageLocation
+                            if (currentArtifact != null) {
+                                artifact.storageLocation = currentArtifact.storageLocation;
+                            }
                         }
 
-                        artifactDAO.put(currentArtifact);
-                        harvestState.curLastModified = currentArtifact.getLastModified();
+                        transactionManager.startTransaction();
+                        
+                        log.info("PUT: " + artifact.getID() + " " + artifact.getURI() + " " + df.format(artifact.getLastModified()));
+                        artifactDAO.put(artifact);
+                        harvestState.curLastModified = artifact.getLastModified();
                         harvestStateDAO.put(harvestState);
                         transactionManager.commitTransaction();
                         log.debug("END: Process Artifact " + artifact.getURI() + ".");

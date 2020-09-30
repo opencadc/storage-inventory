@@ -101,6 +101,7 @@ public class StorageSiteSyncTest {
     static {
         Log4jInit.setLevel("org.opencadc.inventory", Level.INFO);
         Log4jInit.setLevel("ca.nrc.cadc.db", Level.INFO);
+        Log4jInit.setLevel("org.opencadc.tap", Level.INFO);
         Log4jInit.setLevel("org.opencadc.fenwick", Level.DEBUG);
     }
 
@@ -120,6 +121,8 @@ public class StorageSiteSyncTest {
 
     @Test
     public void intTestSiteSyncOK() throws Exception {
+        LOGGER.info("intTestSiteSyncOK");
+        
         final MessageDigest messageDigest = MessageDigest.getInstance("MD5");
         final TapClient<StorageSite> tapClient = new TapClient<>(TestUtil.LUSKAN_URI);
 
@@ -145,6 +148,8 @@ public class StorageSiteSyncTest {
 
     @Test
     public void intTestSiteSyncChecksumError() throws Exception {
+        LOGGER.info("intTestSiteSyncChecksumError");
+        
         final MessageDigest messageDigest = MessageDigest.getInstance("MD5");
         final TapClient<StorageSite> tapClient = new TapClient<>(TestUtil.LUSKAN_URI);
 
@@ -154,10 +159,11 @@ public class StorageSiteSyncTest {
                                                         StorageSiteSyncTest.class.getSimpleName(), true, false);
         luskanEnvironment.storageSiteDAO.put(storageSite);
 
+        // d41d8cd98f00b204e9800998ecf8427e is the MD5 of 0 bytes
         final JdbcTemplate jdbcTemplate = new JdbcTemplate(DBUtil.findJNDIDataSource(luskanEnvironment.jndiPath));
         Assert.assertTrue("Should have updated peacefully.",
                           jdbcTemplate.update("UPDATE " + TestUtil.LUSKAN_SCHEMA + "." + "storageSite "
-                                              + "SET metaChecksum = 'md5:7777777' WHERE resourceID = "
+                                              + "SET metaChecksum = '" + TestUtil.ZERO_BYTES_MD5 + "' WHERE resourceID = "
                                               + "'cadc:TESTSITE/one_1'") > 0);
 
         final StorageSiteSync storageSiteSync = new StorageSiteSync(tapClient, inventoryEnvironment.storageSiteDAO);
@@ -171,7 +177,7 @@ public class StorageSiteSyncTest {
             // Good.
             final URI expectedChecksum = storageSite.computeMetaChecksum(messageDigest);
             Assert.assertEquals("Wrong error message.",
-                                "Discovered Storage Site checksum (md5:7777777) does not "
+                                "Discovered Storage Site checksum (" + TestUtil.ZERO_BYTES_MD5 + ") does not "
                                 + "match computed value (" + expectedChecksum + ").",
                                 e.getMessage());
         }
@@ -179,6 +185,7 @@ public class StorageSiteSyncTest {
 
     @Test
     public void intTestSiteSyncMultiple() throws Exception {
+        LOGGER.info("intTestSiteSyncMultiple");
         final TapClient<StorageSite> tapClient = new TapClient<>(TestUtil.LUSKAN_URI);
         final StorageSiteSync storageSiteSyncMultipleSitesError =
                 new StorageSiteSync(tapClient, inventoryEnvironment.storageSiteDAO);
@@ -204,6 +211,7 @@ public class StorageSiteSyncTest {
 
     @Test
     public void intTestSiteSyncNoSitesFound() throws Exception {
+        LOGGER.info("intTestSiteSyncNoSitesFound");
         final TapClient<StorageSite> tapClient = new TapClient<>(TestUtil.LUSKAN_URI);
 
         Assert.assertTrue("Sites should be empty.", inventoryEnvironment.storageSiteDAO.list().isEmpty());
@@ -227,6 +235,7 @@ public class StorageSiteSyncTest {
      */
     private static class ResourceIteratorModifiedChecksum implements ResourceIterator<StorageSite> {
         final Iterator<StorageSite> sourceIterator;
+        
         public ResourceIteratorModifiedChecksum(final StorageSite storageSite) {
             sourceIterator = Collections.singletonList(storageSite).iterator();
         }
@@ -253,6 +262,7 @@ public class StorageSiteSyncTest {
      */
     private static class ResourceIteratorMultipleSites implements ResourceIterator<StorageSite> {
         final Iterator<StorageSite> sourceIterator;
+        
         public ResourceIteratorMultipleSites() {
             final List<StorageSite> storageSiteList = new ArrayList<>();
 
@@ -281,6 +291,7 @@ public class StorageSiteSyncTest {
      */
     private static class ResourceIteratorEmptySites implements ResourceIterator<StorageSite> {
         final Iterator<StorageSite> sourceIterator = Collections.emptyIterator();
+        
         public ResourceIteratorEmptySites() {
         }
 

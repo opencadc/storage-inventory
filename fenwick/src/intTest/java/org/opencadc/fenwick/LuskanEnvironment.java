@@ -76,10 +76,9 @@ import java.util.Map;
 import java.util.TreeMap;
 
 import org.apache.log4j.Logger;
-import org.opencadc.inventory.DeletedArtifactEvent;
-import org.opencadc.inventory.DeletedStorageLocationEvent;
+import org.opencadc.fenwick.TestUtil.DeletedArtifactEventDAO;
+import org.opencadc.fenwick.TestUtil.DeletedStorageLocationEventDAO;
 import org.opencadc.inventory.db.ArtifactDAO;
-import org.opencadc.inventory.db.DeletedEventDAO;
 import org.opencadc.inventory.db.SQLGenerator;
 import org.opencadc.inventory.db.StorageSiteDAO;
 import org.opencadc.inventory.db.version.InitDatabase;
@@ -92,8 +91,8 @@ public class LuskanEnvironment {
     // The local inventory database DAOs.
     final StorageSiteDAO storageSiteDAO = new StorageSiteDAO();
     final ArtifactDAO artifactDAO = new ArtifactDAO();
-    final DeletedEventDAO<DeletedArtifactEvent> deletedArtifactEventDAO = new DeletedEventDAO<>();
-    final DeletedEventDAO<DeletedStorageLocationEvent> deletedStorageLocationEventDAO = new DeletedEventDAO<>();
+    final DeletedArtifactEventDAO deletedArtifactEventDAO = new DeletedArtifactEventDAO();
+    final DeletedStorageLocationEventDAO deletedStorageLocationEventDAO = new DeletedStorageLocationEventDAO();
     final String jndiPath = "jdbc/LuskanEnvironment";
 
 
@@ -128,4 +127,6 @@ public class LuskanEnvironment {
         jdbcTemplate.execute("TRUNCATE TABLE " + TestUtil.LUSKAN_SCHEMA + ".harvestState");
         jdbcTemplate.execute("TRUNCATE TABLE " + TestUtil.LUSKAN_SCHEMA + ".Artifact");
     }
+    
+    
 }

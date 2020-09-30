@@ -23,7 +23,12 @@ The following keys are required:
 # inventory database settings
 org.opencadc.inventory.db.SQLGenerator=org.opencadc.inventory.db.SQLGenerator
 org.opencadc.raven.db.schema={schema}
+
+org.opencadc.raven.publicKeyFile={public key file name}
+org.opencadc.raven.privateKeyFile={private key file name}
 ```
+The key file names are relative (no path) and the files must be in the config directory.
+
 The following optional keys configure raven to use external service(s) to obtain grant information in order
 to perform authorization checks:
 ```

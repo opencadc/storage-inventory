@@ -150,7 +150,7 @@ public class Main {
             final String dbUrl = props.getFirstPropertyValue(DB_URL_CONFIG_KEY);
 
             daoConfig.put("schema", props.getFirstPropertyValue(DB_SCHEMA_CONFIG_KEY));
-            daoConfig.put("database", "inventory");
+            //daoConfig.put("database", null);
 
             final ConnectionConfig cc = new ConnectionConfig(null, null, username, password,
                                                              "org.postgresql.Driver", dbUrl);
