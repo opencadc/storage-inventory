@@ -256,7 +256,7 @@ public class InventoryHarvester implements Runnable {
 
                 transactionManager.startTransaction();
                 final Artifact artifact = this.artifactDAO.get(deletedStorageLocationEvent.getID());
-                if (artifact != null) {
+                if (artifact != null && storageSite != null) {
                     final SiteLocation siteLocation = new SiteLocation(storageSite.getID());
                     deletedStorageLocationEventDeletedEventDAO.put(deletedStorageLocationEvent);
                     artifact.siteLocations.remove(siteLocation);
