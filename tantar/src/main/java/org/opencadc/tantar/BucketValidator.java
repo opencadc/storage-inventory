@@ -468,9 +468,14 @@ public class BucketValidator implements ValidateEventListener {
     public void createArtifact(final StorageMetadata storageMetadata) {
         if (canTakeAction()) {
             if (storageMetadata.artifactURI != null) {
+
+                // if contentLastModified is null, assign new Date()
+                final Date contentLastModified =
+                    storageMetadata.contentLastModified == null ? new Date() : storageMetadata.contentLastModified;
+
                 final Artifact artifact = new Artifact(storageMetadata.artifactURI,
                                                        storageMetadata.getContentChecksum(),
-                                                       storageMetadata.contentLastModified,
+                                                       contentLastModified,
                                                        storageMetadata.getContentLength());
                 artifact.storageLocation = storageMetadata.getStorageLocation();
                 artifact.contentType = storageMetadata.contentType;
@@ -530,10 +535,13 @@ public class BucketValidator implements ValidateEventListener {
                 deletedArtifactEventDeletedEventDAO.put(deletedArtifactEvent);
 
                 // Create a replacement Artifact with information from the StorageMetadata, as it's assumed to hold
-                // the correct state of this Storage Entity.
+                // the correct state of this Storage Entity. If contentLastModified is null, assign new Date()
+                final Date contentLastModified =
+                    storageMetadata.contentLastModified == null ? new Date() : storageMetadata.contentLastModified;
+
                 final Artifact replacementArtifact = new Artifact(storageMetadata.artifactURI,
                                                                   storageMetadata.getContentChecksum(),
-                                                                  storageMetadata.contentLastModified,
+                                                                  contentLastModified,
                                                                   storageMetadata.getContentLength());
                 replacementArtifact.contentEncoding = storageMetadata.contentEncoding;
                 replacementArtifact.contentType = storageMetadata.contentType;
