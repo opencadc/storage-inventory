@@ -85,7 +85,7 @@ public class EntityTest {
     private static final Logger log = Logger.getLogger(EntityTest.class);
 
     static {
-        Log4jInit.setLevel("org.opencadc.si", Level.INFO);
+        Log4jInit.setLevel("org.opencadc.inventory", Level.INFO);
     }
     
     public EntityTest() { 

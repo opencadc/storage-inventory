@@ -207,7 +207,7 @@ public class FileSync implements Runnable {
                             // are available from the cadc-inventory-db API
                             Artifact curArtifact = unstoredArtifacts.next();
                             log.debug("create job: " + curArtifact.getURI());
-                            FileSyncJob fsj = new FileSyncJob(curArtifact.getURI(), this.locatorService,
+                            FileSyncJob fsj = new FileSyncJob(curArtifact, this.locatorService,
                                                               this.storageAdapter, this.jobArtifactDAO, currentUser);
 
                             jobQueue.put(fsj); // blocks when queue capacity is reached
