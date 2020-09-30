@@ -215,7 +215,7 @@ public class FileSyncJobTest {
             log.debug("putting test artifact to database");
             dao.put(artifactToUpdate);
 
-            FileSyncJob fsj = new FileSyncJob(artifactID, resourceID, sa, dao, anonSubject);
+            FileSyncJob fsj = new FileSyncJob(artifactToUpdate, resourceID, sa, dao, anonSubject);
             fsj.run();
 
             // check job succeeded by trying to get artifact by location
@@ -255,7 +255,7 @@ public class FileSyncJobTest {
             log.debug("putting test artifact to database");
             dao.put(artifactToUpdate);
 
-            FileSyncJob fsj = new FileSyncJob(artifactID, resourceID, sa, dao, anonSubject);
+            FileSyncJob fsj = new FileSyncJob(artifactToUpdate, resourceID, sa, dao, anonSubject);
             fsj.run();
 
             log.debug("finished run in failure test.");
@@ -291,7 +291,7 @@ public class FileSyncJobTest {
             log.debug("putting test artifact to database");
             dao.put(artifactToUpdate);
 
-            FileSyncJob fsj = new FileSyncJob(artifactID, resourceID, sa, dao, anonSubject);
+            FileSyncJob fsj = new FileSyncJob(artifactToUpdate, resourceID, sa, dao, anonSubject);
             fsj.run();
 
             log.debug("finished run in failure test.");
@@ -332,12 +332,12 @@ public class FileSyncJobTest {
             dao.put(artifactToUpdate);
             
 
-            FileSyncJob fsj = new FileSyncJob(artifactID, resourceID, sa, dao, anonSubject);
+            FileSyncJob fsj = new FileSyncJob(artifactToUpdate, resourceID, sa, dao, anonSubject);
             fsj.run();
 
             log.debug("successfully finished FileSyncJob run in test.");
 
-            // check job fdid nothing to the storageLocation
+            // check job did nothing to the storageLocation
             Artifact storedArtifact = dao.get(artifactToUpdate.getID());
             Assert.assertEquals(testLocation, storedArtifact.storageLocation);
 
