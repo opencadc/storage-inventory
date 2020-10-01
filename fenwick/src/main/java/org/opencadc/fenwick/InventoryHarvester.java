@@ -238,16 +238,18 @@ public class InventoryHarvester implements Runnable {
      */
     void doit() throws ResourceNotFoundException, IOException, IllegalStateException, TransientException,
                        InterruptedException, NoSuchAlgorithmException {
-        final StorageSiteDAO storageSiteDAO = new StorageSiteDAO(this.artifactDAO);
         final StorageSite storageSite;
+
         if (trackSiteLocations) {
             final TapClient<StorageSite> storageSiteTapClient = new TapClient<>(this.resourceID);
+            final StorageSiteDAO storageSiteDAO = new StorageSiteDAO(this.artifactDAO);
             final StorageSiteSync storageSiteSync = new StorageSiteSync(storageSiteTapClient, storageSiteDAO);
             storageSite = storageSiteSync.doit();
+            syncDeletedStorageLocationEvents(storageSite);
         } else {
             storageSite = null;
         }
-        syncDeletedStorageLocationEvents(storageSite);
+
         syncDeletedArtifactEvents();
         syncArtifacts(storageSite);
     }
@@ -255,7 +257,7 @@ public class InventoryHarvester implements Runnable {
     /**
      * Perform a sync for deleted storage locations.  This will be used by Global sites to sync from storage sites to
      * indicate that an Artifact at the given storage site is no longer available.
-     * @param storageSite                The storage site obtained from the Storage Site sync.
+     * @param storageSite                The storage site obtained from the Storage Site sync.  Cannot be null.
      * @throws ResourceNotFoundException For any missing required configuration that is missing.
      * @throws IOException               For unreadable configuration files.
      * @throws IllegalStateException     For any invalid configuration.
@@ -290,7 +292,7 @@ public class InventoryHarvester implements Runnable {
 
                 transactionManager.startTransaction();
                 final Artifact artifact = this.artifactDAO.get(deletedStorageLocationEvent.getID());
-                if (artifact != null && storageSite != null) {
+                if (artifact != null) {
                     final SiteLocation siteLocation = new SiteLocation(storageSite.getID());
                     deletedStorageLocationEventDeletedEventDAO.put(deletedStorageLocationEvent);
                     artifactDAO.removeSiteLocation(artifact, siteLocation);
@@ -369,7 +371,7 @@ public class InventoryHarvester implements Runnable {
     /**
      * Synchronize the artifacts found by the TAP (Luskan) query.
      *
-     * @param storageSite                The storage site obtained from the Storage Site sync.
+     * @param storageSite                The storage site obtained from the Storage Site sync.  Optional.
      * @throws ResourceNotFoundException For any missing required configuration that is missing.
      * @throws IOException               For unreadable configuration files.
      * @throws IllegalStateException     For any invalid configuration.
