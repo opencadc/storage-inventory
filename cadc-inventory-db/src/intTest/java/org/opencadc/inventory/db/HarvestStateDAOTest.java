@@ -78,6 +78,7 @@ import java.util.Date;
 import java.util.Map;
 import java.util.TreeMap;
 
+import java.util.UUID;
 import javax.sql.DataSource;
 
 import org.apache.log4j.Level;
@@ -169,6 +170,7 @@ public class HarvestStateDAOTest {
             
             // update
             hs1.curLastModified = new Date();
+            hs1.curID = UUID.randomUUID();
             dao.put(hs1);
             HarvestState hs2 = dao.get(hs1.getID());
             log.info("found: " + hs2);
@@ -176,9 +178,21 @@ public class HarvestStateDAOTest {
             Assert.assertNotNull("find by uuid", hs1);
             Assert.assertNotEquals(expected.getLastModified(), hs2.getLastModified());
             Assert.assertNotEquals(expected.getMetaChecksum(), hs2.getMetaChecksum());
-            URI modcs = hs2.computeMetaChecksum(MessageDigest.getInstance("MD5"));
-            Assert.assertEquals("round trip metachecksum", hs1.getMetaChecksum(), modcs);
+            Assert.assertEquals("round trip metachecksum", hs1.getMetaChecksum(), hs2.getMetaChecksum());
             Assert.assertEquals("curLastModified", hs1.curLastModified.getTime(), hs2.curLastModified.getTime());
+            Assert.assertEquals("curID", hs1.curID, hs2.curID);
+            
+            // clear tracking state
+            hs1.curLastModified = null;
+            hs1.curID = null;
+            dao.put(hs1);
+            HarvestState hs3 = dao.get(hs1.getID());
+            log.info("found: " + hs3);
+            Assert.assertNotNull(hs3);
+            Assert.assertEquals("round trip metachecksum", hs1.getMetaChecksum(), hs3.getMetaChecksum());
+            Assert.assertNotEquals("checksum changed", hs2.getMetaChecksum(), hs3.getMetaChecksum());
+            Assert.assertNull("curLastModified", hs3.curLastModified);
+            Assert.assertNull("curID", hs3.curID);
             
             dao.delete(expected.getID());
             HarvestState deleted = dao.get(expected.getID());
