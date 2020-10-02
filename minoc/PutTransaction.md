@@ -113,12 +113,13 @@ This pattern defines one feature: PUT can append by uploading more content in th
 TBD: In the context of large files (~5GiB) the Content-Length header in the initial request 
 is required so the implementation can decide (i) if resume will be supported, and (ii) how to
 store the data. implementation limitations give something like:
-* Content-Length not provided: txn, resume?, file size limit then fail?
+* Content-Length not provided: txn, resume, default behaviour: fail if exceed implementation limit
+* Content-Length not provided, X-Content-Stream=true: txn, resume, implementation prepares to accept large amount of content
 * Content-Length provided, {length} <= X: txn, no resume
 * Content-Length provided, {length} > X: txn, resume
 If resume is not supported, the PUT with X-Put-Txn and {body} would fail with a 400 (405?).
 
-Q. Is it necessary to tell the client that resume is not supported? It means defining a second custom
+Q. Is it necessary to tell the client that resume is not supported before hand? It means defining a second custom
 header and doesn't really add anything.
 
 ## A Tale of Two Conflicting Use Cases
@@ -128,7 +129,8 @@ and simply streams the bytes. We want to store that in the lowest overhead way p
 many such files, which means storing the small file as a single object in object store (cadc-storage-adpater-ceph).
 
 2. Currently works: a TAP (youcat) query with output to VOSpace (vault) also does not provide any metadata and simply
-streams the bytes. For a query like `select * from cfht.magapipe` the resulting file was ~40GiB. From the client side, 
+streams the bytes. For a query like `select * from cfht.megapipe` the resulting file was ~40GiB. From the client side, 
 this is not resumable. We want to store that in the most flexible way possible because the byte stream may be large, 
 so this identical-looking request needs to be stored in multiple chunks in object store (cadc-storage-adpater-ceph).
+*This use case justifies the definition of X-Content-Stream=true and associated behaviour.*
 
