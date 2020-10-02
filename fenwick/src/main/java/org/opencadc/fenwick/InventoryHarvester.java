@@ -288,13 +288,21 @@ public class InventoryHarvester implements Runnable {
             start = df.format(harvestState.curLastModified);
         }
         log.info("QUERY: DeletedStorageLocationEvent from=" + start);
+        boolean first = true;
         try (final ResourceIterator<DeletedStorageLocationEvent> deletedStorageLocationEventResourceIterator =
                      deletedStorageLocationEventSync.getEvents()) {
 
             while (deletedStorageLocationEventResourceIterator.hasNext()) {
                 final DeletedStorageLocationEvent deletedStorageLocationEvent =
                         deletedStorageLocationEventResourceIterator.next();
-
+                if (first 
+                        && deletedStorageLocationEvent.getID().equals(harvestState.curID)
+                        && deletedStorageLocationEvent.getLastModified().equals(harvestState.curLastModified)) {
+                    log.debug("SKIP: previously processed: " + deletedStorageLocationEvent.getID());
+                    first = false;
+                    continue; // ugh
+                }
+                
                 transactionManager.startTransaction();
                 final Artifact artifact = this.artifactDAO.get(deletedStorageLocationEvent.getID());
                 if (artifact != null) {
@@ -354,12 +362,20 @@ public class InventoryHarvester implements Runnable {
             start = df.format(harvestState.curLastModified);
         }
         log.info("QUERY: DeletedArtifactEvent from=" + start);
-                
+        boolean first = true;
         try (final ResourceIterator<DeletedArtifactEvent> deletedArtifactEventResourceIterator
                      = deletedArtifactEventSync.getEvents()) {
 
             while (deletedArtifactEventResourceIterator.hasNext()) {
                 final DeletedArtifactEvent deletedArtifactEvent = deletedArtifactEventResourceIterator.next();
+                if (first 
+                        && deletedArtifactEvent.getID().equals(harvestState.curID)
+                        && deletedArtifactEvent.getLastModified().equals(harvestState.curLastModified)) {
+                    log.debug("SKIP: previously processed: " + deletedArtifactEvent.getID());
+                    first = false;
+                    continue; // ugh
+                }
+                
                 transactionManager.startTransaction();
                 log.info("PUT: DeletedArtifactEvent " + deletedArtifactEvent.getID() + " " + df.format(deletedArtifactEvent.getLastModified()));
                 deletedArtifactEventDeletedEventDAO.put(deletedArtifactEvent);
@@ -420,13 +436,13 @@ public class InventoryHarvester implements Runnable {
                 if (artifactIncludeConstraintIterator.hasNext()) {
                     artifactSync.includeClause = artifactIncludeConstraintIterator.next();
                 }
-                boolean first = true;
                 
                 String start = null;
                 if (harvestState.curLastModified != null) {
                     start = df.format(harvestState.curLastModified);
                 }
-                log.info("QUERY: from=" + start);
+                log.info("QUERY: Artifact from=" + start);
+                boolean first = true;
                 try (final ResourceIterator<Artifact> artifactResourceIterator = artifactSync.iterator()) {
                     
                     while (artifactResourceIterator.hasNext()) {
