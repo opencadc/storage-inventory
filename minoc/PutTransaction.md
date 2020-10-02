@@ -44,7 +44,7 @@ successful response:
 202 (Accepted)
 X-Put-Txn={transaction id}
 Content-Length={number of bytes currently stored}
-Content-MD5={MD5 checksum of bytes currently stored}
+Content-MD5={MD5 checksum of bytes currently stored??}
 ```
 
 get current state:
@@ -103,7 +103,7 @@ response:
 202 (Accepted)
 X-Put-Txn={transaction id}
 Content-Length={number of bytes currently stored}
-Content-MD5={MD5 checksum of bytes currently stored}
+Content-MD5={MD5 checksum of bytes currently stored??}
 ```
 
 get state, commit, and abort: as above
