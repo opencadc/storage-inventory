@@ -274,6 +274,7 @@ public class InventoryHarvester implements Runnable {
                                                              this.resourceID)
                                           : existingHarvestState;
 
+        DateFormat df = DateUtil.getDateFormat(DateUtil.IVOA_DATE_FORMAT, DateUtil.UTC);
         final TapClient<DeletedStorageLocationEvent> deletedStorageLocationEventTapClient =
                 new TapClient<>(this.resourceID);
         final DeletedStorageLocationEventSync deletedStorageLocationEventSync =
@@ -281,6 +282,12 @@ public class InventoryHarvester implements Runnable {
         deletedStorageLocationEventSync.startTime = harvestState.curLastModified;
 
         final TransactionManager transactionManager = artifactDAO.getTransactionManager();
+        
+        String start = null;
+        if (harvestState.curLastModified != null) {
+            start = df.format(harvestState.curLastModified);
+        }
+        log.info("QUERY: DeletedStorageLocationEvent from=" + start);
         try (final ResourceIterator<DeletedStorageLocationEvent> deletedStorageLocationEventResourceIterator =
                      deletedStorageLocationEventSync.getEvents()) {
 
@@ -292,6 +299,9 @@ public class InventoryHarvester implements Runnable {
                 final Artifact artifact = this.artifactDAO.get(deletedStorageLocationEvent.getID());
                 if (artifact != null) {
                     final SiteLocation siteLocation = new SiteLocation(storageSite.getID());
+                    // TODO: this message could also log the artifact and site that was removed
+                    log.info("PUT: DeletedStorageLocationEvent " + deletedStorageLocationEvent.getID() 
+                            + " " + df.format(deletedStorageLocationEvent.getLastModified()));
                     artifactDAO.removeSiteLocation(artifact, siteLocation);
                     harvestState.curLastModified = deletedStorageLocationEvent.getLastModified();
                     harvestStateDAO.put(harvestState);
@@ -305,8 +315,6 @@ public class InventoryHarvester implements Runnable {
                 log.error("Exception in transaction.  Rolling back...");
                 transactionManager.rollbackTransaction();
                 log.error("Rollback: OK");
-            } else {
-                log.warn("No transaction started.");
             }
 
             throw exception;
@@ -331,6 +339,7 @@ public class InventoryHarvester implements Runnable {
                                                                      this.resourceID)
                                                   : existingHarvestState;
 
+        DateFormat df = DateUtil.getDateFormat(DateUtil.IVOA_DATE_FORMAT, DateUtil.UTC);
         final TapClient<DeletedArtifactEvent> deletedArtifactEventTapClientTapClient = new TapClient<>(this.resourceID);
         final DeletedArtifactEventSync deletedArtifactEventSync =
                 new DeletedArtifactEventSync(deletedArtifactEventTapClientTapClient);
@@ -340,15 +349,23 @@ public class InventoryHarvester implements Runnable {
 
         final TransactionManager transactionManager = artifactDAO.getTransactionManager();
 
+        String start = null;
+        if (harvestState.curLastModified != null) {
+            start = df.format(harvestState.curLastModified);
+        }
+        log.info("QUERY: DeletedArtifactEvent from=" + start);
+                
         try (final ResourceIterator<DeletedArtifactEvent> deletedArtifactEventResourceIterator
                      = deletedArtifactEventSync.getEvents()) {
 
             while (deletedArtifactEventResourceIterator.hasNext()) {
                 final DeletedArtifactEvent deletedArtifactEvent = deletedArtifactEventResourceIterator.next();
                 transactionManager.startTransaction();
+                log.info("PUT: DeletedArtifactEvent " + deletedArtifactEvent.getID() + " " + df.format(deletedArtifactEvent.getLastModified()));
                 deletedArtifactEventDeletedEventDAO.put(deletedArtifactEvent);
                 artifactDAO.delete(deletedArtifactEvent.getID());
                 harvestState.curLastModified = deletedArtifactEvent.getLastModified();
+                harvestState.curID = deletedArtifactEvent.getID();
                 harvestStateDAO.put(harvestState);
                 transactionManager.commitTransaction();
             }
@@ -357,8 +374,6 @@ public class InventoryHarvester implements Runnable {
                 log.error("Exception in transaction.  Rolling back...");
                 transactionManager.rollbackTransaction();
                 log.error("Rollback: OK");
-            } else {
-                log.warn("No transaction started.");
             }
 
             throw exception;
@@ -405,11 +420,27 @@ public class InventoryHarvester implements Runnable {
                 if (artifactIncludeConstraintIterator.hasNext()) {
                     artifactSync.includeClause = artifactIncludeConstraintIterator.next();
                 }
-
+                boolean first = true;
+                
+                String start = null;
+                if (harvestState.curLastModified != null) {
+                    start = df.format(harvestState.curLastModified);
+                }
+                log.info("QUERY: from=" + start);
                 try (final ResourceIterator<Artifact> artifactResourceIterator = artifactSync.iterator()) {
+                    
                     while (artifactResourceIterator.hasNext()) {
                         final Artifact artifact = artifactResourceIterator.next();
-                        log.debug("START: Process Artifact " + artifact.getURI());
+                        
+                        if (first 
+                                && artifact.getID().equals(harvestState.curID)
+                                && artifact.getLastModified().equals(harvestState.curLastModified)) {
+                            log.debug("SKIP: previously processed: " + artifact.getID() + " " + artifact.getURI());
+                            first = false;
+                            continue; // ugh
+                        }
+                        
+                        log.debug("START: Process Artifact " + artifact.getID() + " " + artifact.getURI());
 
                         final URI computedChecksum = artifact.computeMetaChecksum(messageDigest);
                         if (!artifact.getMetaChecksum().equals(computedChecksum)) {
@@ -419,28 +450,35 @@ public class InventoryHarvester implements Runnable {
 
                         // TODO: acquire update lock on current artifact and get it again, move startTransaction
                         Artifact currentArtifact = artifactDAO.get(artifact.getID());
-                        if (storageSite != null) {
-                            // trackSiteLocations: merge SiteLocation(s)
-                            artifact.siteLocations.add(new SiteLocation(storageSite.getID()));
-                            if (currentArtifact != null) {
-                                artifact.siteLocations.addAll(currentArtifact.siteLocations);
-                            }
-                        } else {
-                            // storage site: keep StorageLocation
-                            if (currentArtifact != null) {
-                                artifact.storageLocation = currentArtifact.storageLocation;
-                            }
-                        }
-
+                        
                         transactionManager.startTransaction();
-
-                        log.info("PUT: " + artifact.getID() + " " + artifact.getURI() + " "
-                                 + df.format(artifact.getLastModified()));
-                        artifactDAO.put(artifact);
+                        
+                        log.info("PUT: artifact " + artifact.getID() + " " + artifact.getURI() + " " + df.format(artifact.getLastModified()));
+                        if (storageSite != null && currentArtifact != null && artifact.getMetaChecksum().equals(currentArtifact.getMetaChecksum())) {
+                            // only adding a SiteLocation
+                            artifactDAO.addSiteLocation(currentArtifact, new SiteLocation(storageSite.getID()));
+                        } else {
+                            if (storageSite != null) {
+                                // trackSiteLocations: merge SiteLocation(s)
+                                artifact.siteLocations.add(new SiteLocation(storageSite.getID()));
+                                if (currentArtifact != null) {
+                                    artifact.siteLocations.addAll(currentArtifact.siteLocations);
+                                }
+                            } else {
+                                // storage site: keep StorageLocation
+                                if (currentArtifact != null) {
+                                    artifact.storageLocation = currentArtifact.storageLocation;
+                                }
+                            }
+                            
+                            artifactDAO.put(artifact);
+                        }
+                        
                         harvestState.curLastModified = artifact.getLastModified();
+                        harvestState.curID = artifact.getID();
                         harvestStateDAO.put(harvestState);
                         transactionManager.commitTransaction();
-                        log.debug("END: Process Artifact " + artifact.getURI() + ".");
+                        log.debug("END: Process Artifact " + artifact.getID() + " " + artifact.getURI());
                     }
                 }
 
@@ -451,8 +489,6 @@ public class InventoryHarvester implements Runnable {
                 log.error("Exception in transaction.  Rolling back...");
                 transactionManager.rollbackTransaction();
                 log.error("Rollback: OK");
-            } else {
-                log.warn("No transaction started.");
             }
 
             throw exception;
