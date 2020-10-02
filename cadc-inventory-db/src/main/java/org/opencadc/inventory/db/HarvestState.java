@@ -89,6 +89,11 @@ public class HarvestState extends Entity {
      * The timestamp of the last successfully harvested entity.
      */
     public Date curLastModified;
+
+    /**
+     * The ID of the last successfully harvested entity.
+     */
+    public UUID curID;
     
     public HarvestState(String name, URI resourceID) { 
         super();

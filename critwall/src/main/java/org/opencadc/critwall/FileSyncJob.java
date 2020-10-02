@@ -71,7 +71,6 @@ import ca.nrc.cadc.auth.AuthMethod;
 import ca.nrc.cadc.auth.AuthenticationUtil;
 import ca.nrc.cadc.auth.RunnableAction;
 import ca.nrc.cadc.io.ByteLimitExceededException;
-import ca.nrc.cadc.io.ReadException;
 import ca.nrc.cadc.io.WriteException;
 import ca.nrc.cadc.net.FileContent;
 import ca.nrc.cadc.net.HttpGet;
@@ -97,6 +96,7 @@ import java.net.URL;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.UUID;
 import javax.security.auth.Subject;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
@@ -114,18 +114,18 @@ public class FileSyncJob implements Runnable {
     private static long[] RETRY_DELAY = new long[] { 2000L, 4000L };
 
     private final ArtifactDAO artifactDAO;
-    private final URI artifactID;
+    private final Artifact artifact;
     private final URI locatorService;
     private final StorageAdapter storageAdapter;
     private final Subject subject;
     
-    public FileSyncJob(URI artifactID, URI locatorServiceID, StorageAdapter storageAdapter, ArtifactDAO artifactDAO, Subject subject) {
-        InventoryUtil.assertNotNull(FileSyncJob.class, "artifactID", artifactID);
+    public FileSyncJob(Artifact artifact, URI locatorServiceID, StorageAdapter storageAdapter, ArtifactDAO artifactDAO, Subject subject) {
+        InventoryUtil.assertNotNull(FileSyncJob.class, "artifact", artifact);
         InventoryUtil.assertNotNull(FileSyncJob.class, "locatorServiceID", locatorServiceID);
         InventoryUtil.assertNotNull(FileSyncJob.class, "storageAdapter", storageAdapter);
         InventoryUtil.assertNotNull(FileSyncJob.class, "artifactDAO", artifactDAO);
 
-        this.artifactID = artifactID;
+        this.artifact = artifact;
         this.locatorService = locatorServiceID;
         this.storageAdapter = storageAdapter;
 
@@ -138,40 +138,67 @@ public class FileSyncJob implements Runnable {
         Subject.doAs(subject, new RunnableAction(this::doSync));
     }
 
+    // approach here is conservative: if the input artifact changed|deleted in the database, 
+    // the job will abort
+    // in cases where the artifact changed, it will be picked up again and syn'ed later
+    // - note: we only have to worry about changes in Artifact.uri because it may be made mutable in future
+    //         Artifact.contentChecksum and Artifact.contentLength are immutable      
     private void doSync() {
-        log.info("FileSyncJob.START " + artifactID);
+        log.info("FileSyncJob.START " + artifact.getURI());
         long start = System.currentTimeMillis();
         boolean success = false;
         String msg = "";
+        String artifactLabel = artifact.getID().toString() + "|" + artifact.getURI().toASCIIString();
         
         try {
+            Artifact curArtifact = this.artifactDAO.get(artifact.getID());
+            if (curArtifact == null || !artifact.getURI().equals(curArtifact.getURI())) {
+                log.debug("artifact " + artifact.getID() + " changed|deleted since job created");
+                return;
+            }
             List<URL> urlList;
+            
             try {
-                urlList = getDownloadURLs(this.locatorService, this.artifactID);
+                urlList = getDownloadURLs(this.locatorService, artifact.getURI());
                 if (urlList.isEmpty()) {
                     msg = " locator returned 0 URLs";
                     return;
                 }
             } catch (Exception ex) {
-                log.debug("transfer negotiation failed: " + artifactID, ex);
-                msg = " transfer negotiation failed: " + artifactID + " (" + ex + ")";
+                log.debug("transfer negotiation failed: " + artifactLabel, ex);
+                msg = " transfer negotiation failed: " + artifactLabel + " (" + ex + ")";
                 return;
             }
             
             int retryCount = 0;
             try {
+                
                 while (!urlList.isEmpty() && retryCount < RETRY_DELAY.length) {
-                    log.info("FileSyncJob.SYNC " + artifactID + " urls=" + urlList.size() + " attempt=" + retryCount);
-                    log.debug("attempt " + retryCount + " to sync artifact " + this.artifactID);
-                    StorageMetadata storageMeta = syncArtifact(urlList);
+                    curArtifact = this.artifactDAO.get(artifact.getID());
+                    if (curArtifact == null || !artifact.getURI().equals(curArtifact.getURI())) {
+                        log.debug("artifact " + artifact.getID() + " changed|deleted since job created");
+                        return;
+                    }
+                    log.info("FileSyncJob.SYNC " + artifactLabel + " urls=" + urlList.size() + " attempt=" + retryCount);
+                    log.debug("attempt " + retryCount + " to sync artifact " + artifactLabel);
+                    StorageMetadata storageMeta = syncArtifact(artifact, urlList);
 
                     // sync succeeded - update storage location
                     if (storageMeta != null) {
-                        Artifact curArtifact = this.artifactDAO.get(this.artifactID);
-                        this.artifactDAO.setStorageLocation(curArtifact, storageMeta.getStorageLocation());
-                        log.debug("updated artifact storage location" + curArtifact.storageLocation);
-                        success = true;
-                        break;
+                        curArtifact = this.artifactDAO.get(artifact.getID());
+                        // here we only care about URI change since that's the only potentially mutable part of a NewArtifact 
+                        // that could get persisted in the back end
+                        if (curArtifact == null || !artifact.getURI().equals(curArtifact.getURI())) {
+                            log.debug("artifact " + artifact.getID() + " changed|deleted since job created");
+                            storageAdapter.delete(storageMeta.getStorageLocation());
+                            return;
+                        } else {
+                            // use curArtifact here so mutable metadata is not reverted accidentally
+                            this.artifactDAO.setStorageLocation(curArtifact, storageMeta.getStorageLocation());
+                            log.debug("updated artifact storage location" + curArtifact.storageLocation);
+                            success = true;
+                            break;
+                        }
                     }
 
                     Thread.sleep(RETRY_DELAY[retryCount++]);
@@ -180,18 +207,18 @@ public class FileSyncJob implements Runnable {
                     msg = " no more URLs to try";
                 }
             } catch (IllegalStateException ex) {
-                log.debug("artifact sync aborted: " + this.artifactID, ex);
-                msg = " artifact sync aborted: " + this.artifactID + " (" + ex + ")";
+                log.debug("artifact sync aborted: " + artifactLabel, ex);
+                msg = " artifact sync aborted: " + artifactLabel + " (" + ex + ")";
             } catch (IllegalArgumentException | InterruptedException | StorageEngageException | WriteException ex) {
-                log.debug("artifact sync error: " + this.artifactID, ex);
-                msg = " artifact sync error: " + this.artifactID + " (" + ex + ")";
+                log.debug("artifact sync error: " + artifactLabel, ex);
+                msg = " artifact sync error: " + artifactLabel + " (" + ex + ")";
             } catch (Exception ex) {
-                log.debug("unexpected fail: " + this.artifactID, ex);
-                msg = " unexpected sync error: " + this.artifactID + " (" + ex + ")";
+                log.debug("unexpected fail: " + artifactLabel, ex);
+                msg = " unexpected sync error: " + artifactLabel + " (" + ex + ")";
             }
         } finally {
             long dt = System.currentTimeMillis() - start;
-            log.info("FileSyncJob.END " + artifactID + " dt=" + dt + " success=" + success + msg);
+            log.info("FileSyncJob.END " + artifactLabel + " dt=" + dt + " success=" + success + msg);
         }
     }
 
@@ -269,14 +296,14 @@ public class FileSyncJob implements Runnable {
     /**
      * Go through contents of urlIterator, attempting to sync the artifact.
      * @param urlIterator   Iterator over transfer URLs discovered.
-     * @return success: return Storage Metadata from first successful sync
+     * @return success: return StorageMetadata from first successful sync
      *         fail: return null if all URLs failed | throw if failure is fatal (internal)
      * @throws StorageEngageException
      * @throws InterruptedException
      * @throws WriteException
      * @throws IllegalArgumentException
      */
-    private StorageMetadata syncArtifact(List<URL> urls)
+    private StorageMetadata syncArtifact(Artifact a, List<URL> urls)
         throws ByteLimitExceededException, StorageEngageException, InterruptedException, WriteException, IllegalArgumentException {
 
         StorageMetadata storageMeta = null;
@@ -291,14 +318,11 @@ public class FileSyncJob implements Runnable {
                 HttpGet get = new HttpGet(u, dest);
                 get.prepare();
 
-                // Check content checksum and length to verify this
-                // artifact can be synced currently
-                Artifact curArtifact = this.artifactDAO.get(this.artifactID);
-
-                if (curArtifact.storageLocation != null) {
+                Artifact tmp = artifactDAO.get(a.getID());
+                if (tmp != null && a.storageLocation != null) {
                     // artifact has been acted on since this FileSyncJob
                     // instance started and it was null
-                    throw new IllegalStateException("storageLocation updated since FileSyncJob was created: " + this.artifactID);
+                    throw new IllegalStateException("storageLocation updated since FileSyncJob was created: " + a.getURI());
                 }
 
                 // Note: the storage adapter 'put' below does checksum and content length
@@ -306,22 +330,22 @@ public class FileSyncJob implements Runnable {
                 // Making the checks here is more efficient.
                 String getContentMD5 = get.getContentMD5();
                 if (getContentMD5 != null
-                    && !getContentMD5.equals(curArtifact.getContentChecksum().getSchemeSpecificPart())) {
-                    throw new PreconditionFailedException("contentChecksum mismatch: " + this.artifactID);
+                    && !getContentMD5.equals(a.getContentChecksum().getSchemeSpecificPart())) {
+                    throw new PreconditionFailedException("contentChecksum mismatch: " + a.getURI());
                 }
 
                 long getContentLen = get.getContentLength();
                 if (getContentLen != -1
-                    && getContentLen != curArtifact.getContentLength()) {
-                    throw new PreconditionFailedException("contentLength mismatch: " + this.artifactID
-                        + " artifact: " + curArtifact.getContentLength() + " header: " + getContentLen);
+                    && getContentLen != a.getContentLength()) {
+                    throw new PreconditionFailedException("contentLength mismatch: " + a.getURI()
+                        + " artifact: " + a.getContentLength() + " header: " + getContentLen);
                 }
 
-                NewArtifact a = new NewArtifact(this.artifactID);
-                a.contentChecksum = curArtifact.getContentChecksum();
-                a.contentLength = curArtifact.getContentLength();
+                NewArtifact na = new NewArtifact(a.getURI());
+                na.contentChecksum = a.getContentChecksum();
+                na.contentLength = a.getContentLength();
 
-                storageMeta = this.storageAdapter.put(a, get.getInputStream());
+                storageMeta = this.storageAdapter.put(na, get.getInputStream());
                 log.debug("storage meta returned: " + storageMeta.getStorageLocation());
                 return storageMeta;
 

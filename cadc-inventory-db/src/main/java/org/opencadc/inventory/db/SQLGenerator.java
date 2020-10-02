@@ -191,6 +191,7 @@ public class SQLGenerator {
             "name",
             "resourceID",
             "curLastModified",
+            "curID",
             "lastModified",
             "metaChecksum",
             "id" // last column is always PK
@@ -851,6 +852,11 @@ public class SQLGenerator {
             } else {
                 prep.setNull(col++, Types.TIMESTAMP);
             }
+            if (value.curID != null) {
+                prep.setObject(col++, value.curID);
+            } else {
+                prep.setNull(col++, Types.OTHER);
+            }
             
             prep.setTimestamp(col++, new Timestamp(value.getLastModified().getTime()), utc);
             prep.setString(col++, value.getMetaChecksum().toASCIIString());
@@ -1198,6 +1204,7 @@ public class SQLGenerator {
             final String name = rs.getString(col++);
             final URI resourecID = Util.getURI(rs, col++);
             final Date curLastModified = Util.getDate(rs, col++, utc);
+            final UUID curID = Util.getUUID(rs, col++);
             
             final Date lastModified = Util.getDate(rs, col++, utc);
             final URI metaChecksum = Util.getURI(rs, col++);
@@ -1205,6 +1212,7 @@ public class SQLGenerator {
             
             HarvestState ret = new HarvestState(id, name, resourecID);
             ret.curLastModified = curLastModified;
+            ret.curID = curID;
             InventoryUtil.assignLastModified(ret, lastModified);
             InventoryUtil.assignMetaChecksum(ret, metaChecksum);
             return ret;
