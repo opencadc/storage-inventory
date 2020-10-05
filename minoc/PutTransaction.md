@@ -31,7 +31,8 @@ At this point, the file is permanently stored.
 ## PUT with Transaction
 
 The *put with transaction* pattern allows a client to upload content, compute the length and 
-checksum on-the-fly, and verify the upload before the commit. 
+checksum on-the-fly, and verify the upload before the commit. It works equally well for uploading 
+files and streaming dynamic content as far as verifying that the upload was successful.
 
 upload request:
 ```
@@ -49,7 +50,7 @@ Content-Length={number of bytes stored}
 Content-MD5={MD5 checksum of bytes stored}
 ```
 
-get current state:
+state:
 ```
 HTTP HEAD /minoc/files/{Artifact.uri}
 X-Put-Txn={transaction id}
@@ -84,15 +85,20 @@ and response metadata is for the current state of all stored bytes.
 Uncommitted transactions will eventually be aborted by the server; the client can 
 help with cleanup by aborting manually. The behaviour of multiple transactions 
 targetting the same Artifact.uri is undefined, so aborting the transaction of a failed upload
-before retrying will behave in a predictable way.
+before retrying could potentially behave in a more predictable way.
 
-## Put with Transaction and Resume
+## Put with Transaction and Append
+
+With the concept of a transaction one can also define what is means to do a second PUT in the same transaction: append.
+This allows a client to resume an interrupted download.
 
 upload request: as above
 
-response: as above; intermediate metadata for the content that was stored
+response: as above
 
-append more content:
+state: as above
+
+append:
 ```
 HTTP PUT /minoc/files/{Artifact.uri}
 X-Put-Txn={transaction id}
@@ -108,7 +114,7 @@ Content-Length={number of bytes stored}
 Content-MD5={MD5 checksum of bytes stored}
 ```
 
-get state, commit, and abort: as above
+state, commit, and abort: as above
 
 This pattern defines one feature: PUT can append by uploading more content in the same transaction. The client can make use of the
 Content-Length to decide if it needs to send more bytes. Te client can only feasibly use the Content-MD5 to decide if it should commit 
