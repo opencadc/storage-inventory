@@ -6,6 +6,8 @@ committed if pre-conditions are satisfied:
 * content length matches value provided at start (optional)
 * content checksum matches value provided at start (optional)
 
+Note: where it says Content-MD5 this could/should/will also be the Digest HTTP header.
+
 ## PUT
 
 If the caller provides pre-condition metadata with the initial request, the server can 
@@ -21,8 +23,8 @@ Content-MD5={MD5 checksum} (optional)
 successful response:
 ```
 201 (Created)
-Content-Length={number of bytes currently stored}
-Content-MD5={MD5 checksum of bytes currently stored}
+Content-Length={number of bytes stored}
+Content-MD5={MD5 checksum of bytes stored}
 ```
 At this point, the file is permanently stored. 
 
@@ -43,8 +45,8 @@ successful response:
 ```
 202 (Accepted)
 X-Put-Txn={transaction id}
-Content-Length={number of bytes currently stored}
-Content-MD5={MD5 checksum of bytes currently stored??}
+Content-Length={number of bytes stored}
+Content-MD5={MD5 checksum of bytes stored}
 ```
 
 get current state:
@@ -102,19 +104,22 @@ response:
 ```
 202 (Accepted)
 X-Put-Txn={transaction id}
-Content-Length={number of bytes currently stored}
-Content-MD5={MD5 checksum of bytes currently stored??}
+Content-Length={number of bytes stored}
+Content-MD5={MD5 checksum of bytes stored}
 ```
 
 get state, commit, and abort: as above
 
-This pattern defines one feature: PUT can append by uploading more content in the same transaction.
+This pattern defines one feature: PUT can append by uploading more content in the same transaction. The client can make use of the
+Content-Length to decide if it needs to send more bytes. Te client can only feasibly use the Content-MD5 to decide if it should commit 
+or abort.
 
 TBD: In the context of large files (~5GiB) the Content-Length header in the initial request 
 is required so the implementation can decide (i) if resume will be supported, and (ii) how to
 store the data. implementation limitations give something like:
 * Content-Length not provided: txn, resume, default behaviour: fail if exceed implementation limit
-* Content-Length not provided, X-Content-Stream=true: txn, resume, implementation prepares to accept large amount of content
+* Content-Length not provided, X-Content-Stream=true: txn, (resume), implementation prepares to accept large amount of content, client
+  probably cannot resume
 * Content-Length provided, {length} <= X: txn, no resume
 * Content-Length provided, {length} > X: txn, resume
 If resume is not supported, the PUT with X-Put-Txn and {body} would fail with a 400 (405?).
