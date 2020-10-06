@@ -83,8 +83,6 @@ import java.net.URI;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.text.DateFormat;
-import java.util.Iterator;
-import java.util.List;
 import java.util.Map;
 
 import javax.sql.DataSource;
@@ -421,84 +419,71 @@ public class InventoryHarvester implements Runnable {
                                           : existingHarvestState;
 
         final ArtifactSync artifactSync = new ArtifactSync(artifactTapClient, harvestState.curLastModified);
-        final List<String> artifactIncludeConstraints = this.selector.getConstraints();
-        final Iterator<String> artifactIncludeConstraintIterator = artifactIncludeConstraints.iterator();
 
         final TransactionManager transactionManager = artifactDAO.getTransactionManager();
 
         try {
-            boolean keepRunning = true;
+            // The constraint can be null as is the case for the AllArtifacts selector.
+            artifactSync.includeClause = this.selector.getConstraint();
 
-            // This loop will always run at least once.  This will allow a list of constraints of one or more clauses,
-            // or include the case where no constraints are issued.
-            while (keepRunning) {
+            String start = null;
+            if (harvestState.curLastModified != null) {
+                start = df.format(harvestState.curLastModified);
+            }
+            log.info("QUERY: Artifact from=" + start);
+            boolean first = true;
+            try (final ResourceIterator<Artifact> artifactResourceIterator = artifactSync.iterator()) {
+                while (artifactResourceIterator.hasNext()) {
+                    final Artifact artifact = artifactResourceIterator.next();
 
-                if (artifactIncludeConstraintIterator.hasNext()) {
-                    artifactSync.includeClause = artifactIncludeConstraintIterator.next();
-                }
-                
-                String start = null;
-                if (harvestState.curLastModified != null) {
-                    start = df.format(harvestState.curLastModified);
-                }
-                log.info("QUERY: Artifact from=" + start);
-                boolean first = true;
-                try (final ResourceIterator<Artifact> artifactResourceIterator = artifactSync.iterator()) {
-                    
-                    while (artifactResourceIterator.hasNext()) {
-                        final Artifact artifact = artifactResourceIterator.next();
-                        
-                        if (first 
-                                && artifact.getID().equals(harvestState.curID)
-                                && artifact.getLastModified().equals(harvestState.curLastModified)) {
-                            log.debug("SKIP: previously processed: " + artifact.getID() + " " + artifact.getURI());
-                            first = false;
-                            continue; // ugh
-                        }
-                        
-                        log.debug("START: Process Artifact " + artifact.getID() + " " + artifact.getURI());
-
-                        final URI computedChecksum = artifact.computeMetaChecksum(messageDigest);
-                        if (!artifact.getMetaChecksum().equals(computedChecksum)) {
-                            throw new IllegalStateException("checksum mismatch: " + artifact.getID() + " " + artifact.getURI()
-                                    + " provided=" + artifact.getMetaChecksum() + " actual=" + computedChecksum);
-                        }
-
-                        // TODO: acquire update lock on current artifact and get it again, move startTransaction
-                        Artifact currentArtifact = artifactDAO.get(artifact.getID());
-                        
-                        transactionManager.startTransaction();
-                        
-                        log.info("PUT: artifact " + artifact.getID() + " " + artifact.getURI() + " " + df.format(artifact.getLastModified()));
-                        if (storageSite != null && currentArtifact != null && artifact.getMetaChecksum().equals(currentArtifact.getMetaChecksum())) {
-                            // only adding a SiteLocation
-                            artifactDAO.addSiteLocation(currentArtifact, new SiteLocation(storageSite.getID()));
-                        } else {
-                            if (storageSite != null) {
-                                // trackSiteLocations: merge SiteLocation(s)
-                                artifact.siteLocations.add(new SiteLocation(storageSite.getID()));
-                                if (currentArtifact != null) {
-                                    artifact.siteLocations.addAll(currentArtifact.siteLocations);
-                                }
-                            } else {
-                                // storage site: keep StorageLocation
-                                if (currentArtifact != null) {
-                                    artifact.storageLocation = currentArtifact.storageLocation;
-                                }
-                            }
-                            
-                            artifactDAO.put(artifact);
-                        }
-                        
-                        harvestState.curLastModified = artifact.getLastModified();
-                        harvestState.curID = artifact.getID();
-                        harvestStateDAO.put(harvestState);
-                        transactionManager.commitTransaction();
-                        log.debug("END: Process Artifact " + artifact.getID() + " " + artifact.getURI());
+                    if (first
+                            && artifact.getID().equals(harvestState.curID)
+                            && artifact.getLastModified().equals(harvestState.curLastModified)) {
+                        log.debug("SKIP: previously processed: " + artifact.getID() + " " + artifact.getURI());
+                        first = false;
+                        continue; // ugh
                     }
-                }
 
-                keepRunning = artifactIncludeConstraintIterator.hasNext();
+                    log.debug("START: Process Artifact " + artifact.getID() + " " + artifact.getURI());
+
+                    final URI computedChecksum = artifact.computeMetaChecksum(messageDigest);
+                    if (!artifact.getMetaChecksum().equals(computedChecksum)) {
+                        throw new IllegalStateException("checksum mismatch: " + artifact.getID() + " " + artifact.getURI()
+                                + " provided=" + artifact.getMetaChecksum() + " actual=" + computedChecksum);
+                    }
+
+                    // TODO: acquire update lock on current artifact and get it again, move startTransaction
+                    Artifact currentArtifact = artifactDAO.get(artifact.getID());
+
+                    transactionManager.startTransaction();
+
+                    log.info("PUT: artifact " + artifact.getID() + " " + artifact.getURI() + " " + df.format(artifact.getLastModified()));
+                    if (storageSite != null && currentArtifact != null && artifact.getMetaChecksum().equals(currentArtifact.getMetaChecksum())) {
+                        // only adding a SiteLocation
+                        artifactDAO.addSiteLocation(currentArtifact, new SiteLocation(storageSite.getID()));
+                    } else {
+                        if (storageSite != null) {
+                            // trackSiteLocations: merge SiteLocation(s)
+                            artifact.siteLocations.add(new SiteLocation(storageSite.getID()));
+                            if (currentArtifact != null) {
+                                artifact.siteLocations.addAll(currentArtifact.siteLocations);
+                            }
+                        } else {
+                            // storage site: keep StorageLocation
+                            if (currentArtifact != null) {
+                                artifact.storageLocation = currentArtifact.storageLocation;
+                            }
+                        }
+
+                        artifactDAO.put(artifact);
+                    }
+
+                    harvestState.curLastModified = artifact.getLastModified();
+                    harvestState.curID = artifact.getID();
+                    harvestStateDAO.put(harvestState);
+                    transactionManager.commitTransaction();
+                    log.debug("END: Process Artifact " + artifact.getID() + " " + artifact.getURI());
+                }
             }
         } catch (Exception exception) {
             if (transactionManager.isOpen()) {
