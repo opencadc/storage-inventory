@@ -89,8 +89,8 @@ before retrying could potentially behave in a more predictable way.
 
 ## Put with Transaction and Append
 
-With the concept of a transaction one can also define what is means to do a second PUT in the same transaction: append.
-This allows a client to resume an interrupted download.
+With the concept of a transaction one can also define what is means to do a second PUT in 
+the same transaction: append. This allows a client to resume an interrupted download.
 
 upload request: as above
 
@@ -116,22 +116,54 @@ Content-MD5={MD5 checksum of bytes stored}
 
 state, commit, and abort: as above
 
-This pattern defines one feature: PUT can append by uploading more content in the same transaction. The client can make use of the
-Content-Length to decide if it needs to send more bytes. Te client can only feasibly use the Content-MD5 to decide if it should commit 
-or abort.
+This pattern defines one feature: PUT can append by uploading more content in the same transaction. 
+The client can make use of the Content-Length to decide if it needs to send more bytes. The client 
+can only feasibly use the Content-MD5 to decide if it should commit or abort.
 
-TBD: In the context of large files (~5GiB) the Content-Length header in the initial request 
+In the context of large files (~5GiB) the Content-Length header in the initial request 
 is required so the implementation can decide (i) if resume will be supported, and (ii) how to
-store the data. implementation limitations give something like:
-* Content-Length not provided: txn, resume, default behaviour: fail if exceed implementation limit
-* Content-Length not provided, X-Content-Stream=true: txn, (resume), implementation prepares to accept large amount of content, client
-  probably cannot resume
-* Content-Length provided, {length} <= X: txn, no resume
-* Content-Length provided, {length} > X: txn, resume
-If resume is not supported, the PUT with X-Put-Txn and {body} would fail with a 400 (405?).
+store the data.
+* Content-Length not provided: txn, resume?, default behaviour: fail if exceed implementation limit
+* Content-Length not provided, X-Large-Stream=true: txn, resume, implementation prepares to accept 
+large amount of content, (client probably cannot resume)
+* Content-Length provided: txn, resume?
 
-Q. Is it necessary to tell the client that resume is not supported before hand? It means defining a second custom
-header and doesn't really add anything.
+A StorageAdapter implementation must support put with transaction. The implementation
+will decide if resume is supported or not. If resume is not supported, the PUT with 
+X-Put-Txn and {body} would fail with a 400 (405?).
+
+## Implementation Expectations
+
+The StorageAdapter invocation will have to change to support passing additional info from
+minoc into the adapter implementation (txnid, large-stream hint, commit, abort)... probably 
+by changing the interface. **TBD**
+
+OpaqueFileSystemStorageAdapter already has a transaction/commit model and can support txn and 
+resume for any file with no enforced limit.
+
+SwiftStorageAdapter can support txn but not resume for files stored as single data objects.
+The transaction will probably be done via some attribute on the object that causes the iterator to
+skip; commit would mean removing the attr. **TBD**
+
+SwiftStorageAdapter can support txn and resume for files stored as segmented large objects. The 
+adapter has to create a new chunk periodically (5GiB limit per chunk) and each resume has to 
+create a new chunk as well. Uploads with many stop/resume(s) and thus many small chunks will be
+stored very inefficiently and at some point this pattern should be rejected -- maybe the adapter
+should abort txn if it ends up creating chunks smaller than some limit (1GiB?), except the last 
+chunk. There is a limit on number of chunks (default: 1000), container listing may be used
+to access chunks, and will be used to validate chunks.
+
+**Future proofing**: there are several potential enhancements that could be added in the future that will 
+guide implementation choices, especially in the SwiftStorageAdapter and how CEPH object store is used.
+
+## Deployment Considerations
+
+In order to support resume, a minoc instance must have the MessageDigest instance that digested 
+there bytes from the beggining of the PUT and continue to digest bytes with that instance. The two 
+possible ways to implement this are (i) keep the instance in memory and require request affinity 
+based on the txnid (X-Put-Txn header) or (ii) use a MessageDigest implementation that can be serialised 
+so it can be stored at the end of a request and re-instantiated when a new request with that txnid
+begins. **TBD**
 
 ## A Tale of Two Conflicting Use Cases
 
@@ -143,5 +175,5 @@ many such files, which means storing the small file as a single object in object
 streams the bytes. For a query like `select * from cfht.megapipe` the resulting file was ~40GiB. From the client side, 
 this is not resumable. We want to store that in the most flexible way possible because the byte stream may be large, 
 so this identical-looking request needs to be stored in multiple chunks in object store (cadc-storage-adpater-ceph).
-*This use case justifies the definition of X-Content-Stream=true and associated behaviour.*
+*This use case justifies the definition of X-Large-Stream hint and associated behaviour.*
 
