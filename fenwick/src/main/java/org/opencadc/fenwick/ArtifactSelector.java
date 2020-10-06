@@ -69,7 +69,6 @@ package org.opencadc.fenwick;
 
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import java.io.IOException;
-import java.util.List;
 
 
 /**
@@ -80,13 +79,13 @@ import java.util.List;
  */
 public interface ArtifactSelector {
     /**
-     * Obtain the list of clauses used to build a query to include the Artifacts being merged. Each string 
-     * is a condition that can be added to the WHERE clause of artifact sync queries.
+     * Obtain a condition used to build a query to include the Artifacts being merged that can be added to the WHERE
+     * clause of artifact sync queries.
      *
-     * @return list of constraints for use in the WHERE clause; possibly empty
+     * @return SQL constraint for use in the WHERE clause; possibly null
      * @throws ResourceNotFoundException    For any missing required configuration that is missing.
      * @throws IOException      For unreadable configuration files.
      * @throws IllegalStateException    For any invalid configuration.
      */
-    List<String> getConstraints() throws ResourceNotFoundException, IOException, IllegalStateException;
+    String getConstraint() throws ResourceNotFoundException, IOException, IllegalStateException;
 }

@@ -68,7 +68,6 @@
 package org.opencadc.fenwick;
 
 import java.util.ArrayList;
-import java.util.List;
 
 /**
  * Selector that does not constrain Artifact selection.
@@ -86,7 +85,7 @@ public class AllArtifacts implements ArtifactSelector {
      * @return empty list
      */
     @Override
-    public List<String> getConstraints() {
-        return new ArrayList<String>(0);
+    public String getConstraint() {
+        return null;
     }
 }
