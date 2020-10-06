@@ -107,38 +107,30 @@ public class IncludeArtifacts implements ArtifactSelector {
     /**
      * Obtain the iterator of clauses used to build a query to include the Artifacts being merged.
      *
-     * This method will load the expected file, and verify that the clause declared within begins with WHERE.  That
+     * <p>This method will load the expected file, and verify that the clause declared within begins with WHERE.  That
      * clause is then parsed and returned with the WHERE keyword stripped.
      *
-     * <p/>
-     * This method is how the SQL files are read in and loaded as clauses.  Any lines that are not comments are
+     * <p>This method is how the SQL file is read in and loaded as a clause.  Any lines that are not comments are
      * considered part of the clause.  Comments begin with <code>--</code> and can be within the line, but anything
      * after the <code>--</code> will be ignored.
      *
-     * <p>This class will read in the SQL (*.sql) files located in the configuration directory and parse the SQL
+     * <p>This class will read in the SQL (*.sql) file located in the configuration directory and parse the SQL
      * fragments.  Each fragment MUST begin with the WHERE keyword and be followed by one or more SQL conditions:
      *
-     * <p>include-date.sql
+     * <p>artifact-filter.sql
      * <code>
      * -- Comments are OK and ignored!
      * WHERE lastModified &gt; 2020-03-03 AND lastModified &lt; 2020-03-30
      * </code>
      *
-     * <p>include-uri.sql
-     * <code>
-     * -- Multiline is OK, too!
-     * WHERE uri like 'ad:TEST%'
-     * OR uri like 'ad:CADC%'
-     * </code>
-     *
-     * <p>The *.sql files are parsed and ANDed together to form the WHERE clause for the query to select desired
+     * <p>The *.sql file is parsed and ANDed together to form the WHERE clause for the query to select desired
      * Artifacts:
      * <code>
      * WHERE (lastModified &gt; 2020-03-03 AND lastModified &lt; 2020-03-30)
      * AND (uri like 'ad:TEST%' OR uri like 'ad:CADC%')
      * </code>
      *
-     * @return Iterator of String clauses
+     * @return String condition.
      * @throws ResourceNotFoundException For any missing required configuration.
      * @throws IOException               For unreadable configuration files.
      * @throws IllegalStateException     For any invalid configuration.

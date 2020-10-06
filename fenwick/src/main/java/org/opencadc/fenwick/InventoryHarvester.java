@@ -67,7 +67,6 @@
 
 package org.opencadc.fenwick;
 
-
 import ca.nrc.cadc.date.DateUtil;
 import ca.nrc.cadc.db.DBUtil;
 import ca.nrc.cadc.db.TransactionManager;
