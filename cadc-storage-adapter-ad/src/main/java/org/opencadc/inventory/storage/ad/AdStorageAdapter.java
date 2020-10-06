@@ -71,6 +71,7 @@ package org.opencadc.inventory.storage.ad;
 
 import ca.nrc.cadc.auth.AuthMethod;
 import ca.nrc.cadc.auth.AuthenticationUtil;
+import ca.nrc.cadc.cred.client.CredUtil;
 import ca.nrc.cadc.io.ByteLimitExceededException;
 import ca.nrc.cadc.io.MultiBufferIO;
 import ca.nrc.cadc.io.ReadException;
@@ -93,6 +94,8 @@ import java.io.OutputStream;
 import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URL;
+import java.security.cert.CertificateExpiredException;
+import java.security.cert.CertificateNotYetValidException;
 import java.util.Iterator;
 import java.util.Set;
 import java.util.SortedSet;
@@ -143,6 +146,17 @@ public class AdStorageAdapter implements StorageAdapter {
 
         URL sourceURL = this.toURL(storageLocation.getStorageID());
         log.debug("sourceURL: " + sourceURL.toString());
+
+        try {
+            boolean auth = CredUtil.checkCredentials();
+            log.debug("authenticated: " + auth);
+        } catch (CertificateExpiredException e) {
+            log.debug("error type: " + e.getClass());
+            throw new RuntimeException(e.getMessage());
+        } catch (CertificateNotYetValidException e) {
+            log.debug("error type: " + e.getClass());
+            throw new RuntimeException(e.getMessage());
+        }
 
         try {
             boolean followRedirects = true;
