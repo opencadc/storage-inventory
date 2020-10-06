@@ -60,6 +60,7 @@ response: same as above
 commit transaction:
 ```
 HTTP PUT /minoc/files/{Artifact.uri}
+Content-Length=0
 X-Put-Txn={transaction id}
 ```
 successful commit response:
@@ -78,6 +79,9 @@ successful abort response:
 ```
 204 (No Content)
 ```
+
+The commit step (PUT X-Put-Txn={transaction id} with no body is potentially subtle, but the Content-Length = 0 (no more content)
+does mean it won't happen by accident. **TBD**
 
 Responses describe the current state of a transaction: 202 means transaction is open 
 and response metadata is for the current state of all stored bytes.
