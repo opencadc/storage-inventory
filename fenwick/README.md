@@ -34,10 +34,10 @@ Querying the remote query service (luskan) requires permission. `fenwick` uses t
 in /config to authenticate.
 
 ### SQL includes
-When the `org.opencadc.fenwick.IncludeArtifacts` ArtifactSelector is specified, an SQL file specifying the included Artifacts is required 
-in the `/config/include` folder.  The single clause in the SQL file *MUST* begin with the `WHERE` keyword.
+When the `org.opencadc.fenwick.IncludeArtifacts` ArtifactSelector is specified, the `/config/artifact-filter.sql` SQL file specifying the included Artifacts is required.
+The single clause in the SQL file *MUST* begin with the `WHERE` keyword.
 
-> `artifact-include.sql`
+> `artifact-filter.sql`
 ```sql
 WHERE uri LIKE '%SOME CONDITION%'
 ```
@@ -60,4 +60,4 @@ docker run -it fenwick:latest /bin/bash
 ```
 docker run --user opencadc:opencadc -v /path/to/external/config:/config:ro --name fenwick fenwick:latest
 ```
-Note: opencadc user is in the latest cadc-java image.
+Note: The **opencadc** user is in the latest cadc-java image.
