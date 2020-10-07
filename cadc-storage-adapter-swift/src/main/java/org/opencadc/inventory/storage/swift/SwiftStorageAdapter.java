@@ -104,13 +104,10 @@ import org.apache.log4j.Logger;
 import org.javaswift.joss.client.factory.AccountConfig;
 import org.javaswift.joss.client.factory.AccountFactory;
 import org.javaswift.joss.client.factory.AuthenticationMethod;
-import org.javaswift.joss.client.factory.TempUrlHashPrefixSource;
 import org.javaswift.joss.exception.CommandException;
 import org.javaswift.joss.exception.Md5ChecksumException;
-import org.javaswift.joss.headers.object.range.MidPartRange;
 import org.javaswift.joss.instructions.DownloadInstructions;
 import org.javaswift.joss.instructions.UploadInstructions;
-import org.javaswift.joss.model.Access;
 import org.javaswift.joss.model.Account;
 import org.javaswift.joss.model.Container;
 import org.javaswift.joss.model.DirectoryOrObject;
@@ -420,8 +417,7 @@ public class SwiftStorageAdapter  implements StorageAdapter {
      * @param newArtifact known information about the incoming artifact
      * @param source stream from which to read
      * @return storage metadata after write
-     * @throws ca.nrc.cadc.io.ByteLimitExceededException
-     *
+     * @throws ca.nrc.cadc.io.ByteLimitExceededException if content length exceeds limit
      * @throws IncorrectContentChecksumException checksum of the data stream did not match the value in newArtifact
      * @throws IncorrectContentLengthException number bytes read did not match the value in newArtifact
      * @throws ReadException If the client failed to read the stream.
