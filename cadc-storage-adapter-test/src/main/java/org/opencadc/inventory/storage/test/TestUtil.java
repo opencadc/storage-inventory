@@ -65,87 +65,126 @@
 ************************************************************************
 */
 
-package org.opencadc.inventory.storage.fs;
+package org.opencadc.inventory.storage.test;
 
-import ca.nrc.cadc.io.ByteCountOutputStream;
-import ca.nrc.cadc.io.DiscardOutputStream;
-import ca.nrc.cadc.util.HexUtil;
-import ca.nrc.cadc.util.Log4jInit;
-import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.URI;
-import java.nio.file.FileVisitResult;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.SimpleFileVisitor;
-import java.nio.file.attribute.BasicFileAttributes;
-import java.security.DigestOutputStream;
-import java.security.MessageDigest;
-import java.util.ArrayList;
+import java.io.OutputStream;
 import java.util.Arrays;
-import java.util.List;
 import java.util.Random;
-import java.util.SortedSet;
-import java.util.TreeSet;
-import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Test;
-import org.opencadc.inventory.storage.ByteRange;
-import org.opencadc.inventory.storage.NewArtifact;
-import org.opencadc.inventory.storage.StorageMetadata;
-import org.opencadc.inventory.storage.test.StorageAdapterByteRangeTest;
 
 /**
- * Integration tests that interact with the file system. These tests require a file system
- * that supports posix extended attributes.
- * 
+ *
  * @author pdowler
  */
-public class OpaqueByteRangeTest extends StorageAdapterByteRangeTest {
-    private static final Logger log = Logger.getLogger(OpaqueByteRangeTest.class);
+public class TestUtil {
+    private static final Logger log = Logger.getLogger(TestUtil.class);
 
-    static File root;
-    static int depth = 2;
-    
-    static {
-        Log4jInit.setLevel("org.opencadc.inventory.storage", Level.INFO);
-        root = new File("build/tmp/opaque-int-tests");
-        root.mkdir();
+    private TestUtil() { 
     }
     
-    final OpaqueFileSystemStorageAdapter ofsAdapter;
-    
-    public OpaqueByteRangeTest() { 
-        super(new OpaqueFileSystemStorageAdapter(root, depth));
-        this.ofsAdapter = (OpaqueFileSystemStorageAdapter) super.adapter;
+    public static InputStream getInputStreamOfRandomBytes(long numBytes) {
+        
+        Random rnd = new Random();
+        
+        return new InputStream() {
+            long tot = 0L;
+            
+            @Override
+            public int read() throws IOException {
+                if (tot == numBytes) {
+                    return -1;
+                }
+                tot++;
+                return rnd.nextInt(255);
+            }
+            
+            @Override
+            public int read(byte[] bytes) throws IOException {
+                return read(bytes, 0, bytes.length);
+            }
 
-        log.debug("    content path: " + ofsAdapter.contentPath);
-        log.debug("transaction path: " + ofsAdapter.txnPath);
-        Assert.assertTrue("testInit: contentPath", Files.exists(ofsAdapter.contentPath));
-        Assert.assertTrue("testInit: txnPath", Files.exists(ofsAdapter.txnPath));
+            @Override
+            public int read(byte[] bytes, int off, int len) throws IOException {
+                if (tot == numBytes) {
+                    return -1;
+                }
+                int num = len;
+                if (tot + len > numBytes) {
+                    num = (int) (numBytes - tot);
+                }
+                byte val = (byte) rnd.nextInt(255);
+                Arrays.fill(bytes, off, off + num - 1, val);
+                tot += num;
+                return num;
+            }
+        };
     }
     
-    @Before
-    public void cleanupBefore() throws IOException {
-        log.info("cleanupBefore: delete all content from " + ofsAdapter.contentPath);
-        if (Files.exists(ofsAdapter.contentPath)) {
-            Files.walkFileTree(ofsAdapter.contentPath, new SimpleFileVisitor<Path>() {
-                @Override
-                public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
-                    Files.delete(file);
-                    return FileVisitResult.CONTINUE;
+    public static InputStream getInputStreamThatFails() {
+        return getInputStreamThatFails(false);
+    }
+    
+    public static InputStream getInputStreamThatFails(boolean ioex) {
+        return new InputStream() {
+            
+            @Override
+            public int read() throws IOException {
+                if (ioex) {
+                    throw new IOException("test");
                 }
+                throw new RuntimeException("BUG: stream should not be read");
+            }
+            
+            @Override
+            public int read(byte[] bytes) throws IOException {
+                if (ioex) {
+                    throw new IOException("test");
+                }
+                throw new RuntimeException("BUG: stream should not be read");
+            }
 
-                @Override
-                public FileVisitResult postVisitDirectory(Path dir, IOException exc) throws IOException {
-                    Files.delete(dir);
-                    return FileVisitResult.CONTINUE;
+            @Override
+            public int read(byte[] bytes, int off, int len) throws IOException {
+                if (ioex) {
+                    throw new IOException("test");
                 }
-            });
-        }
-        log.info("cleanupBefore: delete all content from " + ofsAdapter.contentPath + " DONE");
+                throw new RuntimeException("BUG: stream should not be read");
+            }
+        };
+    }
+    
+    public static OutputStream getOutputStreamThatFails() {
+        return getOutputStreamThatFails(false);
+    }
+    
+    public static OutputStream getOutputStreamThatFails(boolean ioex) {
+        return new OutputStream() {
+            
+            @Override
+            public void write(int i) throws IOException {
+                if (ioex) {
+                    throw new IOException("test");
+                }
+                throw new RuntimeException("BUG: stream should not be written");
+            }
+
+            @Override
+            public void write(byte[] bytes, int i, int i1) throws IOException {
+                if (ioex) {
+                    throw new IOException("test");
+                }
+                throw new RuntimeException("BUG: stream should not be written");
+            }
+
+            @Override
+            public void write(byte[] bytes) throws IOException {
+                if (ioex) {
+                    throw new IOException("test");
+                }
+                throw new RuntimeException("BUG: stream should not be written");
+            }
+        };
     }
 }
