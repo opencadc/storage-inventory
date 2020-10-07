@@ -80,9 +80,9 @@ public class LuskanConfig {
 
     // config keys
     private static final String LUSKAN_KEY = LuskanConfig.class.getPackage().getName();
-    static final String URI_KEY = LUSKAN_KEY + ".resourceID";
-    static final String TMPDIR_KEY = LUSKAN_KEY + ".resultsDir";
-    static final String STORAGE_SITE_KEY = LUSKAN_KEY + ".isStorageSite";
+    public static final String URI_KEY = LUSKAN_KEY + ".resourceID";
+    public static final String TMPDIR_KEY = LUSKAN_KEY + ".resultsDir";
+    public static final String STORAGE_SITE_KEY = LUSKAN_KEY + ".isStorageSite";
 
     public LuskanConfig() {
 
@@ -110,7 +110,7 @@ public class LuskanConfig {
      * @return MultiValuedProperties containing the application config
      * @throws IllegalStateException if required config items are missing
      */
-    static MultiValuedProperties getConfig() {
+    public static MultiValuedProperties getConfig() {
         PropertiesReader r = new PropertiesReader("luskan.properties");
         MultiValuedProperties props = r.getAllProperties();
 
