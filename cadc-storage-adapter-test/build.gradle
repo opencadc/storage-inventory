@@ -13,11 +13,9 @@ repositories {
 
 sourceCompatibility = 1.8
 
-apply from: '../opencadc.gradle'
-
 group = 'org.opencadc'
 
-version = '0.6.2'
+version = '0.1'
 
 dependencies {
     compile 'log4j:log4j:[1.2,)'
@@ -25,10 +23,9 @@ dependencies {
     compile 'org.opencadc:cadc-inventory:[0.7,)'
     compile 'org.opencadc:cadc-storage-adapter:[0.7,)'
 
-    testCompile 'junit:junit:[4.0,)'
-    
-    intTestCompile 'org.opencadc:cadc-storage-adapter-test:[0.1,)'
+    // this is a test suite lib
+    compile 'junit:junit:[4.0,)'
 }
 
-
+apply from: '../opencadc.gradle'
 

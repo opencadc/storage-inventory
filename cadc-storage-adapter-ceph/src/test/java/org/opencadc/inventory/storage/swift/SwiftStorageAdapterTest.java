@@ -79,28 +79,28 @@ import org.opencadc.inventory.StorageLocation;
 public class SwiftStorageAdapterTest {
     private static final Logger log = Logger.getLogger(SwiftStorageAdapterTest.class);
 
-    SwiftStorageAdapter adapter;
+    SwiftStorageAdapter swiftAdapter;
     
     public SwiftStorageAdapterTest() { 
-        this.adapter = new SwiftStorageAdapter("test-bucket", 0);
+        this.swiftAdapter = new SwiftStorageAdapter("test-bucket", 0);
     }
     
     @Test
     public void testGenerateID() throws Exception {
         // enough to verify that randomness in the scheme doesn't create invalid URI?
         for (int i = 0; i < 20; i++) {
-            StorageLocation loc = adapter.generateStorageLocation();
+            StorageLocation loc = swiftAdapter.generateStorageLocation();
             log.info("testGenerateID: " + loc);
         }
     }
     
     @Test
     public void testBucketeering() throws Exception {
-        StorageLocation loc = adapter.generateStorageLocation();
+        StorageLocation loc = swiftAdapter.generateStorageLocation();
         log.info("testBucketeering created: " + loc);
         
-        SwiftStorageAdapter.InternalBucket ibucket = adapter.toInternalBucket(loc);
-        StorageLocation actual = adapter.toExternal(ibucket, loc.getStorageID().toASCIIString());
+        SwiftStorageAdapter.InternalBucket ibucket = swiftAdapter.toInternalBucket(loc);
+        StorageLocation actual = swiftAdapter.toExternal(ibucket, loc.getStorageID().toASCIIString());
         Assert.assertEquals(loc, actual);
     }
 }

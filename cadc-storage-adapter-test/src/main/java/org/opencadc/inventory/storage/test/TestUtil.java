@@ -65,7 +65,7 @@
 ************************************************************************
 */
 
-package org.opencadc.inventory.storage.swift;
+package org.opencadc.inventory.storage.test;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -84,7 +84,7 @@ public class TestUtil {
     private TestUtil() { 
     }
     
-    static InputStream getInputStreamOfRandomBytes(long numBytes) {
+    public static InputStream getInputStreamOfRandomBytes(long numBytes) {
         
         Random rnd = new Random();
         
@@ -122,11 +122,11 @@ public class TestUtil {
         };
     }
     
-    static InputStream getInputStreamThatFails() {
+    public static InputStream getInputStreamThatFails() {
         return getInputStreamThatFails(false);
     }
     
-    static InputStream getInputStreamThatFails(boolean ioex) {
+    public static InputStream getInputStreamThatFails(boolean ioex) {
         return new InputStream() {
             
             @Override
@@ -155,11 +155,11 @@ public class TestUtil {
         };
     }
     
-    static OutputStream getOutputStreamThatFails() {
+    public static OutputStream getOutputStreamThatFails() {
         return getOutputStreamThatFails(false);
     }
     
-    static OutputStream getOutputStreamThatFails(boolean ioex) {
+    public static OutputStream getOutputStreamThatFails(boolean ioex) {
         return new OutputStream() {
             
             @Override

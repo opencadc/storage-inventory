@@ -36,4 +36,6 @@ dependencies {
     compile 'software.amazon.awssdk:s3:2.10.49'
 
     testCompile 'junit:junit:[4.0,)'
+    
+    intTestCompile 'org.opencadc:cadc-storage-adapter-test:[0.1,)'
 }

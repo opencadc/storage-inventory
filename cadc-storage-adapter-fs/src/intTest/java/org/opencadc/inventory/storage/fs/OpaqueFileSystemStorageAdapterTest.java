@@ -96,6 +96,8 @@ import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.storage.NewArtifact;
 import org.opencadc.inventory.storage.StorageAdapter;
 import org.opencadc.inventory.storage.StorageMetadata;
+import static org.opencadc.inventory.storage.fs.OpaqueByteRangeTest.root;
+import org.opencadc.inventory.storage.test.StorageAdapterBasicTest;
 
 /**
  * Integration tests that interact with the file system. These tests require a file system
@@ -103,33 +105,35 @@ import org.opencadc.inventory.storage.StorageMetadata;
  * 
  * @author pdowler
  */
-public class OpaqueFileSystemStorageAdapterTest {
+public class OpaqueFileSystemStorageAdapterTest extends StorageAdapterBasicTest {
     private static final Logger log = Logger.getLogger(OpaqueFileSystemStorageAdapterTest.class);
 
+    static File root;
+    static int depth = 2;
+    
     static {
-        Log4jInit.setLevel("org.opencadc.inventory.storage.fs", Level.INFO);
+        Log4jInit.setLevel("org.opencadc.inventory.storage", Level.INFO);
+        root = new File("build/tmp/opaque-int-tests");
+        root.mkdir();
     }
     
-    OpaqueFileSystemStorageAdapter adapter;
-    int depth = 2;
+    final OpaqueFileSystemStorageAdapter ofsAdapter;
             
     public OpaqueFileSystemStorageAdapterTest() { 
-        File tmp = new File("build/tmp");
-        File root = new File(tmp, "opaque-int-tests");
-        root.mkdir();
+        super(new OpaqueFileSystemStorageAdapter(root, depth));
+        this.ofsAdapter = (OpaqueFileSystemStorageAdapter) super.adapter;
 
-        this.adapter = new OpaqueFileSystemStorageAdapter(root, depth); // opaque
-        log.info("    content path: " + adapter.contentPath);
-        log.info("transaction path: " + adapter.txnPath);
-        Assert.assertTrue("testInit: contentPath", Files.exists(adapter.contentPath));
-        Assert.assertTrue("testInit: txnPath", Files.exists(adapter.txnPath));
+        log.debug("    content path: " + ofsAdapter.contentPath);
+        log.debug("transaction path: " + ofsAdapter.txnPath);
+        Assert.assertTrue("testInit: contentPath", Files.exists(ofsAdapter.contentPath));
+        Assert.assertTrue("testInit: txnPath", Files.exists(ofsAdapter.txnPath));
     }
     
     @Before
-    public void init_cleanup() throws IOException {
-        log.info("init_cleanup: delete all content from " + adapter.contentPath);
-        if (Files.exists(adapter.contentPath)) {
-            Files.walkFileTree(adapter.contentPath, new SimpleFileVisitor<Path>() {
+    public void cleanupBefore() throws IOException {
+        log.info("cleanupBefore: delete all content from " + ofsAdapter.contentPath);
+        if (Files.exists(ofsAdapter.contentPath)) {
+            Files.walkFileTree(ofsAdapter.contentPath, new SimpleFileVisitor<Path>() {
                 @Override
                 public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
                     Files.delete(file);
@@ -143,252 +147,9 @@ public class OpaqueFileSystemStorageAdapterTest {
                 }
             });
         }
-        log.info("init_cleanup: delete all content from " + adapter.contentPath + " DONE");
+        log.info("cleanupBefore: delete all content from " + ofsAdapter.contentPath + " DONE");
     }
     
-    @Test
-    public void testPutGetDelete() {
-        try {
-            String dataString = "abcdefghijklmnopqrstuvwxyz";
-            byte[] data = dataString.getBytes();
-            
-            URI artifactURI = URI.create("test:path/file");
-            MessageDigest md = MessageDigest.getInstance("MD5");
-            String md5Val = HexUtil.toHex(md.digest(data));
-            NewArtifact newArtifact = new NewArtifact(artifactURI);
-            newArtifact.contentChecksum = URI.create("md5:" + md5Val);
-            newArtifact.contentLength = (long) data.length;
-            
-            ByteArrayInputStream bis = new ByteArrayInputStream(data);
-
-            StorageMetadata storageMetadata = adapter.put(newArtifact, bis);
-            log.info("put: " + storageMetadata.getStorageLocation());
-            Assert.assertNotNull(storageMetadata);
-            Assert.assertNotNull(storageMetadata.getStorageLocation());
-            Assert.assertEquals(newArtifact.contentChecksum, storageMetadata.getContentChecksum());
-            Assert.assertEquals(newArtifact.contentLength, storageMetadata.getContentLength());
-            Assert.assertEquals("artifactURI",  artifactURI, storageMetadata.artifactURI);
-            Assert.assertNotNull(storageMetadata.contentLastModified);
-            
-            ByteArrayOutputStream bos = new ByteArrayOutputStream();
-            adapter.get(storageMetadata.getStorageLocation(), bos);
-            byte[] actual = bos.toByteArray();
-            Assert.assertEquals(("data length"), data.length, actual.length);
-            String resultData = new String(bos.toByteArray());
-            Assert.assertEquals("data", dataString, resultData);
-
-            // other metadata output from StorageAdapter tested in list() and iterator()
-            
-            adapter.delete(storageMetadata.getStorageLocation());
-            try {
-                adapter.get(storageMetadata.getStorageLocation(), new ByteArrayOutputStream());
-                Assert.fail("Should have received resource not found exception");
-            } catch (ResourceNotFoundException expected) {
-                log.info("caught expected: " + expected);
-            }
-            
-        } catch (Exception unexpected) {
-            log.error("unexpected exception", unexpected);
-            Assert.fail("unexpected exception: " + unexpected);
-        }
-    }
-    
-    @Test
-    public void testPutGetDeleteMinimal() {
-        try {
-            String dataString = "abcdefghijklmnopqrstuvwxyz";
-            byte[] data = dataString.getBytes();
-            
-            URI artifactURI = URI.create("test:path/file");
-            MessageDigest md = MessageDigest.getInstance("MD5");
-            String md5Val = HexUtil.toHex(md.digest(data));
-            NewArtifact newArtifact = new NewArtifact(artifactURI);
-            
-            final URI contentChecksum = URI.create("md5:" + md5Val);
-            final Long contentLength = (long) data.length;
-            
-            ByteArrayInputStream bis = new ByteArrayInputStream(data);
-
-            StorageMetadata storageMetadata = adapter.put(newArtifact, bis);
-            log.info("put: " + storageMetadata.getStorageLocation());
-            Assert.assertNotNull(storageMetadata);
-            Assert.assertNotNull(storageMetadata.getStorageLocation());
-            Assert.assertEquals(contentChecksum, storageMetadata.getContentChecksum());
-            Assert.assertEquals(contentLength, storageMetadata.getContentLength());
-            Assert.assertEquals("artifactURI",  artifactURI, storageMetadata.artifactURI);
-            Assert.assertNotNull(storageMetadata.contentLastModified);
-            
-            ByteArrayOutputStream bos = new ByteArrayOutputStream();
-            adapter.get(storageMetadata.getStorageLocation(), bos);
-            byte[] actual = bos.toByteArray();
-            Assert.assertEquals(("data length"), data.length, actual.length);
-            String resultData = new String(bos.toByteArray());
-            Assert.assertEquals("data", dataString, resultData);
-
-            // other metadata output from StorageAdapter tested in list() and iterator()
-            
-            adapter.delete(storageMetadata.getStorageLocation());
-            try {
-                adapter.get(storageMetadata.getStorageLocation(), new ByteArrayOutputStream());
-                Assert.fail("Should have received resource not found exception");
-            } catch (ResourceNotFoundException expected) {
-                log.info("caught expected: " + expected);
-            }
-            
-        } catch (Exception unexpected) {
-            log.error("unexpected exception", unexpected);
-            Assert.fail("unexpected exception: " + unexpected);
-        }
-    }
-    
-    @Test
-    public void testPutRejected() {
-        try {
-            String dataString = "abcdefghijklmnopqrstuvwxyz";
-            byte[] data = dataString.getBytes();
-            
-            URI artifactURI = URI.create("test:path/file");
-            MessageDigest md = MessageDigest.getInstance("MD5");
-            String md5Val = HexUtil.toHex(md.digest(data));
-            NewArtifact newArtifact = new NewArtifact(artifactURI);
-            
-            final URI contentChecksum = URI.create("md5:" + md5Val);
-            final Long contentLength = (long) data.length;
-            
-            final URI wrongChecksum = URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"); // md5 of zero bytes
-            
-            
-            try {
-                newArtifact.contentLength = data.length - 1L;
-                ByteArrayInputStream bis = new ByteArrayInputStream(data);
-                StorageMetadata storageMetadata = adapter.put(newArtifact, bis);
-                Assert.fail("expected fail - got : " + storageMetadata);
-            } catch (PreconditionFailedException expected) {
-                log.info("caught expected: " + expected);
-            }
-            newArtifact.contentLength = null;
-            
-            try {
-                newArtifact.contentLength = data.length + 1L;
-                ByteArrayInputStream bis = new ByteArrayInputStream(data);
-                StorageMetadata storageMetadata = adapter.put(newArtifact, bis);
-                Assert.fail("expected fail - got : " + storageMetadata);
-            } catch (PreconditionFailedException expected) {
-                log.info("caught expected: " + expected);
-            }
-            newArtifact.contentLength = null;
-            
-            try {
-                newArtifact.contentChecksum = URI.create("md5:" + wrongChecksum);
-                ByteArrayInputStream bis = new ByteArrayInputStream(data);
-                StorageMetadata storageMetadata = adapter.put(newArtifact, bis);
-                Assert.fail("expected fail - got : " + storageMetadata);
-            } catch (PreconditionFailedException expected) {
-                log.info("caught expected: " + expected);
-            }
-            newArtifact.contentChecksum = null;
-            
-        } catch (Exception unexpected) {
-            log.error("unexpected exception", unexpected);
-            Assert.fail("unexpected exception: " + unexpected);
-        }
-    }
-    
-    @Test
-    public void testIterator() {
-        try {
-            String dataString = "abcdefghijklmnopqrstuvwxyz";
-            byte[] data = dataString.getBytes();
-            MessageDigest md = MessageDigest.getInstance("MD5");
-            String md5Val = HexUtil.toHex(md.digest(data));
-            URI checksum = URI.create("md5:" + md5Val);
-            log.info("expected md5sum: " + checksum);
-
-            int num = 6;
-            SortedSet<StorageMetadata> explist = new TreeSet<StorageMetadata>();
-            for (int i = 0; i < num; i++) {
-                String suri = "test:FOO/bar" + i;
-                URI uri = URI.create(suri);
-                NewArtifact newArtifact = new NewArtifact(uri);
-                newArtifact.contentChecksum = checksum;
-                newArtifact.contentLength = (long) data.length;
-                ByteArrayInputStream source = new ByteArrayInputStream(data);
-                StorageMetadata meta = adapter.put(newArtifact, source);
-                explist.add(meta);
-                log.info("added file: " + meta.getStorageLocation());
-            }
-            
-            // put + delete leaves empty dirs behind
-            for (int i = num; i < 4 * num; i++) {
-                String suri = "test:FOO/bar" + i;
-                URI uri = URI.create(suri);
-                NewArtifact newArtifact = new NewArtifact(uri);
-                newArtifact.contentChecksum = checksum;
-                newArtifact.contentLength = (long) data.length;
-                ByteArrayInputStream source = new ByteArrayInputStream(data);
-                StorageMetadata meta = adapter.put(newArtifact, source);
-                adapter.delete(meta.getStorageLocation());
-                log.info("added dir: " + meta.getStorageLocation().storageBucket);
-            }
-            
-            // iterate all
-            {
-                Iterator<StorageMetadata> ai = adapter.iterator();
-                Iterator<StorageMetadata> ei = explist.iterator();
-                int count = 0;
-                while (ai.hasNext()) {
-                    count++;
-                    StorageMetadata expected = ei.next();
-                    StorageMetadata actual = ai.next();
-                    log.info("adapter.iterator: " + actual);
-                    Assert.assertEquals("order " + count, expected.getStorageLocation(), actual.getStorageLocation());
-                    Assert.assertEquals("checksum", checksum, actual.getContentChecksum());
-                    Assert.assertEquals("length", new Long(data.length), actual.getContentLength());
-                    Assert.assertEquals("artifactURI",expected.artifactURI, actual.artifactURI);
-                }
-                Assert.assertEquals("file count", explist.size(), count);
-            }
-            
-            // iterate individual top-level buckets
-            {
-                int n = 0;
-                for (int i = 0; i < Artifact.URI_BUCKET_CHARS.length(); i++) {
-                    String bucketPrefix = Artifact.URI_BUCKET_CHARS.substring(i, i + 1);
-                    log.info("iterator: " + bucketPrefix);
-                    Iterator<StorageMetadata> bi = adapter.iterator(bucketPrefix);
-                    while (bi.hasNext()) {
-                        StorageMetadata sm = bi.next();
-                        Assert.assertTrue("prefix match", sm.getStorageLocation().storageBucket.startsWith(bucketPrefix));
-                        n++;
-                    }
-                }
-                Assert.assertEquals("file count", explist.size(), n);
-            }
-            
-            // test list function duplicates iterator content
-            {
-                SortedSet<StorageMetadata> aset = adapter.list(null);
-                Iterator<StorageMetadata> ai = aset.iterator();
-                Iterator<StorageMetadata> ei = explist.iterator();
-                int count = 0;
-                while (ai.hasNext()) {
-                    count++;
-                    StorageMetadata expected = ei.next();
-                    StorageMetadata actual = ai.next();
-                    log.info("adapter.list: " + actual);
-                    Assert.assertEquals("order " + count, expected.getStorageLocation(), actual.getStorageLocation());
-                    Assert.assertEquals("checksum", checksum, actual.getContentChecksum());
-                    Assert.assertEquals("length", new Long(data.length), actual.getContentLength());
-                    Assert.assertEquals("artifactURI",expected.artifactURI, actual.artifactURI);
-                    
-                }
-                Assert.assertEquals("file count", explist.size(), count);
-            }
-        } catch (Exception unexpected) {
-            log.error("unexpected exception", unexpected);
-            Assert.fail("unexpected exception: " + unexpected);
-        }
-    }
     
     // the code currently works correctly if you put files with different storageBucket depths
     // but it is probably a bad idea because you mix bucket directories and files and thus have
@@ -420,7 +181,7 @@ public class OpaqueFileSystemStorageAdapterTest {
             }
             
             // put files with larger depth
-            File root = adapter.contentPath.getParent().toFile();
+            File root = ofsAdapter.contentPath.getParent().toFile();
             StorageAdapter sap2 = new OpaqueFileSystemStorageAdapter(root, depth + 2); // opaque
            
             for (int i = num; i < 2 * num; i++) {
