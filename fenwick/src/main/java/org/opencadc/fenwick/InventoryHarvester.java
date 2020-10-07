@@ -67,6 +67,7 @@
 
 package org.opencadc.fenwick;
 
+import ca.nrc.cadc.auth.SSLUtil;
 import ca.nrc.cadc.date.DateUtil;
 import ca.nrc.cadc.db.DBUtil;
 import ca.nrc.cadc.db.TransactionManager;
@@ -78,13 +79,17 @@ import ca.nrc.cadc.reg.Capability;
 import ca.nrc.cadc.reg.Standards;
 import ca.nrc.cadc.reg.client.RegistryClient;
 
+import java.io.File;
 import java.io.IOException;
 import java.net.URI;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.security.PrivilegedActionException;
+import java.security.PrivilegedExceptionAction;
 import java.text.DateFormat;
 import java.util.Map;
 
+import javax.security.auth.Subject;
 import javax.sql.DataSource;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
@@ -107,6 +112,7 @@ import org.opencadc.tap.TapClient;
  */
 public class InventoryHarvester implements Runnable {
 
+    private static final String CERTIFICATE_FILE_LOCATION = System.getProperty("user.home") + "/.ssl/cadcproxy.pem";
     private static final Logger log = Logger.getLogger(InventoryHarvester.class);
 
     private final ArtifactDAO artifactDAO;
@@ -238,18 +244,54 @@ public class InventoryHarvester implements Runnable {
                        InterruptedException, NoSuchAlgorithmException {
         final StorageSite storageSite;
 
-        if (trackSiteLocations) {
-            final TapClient<StorageSite> storageSiteTapClient = new TapClient<>(this.resourceID);
-            final StorageSiteDAO storageSiteDAO = new StorageSiteDAO(this.artifactDAO);
-            final StorageSiteSync storageSiteSync = new StorageSiteSync(storageSiteTapClient, storageSiteDAO);
-            storageSite = storageSiteSync.doit();
-            syncDeletedStorageLocationEvents(storageSite);
-        } else {
-            storageSite = null;
-        }
+        // This subject will be recreated before performing each job to ensure the certificate is still valid.
+        Subject subject;
 
-        syncDeletedArtifactEvents();
-        syncArtifacts(storageSite);
+        try {
+            if (trackSiteLocations) {
+                subject = SSLUtil.createSubject(new File(CERTIFICATE_FILE_LOCATION));
+                storageSite = Subject.doAs(subject, (PrivilegedExceptionAction<StorageSite>) () -> {
+                    final TapClient<StorageSite> storageSiteTapClient = new TapClient<>(this.resourceID);
+                    final StorageSiteDAO storageSiteDAO = new StorageSiteDAO(this.artifactDAO);
+                    final StorageSiteSync storageSiteSync = new StorageSiteSync(storageSiteTapClient, storageSiteDAO);
+                    final StorageSite innerStorageSite = storageSiteSync.doit();
+
+                    syncDeletedStorageLocationEvents(innerStorageSite);
+                    return innerStorageSite;
+                });
+            } else {
+                storageSite = null;
+            }
+
+            subject = SSLUtil.createSubject(new File(CERTIFICATE_FILE_LOCATION));
+            Subject.doAs(subject, (PrivilegedExceptionAction<Void>) () -> {
+                syncDeletedArtifactEvents();
+                return null;
+            });
+
+            subject = SSLUtil.createSubject(new File(CERTIFICATE_FILE_LOCATION));
+            Subject.doAs(subject, (PrivilegedExceptionAction<Void>) () -> {
+                syncArtifacts(storageSite);
+                return null;
+            });
+        } catch (PrivilegedActionException privilegedActionException) {
+            final Exception exception = privilegedActionException.getException();
+
+            if (exception instanceof ResourceNotFoundException) {
+                throw (ResourceNotFoundException) exception;
+            } else if (exception instanceof IOException) {
+                throw (IOException) exception;
+            } else if (exception instanceof TransientException) {
+                throw (TransientException) exception;
+            } else if (exception instanceof InterruptedException) {
+                throw (InterruptedException) exception;
+            } else if (exception instanceof NoSuchAlgorithmException) {
+                throw (NoSuchAlgorithmException) exception;
+            } else {
+                log.fatal("BUG - Unknown error.", exception);
+                throw new RuntimeException(exception.getMessage(), exception);
+            }
+        }
     }
 
     /**
@@ -293,28 +335,28 @@ public class InventoryHarvester implements Runnable {
             while (deletedStorageLocationEventResourceIterator.hasNext()) {
                 final DeletedStorageLocationEvent deletedStorageLocationEvent =
                         deletedStorageLocationEventResourceIterator.next();
-                if (first 
-                        && deletedStorageLocationEvent.getID().equals(harvestState.curID)
-                        && deletedStorageLocationEvent.getLastModified().equals(harvestState.curLastModified)) {
+                if (!first
+                    || !deletedStorageLocationEvent.getID().equals(harvestState.curID)
+                    || !deletedStorageLocationEvent.getLastModified().equals(harvestState.curLastModified)) {
+                    transactionManager.startTransaction();
+                    final Artifact artifact = this.artifactDAO.get(deletedStorageLocationEvent.getID());
+                    if (artifact != null) {
+                        final SiteLocation siteLocation = new SiteLocation(storageSite.getID());
+                        // TODO: this message could also log the artifact and site that was removed
+                        log.info("PUT: DeletedStorageLocationEvent " + deletedStorageLocationEvent.getID()
+                                 + " " + df.format(deletedStorageLocationEvent.getLastModified()));
+                        artifactDAO.removeSiteLocation(artifact, siteLocation);
+                        harvestState.curLastModified = deletedStorageLocationEvent.getLastModified();
+                        harvestStateDAO.put(harvestState);
+                    } else {
+                        log.warn("Artifact " + deletedStorageLocationEvent.getID() + " does not exist locally.");
+                    }
+                    transactionManager.commitTransaction();
+                } else {
                     log.debug("SKIP: previously processed: " + deletedStorageLocationEvent.getID());
                     first = false;
-                    continue; // ugh
                 }
-                
-                transactionManager.startTransaction();
-                final Artifact artifact = this.artifactDAO.get(deletedStorageLocationEvent.getID());
-                if (artifact != null) {
-                    final SiteLocation siteLocation = new SiteLocation(storageSite.getID());
-                    // TODO: this message could also log the artifact and site that was removed
-                    log.info("PUT: DeletedStorageLocationEvent " + deletedStorageLocationEvent.getID() 
-                            + " " + df.format(deletedStorageLocationEvent.getLastModified()));
-                    artifactDAO.removeSiteLocation(artifact, siteLocation);
-                    harvestState.curLastModified = deletedStorageLocationEvent.getLastModified();
-                    harvestStateDAO.put(harvestState);
-                } else {
-                    log.warn("Artifact " + deletedStorageLocationEvent.getID() + " does not exist locally.");
-                }
-                transactionManager.commitTransaction();
+
             }
         } catch (Exception exception) {
             if (transactionManager.isOpen()) {
