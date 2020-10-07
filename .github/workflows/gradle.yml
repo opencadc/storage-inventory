@@ -34,17 +34,20 @@ jobs:
     - name: build and test cadc-storage-adapter
       run: cd cadc-storage-adapter && gradle --info clean build javadoc checkstyleMain install
       
+    - name: build and test cadc-storage-adapter-test
+      run: cd cadc-storage-adapter-test && gradle --info clean build javadoc checkstyleMain install
+      
     - name: build and test cadc-storage-adapter-fs
       run: cd cadc-storage-adapter-fs && gradle --info clean build javadoc checkstyleMain install
 
     - name: build and test cadc-storage-adapter-ad
       run: cd cadc-storage-adapter-ad && gradle --info clean build javadoc checkstyleMain install
 
-    - name: build and install latest rados-java
-      run: git clone https://github.com/ceph/rados-java && cd rados-java && mvn clean install -Dcom.ceph.rados.skipTests
-
-    - name: build and test cadc-storage-adapter-ceph
-      run: test -d cadc-storage-adapter-ceph && cd cadc-storage-adapter-ceph && gradle --info clean build javadoc checkstyleMain install
+    - name: build and test cadc-storage-adapter-s3
+      run: cd cadc-storage-adapter-s3 && gradle --info clean build javadoc checkstyleMain install
+      
+    - name: build and test cadc-storage-adapter-swift
+      run: cd cadc-storage-adapter-swift && gradle --info clean build javadoc checkstyleMain install
 
     - name: java build -- baldur
       run: cd baldur && gradle --info clean build javadoc checkstyleMain
@@ -66,10 +69,10 @@ jobs:
 
 ## TODO: docker build depends on cadc-tomcat base image from docker-base.git
 #    - name: docker build -- baldur
-#      run: cd baldur && docker build . --file Dockerfile --tag luskan:$(date +%s)
+#      run: cd baldur && docker build . --file Dockerfile --tag baldur:$(date +%s)
 #    - name: docker build -- minoc
 #      run: cd minoc && docker build . --file Dockerfile --tag minoc:$(date +%s)
 #    - name: docker build -- luskan
 #      run: cd luskan && docker build . --file Dockerfile --tag luskan:$(date +%s)
 #    - name: docker build -- raven
-#      run: cd raven && docker build . --file Dockerfile --tag luskan:$(date +%s)
+#      run: cd raven && docker build . --file Dockerfile --tag raven:$(date +%s)
