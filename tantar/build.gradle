@@ -26,7 +26,7 @@ dependencies {
 
     runtime 'org.opencadc:cadc-storage-adapter-fs:[0.6,)'
     runtime 'org.opencadc:cadc-storage-adapter-ad:[0.2,)'
-    runtime 'org.opencadc:cadc-storage-adapter-ceph:[0.4,)'
+    runtime 'org.opencadc:cadc-storage-adapter-swift:[0.4,)'
 
     testCompile 'junit:junit:[4.12,5.0)'
 }
