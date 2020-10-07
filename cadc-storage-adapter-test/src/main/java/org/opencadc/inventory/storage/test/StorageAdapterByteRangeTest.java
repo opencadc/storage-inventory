@@ -185,7 +185,7 @@ public abstract class StorageAdapterByteRangeTest {
     }
     
     @Test
-    public void testReadByteRangeForward() {
+    public void testReadByteRangeForward_16MiB() {
         int[] readOrder = new int[] {0, 1, 2, 0, 1, 2, 0, 1, 2};
         int mib = 16;
         long datalen = mib * 1024L * 1024L; // 1 MiB
@@ -194,9 +194,27 @@ public abstract class StorageAdapterByteRangeTest {
     }
     
     @Test
-    public void testReadByteRangeReverse() {
+    public void testReadByteRangeReverse_16MiB() {
         int[] readOrder = new int[] {2, 1, 0, 2, 1, 0, 2, 1, 0};
         int mib = 16;
+        long datalen = mib * 1024L * 1024L; // 1 MiB
+            
+        doReadPattern(mib, datalen, readOrder);
+    }
+    
+    @Test
+    public void testReadByteRangeForward_2GiB() {
+        int[] readOrder = new int[] {0, 1, 2, 0, 1, 2, 0, 1, 2};
+        int mib = 2048;
+        long datalen = mib * 1024L * 1024L; // 1 MiB
+            
+        doReadPattern(mib, datalen, readOrder);
+    }
+    
+    @Test
+    public void testReadByteRangeReverse_2GiB() {
+        int[] readOrder = new int[] {2, 1, 0, 2, 1, 0, 2, 1, 0};
+        int mib = 2048;
         long datalen = mib * 1024L * 1024L; // 1 MiB
             
         doReadPattern(mib, datalen, readOrder);
@@ -216,7 +234,7 @@ public abstract class StorageAdapterByteRangeTest {
             Assert.assertEquals(datalen, storageMetadata.getContentLength().longValue());
             
             List<ByteRange> ranges = new ArrayList<>();
-            long rlen = 16 * 1024L; // 16KiB
+            long rlen = 16 * 1024L; // 16KiB ~ decent sized FITS header
             ranges.add(new ByteRange(0L, rlen));                    // at start
             ranges.add(new ByteRange(datalen / 2L, rlen));          // near the middle
             ranges.add(new ByteRange(datalen - rlen - 1L, rlen));   // at end
