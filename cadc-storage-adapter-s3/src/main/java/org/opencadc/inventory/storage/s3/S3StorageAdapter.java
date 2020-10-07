@@ -137,7 +137,7 @@ abstract class S3StorageAdapter implements StorageAdapter {
 
     private static final Logger LOGGER = Logger.getLogger(S3StorageAdapterSB.class);
     
-    private static final String CONFIG_FILENAME = "cadc-storage-adapter-ceph.properties";
+    private static final String CONFIG_FILENAME = "cadc-storage-adapter-s3.properties";
 
     private static final Region REGION = Region.of("default");
 

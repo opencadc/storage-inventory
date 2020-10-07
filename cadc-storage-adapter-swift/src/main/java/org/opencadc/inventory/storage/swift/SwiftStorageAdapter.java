@@ -130,7 +130,7 @@ public class SwiftStorageAdapter  implements StorageAdapter {
     private static final long CEPH_UPLOAD_LIMIT = 5 * 1024L * 1024L * 1024L; // 5 GiB
     private static final String CEPH_UPLOAD_LIMIT_MSG = "5 GiB";
     
-    private static final String CONFIG_FILENAME = "cadc-storage-adapter-ceph.properties";
+    private static final String CONFIG_FILENAME = "cadc-storage-adapter-swift.properties";
     
     private static final String CONF_ENDPOINT = SwiftStorageAdapter.class.getName() + ".authEndpoint";
     private static final String CONF_USER = SwiftStorageAdapter.class.getName() + ".username";
@@ -143,7 +143,7 @@ public class SwiftStorageAdapter  implements StorageAdapter {
     static final String DEFAULT_CHECKSUM_ALGORITHM = "md5";
     
     // ceph or swift does all kinds of mangling of metadata keys (char substitution, truncation, case changes)
-    // javaswift lib seems to at least force keys in the Map to lower case to protect aginst some of it
+    // javaswift lib seems to at least force keys in the Map to lower case to protect against some of it
     static final String ARTIFACT_ID_ATTR = "org.opencadc.artifactid";
     static final String CONTENT_CHECKSUM_ATTR = "org.opencadc.contentchecksum";
     
