@@ -227,8 +227,17 @@ public abstract class StorageAdapterByteRangeTest {
             InputStream istream = getInputStreamOfRandomBytes(datalen);
 
             log.info("put: " + mib + " MiB file...");
-            StorageMetadata storageMetadata = adapter.put(newArtifact, istream);
-            log.info("put: " + storageMetadata.getStorageLocation());
+            long t1 = System.nanoTime();
+            final StorageMetadata storageMetadata = adapter.put(newArtifact, istream);
+            long t2 = System.nanoTime();
+            long micros = (t2 - t1) / 1024L;
+            StringBuilder sb = new StringBuilder();
+            sb.append(" -- ");
+            sb.append(Long.toString(micros)).append(" microsec");
+            double spd = (double) (10 * datalen / micros) / 10.0;
+            sb.append(" aka ~").append(spd).append(" MiB/sec");
+            log.info("put: " + storageMetadata.getStorageLocation() + sb.toString());
+            
             Assert.assertNotNull(storageMetadata);
             Assert.assertNotNull(storageMetadata.getStorageLocation());
             Assert.assertEquals(datalen, storageMetadata.getContentLength().longValue());
@@ -245,12 +254,12 @@ public abstract class StorageAdapterByteRangeTest {
                 SortedSet<ByteRange> br = new TreeSet<>();
                 br.add(r);
                 ByteCountOutputStream bcos = new ByteCountOutputStream(new DiscardOutputStream());
-                long t1 = System.nanoTime();
+                t1 = System.nanoTime();
                 adapter.get(storageMetadata.getStorageLocation(), bcos, br);
-                long t2 = System.nanoTime();
-                final long micros = (t2 - t1) / 1024L;
+                t2 = System.nanoTime();
+                micros = (t2 - t1) / 1024L;
                 Assert.assertEquals("num bytes returned", rlen, bcos.getByteCount());
-                StringBuilder sb = new StringBuilder();
+                sb = new StringBuilder();
                 sb.append("read ").append(r);
                 while (sb.length() < 32) {
                     sb.append(" ");
