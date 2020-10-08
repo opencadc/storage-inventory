@@ -68,9 +68,7 @@
 package org.opencadc.luskan.ws;
 
 import ca.nrc.cadc.auth.AuthMethod;
-import ca.nrc.cadc.db.DBUtil;
 import ca.nrc.cadc.net.ResourceNotFoundException;
-import ca.nrc.cadc.reg.AccessURL;
 import ca.nrc.cadc.reg.Capabilities;
 import ca.nrc.cadc.reg.Capability;
 import ca.nrc.cadc.reg.Interface;
@@ -78,8 +76,6 @@ import ca.nrc.cadc.reg.Standards;
 import ca.nrc.cadc.reg.client.LocalAuthority;
 import ca.nrc.cadc.reg.client.RegistryClient;
 import ca.nrc.cadc.rest.RestAction;
-import ca.nrc.cadc.tap.schema.InitDatabaseTS;
-import ca.nrc.cadc.uws.server.impl.InitDatabaseUWS;
 import ca.nrc.cadc.vosi.AvailabilityPlugin;
 import ca.nrc.cadc.vosi.AvailabilityStatus;
 import ca.nrc.cadc.vosi.avail.CheckCertificate;
@@ -92,7 +88,6 @@ import java.io.File;
 import java.io.IOException;
 import java.net.URI;
 import java.util.NoSuchElementException;
-import javax.sql.DataSource;
 import org.apache.log4j.Logger;
 
 import org.opencadc.luskan.LuskanConfig;
