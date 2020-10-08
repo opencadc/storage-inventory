@@ -94,6 +94,7 @@ import java.io.OutputStream;
 import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URL;
+import java.security.AccessControlException;
 import java.security.cert.CertificateExpiredException;
 import java.security.cert.CertificateNotYetValidException;
 import java.util.Iterator;
@@ -150,9 +151,8 @@ public class AdStorageAdapter implements StorageAdapter {
         try {
             boolean auth = CredUtil.checkCredentials();
             log.debug("authenticated: " + auth);
-        } catch (CertificateExpiredException | CertificateNotYetValidException unexpected) {
-            log.debug("error type: " + unexpected.getClass());
-            throw new RuntimeException(unexpected.getMessage());
+        } catch (CertificateExpiredException | CertificateNotYetValidException e) {
+            throw new AccessControlException("permission denied -- reason: delegated X509 Certificate is invalid");
         }
 
         try {
