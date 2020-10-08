@@ -76,7 +76,6 @@ import ca.nrc.cadc.reg.Standards;
 import ca.nrc.cadc.reg.client.LocalAuthority;
 import ca.nrc.cadc.reg.client.RegistryClient;
 import ca.nrc.cadc.rest.RestAction;
-import ca.nrc.cadc.vosi.Availability;
 import ca.nrc.cadc.vosi.AvailabilityPlugin;
 import ca.nrc.cadc.vosi.AvailabilityStatus;
 import ca.nrc.cadc.vosi.avail.CheckCertificate;
@@ -88,9 +87,6 @@ import ca.nrc.cadc.vosi.avail.CheckWebService;
 import java.io.File;
 import java.io.IOException;
 import java.net.URI;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.NoSuchElementException;
 import org.apache.log4j.Logger;
 
@@ -161,9 +157,6 @@ public class StorageTapService implements AvailabilityPlugin {
             url = getAvailabilityForLocal(Standards.GMS_SEARCH_01);
             checkResource = new CheckWebService(url);
             checkResource.check();
-
-            // check TempStorageManager results directory.
-            checkTempStorage();
 
         } catch (CheckException ce) {
             // tests determined that the resource is not working
@@ -252,19 +245,6 @@ public class StorageTapService implements AvailabilityPlugin {
             return RestAction.STATE_READ_WRITE;
         }
         return ret;
-    }
-
-    // Check that the TempStorageManager results directory is writable.
-    private void checkTempStorage() {
-        String tmpDir = LuskanConfig.getConfig().getFirstPropertyValue(LuskanConfig.TMPDIR_KEY);
-        Path tmpDirPath = Paths.get(tmpDir);
-        try {
-            Path tmpFile = Files.createTempFile(tmpDirPath, null,null);
-            Files.delete(tmpFile);
-        } catch (IOException e) {
-            throw new RuntimeException(String.format(
-                "Unable to write to TempStorageManager directory %s", tmpDirPath.toAbsolutePath()));
-        }
     }
 
 }

@@ -71,8 +71,12 @@ package org.opencadc.luskan;
 
 import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.util.PropertiesReader;
+import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import org.apache.log4j.Logger;
 
 public class LuskanConfig {
@@ -119,31 +123,41 @@ public class LuskanConfig {
         boolean ok = true;
 
         String suri = props.getFirstPropertyValue(URI_KEY);
-        sb.append("\n\t").append(URI_KEY);
+        sb.append("\n\t").append(URI_KEY).append(" - ");
         if (suri == null) {
-            sb.append(" MISSING");
+            sb.append("MISSING");
             ok = false;
         } else {
-            sb.append(" OK");
+            sb.append("OK");
         }
 
         String srd = props.getFirstPropertyValue(TMPDIR_KEY);
-        sb.append("\n\t").append(TMPDIR_KEY);
+        sb.append("\n\t").append(TMPDIR_KEY).append(" - ");
         if (srd == null) {
-            sb.append(" MISSING");
+            sb.append("MISSING");
             ok = false;
         } else {
-            sb.append(" OK");
+            // check if tmpdir is writable
+            Path tmpDirPath = Paths.get(srd);
+            try {
+                Path tmpFile = Files.createTempFile(tmpDirPath, null, null);
+                Files.delete(tmpFile);
+                sb.append("OK");
+            } catch (IOException e) {
+                sb.append("WRITE PERMISSION DENIED");
+                ok = false;
+            }
         }
 
         String ssk = props.getFirstPropertyValue(STORAGE_SITE_KEY);
-        sb.append("\n\t").append(STORAGE_SITE_KEY);
+        sb.append("\n\t").append(STORAGE_SITE_KEY).append(" - ");
         if (ssk == null) {
-            sb.append(" MISSING");
+            sb.append("MISSING");
             ok = false;
         } else {
-            sb.append(" OK");
+            sb.append("OK");
         }
+        sb.append("\n");
 
         if (!ok) {
             throw new IllegalStateException(sb.toString());
