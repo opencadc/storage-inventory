@@ -91,7 +91,7 @@ import org.apache.log4j.Logger;
 public class IncludeArtifacts implements ArtifactSelector {
     private static final Logger log = Logger.getLogger(IncludeArtifacts.class);
     static final String COMMENT_PREFIX = "--";
-    static final String SQL_FILE_NAME = "artifact-filter.sql";
+    static final String SQL_FILTER_FILE_NAME = "artifact-filter.sql";
 
     private final Path selectorConfigDir;
 
@@ -102,6 +102,8 @@ public class IncludeArtifacts implements ArtifactSelector {
         // Read in the configuration file, and create a usable Map from it.
         final File homeConfigDirectory = new File(System.getProperty("user.home") + "/config");
         selectorConfigDir = homeConfigDirectory.toPath();
+
+        checkFilterFile();
     }
 
     /**
@@ -137,67 +139,71 @@ public class IncludeArtifacts implements ArtifactSelector {
      */
     @Override
     public String getConstraint() throws ResourceNotFoundException, IOException, IllegalStateException {
-        final File configurationDirFile = selectorConfigDir.toFile();
-        if (configurationDirFile.isDirectory() && configurationDirFile.canRead()) {
-            final File[] fileListing = configurationDirFile.listFiles((dir, name) -> name.equals(SQL_FILE_NAME));
-            if (fileListing == null || fileListing.length != 1) {
-                throw new IllegalStateException("There should exist a single file called " + SQL_FILE_NAME + " in the "
-                        + selectorConfigDir + " folder.");
-            } else {
-                final File f = fileListing[0];
-                boolean validWhereClauseFound = false;
-                final StringBuilder clauseBuilder = new StringBuilder();
+        // Check for the filter file again in case
+        checkFilterFile();
+        final File f = new File(selectorConfigDir + File.separator + SQL_FILTER_FILE_NAME);
+        boolean validWhereClauseFound = false;
+        final StringBuilder clauseBuilder = new StringBuilder();
 
-                try (final LineNumberReader lineNumberReader = new LineNumberReader(new FileReader(f))) {
-                    String line;
-                    while ((line = lineNumberReader.readLine()) != null) {
-                        line = line.trim();
-                        log.debug("Next line is " + line);
+        try (final LineNumberReader lineNumberReader = new LineNumberReader(new FileReader(f))) {
+            String line;
+            while ((line = lineNumberReader.readLine()) != null) {
+                line = line.trim();
+                log.debug("Next line is " + line);
 
-                        if (line.contains(COMMENT_PREFIX)) {
-                            line = line.substring(0, line.indexOf(COMMENT_PREFIX)).trim();
+                if (line.contains(COMMENT_PREFIX)) {
+                    line = line.substring(0, line.indexOf(COMMENT_PREFIX)).trim();
+                }
+
+                // Skip empty lines
+                if (StringUtil.hasText(line)) {
+                    // SQL comment syntax
+                    if (line.regionMatches(true, 0, "WHERE", 0, "WHERE".length())) {
+                        if (validWhereClauseFound) {
+                            throw new IllegalStateException(
+                                    "A valid WHERE clause is already present (line "
+                                            + lineNumberReader.getLineNumber() + ").");
                         }
 
-                        // Skip empty lines
+                        validWhereClauseFound = true;
+                        line = line.replaceFirst("(?i)\\bwhere\\b", "").trim();
+
+                        // It is acceptable to have the WHERE keyword on its own line, too.
                         if (StringUtil.hasText(line)) {
-                            // SQL comment syntax
-                            if (line.regionMatches(true, 0, "WHERE", 0, "WHERE".length())) {
-                                if (validWhereClauseFound) {
-                                    throw new IllegalStateException(
-                                            "A valid WHERE clause is already present (line "
-                                                    + lineNumberReader.getLineNumber() + ").");
-                                }
-
-                                validWhereClauseFound = true;
-                                line = line.replaceFirst("(?i)\\bwhere\\b", "").trim();
-
-                                // It is acceptable to have the WHERE keyword on its own line, too.
-                                if (StringUtil.hasText(line)) {
-                                    clauseBuilder.append(line);
-                                }
-                            } else {
-                                // This is assumed to be another part of the clause, so ensure we've already passed the
-                                // WHERE portion.
-                                if (validWhereClauseFound) {
-                                    clauseBuilder.append(" ").append(line);
-                                } else {
-                                    throw new IllegalStateException("The first clause found in " + f.getName()
-                                            + " (line " + lineNumberReader.getLineNumber()
-                                            + ") MUST be start with the WHERE keyword.");
-                                }
-                            }
+                            clauseBuilder.append(line);
+                        }
+                    } else {
+                        // This is assumed to be another part of the clause, so ensure we've already passed the
+                        // WHERE portion.
+                        if (validWhereClauseFound) {
+                            clauseBuilder.append(" ").append(line);
+                        } else {
+                            throw new IllegalStateException("The first clause found in " + f.getName()
+                                    + " (line " + lineNumberReader.getLineNumber()
+                                    + ") MUST be start with the WHERE keyword.");
                         }
                     }
                 }
-
-                if ((clauseBuilder.length() > 0) && StringUtil.hasText(clauseBuilder.toString().trim())) {
-                    return clauseBuilder.toString();
-                } else {
-                    throw new IllegalStateException("No usable SQL in " + selectorConfigDir + "/" + SQL_FILE_NAME);
-                }
             }
+        }
+
+        if ((clauseBuilder.length() > 0) && StringUtil.hasText(clauseBuilder.toString().trim())) {
+            return clauseBuilder.toString();
         } else {
-            throw new IOException("Directory " + selectorConfigDir + " is not found or not readable.");
+            throw new IllegalStateException("No usable SQL in " + selectorConfigDir + "/" + SQL_FILTER_FILE_NAME);
+        }
+    }
+
+    void checkFilterFile() {
+        final File configurationDirFile = selectorConfigDir.toFile();
+        if (!configurationDirFile.isDirectory() || !configurationDirFile.canRead()) {
+            throw new IllegalStateException("Directory " + selectorConfigDir + " is not found or not readable.");
+        } else {
+            final File[] fileListing = configurationDirFile.listFiles((dir, name) -> name.equals(SQL_FILTER_FILE_NAME));
+            if (fileListing == null || fileListing.length != 1) {
+                throw new IllegalStateException("There should exist a single file called " + SQL_FILTER_FILE_NAME
+                                                + " in the " + selectorConfigDir + " folder.");
+            }
         }
     }
 }
