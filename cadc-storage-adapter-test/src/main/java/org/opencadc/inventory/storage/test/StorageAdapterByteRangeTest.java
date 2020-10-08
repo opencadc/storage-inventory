@@ -168,10 +168,11 @@ public abstract class StorageAdapterByteRangeTest {
             Assert.assertEquals("checksum", storageMetadata.getContentChecksum(), actualMD5);
             sb = new StringBuilder();
             sb.append("read ").append(r);
-            while (sb.length() < 32) {
+            String stim = Long.toString(getMicros);
+            while (sb.length() < 42 - stim.length()) {
                 sb.append(" ");
             }
-            sb.append(Long.toString(getMicros)).append(" microsec");
+            sb.append(stim).append(" microsec");
             spd = (double) (10 * datalen / getMicros) / 10.0;
             sb.append(" aka ~").append(spd).append(" MiB/sec");
             log.info(sb);
@@ -261,10 +262,11 @@ public abstract class StorageAdapterByteRangeTest {
                 Assert.assertEquals("num bytes returned", rlen, bcos.getByteCount());
                 sb = new StringBuilder();
                 sb.append("read ").append(r);
-                while (sb.length() < 32) {
+                String stim = Long.toString(micros);
+                while (sb.length() < 42 - stim.length()) {
                     sb.append(" ");
                 }
-                sb.append(Long.toString(micros)).append(" microsec");
+                sb.append(stim).append(" microsec");
                 log.info(sb);
             }
             
