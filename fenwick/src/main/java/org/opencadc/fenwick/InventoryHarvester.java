@@ -67,6 +67,7 @@
 
 package org.opencadc.fenwick;
 
+import ca.nrc.cadc.auth.AuthenticationUtil;
 import ca.nrc.cadc.auth.SSLUtil;
 import ca.nrc.cadc.date.DateUtil;
 import ca.nrc.cadc.db.DBUtil;
@@ -86,7 +87,10 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
+import java.security.cert.CertificateException;
+import java.security.cert.CertificateExpiredException;
 import java.text.DateFormat;
+import java.util.Calendar;
 import java.util.Map;
 
 import javax.security.auth.Subject;
@@ -114,6 +118,10 @@ public class InventoryHarvester implements Runnable {
 
     private static final String CERTIFICATE_FILE_LOCATION = System.getProperty("user.home") + "/.ssl/cadcproxy.pem";
     private static final Logger log = Logger.getLogger(InventoryHarvester.class);
+
+    // The number of hours that the validity checker for the current Subject will request ahead to see if the Subject's
+    // X500 certificate is about to expire.
+    private static final int CERT_CHECK_HOUR_INTERVAL_COUNT = 5;
 
     private final ArtifactDAO artifactDAO;
     private final URI resourceID;
@@ -172,6 +180,33 @@ public class InventoryHarvester implements Runnable {
         }
     }
 
+    /**
+     * Ensure the current Subject is still valid.  If the certificate has expired during processing, then update the
+     * principals and credentials with a fresh read of the (presumably) refreshed certificate PEM.
+     *
+     * <p>This is generally called before creating a TAP client to ensure the most up to date credentials.
+     * @throws CertificateException     Any issues with checking the Subject's certificate.
+     */
+    private void verifySubject() throws CertificateException {
+        final Subject currentSubject = AuthenticationUtil.getCurrentSubject();
+        final Calendar calendar = Calendar.getInstance();
+        calendar.add(Calendar.HOUR, CERT_CHECK_HOUR_INTERVAL_COUNT);
+
+        try {
+            SSLUtil.validateSubject(currentSubject, calendar.getTime());
+        } catch (CertificateExpiredException cee) {
+            log.debug("Certificate is about to expire.  Assuming the underlying certificate is refreshed and updating "
+                      + "current Subject.");
+            final Subject subject = SSLUtil.createSubject(new File(CERTIFICATE_FILE_LOCATION));
+
+            currentSubject.getPrincipals().clear();
+            currentSubject.getPrincipals().addAll(subject.getPrincipals());
+
+            currentSubject.getPublicCredentials().clear();
+            currentSubject.getPublicCredentials().addAll(subject.getPublicCredentials());
+        }
+    }
+
     // general behaviour is that this process runs continually and manages it's own schedule
     // - harvest everything up to *now*
     // - go idle for a dynamically determined amount of time
@@ -180,36 +215,41 @@ public class InventoryHarvester implements Runnable {
     public void run() {
         while (true) {
             try {
-                doit();
+                final Subject subject = SSLUtil.createSubject(new File(CERTIFICATE_FILE_LOCATION));
+                Subject.doAs(subject, (PrivilegedExceptionAction<Void>) () -> {
+                    doit();
+                    return null;
+                });
 
                 // TODO: dynamic depending on how rapidly the remote content is changing
                 // ... this value and the reprocess-last-N-seconds should be related
                 long dt = 60 * 1000L;
                 Thread.sleep(dt);
+            } catch (PrivilegedActionException privilegedActionException) {
+                final Exception exception = privilegedActionException.getException();
+                throw new IllegalStateException(exception.getMessage(), exception);
             } catch (IllegalArgumentException ex) {
                 // Be careful here.  This IllegalArgumentException is being caught to work around a mysterious
                 // case where TCP connections are simply dropped and the incoming stream of data is invalid.
                 // This catch will allow Fenwick to restart its processing.
                 // jenkinsd 2020.09.25
                 final String message = ex.getMessage().trim();
-                if (!message.startsWith("wrong number of columns")) {
+                if (message.startsWith("wrong number of columns")) {
                     log.error("\n\n*******\n");
                     log.error("Caught IllegalArgumentException - " + message + " (" + ++errorCount + ")");
                     log.error("Ignoring error as presumed to be a dropped connection before fully reading the stream.");
                     log.error("\n*******\n");
-                } else if (!message.startsWith("invalid checksum URI:")) {
+                } else if (message.startsWith("invalid checksum URI:")) {
                     log.error("\n\n*******\n");
                     log.error("Caught IllegalArgumentException - " + message + " (" + ++errorCount + ")");
                     log.error("Ignoring error as presumed to be a dropped connection before fully reading the stream.");
-                    log.error("CAUTION! - This could be an actual mad MD5 checksum! Logging this to provide an audit.");
+                    log.error("CAUTION! - This could actually be a bad MD5 checksum! Logging this to provide an audit.");
                     log.error("\n*******\n");
                 } else {
                     throw ex;
                 }
             } catch (InterruptedException ex) {
                 throw new RuntimeException("interrupted", ex);
-            } catch (Exception ex) {
-                throw new IllegalStateException(ex.getMessage(), ex);
             }
         }
     }
@@ -241,57 +281,22 @@ public class InventoryHarvester implements Runnable {
      * @throws NoSuchAlgorithmException  If the MessageDigest for synchronizing Artifacts cannot be used.
      */
     void doit() throws ResourceNotFoundException, IOException, IllegalStateException, TransientException,
-                       InterruptedException, NoSuchAlgorithmException {
+                       InterruptedException, NoSuchAlgorithmException, CertificateException {
         final StorageSite storageSite;
 
-        // This subject will be recreated before performing each job to ensure the certificate is still valid.
-        Subject subject;
+        if (trackSiteLocations) {
+            final TapClient<StorageSite> storageSiteTapClient = new TapClient<>(this.resourceID);
+            final StorageSiteDAO storageSiteDAO = new StorageSiteDAO(this.artifactDAO);
+            final StorageSiteSync storageSiteSync = new StorageSiteSync(storageSiteTapClient, storageSiteDAO);
+            storageSite = storageSiteSync.doit();
 
-        try {
-            if (trackSiteLocations) {
-                subject = SSLUtil.createSubject(new File(CERTIFICATE_FILE_LOCATION));
-                storageSite = Subject.doAs(subject, (PrivilegedExceptionAction<StorageSite>) () -> {
-                    final TapClient<StorageSite> storageSiteTapClient = new TapClient<>(this.resourceID);
-                    final StorageSiteDAO storageSiteDAO = new StorageSiteDAO(this.artifactDAO);
-                    final StorageSiteSync storageSiteSync = new StorageSiteSync(storageSiteTapClient, storageSiteDAO);
-                    final StorageSite innerStorageSite = storageSiteSync.doit();
-
-                    syncDeletedStorageLocationEvents(innerStorageSite);
-                    return innerStorageSite;
-                });
-            } else {
-                storageSite = null;
-            }
-
-            subject = SSLUtil.createSubject(new File(CERTIFICATE_FILE_LOCATION));
-            Subject.doAs(subject, (PrivilegedExceptionAction<Void>) () -> {
-                syncDeletedArtifactEvents();
-                return null;
-            });
-
-            subject = SSLUtil.createSubject(new File(CERTIFICATE_FILE_LOCATION));
-            Subject.doAs(subject, (PrivilegedExceptionAction<Void>) () -> {
-                syncArtifacts(storageSite);
-                return null;
-            });
-        } catch (PrivilegedActionException privilegedActionException) {
-            final Exception exception = privilegedActionException.getException();
-
-            if (exception instanceof ResourceNotFoundException) {
-                throw (ResourceNotFoundException) exception;
-            } else if (exception instanceof IOException) {
-                throw (IOException) exception;
-            } else if (exception instanceof TransientException) {
-                throw (TransientException) exception;
-            } else if (exception instanceof InterruptedException) {
-                throw (InterruptedException) exception;
-            } else if (exception instanceof NoSuchAlgorithmException) {
-                throw (NoSuchAlgorithmException) exception;
-            } else {
-                log.fatal("BUG - Unknown error.", exception);
-                throw new RuntimeException(exception.getMessage(), exception);
-            }
+            syncDeletedStorageLocationEvents(storageSite);
+        } else {
+            storageSite = null;
         }
+
+        syncDeletedArtifactEvents();
+        syncArtifacts(storageSite);
     }
 
     /**
@@ -306,7 +311,7 @@ public class InventoryHarvester implements Runnable {
      */
     private void syncDeletedStorageLocationEvents(final StorageSite storageSite)
             throws ResourceNotFoundException, IOException, IllegalStateException, TransientException,
-                   InterruptedException {
+                   InterruptedException, CertificateException {
         final HarvestState existingHarvestState = this.harvestStateDAO.get(DeletedStorageLocationEvent.class.getName(),
                                                                            this.resourceID);
         final HarvestState harvestState = (existingHarvestState == null)
@@ -315,6 +320,8 @@ public class InventoryHarvester implements Runnable {
                                           : existingHarvestState;
 
         DateFormat df = DateUtil.getDateFormat(DateUtil.IVOA_DATE_FORMAT, DateUtil.UTC);
+
+        verifySubject();
         final TapClient<DeletedStorageLocationEvent> deletedStorageLocationEventTapClient =
                 new TapClient<>(this.resourceID);
         final DeletedStorageLocationEventSync deletedStorageLocationEventSync =
@@ -335,27 +342,28 @@ public class InventoryHarvester implements Runnable {
             while (deletedStorageLocationEventResourceIterator.hasNext()) {
                 final DeletedStorageLocationEvent deletedStorageLocationEvent =
                         deletedStorageLocationEventResourceIterator.next();
-                if (!first
-                    || !deletedStorageLocationEvent.getID().equals(harvestState.curID)
-                    || !deletedStorageLocationEvent.getLastModified().equals(harvestState.curLastModified)) {
-                    transactionManager.startTransaction();
-                    final Artifact artifact = this.artifactDAO.get(deletedStorageLocationEvent.getID());
-                    if (artifact != null) {
-                        final SiteLocation siteLocation = new SiteLocation(storageSite.getID());
-                        // TODO: this message could also log the artifact and site that was removed
-                        log.info("PUT: DeletedStorageLocationEvent " + deletedStorageLocationEvent.getID()
-                                 + " " + df.format(deletedStorageLocationEvent.getLastModified()));
-                        artifactDAO.removeSiteLocation(artifact, siteLocation);
-                        harvestState.curLastModified = deletedStorageLocationEvent.getLastModified();
-                        harvestStateDAO.put(harvestState);
-                    } else {
-                        log.warn("Artifact " + deletedStorageLocationEvent.getID() + " does not exist locally.");
-                    }
-                    transactionManager.commitTransaction();
-                } else {
+                if (first
+                        && deletedStorageLocationEvent.getID().equals(harvestState.curID)
+                        && deletedStorageLocationEvent.getLastModified().equals(harvestState.curLastModified)) {
                     log.debug("SKIP: previously processed: " + deletedStorageLocationEvent.getID());
                     first = false;
+                    continue; // ugh
                 }
+
+                transactionManager.startTransaction();
+                final Artifact artifact = this.artifactDAO.get(deletedStorageLocationEvent.getID());
+                if (artifact != null) {
+                    final SiteLocation siteLocation = new SiteLocation(storageSite.getID());
+                    // TODO: this message could also log the artifact and site that was removed
+                    log.info("PUT: DeletedStorageLocationEvent " + deletedStorageLocationEvent.getID()
+                             + " " + df.format(deletedStorageLocationEvent.getLastModified()));
+                    artifactDAO.removeSiteLocation(artifact, siteLocation);
+                    harvestState.curLastModified = deletedStorageLocationEvent.getLastModified();
+                    harvestStateDAO.put(harvestState);
+                } else {
+                    log.warn("Artifact " + deletedStorageLocationEvent.getID() + " does not exist locally.");
+                }
+                transactionManager.commitTransaction();
 
             }
         } catch (Exception exception) {
@@ -379,7 +387,7 @@ public class InventoryHarvester implements Runnable {
      * @throws InterruptedException      thread interrupted
      */
     private void syncDeletedArtifactEvents() throws ResourceNotFoundException, IOException, IllegalStateException,
-                                                    TransientException, InterruptedException {
+                                                    TransientException, InterruptedException, CertificateException {
         final HarvestState existingHarvestState = this.harvestStateDAO.get(DeletedArtifactEvent.class.getName(),
                                                                            this.resourceID);
         final HarvestState harvestState = (existingHarvestState == null)
@@ -388,6 +396,8 @@ public class InventoryHarvester implements Runnable {
                                                   : existingHarvestState;
 
         DateFormat df = DateUtil.getDateFormat(DateUtil.IVOA_DATE_FORMAT, DateUtil.UTC);
+
+        verifySubject();
         final TapClient<DeletedArtifactEvent> deletedArtifactEventTapClientTapClient = new TapClient<>(this.resourceID);
         final DeletedArtifactEventSync deletedArtifactEventSync =
                 new DeletedArtifactEventSync(deletedArtifactEventTapClientTapClient);
@@ -447,12 +457,13 @@ public class InventoryHarvester implements Runnable {
      * @throws TransientException        temporary failure of TAP service: same call could work in future
      * @throws InterruptedException      thread interrupted
      */
-    private void syncArtifacts(final StorageSite storageSite) throws ResourceNotFoundException, IOException,
-                                                                     IllegalStateException, NoSuchAlgorithmException,
-                                                                     InterruptedException, TransientException {
+    private void syncArtifacts(final StorageSite storageSite)
+            throws ResourceNotFoundException, IOException, IllegalStateException, NoSuchAlgorithmException,
+                   InterruptedException, TransientException, CertificateException {
         final MessageDigest messageDigest = MessageDigest.getInstance("MD5");
         DateFormat df = DateUtil.getDateFormat(DateUtil.IVOA_DATE_FORMAT, DateUtil.UTC);
 
+        verifySubject();
         final TapClient<Artifact> artifactTapClient = new TapClient<>(this.resourceID);
 
         final HarvestState existingHarvestState = this.harvestStateDAO.get(Artifact.class.getName(), this.resourceID);
