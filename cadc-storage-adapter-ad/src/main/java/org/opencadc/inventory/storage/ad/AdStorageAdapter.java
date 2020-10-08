@@ -150,12 +150,9 @@ public class AdStorageAdapter implements StorageAdapter {
         try {
             boolean auth = CredUtil.checkCredentials();
             log.debug("authenticated: " + auth);
-        } catch (CertificateExpiredException e) {
-            log.debug("error type: " + e.getClass());
-            throw new RuntimeException(e.getMessage());
-        } catch (CertificateNotYetValidException e) {
-            log.debug("error type: " + e.getClass());
-            throw new RuntimeException(e.getMessage());
+        } catch (CertificateExpiredException | CertificateNotYetValidException unexpected) {
+            log.debug("error type: " + unexpected.getClass());
+            throw new RuntimeException(unexpected.getMessage());
         }
 
         try {
