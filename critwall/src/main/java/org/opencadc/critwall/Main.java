@@ -67,9 +67,6 @@
 
 package org.opencadc.critwall;
 
-import ca.nrc.cadc.auth.AuthenticationUtil;
-import ca.nrc.cadc.auth.RunnableAction;
-import ca.nrc.cadc.auth.SSLUtil;
 import ca.nrc.cadc.db.ConnectionConfig;
 import ca.nrc.cadc.util.Log4jInit;
 
@@ -77,16 +74,11 @@ import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.util.PropertiesReader;
 import ca.nrc.cadc.util.StringUtil;
 
-import java.io.File;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.security.AccessControlContext;
-import java.security.AccessController;
-import java.security.PrivilegedExceptionAction;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
-import javax.security.auth.Subject;
 
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
@@ -110,7 +102,7 @@ public class Main {
     private static final String NTHREADS_CONFIG_KEY = CONFIG_PREFIX + ".threads";
     private static final String LOCATOR_SERVICE_CONFIG_KEY = CONFIG_PREFIX + ".locatorService";
     private static final String LOGGING_CONFIG_KEY = CONFIG_PREFIX + ".logging";
-    private static final String CERTIFICATE_FILE_LOCATION = System.getProperty("user.home") + "/.ssl/cadcproxy.pem";
+
 
     public static void main(String[] args) {
         try {
@@ -148,47 +140,47 @@ public class Main {
 
             String schema = props.getFirstPropertyValue(DB_SCHEMA_CONFIG_KEY);
             if (!StringUtil.hasLength(schema)) {
-                errMsg.append(DB_SCHEMA_CONFIG_KEY + " ");
+                errMsg.append(DB_SCHEMA_CONFIG_KEY).append(" ");
             }
 
             String dbUrl = props.getFirstPropertyValue(DB_CONFIG_KEY);
             if (!StringUtil.hasLength(dbUrl)) {
-                errMsg.append(DB_CONFIG_KEY + " ");
+                errMsg.append(DB_CONFIG_KEY).append(" ");
             }
 
             String generatorName = props.getFirstPropertyValue(SQLGENERATOR_CONFIG_KEY);
             if (!StringUtil.hasLength(generatorName)) {
-                errMsg.append(SQLGENERATOR_CONFIG_KEY + " ");
+                errMsg.append(SQLGENERATOR_CONFIG_KEY).append(" ");
             }
 
             String username = props.getFirstPropertyValue(DB_USERNAME_CONFIG_KEY);
             if (!StringUtil.hasLength(username)) {
-                errMsg.append(DB_USERNAME_CONFIG_KEY + " ");
+                errMsg.append(DB_USERNAME_CONFIG_KEY).append(" ");
             }
 
             String password = props.getFirstPropertyValue(DB_PASSWORD_CONFIG_KEY);
             if (!StringUtil.hasLength(password)) {
-                errMsg.append(DB_PASSWORD_CONFIG_KEY + " ");
+                errMsg.append(DB_PASSWORD_CONFIG_KEY).append(" ");
             }
 
             String adapterClass = props.getFirstPropertyValue(StorageAdapter.class.getName());
             if (!StringUtil.hasLength(adapterClass)) {
-                errMsg.append(StorageAdapter.class.getName() + " ");
+                errMsg.append(StorageAdapter.class.getName()).append(" ");
             }
 
             String locatorSourceStr = props.getFirstPropertyValue(LOCATOR_SERVICE_CONFIG_KEY);
             if (!StringUtil.hasLength(locatorSourceStr)) {
-                errMsg.append(LOCATOR_SERVICE_CONFIG_KEY + " ");
+                errMsg.append(LOCATOR_SERVICE_CONFIG_KEY).append(" ");
             }
 
             String bucketSelectorPrefix = props.getFirstPropertyValue(BUCKETSEL_CONFIG_KEY);
             if (!StringUtil.hasLength(bucketSelectorPrefix)) {
-                errMsg.append(BUCKETSEL_CONFIG_KEY + " ");
+                errMsg.append(BUCKETSEL_CONFIG_KEY).append(" ");
             }
 
             String nthreadStr = props.getFirstPropertyValue(NTHREADS_CONFIG_KEY);
             if (!StringUtil.hasLength(nthreadStr)) {
-                errMsg.append(NTHREADS_CONFIG_KEY + " ");
+                errMsg.append(NTHREADS_CONFIG_KEY).append(" ");
             }
 
             // Everything is required
@@ -210,7 +202,7 @@ public class Main {
 
             final StorageAdapter localStorage;
             try {
-                Class c = Class.forName(adapterClass);
+                Class<?> c = Class.forName(adapterClass);
                 Object o = c.newInstance();
                 localStorage = (StorageAdapter) o;
                 log.debug("StorageAdapter: " + localStorage);
@@ -240,13 +232,7 @@ public class Main {
                 dbUrl);
 
             FileSync doit = new FileSync(daoConfig, cc, localStorage, locatorService, bucketSel, nthreads);
-            Subject subject = AuthenticationUtil.getAnonSubject();
-            final File certFile = new File(CERTIFICATE_FILE_LOCATION);
-            if (certFile.exists()) {
-                subject = SSLUtil.createSubject(certFile);
-            }
-            Subject.doAs(subject, new RunnableAction(doit));
-            System.exit(0);
+            doit.run();
         } catch (Throwable unexpected) {
             log.error("failure", unexpected);
             System.exit(-1);

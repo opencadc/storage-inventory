@@ -68,17 +68,27 @@
 package org.opencadc.critwall;
 
 import ca.nrc.cadc.auth.AuthenticationUtil;
+import ca.nrc.cadc.auth.SSLUtil;
 import ca.nrc.cadc.db.ConnectionConfig;
 import ca.nrc.cadc.db.DBUtil;
 
 import ca.nrc.cadc.io.ResourceIterator;
 import ca.nrc.cadc.vosi.Availability;
 import ca.nrc.cadc.vosi.AvailabilityClient;
+
+import java.io.File;
 import java.net.URI;
+import java.security.PrivilegedAction;
+import java.security.cert.CertificateException;
+import java.security.cert.CertificateExpiredException;
+import java.util.Calendar;
 import java.util.Iterator;
 import java.util.Map;
 
+import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import javax.naming.NamingException;
 import javax.security.auth.Subject;
 
@@ -94,6 +104,12 @@ public class FileSync implements Runnable {
     private static final Logger log = Logger.getLogger(FileSync.class);
 
     private static final int MAX_THREADS = 16;
+    private static final String CERTIFICATE_FILE_LOCATION = System.getProperty("user.home") + "/.ssl/cadcproxy.pem";
+
+    // The number of hours that the validity checker for the current Subject will request ahead to see if the Subject's
+    // X500 certificate is about to expire.  This will also be used to update to schedule updates to the Subject's
+    // credentials.
+    private static final int CERT_CHECK_HOUR_INTERVAL_COUNT = 5;
 
     private final ArtifactDAO artifactDAO;
     private final ArtifactDAO jobArtifactDAO;
@@ -169,7 +185,67 @@ public class FileSync implements Runnable {
         log.debug("FileSync ctor done");
     }
 
+    /**
+     * Ensure the current Subject is still valid.  If the certificate has expired during processing, then update the
+     * principals and credentials with a fresh read of the (presumably) refreshed certificate PEM.
+     *
+     * <p>This method likely does not need to be synchronized as the scheduler should be able to wait long enough
+     * between runs for the verify to complete, but here for paranoia.
+     *
+     * <p>This is generally called before creating a TAP client to ensure the most up to date credentials.
+     */
+    private synchronized void verifySubject() {
+        final Subject currentSubject = AuthenticationUtil.getCurrentSubject();
+        final File certificateFile = new File(CERTIFICATE_FILE_LOCATION);
+        final Calendar calendar = Calendar.getInstance();
+        calendar.add(Calendar.HOUR, CERT_CHECK_HOUR_INTERVAL_COUNT);
+
+        // We could check the AuthMethod as well to ensure the subject.  If the certificate file exists though, it seems
+        // likely the caller ought to be authenticated by certificate.  Conceivably, there could be a use case where
+        // Critwall was started anonymously, but a certificate was put into place later.  This will handle that case.
+        if (certificateFile.exists()) {
+            try {
+                SSLUtil.validateSubject(currentSubject, calendar.getTime());
+            } catch (CertificateExpiredException cee) {
+                log.debug("Certificate is about to expire.  Assuming the underlying certificate is refreshed and "
+                          + "updating current Subject.");
+                final Subject subject = SSLUtil.createSubject(new File(CERTIFICATE_FILE_LOCATION));
+
+                currentSubject.getPrincipals().clear();
+                currentSubject.getPrincipals().addAll(subject.getPrincipals());
+
+                currentSubject.getPublicCredentials().clear();
+                currentSubject.getPublicCredentials().addAll(subject.getPublicCredentials());
+            } catch (CertificateException certificateException) {
+                // The certificate file exists but is unusable.  Can we recover from that?  Unlikely, so die here.
+                throw new IllegalStateException(certificateException.getMessage(), certificateException);
+            }
+        }
+    }
+
+    /**
+     * Spin up a Scheduler thread to
+     */
+    private void scheduleSubjectUpdates() {
+        log.debug("START: scheduleSubjectUpdates");
+        final ScheduledExecutorService scheduledExecutorService = Executors.newSingleThreadScheduledExecutor();
+        scheduledExecutorService.schedule(this::verifySubject, CERT_CHECK_HOUR_INTERVAL_COUNT, TimeUnit.HOURS);
+        log.debug("END: scheduleSubjectUpdates OK");
+    }
+
+    @Override
     public void run() {
+        final File certificateFile = new File(CERTIFICATE_FILE_LOCATION);
+        final Subject subject = certificateFile.exists() ? SSLUtil.createSubject(new File(CERTIFICATE_FILE_LOCATION))
+                                                         : AuthenticationUtil.getAnonSubject();
+        scheduleSubjectUpdates();
+        Subject.doAs(subject, (PrivilegedAction<Void>) () -> {
+            doit();
+            return null;
+        });
+    }
+
+    public void doit() {
         // poll time while watching job queue to empty
         long poll = 30 * 1000L; // 30 sec
         if (testRunLoops > 0) {
@@ -177,7 +253,7 @@ public class FileSync implements Runnable {
         }
         // idle time from when jobs finish until next query
         long idle = 10 * poll;
-        
+
         boolean ok = true;
         long loopCount = 0;
         while (ok) {
