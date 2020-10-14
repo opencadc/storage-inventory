@@ -69,25 +69,24 @@ package org.opencadc.critwall;
 
 import ca.nrc.cadc.auth.AuthenticationUtil;
 import ca.nrc.cadc.db.ConnectionConfig;
-import ca.nrc.cadc.db.DBUtil;
-
 import ca.nrc.cadc.io.ResourceIterator;
 import ca.nrc.cadc.vosi.Availability;
 import ca.nrc.cadc.vosi.AvailabilityClient;
 import java.net.URI;
 import java.util.Iterator;
 import java.util.Map;
-
 import java.util.concurrent.LinkedBlockingQueue;
 import javax.naming.NamingException;
 import javax.security.auth.Subject;
-
+import javax.sql.DataSource;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.db.ArtifactDAO;
+import org.opencadc.inventory.db.version.InitDatabase;
 import org.opencadc.inventory.storage.StorageAdapter;
 import org.opencadc.inventory.util.BucketSelector;
+import org.opencadc.inventory.util.DBUtil;
 
 
 public class FileSync implements Runnable {
@@ -137,21 +136,35 @@ public class FileSync implements Runnable {
         // For managing the artifact iterator FileSync loops over
         try {
             // Make FileSync ArtifactDAO instance
-            String jndiSourceName = "jdbc/fileSync";
-            daoConfig.put("jndiDataSourceName", jndiSourceName);
-            DBUtil.createJNDIDataSource(jndiSourceName, connectionConfig);
+            final String fileSyncDS = "jdbc/fileSync";
+            daoConfig.put("jndiDataSourceName", fileSyncDS);
+            DBUtil.createJNDIDataSource(fileSyncDS, connectionConfig);
 
             this.artifactDAO = new ArtifactDAO();
             this.artifactDAO.setConfig(daoConfig);
 
             // Make FileSyncJob ArtifactDAO instance
-            jndiSourceName = "jdbc/fileSyncJob";
-            daoConfig.put("jndiDataSourceName", jndiSourceName);
-            DBUtil.createJNDIDataSource(jndiSourceName, connectionConfig);
+            final String jobDS = "jdbc/fileSyncJob";
+            daoConfig.put("jndiDataSourceName", jobDS);
+            int poolSize = 1 + nthreads / 3; // 3-5 threads ~2 connection, 6-8 threads ~3 connections, ... 30-32 threads ~11 connections
+            DBUtil.PoolConfig pc = new DBUtil.PoolConfig(connectionConfig, poolSize, 20000L, "select 123");
+            DBUtil.createJNDIDataSource(jobDS, pc);
+            
 
             // For passing to FileSyncJob
             this.jobArtifactDAO = new ArtifactDAO();
             this.jobArtifactDAO.setConfig(daoConfig);
+            
+            try {
+                String database = (String) daoConfig.get("database");
+                String schema = (String) daoConfig.get("schema");
+                DataSource ds = ca.nrc.cadc.db.DBUtil.findJNDIDataSource(fileSyncDS);
+                InitDatabase init = new InitDatabase(ds, database, schema);
+                init.doInit();
+                log.info("initDatabase: " + schema + " OK");
+            } catch (Exception ex) {
+                throw new IllegalStateException("check/init database failed", ex);
+            }
 
         } catch (NamingException ne) {
             throw new IllegalStateException("unable to access database: " + daoConfig.get("database"), ne);
@@ -207,7 +220,7 @@ public class FileSync implements Runnable {
                             // are available from the cadc-inventory-db API
                             Artifact curArtifact = unstoredArtifacts.next();
                             log.debug("create job: " + curArtifact.getURI());
-                            FileSyncJob fsj = new FileSyncJob(curArtifact, this.locatorService,
+                            FileSyncJob fsj = new FileSyncJob(curArtifact.getID(), this.locatorService,
                                                               this.storageAdapter, this.jobArtifactDAO, currentUser);
 
                             jobQueue.put(fsj); // blocks when queue capacity is reached
