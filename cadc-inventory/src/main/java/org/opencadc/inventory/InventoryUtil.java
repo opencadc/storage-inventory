@@ -67,19 +67,25 @@
 
 package org.opencadc.inventory;
 
+import ca.nrc.cadc.auth.AuthenticationUtil;
+import ca.nrc.cadc.auth.SSLUtil;
 import ca.nrc.cadc.util.HexUtil;
 
+import java.io.File;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.net.URI;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Date;
 import java.util.UUID;
+
+import javax.security.auth.Subject;
+
 import org.apache.log4j.Logger;
+
 
 /**
  * Static utility methods.
@@ -89,7 +95,34 @@ import org.apache.log4j.Logger;
 public abstract class InventoryUtil {
     private static final Logger log = Logger.getLogger(InventoryUtil.class);
 
+    public static final String CERTIFICATE_FILE_LOCATION = System.getProperty("user.home") + "/.ssl/cadcproxy.pem";
+
+
     private InventoryUtil() {
+    }
+
+    /**
+     * Replace the current Subject's principals and credentials with a fresh set.  Ideally this is run periodically by
+     * a scheduler.
+     */
+    public static void renewSubject() {
+        final Subject currentSubject = AuthenticationUtil.getCurrentSubject();
+        InventoryUtil.renewSubject(currentSubject);
+    }
+
+    /**
+     * Replace the given Subject's principals and credentials with a fresh set.  Ideally this is run periodically by
+     * a scheduler.
+     */
+    public static void renewSubject(final Subject subject) {
+        final File certificateFile = new File(CERTIFICATE_FILE_LOCATION);
+
+        // We could check the AuthMethod as well to ensure the subject.  If the certificate file exists though, it seems
+        // likely the caller ought to be authenticated by certificate.  Conceivably, there could be a use case where
+        // Critwall was started anonymously, but a certificate was put into place later.  This will handle that case.
+        if (certificateFile.exists()) {
+            SSLUtil.renewSubject(subject, certificateFile);
+        }
     }
 
     /**

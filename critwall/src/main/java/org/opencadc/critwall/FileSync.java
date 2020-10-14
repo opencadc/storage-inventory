@@ -79,9 +79,6 @@ import ca.nrc.cadc.vosi.AvailabilityClient;
 import java.io.File;
 import java.net.URI;
 import java.security.PrivilegedAction;
-import java.security.cert.CertificateException;
-import java.security.cert.CertificateExpiredException;
-import java.util.Calendar;
 import java.util.Iterator;
 import java.util.Map;
 
@@ -104,12 +101,11 @@ public class FileSync implements Runnable {
     private static final Logger log = Logger.getLogger(FileSync.class);
 
     private static final int MAX_THREADS = 16;
-    private static final String CERTIFICATE_FILE_LOCATION = System.getProperty("user.home") + "/.ssl/cadcproxy.pem";
 
     // The number of hours that the validity checker for the current Subject will request ahead to see if the Subject's
     // X500 certificate is about to expire.  This will also be used to update to schedule updates to the Subject's
     // credentials.
-    private static final int CERT_CHECK_HOUR_INTERVAL_COUNT = 5;
+    private static final int CERT_CHECK_MINUTE_INTERVAL_COUNT = 10;
 
     private final ArtifactDAO artifactDAO;
     private final ArtifactDAO jobArtifactDAO;
@@ -119,7 +115,7 @@ public class FileSync implements Runnable {
     private final StorageAdapter storageAdapter;
     private final ThreadPool threadPool;
     private final LinkedBlockingQueue<Runnable> jobQueue;
-    
+
     // test usage only
     int testRunLoops = 0; // default: forever
 
@@ -186,59 +182,29 @@ public class FileSync implements Runnable {
     }
 
     /**
-     * Ensure the current Subject is still valid.  If the certificate has expired during processing, then update the
-     * principals and credentials with a fresh read of the (presumably) refreshed certificate PEM.
-     *
-     * <p>This method likely does not need to be synchronized as the scheduler should be able to wait long enough
-     * between runs for the verify to complete, but here for paranoia.
-     *
-     * <p>This is generally called before creating a TAP client to ensure the most up to date credentials.
+     * Spin up a Scheduler thread to renew the subject periodically.
      */
-    private synchronized void verifySubject() {
-        final Subject currentSubject = AuthenticationUtil.getCurrentSubject();
-        final File certificateFile = new File(CERTIFICATE_FILE_LOCATION);
-        final Calendar calendar = Calendar.getInstance();
-        calendar.add(Calendar.HOUR, CERT_CHECK_HOUR_INTERVAL_COUNT);
-
-        // We could check the AuthMethod as well to ensure the subject.  If the certificate file exists though, it seems
-        // likely the caller ought to be authenticated by certificate.  Conceivably, there could be a use case where
-        // Critwall was started anonymously, but a certificate was put into place later.  This will handle that case.
-        if (certificateFile.exists()) {
-            try {
-                SSLUtil.validateSubject(currentSubject, calendar.getTime());
-            } catch (CertificateExpiredException cee) {
-                log.debug("Certificate is about to expire.  Assuming the underlying certificate is refreshed and "
-                          + "updating current Subject.");
-                final Subject subject = SSLUtil.createSubject(new File(CERTIFICATE_FILE_LOCATION));
-
-                currentSubject.getPrincipals().clear();
-                currentSubject.getPrincipals().addAll(subject.getPrincipals());
-
-                currentSubject.getPublicCredentials().clear();
-                currentSubject.getPublicCredentials().addAll(subject.getPublicCredentials());
-            } catch (CertificateException certificateException) {
-                // The certificate file exists but is unusable.  Can we recover from that?  Unlikely, so die here.
-                throw new IllegalStateException(certificateException.getMessage(), certificateException);
-            }
-        }
-    }
-
-    /**
-     * Spin up a Scheduler thread to
-     */
-    private void scheduleSubjectUpdates() {
+    public static void scheduleSubjectUpdates(final Subject subject) {
         log.debug("START: scheduleSubjectUpdates");
         final ScheduledExecutorService scheduledExecutorService = Executors.newSingleThreadScheduledExecutor();
-        scheduledExecutorService.schedule(this::verifySubject, CERT_CHECK_HOUR_INTERVAL_COUNT, TimeUnit.HOURS);
+        scheduledExecutorService.schedule(() -> {
+            // Also synchronized on FileSyncJob.run().
+            synchronized (subject) {
+                InventoryUtil.renewSubject(subject);
+            }
+        }, CERT_CHECK_MINUTE_INTERVAL_COUNT, TimeUnit.MINUTES);
         log.debug("END: scheduleSubjectUpdates OK");
     }
 
     @Override
     public void run() {
-        final File certificateFile = new File(CERTIFICATE_FILE_LOCATION);
-        final Subject subject = certificateFile.exists() ? SSLUtil.createSubject(new File(CERTIFICATE_FILE_LOCATION))
-                                                         : AuthenticationUtil.getAnonSubject();
-        scheduleSubjectUpdates();
+        final File certificateFile = new File(InventoryUtil.CERTIFICATE_FILE_LOCATION);
+        final Subject subject = certificateFile.exists()
+                                ? SSLUtil.createSubject(new File(InventoryUtil.CERTIFICATE_FILE_LOCATION))
+                                : AuthenticationUtil.getAnonSubject();
+
+        scheduleSubjectUpdates(subject);
+
         Subject.doAs(subject, (PrivilegedAction<Void>) () -> {
             doit();
             return null;
@@ -265,10 +231,9 @@ public class FileSync implements Runnable {
                     Thread.sleep(10 * poll);
                     a = acl.getAvailability();
                 }
-                
-                // TODO: load updated subject(cert) for jobs here? or inside FileSyncJob itself?
+
                 loopCount++;
-                
+
                 long startQ = System.currentTimeMillis();
                 long num = 0L;
                 log.info("FileSync.QUERY START");
@@ -295,11 +260,11 @@ public class FileSync implements Runnable {
                         // are available from the cadc-inventory-db API
                         throw qex;
                     }
-                    
+
                 }
                 long dtQ = System.currentTimeMillis() - startQ;
                 log.info("FileSync.QUERY END dt=" + dtQ + " num=" + num);
-                
+
                 boolean waiting = true;
                 while (waiting) {
                     if (jobQueue.isEmpty()) {
@@ -315,7 +280,7 @@ public class FileSync implements Runnable {
                         log.info("FileSync.POLL dt=" + poll);
                         Thread.sleep(poll);
                     }
-                    
+
                 }
                 if (testRunLoops > 0 && loopCount >= testRunLoops) {
                     log.warn("TEST MODE: testRunLoops=" + testRunLoops + " ... terminating!");
