@@ -254,10 +254,11 @@ public class PutAction extends ArtifactAction {
             if (existing != null) {
                 DeletedEventDAO eventDAO = new DeletedEventDAO(artifactDAO);
                 DeletedArtifactEvent deletedArtifact = new DeletedArtifactEvent(existing.getID());
-                artifactDAO.delete(existing.getID());
-                profiler.checkpoint("artifactDAO.delete.ok");
                 eventDAO.put(deletedArtifact);
                 profiler.checkpoint("eventDAO.put.ok");
+                
+                artifactDAO.delete(existing.getID());
+                profiler.checkpoint("artifactDAO.delete.ok");
             }
             
             artifactDAO.put(artifact);
