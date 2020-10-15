@@ -98,7 +98,8 @@ public class DeletedEventDAOTest {
         Log4jInit.setLevel("ca.nrc.cadc.db.version", Level.DEBUG);
     }
     
-    DeletedEventDAO dao = new DeletedEventDAO();
+    DeletedArtifactEventDAO daeDAO = new DeletedArtifactEventDAO();
+    DeletedStorageLocationEventDAO dslDAO = new DeletedStorageLocationEventDAO();
     
     public DeletedEventDAOTest() throws Exception {
         DBConfig dbrc = new DBConfig();
@@ -110,7 +111,8 @@ public class DeletedEventDAOTest {
         config.put("jndiDataSourceName", "jdbc/DeletedEventDAOTest");
         config.put("database", TestUtil.DATABASE);
         config.put("schema", TestUtil.SCHEMA);
-        dao.setConfig(config);
+        daeDAO.setConfig(config);
+        dslDAO.setConfig(config);
     }
     
     @Before
@@ -118,13 +120,13 @@ public class DeletedEventDAOTest {
         throws Exception
     {
         log.info("init database...");
-        InitDatabase init = new InitDatabase(dao.getDataSource(), TestUtil.DATABASE, TestUtil.SCHEMA);
+        InitDatabase init = new InitDatabase(daeDAO.getDataSource(), TestUtil.DATABASE, TestUtil.SCHEMA);
         init.doInit();
         log.info("init database... OK");
         
         log.info("clearing old content...");
-        SQLGenerator gen = dao.getSQLGenerator();
-        DataSource ds = dao.getDataSource();
+        SQLGenerator gen = daeDAO.getSQLGenerator();
+        DataSource ds = daeDAO.getDataSource();
         for (Class c : new Class[] { DeletedArtifactEvent.class, DeletedStorageLocationEvent.class }) {
             String sql = "delete from " + gen.getTable(c);
             log.info("pre-test cleanup: " + sql);
@@ -139,10 +141,10 @@ public class DeletedEventDAOTest {
             DeletedArtifactEvent expected = new DeletedArtifactEvent(UUID.randomUUID());
             log.info("expected: " + expected);
             
-            DeletedArtifactEvent notFound = (DeletedArtifactEvent) dao.get(DeletedArtifactEvent.class, expected.getID());
+            DeletedArtifactEvent notFound = daeDAO.get(expected.getID());
             Assert.assertNull(notFound);
             
-            dao.put(expected);
+            daeDAO.put(expected);
             
             // persistence assigns entity state before put
             Assert.assertNotNull(expected.getLastModified());
@@ -152,7 +154,7 @@ public class DeletedEventDAOTest {
             Assert.assertEquals("put metachecksum", mcs0, expected.getMetaChecksum());
             
             // get by ID
-            DeletedArtifactEvent fid = (DeletedArtifactEvent) dao.get(DeletedArtifactEvent.class, expected.getID());
+            DeletedArtifactEvent fid = (DeletedArtifactEvent) daeDAO.get(expected.getID());
             Assert.assertNotNull(fid);
             
             // no delete
@@ -168,10 +170,10 @@ public class DeletedEventDAOTest {
             DeletedStorageLocationEvent expected = new DeletedStorageLocationEvent(UUID.randomUUID());
             log.info("expected: " + expected);
             
-            DeletedStorageLocationEvent notFound = (DeletedStorageLocationEvent) dao.get(DeletedStorageLocationEvent.class, expected.getID());
+            DeletedStorageLocationEvent notFound = dslDAO.get(expected.getID());
             Assert.assertNull(notFound);
             
-            dao.put(expected);
+            dslDAO.put(expected);
             
             // persistence assigns entity state before put
             Assert.assertNotNull(expected.getLastModified());
@@ -181,7 +183,7 @@ public class DeletedEventDAOTest {
             Assert.assertEquals("put metachecksum", mcs0, expected.getMetaChecksum());
             
             // get by ID
-            DeletedStorageLocationEvent fid = (DeletedStorageLocationEvent) dao.get(DeletedStorageLocationEvent.class, expected.getID());
+            DeletedStorageLocationEvent fid = dslDAO.get(expected.getID());
             Assert.assertNotNull(fid);
             
             // no delete
@@ -192,15 +194,15 @@ public class DeletedEventDAOTest {
     }
     
     @Test
-    public void testCopyConstructor() {
+    public void testCopyConstructorDAE() {
         try {
             DeletedArtifactEvent expected = new DeletedArtifactEvent(UUID.randomUUID());
             log.info("expected: " + expected);
             
-            DeletedArtifactEvent notFound = (DeletedArtifactEvent) dao.get(DeletedArtifactEvent.class, expected.getID());
+            DeletedArtifactEvent notFound = daeDAO.get(expected.getID());
             Assert.assertNull(notFound);
             
-            dao.put(expected);
+            daeDAO.put(expected);
             
             // persistence assigns entity state before put
             Assert.assertNotNull(expected.getLastModified());
@@ -210,8 +212,38 @@ public class DeletedEventDAOTest {
             Assert.assertEquals("put metachecksum", mcs0, expected.getMetaChecksum());
             
             // get by ID
-            DeletedEventDAO cp = new DeletedEventDAO(dao);
+            DeletedArtifactEventDAO cp = new DeletedArtifactEventDAO(daeDAO);
             DeletedArtifactEvent fid = (DeletedArtifactEvent) cp.get(DeletedArtifactEvent.class, expected.getID());
+            Assert.assertNotNull(fid);
+            
+            // no delete
+        } catch (Exception unexpected) {
+            log.error("unexpected exception", unexpected);
+            Assert.fail("unexpected exception: " + unexpected);
+        }
+    }
+    
+    @Test
+    public void testCopyConstructorDSL() {
+        try {
+            DeletedStorageLocationEvent expected = new DeletedStorageLocationEvent(UUID.randomUUID());
+            log.info("expected: " + expected);
+            
+            DeletedStorageLocationEvent notFound = dslDAO.get(expected.getID());
+            Assert.assertNull(notFound);
+            
+            dslDAO.put(expected);
+            
+            // persistence assigns entity state before put
+            Assert.assertNotNull(expected.getLastModified());
+            Assert.assertNotNull(expected.getMetaChecksum());
+            
+            URI mcs0 = expected.computeMetaChecksum(MessageDigest.getInstance("MD5"));
+            Assert.assertEquals("put metachecksum", mcs0, expected.getMetaChecksum());
+            
+            // get by ID
+            DeletedStorageLocationEventDAO cp = new DeletedStorageLocationEventDAO(daeDAO);
+            DeletedStorageLocationEvent fid = cp.get(expected.getID());
             Assert.assertNotNull(fid);
             
             // no delete

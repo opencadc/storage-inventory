@@ -67,24 +67,28 @@
 
 package org.opencadc.inventory.db;
 
-import org.opencadc.inventory.Entity;
-
+import java.util.UUID;
+import org.opencadc.inventory.DeletedStorageLocationEvent;
 
 /**
- * Fire/persist a deleted entity event.
+ * Fire/persist a DeletedStorageLocationEvent.
  * 
  * @author pdowler
  */
-public class DeletedEventDAO<T extends Entity> extends AbstractDAO<T> {
-    public DeletedEventDAO() { 
+public class DeletedStorageLocationEventDAO extends AbstractDAO<DeletedStorageLocationEvent> {
+    public DeletedStorageLocationEventDAO() { 
         super(true);
     }
 
-    public DeletedEventDAO(boolean origin) {
+    public DeletedStorageLocationEventDAO(boolean origin) {
         super(origin);
     }
 
-    public DeletedEventDAO(AbstractDAO<?> dao) {
+    public DeletedStorageLocationEventDAO(AbstractDAO<?> dao) {
         super(dao);
+    }
+    
+    public DeletedStorageLocationEvent get(UUID id) {
+        return super.get(DeletedStorageLocationEvent.class, id);
     }
 }
