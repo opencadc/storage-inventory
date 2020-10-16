@@ -89,8 +89,11 @@ import java.net.URI;
 import java.net.URL;
 import java.sql.ResultSet;
 
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import org.apache.log4j.Logger;
-
+import org.opencadc.luskan.ws.QueryJobManager;
 
 /**
  * Basic temporary storage implementation for a tap service.
@@ -104,7 +107,7 @@ public class TempStorageManager implements ResultStore, UWSInlineContentHandler 
     private final File resultsDir;
     private String baseResultsURL;
 
-    //private Job job;
+    private Job job;
     private String filename;
 
     public TempStorageManager() {
@@ -158,6 +161,8 @@ public class TempStorageManager implements ResultStore, UWSInlineContentHandler 
         }
         // TODO: store requested content-type with file so that 
         // TempStorageGetAction can set content-type header correctly
+
+        scheduleDeletion(dest, getJobDestructionDelay());
         return ret;
     }
 
@@ -169,12 +174,14 @@ public class TempStorageManager implements ResultStore, UWSInlineContentHandler 
         }
         // TODO: store requested content-type with file so that 
         // TempStorageGetAction can set content-type header correctly
+
+        scheduleDeletion(dest, getJobDestructionDelay());
         return ret;
     }
 
     @Override
     public void setJob(Job job) {
-        // unused
+        this.job = job;
     }
 
     @Override
@@ -240,6 +247,8 @@ public class TempStorageManager implements ResultStore, UWSInlineContentHandler 
         fos.flush();
         fos.close();
 
+        scheduleDeletion(put, QueryJobManager.MAX_DESTRUCTION);
+
         URL retURL = new URL(baseResultsURL + "/" + filename);
         Content ret = new Content();
         ret.name = UWSInlineContentHandler.CONTENT_PARAM_REPLACE;
@@ -250,4 +259,35 @@ public class TempStorageManager implements ResultStore, UWSInlineContentHandler 
     private static String getRandomString() {
         return new RandomStringGenerator(16).getID();
     }
+
+    private long getJobDestructionDelay() {
+        return this.job.getDestructionTime().getTime() - System.currentTimeMillis();
+    }
+
+    void scheduleDeletion(final File file, final long delay) {
+        ScheduledExecutorService scheduledExecutorService = null;
+        try {
+            scheduledExecutorService = Executors.newSingleThreadScheduledExecutor();
+            scheduledExecutorService.schedule(new Runnable() {
+                @Override public void run() {
+                    try {
+                        if (!file.exists()) {
+                            log.info(String.format("%s not found for deletion", file.getAbsolutePath()));
+                        } else {
+                            boolean deleted = file.delete();
+                            log.debug(String.format("deleted %s: %s", file.getAbsolutePath(), deleted));
+                        }
+                    } catch (SecurityException e) {
+                        log.error(String.format("Unable to delete %s because %s", file.getAbsolutePath(),
+                                                e.getMessage()));
+                    }
+                }
+            }, delay, TimeUnit.MILLISECONDS);
+        } finally {
+            if (scheduledExecutorService != null) {
+                scheduledExecutorService.shutdown();
+            }
+        }
+    }
+
 }
