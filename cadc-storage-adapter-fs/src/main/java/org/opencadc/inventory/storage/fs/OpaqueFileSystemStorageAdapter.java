@@ -467,13 +467,15 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
                     // since filename is a UUID this is fatal
                     throw new RuntimeException("UUID collision on put: " + newArtifact.getArtifactURI() + " -> " + storageLocation);
                 }
+
+                // create this before committing the file so constraints applied
+                StorageMetadata metadata = new StorageMetadata(storageLocation, checksum, length);
                 
                 // to atomic copy into content directory
                 final Path result = Files.move(txnTarget, contentTarget, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
                 log.debug("moved file to : " + contentTarget);
                 txnTarget = null;
-
-                StorageMetadata metadata = new StorageMetadata(storageLocation, checksum, length);
+                
                 metadata.artifactURI = artifactURI;
                 metadata.contentLastModified = new Date(Files.getLastModifiedTime(result).toMillis());
                 return metadata;
