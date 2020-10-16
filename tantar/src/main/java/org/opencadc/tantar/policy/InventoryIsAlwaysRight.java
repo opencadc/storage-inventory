@@ -97,12 +97,12 @@ public class InventoryIsAlwaysRight extends ResolutionPolicy {
             // either.
             reporter.report("Resetting Artifact " + artifact.storageLocation + " as per policy.");
 
-            validateEventListener.markAsNew(artifact);
+            validateEventListener.clearStorageLocation(artifact);
         } else if (!storageMetadata.isValid()) {
             reporter.report("Invalid Storage Metadata (" + storageMetadata.getStorageLocation() + ").  "
                             + "Replacing as per policy.");
             validateEventListener.delete(storageMetadata);
-            validateEventListener.markAsNew(artifact);
+            validateEventListener.clearStorageLocation(artifact);
         } else if (artifact == null) {
             reporter.report("Removing Unknown File " + storageMetadata.getStorageLocation() + " as per policy.");
 
@@ -114,7 +114,7 @@ public class InventoryIsAlwaysRight extends ResolutionPolicy {
                 reporter.report("Replacing File " + storageMetadata.getStorageLocation() + " as per policy.");
 
                 validateEventListener.delete(storageMetadata);
-                validateEventListener.markAsNew(artifact);
+                validateEventListener.clearStorageLocation(artifact);
             } else {
                 reporter.report("Artifact " + artifact.storageLocation + " is valid as per policy.");
             }

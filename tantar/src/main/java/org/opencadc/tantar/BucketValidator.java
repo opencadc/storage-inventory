@@ -77,7 +77,6 @@ import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.profiler.Profiler;
 import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.util.StringUtil;
-
 import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
@@ -88,7 +87,7 @@ import java.util.List;
 import java.util.Map;
 import javax.naming.NamingException;
 import javax.security.auth.Subject;
-
+import javax.sql.DataSource;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.DeletedArtifactEvent;
@@ -96,17 +95,18 @@ import org.opencadc.inventory.DeletedStorageLocationEvent;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.db.ArtifactDAO;
-import org.opencadc.inventory.db.DeletedEventDAO;
+import org.opencadc.inventory.db.DeletedArtifactEventDAO;
+import org.opencadc.inventory.db.DeletedStorageLocationEventDAO;
+import org.opencadc.inventory.db.EntityNotFoundException;
 import org.opencadc.inventory.db.ObsoleteStorageLocation;
 import org.opencadc.inventory.db.ObsoleteStorageLocationDAO;
-
 import org.opencadc.inventory.db.SQLGenerator;
+import org.opencadc.inventory.db.version.InitDatabase;
 import org.opencadc.inventory.storage.StorageAdapter;
 import org.opencadc.inventory.storage.StorageEngageException;
 import org.opencadc.inventory.storage.StorageMetadata;
 import org.opencadc.inventory.util.BucketSelector;
 import org.opencadc.tantar.policy.ResolutionPolicy;
-
 
 /**
  * Main class to issue iterator requests to the Storage Adaptor and verify the contents.
@@ -230,7 +230,8 @@ public class BucketValidator implements ValidateEventListener {
                     String.format("A value for %s is required in tantar.properties", jdbcSchemaKey));
         }
 
-        config.put("database", "inventory");
+        // not currently used in the SQL; correct database must be in the JDBC URL
+        //config.put("database", "inventory");
 
         config.put("jndiDataSourceName", "jdbc/txinventory");
         this.artifactDAO = new ArtifactDAO();
@@ -239,6 +240,17 @@ public class BucketValidator implements ValidateEventListener {
         config.put("jndiDataSourceName", "jdbc/inventory");
         this.iteratorDAO = new ArtifactDAO();
         this.iteratorDAO.setConfig(config);
+        
+        try {
+            String database = (String) config.get("database");
+            String schema = (String) config.get("schema");
+            DataSource ds = ca.nrc.cadc.db.DBUtil.findJNDIDataSource("jdbc/inventory");
+            InitDatabase init = new InitDatabase(ds, database, schema);
+            init.doInit();
+            LOGGER.info("initDatabase: " + schema + " OK");
+        } catch (Exception ex) {
+            throw new IllegalStateException("check/init database failed", ex);
+        }
     }
 
     /**
@@ -338,27 +350,29 @@ public class BucketValidator implements ValidateEventListener {
     /**
      * Mark the given Artifact as new by removing its Storage Location.  This will force the file-sync application to
      * assume it's a new insert and force a re-download of the file.
-     * TODO: Check for an existing ObsoleteStorageLocation that will indicate an already deleted Artifact by Minoc.
      *
-     * @param artifact The base artifact.  This MUST have a Storage Location.
+     * @param artifact The artifact to clear
      */
     @Override
-    public void markAsNew(final Artifact artifact) {
+    public void clearStorageLocation(final Artifact artifact) {
         if (canTakeAction()) {
             final TransactionManager transactionManager = artifactDAO.getTransactionManager();
 
             try {
                 LOGGER.debug("Start transaction.");
                 transactionManager.startTransaction();
-
-                final DeletedStorageLocationEvent deletedStorageLocationEvent =
-                        new DeletedStorageLocationEvent(artifact.getID());
-                final DeletedEventDAO<DeletedStorageLocationEvent> deletedEventDAO = new DeletedEventDAO<>(artifactDAO);
-                deletedEventDAO.put(deletedStorageLocationEvent);
-
-                artifactDAO.setStorageLocation(artifact, null);
-
+                
+                artifactDAO.lock(artifact);
+                Artifact curArtifact = artifactDAO.get(artifact.getID());
+                final DeletedStorageLocationEventDAO deletedEventDAO = new DeletedStorageLocationEventDAO(artifactDAO);
+                deletedEventDAO.put(new DeletedStorageLocationEvent(artifact.getID()));
+                artifactDAO.setStorageLocation(curArtifact, null);
+                
                 transactionManager.commitTransaction();
+            } catch (EntityNotFoundException ex) {
+                // failed to lock: artifact deleted since start of iteration
+                transactionManager.rollbackTransaction();
+                LOGGER.debug("Rollback Transaction: OK");
             } catch (Exception e) {
                 LOGGER.error(String.format("Failed to mark Artifact as new %s.", artifact.getURI()), e);
                 transactionManager.rollbackTransaction();
@@ -377,49 +391,15 @@ public class BucketValidator implements ValidateEventListener {
     /**
      * Remove a file based on the determination of the Policy.  The use case driving this is when the Policy dictates
      * that the Inventory is correct, but the Artifact is missing, and the Storage Metadata is present.
-     * TODO: Finalize the logic in this method.
-     * TODO: jenkinsd 2020.03.13
-     *
      * @param storageMetadata The StorageMetadata containing a Storage Location to remove.
      */
     @Override
     public void delete(final StorageMetadata storageMetadata) throws Exception {
         if (canTakeAction()) {
-
             final StorageLocation storageLocation = storageMetadata.getStorageLocation();
-
             LOGGER.debug("Deleting from storage...");
             storageAdapter.delete(storageLocation);
             LOGGER.debug("Delete from storage: OK");
-
-            final TransactionManager transactionManager = artifactDAO.getTransactionManager();
-
-            try {
-                LOGGER.debug("Start transaction.");
-                transactionManager.startTransaction();
-                final ObsoleteStorageLocationDAO obsoleteStorageLocationDAO =
-                        new ObsoleteStorageLocationDAO(artifactDAO);
-                final ObsoleteStorageLocation obsoleteStorageLocation = obsoleteStorageLocationDAO.get(storageLocation);
-
-                if (obsoleteStorageLocation != null) {
-                    obsoleteStorageLocationDAO.delete(obsoleteStorageLocation.getID());
-                }
-
-                LOGGER.debug("Commit transaction.");
-                transactionManager.commitTransaction();
-            } catch (Exception e) {
-                LOGGER.error(String.format("Failed to delete StorageMetadata %s.",
-                                           storageMetadata.getStorageLocation()), e);
-                transactionManager.rollbackTransaction();
-                LOGGER.debug("Rollback Transaction: OK");
-                throw e;
-            } finally {
-                if (transactionManager.isOpen()) {
-                    LOGGER.error("BUG - Open transaction in finally");
-                    transactionManager.rollbackTransaction();
-                    LOGGER.error("Transaction rolled back successfully.");
-                }
-            }
         }
     }
 
@@ -434,16 +414,22 @@ public class BucketValidator implements ValidateEventListener {
         if (canTakeAction()) {
             final TransactionManager transactionManager = artifactDAO.getTransactionManager();
             try {
-                LOGGER.debug("Start transaction.");
+                LOGGER.debug("start transaction...");
                 transactionManager.startTransaction();
+                LOGGER.debug("start transaction... OK");
 
-                final DeletedEventDAO<DeletedArtifactEvent> deletedEventDAO = new DeletedEventDAO<>(artifactDAO);
-                final DeletedArtifactEvent deletedArtifactEvent = new DeletedArtifactEvent(artifact.getID());
-
+                artifactDAO.lock(artifact);
+                
+                final DeletedArtifactEventDAO deletedEventDAO = new DeletedArtifactEventDAO(artifactDAO);
+                deletedEventDAO.put(new DeletedArtifactEvent(artifact.getID()));
+                
                 artifactDAO.delete(artifact.getID());
-                deletedEventDAO.put(deletedArtifactEvent);
 
+                LOGGER.debug("commit transaction...");
                 transactionManager.commitTransaction();
+                LOGGER.debug("commit transaction... OK");
+            } catch (EntityNotFoundException ex) {
+                LOGGER.debug("failed to lock Artifact " + artifact.getID() + " : already deleted");
             } catch (Exception e) {
                 LOGGER.error(String.format("Failed to delete Artifact %s.", artifact.getURI()), e);
                 transactionManager.rollbackTransaction();
@@ -459,6 +445,29 @@ public class BucketValidator implements ValidateEventListener {
         }
     }
 
+    // used by createArtifact and replaceArtifact
+    private Artifact toArtifact(StorageMetadata storageMetadata) {
+        if (storageMetadata.artifactURI != null) {
+            final Date contentLastModified =
+                storageMetadata.contentLastModified == null ? new Date() : storageMetadata.contentLastModified;
+
+            final Artifact artifact = new Artifact(storageMetadata.artifactURI,
+                                                   storageMetadata.getContentChecksum(),
+                                                   contentLastModified,
+                                                   storageMetadata.getContentLength());
+            artifact.storageLocation = storageMetadata.getStorageLocation();
+            artifact.contentType = storageMetadata.contentType;
+            artifact.contentEncoding = storageMetadata.contentEncoding;
+            return artifact;
+        }
+        LOGGER.warn(String.format(
+            "Policy would like to create an Artifact, but no Artifact URI exists in StorageMetadata "
+            + "located at %s.  This StorageLocation will be skipped for now but will be present in future"
+            + "runs and will likely require manual intervention.",
+            storageMetadata.getStorageLocation()));
+        return null;
+    }
+    
     /**
      * The Artifact from the given StorageMetadata does not exist but it should.
      *
@@ -467,45 +476,29 @@ public class BucketValidator implements ValidateEventListener {
     @Override
     public void createArtifact(final StorageMetadata storageMetadata) {
         if (canTakeAction()) {
-            if (storageMetadata.artifactURI != null) {
+            Artifact artifact = toArtifact(storageMetadata);
+            if (artifact == null) {
+                return; // nothing to do
+            }
+                
+            final TransactionManager transactionManager = artifactDAO.getTransactionManager();
 
-                // if contentLastModified is null, assign new Date()
-                final Date contentLastModified =
-                    storageMetadata.contentLastModified == null ? new Date() : storageMetadata.contentLastModified;
-
-                final Artifact artifact = new Artifact(storageMetadata.artifactURI,
-                                                       storageMetadata.getContentChecksum(),
-                                                       contentLastModified,
-                                                       storageMetadata.getContentLength());
-                artifact.storageLocation = storageMetadata.getStorageLocation();
-                artifact.contentType = storageMetadata.contentType;
-                artifact.contentEncoding = storageMetadata.contentEncoding;
-
-                final TransactionManager transactionManager = artifactDAO.getTransactionManager();
-
-                try {
-                    LOGGER.debug("Start transaction.");
-                    transactionManager.startTransaction();
-                    artifactDAO.put(artifact);
-                    transactionManager.commitTransaction();
-                } catch (Exception e) {
-                    LOGGER.error(String.format("Failed to create Artifact %s.", artifact.getURI()), e);
+            try {
+                LOGGER.debug("Start transaction.");
+                transactionManager.startTransaction();
+                artifactDAO.put(artifact);
+                transactionManager.commitTransaction();
+            } catch (Exception e) {
+                LOGGER.error(String.format("Failed to create Artifact %s.", artifact.getURI()), e);
+                transactionManager.rollbackTransaction();
+                LOGGER.debug("Rollback Transaction: OK");
+                throw e;
+            } finally {
+                if (transactionManager.isOpen()) {
+                    LOGGER.error("BUG - Open transaction in finally");
                     transactionManager.rollbackTransaction();
-                    LOGGER.debug("Rollback Transaction: OK");
-                    throw e;
-                } finally {
-                    if (transactionManager.isOpen()) {
-                        LOGGER.error("BUG - Open transaction in finally");
-                        transactionManager.rollbackTransaction();
-                        LOGGER.error("Transaction rolled back successfully.");
-                    }
+                    LOGGER.error("Transaction rolled back successfully.");
                 }
-            } else {
-                LOGGER.warn(String.format(
-                        "Policy would like to create an Artifact, but no Artifact URI exists in StorageMetadata "
-                        + "located at %s.  This StorageLocation will be skipped for now but will be present in future"
-                        + "runs and will likely require manual intervention.",
-                        storageMetadata.getStorageLocation()));
             }
         }
     }
@@ -526,26 +519,21 @@ public class BucketValidator implements ValidateEventListener {
             try {
                 LOGGER.debug("Start transaction.");
                 transactionManager.startTransaction();
+                
+                try {
+                    artifactDAO.lock(artifact);
+                    
+                    DeletedArtifactEventDAO deletedEventDAO = new DeletedArtifactEventDAO(artifactDAO);
+                    deletedEventDAO.put(new DeletedArtifactEvent(artifact.getID()));
+                    
+                    artifactDAO.delete(artifact.getID());
+                } catch (EntityNotFoundException ex) {
+                    // artifact deleted since start of iteration - continue 
+                    LOGGER.debug("artifact to be replaced was already deleted... continuing to create replacement");
+                }
 
-                artifactDAO.delete(artifact.getID());
-
-                final DeletedArtifactEvent deletedArtifactEvent = new DeletedArtifactEvent(artifact.getID());
-                final DeletedEventDAO<DeletedArtifactEvent> deletedArtifactEventDeletedEventDAO =
-                        new DeletedEventDAO<>(artifactDAO);
-                deletedArtifactEventDeletedEventDAO.put(deletedArtifactEvent);
-
-                // Create a replacement Artifact with information from the StorageMetadata, as it's assumed to hold
-                // the correct state of this Storage Entity. If contentLastModified is null, assign new Date()
-                final Date contentLastModified =
-                    storageMetadata.contentLastModified == null ? new Date() : storageMetadata.contentLastModified;
-
-                final Artifact replacementArtifact = new Artifact(storageMetadata.artifactURI,
-                                                                  storageMetadata.getContentChecksum(),
-                                                                  contentLastModified,
-                                                                  storageMetadata.getContentLength());
-                replacementArtifact.contentEncoding = storageMetadata.contentEncoding;
-                replacementArtifact.contentType = storageMetadata.contentType;
-                replacementArtifact.storageLocation = storageMetadata.getStorageLocation();
+                final Artifact replacementArtifact = toArtifact(storageMetadata);
+                
                 artifactDAO.put(replacementArtifact);
 
                 transactionManager.commitTransaction();
@@ -580,8 +568,10 @@ public class BucketValidator implements ValidateEventListener {
             try {
                 LOGGER.debug("Start transaction.");
                 transactionManager.startTransaction();
+                
+                artifactDAO.lock(artifact);
 
-                // By reusing the Artifact instance's ID we can have the original Artifact but wipe out the mutable
+                // By reusing the Artifact instance's ID we can have the original Artifact but reset the mutable
                 // fields below.
                 artifact.contentEncoding = storageMetadata.contentEncoding;
                 artifact.contentType = storageMetadata.contentType;
@@ -590,6 +580,8 @@ public class BucketValidator implements ValidateEventListener {
                 artifactDAO.put(artifact);
 
                 transactionManager.commitTransaction();
+            } catch (EntityNotFoundException ex) {
+                LOGGER.debug("failed to lock Artifact " + artifact.getID() + " : already deleted");
             } catch (Exception e) {
                 LOGGER.error(String.format("Failed to update Artifact %s.", storageMetadata.artifactURI), e);
                 transactionManager.rollbackTransaction();
