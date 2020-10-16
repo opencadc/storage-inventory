@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2020.                            (c) 2020.
+*  (c) 2019.                            (c) 2019.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -65,86 +65,30 @@
 ************************************************************************
 */
 
-package org.opencadc.fenwick;
+package org.opencadc.inventory.db;
 
-import ca.nrc.cadc.auth.SSLUtil;
-import ca.nrc.cadc.util.FileUtil;
-import ca.nrc.cadc.util.HexUtil;
-import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.FileReader;
-import java.io.IOException;
-import java.net.URI;
-import java.util.MissingResourceException;
-import java.util.Properties;
 import java.util.UUID;
-import javax.security.auth.Subject;
-import org.apache.log4j.Logger;
+import org.opencadc.inventory.DeletedArtifactEvent;
 
 /**
- *
+ * Fire/persist a DeletedArtifactEvent.
+ * 
  * @author pdowler
  */
-public class TestUtil {
-    private static final Logger log = Logger.getLogger(TestUtil.class);
-    static String INVENTORY_SERVER = "FENWICK_TEST";
-    static String INVENTORY_DATABASE = "cadctest";
-    static String INVENTORY_SCHEMA = "inventory";
-    static String LUSKAN_SERVER = "LUSKAN_TEST";
-    static String LUSKAN_SCHEMA = "inventory";
-    static String LUSKAN_DATABASE = "cadctest";
-    static URI LUSKAN_URI = URI.create("ivo://cadc.nrc.ca/luskan");
-    
-    static String ZERO_BYTES_MD5 = "md5:d41d8cd98f00b204e9800998ecf8427e";
-
-    static {
-        try {
-            File opt = FileUtil.getFileFromResource("intTest.properties", TestUtil.class);
-            if (opt.exists()) {
-                Properties props = new Properties();
-                props.load(new FileReader(opt));
-
-                if (props.containsKey("inventoryServer")) {
-                    INVENTORY_SERVER = props.getProperty("inventoryServer").trim();
-                }
-                if (props.containsKey("inventoryDatabase")) {
-                    INVENTORY_DATABASE = props.getProperty("inventoryDatabase").trim();
-                }
-                if (props.containsKey("inventorySchema")) {
-                    INVENTORY_SCHEMA = props.getProperty("inventorySchema").trim();
-                }
-                if (props.containsKey("luskanServer")) {
-                    LUSKAN_SERVER = props.getProperty("luskanServer").trim();
-                }
-                if (props.containsKey("luskanSchema")) {
-                    LUSKAN_SCHEMA = props.getProperty("luskanSchema").trim();
-                }
-                if (props.containsKey("luskanDatabase")) {
-                    LUSKAN_DATABASE = props.getProperty("luskanDatabase").trim();
-                }
-                if (props.containsKey("luskanURI")) {
-                    LUSKAN_URI = URI.create(props.getProperty("luskanURI").trim());
-                }
-            }
-        } catch (MissingResourceException | FileNotFoundException noFileException) {
-            log.debug("No intTest.properties supplied.  Using defaults.");
-        } catch (IOException oops) {
-            throw new RuntimeException(oops.getMessage(), oops);
-        }
-
-        log.debug("intTest database config: " + INVENTORY_SERVER + " " + INVENTORY_DATABASE + " "
-                  + INVENTORY_SCHEMA);
-    }
-    
-    private TestUtil() { 
+public class DeletedArtifactEventDAO extends AbstractDAO<DeletedArtifactEvent> {
+    public DeletedArtifactEventDAO() { 
+        super(true);
     }
 
-    static Subject getConfiguredSubject() {
-        return SSLUtil.createSubject(new File(System.getProperty("user.home") + "/.ssl/cadcproxy.pem"));
+    public DeletedArtifactEventDAO(boolean origin) {
+        super(origin);
+    }
+
+    public DeletedArtifactEventDAO(AbstractDAO<?> dao) {
+        super(dao);
     }
     
-    static URI getRandomMD5() {
-        UUID uuid = UUID.randomUUID();
-        return URI.create("md5:" + HexUtil.toHex(uuid.getMostSignificantBits()) + HexUtil.toHex(uuid.getLeastSignificantBits()));
+    public DeletedArtifactEvent get(UUID id) {
+        return super.get(DeletedArtifactEvent.class, id);
     }
 }

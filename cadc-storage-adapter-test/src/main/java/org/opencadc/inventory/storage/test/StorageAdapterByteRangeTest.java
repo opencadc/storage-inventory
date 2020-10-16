@@ -168,10 +168,11 @@ public abstract class StorageAdapterByteRangeTest {
             Assert.assertEquals("checksum", storageMetadata.getContentChecksum(), actualMD5);
             sb = new StringBuilder();
             sb.append("read ").append(r);
-            while (sb.length() < 32) {
+            String stim = Long.toString(getMicros);
+            while (sb.length() < 42 - stim.length()) {
                 sb.append(" ");
             }
-            sb.append(Long.toString(getMicros)).append(" microsec");
+            sb.append(stim).append(" microsec");
             spd = (double) (10 * datalen / getMicros) / 10.0;
             sb.append(" aka ~").append(spd).append(" MiB/sec");
             log.info(sb);
@@ -185,7 +186,7 @@ public abstract class StorageAdapterByteRangeTest {
     }
     
     @Test
-    public void testReadByteRangeForward() {
+    public void testReadByteRangeForward_16MiB() {
         int[] readOrder = new int[] {0, 1, 2, 0, 1, 2, 0, 1, 2};
         int mib = 16;
         long datalen = mib * 1024L * 1024L; // 1 MiB
@@ -194,9 +195,27 @@ public abstract class StorageAdapterByteRangeTest {
     }
     
     @Test
-    public void testReadByteRangeReverse() {
+    public void testReadByteRangeReverse_16MiB() {
         int[] readOrder = new int[] {2, 1, 0, 2, 1, 0, 2, 1, 0};
         int mib = 16;
+        long datalen = mib * 1024L * 1024L; // 1 MiB
+            
+        doReadPattern(mib, datalen, readOrder);
+    }
+    
+    @Test
+    public void testReadByteRangeForward_2GiB() {
+        int[] readOrder = new int[] {0, 1, 2, 0, 1, 2, 0, 1, 2};
+        int mib = 2048;
+        long datalen = mib * 1024L * 1024L; // 1 MiB
+            
+        doReadPattern(mib, datalen, readOrder);
+    }
+    
+    @Test
+    public void testReadByteRangeReverse_2GiB() {
+        int[] readOrder = new int[] {2, 1, 0, 2, 1, 0, 2, 1, 0};
+        int mib = 2048;
         long datalen = mib * 1024L * 1024L; // 1 MiB
             
         doReadPattern(mib, datalen, readOrder);
@@ -209,14 +228,23 @@ public abstract class StorageAdapterByteRangeTest {
             InputStream istream = getInputStreamOfRandomBytes(datalen);
 
             log.info("put: " + mib + " MiB file...");
-            StorageMetadata storageMetadata = adapter.put(newArtifact, istream);
-            log.info("put: " + storageMetadata.getStorageLocation());
+            long t1 = System.nanoTime();
+            final StorageMetadata storageMetadata = adapter.put(newArtifact, istream);
+            long t2 = System.nanoTime();
+            long micros = (t2 - t1) / 1024L;
+            StringBuilder sb = new StringBuilder();
+            sb.append(" -- ");
+            sb.append(Long.toString(micros)).append(" microsec");
+            double spd = (double) (10 * datalen / micros) / 10.0;
+            sb.append(" aka ~").append(spd).append(" MiB/sec");
+            log.info("put: " + storageMetadata.getStorageLocation() + sb.toString());
+            
             Assert.assertNotNull(storageMetadata);
             Assert.assertNotNull(storageMetadata.getStorageLocation());
             Assert.assertEquals(datalen, storageMetadata.getContentLength().longValue());
             
             List<ByteRange> ranges = new ArrayList<>();
-            long rlen = 16 * 1024L; // 16KiB
+            long rlen = 16 * 1024L; // 16KiB ~ decent sized FITS header
             ranges.add(new ByteRange(0L, rlen));                    // at start
             ranges.add(new ByteRange(datalen / 2L, rlen));          // near the middle
             ranges.add(new ByteRange(datalen - rlen - 1L, rlen));   // at end
@@ -227,17 +255,18 @@ public abstract class StorageAdapterByteRangeTest {
                 SortedSet<ByteRange> br = new TreeSet<>();
                 br.add(r);
                 ByteCountOutputStream bcos = new ByteCountOutputStream(new DiscardOutputStream());
-                long t1 = System.nanoTime();
+                t1 = System.nanoTime();
                 adapter.get(storageMetadata.getStorageLocation(), bcos, br);
-                long t2 = System.nanoTime();
-                final long micros = (t2 - t1) / 1024L;
+                t2 = System.nanoTime();
+                micros = (t2 - t1) / 1024L;
                 Assert.assertEquals("num bytes returned", rlen, bcos.getByteCount());
-                StringBuilder sb = new StringBuilder();
+                sb = new StringBuilder();
                 sb.append("read ").append(r);
-                while (sb.length() < 32) {
+                String stim = Long.toString(micros);
+                while (sb.length() < 42 - stim.length()) {
                     sb.append(" ");
                 }
-                sb.append(Long.toString(micros)).append(" microsec");
+                sb.append(stim).append(" microsec");
                 log.info(sb);
             }
             

@@ -140,7 +140,7 @@ public class AbstractResolutionPolicyTest<T extends ResolutionPolicy> {
         }
 
         @Override
-        public void markAsNew(Artifact artifact) throws Exception {
+        public void clearStorageLocation(Artifact artifact) throws Exception {
             resetArtifactCalled = true;
         }
 

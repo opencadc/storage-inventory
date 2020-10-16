@@ -94,7 +94,7 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.opencadc.inventory.DeletedStorageLocationEvent;
-import org.opencadc.inventory.db.DeletedEventDAO;
+import org.opencadc.inventory.db.DeletedStorageLocationEventDAO;
 import org.opencadc.inventory.db.SQLGenerator;
 import org.opencadc.tap.TapClient;
 import org.opencadc.tap.TapRowMapper;
@@ -111,7 +111,7 @@ public class DeletedStorageLocationEventSyncTest {
         Log4jInit.setLevel("org.opencadc.fenwick", Level.INFO);
     }
 
-    private final DeletedEventDAO<DeletedStorageLocationEvent> deletedEventDAO = new DeletedEventDAO<>();
+    private final DeletedStorageLocationEventDAO deletedEventDAO = new DeletedStorageLocationEventDAO();
 
     public DeletedStorageLocationEventSyncTest() throws Exception {
         final DBConfig dbConfig = new DBConfig();

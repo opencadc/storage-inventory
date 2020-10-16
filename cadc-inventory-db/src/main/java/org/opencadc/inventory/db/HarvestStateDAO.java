@@ -90,9 +90,17 @@ public class HarvestStateDAO extends AbstractDAO<HarvestState> {
     }
     
     public HarvestState get(UUID id) {
-        return super.get(HarvestState.class, id);
+        HarvestState ret = super.get(HarvestState.class, id);
+        return ret;
     }
     
+    /**
+     * Get HarvestState for the specified name and resourceID (create if necessary).
+     * 
+     * @param name
+     * @param resourceID
+     * @return 
+     */
     public HarvestState get(String name, URI resourceID) {
         if (name == null || resourceID == null) {
             throw new IllegalArgumentException("name and resourceID cannot be null");
@@ -107,6 +115,9 @@ public class HarvestStateDAO extends AbstractDAO<HarvestState> {
             SQLGenerator.HarvestStateGet get = ( SQLGenerator.HarvestStateGet) gen.getEntityGet(HarvestState.class);
             get.setSource(name, resourceID);
             HarvestState o = get.execute(jdbc);
+            if (o == null) {
+                o = new HarvestState(name, resourceID);
+            }
             return o;
         } finally {
             long dt = System.currentTimeMillis() - t;
