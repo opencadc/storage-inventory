@@ -115,7 +115,7 @@ import org.opencadc.inventory.storage.StorageMetadata;
 public class FileSyncJob implements Runnable {
     private static final Logger log = Logger.getLogger(FileSyncJob.class);
 
-    private static long[] RETRY_DELAY = new long[] { 2000L, 4000L };
+    private static final long[] RETRY_DELAY = new long[] { 6000L, 12000L };
 
     private final ArtifactDAO artifactDAO;
     private final UUID artifactID;
@@ -124,7 +124,7 @@ public class FileSyncJob implements Runnable {
     private final Subject subject;
     
     /**
-     * Constrcuct a job to sync the specified artifact.
+     * Construct a job to sync the specified artifact.
      * 
      * @param artifactID
      * @param locatorServiceID
@@ -190,8 +190,7 @@ public class FileSyncJob implements Runnable {
             
             int retryCount = 0;
             try {
-                
-                while (!urlList.isEmpty() && retryCount < RETRY_DELAY.length) {
+                while (!success && !urlList.isEmpty() && retryCount < RETRY_DELAY.length) {
                     Artifact curArtifact = artifactDAO.get(artifactID);
                     if (curArtifact == null 
                             || !curArtifact.getURI().equals(artifact.getURI())
@@ -236,7 +235,6 @@ public class FileSyncJob implements Runnable {
                                         locDAO.put(obsLoc);
                                     }
                                 }
-                                
                                 artifactDAO.setStorageLocation(curArtifact, storageMeta.getStorageLocation());
                                 success = true;
                                 msg = "uri=" + artifact.getURI();
@@ -246,13 +244,16 @@ public class FileSyncJob implements Runnable {
                             log.debug("commit txn: OK");
                             
                             if (obsLoc != null) {
-                                log.debug("deleting obsolete stored object: " + obsLoc.getLocation());
-                                storageAdapter.delete(obsLoc.getLocation());
-                                // obsolete tracker record no longer needed
-                                locDAO.delete(obsLoc.getID());
+                                try {
+                                    log.debug("deleting obsolete stored object: " + obsLoc.getLocation());
+                                    storageAdapter.delete(obsLoc.getLocation());
+                                    // obsolete tracker record no longer needed
+                                    locDAO.delete(obsLoc.getID()); // outside txn, auto-commit mode
+                                } catch (Exception ex) {
+                                    // OK to continue in this case
+                                    log.error("failed to remove obsolete stored object: " + obsLoc.getLocation(), ex);
+                                }
                             }
-                            
-                            return; // straight to finally
                             
                         } catch (Exception e) {
                             log.error("failed to persist " + artifactID, e);
@@ -267,11 +268,14 @@ public class FileSyncJob implements Runnable {
                             }
                         }
                     }
-
-                    Thread.sleep(RETRY_DELAY[retryCount++]);
+                    
+                    if (!success) {
+                        log.info("FileSyncJob.SLEEP dt=" + RETRY_DELAY[retryCount]);
+                        Thread.sleep(RETRY_DELAY[retryCount++]);
+                    }
                 }
                 if (!success) {
-                    msg = " no more URLs to try";
+                    msg = " all URLs tried, retryCount=" + retryCount;
                 }
             } catch (IllegalStateException | EntityNotFoundException ex) {
                 log.debug("artifact sync aborted: " + artifactLabel, ex);
