@@ -126,11 +126,11 @@ public class FileSyncJob implements Runnable {
     /**
      * Construct a job to sync the specified artifact.
      * 
-     * @param artifactID
-     * @param locatorServiceID
-     * @param storageAdapter
-     * @param artifactDAO
-     * @param subject 
+     * @param artifactID entity ID of artifact to sync
+     * @param locatorServiceID locator service to use
+     * @param storageAdapter back end storage
+     * @param artifactDAO database persistence
+     * @param subject caller with credentials for downloads
      */
     public FileSyncJob(UUID artifactID, URI locatorServiceID, StorageAdapter storageAdapter, ArtifactDAO artifactDAO, Subject subject) {
         InventoryUtil.assertNotNull(FileSyncJob.class, "artifactID", artifactID);

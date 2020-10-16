@@ -255,11 +255,11 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
      * @param storageLocation The storage location containing storageID and storageBucket.
      * @param dest The destination stream.
      * 
-     * @throws ResourceNotFoundException If the artifact could not be found.
-     * @throws ReadException If the storage system failed to stream.
-     * @throws WriteException If the client failed to stream.
-     * @throws StorageEngageException If the adapter failed to interact with storage.
-     * @throws TransientException If an unexpected, temporary exception occurred. 
+     * @throws ResourceNotFoundException If the artifact could not be found
+     * @throws ReadException If the storage system failed to stream
+     * @throws WriteException If the client failed to stream
+     * @throws StorageEngageException If the adapter failed to interact with storage
+     * @throws TransientException If an unexpected, temporary exception occurred
      */
     @Override
     public void get(StorageLocation storageLocation, OutputStream dest)
@@ -296,11 +296,12 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
      * @param storageLocation the object to read
      * @param dest the output stream
      * @param byteRanges one or more byte ranges ordered to only seek forward
-     * @throws ResourceNotFoundException
-     * @throws ReadException
-     * @throws WriteException
-     * @throws StorageEngageException
-     * @throws TransientException 
+     * 
+     * @throws ResourceNotFoundException If the artifact could not be found
+     * @throws ReadException If the storage system failed to stream
+     * @throws WriteException If the client failed to stream
+     * @throws StorageEngageException If the adapter failed to interact with storage
+     * @throws TransientException If an unexpected, temporary exception occurred
      */
     public void get(StorageLocation storageLocation, OutputStream dest, SortedSet<ByteRange> byteRanges)
         throws ResourceNotFoundException, ReadException, WriteException, StorageEngageException, TransientException {
