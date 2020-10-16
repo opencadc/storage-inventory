@@ -102,7 +102,6 @@ public abstract class AbstractDAO<T extends Entity> {
 
     protected SQLGenerator gen;
     protected DataSource dataSource;
-    protected TransactionManager txnManager;
     
     protected final boolean origin;
 
@@ -120,7 +119,6 @@ public abstract class AbstractDAO<T extends Entity> {
         this(dao.origin);
         this.gen = dao.getSQLGenerator();
         this.dataSource = dao.getDataSource();
-        this.txnManager = dao.getTransactionManager();
     }
 
     protected MessageDigest getDigest() {
