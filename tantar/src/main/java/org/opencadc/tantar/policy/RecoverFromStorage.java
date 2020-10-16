@@ -77,7 +77,7 @@ import org.opencadc.tantar.ValidateEventListener;
 
 /**
  * Policy to ensure that a recovery from Storage (in the event of a disaster or a new site is brought online) will
- * dictate what goes into the Inventory Database.
+ * dictate what goes into the Inventory Database. This policy differs from StorageIsAlwaysRight because... ???
  */
 public class RecoverFromStorage extends ResolutionPolicy {
 
@@ -95,16 +95,26 @@ public class RecoverFromStorage extends ResolutionPolicy {
      */
     @Override
     public void resolve(final Artifact artifact, final StorageMetadata storageMetadata) throws Exception {
-        if (!storageMetadata.isValid()) {
-            reporter.report("Invalid Storage Metadata (" + storageMetadata.getStorageLocation()
-                            + ").  Skipping as per policy.");
+        if (artifact == null && storageMetadata == null) {
+            throw new RuntimeException("BUG: both args to resolve are null");
+        }
+        
+        if (storageMetadata == null) {
+            reporter.report("RecoverFromStorage: artifact " + artifact.getID() + " vs StorageMetadata null");
+            // TODO: ???
+            
         } else if (artifact == null) {
             reporter.report(String.format("Adding Artifact %s as per policy.", storageMetadata.getStorageLocation()));
+            
             validateEventListener.createArtifact(storageMetadata);
-        } else {
+        } else if (!storageMetadata.isValid()) {
+            reporter.report("Invalid Storage Metadata (" + storageMetadata.getStorageLocation()
+                            + ").  Skipping as per policy.");
+        } else  {
             // This scenario is for an incomplete previous run.  Treat the Artifact as corrupt and set it back to the
             // StorageMetadata's values.
             reporter.report(String.format("Updating Artifact %s as per policy.", storageMetadata.getStorageLocation()));
+            
             validateEventListener.updateArtifact(artifact, storageMetadata);
         }
     }
