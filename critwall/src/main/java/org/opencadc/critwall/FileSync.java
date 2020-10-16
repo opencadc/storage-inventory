@@ -156,7 +156,7 @@ public class FileSync implements Runnable {
             this.jobArtifactDAO.setConfig(daoConfig);
             
             try {
-                String database = (String) daoConfig.get("database");
+                String database = null; // unused (String) daoConfig.get("database");
                 String schema = (String) daoConfig.get("schema");
                 DataSource ds = ca.nrc.cadc.db.DBUtil.findJNDIDataSource(fileSyncDS);
                 InitDatabase init = new InitDatabase(ds, database, schema);
