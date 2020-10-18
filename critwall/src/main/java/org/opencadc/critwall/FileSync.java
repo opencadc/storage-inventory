@@ -107,6 +107,8 @@ public class FileSync implements Runnable {
     // credentials.
     private static final int CERT_CHECK_MINUTE_INTERVAL_COUNT = 10;
 
+    public static final String CERTIFICATE_FILE_LOCATION = System.getProperty("user.home") + "/.ssl/cadcproxy.pem";
+
     private final ArtifactDAO artifactDAO;
     private final ArtifactDAO jobArtifactDAO;
     private final URI locatorService;
@@ -190,7 +192,7 @@ public class FileSync implements Runnable {
         scheduledExecutorService.schedule(() -> {
             // Also synchronized on FileSyncJob.run().
             synchronized (subject) {
-                InventoryUtil.renewSubject(subject);
+                SSLUtil.renewSubject(subject, new File(CERTIFICATE_FILE_LOCATION));
             }
         }, CERT_CHECK_MINUTE_INTERVAL_COUNT, TimeUnit.MINUTES);
         log.debug("END: scheduleSubjectUpdates OK");
@@ -198,9 +200,9 @@ public class FileSync implements Runnable {
 
     @Override
     public void run() {
-        final File certificateFile = new File(InventoryUtil.CERTIFICATE_FILE_LOCATION);
+        final File certificateFile = new File(CERTIFICATE_FILE_LOCATION);
         final Subject subject = certificateFile.exists()
-                                ? SSLUtil.createSubject(new File(InventoryUtil.CERTIFICATE_FILE_LOCATION))
+                                ? SSLUtil.createSubject(new File(CERTIFICATE_FILE_LOCATION))
                                 : AuthenticationUtil.getAnonSubject();
 
         scheduleSubjectUpdates(subject);

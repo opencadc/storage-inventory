@@ -67,6 +67,7 @@
 
 package org.opencadc.fenwick;
 
+import ca.nrc.cadc.auth.AuthenticationUtil;
 import ca.nrc.cadc.auth.SSLUtil;
 import ca.nrc.cadc.date.DateUtil;
 import ca.nrc.cadc.db.DBUtil;
@@ -113,6 +114,7 @@ import org.opencadc.tap.TapClient;
 public class InventoryHarvester implements Runnable {
 
     private static final Logger log = Logger.getLogger(InventoryHarvester.class);
+    public static final String CERTIFICATE_FILE_LOCATION = System.getProperty("user.home") + "/.ssl/cadcproxy.pem";
 
     private final ArtifactDAO artifactDAO;
     private final URI resourceID;
@@ -183,7 +185,7 @@ public class InventoryHarvester implements Runnable {
     public void run() {
         while (true) {
             try {
-                final Subject subject = SSLUtil.createSubject(new File(InventoryUtil.CERTIFICATE_FILE_LOCATION));
+                final Subject subject = SSLUtil.createSubject(new File(CERTIFICATE_FILE_LOCATION));
                 Subject.doAs(subject, (PrivilegedExceptionAction<Void>) () -> {
                     doit();
                     return null;
@@ -289,7 +291,8 @@ public class InventoryHarvester implements Runnable {
 
         DateFormat df = DateUtil.getDateFormat(DateUtil.IVOA_DATE_FORMAT, DateUtil.UTC);
 
-        InventoryUtil.renewSubject();
+        SSLUtil.renewSubject(AuthenticationUtil.getCurrentSubject(), new File(CERTIFICATE_FILE_LOCATION));
+
         final TapClient<DeletedStorageLocationEvent> deletedStorageLocationEventTapClient =
                 new TapClient<>(this.resourceID);
         final DeletedStorageLocationEventSync deletedStorageLocationEventSync =
@@ -365,7 +368,8 @@ public class InventoryHarvester implements Runnable {
 
         DateFormat df = DateUtil.getDateFormat(DateUtil.IVOA_DATE_FORMAT, DateUtil.UTC);
 
-        InventoryUtil.renewSubject();
+        SSLUtil.renewSubject(AuthenticationUtil.getCurrentSubject(), new File(CERTIFICATE_FILE_LOCATION));
+
         final TapClient<DeletedArtifactEvent> deletedArtifactEventTapClientTapClient = new TapClient<>(this.resourceID);
         final DeletedArtifactEventSync deletedArtifactEventSync =
                 new DeletedArtifactEventSync(deletedArtifactEventTapClientTapClient);
@@ -431,7 +435,8 @@ public class InventoryHarvester implements Runnable {
         final MessageDigest messageDigest = MessageDigest.getInstance("MD5");
         DateFormat df = DateUtil.getDateFormat(DateUtil.IVOA_DATE_FORMAT, DateUtil.UTC);
 
-        InventoryUtil.renewSubject();
+        SSLUtil.renewSubject(AuthenticationUtil.getCurrentSubject(), new File(CERTIFICATE_FILE_LOCATION));
+
         final TapClient<Artifact> artifactTapClient = new TapClient<>(this.resourceID);
 
         final HarvestState existingHarvestState = this.harvestStateDAO.get(Artifact.class.getName(), this.resourceID);
