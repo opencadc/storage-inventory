@@ -102,17 +102,11 @@ public abstract class AbstractDAO<T extends Entity> {
 
     protected SQLGenerator gen;
     protected DataSource dataSource;
-    protected TransactionManager txnManager;
-    protected MessageDigest digest;
+    
     protected final boolean origin;
 
     protected AbstractDAO(boolean origin) {
         this.origin = origin;
-        try {
-            this.digest = MessageDigest.getInstance("MD5");
-        } catch (NoSuchAlgorithmException ex) {
-            throw new RuntimeException("FATAL: no MD5 digest algorithm available", ex);
-        }
     }
     
     /**
@@ -125,9 +119,16 @@ public abstract class AbstractDAO<T extends Entity> {
         this(dao.origin);
         this.gen = dao.getSQLGenerator();
         this.dataSource = dao.getDataSource();
-        this.txnManager = dao.getTransactionManager();
     }
 
+    protected MessageDigest getDigest() {
+        try {
+            return MessageDigest.getInstance("MD5");
+        } catch (NoSuchAlgorithmException ex) {
+            throw new RuntimeException("FATAL: no MD5 digest algorithm available", ex);
+        }
+    }
+    
     /**
      * Get the DataSource in use by the DAO. This is intended so that
      * applications can include other SQL statements along with DAO operations
@@ -146,17 +147,16 @@ public abstract class AbstractDAO<T extends Entity> {
     }
 
     /**
-     * Get the TransactionManager that controls transactions using this DAOs
-     * DataSource.
+     * Get a new TransactionManager that controls transactions using this DAOs
+     * DataSource. For thread safe use of a DAO class, this method creates a new 
+     * TransactionManager each time it is called. The caller must maintain a reference 
+     * to the instance for the life of a transaction.
      *
      * @return the TransactionManager
      */
     public TransactionManager getTransactionManager() {
         checkInit();
-        if (txnManager == null) {
-            this.txnManager = new DatabaseTransactionManager(dataSource);
-        }
-        return txnManager;
+        return new DatabaseTransactionManager(dataSource);
     }
 
     public Map<String, Class> getParams() {
@@ -330,8 +330,8 @@ public abstract class AbstractDAO<T extends Entity> {
     // assign metaChecksum and update lastModified
     private boolean updateEntity(T entity, Entity cur, Date now, boolean timestampUpdate) {
         log.debug("updateEntity: " + entity);
+        MessageDigest digest = getDigest();
         
-        digest.reset(); // just in case
         InventoryUtil.assignMetaChecksum(entity, entity.computeMetaChecksum(digest));
         
         boolean delta = false;

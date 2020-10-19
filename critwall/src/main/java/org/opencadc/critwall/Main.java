@@ -191,8 +191,7 @@ public class Main {
             // populate/assign values to pass to FileSync
             Map<String, Object> daoConfig = new TreeMap<>();
             daoConfig.put("schema", schema);
-            daoConfig.put("database", dbUrl);
-
+            
             try {
                 daoConfig.put(SQLGENERATOR_CONFIG_KEY, Class.forName(generatorName));
             } catch (Exception ex) {

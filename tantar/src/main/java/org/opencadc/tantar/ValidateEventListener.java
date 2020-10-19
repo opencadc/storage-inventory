@@ -107,7 +107,7 @@ public interface ValidateEventListener extends EventListener {
      * @param artifact The base artifact.  This MUST have a Storage Location.
      * @throws Exception Anything IO/Thread related.
      */
-    void markAsNew(final Artifact artifact) throws Exception;
+    void clearStorageLocation(final Artifact artifact) throws Exception;
 
     /**
      * Replace the given Artifact with a new one created from the given StorageMetadata instance.

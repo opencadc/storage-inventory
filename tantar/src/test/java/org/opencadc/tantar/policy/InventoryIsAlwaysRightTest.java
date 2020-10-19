@@ -164,7 +164,7 @@ public class InventoryIsAlwaysRightTest extends AbstractResolutionPolicyTest<Inv
                                   "Invalid Storage Metadata (StorageLocation[s3:989877]).  "
                                   + "Replacing as per policy.");
 
-        Assert.assertTrue("Should only have called deleteStorageMetadata and markAsNew.",
+        Assert.assertTrue("Should only have called deleteStorageMetadata and clearStorageLocation.",
                           !testEventListener.deleteArtifactCalled
                           && !testEventListener.addArtifactCalled
                           && testEventListener.resetArtifactCalled

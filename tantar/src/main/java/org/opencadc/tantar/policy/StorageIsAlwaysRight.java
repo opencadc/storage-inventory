@@ -90,7 +90,15 @@ public class StorageIsAlwaysRight extends ResolutionPolicy {
      */
     @Override
     public void resolve(final Artifact artifact, final StorageMetadata storageMetadata) throws Exception {
-        if (artifact == null) {
+        if (artifact == null && storageMetadata == null) {
+            throw new RuntimeException("BUG: both args to resolve are null");
+        }
+        
+        if (storageMetadata == null) {
+            reporter.report("Removing Unknown Artifact " + artifact.storageLocation + " as per policy.");
+
+            validateEventListener.delete(artifact);
+        } else if (artifact == null) {
             if (storageMetadata.isValid()) {
                 // The Inventory has a file that does not exist in storage.  This is most unusual.
                 reporter.report("Adding Artifact " + storageMetadata.getStorageLocation() + " as per policy.");
@@ -101,23 +109,17 @@ public class StorageIsAlwaysRight extends ResolutionPolicy {
                 reporter.report("Corrupt or invalid Storage Metadata (" + storageMetadata.getStorageLocation()
                                 + ").  Skipping as per policy.");
             }
-        } else if (storageMetadata == null) {
-            reporter.report("Removing Unknown Artifact " + artifact.storageLocation + " as per policy.");
-            validateEventListener.delete(artifact);
+        } else if (!storageMetadata.isValid()) {
+            // If storage is always right, but it has no metadata, then leave it for someone to manually fix.
+            reporter.report("Invalid Storage Metadata (" + storageMetadata.getStorageLocation()
+                            + ").  Skipping as per policy.");
         } else {
             // Check metadata for discrepancies.
             if (haveDifferentStructure(artifact, storageMetadata)) {
-                // The metadata differs, but for valid reasons (update).
-                if (storageMetadata.isValid()) {
-                    // Then prefer the Storage Metadata.
-                    reporter.report("Replacing Artifact " + artifact.storageLocation + " as per policy.");
+                // Then prefer the Storage Metadata.
+                reporter.report("Replacing Artifact " + artifact.storageLocation + " as per policy.");
 
-                    validateEventListener.replaceArtifact(artifact, storageMetadata);
-                } else {
-                    // If storage is always right, but it has no metadata, then leave it for someone to manually fix.
-                    reporter.report("Invalid Storage Metadata (" + storageMetadata.getStorageLocation()
-                                    + ").  Skipping as per policy.");
-                }
+                validateEventListener.replaceArtifact(artifact, storageMetadata);
             } else {
                 reporter.report("Storage Metadata " + storageMetadata.getStorageLocation()
                                 + " is valid as per policy.");

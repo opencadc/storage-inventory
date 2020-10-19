@@ -65,86 +65,87 @@
 ************************************************************************
 */
 
-package org.opencadc.fenwick;
+package org.opencadc.inventory.util;
 
-import ca.nrc.cadc.auth.SSLUtil;
-import ca.nrc.cadc.util.FileUtil;
-import ca.nrc.cadc.util.HexUtil;
-import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.FileReader;
-import java.io.IOException;
-import java.net.URI;
-import java.util.MissingResourceException;
-import java.util.Properties;
-import java.util.UUID;
-import javax.security.auth.Subject;
+import ca.nrc.cadc.db.ConnectionConfig;
+import ca.nrc.cadc.db.DBConfig;
+import ca.nrc.cadc.util.Log4jInit;
+import java.sql.Connection;
+import java.sql.SQLException;
+import javax.sql.DataSource;
+import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
+import org.junit.Assert;
+import org.junit.Test;
 
 /**
  *
  * @author pdowler
  */
-public class TestUtil {
-    private static final Logger log = Logger.getLogger(TestUtil.class);
-    static String INVENTORY_SERVER = "FENWICK_TEST";
-    static String INVENTORY_DATABASE = "cadctest";
-    static String INVENTORY_SCHEMA = "inventory";
-    static String LUSKAN_SERVER = "LUSKAN_TEST";
-    static String LUSKAN_SCHEMA = "inventory";
-    static String LUSKAN_DATABASE = "cadctest";
-    static URI LUSKAN_URI = URI.create("ivo://cadc.nrc.ca/luskan");
-    
-    static String ZERO_BYTES_MD5 = "md5:d41d8cd98f00b204e9800998ecf8427e";
+public class DBUtilTest {
+    private static final Logger log = Logger.getLogger(DBUtilTest.class);
 
     static {
+        Log4jInit.setLevel("org.opencadc.inventory.util", Level.INFO);
+    }
+    
+    public DBUtilTest() { 
+    }
+    
+    @Test
+    public void testCreatePool() {
+        String poolName = "jdbc/create-pool";
+        long maxWait = 6000L;
         try {
-            File opt = FileUtil.getFileFromResource("intTest.properties", TestUtil.class);
-            if (opt.exists()) {
-                Properties props = new Properties();
-                props.load(new FileReader(opt));
-
-                if (props.containsKey("inventoryServer")) {
-                    INVENTORY_SERVER = props.getProperty("inventoryServer").trim();
+            DBConfig dbrc = new DBConfig();
+            ConnectionConfig cc = dbrc.getConnectionConfig("INVENTORY_TEST", "cadctest");
+            DBUtil.PoolConfig pc = new DBUtil.PoolConfig(cc, 2, maxWait, "select 123");
+            
+            DBUtil.createJNDIDataSource(poolName, pc);
+            
+            DataSource pool = DBUtil.findJNDIDataSource(poolName);
+            Assert.assertNotNull("pool", pool);
+            
+            Connection con1 = pool.getConnection();
+            Assert.assertNotNull("connection 1", con1);
+            log.info("connection 1: " + con1.getCatalog() + " " + con1.isValid(0));
+            
+            Connection con2 = pool.getConnection();
+            Assert.assertNotNull("connection 2", con2);
+            log.info("connection 2: " + con2.getCatalog() + " " + con2.isValid(0));
+            
+            long t1 = System.currentTimeMillis();
+            try {
+                log.info("get connection: BLOCKED for " + maxWait + " ...");
+                Connection con3 = pool.getConnection();
+                Assert.fail("expected pool timeout, got: " + con3.getCatalog() + " " + con3.isValid(0));
+            } catch (SQLException ex) {
+                if (!ex.getMessage().toLowerCase().contains("timeout")) {
+                    throw ex;
                 }
-                if (props.containsKey("inventoryDatabase")) {
-                    INVENTORY_DATABASE = props.getProperty("inventoryDatabase").trim();
-                }
-                if (props.containsKey("inventorySchema")) {
-                    INVENTORY_SCHEMA = props.getProperty("inventorySchema").trim();
-                }
-                if (props.containsKey("luskanServer")) {
-                    LUSKAN_SERVER = props.getProperty("luskanServer").trim();
-                }
-                if (props.containsKey("luskanSchema")) {
-                    LUSKAN_SCHEMA = props.getProperty("luskanSchema").trim();
-                }
-                if (props.containsKey("luskanDatabase")) {
-                    LUSKAN_DATABASE = props.getProperty("luskanDatabase").trim();
-                }
-                if (props.containsKey("luskanURI")) {
-                    LUSKAN_URI = URI.create(props.getProperty("luskanURI").trim());
-                }
+                
+                long t2 = System.currentTimeMillis();
+                log.info("  caught: " + ex);
+                long timeout = t2 - t1;
+                log.info("timeout: " + timeout);
+                long dt = Math.abs(timeout - maxWait);
+                Assert.assertTrue("timeout", dt < 3L); // within 3 ms
             }
-        } catch (MissingResourceException | FileNotFoundException noFileException) {
-            log.debug("No intTest.properties supplied.  Using defaults.");
-        } catch (IOException oops) {
-            throw new RuntimeException(oops.getMessage(), oops);
+            
+            con1.close();
+            con2.close();
+            
+            t1 = System.currentTimeMillis();
+            con1 = pool.getConnection();
+            Assert.assertNotNull("connection 1", con1);
+            log.info("connection 1: " + con1.getCatalog() + " " + con1.isValid(0));
+            long t2 = System.currentTimeMillis();
+            long dt = t2 - t1;
+            Assert.assertTrue("connection returned to pool", dt < 3L);
+            
+        } catch (Exception t) {
+            log.error("unexpected exception", t);
+            Assert.fail("unexpected exception: " + t);
         }
-
-        log.debug("intTest database config: " + INVENTORY_SERVER + " " + INVENTORY_DATABASE + " "
-                  + INVENTORY_SCHEMA);
-    }
-    
-    private TestUtil() { 
-    }
-
-    static Subject getConfiguredSubject() {
-        return SSLUtil.createSubject(new File(System.getProperty("user.home") + "/.ssl/cadcproxy.pem"));
-    }
-    
-    static URI getRandomMD5() {
-        UUID uuid = UUID.randomUUID();
-        return URI.create("md5:" + HexUtil.toHex(uuid.getMostSignificantBits()) + HexUtil.toHex(uuid.getLeastSignificantBits()));
     }
 }
