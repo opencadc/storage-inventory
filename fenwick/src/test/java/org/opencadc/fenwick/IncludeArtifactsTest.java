@@ -1,4 +1,3 @@
-
 /*
  ************************************************************************
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
@@ -70,18 +69,18 @@
 package org.opencadc.fenwick;
 
 import ca.nrc.cadc.util.Log4jInit;
-
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
-
 import org.apache.log4j.Level;
+import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.Test;
 
 
 public class IncludeArtifactsTest {
-
+    private static final Logger log = Logger.getLogger(IncludeArtifactsTest.class);
+    
     static {
         Log4jInit.setLevel("org.opencadc.fenwick", Level.DEBUG);
     }
@@ -179,6 +178,42 @@ public class IncludeArtifactsTest {
             }
         } finally {
             System.setProperty("user.home", currUserHome);
+        }
+    }
+    
+    @Test
+    public void testMissingConfigFile() throws Exception {
+        final String oldSetting = System.getProperty("user.home");
+        try {
+            final Path tempLocation = Files.createTempDirectory(IncludeArtifactsTest.class.getName());
+            System.setProperty("user.home", tempLocation.toString());
+            log.debug("Now looking for includes in " + System.getProperty("user.home") + "/config");
+            Files.createDirectories(new File(System.getProperty("user.home") + "/config").toPath());
+            
+            IncludeArtifacts o = new IncludeArtifacts();
+            Assert.fail("expected IllegalStateException, got: " + o);
+        } catch (IllegalStateException expected) {
+            log.info("caught expected: " + expected);
+        } finally {
+            System.setProperty("user.home", oldSetting);
+        }
+    }
+    
+    @Test
+    public void testMissingConfigDir() throws Exception {
+        final String oldSetting = System.getProperty("user.home");
+        try {
+            final Path tempLocation = Files.createTempDirectory(IncludeArtifactsTest.class.getName());
+            System.setProperty("user.home", tempLocation.toString());
+            log.debug("Now looking for includes in non-existent " + System.getProperty("user.home") + "/config");
+            Files.createDirectories(new File(System.getProperty("user.home")).toPath());
+            
+            IncludeArtifacts o = new IncludeArtifacts();
+            Assert.fail("expected IllegalStateException, got: " + o);
+        } catch (IllegalStateException expected) {
+            log.info("caught expected: " + expected);
+        } finally {
+            System.setProperty("user.home", oldSetting);
         }
     }
 }

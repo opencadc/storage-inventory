@@ -255,11 +255,11 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
      * @param storageLocation The storage location containing storageID and storageBucket.
      * @param dest The destination stream.
      * 
-     * @throws ResourceNotFoundException If the artifact could not be found.
-     * @throws ReadException If the storage system failed to stream.
-     * @throws WriteException If the client failed to stream.
-     * @throws StorageEngageException If the adapter failed to interact with storage.
-     * @throws TransientException If an unexpected, temporary exception occurred. 
+     * @throws ResourceNotFoundException If the artifact could not be found
+     * @throws ReadException If the storage system failed to stream
+     * @throws WriteException If the client failed to stream
+     * @throws StorageEngageException If the adapter failed to interact with storage
+     * @throws TransientException If an unexpected, temporary exception occurred
      */
     @Override
     public void get(StorageLocation storageLocation, OutputStream dest)
@@ -296,11 +296,12 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
      * @param storageLocation the object to read
      * @param dest the output stream
      * @param byteRanges one or more byte ranges ordered to only seek forward
-     * @throws ResourceNotFoundException
-     * @throws ReadException
-     * @throws WriteException
-     * @throws StorageEngageException
-     * @throws TransientException 
+     * 
+     * @throws ResourceNotFoundException If the artifact could not be found
+     * @throws ReadException If the storage system failed to stream
+     * @throws WriteException If the client failed to stream
+     * @throws StorageEngageException If the adapter failed to interact with storage
+     * @throws TransientException If an unexpected, temporary exception occurred
      */
     public void get(StorageLocation storageLocation, OutputStream dest, SortedSet<ByteRange> byteRanges)
         throws ResourceNotFoundException, ReadException, WriteException, StorageEngageException, TransientException {
@@ -467,13 +468,15 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
                     // since filename is a UUID this is fatal
                     throw new RuntimeException("UUID collision on put: " + newArtifact.getArtifactURI() + " -> " + storageLocation);
                 }
+
+                // create this before committing the file so constraints applied
+                StorageMetadata metadata = new StorageMetadata(storageLocation, checksum, length);
                 
                 // to atomic copy into content directory
                 final Path result = Files.move(txnTarget, contentTarget, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
                 log.debug("moved file to : " + contentTarget);
                 txnTarget = null;
-
-                StorageMetadata metadata = new StorageMetadata(storageLocation, checksum, length);
+                
                 metadata.artifactURI = artifactURI;
                 metadata.contentLastModified = new Date(Files.getLastModifiedTime(result).toMillis());
                 return metadata;

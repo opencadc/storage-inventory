@@ -112,6 +112,8 @@ public class NegotiationTest extends RavenTest {
         Log4jInit.setLevel("ca.nrc.cadc.db", Level.INFO);
     }
     
+    
+    
     ArtifactDAO artifactDAO;
     StorageSiteDAO siteDAO;
     
@@ -135,151 +137,215 @@ public class NegotiationTest extends RavenTest {
 
     @Test
     public void testGET() {
-        try {
-            Subject.doAs(userSubject, new PrivilegedExceptionAction<Object>() {
-                public Object run() throws Exception {
-                    
-                    URI resourceID1 = URI.create("ivo://negotiation-test-site1");
-                    URI resourceID2 = URI.create("ivo://negotiation-test-site2");
-                    
-                    
-                    StorageSite site1 = new StorageSite(resourceID1, "site1", true, true);
-                    StorageSite site2 = new StorageSite(resourceID2, "site2", true, true);
+        List<Protocol> requested = new ArrayList<>();
+        
+        // https+anon
+        Protocol sa = new Protocol(VOS.PROTOCOL_HTTPS_GET);
+        requested.add(sa);
 
-                    URI artifactURI = URI.create("cadc:TEST/" + UUID.randomUUID() + ".fits");
-                    URI checksum = URI.create("md5:d41d8cd98f00b204e9800998ecf8427e");
-                    Artifact artifact = new Artifact(artifactURI, checksum, new Date(), 1L);
+        // https+cert
+        Protocol sc = new Protocol(VOS.PROTOCOL_HTTPS_GET);
+        sc.setSecurityMethod(Standards.SECURITY_METHOD_CERT);
+        requested.add(sc);
+        
+        for (Protocol p : requested) {
+            log.info("testGET: " + p);
+            try {
+                Subject.doAs(userSubject, new PrivilegedExceptionAction<Object>() {
+                    public Object run() throws Exception {
 
-                    try {
-                        siteDAO.put(site1);
-                        siteDAO.put(site2);
-                        
-                        final SiteLocation location1 = new SiteLocation(site1.getID());
-                        final SiteLocation location2 = new SiteLocation(site2.getID());
-                        
-                        List<Protocol> protos = new ArrayList<>();
-                        
-                        // https+anon means raven has to do auth check and add pre-auth token
-                        Protocol p = new Protocol(VOS.PROTOCOL_HTTPS_GET);
-                        protos.add(p);
-                        
-                        Transfer transfer = new Transfer(artifactURI, Direction.pullFromVoSpace, protos);
-                        transfer.version = VOS.VOSPACE_21;
-                        
-                        artifactDAO.put(artifact);
-                        
-                        // test that there are no copies available
+                        URI resourceID1 = URI.create("ivo://negotiation-test-site1");
+                        URI resourceID2 = URI.create("ivo://negotiation-test-site2");
+
+
+                        StorageSite site1 = new StorageSite(resourceID1, "site1", true, true);
+                        StorageSite site2 = new StorageSite(resourceID2, "site2", true, true);
+
+                        URI artifactURI = URI.create("cadc:TEST/" + UUID.randomUUID() + ".fits");
+                        URI checksum = URI.create("md5:d41d8cd98f00b204e9800998ecf8427e");
+                        Artifact artifact = new Artifact(artifactURI, checksum, new Date(), 1L);
+
                         try {
-                            negotiate(transfer);
-                            Assert.fail("should have received file not found exception");
-                        } catch (ResourceNotFoundException e) {
-                            log.info("caught expected: " + e);
-                        }
-                        
-                        log.info("add: " + location1);
-                        artifactDAO.addSiteLocation(artifact, location1);
-                        artifact = artifactDAO.get(artifact.getID());
-                        
-                        // test that there's one copy
-                        Transfer response = negotiate(transfer);
-                        Assert.assertEquals(1, response.getAllEndpoints().size());
-                        
-                        // verify that pre-auth is present in URL, sort of
-                        String surl = response.getAllEndpoints().get(0);
-                        URL url = new URL(surl);
-                        String path = url.getPath().substring(1);
-                        log.debug("path: " + path);
+                            siteDAO.put(site1);
+                            siteDAO.put(site2);
 
-                        String[] elems = path.split("/");
-                        // path: minoc/endpoint/{pre-auth}/cadc:TEST/{uuid}.fits == 5
-                        Assert.assertEquals(5, elems.length);
-                        Assert.assertEquals("cadc:TEST", elems[3]);
-                        
-                        log.info("add: " + location2);
-                        artifactDAO.addSiteLocation(artifact, location2);
-                        artifact = artifactDAO.get(artifact.getID());
-                        
-                        // test that there are now two copies
-                        response = negotiate(transfer);
-                        Assert.assertEquals(2, response.getAllEndpoints().size());
-                        
-                        return null;
-                        
-                    } finally {
-                        // cleanup sites
-                        siteDAO.delete(site1.getID());
-                        siteDAO.delete(site2.getID());
-                        artifactDAO.delete(artifact.getID());
+                            final SiteLocation location1 = new SiteLocation(site1.getID());
+                            final SiteLocation location2 = new SiteLocation(site2.getID());
+
+                            List<Protocol> protos = new ArrayList<>();
+                            protos.add(p);
+                            
+                            Transfer transfer = new Transfer(artifactURI, Direction.pullFromVoSpace, protos);
+                            transfer.version = VOS.VOSPACE_21;
+
+                            artifactDAO.put(artifact);
+
+                            // test that there are no copies available
+                            try {
+                                negotiate(transfer);
+                                Assert.fail("should have received file not found exception");
+                            } catch (ResourceNotFoundException e) {
+                                log.info("caught expected: " + e);
+                            }
+
+                            log.info("add: " + location1);
+                            artifactDAO.addSiteLocation(artifact, location1);
+                            artifact = artifactDAO.get(artifact.getID());
+
+                            // test that there's one copy
+                            Transfer response = negotiate(transfer);
+                            Assert.assertEquals(1, response.getProtocols().size());
+                            Protocol actual = response.getProtocols().get(0);
+                            log.info("actual: " + actual);
+                            
+                            Assert.assertNotNull(actual.getEndpoint());
+                            Assert.assertEquals(p.getUri(), actual.getUri());
+                            Assert.assertEquals(p.getSecurityMethod(), actual.getSecurityMethod());
+                            if (p.getSecurityMethod() == null || p.getSecurityMethod().equals(Standards.SECURITY_METHOD_ANON)) {
+                                // verify that pre-auth is present in URL, sort of
+                                String surl = actual.getEndpoint();
+                                URL url = new URL(surl);
+                                String path = url.getPath().substring(1);
+                                log.debug("path: " + path);
+
+                                String[] elems = path.split("/");
+                                // path: minoc/endpoint/{pre-auth}/cadc:TEST/{uuid}.fits == 5
+                                Assert.assertEquals(5, elems.length);
+                                Assert.assertEquals("cadc:TEST", elems[3]);
+                            } else {
+                                // verify that pre-auth is NOT present in URL
+                                String surl = actual.getEndpoint();
+                                URL url = new URL(surl);
+                                String path = url.getPath().substring(1);
+                                log.debug("path: " + path);
+
+                                String[] elems = path.split("/");
+                                // path: minoc/endpoint/cadc:TEST/{uuid}.fits == 5
+                                Assert.assertEquals(4, elems.length);
+                                Assert.assertEquals("cadc:TEST", elems[2]);
+                            }
+
+                            log.info("add: " + location2);
+                            artifactDAO.addSiteLocation(artifact, location2);
+                            artifact = artifactDAO.get(artifact.getID());
+
+                            // test that there are now two copies
+                            response = negotiate(transfer);
+                            Assert.assertEquals(2, response.getAllEndpoints().size());
+
+                            return null;
+
+                        } finally {
+                            // cleanup sites
+                            siteDAO.delete(site1.getID());
+                            siteDAO.delete(site2.getID());
+                            artifactDAO.delete(artifact.getID());
+                        }
                     }
-                }
-            });
-        } catch (Exception e) {
-            log.error("unexpected exception", e);
-            Assert.fail("unexpected exception: " + e);
+                });
+            } catch (Exception e) {
+                log.error("unexpected exception", e);
+                Assert.fail("unexpected exception: " + e);
+            }
         }
     }
 
     @Test
     public void testPUT() {
-        try {
-            Subject.doAs(userSubject, new PrivilegedExceptionAction<Object>() {
-                public Object run() throws Exception {
+        List<Protocol> requested = new ArrayList<>();
+        // https+anon
+        Protocol sa = new Protocol(VOS.PROTOCOL_HTTPS_PUT);
+        requested.add(sa);
 
-                    StorageSite site1 = new StorageSite(URI.create("ivo://negotiation-test-site1"), "site1", true, false);
-                    StorageSite site2 = new StorageSite(URI.create("ivo://negotiation-test-site2"), "site2", true, true);
-                    StorageSite site3 = new StorageSite(URI.create("ivo://negotiation-test-site3"), "site3", true, true);
+        // https+cert
+        Protocol sc = new Protocol(VOS.PROTOCOL_HTTPS_PUT);
+        sc.setSecurityMethod(Standards.SECURITY_METHOD_CERT);
+        requested.add(sc);
+        
+        for (Protocol p : requested) {
+            log.info("testPUT: " + p);
+            try {
+                Subject.doAs(userSubject, new PrivilegedExceptionAction<Object>() {
+                    public Object run() throws Exception {
 
-                    URI artifactURI = URI.create("cadc:TEST/" + UUID.randomUUID() + ".fits");
+                        StorageSite site1 = new StorageSite(URI.create("ivo://negotiation-test-site1"), "site1", true, false);
+                        StorageSite site2 = new StorageSite(URI.create("ivo://negotiation-test-site2"), "site2", true, true);
+                        StorageSite site3 = new StorageSite(URI.create("ivo://negotiation-test-site3"), "site3", true, true);
 
-                    try {
-                        siteDAO.put(site1); // not writable
+                        URI artifactURI = URI.create("cadc:TEST/" + UUID.randomUUID() + ".fits");
 
-                        List<Protocol> protos = new ArrayList<>();
-                        // https+anon means raven has to do auth check and add pre-auth token
-                        Protocol p = new Protocol(VOS.PROTOCOL_HTTPS_PUT);
-                        protos.add(p);
-                        
-                        Transfer transfer = new Transfer(artifactURI, Direction.pushToVoSpace, protos);
-                        transfer.version = VOS.VOSPACE_21;
+                        try {
+                            siteDAO.put(site1); // not writable
 
-                        // test that there's one place to put
-                        Transfer response = negotiate(transfer);
-                        Assert.assertEquals(0, response.getAllEndpoints().size());
-                        
-                        siteDAO.put(site2); // writable
-                        siteDAO.put(site3); // writable
-                        
-                        response = negotiate(transfer);
-                        Assert.assertEquals(2, response.getAllEndpoints().size());
-                        
-                        String surl = response.getAllEndpoints().get(0);
-                        URL url = new URL(surl);
-                        String path = url.getPath().substring(1);
-                        log.debug("path: " + path);
+                            List<Protocol> protos = new ArrayList<>();
+                            protos.add(p);
 
-                        String[] elems = path.split("/");
-                        // path: minoc/endpoint/{pre-auth}/cadc:TEST/{uuid}.fits == 5
-                        Assert.assertEquals(5, elems.length);
-                        Assert.assertEquals("cadc:TEST", elems[3]);
+                            Transfer transfer = new Transfer(artifactURI, Direction.pushToVoSpace, protos);
+                            transfer.version = VOS.VOSPACE_21;
 
-                        return null;
+                            // test that there's no place to put
+                            Transfer response = negotiate(transfer);
+                            Assert.assertEquals(0, response.getAllEndpoints().size());
 
-                    } finally {
-                        // cleanup sites
-                        siteDAO.delete(site1.getID());
-                        siteDAO.delete(site2.getID());
-                        siteDAO.delete(site3.getID());
+                            siteDAO.put(site2); // writable
+                            
+                            // now one place to write
+                            response = negotiate(transfer);
+                            Assert.assertEquals(1, response.getProtocols().size());
+                            Protocol actual = response.getProtocols().get(0);
+                            log.info("actual: " + actual);
+                            
+                            Assert.assertNotNull(actual.getEndpoint());
+                            Assert.assertEquals(p.getUri(), actual.getUri());
+                            Assert.assertEquals(p.getSecurityMethod(), actual.getSecurityMethod());
+                                                      
+                            if (p.getSecurityMethod() == null || p.getSecurityMethod().equals(Standards.SECURITY_METHOD_ANON)) {
+                                // verify that pre-auth is present in URL, sort of
+                                String surl = actual.getEndpoint();
+                                URL url = new URL(surl);
+                                String path = url.getPath().substring(1);
+                                log.debug("path: " + path);
+
+                                String[] elems = path.split("/");
+                                // path: minoc/endpoint/{pre-auth}/cadc:TEST/{uuid}.fits == 5
+                                Assert.assertEquals(5, elems.length);
+                                Assert.assertEquals("cadc:TEST", elems[3]);
+                            } else {
+                                // verify that pre-auth is NOT present in URL
+                                String surl = actual.getEndpoint();
+                                URL url = new URL(surl);
+                                String path = url.getPath().substring(1);
+                                log.debug("path: " + path);
+
+                                String[] elems = path.split("/");
+                                // path: minoc/endpoint/cadc:TEST/{uuid}.fits == 5
+                                Assert.assertEquals(4, elems.length);
+                                Assert.assertEquals("cadc:TEST", elems[2]);
+                            }
+                            
+                            siteDAO.put(site3); // writable
+                            response = negotiate(transfer);
+                            Assert.assertEquals(2, response.getProtocols().size());
+                            Assert.assertEquals(2, response.getAllEndpoints().size());
+
+                            return null;
+
+                        } finally {
+                            // cleanup sites
+                            siteDAO.delete(site1.getID());
+                            siteDAO.delete(site2.getID());
+                            siteDAO.delete(site3.getID());
+                        }
                     }
-                }
-            });
-        } catch (Exception e) {
-            log.error("unexpected exception", e);
-            Assert.fail("unexpected exception: " + e);
+                });
+            } catch (Exception e) {
+                log.error("unexpected exception", e);
+                Assert.fail("unexpected exception: " + e);
+            }
         }
     }
     
-    
-    @Test
+    //@Test
     public void testMultiProtocol() {
         List<Protocol> protos = new ArrayList<>();
         // https+anon

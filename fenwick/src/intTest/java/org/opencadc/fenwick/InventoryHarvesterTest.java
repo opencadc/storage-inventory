@@ -69,24 +69,16 @@
 package org.opencadc.fenwick;
 
 import ca.nrc.cadc.date.DateUtil;
-import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.util.Log4jInit;
-
 import java.io.File;
 import java.io.FileWriter;
-import java.io.IOException;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.security.MessageDigest;
-import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
 import java.text.DateFormat;
 import java.util.Calendar;
-import java.util.UUID;
-
 import javax.security.auth.Subject;
-
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
@@ -98,7 +90,6 @@ import org.opencadc.inventory.DeletedStorageLocationEvent;
 import org.opencadc.inventory.SiteLocation;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.StorageSite;
-import org.opencadc.inventory.db.DeletedEventDAO;
 import org.opencadc.inventory.db.HarvestState;
 
 
@@ -367,82 +358,6 @@ public class InventoryHarvesterTest {
     }
 
     /**
-     * Scenario:
-     * - Set include directory to something non existent.
-     * - Ensure error thrown.
-     *
-     * @throws Exception Any unexpected errors.
-     */
-    @Test
-    public void runIncludeArtifactsNoTrackSiteLocationsIOError() throws Exception {
-        final String oldSetting = System.getProperty("user.home");
-        final Path tempLocation = Files.createTempDirectory(InventoryHarvesterTest.class.getName());
-        System.setProperty("user.home", tempLocation.toString());
-        LOGGER.debug("Now looking for includes in " + System.getProperty("user.home") + "/config/include");
-
-        try {
-            final InventoryHarvester testSubject = new InventoryHarvester(inventoryEnvironment.daoConfig,
-                                                                          TestUtil.LUSKAN_URI, new IncludeArtifacts(),
-                                                                          false);
-            Subject.doAs(this.testUser, (PrivilegedExceptionAction<Object>) () -> {
-                testSubject.doit();
-                return null;
-            });
-
-            Assert.fail("Should throw IOException.");
-        } catch (PrivilegedActionException e) {
-            // Good.
-            final Throwable baseThrowable = e.getCause();
-            Assert.assertEquals("Wrong exception type.", IOException.class, baseThrowable.getClass());
-        } finally {
-            if (oldSetting != null) {
-                System.setProperty("user.home", oldSetting);
-            } else {
-                System.getProperties().remove("user.home");
-            }
-        }
-    }
-
-    /**
-     * Scenario:
-     * - Set include directory to something empty.
-     * - Ensure error thrown.
-     *
-     * @throws Exception Any unexpected errors.
-     */
-    @Test
-    public void runIncludeArtifactsNoTrackSiteLocationsNotFoundError() throws Exception {
-        final String oldSetting = System.getProperty("user.home");
-        final Path tempLocation = Files.createTempDirectory(InventoryHarvesterTest.class.getName());
-        System.setProperty("user.home", tempLocation.toString());
-        LOGGER.debug("Now looking for includes in " + System.getProperty("user.home") + "/config/include");
-        Files.createDirectories(new File(System.getProperty("user.home") + "/config/include").toPath());
-
-        try {
-            final InventoryHarvester testSubject = new InventoryHarvester(inventoryEnvironment.daoConfig,
-                                                                          TestUtil.LUSKAN_URI, new IncludeArtifacts(),
-                                                                          false);
-            Subject.doAs(this.testUser, (PrivilegedExceptionAction<Object>) () -> {
-                testSubject.doit();
-                return null;
-            });
-
-            Assert.fail("Should throw ResourceNotFoundException.");
-        } catch (PrivilegedActionException e) {
-            // Good.
-            final Throwable baseThrowable = e.getCause();
-            Assert.assertEquals("Wrong exception type.", ResourceNotFoundException.class,
-                                baseThrowable.getClass());
-        } finally {
-            if (oldSetting != null) {
-                System.setProperty("user.home", oldSetting);
-            } else {
-                System.getProperties().remove("user.home");
-            }
-        }
-    }
-
-    /**
      * Scenario
      *  - Write an include SQL file
      *  - Add two artifacts to Luskan database
@@ -451,13 +366,11 @@ public class InventoryHarvesterTest {
      */
     @Test
     public void runIncludeArtifacts() throws Exception {
-        LOGGER.debug("Looking for includes in " + System.getProperty("user.home") + "/config/include");
-        final Path includePath = new File(System.getProperty("user.home") + "/config/include").toPath();
+        LOGGER.debug("Looking for includes in " + System.getProperty("user.home") + "/config");
+        final Path includePath = new File(System.getProperty("user.home") + "/config/").toPath();
         Files.createDirectories(includePath);
 
-        final File includeFile =
-                new File(includePath.toFile(), InventoryHarvesterTest.class.getSimpleName() + "_"
-                                               + UUID.randomUUID() + ".sql");
+        final File includeFile = new File(includePath.toFile(), "artifact-filter.sql");
         includeFile.deleteOnExit();
 
         final FileWriter fileWriter = new FileWriter(includeFile);
@@ -465,7 +378,6 @@ public class InventoryHarvesterTest {
         fileWriter.flush();
         fileWriter.close();
 
-        final MessageDigest messageDigest = MessageDigest.getInstance("MD5");
         final Calendar calendar = Calendar.getInstance();
         calendar.set(2007, Calendar.SEPTEMBER, 18, 1, 13, 0);
         final Artifact artifactOne = new Artifact(URI.create("cadc:TEST/fileone.ext"), 

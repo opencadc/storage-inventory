@@ -76,8 +76,8 @@ import java.util.Map;
 import java.util.TreeMap;
 
 import org.apache.log4j.Logger;
-import org.opencadc.fenwick.TestUtil.DeletedArtifactEventDAO;
-import org.opencadc.fenwick.TestUtil.DeletedStorageLocationEventDAO;
+import org.opencadc.inventory.db.DeletedArtifactEventDAO;
+import org.opencadc.inventory.db.DeletedStorageLocationEventDAO;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.SQLGenerator;
 import org.opencadc.inventory.db.StorageSiteDAO;

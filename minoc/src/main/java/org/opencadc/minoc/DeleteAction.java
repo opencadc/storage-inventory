@@ -72,7 +72,7 @@ import ca.nrc.cadc.net.ResourceNotFoundException;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.DeletedArtifactEvent;
-import org.opencadc.inventory.db.DeletedEventDAO;
+import org.opencadc.inventory.db.DeletedArtifactEventDAO;
 import org.opencadc.inventory.db.EntityNotFoundException;
 import org.opencadc.inventory.db.ObsoleteStorageLocation;
 import org.opencadc.inventory.db.ObsoleteStorageLocationDAO;
@@ -107,7 +107,7 @@ public class DeleteAction extends ArtifactAction {
             throw new ResourceNotFoundException("not found: " + artifactURI);
         }
         
-        DeletedEventDAO eventDAO = new DeletedEventDAO(artifactDAO);
+        DeletedArtifactEventDAO eventDAO = new DeletedArtifactEventDAO(artifactDAO);
         TransactionManager txnMgr = artifactDAO.getTransactionManager();
         
         try {
@@ -131,8 +131,8 @@ public class DeleteAction extends ArtifactAction {
             }
             
             DeletedArtifactEvent deletedArtifact = new DeletedArtifactEvent(existing.getID());
-            artifactDAO.delete(existing.getID());
             eventDAO.put(deletedArtifact);
+            artifactDAO.delete(existing.getID());
             ObsoleteStorageLocation dsl = null;
             ObsoleteStorageLocationDAO locDAO = new ObsoleteStorageLocationDAO(artifactDAO);
             if (existing.storageLocation != null) {

@@ -168,7 +168,7 @@ public abstract class RavenTest {
         String response = post.getResponseBody();
         TransferReader reader = new TransferReader();
         Transfer t = reader.read(response,  null);
-        log.info("Response transfer: " + t);
+        log.debug("Response transfer: " + t);
         return t;
     }
 

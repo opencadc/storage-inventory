@@ -97,7 +97,7 @@ public class TestEventListener implements ValidateEventListener {
     }
 
     @Override
-    public void markAsNew(Artifact artifact) throws Exception {
+    public void clearStorageLocation(Artifact artifact) throws Exception {
         resetArtifactCalled = true;
     }
 

@@ -90,6 +90,10 @@ public class InventoryIsAlwaysRight extends ResolutionPolicy {
      */
     @Override
     public void resolve(final Artifact artifact, final StorageMetadata storageMetadata) throws Exception {
+        if (artifact == null && storageMetadata == null) {
+            throw new RuntimeException("BUG: both args to resolve are null");
+        }
+        
         if (storageMetadata == null) {
             // Scenario when an Entity exists in the inventory database but the file is not in Storage.  This can
             // happen in the case where all files are managed by the inventory but an intervention outside of the
@@ -97,16 +101,17 @@ public class InventoryIsAlwaysRight extends ResolutionPolicy {
             // either.
             reporter.report("Resetting Artifact " + artifact.storageLocation + " as per policy.");
 
-            validateEventListener.markAsNew(artifact);
-        } else if (!storageMetadata.isValid()) {
-            reporter.report("Invalid Storage Metadata (" + storageMetadata.getStorageLocation() + ").  "
-                            + "Replacing as per policy.");
-            validateEventListener.delete(storageMetadata);
-            validateEventListener.markAsNew(artifact);
+            validateEventListener.clearStorageLocation(artifact);
         } else if (artifact == null) {
             reporter.report("Removing Unknown File " + storageMetadata.getStorageLocation() + " as per policy.");
 
             validateEventListener.delete(storageMetadata);
+        } else if (!storageMetadata.isValid()) {
+            reporter.report("Invalid Storage Metadata (" + storageMetadata.getStorageLocation() + ").  "
+                            + "Replacing as per policy.");
+
+            validateEventListener.delete(storageMetadata);
+            validateEventListener.clearStorageLocation(artifact);
         } else {
             // Check metadata for discrepancies.
             if (haveDifferentStructure(artifact, storageMetadata)) {
@@ -114,7 +119,7 @@ public class InventoryIsAlwaysRight extends ResolutionPolicy {
                 reporter.report("Replacing File " + storageMetadata.getStorageLocation() + " as per policy.");
 
                 validateEventListener.delete(storageMetadata);
-                validateEventListener.markAsNew(artifact);
+                validateEventListener.clearStorageLocation(artifact);
             } else {
                 reporter.report("Artifact " + artifact.storageLocation + " is valid as per policy.");
             }

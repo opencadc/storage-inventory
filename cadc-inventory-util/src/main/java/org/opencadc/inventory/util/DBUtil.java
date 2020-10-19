@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2019.                            (c) 2019.
+*  (c) 2020.                            (c) 2020.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -65,26 +65,99 @@
 ************************************************************************
 */
 
-package org.opencadc.inventory.db;
+package org.opencadc.inventory.util;
 
-import org.opencadc.inventory.Entity;
-
+import ca.nrc.cadc.db.ConnectionConfig;
+import ca.nrc.cadc.db.DBConfigException;
+import ca.nrc.cadc.db.StandaloneContextFactory;
+import javax.management.ObjectName;
+import javax.naming.Context;
+import javax.naming.InitialContext;
+import javax.naming.NamingException;
+import javax.sql.DataSource;
+import org.apache.commons.dbcp2.ConnectionFactory;
+import org.apache.commons.dbcp2.DriverManagerConnectionFactory;
+import org.apache.commons.dbcp2.PoolableConnectionFactory;
+import org.apache.commons.dbcp2.PoolingDataSource;
+import org.apache.commons.pool2.impl.GenericObjectPool;
+import org.apache.log4j.Logger;
 
 /**
- * Fire/persist a deleted entity event.
+ * Utility for applications to create and manage JDBC connections. This class extends
+ * <code>ca.nrc.cadc.db.DBUtil</code> to add some extra static methods for creating a
+ * connection pool. This code may be merged upstream into the parent class at some point.
  * 
  * @author pdowler
  */
-public class DeletedEventDAO<T extends Entity> extends AbstractDAO<T> {
-    public DeletedEventDAO() { 
-        super(true);
-    }
+public abstract class DBUtil extends ca.nrc.cadc.db.DBUtil {
+    private static final Logger log = Logger.getLogger(DBUtil.class);
 
-    public DeletedEventDAO(boolean origin) {
-        super(origin);
+    private DBUtil() { 
     }
+    
+    public static class PoolConfig {
+        private ConnectionConfig cc;
 
-    public DeletedEventDAO(AbstractDAO<?> dao) {
-        super(dao);
+        private int poolSize;
+        
+        private long maxWait;
+        
+        private String validationQuery;
+
+        public PoolConfig(ConnectionConfig cc, int poolSize, long maxWait, String validationQuery) {
+            this.cc = cc;
+            this.poolSize = poolSize;
+            this.maxWait = maxWait;
+            this.validationQuery = validationQuery;
+        }
+    }
+    
+    public static void createJNDIDataSource(String dataSourceName, PoolConfig config) throws NamingException {
+        log.debug("createJNDIDataSource: " + dataSourceName + " POOL START");
+        
+            
+        StandaloneContextFactory.initJNDI();
+
+        Context initContext = new InitialContext();
+        Context envContext = (Context) initContext.lookup(DEFAULT_JNDI_ENV_CONTEXT);
+        if (envContext == null) {
+            envContext = initContext.createSubcontext(DEFAULT_JNDI_ENV_CONTEXT);
+        }
+        log.debug("env: " + envContext);
+
+        DataSource dataSource = createPool(config);
+ 
+        envContext.bind(dataSourceName, dataSource);
+        log.debug("createJNDIDataSource: " + dataSourceName + " POOL DONE");
+    }
+    
+    private static DataSource createPool(PoolConfig config) {
+        try {
+            // load JDBC driver
+            Class.forName(config.cc.getDriver());
+        
+            ConnectionFactory connectionFactory = 
+                new DriverManagerConnectionFactory(config.cc.getURL(), config.cc.getUsername(), config.cc.getPassword());
+            
+            ObjectName jmxObjectName = null; // TODO? 
+            PoolableConnectionFactory poolableConnectionFactory = new PoolableConnectionFactory(connectionFactory, jmxObjectName);
+            poolableConnectionFactory.setValidationQuery(config.validationQuery);
+            
+            GenericObjectPool objectPool = new GenericObjectPool(poolableConnectionFactory);
+            objectPool.setMinIdle(config.poolSize);
+            objectPool.setMaxIdle(config.poolSize);
+            objectPool.setMaxTotal(config.poolSize);
+            objectPool.setTestOnBorrow(true);
+            objectPool.setTestOnCreate(true);
+            objectPool.setMaxWaitMillis(config.maxWait);
+            
+            PoolingDataSource dataSource = new PoolingDataSource(objectPool);
+            
+            return dataSource;
+        } catch (ClassNotFoundException ex) {
+            throw new DBConfigException("failed to load JDBC driver: " + config.cc.getDriver(), ex);
+        } catch (Exception ex) {
+            throw new DBConfigException("failed to init connection pool: " + config.cc.getURL(), ex);
+        }
     }
 }
