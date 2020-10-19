@@ -148,7 +148,14 @@ public class FileSyncJob implements Runnable {
 
     @Override
     public void run() {
-        Subject.doAs(subject, new RunnableAction(this::doSync));
+        Subject currentSubject = new Subject();
+
+        // Also synchronized in FileSync.run()
+        synchronized (subject) {
+            currentSubject.getPrincipals().addAll(subject.getPrincipals());
+            currentSubject.getPublicCredentials().addAll(subject.getPublicCredentials());
+        }
+        Subject.doAs(currentSubject, new RunnableAction(this::doSync));
     }
 
     // approach here is conservative: if the input artifact changed|deleted in the database, 
