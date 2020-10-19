@@ -68,14 +68,22 @@
 package org.opencadc.critwall;
 
 import ca.nrc.cadc.auth.AuthenticationUtil;
+import ca.nrc.cadc.auth.SSLUtil;
 import ca.nrc.cadc.db.ConnectionConfig;
 import ca.nrc.cadc.io.ResourceIterator;
 import ca.nrc.cadc.vosi.Availability;
 import ca.nrc.cadc.vosi.AvailabilityClient;
+
+import java.io.File;
 import java.net.URI;
+import java.security.PrivilegedAction;
 import java.util.Iterator;
 import java.util.Map;
+
+import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import javax.naming.NamingException;
 import javax.security.auth.Subject;
 import javax.sql.DataSource;
@@ -94,6 +102,13 @@ public class FileSync implements Runnable {
 
     private static final int MAX_THREADS = 16;
 
+    // The number of hours that the validity checker for the current Subject will request ahead to see if the Subject's
+    // X500 certificate is about to expire.  This will also be used to update to schedule updates to the Subject's
+    // credentials.
+    private static final int CERT_CHECK_MINUTE_INTERVAL_COUNT = 10;
+
+    public static final String CERTIFICATE_FILE_LOCATION = System.getProperty("user.home") + "/.ssl/cadcproxy.pem";
+
     private final ArtifactDAO artifactDAO;
     private final ArtifactDAO jobArtifactDAO;
     private final URI locatorService;
@@ -102,7 +117,7 @@ public class FileSync implements Runnable {
     private final StorageAdapter storageAdapter;
     private final ThreadPool threadPool;
     private final LinkedBlockingQueue<Runnable> jobQueue;
-    
+
     // test usage only
     int testRunLoops = 0; // default: forever
 
@@ -182,7 +197,37 @@ public class FileSync implements Runnable {
         log.debug("FileSync ctor done");
     }
 
+    /**
+     * Spin up a Scheduler thread to renew the subject periodically.
+     */
+    public static void scheduleSubjectUpdates(final Subject subject) {
+        log.debug("START: scheduleSubjectUpdates");
+        final ScheduledExecutorService scheduledExecutorService = Executors.newSingleThreadScheduledExecutor();
+        scheduledExecutorService.schedule(() -> {
+            // Also synchronized on FileSyncJob.run().
+            synchronized (subject) {
+                SSLUtil.renewSubject(subject, new File(CERTIFICATE_FILE_LOCATION));
+            }
+        }, CERT_CHECK_MINUTE_INTERVAL_COUNT, TimeUnit.MINUTES);
+        log.debug("END: scheduleSubjectUpdates OK");
+    }
+
+    @Override
     public void run() {
+        final File certificateFile = new File(CERTIFICATE_FILE_LOCATION);
+        final Subject subject = certificateFile.exists()
+                                ? SSLUtil.createSubject(new File(CERTIFICATE_FILE_LOCATION))
+                                : AuthenticationUtil.getAnonSubject();
+
+        scheduleSubjectUpdates(subject);
+
+        Subject.doAs(subject, (PrivilegedAction<Void>) () -> {
+            doit();
+            return null;
+        });
+    }
+
+    public void doit() {
         // poll time while watching job queue to empty
         long poll = 30 * 1000L; // 30 sec
         if (testRunLoops > 0) {
@@ -190,7 +235,7 @@ public class FileSync implements Runnable {
         }
         // idle time from when jobs finish until next query
         long idle = 10 * poll;
-        
+
         boolean ok = true;
         long loopCount = 0;
         while (ok) {
@@ -202,10 +247,9 @@ public class FileSync implements Runnable {
                     Thread.sleep(10 * poll);
                     a = acl.getAvailability();
                 }
-                
-                // TODO: load updated subject(cert) for jobs here? or inside FileSyncJob itself?
+
                 loopCount++;
-                
+
                 long startQ = System.currentTimeMillis();
                 long num = 0L;
                 log.info("FileSync.QUERY START");
@@ -232,11 +276,11 @@ public class FileSync implements Runnable {
                         // are available from the cadc-inventory-db API
                         throw qex;
                     }
-                    
+
                 }
                 long dtQ = System.currentTimeMillis() - startQ;
                 log.info("FileSync.QUERY END dt=" + dtQ + " num=" + num);
-                
+
                 boolean waiting = true;
                 while (waiting) {
                     if (jobQueue.isEmpty()) {
@@ -252,7 +296,7 @@ public class FileSync implements Runnable {
                         log.info("FileSync.POLL dt=" + poll);
                         Thread.sleep(poll);
                     }
-                    
+
                 }
                 if (testRunLoops > 0 && loopCount >= testRunLoops) {
                     log.warn("TEST MODE: testRunLoops=" + testRunLoops + " ... terminating!");

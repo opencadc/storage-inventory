@@ -97,9 +97,9 @@ public class HarvestStateDAO extends AbstractDAO<HarvestState> {
     /**
      * Get HarvestState for the specified name and resourceID (create if necessary).
      * 
-     * @param name
-     * @param resourceID
-     * @return 
+     * @param name name of the entity being harvested
+     * @param resourceID source of entities
+     * @return current (or new) HarvestState (never null)
      */
     public HarvestState get(String name, URI resourceID) {
         if (name == null || resourceID == null) {
