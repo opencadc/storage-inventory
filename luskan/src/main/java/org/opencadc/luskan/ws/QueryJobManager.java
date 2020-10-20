@@ -86,7 +86,7 @@ public class QueryJobManager extends SimpleJobManager {
     private static final Logger log = Logger.getLogger(QueryJobManager.class);
 
     private static final Long MAX_EXEC_DURATION = 4 * 3600L;    // 4 hours to dump a catalog to vpsace
-    private static final Long MAX_DESTRUCTION = 7 * 24 * 60 * 60L; // 1 week
+    public static final Long MAX_DESTRUCTION = 7 * 24 * 60 * 60L; // 1 week
     private static final Long MAX_QUOTE = 24 * 3600L; // 24 hours since we have a threadpool with queued jobs
 
     public QueryJobManager() {
