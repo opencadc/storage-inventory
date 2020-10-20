@@ -91,6 +91,7 @@ import java.sql.ResultSet;
 
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import org.apache.log4j.Logger;
 import org.opencadc.luskan.ws.QueryJobManager;
@@ -109,6 +110,9 @@ public class TempStorageManager implements ResultStore, UWSInlineContentHandler 
 
     private Job job;
     private String filename;
+
+    // singleton executor service
+    private static ScheduledExecutorService SCHEDULER = null;
 
     public TempStorageManager() {
         try {
@@ -162,7 +166,7 @@ public class TempStorageManager implements ResultStore, UWSInlineContentHandler 
         // TODO: store requested content-type with file so that 
         // TempStorageGetAction can set content-type header correctly
 
-        scheduleDeletion(dest, getJobDestructionDelay());
+        scheduleDeletion(dest);
         return ret;
     }
 
@@ -175,7 +179,7 @@ public class TempStorageManager implements ResultStore, UWSInlineContentHandler 
         // TODO: store requested content-type with file so that 
         // TempStorageGetAction can set content-type header correctly
 
-        scheduleDeletion(dest, getJobDestructionDelay());
+        scheduleDeletion(dest);
         return ret;
     }
 
@@ -247,7 +251,7 @@ public class TempStorageManager implements ResultStore, UWSInlineContentHandler 
         fos.flush();
         fos.close();
 
-        scheduleDeletion(put, QueryJobManager.MAX_DESTRUCTION);
+        scheduleDeletion(put);
 
         URL retURL = new URL(baseResultsURL + "/" + filename);
         Content ret = new Content();
@@ -260,33 +264,43 @@ public class TempStorageManager implements ResultStore, UWSInlineContentHandler 
         return new RandomStringGenerator(16).getID();
     }
 
-    private long getJobDestructionDelay() {
-        return this.job.getDestructionTime().getTime() - System.currentTimeMillis();
+    private void scheduleDeletion(final File file) {
+        getScheduler().schedule(new Runnable() {
+            @Override public void run() {
+                try {
+                    if (!file.exists()) {
+                        log.info(String.format("%s not found for deletion", file.getAbsolutePath()));
+                    } else {
+                        boolean deleted = file.delete();
+                        log.debug(String.format("deleted %s: %s", file.getAbsolutePath(), deleted));
+                    }
+                } catch (SecurityException e) {
+                    log.error(String.format("Unable to delete %s because %s", file.getAbsolutePath(),
+                                            e.getMessage()));
+                }
+            }
+        }, QueryJobManager.MAX_DESTRUCTION, TimeUnit.MILLISECONDS);
     }
 
-    void scheduleDeletion(final File file, final long delay) {
-        ScheduledExecutorService scheduledExecutorService = null;
-        try {
-            scheduledExecutorService = Executors.newSingleThreadScheduledExecutor();
-            scheduledExecutorService.schedule(new Runnable() {
-                @Override public void run() {
-                    try {
-                        if (!file.exists()) {
-                            log.info(String.format("%s not found for deletion", file.getAbsolutePath()));
-                        } else {
-                            boolean deleted = file.delete();
-                            log.debug(String.format("deleted %s: %s", file.getAbsolutePath(), deleted));
-                        }
-                    } catch (SecurityException e) {
-                        log.error(String.format("Unable to delete %s because %s", file.getAbsolutePath(),
-                                                e.getMessage()));
-                    }
+    // lazy init of the scheduler.
+    private static ScheduledExecutorService getScheduler() {
+        if (SCHEDULER == null) {
+            synchronized (ScheduledExecutorService.class) {
+                if (SCHEDULER == null) {
+                    SCHEDULER = Executors.newSingleThreadScheduledExecutor(new DaemonThreadFactory());
                 }
-            }, delay, TimeUnit.MILLISECONDS);
-        } finally {
-            if (scheduledExecutorService != null) {
-                scheduledExecutorService.shutdown();
             }
+        }
+        return SCHEDULER;
+    }
+
+    // Returns daemon threads for jvm termination.
+    static class DaemonThreadFactory implements ThreadFactory {
+
+        public Thread newThread(Runnable r) {
+            Thread thread = new Thread(r);
+            thread.setDaemon(true);
+            return thread;
         }
     }
 
