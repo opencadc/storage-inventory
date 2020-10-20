@@ -279,7 +279,7 @@ public class TempStorageManager implements ResultStore, UWSInlineContentHandler 
                                             e.getMessage()));
                 }
             }
-        }, QueryJobManager.MAX_DESTRUCTION, TimeUnit.MILLISECONDS);
+        }, QueryJobManager.MAX_DESTRUCTION, TimeUnit.SECONDS);
     }
 
     // lazy init of the scheduler.
