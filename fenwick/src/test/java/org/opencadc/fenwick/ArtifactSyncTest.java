@@ -68,6 +68,7 @@
 
 package org.opencadc.fenwick;
 
+import ca.nrc.cadc.date.DateUtil;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -89,7 +90,7 @@ public class ArtifactSyncTest {
 
     @Test
     public void testBuildQueryWithLastModifiedDate() throws Exception {
-        final Calendar calendar = Calendar.getInstance();
+        final Calendar calendar = Calendar.getInstance(DateUtil.UTC);
         calendar.set(1977, Calendar.NOVEMBER, 25, 3, 12, 0);
         calendar.set(Calendar.MILLISECOND, 0);
 
@@ -105,7 +106,7 @@ public class ArtifactSyncTest {
 
     @Test
     public void testBuildQueryWithLastModifiedDateAndInclude() throws Exception {
-        final Calendar calendar = Calendar.getInstance();
+        final Calendar calendar = Calendar.getInstance(DateUtil.UTC);
         calendar.set(1977, Calendar.NOVEMBER, 25, 3, 12, 0);
         calendar.set(Calendar.MILLISECOND, 0);
 

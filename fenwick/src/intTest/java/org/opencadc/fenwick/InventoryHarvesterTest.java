@@ -91,6 +91,7 @@ import org.opencadc.inventory.SiteLocation;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.StorageSite;
 import org.opencadc.inventory.db.HarvestState;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 
 /**
@@ -223,6 +224,16 @@ public class InventoryHarvesterTest {
             luskanEnvironment.deletedStorageLocationEventDAO.put(deletedStorageLocationEvent);
             Thread.sleep(20L);
         }
+
+        // Should not appear in the results ever.
+        final Artifact artifactFive = new Artifact(URI.create("cadc:TEST/filefive.ext"), TestUtil.getRandomMD5(), calendar.getTime(), 78787L);
+        luskanEnvironment.artifactDAO.put(artifactFive);
+
+        // Put the artifactFive's lastModified in the future to exclude it.
+        final JdbcTemplate jdbcTemplate = new JdbcTemplate(luskanEnvironment.artifactDAO.getDataSource());
+        jdbcTemplate.execute("UPDATE " + TestUtil.LUSKAN_SCHEMA
+                             + ".Artifact SET lastModified = (SELECT now() + '12 hours'::interval) WHERE uri = 'cadc:TEST/filefive.ext'");
+        Thread.sleep(20L);
         
         // Run it.
 
@@ -275,6 +286,9 @@ public class InventoryHarvesterTest {
             Assert.assertTrue("Artifact.siteLocations", a4.siteLocations.isEmpty());
             Assert.assertNull("Artifact.storageLocation", a4.storageLocation);
         }
+
+        Assert.assertNull("Artifact five should be missing as it's too far in the future.",
+                          inventoryEnvironment.artifactDAO.get(URI.create("cadc:TEST/filefive.ext")));
         
         final HarvestState artifactHarvestState = inventoryEnvironment.harvestStateDAO.get(Artifact.class.getName(), TestUtil.LUSKAN_URI);
         Assert.assertEquals("Artifact HarvestState.curlastModified", 
