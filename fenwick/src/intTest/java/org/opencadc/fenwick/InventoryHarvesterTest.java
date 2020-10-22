@@ -78,6 +78,7 @@ import java.nio.file.Path;
 import java.security.PrivilegedExceptionAction;
 import java.text.DateFormat;
 import java.util.Calendar;
+import java.util.Date;
 import javax.security.auth.Subject;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
@@ -91,6 +92,7 @@ import org.opencadc.inventory.SiteLocation;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.StorageSite;
 import org.opencadc.inventory.db.HarvestState;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 
 /**
@@ -223,6 +225,16 @@ public class InventoryHarvesterTest {
             luskanEnvironment.deletedStorageLocationEventDAO.put(deletedStorageLocationEvent);
             Thread.sleep(20L);
         }
+
+        // Should not appear in the results ever.
+        final Artifact artifactFive = new Artifact(URI.create("cadc:TEST/filefive.ext"), TestUtil.getRandomMD5(), calendar.getTime(), 78787L);
+        luskanEnvironment.artifactDAO.put(artifactFive);
+        
+        // Put the artifactFive's lastModified in the future to exclude it.
+        final JdbcTemplate jdbcTemplate = new JdbcTemplate(luskanEnvironment.artifactDAO.getDataSource());
+        jdbcTemplate.execute("UPDATE " + TestUtil.LUSKAN_SCHEMA
+                             + ".Artifact SET lastModified = (SELECT now() + '12 hours'::interval) WHERE uri = 'cadc:TEST/filefive.ext'");
+        Thread.sleep(20L);
         
         // Run it.
 
@@ -275,6 +287,9 @@ public class InventoryHarvesterTest {
             Assert.assertTrue("Artifact.siteLocations", a4.siteLocations.isEmpty());
             Assert.assertNull("Artifact.storageLocation", a4.storageLocation);
         }
+
+        Assert.assertNull("Artifact five should be missing as it's too far in the future.",
+                          inventoryEnvironment.artifactDAO.get(artifactFive.getID()));
         
         final HarvestState artifactHarvestState = inventoryEnvironment.harvestStateDAO.get(Artifact.class.getName(), TestUtil.LUSKAN_URI);
         Assert.assertEquals("Artifact HarvestState.curlastModified", 
@@ -294,9 +309,7 @@ public class InventoryHarvesterTest {
                     deletedStorageLocationEvent.getLastModified(), deletedStorageLocationEventState.curLastModified);
         }
         
-        //
-        // Run it again.  It should be idempotent.
-        //
+        LOGGER.info("Run it again.  It should be idempotent...");
 
         Subject.doAs(this.testUser, (PrivilegedExceptionAction<Object>) () -> {
             testSubject.doit();
@@ -400,5 +413,63 @@ public class InventoryHarvesterTest {
         Assert.assertNull("not included", inventoryEnvironment.artifactDAO.get(artifactOne.getID()));
 
         Assert.assertNotNull("included", inventoryEnvironment.artifactDAO.get(artifactTwo.getID()));
+    }
+    
+    @Test
+    public void atestCollisions() throws Exception {
+        LOGGER.info("testCollisions - START");
+        
+        StorageSite expectedSite = new StorageSite(URI.create("cadc:TEST/siteone"), "Test Site", true, false);
+        luskanEnvironment.storageSiteDAO.put(expectedSite);
+        
+        // create an Artifacty.uri collision where existing artifact is newer and harvested gets skipped
+        final Artifact artifactCollision1 = new Artifact(URI.create("cadc:TEST/collision1"), TestUtil.getRandomMD5(), new Date(), 78787L);
+        artifactCollision1.storageLocation = new StorageLocation(URI.create("foo:bar/baz"));
+        luskanEnvironment.artifactDAO.put(artifactCollision1);
+        
+        Date newerCLM = new Date(artifactCollision1.getContentLastModified().getTime() + 20000L);
+        final Artifact artifactCollisionKeeper1 = new Artifact(URI.create("cadc:TEST/collision1"), TestUtil.getRandomMD5(), newerCLM, 78787L);
+        inventoryEnvironment.artifactDAO.put(artifactCollisionKeeper1);
+        Thread.sleep(20L);
+        
+        // create an Artifacty.uri collision where existing artifact is nwewer and harvested gets skipped
+        final Artifact artifactCollisionKeeper2 = new Artifact(URI.create("cadc:TEST/collision2"), TestUtil.getRandomMD5(), new Date(), 78787L);
+        artifactCollisionKeeper2.storageLocation = new StorageLocation(URI.create("foo:bar/baz2"));
+        luskanEnvironment.artifactDAO.put(artifactCollisionKeeper2);
+        
+        Date olderCLM = new Date(artifactCollisionKeeper2.getContentLastModified().getTime() - 20000L);
+        final Artifact artifactCollision2 = new Artifact(URI.create("cadc:TEST/collision2"), TestUtil.getRandomMD5(), olderCLM, 78787L);
+        luskanEnvironment.artifactDAO.put(artifactCollisionKeeper2);
+        inventoryEnvironment.artifactDAO.put(artifactCollision2);
+        Thread.sleep(20L);
+        
+        final InventoryHarvester testSubject = new InventoryHarvester(inventoryEnvironment.daoConfig, TestUtil.LUSKAN_URI, new AllArtifacts(), true);
+        Subject.doAs(this.testUser, (PrivilegedExceptionAction<Object>) () -> {
+            testSubject.doit();
+            return null;
+        });
+        
+        // artifactCollision1 vs artifactCollisionKeeper1
+        Assert.assertNull("artifactCollision1 should have been skipped", 
+                inventoryEnvironment.artifactDAO.get(artifactCollision1.getID()));
+        Assert.assertNotNull("artifactCollisionKeeper1 should have been retained", 
+                inventoryEnvironment.artifactDAO.get(artifactCollisionKeeper1.getID()));
+        
+        // artifactCollision2 vs artifactCollisionKeeper2
+        Assert.assertNull("artifactCollision2 should have been removed", 
+                inventoryEnvironment.artifactDAO.get(artifactCollision2.getID()));
+        Assert.assertNotNull("artifactCollision2 DeletedArtifactEvent should have been created", 
+                inventoryEnvironment.deletedArtifactEventDAO.get(artifactCollision2.getID()));
+        Assert.assertNotNull("artifactCollisionKeeper2 should have been retained", 
+                inventoryEnvironment.artifactDAO.get(artifactCollisionKeeper2.getID()));
+        
+        LOGGER.info("testCollisions - IDEMPOTENT");
+        
+        Subject.doAs(this.testUser, (PrivilegedExceptionAction<Object>) () -> {
+            testSubject.doit();
+            return null;
+        });
+        
+        LOGGER.info("testCollisions - DONE");
     }
 }

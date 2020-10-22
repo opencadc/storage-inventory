@@ -74,6 +74,7 @@ import ca.nrc.cadc.util.PropertiesReader;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -137,14 +138,23 @@ public class LuskanConfig {
             sb.append("MISSING");
             ok = false;
         } else {
-            // check if tmpdir is writable
+            // create tmpdir path if necessary, and check if writable
             Path tmpDirPath = Paths.get(srd);
             try {
+                Files.createDirectories(tmpDirPath.toAbsolutePath());
                 Path tmpFile = Files.createTempFile(tmpDirPath, null, null);
                 Files.delete(tmpFile);
                 sb.append("OK");
-            } catch (IOException e) {
-                sb.append("WRITE PERMISSION DENIED");
+            } catch (Exception e) {
+                if (e instanceof FileAlreadyExistsException) {
+                    sb.append("FILE ALREADY EXISTS");
+                } else if (e instanceof SecurityException) {
+                    sb.append(String.format("WRITE PERMISSION DENIED: %s", e.getMessage()));
+                } else if (e instanceof IOException) {
+                    sb.append(String.format("UNABLE TO CREATE FILE: %s", e.getMessage()));
+                } else {
+                    sb.append(String.format("ERROR: %s", e.getMessage()));
+                }
                 ok = false;
             }
         }

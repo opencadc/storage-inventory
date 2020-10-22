@@ -89,8 +89,12 @@ import java.net.URI;
 import java.net.URL;
 import java.sql.ResultSet;
 
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.TimeUnit;
 import org.apache.log4j.Logger;
-
+import org.opencadc.luskan.ws.QueryJobManager;
 
 /**
  * Basic temporary storage implementation for a tap service.
@@ -104,8 +108,11 @@ public class TempStorageManager implements ResultStore, UWSInlineContentHandler 
     private final File resultsDir;
     private String baseResultsURL;
 
-    //private Job job;
+    private Job job;
     private String filename;
+
+    // singleton executor service
+    private static ScheduledExecutorService SCHEDULER = null;
 
     public TempStorageManager() {
         try {
@@ -158,6 +165,8 @@ public class TempStorageManager implements ResultStore, UWSInlineContentHandler 
         }
         // TODO: store requested content-type with file so that 
         // TempStorageGetAction can set content-type header correctly
+
+        scheduleDeletion(dest);
         return ret;
     }
 
@@ -169,12 +178,14 @@ public class TempStorageManager implements ResultStore, UWSInlineContentHandler 
         }
         // TODO: store requested content-type with file so that 
         // TempStorageGetAction can set content-type header correctly
+
+        scheduleDeletion(dest);
         return ret;
     }
 
     @Override
     public void setJob(Job job) {
-        // unused
+        this.job = job;
     }
 
     @Override
@@ -240,6 +251,8 @@ public class TempStorageManager implements ResultStore, UWSInlineContentHandler 
         fos.flush();
         fos.close();
 
+        scheduleDeletion(put);
+
         URL retURL = new URL(baseResultsURL + "/" + filename);
         Content ret = new Content();
         ret.name = UWSInlineContentHandler.CONTENT_PARAM_REPLACE;
@@ -250,4 +263,45 @@ public class TempStorageManager implements ResultStore, UWSInlineContentHandler 
     private static String getRandomString() {
         return new RandomStringGenerator(16).getID();
     }
+
+    private void scheduleDeletion(final File file) {
+        getScheduler().schedule(new Runnable() {
+            @Override public void run() {
+                try {
+                    if (!file.exists()) {
+                        log.info(String.format("%s not found for deletion", file.getAbsolutePath()));
+                    } else {
+                        boolean deleted = file.delete();
+                        log.debug(String.format("deleted %s: %s", file.getAbsolutePath(), deleted));
+                    }
+                } catch (SecurityException e) {
+                    log.error(String.format("Unable to delete %s because %s", file.getAbsolutePath(),
+                                            e.getMessage()));
+                }
+            }
+        }, QueryJobManager.MAX_DESTRUCTION, TimeUnit.SECONDS);
+    }
+
+    // lazy init of the scheduler.
+    private static ScheduledExecutorService getScheduler() {
+        if (SCHEDULER == null) {
+            synchronized (ScheduledExecutorService.class) {
+                if (SCHEDULER == null) {
+                    SCHEDULER = Executors.newSingleThreadScheduledExecutor(new DaemonThreadFactory());
+                }
+            }
+        }
+        return SCHEDULER;
+    }
+
+    // Returns daemon threads for jvm termination.
+    static class DaemonThreadFactory implements ThreadFactory {
+
+        public Thread newThread(Runnable r) {
+            Thread thread = new Thread(r);
+            thread.setDaemon(true);
+            return thread;
+        }
+    }
+
 }

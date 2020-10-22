@@ -94,7 +94,10 @@ public class DeletedStorageLocationEventSync {
     private static final Logger log = Logger.getLogger(DeletedStorageLocationEventSync.class);
 
     private final TapClient<DeletedStorageLocationEvent> tapClient;
+
+    // Query bounds.
     public Date startTime;
+    public Date endTime;
 
     /**
      * Constructor
@@ -134,7 +137,15 @@ public class DeletedStorageLocationEventSync {
             query.append(" WHERE lastModified >= '");
             query.append(getDateFormat().format(this.startTime));
             query.append("'");
+
+            if (this.endTime != null) {
+                query.append(" AND ").append("lastModified < '").append(
+                        getDateFormat().format(this.endTime)).append("'");
+            }
+        } else if (this.endTime != null) {
+            query.append(" WHERE ").append("lastModified < '").append(getDateFormat().format(this.endTime)).append("'");
         }
+
         query.append(" order by lastModified");
         log.debug("Tap query: " + query.toString());
         return query.toString();

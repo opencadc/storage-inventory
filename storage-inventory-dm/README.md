@@ -151,51 +151,52 @@ src="https://raw.githubusercontent.com/opencadc/storage-inventory/master/storage
 
 # patterns, ideas, and incomplete thoughts...
 
-files (basic put/get/delete):
-- PUT /srv/files/{uri}
-- GET /srv/files/{uri}
-- DELETE /srv/files/{uri}
-- POST /srv/files/{uri}
+files (basic put/get/update/delete):
+- put: PUT /srv/files/{uri}
+- get: GET /srv/files/{uri}
+- upate: POST /srv/files/{uri}
+- delete: DELETE /srv/files/{uri}
 - mirroring policy at sites will (mostly) be based on information in the Artifact.uri (chose wisely)
-- cannot directly access vault files at a site - must use transfer negotiation (no real change)
-- POST can modify the Artifact.uri (rename), the Artifact.contentType, and the Artifact.contentEncoding
+- cannot directly access vault files at a site - must use transfer negotiation with vault (no real change)
+- POST can modify mutable metadata: Artifact.uri (rename), Artifact.contentType, Artifact.contentEncoding
+
 
 locate (transfer negotiation):
 - GET: negotiate with global, locate available copies, return URL(s), order by proximity
-- PUT: negotiate with global? sites that are writable, try to match policy? (like--)
-- DELETE: delete from global? global deletes Artifact, creates DeletedArtifactEvent, sites harvest and delete as usual
-- DELETE: negotiate with global? find sites with a copy and delete from one?
-- global should implement heartbeat check with sites so negotiated transfers likely to work
-- vault transfer negotiation maps vos {path} to DataNode.uuid and then negotiates with global
+- PUT: negotiate with global, locate writable sites, return URL(s), order by proximity -- try to match policy? (like--)
+- POST and DELETE: negotiate with global, locate available copies at writable sites, return URL(s), order by proximity
+- POST and DELETE (alt): modify|delete Artifact in global? update Artifact.lastModifed|delete and creates DeletedArtifactEvent, sites harvest
+- **eventual consistency**: if caller wants to put *then* get a file the client must be aware of eventual consistency
+- global: implement heartbeat check with sites so negotiated transfers likely to work
+- vault transfer negotiation maps vos {path} to DataNode.uuid and then negotiates with global (eg, for Artifact.uri ~ vault:{uuid})
 - vault implementation could maintain it's own global inventory of vault files (policy)
 
-how does a curl/wget user download a file?
+how does a curl/wget user download a file without knowing where it is?
 - an endpoint like the files endpoint that supports GET only can be implemented as part of global deployment
 - this is a convenience feature so it is not part of the core design (just for clarity)
 - a simple "I'm feeling lucky" implementation could just redirect to the highest ranked negotiated transfer
-- something with a marginally better chance of success could use have the storage site files endpoint redirect 
-  failed GETs back to global, but that introduces tighter coupling between global and sites (like--)
 
 overwrite a file at storage site: atomic delete + create
-- create a new Artifact (new UUID), Artifact.lastModified/metaChecksum must change, global harvests, sites harvest
 - create DeletedArtifactEvent with old UUID
+- create a new Artifact (new UUID), Artifact.lastModified/metaChecksum must change, global harvests, sites harvest
 - before global harvests: eventually consistent (but detectable by clients in principle)
 - after global harvests: consistent (only new file accessible, sites limited until sync'ed
 - direct access: other storage sites would deliver previous version of file until they sync
-- race condition when put at two sites -> two Artifact(s) with same uri but different id: keep max(Artifact.lastModified)
+- sequence of events: DeletedArtifactEvent.lastModified <= new Artifact.lastModified -> metadata-sync tries to process events in order
+- **race condition** - put at two different sites -> two Artifact(s) with same uri but different id: resolve collision by keeping the one with max(Artifact.contentLastModified)
 
 how does delete file get propagated?
 - delete from any site with a copy; delete harvested to global and then to other sites
 - process harvested delete by Artifact.id so it is decoupled from put new file with same name
-- race condition - delete and put at different sites: the put always wins
+- **race condition** - delete and put at different sites -> the put wins by nature 
+- **eventual consistency**: if caller wants to put *then* delete a file the client must be aware of eventual consistency
 - delete by Artifact UUID is idempotent so duplicate DeletedArtifactEvent records are ok
 
 how does global learn about copies at sites other than the original?
 - when a site syncs a file (adds a local StorageLocation): update the Artifact.lastModified
 - global metadata-sync from site(s) will see this and add a SiteLocation
-- global does not update Artifact.lastModified?
-- the Artifact.id and Artifact.metaChecksum never change during sync
-- global's view of the Artifact.lastModified will be the latest change at all sites, but that doesn't stop it from getting an "event" out of order and still merging in the new SiteLocation
+- metadata-sync never modifies Entity metdata: id, metaChecksum, lastModified never change during sync
+- eventually: Artifact.lastModified will be the latest change at all sites, but that doesn't stop metadata-sync from processing an "event" out of order and merging in the new SiteLocation
 
 how would a temporary cache instance at a site be maintained?
 - site could accept writes to a "cache" instance for Artifact(s) that do not match local policy
@@ -241,7 +242,7 @@ The cadc-storage-adapter API places requirements on the implementation:
 1. store (via put) and return (via iterator) metadata (min: Artifact.uri, Artifact.contentChecksum, Artifact.contentLength)
 2. update metadata after a write: checksum not known before write, update Artifact.uri (rename)
 3. streaming write: content length not known before write
-4. consistent timestamp: contentLastModfied from put and iterator/list
+4. consistent timestamp: contentLastModfied from put and iterator
 5. support random access: resumable download, metadata extraction (fhead, fwcs), cutouts
 6. support iterator (ordered by StorageLocation) *or* batched list (by storageBucket): **preferably both**
 
@@ -250,23 +251,23 @@ Y=yes NS=not scalable X=not possible
 |feature|opaque filesystem|mountable fs (RO)|mountable fs (RW)|ceph+rados|ceph+S3|ceph+swift|AD + /data|
 |-------|:---------------:|:---------------:|:---------------:|:--------:|:-----:|:--------:|:--------:|
 |fixed overhead|Y|Y?|Y?|Y|Y|Y|Y|
-|store/retrieve metadata|Y|Y|Y|?|Y|Y?|Y|
-|update metadata        |Y|Y|Y|?|X|Y?|X|
-|streaming write        |Y|Y|Y|?|X?|Y?|Y|
+|store/retrieve metadata|Y|Y|Y|?|Y|Y|Y|
+|update metadata        |Y|Y|Y|?|X|Y|X|
+|streaming write        |Y|Y|Y|?|X?|Y|Y|
 |consistent timestamp   |Y|Y|Y|?|NS|?|Y|
-|random access          |Y|Y|Y|Y?|Y?|Y?|Y|
-|batch list             |Y|NS|NS|Y?|Y|Y?|NS|
-|prefix batch list      |Y|NS|NS|Y?|Y|Y?|X|
-|iterator               |Y|NS|NS|?|Y|Y?|Y|
-|prefix iterator        |Y|NS|NS|?|Y|Y?|X|
-|batch iterator         |Y|NS|NS|?|Y|Y?|Y|
-|prefix batch iterator  |Y|NS|NS|?|Y|Y?|X|
+|random access          |Y|Y|Y|Y?|Y?|Y|Y|
+|batch list (obsiolete) |Y|NS|NS|Y?|Y|Y|NS|
+|prefix batch list (obsolete) |Y|NS|NS|Y?|Y|Y|X|
+|iterator               |Y|NS|NS|?|Y|Y|Y|
+|prefix iterator        |Y|NS|NS|?|Y|Y|X|
+|batch iterator         |Y|NS|NS|?|Y|Y|Y|
+|prefix batch iterator  |Y|NS|NS|?|Y|Y|X|
 
 For opaque fs: random hierarchical "hex" bucket scheme can give many buckets with few files, so scalability comes from
 using the directory structure (buckets) to maintain finite memory footprint. The hex bucket scheme is implementing a B-tree scheme with directories (more or less).
 
 For mountable RO filesystem: Artifact.uri structure maps to directories and files is only as scalable as is implied by 
-the Artifact.uri organisation; validation (iterator or list) is NS for current practices (too flat).
+the Artifact.uri organisation; validation (iterator) is not scalable (NS) for current practices (too flat).
 
 For mountable RW filesystem (e.g. cavern): in addition to RO issues above, simple operations in the filesystem (mv) can
 invalidate an arbitrary number of storageID values, make all those artifacts inaccessible, and cause file-validate to do 

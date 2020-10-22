@@ -79,6 +79,7 @@ import ca.nrc.cadc.reg.Capabilities;
 import ca.nrc.cadc.reg.Capability;
 import ca.nrc.cadc.reg.Standards;
 import ca.nrc.cadc.reg.client.RegistryClient;
+import ca.nrc.cadc.util.UUIDComparator;
 import java.io.File;
 import java.io.IOException;
 import java.net.URI;
@@ -87,6 +88,7 @@ import java.security.NoSuchAlgorithmException;
 import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
 import java.text.DateFormat;
+import java.util.Date;
 import java.util.Map;
 import javax.security.auth.Subject;
 import javax.sql.DataSource;
@@ -252,6 +254,7 @@ public class InventoryHarvester implements Runnable {
     void doit() throws ResourceNotFoundException, IOException, IllegalStateException, TransientException,
                        InterruptedException, NoSuchAlgorithmException {
         final TapClient tapClient = new TapClient<>(this.resourceID);
+        final Date end = new Date();
         
         final StorageSite storageSite;
         if (trackSiteLocations) {
@@ -260,18 +263,20 @@ public class InventoryHarvester implements Runnable {
             final StorageSiteSync storageSiteSync = new StorageSiteSync(tapClient, storageSiteDAO);
             storageSite = storageSiteSync.doit();
 
-            syncDeletedStorageLocationEvents(tapClient, storageSite);
+            syncDeletedStorageLocationEvents(tapClient, end, storageSite);
         } else {
             storageSite = null;
         }
 
-        syncDeletedArtifactEvents(tapClient);
-        syncArtifacts(tapClient, storageSite);
+        syncDeletedArtifactEvents(tapClient, end);
+        syncArtifacts(tapClient, end, storageSite);
     }
 
     /**
      * Perform a sync for deleted storage locations.  This will be used by Global sites to sync from storage sites to
      * indicate that an Artifact at the given storage site is no longer available.
+     * @param tapClient                  A TAP client to issue a Luskan request.
+     * @param endDate                    The upper bound of the Luskan query.
      * @param storageSite                The storage site obtained from the Storage Site sync.  Cannot be null.
      * @throws ResourceNotFoundException For any missing required configuration that is missing.
      * @throws IOException               For unreadable configuration files.
@@ -279,7 +284,8 @@ public class InventoryHarvester implements Runnable {
      * @throws TransientException        temporary failure of TAP service: same call could work in future
      * @throws InterruptedException      thread interrupted
      */
-    private void syncDeletedStorageLocationEvents(final TapClient tapClient, final StorageSite storageSite)
+    private void syncDeletedStorageLocationEvents(final TapClient tapClient, final Date endDate,
+                                                  final StorageSite storageSite)
             throws ResourceNotFoundException, IOException, IllegalStateException, TransientException,
                    InterruptedException {
 
@@ -293,6 +299,7 @@ public class InventoryHarvester implements Runnable {
         final DeletedStorageLocationEventSync deletedStorageLocationEventSync =
                 new DeletedStorageLocationEventSync(tapClient);
         deletedStorageLocationEventSync.startTime = harvestState.curLastModified;
+        deletedStorageLocationEventSync.endTime = endDate;
 
         final TransactionManager transactionManager = artifactDAO.getTransactionManager();
         
@@ -355,14 +362,15 @@ public class InventoryHarvester implements Runnable {
 
     /**
      * Perform a sync of the remote deleted artifact events.
-     *
+     * @param tapClient                  A TAP client to issue a Luskan request.
+     * @param endDate                    The upper bound of the Luskan query.
      * @throws ResourceNotFoundException For any missing required configuration that is missing.
      * @throws IOException               For unreadable configuration files.
      * @throws IllegalStateException     For any invalid configuration.
      * @throws TransientException        temporary failure of TAP service: same call could work in future
      * @throws InterruptedException      thread interrupted
      */
-    private void syncDeletedArtifactEvents(final TapClient tapClient)
+    private void syncDeletedArtifactEvents(final TapClient tapClient, final Date endDate)
             throws ResourceNotFoundException, IOException, IllegalStateException, TransientException,
                    InterruptedException {
         final HarvestState harvestState = this.harvestStateDAO.get(DeletedArtifactEvent.class.getName(),
@@ -376,6 +384,7 @@ public class InventoryHarvester implements Runnable {
         final DeletedArtifactEventDAO deletedArtifactEventDeletedEventDAO = new DeletedArtifactEventDAO(this.artifactDAO);
 
         deletedArtifactEventSync.startTime = harvestState.curLastModified;
+        deletedArtifactEventSync.endTime = endDate;
 
         final TransactionManager transactionManager = artifactDAO.getTransactionManager();
 
@@ -422,6 +431,7 @@ public class InventoryHarvester implements Runnable {
     /**
      * Synchronize the artifacts found by the TAP (Luskan) query.
      *
+     * @param endDate                    The upper bound of the Luskan query.
      * @param storageSite                The storage site obtained from the Storage Site sync.  Optional.
      * @throws ResourceNotFoundException For any missing required configuration that is missing.
      * @throws IOException               For unreadable configuration files.
@@ -430,7 +440,7 @@ public class InventoryHarvester implements Runnable {
      * @throws TransientException        temporary failure of TAP service: same call could work in future
      * @throws InterruptedException      thread interrupted
      */
-    private void syncArtifacts(final TapClient tapClient, final StorageSite storageSite)
+    private void syncArtifacts(final TapClient tapClient, final Date endDate, final StorageSite storageSite)
             throws ResourceNotFoundException, IOException, IllegalStateException, NoSuchAlgorithmException,
                    InterruptedException, TransientException {
         final MessageDigest messageDigest = MessageDigest.getInstance("MD5");
@@ -442,6 +452,7 @@ public class InventoryHarvester implements Runnable {
 
         final ArtifactSync artifactSync = new ArtifactSync(tapClient, harvestState.curLastModified);
         artifactSync.includeClause = this.selector.getConstraint();
+        artifactSync.endTime = endDate;
         
         final TransactionManager transactionManager = artifactDAO.getTransactionManager();
 
@@ -476,20 +487,52 @@ public class InventoryHarvester implements Runnable {
                                 + " provided=" + artifact.getMetaChecksum() + " actual=" + computedChecksum);
                     }
 
+                    Artifact collidingArtifact = artifactDAO.get(artifact.getURI());
+                    if (collidingArtifact != null && collidingArtifact.getID().equals(artifact.getID())) {
+                        // same ID: not a collision
+                        collidingArtifact = null;
+                    }
+                    
                     transactionManager.startTransaction();
+                    
+                    // since Artifact.id and Artifact.uri are both unique keys, there is only ever one "current artifact"
+                    // it normally has the same ID but may be the colliding artifact
                     Artifact currentArtifact = null;
                     try {
-                        artifactDAO.lock(artifact);
-                        currentArtifact = artifactDAO.get(artifact.getID());
+                        if (collidingArtifact == null) {
+                            artifactDAO.lock(artifact);
+                            currentArtifact = artifactDAO.get(artifact.getID());
+                        } else {
+                            artifactDAO.lock(collidingArtifact);
+                            currentArtifact = artifactDAO.get(collidingArtifact.getID());
+                        }
                     } catch (EntityNotFoundException ex) {
                         currentArtifact = null;
                     }
-                    
+
                     if (currentArtifact == null) {
                         // check if it was already deleted (sync from stale site)
                         DeletedArtifactEvent ev = daeDAO.get(artifact.getID());
                         if (ev != null) {
-                            log.info("SKIP: stale artifact " + artifact.getID() + " " + artifact.getURI() + " " + df.format(artifact.getLastModified()));
+                            log.info("STALE Artifact: skip " 
+                                    + artifact.getID() + "|" + artifact.getURI() + "|" + df.format(artifact.getLastModified()));
+                            transactionManager.rollbackTransaction();
+                            continue;
+                        }
+                    }
+                    
+                    if (collidingArtifact != null && currentArtifact != null) {
+                        // resolve collision using Artifact.contentLastModified
+                        if (currentArtifact.getContentLastModified().before(artifact.getContentLastModified())) {
+                            log.info("Artifact.uri COLLISION: replace " 
+                                    + currentArtifact.getID() + "|" + currentArtifact.getURI() + "|" + df.format(currentArtifact.getContentLastModified())
+                                    + " with " + artifact.getID() + "|" + artifact.getURI() + "|" + df.format(artifact.getContentLastModified()));
+                            daeDAO.put(new DeletedArtifactEvent(currentArtifact.getID()));
+                            artifactDAO.delete(currentArtifact.getID());
+                        } else {
+                            log.info("Artifact.uri COLLISION: skip " 
+                                    + artifact.getID() + " " + artifact.getURI() + " " + df.format(artifact.getLastModified()));
+                            transactionManager.rollbackTransaction();
                             continue;
                         }
                     }

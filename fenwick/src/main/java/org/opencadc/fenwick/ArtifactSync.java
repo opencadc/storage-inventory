@@ -76,6 +76,7 @@ import ca.nrc.cadc.util.StringUtil;
 
 import java.io.IOException;
 import java.net.URI;
+import java.text.DateFormat;
 import java.util.Date;
 import java.util.List;
 import java.util.TimeZone;
@@ -101,6 +102,7 @@ public class ArtifactSync {
 
     // Mutable field to use in the query.  Will be AND'd to the query but isolated in parentheses.
     public String includeClause;
+    public Date endTime;
 
     /**
      * Complete constructor.
@@ -143,10 +145,14 @@ public class ArtifactSync {
 
         if (this.currLastModified != null) {
             LOGGER.debug("\nInjecting lastModified date compare '" + this.currLastModified + "'\n");
-            query.append(" WHERE lastModified >= '")
-                       .append(DateUtil.getDateFormat(DateUtil.ISO_DATE_FORMAT,
-                                                      TimeZone.getDefault()).format(this.currLastModified))
-                       .append("'");
+            query.append(" WHERE lastModified >= '").append(getDateFormat().format(this.currLastModified)).append("'");
+
+            if (this.endTime != null) {
+                query.append(" AND ").append("lastModified < '").append(
+                        getDateFormat().format(this.endTime)).append("'");
+            }
+        } else if (this.endTime != null) {
+            query.append(" WHERE ").append("lastModified < '").append(getDateFormat().format(this.endTime)).append("'");
         }
 
         if (StringUtil.hasText(this.includeClause)) {
@@ -164,6 +170,15 @@ public class ArtifactSync {
         query.append(" ORDER BY lastModified");
 
         return query.toString();
+    }
+
+    /**
+     * Get a DateFormat instance.
+     *
+     * @return ISO DateFormat in UTC.
+     */
+    protected DateFormat getDateFormat() {
+        return DateUtil.getDateFormat(DateUtil.ISO_DATE_FORMAT, DateUtil.UTC);
     }
 
     private static final class ArtifactRowMapper implements TapRowMapper<Artifact> {

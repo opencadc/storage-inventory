@@ -345,7 +345,7 @@ public class NegotiationTest extends RavenTest {
         }
     }
     
-    //@Test
+    @Test
     public void testMultiProtocol() {
         List<Protocol> protos = new ArrayList<>();
         // https+anon
