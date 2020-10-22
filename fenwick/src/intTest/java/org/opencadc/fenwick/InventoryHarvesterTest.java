@@ -416,7 +416,7 @@ public class InventoryHarvesterTest {
     }
     
     @Test
-    public void atestCollisions() throws Exception {
+    public void testCollisions() throws Exception {
         LOGGER.info("testCollisions - START");
         
         StorageSite expectedSite = new StorageSite(URI.create("cadc:TEST/siteone"), "Test Site", true, false);
