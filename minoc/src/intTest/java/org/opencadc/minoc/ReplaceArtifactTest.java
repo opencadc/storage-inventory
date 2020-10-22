@@ -67,6 +67,9 @@
 
 package org.opencadc.minoc;
 
+import ca.nrc.cadc.db.ConnectionConfig;
+import ca.nrc.cadc.db.DBConfig;
+import ca.nrc.cadc.db.DBUtil;
 import ca.nrc.cadc.net.HttpDelete;
 import ca.nrc.cadc.net.HttpGet;
 import ca.nrc.cadc.net.HttpUpload;
@@ -80,12 +83,18 @@ import java.net.URI;
 import java.net.URL;
 import java.security.PrivilegedExceptionAction;
 
+import java.util.Date;
+import java.util.Map;
+import java.util.TreeMap;
 import javax.security.auth.Subject;
 
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.Test;
+import org.opencadc.inventory.Artifact;
+import org.opencadc.inventory.db.ArtifactDAO;
+import org.opencadc.inventory.db.SQLGenerator;
 
 /**
  * Test artifact replacement
@@ -100,8 +109,21 @@ public class ReplaceArtifactTest extends MinocTest {
         Log4jInit.setLevel("org.opencadc.minoc", Level.INFO);
     }
     
-    public ReplaceArtifactTest() {
+    ArtifactDAO dao;
+    
+    public ReplaceArtifactTest() throws Exception {
         super();
+        
+        DBConfig dbrc = new DBConfig();
+        ConnectionConfig cc = dbrc.getConnectionConfig("MINOC_TEST", "cadctest");
+        DBUtil.createJNDIDataSource("jdbc/minoc", cc);
+        Map<String,Object> config = new TreeMap<>();
+        config.put("jndiDataSourceName", "jdbc/minoc");
+        config.put(SQLGenerator.class.getName(), SQLGenerator.class);
+        config.put("schema", "inventory");
+        
+        this.dao = new ArtifactDAO();
+        dao.setConfig(config);
     }
     
     @Test
@@ -111,8 +133,8 @@ public class ReplaceArtifactTest extends MinocTest {
             Subject.doAs(userSubject, new PrivilegedExceptionAction<Object>() {
                 public Object run() throws Exception {
             
-                    String data1 = "first artifact";
-                    String data2 = "second artifact";
+                    final String data1 = "first artifact";
+                    final String data2 = "second artifact";
                     URI artifactURI = URI.create("cadc:TEST/testReplaceFile");
                     URL artifactURL = new URL(filesURL + "/" + artifactURI.toString());
                     
@@ -147,6 +169,67 @@ public class ReplaceArtifactTest extends MinocTest {
                     contentLength = get.getContentLength();
                     Assert.assertEquals(computeMD5(data2.getBytes()), contentMD5);
                     Assert.assertEquals(data2.getBytes().length, contentLength);
+                    
+                    // delete
+                    HttpDelete delete = new HttpDelete(artifactURL, false);
+                    delete.run();
+                    Assert.assertNull(delete.getThrowable());
+                    
+                    return null;
+                }
+            });
+            
+        } catch (Exception t) {
+            log.error("unexpected throwable", t);
+            Assert.fail("unexpected throwable: " + t);
+        }
+    }
+    
+    @Test
+    public void testReplaceUnstoredfArtifact() {
+        try {
+            
+            Subject.doAs(userSubject, new PrivilegedExceptionAction<Object>() {
+                public Object run() throws Exception {
+            
+                    final String data2 = "second artifact";
+                    
+                    final URI artifactURI = URI.create("cadc:TEST/testReplaceUnstoredfArtifact");
+                    final URL artifactURL = new URL(filesURL + "/" + artifactURI.toString());
+
+                    Artifact prev = dao.get(artifactURI);
+                    if (prev != null) {
+                        log.info("cleanup: " + prev);
+                        dao.delete(prev.getID());
+                    }
+                    
+                    Artifact a = new Artifact(artifactURI, URI.create("md5:985b343f03d927ffb32e9de086d15730"), new Date(), 15L);
+                    dao.put(a);
+                    log.info("put: " + a);
+                    
+                    // try to overwrite with actual
+                    InputStream in = new ByteArrayInputStream(data2.getBytes());
+                    HttpUpload put = new HttpUpload(in, artifactURL);
+                    put.run();
+                    Assert.assertNull(put.getThrowable());
+                    
+                    // assert file and metadata
+                    OutputStream out = new ByteArrayOutputStream();
+                    HttpGet get = new HttpGet(artifactURL, out);
+                    get.run();
+                    Assert.assertNull(get.getThrowable());
+                    String contentMD5 = get.getContentMD5();
+                    long contentLength = get.getContentLength();
+                    Assert.assertEquals(computeMD5(data2.getBytes()), contentMD5);
+                    Assert.assertEquals(data2.getBytes().length, contentLength);
+                    
+                    Artifact actual = dao.get(artifactURI); // overwrite == new Artifact: get by URI
+                    log.info("get: " + actual);
+                    Assert.assertNotNull(actual);
+                    Assert.assertNotNull("storageLocation", actual.storageLocation);
+                    Assert.assertTrue(a.getContentLastModified().before(actual.getContentLastModified()));
+                    Assert.assertEquals(URI.create("md5:" + contentMD5), actual.getContentChecksum());
+                    Assert.assertEquals(contentLength, actual.getContentLength().longValue());
                     
                     // delete
                     HttpDelete delete = new HttpDelete(artifactURL, false);

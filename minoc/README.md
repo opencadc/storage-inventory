@@ -28,11 +28,13 @@ org.opencadc.inventory.storage.StorageAdapter={fully qualified classname of Stor
 # inventory database settings
 org.opencadc.inventory.db.SQLGenerator=org.opencadc.inventory.db.SQLGenerator
 org.opencadc.minoc.db.schema={schema}
+
+org.opencadc.minoc.publicKeyFile={public key file from raven}
 ```
 The following optional keys configure minoc to use external service(s) to obtain grant information in order
 to perform authorization checks:
-# permission granting service settings (optional)
 ```
+# permission granting services (optional)
 org.opencadc.minoc.readGrantProvider={resourceID of a permission granting service}
 org.opencadc.minoc.writeGrantProvider={resourceID of a permission granting service}
 ```

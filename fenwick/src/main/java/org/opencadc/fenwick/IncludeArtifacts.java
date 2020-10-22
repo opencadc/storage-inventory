@@ -77,9 +77,6 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.io.LineNumberReader;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Objects;
 
 import org.apache.log4j.Logger;
 
@@ -88,12 +85,13 @@ import org.apache.log4j.Logger;
  * This class requires one or more fragments of SQL (a WHERE clause), each in a separate
  * file located in {user.home}/config/include and named {something}.sql -- see the
  * iterator() method for details.
- * 
+ *
  * @author pdowler
  */
 public class IncludeArtifacts implements ArtifactSelector {
     private static final Logger log = Logger.getLogger(IncludeArtifacts.class);
     static final String COMMENT_PREFIX = "--";
+    static final String SQL_FILTER_FILE_NAME = "artifact-filter.sql";
 
     private final Path selectorConfigDir;
 
@@ -102,128 +100,110 @@ public class IncludeArtifacts implements ArtifactSelector {
      */
     public IncludeArtifacts() {
         // Read in the configuration file, and create a usable Map from it.
-        final File homeConfigDirectory = new File(System.getProperty("user.home") + "/config/include");
+        final File homeConfigDirectory = new File(System.getProperty("user.home") + "/config");
         selectorConfigDir = homeConfigDirectory.toPath();
+
+        checkFilterFile();
     }
 
     /**
      * Obtain the iterator of clauses used to build a query to include the Artifacts being merged.
-     * 
-     * <p>This class will read in the SQL (*.sql) files located in the configuration directory and parse the SQL
+     *
+     * <p>This method will load the expected file, and verify that the clause declared within begins with WHERE.  That
+     * clause is then parsed and returned with the WHERE keyword stripped.
+     *
+     * <p>This method is how the SQL file is read in and loaded as a clause.  Any lines that are not comments are
+     * considered part of the clause.  Comments begin with <code>--</code> and can be within the line, but anything
+     * after the <code>--</code> will be ignored.
+     *
+     * <p>This class will read in the SQL (*.sql) file located in the configuration directory and parse the SQL
      * fragments.  Each fragment MUST begin with the WHERE keyword and be followed by one or more SQL conditions:
      *
-     * <p>include-date.sql
+     * <p>artifact-filter.sql
      * <code>
-     *     -- Comments are OK and ignored!
-     *     WHERE lastModified &gt; 2020-03-03 AND lastModified &lt; 2020-03-30
+     * -- Comments are OK and ignored!
+     * WHERE lastModified &gt; 2020-03-03 AND lastModified &lt; 2020-03-30
      * </code>
      *
-     * <p>include-uri.sql
-     * <code>
-     *     -- Multiline is OK, too!
-     *     WHERE uri like 'ad:TEST%'
-     *     OR uri like 'ad:CADC%'
-     * </code>
-     *
-     * <p>The *.sql files are parsed and ANDed together to form the WHERE clause for the query to select desired
+     * <p>The *.sql file is parsed and ANDed together to form the WHERE clause for the query to select desired
      * Artifacts:
      * <code>
-     *     WHERE (lastModified &gt; 2020-03-03 AND lastModified &lt; 2020-03-30)
-     *     AND (uri like 'ad:TEST%' OR uri like 'ad:CADC%')
+     * WHERE (lastModified &gt; 2020-03-03 AND lastModified &lt; 2020-03-30)
+     * AND (uri like 'ad:TEST%' OR uri like 'ad:CADC%')
      * </code>
      *
-     * @return Iterator of String clauses
-     *
+     * @return String condition.
      * @throws ResourceNotFoundException For any missing required configuration.
      * @throws IOException               For unreadable configuration files.
      * @throws IllegalStateException     For any invalid configuration.
      */
     @Override
-    public List<String> getConstraints() throws ResourceNotFoundException, IOException, IllegalStateException {
-        final List<String> whereClauses = new ArrayList<>();
-        loadClauses(whereClauses);
-        if (whereClauses.isEmpty()) {
-            throw new IllegalStateException("No usable SQL filter files located in " + selectorConfigDir
-                                            + ".  Ensure there is at least one file "
-                                            + "with the .sql extension whose content begins with the keyword 'WHERE'.");
-        }
-        return whereClauses;
-    }
+    public String getConstraint() throws ResourceNotFoundException, IOException, IllegalStateException {
+        // Check for the filter file again in case
+        checkFilterFile();
+        final File f = new File(selectorConfigDir + File.separator + SQL_FILTER_FILE_NAME);
+        boolean validWhereClauseFound = false;
+        final StringBuilder clauseBuilder = new StringBuilder();
 
-    /**
-     * Iterate the files in the filters folder and read in the appropriately named files.  This method will verify that
-     * the file names end with an SQL extension, and the clause declared within begins with WHERE.  That clause is
-     * then loaded into the given list with the WHERE keyword stripped.
-     * <p/>
-     * This method is how the SQL files are read in and loaded as clauses.  Any lines that are not comments are
-     * considered part of the clause.  Comments begin with <code>--</code> and can be within the line, but anything
-     * after the <code>--</code> will be ignored.
-     *
-     * @param whereClauses A list of clauses to load into.
-     * @throws IOException If anything goes awry while reading the files.
-     * @throws ResourceNotFoundException    For missing include directory.
-     */
-    void loadClauses(final List<String> whereClauses) throws IOException, ResourceNotFoundException {
-        final File configurationDirFile = selectorConfigDir.toFile();
-        if (configurationDirFile.isDirectory() && configurationDirFile.canRead()) {
-            final File[] fileListing = Objects.requireNonNull(
-                    configurationDirFile.listFiles(pathname -> pathname.getName().toLowerCase().endsWith(".sql")));
-            log.debug("Found " + fileListing.length + " files.");
-            if (fileListing.length > 0) {
-                for (final File f : fileListing) {
-                    boolean validWhereClauseFound = false;
-                    final StringBuilder clauseBuilder = new StringBuilder();
+        try (final LineNumberReader lineNumberReader = new LineNumberReader(new FileReader(f))) {
+            String line;
+            while ((line = lineNumberReader.readLine()) != null) {
+                line = line.trim();
+                log.debug("Next line is " + line);
 
-                    try (final LineNumberReader lineNumberReader = new LineNumberReader(new FileReader(f))) {
-                        String line;
-                        while ((line = lineNumberReader.readLine()) != null) {
-                            line = line.trim();
+                if (line.contains(COMMENT_PREFIX)) {
+                    line = line.substring(0, line.indexOf(COMMENT_PREFIX)).trim();
+                }
 
-                            if (line.contains(COMMENT_PREFIX)) {
-                                line = line.substring(0, line.indexOf(COMMENT_PREFIX)).trim();
-                            }
+                // Skip empty lines
+                if (StringUtil.hasText(line)) {
+                    // SQL comment syntax
+                    if (line.regionMatches(true, 0, "WHERE", 0, "WHERE".length())) {
+                        if (validWhereClauseFound) {
+                            throw new IllegalStateException(
+                                    "A valid WHERE clause is already present (line "
+                                            + lineNumberReader.getLineNumber() + ").");
+                        }
 
-                            // Skip empty lines
-                            if (StringUtil.hasText(line)) {
-                                // SQL comment syntax
-                                if (line.regionMatches(true, 0, "WHERE", 0, "WHERE".length())) {
-                                    if (validWhereClauseFound) {
-                                        throw new IllegalStateException(
-                                                "A valid WHERE clause is already present (line "
-                                                + lineNumberReader.getLineNumber() + ").");
-                                    }
+                        validWhereClauseFound = true;
+                        line = line.replaceFirst("(?i)\\bwhere\\b", "").trim();
 
-                                    validWhereClauseFound = true;
-                                    line = line.replaceFirst("(?i)\\bwhere\\b", "").trim();
-
-                                    // It is acceptable to have the WHERE keyword on its own line, too.
-                                    if (StringUtil.hasText(line)) {
-                                        clauseBuilder.append(line);
-                                    }
-                                } else {
-                                    // This is assumed to be another part of the clause, so ensure we've already passed the
-                                    // WHERE portion.
-                                    if (validWhereClauseFound) {
-                                        clauseBuilder.append(" ").append(line);
-                                    } else {
-                                        throw new IllegalStateException("The first clause found in " + f.getName()
-                                                                        + " (line " + lineNumberReader.getLineNumber()
-                                                                        + ") MUST be start with the WHERE keyword.");
-                                    }
-                                }
-                            }
+                        // It is acceptable to have the WHERE keyword on its own line, too.
+                        if (StringUtil.hasText(line)) {
+                            clauseBuilder.append(line);
+                        }
+                    } else {
+                        // This is assumed to be another part of the clause, so ensure we've already passed the
+                        // WHERE portion.
+                        if (validWhereClauseFound) {
+                            clauseBuilder.append(" ").append(line);
+                        } else {
+                            throw new IllegalStateException("The first clause found in " + f.getName()
+                                    + " (line " + lineNumberReader.getLineNumber()
+                                    + ") MUST be start with the WHERE keyword.");
                         }
                     }
-
-                    if ((clauseBuilder.length() > 0) && StringUtil.hasText(clauseBuilder.toString().trim())) {
-                        whereClauses.add(clauseBuilder.toString().trim());
-                    }
                 }
-            } else {
-                throw new ResourceNotFoundException("No SQL (.sql) files found in " + selectorConfigDir + ".");
             }
+        }
+
+        if ((clauseBuilder.length() > 0) && StringUtil.hasText(clauseBuilder.toString().trim())) {
+            return clauseBuilder.toString();
         } else {
-            throw new IOException("Directory " + selectorConfigDir + " is not found or not readable.");
+            throw new IllegalStateException("No usable SQL in " + selectorConfigDir + "/" + SQL_FILTER_FILE_NAME);
+        }
+    }
+
+    void checkFilterFile() {
+        final File configurationDirFile = selectorConfigDir.toFile();
+        if (!configurationDirFile.isDirectory() || !configurationDirFile.canRead()) {
+            throw new IllegalStateException("Directory " + selectorConfigDir + " is not found or not readable.");
+        } else {
+            final File[] fileListing = configurationDirFile.listFiles((dir, name) -> name.equals(SQL_FILTER_FILE_NAME));
+            if (fileListing == null || fileListing.length != 1) {
+                throw new IllegalStateException("There should exist a single file called " + SQL_FILTER_FILE_NAME
+                                                + " in the " + selectorConfigDir + " folder.");
+            }
         }
     }
 }

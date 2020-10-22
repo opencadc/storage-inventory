@@ -75,7 +75,6 @@ import ca.nrc.cadc.reg.Standards;
 import ca.nrc.cadc.reg.client.RegistryClient;
 import ca.nrc.cadc.tap.ResultStore;
 import ca.nrc.cadc.util.MultiValuedProperties;
-import ca.nrc.cadc.util.PropertiesReader;
 import ca.nrc.cadc.uws.Job;
 import ca.nrc.cadc.uws.server.RandomStringGenerator;
 import ca.nrc.cadc.uws.web.InlineContentException;
@@ -90,8 +89,12 @@ import java.net.URI;
 import java.net.URL;
 import java.sql.ResultSet;
 
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.TimeUnit;
 import org.apache.log4j.Logger;
-
+import org.opencadc.luskan.ws.QueryJobManager;
 
 /**
  * Basic temporary storage implementation for a tap service.
@@ -101,48 +104,22 @@ import org.apache.log4j.Logger;
 public class TempStorageManager implements ResultStore, UWSInlineContentHandler {
 
     private static final Logger log = Logger.getLogger(TempStorageManager.class);
-
-    private static final String URI_KEY = TempStorageManager.class.getPackage().getName() + ".resourceID";
-    private static final String TMPDIR_KEY = TempStorageManager.class.getPackage().getName() + ".resultsDir";
     
     private final File resultsDir;
     private String baseResultsURL;
 
-    //private Job job;
+    private Job job;
     private String filename;
+
+    // singleton executor service
+    private static ScheduledExecutorService SCHEDULER = null;
 
     public TempStorageManager() {
         try {
-            PropertiesReader pr = new PropertiesReader("luskan.properties");
-            MultiValuedProperties props = pr.getAllProperties();
-            
-            StringBuilder sb = new StringBuilder();
-            sb.append("incomplete config: ");
-            boolean ok = true;
-            
-            String suri = props.getFirstPropertyValue(URI_KEY);
-            sb.append("\n\t").append(URI_KEY);
-            if (suri == null) {
-                sb.append("MISSING");
-                ok = false;
-            } else {
-                sb.append("OK");
-            }
-            
-            String srd = props.getFirstPropertyValue(TMPDIR_KEY);
-            sb.append("\n\t").append(TMPDIR_KEY);
-            if (srd == null) {
-                sb.append("MISSING");
-                ok = false;
-            } else {
-                sb.append("OK");
-            }
-            
-            if (!ok) {
-                throw new IllegalStateException(sb.toString());
-            }
-            
-            log.info("system property: " + URI_KEY + " = " + suri);
+            MultiValuedProperties props = LuskanConfig.getConfig();
+
+            String suri = props.getFirstPropertyValue(LuskanConfig.URI_KEY);
+            log.info("system property: " + LuskanConfig.URI_KEY + " = " + suri);
             URI luskan = new URI(suri);
             
             RegistryClient regClient = new RegistryClient();
@@ -151,7 +128,8 @@ public class TempStorageManager implements ResultStore, UWSInlineContentHandler 
             // NOTE: "results" is used in the servlet mapping in web.xml
             this.baseResultsURL = serviceURL.toExternalForm() + "/results";
             log.info("resultsURL: " + baseResultsURL);
-            
+
+            String srd = props.getFirstPropertyValue(LuskanConfig.TMPDIR_KEY);
             this.resultsDir = new File(srd);
             resultsDir.mkdirs();
             log.info("resultsDir: " + resultsDir.getCanonicalPath());
@@ -187,6 +165,8 @@ public class TempStorageManager implements ResultStore, UWSInlineContentHandler 
         }
         // TODO: store requested content-type with file so that 
         // TempStorageGetAction can set content-type header correctly
+
+        scheduleDeletion(dest);
         return ret;
     }
 
@@ -198,12 +178,14 @@ public class TempStorageManager implements ResultStore, UWSInlineContentHandler 
         }
         // TODO: store requested content-type with file so that 
         // TempStorageGetAction can set content-type header correctly
+
+        scheduleDeletion(dest);
         return ret;
     }
 
     @Override
     public void setJob(Job job) {
-        // unused
+        this.job = job;
     }
 
     @Override
@@ -269,6 +251,8 @@ public class TempStorageManager implements ResultStore, UWSInlineContentHandler 
         fos.flush();
         fos.close();
 
+        scheduleDeletion(put);
+
         URL retURL = new URL(baseResultsURL + "/" + filename);
         Content ret = new Content();
         ret.name = UWSInlineContentHandler.CONTENT_PARAM_REPLACE;
@@ -279,4 +263,45 @@ public class TempStorageManager implements ResultStore, UWSInlineContentHandler 
     private static String getRandomString() {
         return new RandomStringGenerator(16).getID();
     }
+
+    private void scheduleDeletion(final File file) {
+        getScheduler().schedule(new Runnable() {
+            @Override public void run() {
+                try {
+                    if (!file.exists()) {
+                        log.info(String.format("%s not found for deletion", file.getAbsolutePath()));
+                    } else {
+                        boolean deleted = file.delete();
+                        log.debug(String.format("deleted %s: %s", file.getAbsolutePath(), deleted));
+                    }
+                } catch (SecurityException e) {
+                    log.error(String.format("Unable to delete %s because %s", file.getAbsolutePath(),
+                                            e.getMessage()));
+                }
+            }
+        }, QueryJobManager.MAX_DESTRUCTION, TimeUnit.SECONDS);
+    }
+
+    // lazy init of the scheduler.
+    private static ScheduledExecutorService getScheduler() {
+        if (SCHEDULER == null) {
+            synchronized (ScheduledExecutorService.class) {
+                if (SCHEDULER == null) {
+                    SCHEDULER = Executors.newSingleThreadScheduledExecutor(new DaemonThreadFactory());
+                }
+            }
+        }
+        return SCHEDULER;
+    }
+
+    // Returns daemon threads for jvm termination.
+    static class DaemonThreadFactory implements ThreadFactory {
+
+        public Thread newThread(Runnable r) {
+            Thread thread = new Thread(r);
+            thread.setDaemon(true);
+            return thread;
+        }
+    }
+
 }

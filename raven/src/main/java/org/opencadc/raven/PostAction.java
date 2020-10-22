@@ -70,9 +70,10 @@ package org.opencadc.raven;
 import ca.nrc.cadc.auth.AuthMethod;
 import ca.nrc.cadc.auth.AuthenticationUtil;
 import ca.nrc.cadc.net.ResourceNotFoundException;
-import ca.nrc.cadc.net.TransientException;
+import ca.nrc.cadc.reg.Capabilities;
+import ca.nrc.cadc.reg.Capability;
+import ca.nrc.cadc.reg.Interface;
 import ca.nrc.cadc.reg.Standards;
-import ca.nrc.cadc.reg.client.LocalAuthority;
 import ca.nrc.cadc.reg.client.RegistryClient;
 import ca.nrc.cadc.rest.InlineContentException;
 import ca.nrc.cadc.rest.InlineContentHandler;
@@ -85,33 +86,30 @@ import ca.nrc.cadc.vos.Transfer;
 import ca.nrc.cadc.vos.TransferReader;
 import ca.nrc.cadc.vos.TransferWriter;
 import ca.nrc.cadc.vos.VOS;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
-import java.security.AccessControlException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
-import java.util.TreeSet;
+import java.util.UUID;
 import org.apache.log4j.Logger;
-import org.opencadc.gms.GroupClient;
-import org.opencadc.gms.GroupURI;
-import org.opencadc.gms.GroupUtil;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.SiteLocation;
 import org.opencadc.inventory.StorageSite;
 import org.opencadc.inventory.db.ArtifactDAO;
-import org.opencadc.inventory.db.DeletedEventDAO;
 import org.opencadc.inventory.db.SQLGenerator;
 import org.opencadc.inventory.db.StorageSiteDAO;
+import org.opencadc.inventory.server.PermissionsCheck;
 import org.opencadc.permissions.ReadGrant;
-import org.opencadc.permissions.TokenUtil;
-import org.opencadc.permissions.client.PermissionsClient;
+import org.opencadc.permissions.TokenTool;
+import org.opencadc.permissions.WriteGrant;
 
 /**
  * Given a transfer request object return a transfer response object with all
@@ -127,12 +125,16 @@ public class PostAction extends RestAction {
 
     private static final String KEY_BASE = PostAction.class.getPackage().getName();
     static final String SCHEMA_KEY =  KEY_BASE + ".db.schema";
+    static final String PUBKEY_KEY = KEY_BASE + ".publicKeyFile";
+    static final String PRIVATEKEY_KEY = KEY_BASE + ".privateKeyFile";
     static final String READ_GRANTS_KEY = KEY_BASE + ".readGrantProvider";
     static final String WRITE_GRANTS_KEY = KEY_BASE + ".writeGrantProvider";
     static final String DEV_AUTH_ONLY_KEY = KEY_BASE + ".authenticateOnly";
     
     // immutable state set in constructor
     protected final ArtifactDAO artifactDAO;
+    private final File publicKeyFile;
+    private final File privateKeyFile;
     private final List<URI> readGrantServices = new ArrayList<>();
     private final List<URI> writeGrantServices = new ArrayList<>();
     private final boolean authenticateOnly;
@@ -146,7 +148,21 @@ public class PostAction extends RestAction {
     public PostAction() {
         super();
         MultiValuedProperties props = getConfig();
-
+        
+        // technically, raven only needs the private key to generate pre-auth tokens
+        // but both are requied here for clarity
+        // - in principle, raven could export it's public key and minoc(s) could retrieve it
+        // - for now, minoc(s) need to be configured with the public key to validate pre-auth
+        
+        String publicKey = props.getFirstPropertyValue(PUBKEY_KEY);
+        String privateKey = props.getFirstPropertyValue(PRIVATEKEY_KEY);
+        // verify that these files exist in $HOME/config -- would prefer not to care about that location here
+        this.publicKeyFile = new File(System.getProperty("user.home") + "/config/" + publicKey);
+        this.privateKeyFile = new File(System.getProperty("user.home") + "/config/" + privateKey);
+        if (!publicKeyFile.exists() || !privateKeyFile.exists()) {
+            throw new IllegalStateException("invalid config: missing public/private key pair files -- " + publicKeyFile + " | " + privateKey);
+        }
+        
         List<String> readGrants = props.getProperty(READ_GRANTS_KEY);
         if (readGrants != null) {
             for (String s : readGrants) {
@@ -210,41 +226,29 @@ public class PostAction extends RestAction {
 
     /**
      * Perform transfer negotiation.
-     * TODO: add support for write negotiation (pushToVoSpace and PROTOCOL_HTTPS_PUT)
      */
     @Override
     public void doAction() throws Exception {
         
         TransferReader reader = new TransferReader();
         InputStream in = (InputStream) syncInput.getContent(INLINE_CONTENT_TAG);
-        Transfer transfer = reader.read(in, null);
+        final Transfer transfer = reader.read(in, null);
         
         log.debug("transfer request: " + transfer);
-        if (!Direction.pullFromVoSpace.equals(transfer.getDirection())) {
+        Direction direction = transfer.getDirection();
+        if (!Direction.pullFromVoSpace.equals(direction) && !Direction.pushToVoSpace.equals(direction)) {
             throw new IllegalArgumentException("direction not supported: " + transfer.getDirection());
         }
         
-        // only support https over anonymous auth method for now
-        // TODO: if the protocol includes an auth method that the storage site supports, generate a non-token URL
-        Protocol supportedProtocol = new Protocol(VOS.PROTOCOL_HTTPS_GET);
-        if (!transfer.getProtocols().contains(supportedProtocol)) {
-            throw new UnsupportedOperationException("no supported protocols (require https with anon security method)");
-        }
-        transfer.getProtocols().clear();
-        
-        // ensure artifact uri is valid and exists
         URI artifactURI = transfer.getTarget();
         InventoryUtil.validateArtifactURI(PostAction.class, artifactURI);
-        Artifact artifact = artifactDAO.get(artifactURI);
-        if (artifact == null) {
-            throw new ResourceNotFoundException(artifactURI.toString());
-        }
         
-        // TODO: checkReadPermission for pullFromVoSpace/GET
-        // TODO: checkWritePermission for pushToVoSpace/PUT
-        // TODO: checkReadPermission and checkWritePermission are identical in minoc so move to a
-        //       service utility library rather than implement here
-        checkReadPermission(artifactURI);
+        PermissionsCheck permissionsCheck = new PermissionsCheck(artifactURI, this.authenticateOnly, this.logInfo);
+        if (direction.equals(Direction.pullFromVoSpace)) {
+            permissionsCheck.checkReadPermission(this.readGrantServices);
+        } else {
+            permissionsCheck.checkWritePermission(this.writeGrantServices);
+        }
         
         // get the user for logging
         String user = AuthMethod.ANON.toString();
@@ -256,97 +260,182 @@ public class PostAction extends RestAction {
             }
         }
         
-        // gather all copies of the artifact
-        if (artifact.siteLocations.isEmpty()) {
-            throw new ResourceNotFoundException("no copies");
-        }
-        
+        String authToken = null;
         // create an auth token
-        String authToken = TokenUtil.generateToken(artifactURI, ReadGrant.class, user);
-        
-        RegistryClient regClient = new RegistryClient();
-        StorageSiteDAO storageSiteDAO = new StorageSiteDAO(artifactDAO);
-        StorageSite storageSite = null;
-        URI resourceID = null;
-        URL baseURL = null;
-        String endpointURL = null;
-        
-        // TODO: Cache the full list of storage sites (using storageSiteDAO.list())
-        // and check for updates to that list periodically (every 5 min or so)
-        
-        // produce URLs to each of the copies
-        for (SiteLocation site : artifact.siteLocations) {
-            storageSite = storageSiteDAO.get(site.getSiteID());
-            resourceID = storageSite.getResourceID();
-            baseURL = regClient.getServiceURL(resourceID, Standards.SI_FILES, AuthMethod.ANON);
-            log.debug("base url for site " + site.toString() + ": " + baseURL);
-            if (baseURL != null) {
-                endpointURL = baseURL.toString() + "/" + authToken + "/" + artifactURI.toString();
-                Protocol p = new Protocol(supportedProtocol.getUri());
-                if (transfer.version == VOS.VOSPACE_21) {
-                    p.setSecurityMethod(Standards.SECURITY_METHOD_ANON);
-                }
-                p.setEndpoint(endpointURL);
-                transfer.getProtocols().add(p);
-                log.debug("added endpoint url: " + endpointURL);
-            }
+        TokenTool tk = new TokenTool(publicKeyFile, privateKeyFile);
+        if (direction.equals(Direction.pullFromVoSpace)) {
+            authToken = tk.generateToken(artifactURI, ReadGrant.class, user);
+        } else {
+            authToken = tk.generateToken(artifactURI, WriteGrant.class, user);
         }
         
+        List<Protocol> protos = null;
+        if (Direction.pullFromVoSpace.equals(direction)) {
+            protos = doPullFrom(artifactURI, transfer, authToken);
+        } else {
+            protos = doPushTo(artifactURI, transfer, authToken);
+        }
+        
+        // TODO: sort protocols as caller will try them in order until success
+        // - depends on client and site proximity
+        // - sort pre-auth before non-pre-auth because we already did the permission check
+        
+        Transfer ret = new Transfer(artifactURI, direction, protos);
+        ret.version = VOS.VOSPACE_21;
+                        
         TransferWriter transferWriter = new TransferWriter();
-        transferWriter.write(transfer, syncOutput.getOutputStream());
+        transferWriter.write(ret, syncOutput.getOutputStream());
     }
     
-    private void checkReadPermission(URI artifactURI) throws AccessControlException, TransientException {
-
-        if (authenticateOnly) {
-            log.warn(DEV_AUTH_ONLY_KEY + "=true: allowing unrestricted access");
-            return;
+    private List<Protocol> doPullFrom(URI artifactURI, Transfer transfer, String authToken) throws ResourceNotFoundException, IOException {
+        RegistryClient regClient = new RegistryClient();
+        StorageSiteDAO storageSiteDAO = new StorageSiteDAO(artifactDAO);
+        Set<StorageSite> sites = storageSiteDAO.list(); // this set could be cached
+        
+        List<Protocol> protos = new ArrayList<>();
+        Artifact artifact = artifactDAO.get(artifactURI);
+        if (artifact == null) {
+            throw new ResourceNotFoundException(artifactURI.toString());
         }
 
-        // TODO: could call multiple services in parallel
-        Set<GroupURI> granted = new TreeSet<>();
-        for (URI ps : readGrantServices) {
+        // TODO: this can currently happen but maybe should not: 
+        // --- when the last siteLocation is removed, the artifact should be deleted?
+        if (artifact.siteLocations.isEmpty()) {
+            throw new ResourceNotFoundException("TBD: no copies available");
+        }
+
+        // produce URLs to each of the copies for each of the protocols
+        for (SiteLocation site : artifact.siteLocations) {
+            StorageSite storageSite = getSite(sites, site.getSiteID());
+            Capability filesCap = null;
             try {
-                PermissionsClient pc = new PermissionsClient(ps);
-                ReadGrant grant = pc.getReadGrant(artifactURI);
-                if (grant != null) {
-                    if (grant.isAnonymousAccess()) {
-                        logInfo.setMessage("read grant: anonymous");
-                        return;
-                    }
-                    granted.addAll(grant.getGroups());
+                Capabilities caps = regClient.getCapabilities(storageSite.getResourceID());
+                filesCap = caps.findCapability(Standards.SI_FILES);
+                if (filesCap == null) {
+                    log.warn("service: " + storageSite.getResourceID() + " does not provide " + Standards.SI_FILES);
                 }
             } catch (ResourceNotFoundException ex) {
-                log.warn("failed to find granting service: " + ps + " -- cause: " + ex);
+                log.warn("failed to find service: " + storageSite.getResourceID());
             }
-        }
-        if (granted.isEmpty()) {
-            throw new AccessControlException("permission denied: no read grants for " + artifactURI);
-        }
-
-        // TODO: add profiling
-        // if the granted group list is small, it would be better to use GroupClient.isMember()
-        // rather than getting all groups... experiment to determine threshold?
-        // unfortunately, the speed of GroupClient.getGroups() will also depend on how many groups the
-        // caller belongs to...
-        LocalAuthority loc = new LocalAuthority();
-        URI resourceID = loc.getServiceURI(Standards.GMS_SEARCH_01.toString());
-        GroupClient client = GroupUtil.getGroupClient(resourceID);
-        List<GroupURI> userGroups = client.getMemberships();
-        for (GroupURI gg : granted) {
-            for (GroupURI userGroup : userGroups) {
-                if (gg.equals(userGroup)) {
-                    logInfo.setMessage("read grant: " + gg);
-                    return;
+            if (filesCap != null) {
+                for (Protocol proto : transfer.getProtocols()) {
+                    if (storageSite.getAllowRead()) {
+                        URI sec = proto.getSecurityMethod();
+                        if (sec == null) {
+                            sec = Standards.SECURITY_METHOD_ANON;
+                        }
+                        Interface iface = filesCap.findInterface(sec);
+                        if (iface != null) {
+                            URL baseURL = iface.getAccessURL().getURL();
+                            log.debug("base url for site " + storageSite.getResourceID() + ": " + baseURL);
+                            if (protocolCompat(proto, baseURL)) {
+                                StringBuilder sb = new StringBuilder();
+                                sb.append(baseURL.toExternalForm()).append("/");
+                                if (proto.getSecurityMethod() == null || Standards.SECURITY_METHOD_ANON.equals(proto.getSecurityMethod())) {
+                                    sb.append(authToken).append("/");
+                                }
+                                sb.append(artifactURI.toASCIIString());
+                                Protocol p = new Protocol(proto.getUri());
+                                if (transfer.version == VOS.VOSPACE_21) {
+                                    p.setSecurityMethod(proto.getSecurityMethod());
+                                }
+                                p.setEndpoint(sb.toString());
+                                protos.add(p);
+                                log.debug("added: " + p);
+                            } else {
+                                log.debug("reject protocol: " + proto 
+                                        + " reason: no compatible URL protocol");
+                            }
+                        } else {
+                            log.debug("reject protocol: " + proto 
+                                    + " reason: unsupported security method: " + proto.getSecurityMethod());
+                        }
+                    }
                 }
             }
         }
-
-        throw new AccessControlException("read permission denied");
+        
+        return protos;
     }
-
-    protected DeletedEventDAO getDeletedEventDAO(ArtifactDAO src) {
-        return new DeletedEventDAO(src);
+    
+    private List<Protocol> doPushTo(URI artifactURI, Transfer transfer, String authToken) throws IOException {
+        RegistryClient regClient = new RegistryClient();
+        StorageSiteDAO storageSiteDAO = new StorageSiteDAO(artifactDAO);
+        Set<StorageSite> sites = storageSiteDAO.list(); // this set could be cached
+        
+        List<Protocol> protos = new ArrayList<>();
+        // produce URLs for all writable sites
+        for (StorageSite storageSite : sites) {
+            //log.warn("PUT: " + storageSite);
+            Capability filesCap = null;
+            try {
+                Capabilities caps = regClient.getCapabilities(storageSite.getResourceID());
+                filesCap = caps.findCapability(Standards.SI_FILES);
+                if (filesCap == null) {
+                    log.warn("service: " + storageSite.getResourceID() + " does not provide " + Standards.SI_FILES);
+                }
+            } catch (ResourceNotFoundException ex) {
+                log.warn("failed to find service: " + storageSite.getResourceID());
+            }
+            if (filesCap != null) {
+                for (Protocol proto : transfer.getProtocols()) {
+                    //log.warn("PUT: " + storageSite + " proto: " + proto);
+                    if (storageSite.getAllowWrite()) {
+                        URI sec = proto.getSecurityMethod();
+                        if (sec == null) {
+                            sec = Standards.SECURITY_METHOD_ANON;
+                        }
+                        Interface iface = filesCap.findInterface(sec);
+                        log.debug("PUT: " + storageSite + " proto: " + proto + " iface: " + iface);
+                        if (iface != null) {
+                            URL baseURL = iface.getAccessURL().getURL();
+                            //log.debug("base url for site " + storageSite.getResourceID() + ": " + baseURL);
+                            if (protocolCompat(proto, baseURL)) {
+                                StringBuilder sb = new StringBuilder();
+                                sb.append(baseURL.toExternalForm()).append("/");
+                                if (proto.getSecurityMethod() == null || Standards.SECURITY_METHOD_ANON.equals(proto.getSecurityMethod())) {
+                                    sb.append(authToken).append("/");
+                                }
+                                sb.append(artifactURI.toASCIIString());
+                                Protocol p = new Protocol(proto.getUri());
+                                if (transfer.version == VOS.VOSPACE_21) {
+                                    p.setSecurityMethod(proto.getSecurityMethod());
+                                }
+                                p.setEndpoint(sb.toString());
+                                protos.add(p);
+                                log.debug("added: " + p);
+                            } else {
+                                log.debug("PUT: " + storageSite + "PUT: reject protocol: " + proto 
+                                        + " reason: no compatible URL protocol");
+                            }
+                        } else {
+                            log.debug("PUT: " + storageSite + "PUT: reject protocol: " + proto 
+                                    + " reason: unsupported security method: " + proto.getSecurityMethod());
+                        }
+                    }
+                }
+            }
+        }
+        return protos;
+    }
+    
+    private StorageSite getSite(Set<StorageSite> sites, UUID id) {
+        for (StorageSite s : sites) {
+            if (s.getID().equals(id)) {
+                return s;
+            }
+        }
+        throw new IllegalStateException("BUG: could not find StorageSite with id=" +  id);
+    }
+    
+    private boolean protocolCompat(Protocol p, URL u) {
+        if ("https".equals(u.getProtocol())) {
+            return VOS.PROTOCOL_HTTPS_GET.equals(p.getUri()) || VOS.PROTOCOL_HTTPS_PUT.equals(p.getUri());
+        }
+        if ("http".equals(u.getProtocol())) {
+            return VOS.PROTOCOL_HTTP_GET.equals(p.getUri()) || VOS.PROTOCOL_HTTP_PUT.equals(p.getUri());
+        }
+        return false;
     }
 
     /**
@@ -362,9 +451,28 @@ public class PostAction extends RestAction {
         sb.append("incomplete config: ");
         boolean ok = true;
 
+        // validate required config here
         String schema = mvp.getFirstPropertyValue(SCHEMA_KEY);
         sb.append("\n\t").append(SCHEMA_KEY).append(": ");
         if (schema == null) {
+            sb.append("MISSING");
+            ok = false;
+        } else {
+            sb.append("OK");
+        }
+        
+        String pub = mvp.getFirstPropertyValue(PUBKEY_KEY);
+        sb.append("\n\t").append(PUBKEY_KEY).append(": ");
+        if (pub == null) {
+            sb.append("MISSING");
+            ok = false;
+        } else {
+            sb.append("OK");
+        }
+        
+        String priv = mvp.getFirstPropertyValue(PRIVATEKEY_KEY);
+        sb.append("\n\t").append(PUBKEY_KEY).append(": ");
+        if (priv == null) {
             sb.append("MISSING");
             ok = false;
         } else {

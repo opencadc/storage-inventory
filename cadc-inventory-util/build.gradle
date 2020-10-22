@@ -11,17 +11,22 @@ repositories {
     mavenLocal()
 }
 
+apply from: '../opencadc.gradle'
+
 sourceCompatibility = 1.8
+
 group = 'org.opencadc'
-version = '0.1.0'
+
+version = '0.1.1'
 
 dependencies {
     compile 'log4j:log4j:[1.2,)'
+    compile 'org.apache.commons:commons-dbcp2:[2.8.0,2.9.0)'
     compile 'org.opencadc:cadc-inventory:[0.7,1.0)'
     compile 'org.opencadc:cadc-util:[1.2,)'
-
+    compile 'org.opencadc:cadc-gms:[1.0.0,)'
+    
     testCompile 'junit:junit:[4.0,)'
+    
+    intTestRuntime 'org.postgresql:postgresql:[42.2.8,)'
 }
-
-apply from: '../opencadc.gradle'
-

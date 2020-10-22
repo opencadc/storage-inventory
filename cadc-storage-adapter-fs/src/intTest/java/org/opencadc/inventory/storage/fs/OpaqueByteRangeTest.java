@@ -71,7 +71,6 @@ import ca.nrc.cadc.io.ByteCountOutputStream;
 import ca.nrc.cadc.io.DiscardOutputStream;
 import ca.nrc.cadc.util.HexUtil;
 import ca.nrc.cadc.util.Log4jInit;
-import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -97,6 +96,7 @@ import org.junit.Test;
 import org.opencadc.inventory.storage.ByteRange;
 import org.opencadc.inventory.storage.NewArtifact;
 import org.opencadc.inventory.storage.StorageMetadata;
+import org.opencadc.inventory.storage.test.StorageAdapterByteRangeTest;
 
 /**
  * Integration tests that interact with the file system. These tests require a file system
@@ -104,33 +104,35 @@ import org.opencadc.inventory.storage.StorageMetadata;
  * 
  * @author pdowler
  */
-public class OpaqueByteRangeTest {
+public class OpaqueByteRangeTest extends StorageAdapterByteRangeTest {
     private static final Logger log = Logger.getLogger(OpaqueByteRangeTest.class);
 
+    static File root;
+    static int depth = 2;
+    
     static {
-        Log4jInit.setLevel("org.opencadc.inventory.storage.fs", Level.INFO);
-    }
-    
-    OpaqueFileSystemStorageAdapter adapter;
-    int depth = 2;
-            
-    public OpaqueByteRangeTest() { 
-        File tmp = new File("build/tmp");
-        File root = new File(tmp, "opaque-int-tests");
+        Log4jInit.setLevel("org.opencadc.inventory.storage", Level.INFO);
+        root = new File("build/tmp/opaque-int-tests");
         root.mkdir();
-
-        this.adapter = new OpaqueFileSystemStorageAdapter(root, depth); // opaque
-        log.debug("    content path: " + adapter.contentPath);
-        log.debug("transaction path: " + adapter.txnPath);
-        Assert.assertTrue("testInit: contentPath", Files.exists(adapter.contentPath));
-        Assert.assertTrue("testInit: txnPath", Files.exists(adapter.txnPath));
     }
     
-    //@Before
-    public void init_cleanup() throws IOException {
-        log.info("init_cleanup: delete all content from " + adapter.contentPath);
-        if (Files.exists(adapter.contentPath)) {
-            Files.walkFileTree(adapter.contentPath, new SimpleFileVisitor<Path>() {
+    final OpaqueFileSystemStorageAdapter ofsAdapter;
+    
+    public OpaqueByteRangeTest() { 
+        super(new OpaqueFileSystemStorageAdapter(root, depth));
+        this.ofsAdapter = (OpaqueFileSystemStorageAdapter) super.adapter;
+
+        log.debug("    content path: " + ofsAdapter.contentPath);
+        log.debug("transaction path: " + ofsAdapter.txnPath);
+        Assert.assertTrue("testInit: contentPath", Files.exists(ofsAdapter.contentPath));
+        Assert.assertTrue("testInit: txnPath", Files.exists(ofsAdapter.txnPath));
+    }
+    
+    @Before
+    public void cleanupBefore() throws IOException {
+        log.info("cleanupBefore: delete all content from " + ofsAdapter.contentPath);
+        if (Files.exists(ofsAdapter.contentPath)) {
+            Files.walkFileTree(ofsAdapter.contentPath, new SimpleFileVisitor<Path>() {
                 @Override
                 public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
                     Files.delete(file);
@@ -144,167 +146,6 @@ public class OpaqueByteRangeTest {
                 }
             });
         }
-        log.info("init_cleanup: delete all content from " + adapter.contentPath + " DONE");
-    }
-    
-    @Test
-    public void testFullRead() {
-        try {
-            int mib = 16;
-            long datalen = mib * 1024L * 1024L; // 1 MiB
-            
-            URI artifactURI = URI.create("test:path/file");
-            NewArtifact newArtifact = new NewArtifact(artifactURI);
-            InputStream istream = getInputStreamOfRandomBytes(datalen);
-
-            log.info("put: " + mib + " MiB file...");
-            long t1 = System.nanoTime();
-            StorageMetadata storageMetadata = adapter.put(newArtifact, istream);
-            long t2 = System.nanoTime();
-            final long putMicros = (t2 - t1) / 1024L;
-            StringBuilder sb = new StringBuilder();
-            sb.append("put: ").append(storageMetadata.getStorageLocation());
-            sb.append(" -- ");
-            
-            sb.append(Long.toString(putMicros)).append(" microsec");
-            double spd = (double) (10 * datalen / putMicros) / 10.0;
-            sb.append(" aka ~" + spd + " MiB/sec");
-            log.info(sb);
-            
-            Assert.assertNotNull(storageMetadata);
-            Assert.assertNotNull(storageMetadata.getStorageLocation());
-            Assert.assertEquals(datalen, storageMetadata.getContentLength().longValue());
-            
-            
-            ByteRange r = new ByteRange(0, datalen);
-
-            SortedSet<ByteRange> br = new TreeSet<>();
-            br.add(r);
-            DigestOutputStream out = new DigestOutputStream(new DiscardOutputStream(), MessageDigest.getInstance("MD5"));
-            ByteCountOutputStream bcos = new ByteCountOutputStream(out);
-            t1 = System.nanoTime();
-            adapter.get(storageMetadata.getStorageLocation(), bcos);
-            //adapter.get(storageMetadata.getStorageLocation(), bcos, br);
-            t2 = System.nanoTime();
-            final long getMicros = (t2 - t1) / 1024L;
-            Assert.assertEquals("num bytes returned", datalen, bcos.getByteCount());
-            URI actualMD5 = URI.create("md5:" + HexUtil.toHex(out.getMessageDigest().digest()));
-            Assert.assertEquals("checksum", storageMetadata.getContentChecksum(), actualMD5);
-            sb = new StringBuilder();
-            sb.append("read ").append(r);
-            while (sb.length() < 32) {
-                sb.append(" ");
-            }
-            sb.append(Long.toString(getMicros)).append(" microsec");
-            spd = (double) (10 * datalen / getMicros) / 10.0;
-            sb.append(" aka ~" + spd + " MiB/sec");
-            log.info(sb);
-            
-            adapter.delete(storageMetadata.getStorageLocation());
-            
-        } catch (Exception unexpected) {
-            log.error("unexpected exception", unexpected);
-            Assert.fail("unexpected exception: " + unexpected);
-        }
-    }
-    
-    //@Test
-    public void testReadByteRangeForward() {
-        int[] readOrder = new int[] {0, 1, 2, 0, 1, 2, 0, 1, 2};
-        doReadPattern(readOrder);
-    }
-    
-    //@Test
-    public void testReadByteRangeReverse() {
-        int[] readOrder = new int[] {2, 1, 0, 2, 1, 0, 2, 1, 0};
-        doReadPattern(readOrder);
-    }
-    
-    public void doReadPattern(int[] readOrder) {
-        try {
-            int mib = 16;
-            long datalen = mib * 1024L * 1024L; // 1 MiB
-            
-            URI artifactURI = URI.create("test:path/file");
-            NewArtifact newArtifact = new NewArtifact(artifactURI);
-            InputStream istream = getInputStreamOfRandomBytes(datalen);
-
-            log.info("put: " + mib + " MiB file...");
-            StorageMetadata storageMetadata = adapter.put(newArtifact, istream);
-            log.info("put: " + storageMetadata.getStorageLocation());
-            Assert.assertNotNull(storageMetadata);
-            Assert.assertNotNull(storageMetadata.getStorageLocation());
-            Assert.assertEquals(datalen, storageMetadata.getContentLength().longValue());
-            
-            List<ByteRange> ranges = new ArrayList<>();
-            long rlen = 16 * 1024L; // 16KiB
-            ranges.add(new ByteRange(0L, rlen));                    // at start
-            ranges.add(new ByteRange(datalen / 2L, rlen));          // near the middle
-            ranges.add(new ByteRange(datalen - rlen - 1L, rlen));   // at end
-            
-            for (int i : readOrder) {
-                ByteRange r = ranges.get(i);
-                
-                SortedSet<ByteRange> br = new TreeSet<>();
-                br.add(r);
-                ByteCountOutputStream bcos = new ByteCountOutputStream(new DiscardOutputStream());
-                long t1 = System.nanoTime();
-                adapter.get(storageMetadata.getStorageLocation(), bcos, br);
-                long t2 = System.nanoTime();
-                final long micros = (t2 - t1) / 1024L;
-                Assert.assertEquals("num bytes returned", rlen, bcos.getByteCount());
-                StringBuilder sb = new StringBuilder();
-                sb.append("read ").append(r);
-                while (sb.length() < 32) {
-                    sb.append(" ");
-                }
-                sb.append(Long.toString(micros)).append(" microsec");
-                log.info(sb);
-            }
-            
-            //adapter.delete(storageMetadata.getStorageLocation());
-            
-        } catch (Exception unexpected) {
-            log.error("unexpected exception", unexpected);
-            Assert.fail("unexpected exception: " + unexpected);
-        }
-    }
-    
-    private InputStream getInputStreamOfRandomBytes(long numBytes) {
-        
-        Random rnd = new Random();
-        
-        return new InputStream() {
-            long tot = 0L;
-            
-            @Override
-            public int read() throws IOException {
-                if (tot == numBytes) {
-                    return -1;
-                }
-                tot++;
-                return rnd.nextInt(255);
-            }
-            
-            @Override
-            public int read(byte[] bytes) throws IOException {
-                return read(bytes, 0, bytes.length);
-            }
-
-            @Override
-            public int read(byte[] bytes, int off, int len) throws IOException {
-                if (tot == numBytes) {
-                    return -1;
-                }
-                int num = len;
-                if (tot + len > numBytes) {
-                    num = (int) (numBytes - tot);
-                }
-                byte val = (byte) rnd.nextInt(255);
-                Arrays.fill(bytes, off, off + num - 1, val);
-                tot += num;
-                return num;
-            }
-        };
+        log.info("cleanupBefore: delete all content from " + ofsAdapter.contentPath + " DONE");
     }
 }

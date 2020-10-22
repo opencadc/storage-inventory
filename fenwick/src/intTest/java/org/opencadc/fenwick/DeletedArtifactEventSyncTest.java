@@ -69,8 +69,6 @@
 
 package org.opencadc.fenwick;
 
-import static org.opencadc.fenwick.TestUtil.INVENTORY_DATABASE;
-import static org.opencadc.fenwick.TestUtil.INVENTORY_SCHEMA;
 import static org.opencadc.fenwick.TestUtil.LUSKAN_DATABASE;
 import static org.opencadc.fenwick.TestUtil.LUSKAN_SCHEMA;
 
@@ -99,7 +97,7 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.opencadc.inventory.DeletedArtifactEvent;
-import org.opencadc.inventory.db.DeletedEventDAO;
+import org.opencadc.inventory.db.DeletedArtifactEventDAO;
 import org.opencadc.inventory.db.SQLGenerator;
 import org.opencadc.tap.TapClient;
 import org.opencadc.tap.TapRowMapper;
@@ -116,7 +114,7 @@ public class DeletedArtifactEventSyncTest {
         Log4jInit.setLevel("org.opencadc.fenwick", Level.INFO);
     }
 
-    private final DeletedEventDAO<DeletedArtifactEvent> deletedEventDAO = new DeletedEventDAO<>();
+    private final DeletedArtifactEventDAO deletedEventDAO = new DeletedArtifactEventDAO();
 
     public DeletedArtifactEventSyncTest() throws Exception {
         final DBConfig dbConfig = new DBConfig();
@@ -148,7 +146,7 @@ public class DeletedArtifactEventSyncTest {
 
             UUID uuid = UUID.randomUUID();
             Date lasModified = new Date();
-            URI metaChecksum = new URI("foo://bar/baz");
+            URI metaChecksum = new URI(TestUtil.ZERO_BYTES_MD5);
 
             List<Object> row = new ArrayList<>();
             row.add(uuid);

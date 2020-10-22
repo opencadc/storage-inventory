@@ -112,8 +112,9 @@ public class ArtifactDAOTest {
         Log4jInit.setLevel("ca.nrc.cadc.db", Level.INFO);
     }
     
-    ArtifactDAO dao = new ArtifactDAO();
-    ArtifactDAO alt = new ArtifactDAO();
+    ArtifactDAO originDAO;
+    ArtifactDAO nonOriginDAO;
+    ArtifactDAO altDAO = new ArtifactDAO();
     
     public ArtifactDAOTest() throws Exception {
         try {
@@ -126,7 +127,12 @@ public class ArtifactDAOTest {
             config.put("jndiDataSourceName", "jdbc/ArtifactDAOTest");
             config.put("database", TestUtil.DATABASE);
             config.put("schema", TestUtil.SCHEMA);
-            dao.setConfig(config);
+            
+            originDAO = new ArtifactDAO();
+            originDAO.setConfig(config);
+            
+            nonOriginDAO = new ArtifactDAO(false);
+            nonOriginDAO.setConfig(config);
             
             DBUtil.createJNDIDataSource("jdbc/ArtifactDAOTest-alt", cc);
             Map<String,Object> altConfig = new TreeMap<String,Object>();
@@ -134,7 +140,7 @@ public class ArtifactDAOTest {
             altConfig.put("jndiDataSourceName", "jdbc/ArtifactDAOTest-alt");
             altConfig.put("database", TestUtil.DATABASE);
             altConfig.put("schema", TestUtil.SCHEMA);
-            alt.setConfig(altConfig);
+            altDAO.setConfig(altConfig);
             
         } catch (Exception ex) {
             log.error("setup failed", ex);
@@ -145,13 +151,13 @@ public class ArtifactDAOTest {
     @Before
     public void init_cleanup() throws Exception {
         log.info("init database...");
-        InitDatabase init = new InitDatabase(dao.getDataSource(), TestUtil.DATABASE, TestUtil.SCHEMA);
+        InitDatabase init = new InitDatabase(originDAO.getDataSource(), TestUtil.DATABASE, TestUtil.SCHEMA);
         init.doInit();
         log.info("init database... OK");
         
         log.info("clearing old content...");
-        SQLGenerator gen = dao.getSQLGenerator();
-        DataSource ds = dao.getDataSource();
+        SQLGenerator gen = originDAO.getSQLGenerator();
+        DataSource ds = originDAO.getDataSource();
         String sql = "delete from " + gen.getTable(Artifact.class);
         log.info("pre-test cleanup: " + sql);
         ds.getConnection().createStatement().execute(sql);
@@ -171,10 +177,10 @@ public class ArtifactDAOTest {
             log.info("expected: " + expected);
             
             
-            Artifact notFound = dao.get(expected.getURI());
+            Artifact notFound = originDAO.get(expected.getURI());
             Assert.assertNull(notFound);
             
-            dao.put(expected);
+            originDAO.put(expected);
             
             // persistence assigns entity state before put
             Assert.assertNotNull(expected.getLastModified());
@@ -184,7 +190,7 @@ public class ArtifactDAOTest {
             Assert.assertEquals("put metachecksum", mcs0, expected.getMetaChecksum());
             
             // get by ID
-            Artifact fid = dao.get(expected.getID());
+            Artifact fid = originDAO.get(expected.getID());
             Assert.assertNotNull(fid);
             Assert.assertEquals(expected.getURI(), fid.getURI());
             Assert.assertEquals(expected.getLastModified(), fid.getLastModified());
@@ -193,7 +199,7 @@ public class ArtifactDAOTest {
             Assert.assertEquals("round trip metachecksum", expected.getMetaChecksum(), mcs1);
             
             // get by URI
-            Artifact furi = dao.get(expected.getURI());
+            Artifact furi = originDAO.get(expected.getURI());
             Assert.assertNotNull(furi);
             Assert.assertEquals(expected.getID(), furi.getID());
             Assert.assertEquals(expected.getLastModified(), furi.getLastModified());
@@ -201,8 +207,8 @@ public class ArtifactDAOTest {
             URI mcs2 = furi.computeMetaChecksum(MessageDigest.getInstance("MD5"));
             Assert.assertEquals("round trip metachecksum", expected.getMetaChecksum(), mcs2);
             
-            dao.delete(expected.getID());
-            Artifact deleted = dao.get(expected.getID());
+            originDAO.delete(expected.getID());
+            Artifact deleted = originDAO.get(expected.getID());
             Assert.assertNull(deleted);
             
         } catch (Exception unexpected) {
@@ -224,20 +230,20 @@ public class ArtifactDAOTest {
             log.info("expected: " + expected);
             
             
-            Artifact notFound = dao.get(expected.getURI());
+            Artifact notFound = originDAO.get(expected.getURI());
             Assert.assertNull(notFound);
             
-            dao.put(expected);
+            originDAO.put(expected);
             
             // get by ID
-            Artifact fid = dao.get(expected.getID());
+            Artifact fid = originDAO.get(expected.getID());
             Assert.assertNotNull(fid);
             Assert.assertEquals(expected.getURI(), fid.getURI());
             
-            ArtifactDAO cp = new ArtifactDAO(dao);
+            ArtifactDAO cp = new ArtifactDAO(originDAO);
             cp.delete(expected.getID());
             
-            Artifact deleted = dao.get(expected.getID());
+            Artifact deleted = originDAO.get(expected.getID());
             Assert.assertNull(deleted);
             
         } catch (Exception unexpected) {
@@ -257,64 +263,50 @@ public class ArtifactDAOTest {
             log.info("expected: " + expected);
             
             
-            Artifact notFound = dao.get(expected.getURI());
+            Artifact notFound = originDAO.get(expected.getURI());
             Assert.assertNull(notFound);
             
-            dao.put(expected);
-            
-            // persistence assigns entity state before put
-            Assert.assertNotNull(expected.getLastModified());
-            Assert.assertNotNull(expected.getMetaChecksum());
-            
-            URI mcs0 = expected.computeMetaChecksum(MessageDigest.getInstance("MD5"));
-            Assert.assertEquals("put metachecksum", mcs0, expected.getMetaChecksum());
-            
-            expected.storageLocation = new StorageLocation(URI.create("ceph:" + UUID.randomUUID()));
-            // no storageBucket
-            
-            dao.put(expected);
-            Date t1 = expected.getLastModified();
-            
-            Artifact a1 = dao.get(expected.getID());
+            originDAO.put(expected);
+            Artifact a1 = originDAO.get(expected.getID());
             Assert.assertNotNull(a1);
-            URI mcs1 = a1.computeMetaChecksum(MessageDigest.getInstance("MD5"));
-            Assert.assertEquals("round trip metachecksum unchanged", expected.getMetaChecksum(), mcs1);
-            Assert.assertNotNull(a1.getLastModified());
-            Assert.assertNull("did-not-force-update", a1.storageLocation);
+            Assert.assertNull("no storageLocation", a1.storageLocation);
+            Thread.sleep(20L);
             
-            dao.put(expected, true);
-            Artifact a2 = dao.get(expected.getID());
+            StorageLocation loc = new StorageLocation(URI.create("ceph:" + UUID.randomUUID()));
+            originDAO.setStorageLocation(expected, loc);
+            Artifact a2 = originDAO.get(expected.getID());
             Assert.assertNotNull(a2);
             URI mcs2 = a2.computeMetaChecksum(MessageDigest.getInstance("MD5"));
             Assert.assertEquals("round trip metachecksum unchanged", expected.getMetaChecksum(), mcs2);
-            Assert.assertTrue(a1.getLastModified().before(a2.getLastModified()));
-            Assert.assertNotNull("force-update", a2.storageLocation);
+            Assert.assertTrue("lastModified incremented", a1.getLastModified().before(a2.getLastModified()));
+            Assert.assertNotNull("set storageLocation", a2.storageLocation);
             Assert.assertEquals(expected.storageLocation.getStorageID(), a2.storageLocation.getStorageID());
             Assert.assertNull(a2.storageLocation.storageBucket);
+            Thread.sleep(20L);
             
-            expected.storageLocation = new StorageLocation(URI.create("ceph:"  + UUID.randomUUID()));
-            expected.storageLocation.storageBucket = "abc";
-            dao.put(expected, true);
-            Artifact a3 = dao.get(expected.getID());
+            loc = new StorageLocation(URI.create("ceph:"  + UUID.randomUUID()));
+            loc.storageBucket = "abc";
+            originDAO.setStorageLocation(expected, loc);
+            Artifact a3 = originDAO.get(expected.getID());
             Assert.assertNotNull(a2);
             URI mcs3 = a3.computeMetaChecksum(MessageDigest.getInstance("MD5"));
             Assert.assertEquals("round trip metachecksum unchanged", expected.getMetaChecksum(), mcs3);
             Assert.assertTrue(a2.getLastModified().before(a3.getLastModified()));
-            Assert.assertNotNull("updated", a3.storageLocation);
+            Assert.assertNotNull("update storageLocation", a3.storageLocation);
             Assert.assertEquals(expected.storageLocation.getStorageID(), a3.storageLocation.getStorageID());
             Assert.assertEquals(expected.storageLocation.storageBucket, a3.storageLocation.storageBucket);
+            Thread.sleep(20L);
             
-            expected.storageLocation = null;
-            dao.put(expected, true);
-            Artifact a4 = dao.get(expected.getID());
+            originDAO.setStorageLocation(expected, null);
+            Artifact a4 = originDAO.get(expected.getID());
             Assert.assertNotNull(a2);
             URI mcs4 = a4.computeMetaChecksum(MessageDigest.getInstance("MD5"));
             Assert.assertEquals("round trip metachecksum unchanged", expected.getMetaChecksum(), mcs4);
-            Assert.assertTrue(a3.getLastModified().before(a4.getLastModified()));
-            Assert.assertNull("cleared", a4.storageLocation);
+            Assert.assertTrue("lastModified unchanged", a3.getLastModified().equals(a4.getLastModified()));
+            Assert.assertNull("clear storageLocation", a4.storageLocation);
             
-            dao.delete(expected.getID());
-            Artifact deleted = dao.get(expected.getID());
+            originDAO.delete(expected.getID());
+            Artifact deleted = originDAO.get(expected.getID());
             Assert.assertNull(deleted);
             
         } catch (Exception unexpected) {
@@ -334,54 +326,55 @@ public class ArtifactDAOTest {
             log.info("expected: " + expected);
             
             
-            Artifact notFound = dao.get(expected.getURI());
+            Artifact notFound = originDAO.get(expected.getURI());
             Assert.assertNull(notFound);
             
-            dao.put(expected);
+            originDAO.put(expected);
+            Thread.sleep(20L);
             
-            // persistence assigns entity state before put
-            Assert.assertNotNull(expected.getLastModified());
-            Assert.assertNotNull(expected.getMetaChecksum());
+            final SiteLocation loc1 = new SiteLocation(UUID.randomUUID());
+            final SiteLocation loc2 = new SiteLocation(UUID.randomUUID());
+            final SiteLocation loc3 = new SiteLocation(UUID.randomUUID());
             
-            URI mcs0 = expected.computeMetaChecksum(MessageDigest.getInstance("MD5"));
-            Assert.assertEquals("put metachecksum", mcs0, expected.getMetaChecksum());
-            
-            UUID s1 = UUID.randomUUID();
-            UUID s2 = UUID.randomUUID();
-            UUID s3 = UUID.randomUUID();
-            expected.siteLocations.add(new SiteLocation(s1));
-            expected.siteLocations.add(new SiteLocation(s2));
-            expected.siteLocations.add(new SiteLocation(s3));
-            Thread.sleep(100L);
-            
-            dao.put(expected);
-            
-            Artifact a1 = dao.get(expected.getID());
+            Artifact a1 = originDAO.get(expected.getID());
             Assert.assertNotNull(a1);
             URI mcs1 = a1.computeMetaChecksum(MessageDigest.getInstance("MD5"));
             Assert.assertEquals("round trip metachecksum unchanged", expected.getMetaChecksum(), mcs1);
-            Assert.assertTrue("did-not-force-update", a1.siteLocations.isEmpty());
+            Assert.assertTrue("no siteLocations", a1.siteLocations.isEmpty());
             
-            dao.put(expected, true);
-            Artifact a2 = dao.get(expected.getID());
+            nonOriginDAO.addSiteLocation(expected, loc1);
+            Artifact a2 = nonOriginDAO.get(expected.getID());
             Assert.assertNotNull(a2);
             URI mcs2 = a2.computeMetaChecksum(MessageDigest.getInstance("MD5"));
             Assert.assertEquals("round trip metachecksum unchanged", expected.getMetaChecksum(), mcs2);
-            Assert.assertTrue(a1.getLastModified().before(a2.getLastModified()));
-            Assert.assertFalse("force-update", a2.siteLocations.isEmpty());
-            Assert.assertEquals(3, a2.siteLocations.size());
+            Assert.assertTrue("lastModified unchanged", a1.getLastModified().equals(a2.getLastModified()));
+            Assert.assertEquals(1, a2.siteLocations.size());
+            Thread.sleep(20L);
             
-            expected.siteLocations.clear();
-            dao.put(expected, true);
-            Artifact a3 = dao.get(expected.getID());
-            Assert.assertNotNull(a1);
+            nonOriginDAO.addSiteLocation(expected, loc2);
+            nonOriginDAO.addSiteLocation(expected, loc3);
+            Artifact a3 = nonOriginDAO.get(expected.getID());
+            Assert.assertNotNull(a3);
             URI mcs3 = a3.computeMetaChecksum(MessageDigest.getInstance("MD5"));
             Assert.assertEquals("round trip metachecksum unchanged", expected.getMetaChecksum(), mcs3);
-            Assert.assertTrue(a2.getLastModified().before(a3.getLastModified()));
-            Assert.assertTrue("cleaned", a3.siteLocations.isEmpty());
+            Assert.assertTrue("lastModified unchanged", a1.getLastModified().equals(a3.getLastModified()));
+            Assert.assertEquals(3, a3.siteLocations.size());
+            Thread.sleep(20L);
             
-            dao.delete(expected.getID());
-            Artifact deleted = dao.get(expected.getID());
+            // must remove from the persisted artifact that contains them
+            nonOriginDAO.removeSiteLocation(a3, loc3);
+            Assert.assertEquals("removed", 2, originDAO.get(expected.getID()).siteLocations.size());
+            nonOriginDAO.removeSiteLocation(a3, loc1);
+            Assert.assertEquals("removed", 1, originDAO.get(expected.getID()).siteLocations.size());
+            nonOriginDAO.removeSiteLocation(a3, loc2);
+            Artifact a4 = nonOriginDAO.get(expected.getID());
+            Assert.assertNotNull(a1);
+            URI mcs4 = a4.computeMetaChecksum(MessageDigest.getInstance("MD5"));
+            Assert.assertEquals("round trip metachecksum unchanged", expected.getMetaChecksum(), mcs3);
+            Assert.assertTrue(a1.getLastModified().equals(a4.getLastModified()));
+            
+            originDAO.delete(expected.getID());
+            Artifact deleted = originDAO.get(expected.getID());
             Assert.assertNull(deleted);
             
         } catch (Exception unexpected) {
@@ -402,11 +395,11 @@ public class ArtifactDAOTest {
                 a.contentType = "application/octet-stream";
                 a.contentEncoding = "gzip";
                 // no storage location
-                dao.put(a);
+                originDAO.put(a);
                 log.info("expected: " + a);
             }
             
-            ResourceIterator<Artifact> iter = dao.storedIterator(null);
+            ResourceIterator<Artifact> iter = originDAO.storedIterator(null);
             Assert.assertFalse("no results", iter.hasNext());
             
             iter.close();
@@ -432,7 +425,7 @@ public class ArtifactDAOTest {
                         new Long(666L));
                 a.storageLocation = new StorageLocation(URI.create("foo:" + UUID.randomUUID()));
                 a.storageLocation.storageBucket = InventoryUtil.computeBucket(a.storageLocation.getStorageID(), 3);
-                dao.put(a);
+                originDAO.put(a);
                 log.debug("put: " + a);
                 eset.add(a);
                 numArtifacts++;
@@ -446,7 +439,7 @@ public class ArtifactDAOTest {
                         new Long(666L));
                 a.storageLocation = new StorageLocation(URI.create("foo:" + UUID.randomUUID()));
                 // no bucket
-                dao.put(a);
+                originDAO.put(a);
                 log.debug("put: " + a);
                 eset.add(a);
                 numArtifacts++;
@@ -459,14 +452,14 @@ public class ArtifactDAOTest {
                         new Date(),
                         new Long(666L));
                 // no storageLocation
-                dao.put(a);
+                originDAO.put(a);
                 log.debug("put: " + a);
                 //not in eset
                 numArtifacts++;
             }
             log.info("added: " + numArtifacts);
             
-            ResourceIterator<Artifact> iter = dao.storedIterator(null);
+            ResourceIterator<Artifact> iter = originDAO.storedIterator(null);
             Iterator<Artifact> ei = eset.iterator();
             Artifact prev = null;
             int count = 0;
@@ -487,10 +480,10 @@ public class ArtifactDAOTest {
                 
                 // check if iterator is holding a read lock that prevents update
                 if (prev != null) {
-                    Artifact a = alt.get(prev.getID());
+                    Artifact a = altDAO.get(prev.getID());
                     log.info("alt.get: " + a);
                     a.contentType = "text/plain";
-                    alt.put(a);
+                    altDAO.put(a);
                     log.info("log.put: " + a + " OK");
                 }
                 prev = actual;
@@ -512,7 +505,7 @@ public class ArtifactDAOTest {
             for (byte b = 0; b < 16; b++) {
                 String hex =  HexUtil.toHex(b);
                 String bp = hex.substring(1);
-                ResourceIterator<Artifact> i = dao.storedIterator(bp);
+                ResourceIterator<Artifact> i = originDAO.storedIterator(bp);
                 while (i.hasNext()) {
                     Artifact a = i.next();
                     log.info("found: " + bp + " contains " + a.storageLocation);
@@ -542,11 +535,11 @@ public class ArtifactDAOTest {
                 a.contentType = "application/octet-stream";
                 a.contentEncoding = "gzip";
                 a.storageLocation = new StorageLocation(URI.create("foo:" + UUID.randomUUID()));
-                dao.put(a);
+                originDAO.put(a);
                 log.info("expected: " + a);
             }
             
-            ResourceIterator<Artifact> iter = dao.unstoredIterator(null);
+            ResourceIterator<Artifact> iter = originDAO.unstoredIterator(null);
             Assert.assertFalse("no results", iter.hasNext());
             
             iter.close();
@@ -572,7 +565,7 @@ public class ArtifactDAOTest {
                         new Long(666L));
                 a.storageLocation = new StorageLocation(URI.create("foo:" + UUID.randomUUID()));
                 a.storageLocation.storageBucket = InventoryUtil.computeBucket(a.storageLocation.getStorageID(), 3);
-                dao.put(a);
+                originDAO.put(a);
                 log.info("expected: " + a);
                 // not in eset
                 Thread.sleep(1L);
@@ -587,7 +580,7 @@ public class ArtifactDAOTest {
                         new Long(666L));
                 a.storageLocation = new StorageLocation(URI.create("foo:" + UUID.randomUUID()));
                 // no bucket
-                dao.put(a);
+                originDAO.put(a);
                 log.info("expected: " + a);
                 // not in eset
                 Thread.sleep(1L);
@@ -601,7 +594,7 @@ public class ArtifactDAOTest {
                         new Date(),
                         new Long(666L));
                 // no storageLocation
-                dao.put(a);
+                originDAO.put(a);
                 log.info("expected: " + a);
                 eset.add(a);
                 Thread.sleep(1L);
@@ -609,7 +602,7 @@ public class ArtifactDAOTest {
             }
             log.info("added: " + numArtifacts);
             
-            ResourceIterator<Artifact> iter = dao.unstoredIterator(null);
+            ResourceIterator<Artifact> iter = originDAO.unstoredIterator(null);
             Iterator<Artifact> ei = eset.iterator();
             int count = 0;
             while (ei.hasNext()) {
@@ -636,7 +629,7 @@ public class ArtifactDAOTest {
             for (byte b = 0; b < 16; b++) {
                 String urib = HexUtil.toHex(b).substring(1);
                 log.info("bucket prefix: " + urib);
-                ResourceIterator<Artifact> i = dao.unstoredIterator(urib);
+                ResourceIterator<Artifact> i = originDAO.unstoredIterator(urib);
                 while (i.hasNext()) {
                     Artifact a = i.next();
                     log.info("found: " + urib + " contains " + a.getBucket());
@@ -667,19 +660,19 @@ public class ArtifactDAOTest {
                         URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"),
                         new Date(),
                         new Long(666L));
-                dao.put(a);
+                originDAO.put(a);
                 log.info("expected: " + a);
                 Thread.sleep(1L);
                 numArtifacts++;
             }
             
             log.info("created: " + numArtifacts);
-            ResourceIterator<Artifact> iter = dao.unstoredIterator(null);
+            ResourceIterator<Artifact> iter = originDAO.unstoredIterator(null);
             
             int count = 0;
             while (iter.hasNext()) {
                 Artifact actual = iter.next();
-                dao.delete(actual.getID());
+                originDAO.delete(actual.getID());
                 log.info("deleted: " + actual.getID() + " aka " + actual.getURI());
                 count++;
                 
@@ -693,7 +686,7 @@ public class ArtifactDAOTest {
             iter.close();
             Assert.assertFalse("no more results", iter.hasNext());
             
-            iter = dao.unstoredIterator(null);
+            iter = originDAO.unstoredIterator(null);
             Assert.assertFalse("all deleted", iter.hasNext());
             log.info("testIteratorDelete: OK");
             
@@ -724,17 +717,17 @@ public class ArtifactDAOTest {
                         new Date(),
                         new Long(666L));
                 // no storageLocation
-                dao.put(a);
+                originDAO.put(a);
                 log.info("expected: " + a);
                 numArtifacts++;
             }
             log.info("added: " + numArtifacts);
             
-            ResourceIterator<Artifact> iter = dao.unstoredIterator(null);
+            ResourceIterator<Artifact> iter = originDAO.unstoredIterator(null);
             int count = 0;
             while (iter.hasNext()) {
                 Artifact actual = iter.next();
-                dao.delete(actual.getID()); // delete to create locks in txn
+                originDAO.delete(actual.getID()); // delete to create locks in txn
                 log.info("deleted: " + actual.getURI() + " aka " + actual.getID());
                 count++;
                 if (count == numArtifacts / 2) {

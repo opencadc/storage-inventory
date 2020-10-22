@@ -82,7 +82,7 @@ public class ObsoleteStorageLocationDAO extends AbstractDAO<ObsoleteStorageLocat
     private static final Logger log = Logger.getLogger(ObsoleteStorageLocationDAO.class);
 
     public ObsoleteStorageLocationDAO() {
-        super();
+        super(true);
     }
     
     public ObsoleteStorageLocationDAO(AbstractDAO src) {

@@ -67,8 +67,11 @@
 
 package org.opencadc.minoc;
 
+import ca.nrc.cadc.db.TransactionManager;
+import ca.nrc.cadc.profiler.Profiler;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
+import org.opencadc.inventory.db.EntityNotFoundException;
 import org.opencadc.permissions.WriteGrant;
 
 /**
@@ -102,19 +105,59 @@ public class PostAction extends ArtifactAction {
         log.debug("new contentType: " + newContentType);
         log.debug("new contentEncoding: " + newContentEncoding);
         
-        Artifact artifact = getArtifact(artifactURI);
+        final Profiler profiler = new Profiler(PostAction.class);
         
-        // TODO: enable modifying URIs when supported by DAO
-        // TODO: how to support clearing values?
-        if (newContentType != null) {
-            artifact.contentType = newContentType;
+        Artifact existing = getArtifact(artifactURI);
+        profiler.checkpoint("artifactDAO.get.ok");
+        
+        TransactionManager txnMgr = artifactDAO.getTransactionManager();
+        try {
+            log.debug("starting transaction");
+            txnMgr.startTransaction();
+            log.debug("start txn: OK");
+            
+            boolean locked = false;
+            while (existing != null && !locked) {
+                try { 
+                    artifactDAO.lock(existing);
+                    profiler.checkpoint("artifactDAO.lock.ok");
+                    locked = true;
+                } catch (EntityNotFoundException ex) {
+                    profiler.checkpoint("artifactDAO.lock.fail");
+                    // entity deleted
+                    existing = artifactDAO.get(artifactURI);
+                    profiler.checkpoint("artifactDAO.get.ok");
+                }
+            }
+            
+            // TODO: enable modifying URIs when supported by DAO
+            // TODO: how to support clearing values?
+            if (newContentType != null) {
+                existing.contentType = newContentType;
+            }
+            if (newContentEncoding != null) {
+                existing.contentEncoding = newContentEncoding;
+            }
+            
+            artifactDAO.put(existing);
+            profiler.checkpoint("artifactDAO.put.ok");
+        
+            txnMgr.commitTransaction();
+            log.debug("commit txn: OK");
+        } catch (Exception e) {
+            log.error("failed to persist " + artifactURI, e);
+            txnMgr.rollbackTransaction();
+            log.debug("rollback txn: OK");
+            throw e;
+        } finally {
+            if (txnMgr.isOpen()) {
+                log.error("BUG - open transaction in finally");
+                txnMgr.rollbackTransaction();
+                log.error("rollback txn: OK");
+            }
         }
-        if (newContentEncoding != null) {
-            artifact.contentEncoding = newContentEncoding;
-        }
-        log.debug("updating artifact metadata...");
-        artifactDAO.put(artifact);
-        log.debug("updated artifact metadata");
+        
+        
     }
 
 }

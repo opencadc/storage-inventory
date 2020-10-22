@@ -157,7 +157,7 @@ public class BucketValidatorTest {
         final TestEventListener testEventListener = new TestEventListener();
 
         final BucketValidator testSubject =
-                new BucketValidator(new BucketSelector("a-c"), null,
+                new BucketValidator(Arrays.asList("a", "b", "c"), null,
                                     new Subject(), true, new InventoryIsAlwaysRight(testEventListener, reporter),
                                     null, null) {
                     @Override
@@ -226,7 +226,7 @@ public class BucketValidatorTest {
         final TestEventListener testEventListener = new TestEventListener();
 
         final BucketValidator testSubject =
-                new BucketValidator(new BucketSelector("a-c"), null,
+                new BucketValidator(Arrays.asList("a", "b", "c"), null,
                                     new Subject(), true, new InventoryIsAlwaysRight(testEventListener, reporter),
                                     null, null) {
                     @Override
@@ -305,7 +305,7 @@ public class BucketValidatorTest {
         final TestEventListener testEventListener = new TestEventListener();
 
         final BucketValidator testSubject =
-                new BucketValidator(new BucketSelector("a-c"), null,
+                new BucketValidator(Arrays.asList("a", "b", "c"), null,
                                     new Subject(), true, new StorageIsAlwaysRight(testEventListener, reporter),
                                     null, null) {
                     @Override
@@ -367,7 +367,7 @@ public class BucketValidatorTest {
         final TestEventListener testEventListener = new TestEventListener();
 
         final BucketValidator testSubject =
-                new BucketValidator(new BucketSelector("a-c"), null,
+                new BucketValidator(Arrays.asList("a", "b", "c"), null,
                                     new Subject(), true, new StorageIsAlwaysRight(testEventListener, reporter),
                                     null, null) {
                     @Override
@@ -423,7 +423,7 @@ public class BucketValidatorTest {
         final TestEventListener testEventListener = new TestEventListener();
 
         final BucketValidator testSubject =
-                new BucketValidator(new BucketSelector("a-c"), null,
+                new BucketValidator(Arrays.asList("a", "b", "c"), null,
                                     new Subject(), true, new RecoverFromStorage(testEventListener, reporter),
                                     null, null) {
                     @Override

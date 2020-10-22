@@ -72,7 +72,6 @@ import ca.nrc.cadc.db.version.InitDatabase;
 import java.net.URL;
 import javax.sql.DataSource;
 
-
 /**
  * This class automates adding/updating the description of CAOM tables and views
  * in the tap_schema. This class assumes that it can re-use the tap_schema.ModelVersion

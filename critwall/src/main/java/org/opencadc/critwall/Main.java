@@ -73,6 +73,7 @@ import ca.nrc.cadc.util.Log4jInit;
 import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.util.PropertiesReader;
 import ca.nrc.cadc.util.StringUtil;
+
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.Map;
@@ -101,6 +102,7 @@ public class Main {
     private static final String NTHREADS_CONFIG_KEY = CONFIG_PREFIX + ".threads";
     private static final String LOCATOR_SERVICE_CONFIG_KEY = CONFIG_PREFIX + ".locatorService";
     private static final String LOGGING_CONFIG_KEY = CONFIG_PREFIX + ".logging";
+
 
     public static void main(String[] args) {
         try {
@@ -138,47 +140,47 @@ public class Main {
 
             String schema = props.getFirstPropertyValue(DB_SCHEMA_CONFIG_KEY);
             if (!StringUtil.hasLength(schema)) {
-                errMsg.append(DB_SCHEMA_CONFIG_KEY + " ");
+                errMsg.append(DB_SCHEMA_CONFIG_KEY).append(" ");
             }
 
             String dbUrl = props.getFirstPropertyValue(DB_CONFIG_KEY);
             if (!StringUtil.hasLength(dbUrl)) {
-                errMsg.append(DB_CONFIG_KEY + " ");
+                errMsg.append(DB_CONFIG_KEY).append(" ");
             }
 
             String generatorName = props.getFirstPropertyValue(SQLGENERATOR_CONFIG_KEY);
             if (!StringUtil.hasLength(generatorName)) {
-                errMsg.append(SQLGENERATOR_CONFIG_KEY + " ");
+                errMsg.append(SQLGENERATOR_CONFIG_KEY).append(" ");
             }
 
             String username = props.getFirstPropertyValue(DB_USERNAME_CONFIG_KEY);
             if (!StringUtil.hasLength(username)) {
-                errMsg.append(DB_USERNAME_CONFIG_KEY + " ");
+                errMsg.append(DB_USERNAME_CONFIG_KEY).append(" ");
             }
 
             String password = props.getFirstPropertyValue(DB_PASSWORD_CONFIG_KEY);
             if (!StringUtil.hasLength(password)) {
-                errMsg.append(DB_PASSWORD_CONFIG_KEY + " ");
+                errMsg.append(DB_PASSWORD_CONFIG_KEY).append(" ");
             }
 
             String adapterClass = props.getFirstPropertyValue(StorageAdapter.class.getName());
             if (!StringUtil.hasLength(adapterClass)) {
-                errMsg.append(StorageAdapter.class.getName() + " ");
+                errMsg.append(StorageAdapter.class.getName()).append(" ");
             }
 
             String locatorSourceStr = props.getFirstPropertyValue(LOCATOR_SERVICE_CONFIG_KEY);
             if (!StringUtil.hasLength(locatorSourceStr)) {
-                errMsg.append(LOCATOR_SERVICE_CONFIG_KEY + " ");
+                errMsg.append(LOCATOR_SERVICE_CONFIG_KEY).append(" ");
             }
 
             String bucketSelectorPrefix = props.getFirstPropertyValue(BUCKETSEL_CONFIG_KEY);
             if (!StringUtil.hasLength(bucketSelectorPrefix)) {
-                errMsg.append(BUCKETSEL_CONFIG_KEY + " ");
+                errMsg.append(BUCKETSEL_CONFIG_KEY).append(" ");
             }
 
             String nthreadStr = props.getFirstPropertyValue(NTHREADS_CONFIG_KEY);
             if (!StringUtil.hasLength(nthreadStr)) {
-                errMsg.append(NTHREADS_CONFIG_KEY + " ");
+                errMsg.append(NTHREADS_CONFIG_KEY).append(" ");
             }
 
             // Everything is required
@@ -189,18 +191,17 @@ public class Main {
             // populate/assign values to pass to FileSync
             Map<String, Object> daoConfig = new TreeMap<>();
             daoConfig.put("schema", schema);
-            daoConfig.put("database", dbUrl);
-
+            
             try {
-                daoConfig.put(SQLGENERATOR_CONFIG_KEY, (Class<SQLGenerator>)Class.forName(generatorName));
+                daoConfig.put(SQLGENERATOR_CONFIG_KEY, Class.forName(generatorName));
             } catch (Exception ex) {
                 throw new IllegalStateException("cannot instantiate SQLGenerator: " + generatorName, ex);
             }
             log.debug("SQL generator class made");
 
-            StorageAdapter localStorage = null;
+            final StorageAdapter localStorage;
             try {
-                Class c = Class.forName(adapterClass);
+                Class<?> c = Class.forName(adapterClass);
                 Object o = c.newInstance();
                 localStorage = (StorageAdapter) o;
                 log.debug("StorageAdapter: " + localStorage);
@@ -209,7 +210,7 @@ public class Main {
             }
             log.debug("storage adapter: " + localStorage);
 
-            URI locatorService = null;
+            final URI locatorService;
             try {
                 locatorService = new URI(locatorSourceStr);
             } catch (URISyntaxException us) {
@@ -231,7 +232,6 @@ public class Main {
 
             FileSync doit = new FileSync(daoConfig, cc, localStorage, locatorService, bucketSel, nthreads);
             doit.run();
-            System.exit(0);
         } catch (Throwable unexpected) {
             log.error("failure", unexpected);
             System.exit(-1);

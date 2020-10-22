@@ -1,4 +1,3 @@
-
 /*
  ************************************************************************
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
@@ -73,18 +72,15 @@ import ca.nrc.cadc.util.Log4jInit;
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Comparator;
-import java.util.Iterator;
-import java.util.List;
 import org.apache.log4j.Level;
+import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.Test;
 
 
 public class IncludeArtifactsTest {
-
+    private static final Logger log = Logger.getLogger(IncludeArtifactsTest.class);
+    
     static {
         Log4jInit.setLevel("org.opencadc.fenwick", Level.DEBUG);
     }
@@ -95,52 +91,31 @@ public class IncludeArtifactsTest {
         try {
             final Path tmpConfDirPath = Files.createTempDirectory(IncludeArtifactsTest.class.getName());
             // Create the expected layout.
-            final File includeDir = new File(tmpConfDirPath.toFile(), "config/include");
+            final File includeDir = new File(tmpConfDirPath.toFile(), "config");
             includeDir.mkdirs();
-            final Path includePath = includeDir.toPath();
+
+            final Path filterFilePath = new File(includeDir, "artifact-filter.sql").toPath();
 
             System.setProperty("user.home", tmpConfDirPath.toFile().toString());
 
-            final String clauseOne = "WHERE a = b AND c < 8";
-            Files.write(Files.createTempFile(includePath, "clauseone_", ".sql"), clauseOne.getBytes());
-
-            final String clauseTwo =
-                    "--Authored by jenkisnd\n--2020.04.28\nWHERE column between (45, 60) AND column_type = " +
-                    "'PROJECT'\nAND year = 2020";
-            Files.write(Files.createTempFile(includePath, "clausetwo_", ".sql"), clauseTwo.getBytes());
-
-            final String clauseThree = "WHERE lastModified >= 1977-11-25";
-            Files.write(Files.createTempFile(includePath, "clausethree_", ".sql"), clauseThree.getBytes());
-
-            // TXT files are excluded.
-            final String clauseFour = "WHERE name != 'BADARCHIVE'";
-            Files.write(Files.createTempFile(includePath, "clausefour_", ".txt"), clauseFour.getBytes());
-
-            final String clauseFive = "      where thiscol = 'thisvalue'";
-            Files.write(Files.createTempFile(includePath, "clausefive_", ".sql"), clauseFive.getBytes());
-
-            // Should be excluded
-            final String clauseSix = "      where ";
-            Files.write(Files.createTempFile(includePath, "clausesix_", ".sql"), clauseSix.getBytes());
-
-            final String clauseSeven = "      \nwhere\n number = 88\n  and speed = 'racer' --Only speed racer";
-            Files.write(Files.createTempFile(includePath, "clauseseven_", ".sql"), clauseSeven.getBytes());
+            final String clauseOne = "--Authored by jenkisnd\n--2020.04.28\nWHERE a = b AND c < 8\n"
+                                     + "AND column between (45, 60) AND column_type = 'PROJECT'\nAND year = 2020";
+            Files.write(filterFilePath, clauseOne.getBytes());
 
             final IncludeArtifacts includeArtifacts = new IncludeArtifacts();
-            final Iterator<String> clauses = includeArtifacts.getConstraints().iterator();
-            final List<String> clauseList = new ArrayList<>();
-            clauses.forEachRemaining(clauseList::add);
 
-            final List<String> expectedClauses =
-                    Arrays.asList("column between (45, 60) AND column_type = 'PROJECT' AND year = 2020",
-                                  "a = b AND c < 8", "thiscol = 'thisvalue'", "number = 88 and speed = 'racer'",
-                                  "lastModified >= 1977-11-25");
+            Assert.assertEquals("Wrong clause", "a = b AND c < 8 AND column between (45, 60) AND "
+                                                + "column_type = 'PROJECT' AND year = 2020",
+                                includeArtifacts.getConstraint());
 
-            // Sort to allow comparisons.
-            expectedClauses.sort(Comparator.naturalOrder());
-            clauseList.sort(Comparator.naturalOrder());
+            // TXT files are excluded.
+            final String clauseTwo = "WHERE name != 'BADARCHIVE'\n       and thiscol = 'thisvalue'--Only thisvalue";
+            Files.delete(filterFilePath);
+            Files.write(filterFilePath, clauseTwo.getBytes());
 
-            Assert.assertArrayEquals("Wrong clauses", expectedClauses.toArray(), clauseList.toArray());
+            Assert.assertEquals("Wrong clause", "name != 'BADARCHIVE' and thiscol = 'thisvalue'",
+                                includeArtifacts.getConstraint());
+
         } finally {
             System.setProperty("user.home", currUserHome);
         }
@@ -152,19 +127,18 @@ public class IncludeArtifactsTest {
         try {
             final Path tmpConfDirPath = Files.createTempDirectory(IncludeArtifactsTest.class.getName());
             // Create the expected layout.
-            final File includeDir = new File(tmpConfDirPath.toFile(), "config/include");
+            final File includeDir = new File(tmpConfDirPath.toFile(), "config");
             includeDir.mkdirs();
-            final Path includePath = includeDir.toPath();
+            final Path filterFilePath = new File(includeDir, "artifact-filter.sql").toPath();
 
             System.setProperty("user.home", tmpConfDirPath.toFile().toString());
 
             final String clause = "OR B < 9";
-            final Path tmpFilePath =
-                    Files.write(Files.createTempFile(includePath, "clause_", ".sql"), clause.getBytes());
+            final Path tmpFilePath = Files.write(filterFilePath, clause.getBytes());
 
             final IncludeArtifacts includeArtifacts = new IncludeArtifacts();
             try {
-                includeArtifacts.getConstraints().iterator();
+                includeArtifacts.getConstraint();
                 Assert.fail("Should throw IllegalStateException for missing where.");
             } catch (IllegalStateException e) {
                 Assert.assertEquals("Wrong message.",
@@ -184,18 +158,18 @@ public class IncludeArtifactsTest {
         try {
             final Path tmpConfDirPath = Files.createTempDirectory(IncludeArtifactsTest.class.getName());
             // Create the expected layout.
-            final File includeDir = new File(tmpConfDirPath.toFile(), "config/include");
+            final File includeDir = new File(tmpConfDirPath.toFile(), "config");
             includeDir.mkdirs();
-            final Path includePath = includeDir.toPath();
+            final Path filterFilePath = new File(includeDir, "artifact-filter.sql").toPath();
 
             System.setProperty("user.home", tmpConfDirPath.toFile().toString());
 
             final String clause = "WHERE B < 9 -- first where\nwhere z == 9 -- should fail here";
-            Files.write(Files.createTempFile(includePath, "clause_", ".sql"), clause.getBytes());
+            Files.write(filterFilePath, clause.getBytes());
 
             final IncludeArtifacts includeArtifacts = new IncludeArtifacts();
             try {
-                includeArtifacts.getConstraints().iterator();
+                includeArtifacts.getConstraint();
                 Assert.fail("Should throw IllegalStateException for too many wheres.");
             } catch (IllegalStateException e) {
                 Assert.assertEquals("Wrong message.", "A valid WHERE clause is already present (line 2).",
@@ -204,6 +178,42 @@ public class IncludeArtifactsTest {
             }
         } finally {
             System.setProperty("user.home", currUserHome);
+        }
+    }
+    
+    @Test
+    public void testMissingConfigFile() throws Exception {
+        final String oldSetting = System.getProperty("user.home");
+        try {
+            final Path tempLocation = Files.createTempDirectory(IncludeArtifactsTest.class.getName());
+            System.setProperty("user.home", tempLocation.toString());
+            log.debug("Now looking for includes in " + System.getProperty("user.home") + "/config");
+            Files.createDirectories(new File(System.getProperty("user.home") + "/config").toPath());
+            
+            IncludeArtifacts o = new IncludeArtifacts();
+            Assert.fail("expected IllegalStateException, got: " + o);
+        } catch (IllegalStateException expected) {
+            log.info("caught expected: " + expected);
+        } finally {
+            System.setProperty("user.home", oldSetting);
+        }
+    }
+    
+    @Test
+    public void testMissingConfigDir() throws Exception {
+        final String oldSetting = System.getProperty("user.home");
+        try {
+            final Path tempLocation = Files.createTempDirectory(IncludeArtifactsTest.class.getName());
+            System.setProperty("user.home", tempLocation.toString());
+            log.debug("Now looking for includes in non-existent " + System.getProperty("user.home") + "/config");
+            Files.createDirectories(new File(System.getProperty("user.home")).toPath());
+            
+            IncludeArtifacts o = new IncludeArtifacts();
+            Assert.fail("expected IllegalStateException, got: " + o);
+        } catch (IllegalStateException expected) {
+            log.info("caught expected: " + expected);
+        } finally {
+            System.setProperty("user.home", oldSetting);
         }
     }
 }

@@ -80,9 +80,9 @@ import org.springframework.jdbc.core.JdbcTemplate;
 public class HarvestStateDAO extends AbstractDAO<HarvestState> {
     private static final Logger log = Logger.getLogger(HarvestStateDAO.class);
 
-    // only usabe by itself for testing
+    // only usable by itself for testing
     public HarvestStateDAO() { 
-        super();
+        super(true);
     }
     
     public HarvestStateDAO(AbstractDAO src) {
@@ -90,9 +90,17 @@ public class HarvestStateDAO extends AbstractDAO<HarvestState> {
     }
     
     public HarvestState get(UUID id) {
-        return super.get(HarvestState.class, id);
+        HarvestState ret = super.get(HarvestState.class, id);
+        return ret;
     }
     
+    /**
+     * Get HarvestState for the specified name and resourceID (create if necessary).
+     * 
+     * @param name name of the entity being harvested
+     * @param resourceID source of entities
+     * @return current (or new) HarvestState (never null)
+     */
     public HarvestState get(String name, URI resourceID) {
         if (name == null || resourceID == null) {
             throw new IllegalArgumentException("name and resourceID cannot be null");
@@ -107,6 +115,9 @@ public class HarvestStateDAO extends AbstractDAO<HarvestState> {
             SQLGenerator.HarvestStateGet get = ( SQLGenerator.HarvestStateGet) gen.getEntityGet(HarvestState.class);
             get.setSource(name, resourceID);
             HarvestState o = get.execute(jdbc);
+            if (o == null) {
+                o = new HarvestState(name, resourceID);
+            }
             return o;
         } finally {
             long dt = System.currentTimeMillis() - t;

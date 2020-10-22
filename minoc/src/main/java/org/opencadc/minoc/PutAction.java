@@ -86,7 +86,7 @@ import java.util.Date;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.DeletedArtifactEvent;
-import org.opencadc.inventory.db.DeletedEventDAO;
+import org.opencadc.inventory.db.DeletedArtifactEventDAO;
 import org.opencadc.inventory.db.EntityNotFoundException;
 import org.opencadc.inventory.db.ObsoleteStorageLocation;
 import org.opencadc.inventory.db.ObsoleteStorageLocationDAO;
@@ -252,19 +252,20 @@ public class PutAction extends ArtifactAction {
             
             ObsoleteStorageLocation newOSL = null;
             if (existing != null) {
-                DeletedEventDAO eventDAO = new DeletedEventDAO(artifactDAO);
+                DeletedArtifactEventDAO eventDAO = new DeletedArtifactEventDAO(artifactDAO);
                 DeletedArtifactEvent deletedArtifact = new DeletedArtifactEvent(existing.getID());
-                artifactDAO.delete(existing.getID());
-                profiler.checkpoint("artifactDAO.delete.ok");
                 eventDAO.put(deletedArtifact);
                 profiler.checkpoint("eventDAO.put.ok");
+                
+                artifactDAO.delete(existing.getID());
+                profiler.checkpoint("artifactDAO.delete.ok");
             }
             
             artifactDAO.put(artifact);
             profiler.checkpoint("artifactDAO.put.ok");
             log.debug("put artifact in database: " + artifactURI);
             
-            if (existing != null) {
+            if (existing != null && existing.storageLocation != null) {
                 if (!artifact.storageLocation.equals(existing.storageLocation)) {
                     newOSL = new ObsoleteStorageLocation(existing.storageLocation);
                     locDAO.put(newOSL);
