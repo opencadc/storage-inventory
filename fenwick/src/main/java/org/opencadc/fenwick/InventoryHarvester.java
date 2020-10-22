@@ -79,6 +79,7 @@ import ca.nrc.cadc.reg.Capabilities;
 import ca.nrc.cadc.reg.Capability;
 import ca.nrc.cadc.reg.Standards;
 import ca.nrc.cadc.reg.client.RegistryClient;
+import ca.nrc.cadc.util.UUIDComparator;
 import java.io.File;
 import java.io.IOException;
 import java.net.URI;
@@ -323,40 +324,47 @@ public class InventoryHarvester implements Runnable {
                 }
 
                 Artifact artifact = this.artifactDAO.get(deletedStorageLocationEvent.getID());
-
-                transactionManager.startTransaction();
-
                 if (artifact != null) {
-                    artifactDAO.lock(artifact);
-                    artifact = this.artifactDAO.get(deletedStorageLocationEvent.getID());
-                    
-                    final SiteLocation siteLocation = new SiteLocation(storageSite.getID());
-                    // TODO: this message could also log the artifact and site that was removed
-                    log.info("PUT: DeletedStorageLocationEvent " + deletedStorageLocationEvent.getID()
-                             + " " + df.format(deletedStorageLocationEvent.getLastModified()));
-                    artifactDAO.removeSiteLocation(artifact, siteLocation);
-                    harvestState.curLastModified = deletedStorageLocationEvent.getLastModified();
-                    harvestStateDAO.put(harvestState);
+                    try {
+                        transactionManager.startTransaction();
+                        try {
+                            artifactDAO.lock(artifact);
+                            artifact = artifactDAO.get(deletedStorageLocationEvent.getID());
+                        } catch (EntityNotFoundException ex) {
+                            artifact = null;
+                        }
+                        if (artifact != null) {
+                            artifact = this.artifactDAO.get(deletedStorageLocationEvent.getID());
+
+                            final SiteLocation siteLocation = new SiteLocation(storageSite.getID());
+                            // TODO: this message could also log the artifact and site that was removed
+                            log.info("PUT: DeletedStorageLocationEvent " + deletedStorageLocationEvent.getID()
+                                     + " " + df.format(deletedStorageLocationEvent.getLastModified()));
+                            artifactDAO.removeSiteLocation(artifact, siteLocation);
+                            harvestState.curLastModified = deletedStorageLocationEvent.getLastModified();
+                            harvestStateDAO.put(harvestState);
+                        }
+
+                        transactionManager.commitTransaction();
+                    } catch (Exception exception) {
+                        if (transactionManager.isOpen()) {
+                            log.error("Exception in transaction.  Rolling back...");
+                            transactionManager.rollbackTransaction();
+                            log.error("Rollback: OK");
+                        }
+
+                        throw exception;
+                    } finally {
+                        if (transactionManager.isOpen()) {
+                            log.error("BUG: transaction open in finally. Rolling back...");
+                            transactionManager.rollbackTransaction();
+                            log.error("Rollback: OK");
+                            throw new RuntimeException("BUG: transaction open in finally");
+                        }
+                    }
                 }
-                
-                transactionManager.commitTransaction();
-
             }
-        } catch (EntityNotFoundException ex) {
-            try {
-                transactionManager.rollbackTransaction();
-            } catch (Exception tex) {
-                log.error("failed to rollback txn after lock encountered " + ex, tex);
-            }
-        } catch (Exception exception) {
-            if (transactionManager.isOpen()) {
-                log.error("Exception in transaction.  Rolling back...");
-                transactionManager.rollbackTransaction();
-                log.error("Rollback: OK");
-            }
-
-            throw exception;
-        }
+        } 
     }
 
     /**
@@ -406,25 +414,34 @@ public class InventoryHarvester implements Runnable {
                     continue; // ugh
                 }
                 
-                transactionManager.startTransaction();
-                // no need to acquire lock on artifact
-                log.info("PUT: DeletedArtifactEvent " + deletedArtifactEvent.getID() + " " + df.format(deletedArtifactEvent.getLastModified()));
-                deletedArtifactEventDeletedEventDAO.put(deletedArtifactEvent);
-                artifactDAO.delete(deletedArtifactEvent.getID());
-                harvestState.curLastModified = deletedArtifactEvent.getLastModified();
-                harvestState.curID = deletedArtifactEvent.getID();
-                harvestStateDAO.put(harvestState);
-                transactionManager.commitTransaction();
-            }
-        } catch (Exception exception) {
-            if (transactionManager.isOpen()) {
-                log.error("Exception in transaction.  Rolling back...");
-                transactionManager.rollbackTransaction();
-                log.error("Rollback: OK");
-            }
+                try {
+                    transactionManager.startTransaction();
+                    // no need to acquire lock on artifact
+                    log.info("PUT: DeletedArtifactEvent " + deletedArtifactEvent.getID() + " " + df.format(deletedArtifactEvent.getLastModified()));
+                    deletedArtifactEventDeletedEventDAO.put(deletedArtifactEvent);
+                    artifactDAO.delete(deletedArtifactEvent.getID());
+                    harvestState.curLastModified = deletedArtifactEvent.getLastModified();
+                    harvestState.curID = deletedArtifactEvent.getID();
+                    harvestStateDAO.put(harvestState);
+                    transactionManager.commitTransaction();
+                } catch (Exception exception) {
+                    if (transactionManager.isOpen()) {
+                        log.error("Exception in transaction.  Rolling back...");
+                        transactionManager.rollbackTransaction();
+                        log.error("Rollback: OK");
+                    }
 
-            throw exception;
-        }
+                    throw exception;
+                } finally {
+                    if (transactionManager.isOpen()) {
+                        log.error("BUG: transaction open in finally. Rolling back...");
+                        transactionManager.rollbackTransaction();
+                        log.error("Rollback: OK");
+                        throw new RuntimeException("BUG: transaction open in finally");
+                    }
+                }
+            }
+        } 
     }
 
     /**
@@ -455,55 +472,87 @@ public class InventoryHarvester implements Runnable {
         
         final TransactionManager transactionManager = artifactDAO.getTransactionManager();
 
-        try {
-            DeletedArtifactEventDAO daeDAO = new DeletedArtifactEventDAO(artifactDAO);
-            
-            String start = null;
-            if (harvestState.curLastModified != null) {
-                start = df.format(harvestState.curLastModified);
-            }
-            log.info("QUERY: Artifact from=" + start);
-            boolean first = true;
-            try (final ResourceIterator<Artifact> artifactResourceIterator = artifactSync.iterator()) {
-                while (artifactResourceIterator.hasNext()) {
-                    final Artifact artifact = artifactResourceIterator.next();
+        DeletedArtifactEventDAO daeDAO = new DeletedArtifactEventDAO(artifactDAO);
 
-                    if (first
-                            && artifact.getID().equals(harvestState.curID)
-                            && artifact.getLastModified().equals(harvestState.curLastModified)) {
-                        log.debug("SKIP: previously processed: " + artifact.getID() + " " + artifact.getURI());
-                        first = false;
-                        // ugh but the skip is comprehensible: have to do this inside the loop when using
-                        // try-with-resources
-                        continue;
-                    }
+        String start = null;
+        if (harvestState.curLastModified != null) {
+            start = df.format(harvestState.curLastModified);
+        }
+        log.info("QUERY: Artifact from=" + start);
+        boolean first = true;
+        try (final ResourceIterator<Artifact> artifactResourceIterator = artifactSync.iterator()) {
+            while (artifactResourceIterator.hasNext()) {
+                final Artifact artifact = artifactResourceIterator.next();
 
-                    log.debug("START: Process Artifact " + artifact.getID() + " " + artifact.getURI());
+                if (first
+                        && artifact.getID().equals(harvestState.curID)
+                        && artifact.getLastModified().equals(harvestState.curLastModified)) {
+                    log.debug("SKIP: previously processed: " + artifact.getID() + " " + artifact.getURI());
+                    first = false;
+                    // ugh but the skip is comprehensible: have to do this inside the loop when using
+                    // try-with-resources
+                    continue;
+                }
 
-                    final URI computedChecksum = artifact.computeMetaChecksum(messageDigest);
-                    if (!artifact.getMetaChecksum().equals(computedChecksum)) {
-                        throw new IllegalStateException("checksum mismatch: " + artifact.getID() + " " + artifact.getURI()
-                                + " provided=" + artifact.getMetaChecksum() + " actual=" + computedChecksum);
-                    }
+                log.debug("START: Process Artifact " + artifact.getID() + " " + artifact.getURI());
 
+                final URI computedChecksum = artifact.computeMetaChecksum(messageDigest);
+                if (!artifact.getMetaChecksum().equals(computedChecksum)) {
+                    throw new IllegalStateException("checksum mismatch: " + artifact.getID() + " " + artifact.getURI()
+                            + " provided=" + artifact.getMetaChecksum() + " actual=" + computedChecksum);
+                }
+
+                Artifact collidingArtifact = artifactDAO.get(artifact.getURI());
+                if (collidingArtifact != null && collidingArtifact.getID().equals(artifact.getID())) {
+                    // same ID: not a collision
+                    collidingArtifact = null;
+                }
+
+                try {
                     transactionManager.startTransaction();
+
+                    // since Artifact.id and Artifact.uri are both unique keys, there is only ever one "current artifact"
+                    // it normally has the same ID but may be the colliding artifact
                     Artifact currentArtifact = null;
                     try {
-                        artifactDAO.lock(artifact);
-                        currentArtifact = artifactDAO.get(artifact.getID());
+                        if (collidingArtifact == null) {
+                            artifactDAO.lock(artifact);
+                            currentArtifact = artifactDAO.get(artifact.getID());
+                        } else {
+                            artifactDAO.lock(collidingArtifact);
+                            currentArtifact = artifactDAO.get(collidingArtifact.getID());
+                        }
                     } catch (EntityNotFoundException ex) {
                         currentArtifact = null;
                     }
-                    
+
                     if (currentArtifact == null) {
                         // check if it was already deleted (sync from stale site)
                         DeletedArtifactEvent ev = daeDAO.get(artifact.getID());
                         if (ev != null) {
-                            log.info("SKIP: stale artifact " + artifact.getID() + " " + artifact.getURI() + " " + df.format(artifact.getLastModified()));
+                            log.info("STALE Artifact: skip " 
+                                    + artifact.getID() + "|" + artifact.getURI() + "|" + df.format(artifact.getLastModified()));
+                            transactionManager.rollbackTransaction();
                             continue;
                         }
                     }
-                    
+
+                    if (collidingArtifact != null && currentArtifact != null) {
+                        // resolve collision using Artifact.contentLastModified
+                        if (currentArtifact.getContentLastModified().before(artifact.getContentLastModified())) {
+                            log.info("Artifact.uri COLLISION: replace " 
+                                    + currentArtifact.getID() + "|" + currentArtifact.getURI() + "|" + df.format(currentArtifact.getContentLastModified())
+                                    + " with " + artifact.getID() + "|" + artifact.getURI() + "|" + df.format(artifact.getContentLastModified()));
+                            daeDAO.put(new DeletedArtifactEvent(currentArtifact.getID()));
+                            artifactDAO.delete(currentArtifact.getID());
+                        } else {
+                            log.info("Artifact.uri COLLISION: skip " 
+                                    + artifact.getID() + " " + artifact.getURI() + " " + df.format(artifact.getLastModified()));
+                            transactionManager.rollbackTransaction();
+                            continue;
+                        }
+                    }
+
                     log.info("PUT: artifact " + artifact.getID() + " " + artifact.getURI() + " " + df.format(artifact.getLastModified()));
                     if (storageSite != null && currentArtifact != null && artifact.getMetaChecksum().equals(currentArtifact.getMetaChecksum())) {
                         // only adding a SiteLocation
@@ -530,16 +579,23 @@ public class InventoryHarvester implements Runnable {
                     harvestStateDAO.put(harvestState);
                     transactionManager.commitTransaction();
                     log.debug("END: Process Artifact " + artifact.getID() + " " + artifact.getURI());
+                } catch (Exception exception) {
+                    if (transactionManager.isOpen()) {
+                        log.error("Exception in transaction.  Rolling back...");
+                        transactionManager.rollbackTransaction();
+                        log.error("Rollback: OK");
+                    }
+
+                    throw exception;
+                } finally {
+                    if (transactionManager.isOpen()) {
+                        log.error("BUG: transaction open in finally. Rolling back...");
+                        transactionManager.rollbackTransaction();
+                        log.error("Rollback: OK");
+                        throw new RuntimeException("BUG: transaction open in finally");
+                    }
                 }
             }
-        } catch (Exception exception) {
-            if (transactionManager.isOpen()) {
-                log.error("Exception in transaction.  Rolling back...");
-                transactionManager.rollbackTransaction();
-                log.error("Rollback: OK");
-            }
-
-            throw exception;
         }
     }
 }
