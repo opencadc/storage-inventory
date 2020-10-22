@@ -79,6 +79,7 @@ import ca.nrc.cadc.reg.Capabilities;
 import ca.nrc.cadc.reg.Capability;
 import ca.nrc.cadc.reg.Standards;
 import ca.nrc.cadc.reg.client.RegistryClient;
+import ca.nrc.cadc.util.UUIDComparator;
 import java.io.File;
 import java.io.IOException;
 import java.net.URI;
@@ -486,20 +487,52 @@ public class InventoryHarvester implements Runnable {
                                 + " provided=" + artifact.getMetaChecksum() + " actual=" + computedChecksum);
                     }
 
+                    Artifact collidingArtifact = artifactDAO.get(artifact.getURI());
+                    if (collidingArtifact != null && collidingArtifact.getID().equals(artifact.getID())) {
+                        // same ID: not a collision
+                        collidingArtifact = null;
+                    }
+                    
                     transactionManager.startTransaction();
+                    
+                    // since Artifact.id and Artifact.uri are both unique keys, there is only ever one "current artifact"
+                    // it normally has the same ID but may be the colliding artifact
                     Artifact currentArtifact = null;
                     try {
-                        artifactDAO.lock(artifact);
-                        currentArtifact = artifactDAO.get(artifact.getID());
+                        if (collidingArtifact == null) {
+                            artifactDAO.lock(artifact);
+                            currentArtifact = artifactDAO.get(artifact.getID());
+                        } else {
+                            artifactDAO.lock(collidingArtifact);
+                            currentArtifact = artifactDAO.get(collidingArtifact.getID());
+                        }
                     } catch (EntityNotFoundException ex) {
                         currentArtifact = null;
                     }
-                    
+
                     if (currentArtifact == null) {
                         // check if it was already deleted (sync from stale site)
                         DeletedArtifactEvent ev = daeDAO.get(artifact.getID());
                         if (ev != null) {
-                            log.info("SKIP: stale artifact " + artifact.getID() + " " + artifact.getURI() + " " + df.format(artifact.getLastModified()));
+                            log.info("STALE Artifact: skip " 
+                                    + artifact.getID() + "|" + artifact.getURI() + "|" + df.format(artifact.getLastModified()));
+                            transactionManager.rollbackTransaction();
+                            continue;
+                        }
+                    }
+                    
+                    if (collidingArtifact != null && currentArtifact != null) {
+                        // resolve collision using Artifact.contentLastModified
+                        if (currentArtifact.getContentLastModified().before(artifact.getContentLastModified())) {
+                            log.info("Artifact.uri COLLISION: replace " 
+                                    + currentArtifact.getID() + "|" + currentArtifact.getURI() + "|" + df.format(currentArtifact.getContentLastModified())
+                                    + " with " + artifact.getID() + "|" + artifact.getURI() + "|" + df.format(artifact.getContentLastModified()));
+                            daeDAO.put(new DeletedArtifactEvent(currentArtifact.getID()));
+                            artifactDAO.delete(currentArtifact.getID());
+                        } else {
+                            log.info("Artifact.uri COLLISION: skip " 
+                                    + artifact.getID() + " " + artifact.getURI() + " " + df.format(artifact.getLastModified()));
+                            transactionManager.rollbackTransaction();
                             continue;
                         }
                     }
