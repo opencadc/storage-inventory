@@ -40,7 +40,10 @@ dependencies {
     compile 'org.opencadc:cadc-permissions-client:[0.2,)'
     compile 'org.opencadc:cadc-gms:[1.0,)'
     
+    compile 'gov.nasa.gsfc.heasarc:nom-tam-fits:1.15.3-pdowler'
+    
     testCompile 'junit:junit:[4.0,)'
+    testCompile 'org.opencadc:cadc-storage-adapter-fs:[0.6,)'
 
     intTestCompile 'org.opencadc:cadc-test-vosi:[1.0.2,)'
 

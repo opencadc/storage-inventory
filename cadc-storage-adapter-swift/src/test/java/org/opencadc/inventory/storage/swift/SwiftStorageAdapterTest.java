@@ -67,6 +67,8 @@
 
 package org.opencadc.inventory.storage.swift;
 
+import ca.nrc.cadc.util.Log4jInit;
+import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.Test;
@@ -79,28 +81,54 @@ import org.opencadc.inventory.StorageLocation;
 public class SwiftStorageAdapterTest {
     private static final Logger log = Logger.getLogger(SwiftStorageAdapterTest.class);
 
-    SwiftStorageAdapter swiftAdapter;
+    static {
+        Log4jInit.setLevel("org.opencadc.inventory", Level.INFO);
+    }
+    
     
     public SwiftStorageAdapterTest() { 
-        this.swiftAdapter = new SwiftStorageAdapter("test-bucket", 0);
+        
     }
     
     @Test
     public void testGenerateID() throws Exception {
+        SwiftStorageAdapter swiftAdapter = new SwiftStorageAdapter("test-bucket", 3, false);
         // enough to verify that randomness in the scheme doesn't create invalid URI?
         for (int i = 0; i < 20; i++) {
             StorageLocation loc = swiftAdapter.generateStorageLocation();
-            log.info("testGenerateID: " + loc);
+            log.info("testGenerateID (single-bucket): " + loc);
+        }
+        
+        swiftAdapter = new SwiftStorageAdapter("test-bucket", 3, true);
+        // enough to verify that randomness in the scheme doesn't create invalid URI?
+        for (int i = 0; i < 20; i++) {
+            StorageLocation loc = swiftAdapter.generateStorageLocation();
+            log.info("testGenerateID (multi-bucket): " + loc);
         }
     }
     
     @Test
     public void testBucketeering() throws Exception {
+        SwiftStorageAdapter swiftAdapter = new SwiftStorageAdapter("test-bucket", 3, false);
         StorageLocation loc = swiftAdapter.generateStorageLocation();
         log.info("testBucketeering created: " + loc);
         
         SwiftStorageAdapter.InternalBucket ibucket = swiftAdapter.toInternalBucket(loc);
+        log.info("internal: " + ibucket);
         StorageLocation actual = swiftAdapter.toExternal(ibucket, loc.getStorageID().toASCIIString());
+        log.info("single-bucket: " + loc + " -> " + ibucket + " -> " + actual);
         Assert.assertEquals(loc, actual);
+        
+        
+        swiftAdapter = new SwiftStorageAdapter("test-bucket", 3, false);
+        loc = swiftAdapter.generateStorageLocation();
+        log.info("testBucketeering created: " + loc);
+        
+        ibucket = swiftAdapter.toInternalBucket(loc);
+        log.info("internal: " + ibucket);
+        actual = swiftAdapter.toExternal(ibucket, loc.getStorageID().toASCIIString());
+        log.info("multi-bucket: " + loc + " -> " + ibucket + " -> " + actual);
+        Assert.assertEquals(loc, actual);
+        
     }
 }
