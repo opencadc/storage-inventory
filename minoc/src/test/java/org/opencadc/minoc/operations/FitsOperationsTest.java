@@ -93,6 +93,7 @@ public class FitsOperationsTest {
 
     static {
         Log4jInit.setLevel("org.opencadc.minoc.operations", Level.DEBUG);
+        //Log4jInit.setLevel("org.opencadc.inventory.storage.fs", Level.DEBUG);
     }
      
     public FitsOperationsTest() { 

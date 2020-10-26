@@ -156,6 +156,7 @@ public class ProxyInputStream extends InputStream {
             SortedSet<ByteRange> ranges = new TreeSet<>();
             ranges.add(range);
             ByteArrayOutputStream bos = new ByteArrayOutputStream(len);
+            //log.warn("calling  StorageAdapter.get: curpos=" + curpos + " len=" + len);
             sad.get(loc, bos, ranges);
             byte[] result = bos.toByteArray();
 
