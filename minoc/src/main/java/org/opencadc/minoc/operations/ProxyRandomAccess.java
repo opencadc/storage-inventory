@@ -63,59 +63,41 @@
 *                                       <http://www.gnu.org/licenses/>.
 *
 ************************************************************************
- */
+*/
 
 package org.opencadc.minoc.operations;
 
 import java.io.ByteArrayOutputStream;
+import java.io.FileDescriptor;
 import java.io.IOException;
-import java.io.InputStream;
+import java.nio.channels.FileChannel;
 import java.util.SortedSet;
 import java.util.TreeSet;
-import nom.tam.util.RandomAccess;
+import nom.tam.util.RandomAccessDataObject;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.storage.ByteRange;
 import org.opencadc.inventory.storage.StorageAdapter;
 
 /**
- * Proxy stream that reads from a StorageAdapter.
- * 
+ *
  * @author pdowler
  */
-public class ProxyInputStream extends InputStream {
-    private static final Logger log = Logger.getLogger(ProxyInputStream.class);
+public class ProxyRandomAccess implements RandomAccessDataObject {
+    private static final Logger log = Logger.getLogger(ProxyRandomAccess.class);
 
-    private final StorageAdapter sad;
-    private final StorageLocation loc;
+    private final StorageAdapter adapter;
+    private final StorageLocation sloc;
+    private final long contentLength;
+    
     private long curpos = 0L;
     private long markpos = -1L;
-    private final long contentLength;
-
-    public ProxyInputStream(StorageAdapter sad, StorageLocation loc, long contentLength) {
-        super();
-        this.sad = sad;
-        this.loc = loc;
+    
+    
+    public ProxyRandomAccess(StorageAdapter adapter, StorageLocation sloc, long contentLength) {
+        this.adapter = adapter;
+        this.sloc = sloc;
         this.contentLength = contentLength;
-    }
-
-    @Override
-    public boolean markSupported() {
-        return true;
-    }
-
-    @Override
-    public synchronized void reset() throws IOException {
-        if (markpos == -1L) {
-            throw new IOException("no mark position for reset");
-        }
-        this.curpos = markpos;
-    }
-
-    @Override
-    public synchronized void mark(int readLimit) {
-        // ignore readLimit
-        this.markpos = curpos;
     }
 
     @Override
@@ -124,19 +106,21 @@ public class ProxyInputStream extends InputStream {
     }
 
     @Override
-    public int available() throws IOException {
-        return 0;
+    public long length() throws IOException {
+        return contentLength;
     }
 
     @Override
-    public long skip(long len) throws IOException {
-        long ret = len;
-        if (curpos + len > contentLength) {
-            len = contentLength - curpos;
+    public void seek(long pos) throws IOException {
+        if (pos < 0L || pos > contentLength) {
+            throw new IOException("invalid seek: " + pos);
         }
-        curpos += len;
-        log.warn("ProxyInputStream.skip(" + len + " (curpos:" + curpos + ")");
-        return len;
+        this.curpos = pos;
+    }
+
+    @Override
+    public long getFilePointer() throws IOException {
+        return curpos;
     }
 
     @Override
@@ -151,23 +135,76 @@ public class ProxyInputStream extends InputStream {
 
     @Override
     public int read(byte[] bytes, int off, int len) throws IOException {
+        if (curpos == -1L) {
+            throw new IOException("closed");
+        }
         try {
             long avail = Math.min(len, contentLength - curpos); 
+            if (avail == 0) {
+                return -1;
+            }
             ByteRange range = new ByteRange(curpos, avail);
             SortedSet<ByteRange> ranges = new TreeSet<>();
             ranges.add(range);
             ByteArrayOutputStream bos = new ByteArrayOutputStream(len);
             //log.warn("calling  StorageAdapter.get: curpos=" + curpos + " len=" + len);
-            sad.get(loc, bos, ranges);
+            adapter.get(sloc, bos, ranges);
             byte[] result = bos.toByteArray();
 
             int ret = bos.size();
             System.arraycopy(result, 0, bytes, off, ret);
             curpos += ret;
-            log.warn("ProxyInputStream.read(" + off + "," + len + " read " + ret + " (curpos:" + curpos + ")");
+            log.warn("ProxyRandomAccess.read(" + off + "," + len + " read " + ret + " (curpos:" + curpos + ")");
             return ret;
         } catch (Exception ex) {
             throw new IOException("read failed", ex);
         }
     }
+
+    @Override
+    public String readUTF() throws IOException {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public String readLine() throws IOException {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public void setLength(long l) throws IOException {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public void write(byte[] bytes, int i, int i1) throws IOException {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public void write(byte[] bytes) throws IOException {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public void write(int i) throws IOException {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public void writeUTF(String s) throws IOException {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public FileChannel getChannel() {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public FileDescriptor getFD() throws IOException {
+        throw new UnsupportedOperationException();
+    }
+    
+    
 }

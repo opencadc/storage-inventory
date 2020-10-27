@@ -72,6 +72,7 @@ import ca.nrc.cadc.util.Log4jInit;
 import java.io.File;
 import java.io.FileInputStream;
 import java.net.URI;
+import java.util.List;
 import nom.tam.fits.Header;
 import nom.tam.fits.HeaderCard;
 import nom.tam.util.Cursor;
@@ -129,6 +130,46 @@ public class FitsOperationsTest {
             
             long nbytes = h.getDataSize();
             log.info("data size: " + nbytes);
+            
+        } catch (Exception unexpected) {
+            log.error("unexpected exception", unexpected);
+            Assert.fail("unexpected exception: " + unexpected);
+        }
+    }
+    
+    @Test
+    public void testGetHeaders() {
+        try {
+            // setup
+            File testFile = FileUtil.getFileFromResource("sample-mef.fits", FitsOperationsTest.class);
+            FileInputStream fis = new FileInputStream(testFile);
+            File rootDir = new File("build/tmp/saroot");
+            if (!rootDir.exists()) {
+                rootDir.mkdirs();
+            }
+            StorageAdapter sa = new OpaqueFileSystemStorageAdapter(rootDir, 1);
+            NewArtifact na = new NewArtifact(URI.create("cadc:TEST/" + testFile.getName()));
+            na.contentLength = testFile.length();
+            StorageMetadata sm = sa.put(na, fis);
+            
+            // caller will construct this from requested Artifact
+            StorageMetadata target = new StorageMetadata(sm.getStorageLocation(), sm.getContentChecksum(), sm.getContentLength());
+            
+            FitsOperations fop = new FitsOperations(sa);
+            List<Header> hdrs = fop.getHeaders(target);
+            
+            for (int i = 0; i < hdrs.size(); i++) {
+                Header h = hdrs.get(i);
+                log.info("** header: " + i);
+                Cursor<String,HeaderCard> iter = h.iterator();
+                for (int c = 0; c <= 5; c++) {
+                    HeaderCard hc = iter.next();
+                    log.info(hc.getKey() + " = " + hc.getValue());
+                }
+                long nbytes = h.getDataSize();
+                log.info("** data size: " + nbytes);
+                log.info("...");
+            }
             
         } catch (Exception unexpected) {
             log.error("unexpected exception", unexpected);

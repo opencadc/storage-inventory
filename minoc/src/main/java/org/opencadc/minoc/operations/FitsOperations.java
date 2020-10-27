@@ -80,6 +80,7 @@ import nom.tam.fits.FitsException;
 import nom.tam.fits.Header;
 import nom.tam.util.RandomAccess;
 import org.apache.log4j.Logger;
+import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.storage.StorageAdapter;
 import org.opencadc.inventory.storage.StorageMetadata;
 
@@ -97,17 +98,13 @@ public class FitsOperations {
         this.storageAdapter = storageAdapter;
     }
 
-    // commented out code requires implementation of readHeaderAndSkipHDU() as described in
-    // https://github.com/nom-tam-fits/nom-tam-fits/issues/66
-    
     public Header getPrimaryHeader(StorageMetadata sm) throws ReadException {
         try {
-            ProxyInputStream istream = new ProxyInputStream(storageAdapter, sm.getStorageLocation(), sm.getContentLength());
+            ProxyRandomAccess istream = new ProxyRandomAccess(storageAdapter, sm.getStorageLocation(), sm.getContentLength());
             Fits fits = new Fits(istream);
             
-            Header ret = fits.readHeaderSkipData();
-            //BasicHDU hdu = fits.readHDU();
-            //Header ret = hdu.getHeader();
+            BasicHDU hdu = fits.readHDU();
+            Header ret = hdu.getHeader();
             
             return ret;
         } catch (FitsException ex) {
@@ -120,34 +117,16 @@ public class FitsOperations {
     public List<Header> getHeaders(StorageMetadata sm) throws ReadException {
         try {
             List<Header> ret = new ArrayList<>();
-            ProxyInputStream istream = new ProxyInputStream(storageAdapter, sm.getStorageLocation(), sm.getContentLength());
-            Fits fits = new Fits(istream);
-            
-            Header h = fits.readHeaderSkipData();
-            while (h != null) {
-            //BasicHDU hdu = fits.readHDU();
-            //while (hdu != null) {
-                //Header h = hdu.getHeader();
-                ret.add(h);
-                h = fits.readHeaderSkipData();
-                //hdu = fits.readHDU();
-            }
-            return ret;
-        } catch (FitsException ex) {
-            throw new RuntimeException("invalid fits data: " + sm.getStorageLocation());
-        } catch (IOException ex) {
-            throw new ReadException("failed to read " + sm.getStorageLocation(), ex);
-        }
-    }
-    
-    public BasicHDU getHDU(StorageMetadata sm) throws ReadException {
-        try {
-            ProxyInputStream istream = new ProxyInputStream(storageAdapter, sm.getStorageLocation(), sm.getContentLength());
+            ProxyRandomAccess istream = new ProxyRandomAccess(storageAdapter, sm.getStorageLocation(), sm.getContentLength());
             Fits fits = new Fits(istream);
             
             BasicHDU hdu = fits.readHDU();
-            
-            return hdu;
+            while (hdu != null) {
+                Header h = hdu.getHeader();
+                ret.add(h);
+                hdu = fits.readHDU();
+            }
+            return ret;
         } catch (FitsException ex) {
             throw new RuntimeException("invalid fits data: " + sm.getStorageLocation());
         } catch (IOException ex) {
@@ -160,342 +139,4 @@ public class FitsOperations {
         
     }
     
-    private class StorageAdapterWrapper implements RandomAccess {
-        
-        private final StorageAdapter sa;
-        
-        public StorageAdapterWrapper(StorageAdapter sa) {
-            this.sa = sa;
-        }
-
-        @Override
-        public long getFilePointer() {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public void seek(long offsetFromStart) throws IOException {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public void mark(int readlimit) throws IOException {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public int read(byte[] buf) throws IOException {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public int read(byte[] buf, int offset, int size) throws IOException {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public int read(boolean[] buf) throws IOException {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public int read(boolean[] buf, int offset, int size) throws IOException {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public int read(char[] buf) throws IOException {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public int read(char[] buf, int offset, int size) throws IOException {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public int read(double[] buf) throws IOException {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public int read(double[] buf, int offset, int size) throws IOException {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public int read(float[] buf) throws IOException {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public int read(float[] buf, int offset, int size) throws IOException {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public int read(int[] buf) throws IOException {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public int read(int[] buf, int offset, int size) throws IOException {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public int read(long[] buf) throws IOException {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public int read(long[] buf, int offset, int size) throws IOException {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public int read(short[] buf) throws IOException {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public int read(short[] buf, int offset, int size) throws IOException {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public int readArray(Object o) throws IOException {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public long readLArray(Object o) throws IOException {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public void reset() throws IOException {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public long skip(long distance) throws IOException {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public void skipAllBytes(long toSkip) throws IOException {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public void skipAllBytes(int toSkip) throws IOException {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public void readFully(byte[] b, int off, int len) throws IOException {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public void readFully(byte[] bytes) throws IOException {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public int skipBytes(int i) throws IOException {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public boolean readBoolean() throws IOException {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public byte readByte() throws IOException {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public int readUnsignedByte() throws IOException {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public short readShort() throws IOException {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public int readUnsignedShort() throws IOException {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public char readChar() throws IOException {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public int readInt() throws IOException {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public long readLong() throws IOException {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public float readFloat() throws IOException {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public double readDouble() throws IOException {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public String readLine() throws IOException {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public String readUTF() throws IOException {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public void close() throws IOException {
-            throw new UnsupportedOperationException();
-        }
-        
-        
-    }
-    
-    private class FileWrapper extends RandomAccessFile implements RandomAccess {
-
-        public FileWrapper(File file) throws FileNotFoundException {
-            super(file, "r");
-        }
-
-        @Override
-        public long getFilePointer() {
-            try {
-                return super.getFilePointer();
-            } catch (IOException ex) {
-                throw new RuntimeException("API mismatch: RandomAccessFile.getFilePointer failed", ex);
-            }
-        }
-
-        @Override
-        public void mark(int readlimit) throws IOException {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public int read(boolean[] buf) throws IOException {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public int read(boolean[] buf, int offset, int size) throws IOException {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public int read(char[] buf) throws IOException {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public int read(char[] buf, int offset, int size) throws IOException {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public int read(double[] buf) throws IOException {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public int read(double[] buf, int offset, int size) throws IOException {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public int read(float[] buf) throws IOException {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public int read(float[] buf, int offset, int size) throws IOException {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public int read(int[] buf) throws IOException {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public int read(int[] buf, int offset, int size) throws IOException {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public int read(long[] buf) throws IOException {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public int read(long[] buf, int offset, int size) throws IOException {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public int read(short[] buf) throws IOException {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public int read(short[] buf, int offset, int size) throws IOException {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public int readArray(Object o) throws IOException {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public long readLArray(Object o) throws IOException {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public void reset() throws IOException {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public long skip(long distance) throws IOException {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public void skipAllBytes(long toSkip) throws IOException {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public void skipAllBytes(int toSkip) throws IOException {
-            throw new UnsupportedOperationException();
-        }
-        
-        
-    }
 }
