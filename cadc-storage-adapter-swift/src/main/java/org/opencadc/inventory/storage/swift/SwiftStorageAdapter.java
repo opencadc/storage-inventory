@@ -75,7 +75,6 @@ import ca.nrc.cadc.io.WriteException;
 import ca.nrc.cadc.net.IncorrectContentChecksumException;
 import ca.nrc.cadc.net.IncorrectContentLengthException;
 import ca.nrc.cadc.net.PreconditionFailedException;
-import ca.nrc.cadc.net.ResourceAlreadyExistsException;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.util.HexUtil;
@@ -90,9 +89,11 @@ import java.net.URISyntaxException;
 import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Date;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Properties;
@@ -110,7 +111,6 @@ import org.javaswift.joss.instructions.DownloadInstructions;
 import org.javaswift.joss.instructions.UploadInstructions;
 import org.javaswift.joss.model.Account;
 import org.javaswift.joss.model.Container;
-import org.javaswift.joss.model.DirectoryOrObject;
 import org.javaswift.joss.model.StoredObject;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.StorageLocation;
@@ -137,9 +137,10 @@ public class SwiftStorageAdapter  implements StorageAdapter {
     private static final String CONF_KEY = SwiftStorageAdapter.class.getName() + ".key";
     private static final String CONF_SBLEN = SwiftStorageAdapter.class.getName() + ".bucketLength";
     private static final String CONF_BUCKET = SwiftStorageAdapter.class.getName() + ".bucketName";
+    private static final String CONF_ENABLE_MULTI = SwiftStorageAdapter.class.getName() + ".multiBucket";
 
-    static final String KEY_SCHEME = "sb"; // same scheme as the S3StorageAdapterSB for now
-    static final int BUFFER_SIZE_BYTES = 8192;
+    static final String KEY_SCHEME = "sb";
+
     static final String DEFAULT_CHECKSUM_ALGORITHM = "md5";
     
     // ceph or swift does all kinds of mangling of metadata keys (char substitution, truncation, case changes)
@@ -150,19 +151,19 @@ public class SwiftStorageAdapter  implements StorageAdapter {
     private static final int CIRC_BUFFERS = 3;
     private static final int CIRC_BUFFERSIZE = 64 * 1024;
 
-    protected final int storageBucketLength;
-    protected final String storageBucket;
-    protected final Account client;
+    private final int storageBucketLength;
+    private final String storageBucket;
+    private final Account client;
     
-    private final InternalBucket internalBucket;
-    private Container swiftContainer;
+    // intTest need to set this so both modes can be tested with one config file 
+    boolean multiBucket;
     
     // ctor for unit tests that do not connect
-    SwiftStorageAdapter(String storageBucket, int storageBucketLength) {
+    SwiftStorageAdapter(String storageBucket, int storageBucketLength, boolean multiBucket) {
         this.storageBucket = storageBucket;
         this.storageBucketLength = storageBucketLength;
+        this.multiBucket = multiBucket;
         this.client = null;
-        this.internalBucket = new InternalBucket(storageBucket);
     }
     
     public SwiftStorageAdapter() {
@@ -202,6 +203,15 @@ public class SwiftStorageAdapter  implements StorageAdapter {
                 sb.append("OK");
             }
             
+            final String emb = props.getProperty(CONF_ENABLE_MULTI);
+            sb.append("\n\t" + CONF_ENABLE_MULTI + ": ");
+            if (emb == null) {
+                sb.append("MISSING");
+                ok = false;
+            } else {
+                sb.append("OK");
+            }
+            
             final String user = props.getProperty(CONF_USER);
             sb.append("\n\t" + CONF_USER + ": ");
             if (user == null) {
@@ -226,6 +236,7 @@ public class SwiftStorageAdapter  implements StorageAdapter {
            
             this.storageBucket = bn;
             this.storageBucketLength = Integer.parseInt(sbl);
+            this.multiBucket = Boolean.parseBoolean(emb);
             AccountConfig ac = new AccountConfig();
 
             // work around because uvic ceph auth returns wrong storage url
@@ -241,21 +252,24 @@ public class SwiftStorageAdapter  implements StorageAdapter {
             
             this.client = new AccountFactory(ac).createAccount();
             
-            this.internalBucket = new InternalBucket(storageBucket);
-            init();
+            checkConnectivity();
         } catch (Exception fatal) {
             throw new RuntimeException("invalid config", fatal);
         }
     }
 
-    private void init() {
-        this.swiftContainer = client.getContainer(internalBucket.name);
-        if (swiftContainer.exists()) {
-            log.debug("container: " + swiftContainer.getName() + " [exists]");
-            return;
+    private void checkConnectivity() {
+        client.getServerTime();
+        if (multiBucket) {
+            // TODO: create a meta bucket to store config and check that 
+            // nothing changed in the bucket/data layout... meta bucket
+            // has to not get picked up by the BucketIterator
+        } else {
+            Container c = client.getContainer(storageBucket);
+            if (!c.exists()) {
+                c.create();
+            }
         }
-        swiftContainer.create();
-        log.debug("container: " + swiftContainer.getName() + " [created]");
     }
     
     static class InternalBucket {
@@ -271,29 +285,72 @@ public class SwiftStorageAdapter  implements StorageAdapter {
         }
     }
     
-    // internal format for object identifier is sb:{hex}:{uuid} and we re-use hex as the storageBucket
+    // internal storage model for multiBucket=true: 
+    //      {baseStorageBucket}-{StorageLocation.storageBucket}/{StorageLocation.storageID}
+    //      storageID is so:{uuid}
+    //      storageBucket is {hex}
+    // internal storage model for multiBucket=false (compat): 
+    //      {baseStorageBucket}/{StorageLocation.storageID}
+    //      storageID is sb:{hex}:{uuid}
+    //      storageBucket is {hex}
     StorageLocation generateStorageLocation() {
         String id = UUID.randomUUID().toString();
-        String pre = InventoryUtil.computeBucket(URI.create(id), storageBucketLength);
-        StorageLocation ret = new StorageLocation(URI.create(KEY_SCHEME + ":" + pre + ":" + id));
-        ret.storageBucket = pre;
+        if (multiBucket) {
+            StorageLocation ret = new StorageLocation(URI.create(KEY_SCHEME + ":" + id));
+            ret.storageBucket = InventoryUtil.computeBucket(URI.create(id), storageBucketLength);
+            return ret;
+        }
+        // single bucket
+        String sb = InventoryUtil.computeBucket(URI.create(id), storageBucketLength);
+        StorageLocation ret = new StorageLocation(URI.create(KEY_SCHEME + ":" + sb + ":" + id));
+        ret.storageBucket = sb;
         return ret;
     }
     
     InternalBucket toInternalBucket(StorageLocation loc) {
-        return internalBucket;
+        if (multiBucket) {
+            return new InternalBucket(storageBucket + "-" + loc.storageBucket);
+        }
+        return new InternalBucket(storageBucket);
     }
     
-    protected StorageLocation toExternal(InternalBucket bucket, String key) {
-        // ignore bucket
-        // extract scheme from the key
+    StorageLocation toExternal(InternalBucket bucket, String key) {
+        // validate key
         String[] parts = key.split(":");
-        if (parts.length != 3 || !KEY_SCHEME.equals(parts[0])) {
-            throw new IllegalStateException("invalid object key: " + key + " from bucket: " + bucket);
+        if (multiBucket && ((parts.length != 2 || !KEY_SCHEME.equals(parts[0])))) {
+            throw new IllegalStateException("BUG: invalid multi-bucket object key: " + key);
         }
+        if (!multiBucket && ((parts.length != 3 || !KEY_SCHEME.equals(parts[0])))) {
+            throw new IllegalStateException("BUG: invalid single-bucket object key: " + key);
+        }
+        
         StorageLocation ret = new StorageLocation(URI.create(key));
-        ret.storageBucket = parts[1];
+        if (multiBucket) {
+            ret.storageBucket = toStorageBucket(bucket);
+            if (ret.storageBucket == null) {
+                throw new IllegalStateException("BUG: invalid multi-bucket storage bucket: " + bucket.name);
+            }
+        } else {
+            ret.storageBucket = parts[1];
+        }
+        
         return ret;
+    }
+
+    // multi-bucket only: 
+    //      return StorageLocation.storageBucket or null if the name is not a container name created by this adapter
+    String toStorageBucket(InternalBucket bucket) {
+        try {
+            // validate bucket
+            String base = bucket.name.substring(0, storageBucket.length());
+            String sb = bucket.name.substring(1 + storageBucket.length());
+            if (!storageBucket.equals(base) || sb.length() != storageBucketLength) {
+                return null;
+            }
+            return sb;
+        } catch (StringIndexOutOfBoundsException ex) {
+            return null;
+        }
     }
     
     private StorageMetadata toStorageMetadata(StorageLocation loc, URI md5, long contentLength, 
@@ -302,6 +359,20 @@ public class SwiftStorageAdapter  implements StorageAdapter {
         storageMetadata.artifactURI = artifactURI;
         storageMetadata.contentLastModified = lastModified;
         return storageMetadata;
+    }
+    
+    // get the swift container that would include the specified location
+    private Container getContainerImpl(StorageLocation loc, boolean createIfNotExists) throws ResourceNotFoundException {
+        InternalBucket bucket = toInternalBucket(loc);
+        Container sub = client.getContainer(bucket.name);
+        if (!sub.exists()) {
+            if (createIfNotExists) {
+                sub.create();
+            } else {
+                throw new ResourceNotFoundException("not found: " + loc);
+            }
+        }
+        return sub;
     }
 
     /**
@@ -318,16 +389,15 @@ public class SwiftStorageAdapter  implements StorageAdapter {
     public void get(StorageLocation storageLocation, OutputStream dest)
             throws ResourceNotFoundException, ReadException, WriteException, StorageEngageException {
         log.debug("get: " + storageLocation);
-        //String bucket = toInternalBucket(storageLocation).name;
+        
+        Container sub = getContainerImpl(storageLocation, false);
         String key = storageLocation.getStorageID().toASCIIString();
-        StoredObject obj = swiftContainer.getObject(key);
+        StoredObject obj = sub.getObject(key);
         if (!obj.exists()) {
             throw new ResourceNotFoundException("not found: " + storageLocation);
         }
         
         try (final InputStream source = obj.downloadObjectAsInputStream()) {
-            //ThreadedIO tio = new ThreadedIO(BUFFER_SIZE_BYTES, 8);
-            //tio.ioLoop(dest, inputStream);
             MultiBufferIO io = new MultiBufferIO(CIRC_BUFFERS, CIRC_BUFFERSIZE);
             io.copy(source, dest);
         } catch (InterruptedException ex) {
@@ -344,9 +414,10 @@ public class SwiftStorageAdapter  implements StorageAdapter {
     public void get(StorageLocation storageLocation, OutputStream dest, SortedSet<ByteRange> byteRanges) 
         throws ResourceNotFoundException, ReadException, WriteException, StorageEngageException, TransientException {
         log.debug("get: " + storageLocation);
-        //String bucket = toInternalBucket(storageLocation).name;
+        
+        Container sub = getContainerImpl(storageLocation, false);
         String key = storageLocation.getStorageID().toASCIIString();
-        StoredObject obj = swiftContainer.getObject(key);
+        StoredObject obj = sub.getObject(key);
         if (!obj.exists()) {
             throw new ResourceNotFoundException("not found: " + storageLocation);
         }
@@ -364,8 +435,6 @@ public class SwiftStorageAdapter  implements StorageAdapter {
             di.setRange(new JossRangeWorkaround(br.getOffset(), endPos));
         }
         try (final InputStream source = obj.downloadObjectAsInputStream(di)) {
-            //ThreadedIO tio = new ThreadedIO(BUFFER_SIZE_BYTES, 8);
-            //tio.ioLoop(dest, inputStream);
             MultiBufferIO io = new MultiBufferIO(CIRC_BUFFERS, CIRC_BUFFERSIZE);
             io.copy(source, dest);
         } catch (InterruptedException ex) {
@@ -394,15 +463,6 @@ public class SwiftStorageAdapter  implements StorageAdapter {
     @Override
     public void get(StorageLocation storageLocation, OutputStream dest, Set<String> cutouts)
             throws ResourceNotFoundException, ReadException, WriteException, StorageEngageException {
-        throw new UnsupportedOperationException();
-    }
-
-    // internal bucket management used for init, dynamic buckets, and intTest cleanup
-    void createBucket(InternalBucket bucket) throws ResourceAlreadyExistsException {
-        throw new UnsupportedOperationException();
-    }
-    
-    void deleteBucket(InternalBucket bucket) throws ResourceNotFoundException {
         throw new UnsupportedOperationException();
     }
 
@@ -448,8 +508,8 @@ public class SwiftStorageAdapter  implements StorageAdapter {
             ByteCountInputStream bcis = new ByteCountInputStream(trap);
             DigestInputStream dis = new DigestInputStream(bcis, MessageDigest.getInstance(DEFAULT_CHECKSUM_ALGORITHM));
             
-
-            StoredObject obj = swiftContainer.getObject(loc.getStorageID().toASCIIString());
+            Container sub = getContainerImpl(loc, true);
+            StoredObject obj = sub.getObject(loc.getStorageID().toASCIIString());
             UploadInstructions up = new UploadInstructions(dis);
             if (newArtifact.contentChecksum != null && "MD5".equalsIgnoreCase(newArtifact.contentChecksum.getScheme())) {
                 up.setMd5(newArtifact.contentChecksum.getSchemeSpecificPart());
@@ -489,7 +549,6 @@ public class SwiftStorageAdapter  implements StorageAdapter {
             metadata.put(ARTIFACT_ID_ATTR, newArtifact.getArtifactURI().toASCIIString());
             metadata.put(CONTENT_CHECKSUM_ATTR, contentChecksum.toASCIIString());
             obj.setMetadata(metadata);
-            //obj.saveMetadata();
             
             return toStorageMetadata(loc, contentChecksum, contentLength, newArtifact.getArtifactURI(), lastModified);
         } catch (Md5ChecksumException ex) {
@@ -497,6 +556,8 @@ public class SwiftStorageAdapter  implements StorageAdapter {
             throw new PreconditionFailedException("checksum mismatch: " + newArtifact.contentChecksum + " did not match content");
         } catch (NoSuchAlgorithmException ex) {
             throw new RuntimeException("failed to create MessageDigest: " + DEFAULT_CHECKSUM_ALGORITHM);
+        } catch (ResourceNotFoundException ex) {
+            throw new RuntimeException("failed to find/create child container: " + loc.storageBucket, ex);
         }
     }
     
@@ -539,21 +600,9 @@ public class SwiftStorageAdapter  implements StorageAdapter {
         }
     }
     
-    // method used in integration tests to verify put
-    StorageMetadata getMeta(StorageLocation storageLocation)
-        throws ResourceNotFoundException, StorageEngageException {
-        log.debug("getMeta: " + storageLocation);
-        String key = storageLocation.getStorageID().toASCIIString();
-        StoredObject obj = swiftContainer.getObject(key);
-        if (!obj.exists()) {
-            throw new ResourceNotFoundException("not found: " + storageLocation);
-        }
-        return objectToStorageMetadata(obj);
-    }
-    
-    // also used by iterator
-    private StorageMetadata objectToStorageMetadata(StoredObject obj) {
-        final StorageLocation loc = toExternal(internalBucket, obj.getName());
+    // main use: iterator
+    private StorageMetadata objectToStorageMetadata(InternalBucket bucket, StoredObject obj) {
+        final StorageLocation loc = toExternal(bucket, obj.getName());
         try {
             Map<String,Object> meta = obj.getMetadata();
             String scs = (String) meta.get(CONTENT_CHECKSUM_ATTR);
@@ -561,7 +610,6 @@ public class SwiftStorageAdapter  implements StorageAdapter {
 
             if (scs == null || auri == null) {
                 // put failed to set metadata after writing the file: invalid
-                //log.warn("found invalid: " + loc);
                 return new StorageMetadata(loc);
             }
 
@@ -570,7 +618,6 @@ public class SwiftStorageAdapter  implements StorageAdapter {
 
             return toStorageMetadata(loc, md5, obj.getContentLength(), artifactURI, obj.getLastModifiedAsDate());
         } catch (IllegalArgumentException | IllegalStateException | URISyntaxException ex) {
-            //log.warn("found invalid: " + loc, ex);
             return new StorageMetadata(loc);
         }
     }
@@ -590,10 +637,13 @@ public class SwiftStorageAdapter  implements StorageAdapter {
     // used by intTest
     boolean exists(StorageLocation storageLocation) throws StorageEngageException {
         log.debug("exists: " + storageLocation);
-        String key = storageLocation.getStorageID().toASCIIString();
         try {
-            StoredObject obj = swiftContainer.getObject(key);
+            Container sub = getContainerImpl(storageLocation, false);
+            String key = storageLocation.getStorageID().toASCIIString();
+            StoredObject obj = sub.getObject(key);
             return obj.exists();
+        } catch (ResourceNotFoundException ex) {
+            return false; // no container
         } catch (Exception ex) {
             throw new StorageEngageException("failed to delete: " + storageLocation, ex);
         }
@@ -619,11 +669,14 @@ public class SwiftStorageAdapter  implements StorageAdapter {
             key = key.replace("invalid:", "");
         }
         try {
-            StoredObject obj = swiftContainer.getObject(key);
+            Container sub = getContainerImpl(storageLocation, false);
+            StoredObject obj = sub.getObject(key);
             if (obj.exists()) {
                 obj.delete();
                 return;
             }
+        } catch (ResourceNotFoundException ex) {
+            throw ex;
         } catch (Exception ex) {
             throw new StorageEngageException("failed to delete: " + storageLocation, ex);
         }
@@ -637,23 +690,36 @@ public class SwiftStorageAdapter  implements StorageAdapter {
 
     @Override
     public Iterator<StorageMetadata> iterator(String bucketPrefix) throws StorageEngageException, TransientException {
-        return new StorageMetadataIterator(bucketPrefix);
+        client.resetContainerCache();
+        if (multiBucket) {
+            return new MultiBucketStorageIterator(bucketPrefix);
+        }
+        return new SingleBucketStorageIterator(bucketPrefix);
     }
 
-    private class StorageMetadataIterator implements Iterator<StorageMetadata> {
-
-        private static final int BATCH_SIZE = 1000;
-        private Iterator<DirectoryOrObject> objectIterator;
-        private final String bucketPrefix;
+    // for intTest cleanup
+    Iterator<Container> bucketIterator() {
+        return new BucketIterator(null);
+    }
+    
+    void deleteBucket(Container c) throws Exception {
+        c.delete();
+    }
+    
+    // iterator over all dynamically generated storage buckets
+    private class BucketIterator implements Iterator<Container> {
+        private static final int BATCH_SIZE = 1024;
         
-        private String nextMarkerKey; // name of last item returned by next()
+        String bucketPrefix;
+        String queryPrefix;
+        Iterator<Container> iter;
         private boolean done = false;
-
-        public StorageMetadataIterator(String bucketPrefix) {
+        
+        BucketIterator(String bucketPrefix) {
+            this.queryPrefix = storageBucket + "-";
+            this.bucketPrefix = queryPrefix;
             if (bucketPrefix != null) {
-                this.bucketPrefix = KEY_SCHEME + ":" + bucketPrefix;
-            } else {
-                this.bucketPrefix = null;
+                this.bucketPrefix = queryPrefix + bucketPrefix;
             }
         }
         
@@ -663,15 +729,150 @@ public class SwiftStorageAdapter  implements StorageAdapter {
                 return false;
             }
             
+            // laxy init
+            if (iter == null) {
+                // WARNING: With CEPH Object Store and Swift API:
+                // pagesize limit is applied before filtering with the query prefix so if there are enough
+                // non-matching containers before the prefix the result will be empty
+                
+                List<Container> keep = new ArrayList<>();
+                boolean doList = true;
+                String nextMarkeyKey = null;
+                while (doList) {
+                    Collection<Container> list = client.list(queryPrefix, nextMarkeyKey, BATCH_SIZE);
+                    log.debug("BucketIterator from=" + nextMarkeyKey + " -> size=" + list.size());
+                    doList = !list.isEmpty();
+                    for (Container c : list) {
+                        if (c.getName().startsWith(bucketPrefix)) {
+                            keep.add(c);
+                        }
+                        nextMarkeyKey = c.getName();
+                    }
+                }
+                log.debug("BucketIterator bucketprefix=" + bucketPrefix + " keep=" + keep.size());
+                if (!keep.isEmpty()) {
+                    this.iter = keep.iterator();
+                } else {
+                    done = true;
+                }
+            }
+            
+            if (iter == null) {
+                return false;
+            }
+
+            return iter.hasNext();
+        }
+
+        @Override
+        public Container next() {
+            Container c = iter.next();
+            return c;
+        }
+    }
+    
+    private class MultiBucketStorageIterator implements Iterator<StorageMetadata> {
+        private static final int BATCH_SIZE = 1024;
+
+        private Iterator<Container> bucketIterator;
+        private Container currentBucket;
+        private InternalBucket icurBucket;
+        
+        private Iterator<StoredObject> objectIterator;
+        private String nextMarkerKey;
+
+        public MultiBucketStorageIterator(String bucketPrefix) {
+            this.bucketIterator = new BucketIterator(bucketPrefix);
+            if (bucketIterator.hasNext()) {
+                this.currentBucket = bucketIterator.next();
+                this.icurBucket = new InternalBucket(currentBucket.getName());
+            } else {
+                bucketIterator = null; // no matching buckets
+            }
+        }
+        
+        @Override
+        public boolean hasNext() {
+            if (bucketIterator == null) {
+                return false;
+            }
+            
             if (objectIterator == null || !objectIterator.hasNext()) {
-                Collection<DirectoryOrObject> list = swiftContainer.listDirectory(bucketPrefix, '/', nextMarkerKey, BATCH_SIZE);
-                log.debug("StorageMetadataIterator bucketPrefix: " + bucketPrefix + " size: " + list.size() + " from " + nextMarkerKey);
+                Collection<StoredObject> list = currentBucket.list(null, nextMarkerKey, BATCH_SIZE);
+                log.debug("MultiBucketStorageIterator bucket=" + currentBucket.getName() 
+                        + " size=" + list.size() + " from=" + nextMarkerKey);
+                if (!list.isEmpty()) {
+                    objectIterator = list.iterator();
+                } else {
+                    // finished current bucket
+                    objectIterator = null;
+                }
+            }
+
+            if (objectIterator == null) {
+                if (bucketIterator.hasNext()) {
+                    currentBucket = bucketIterator.next();
+                    icurBucket = new InternalBucket(currentBucket.getName());
+                    nextMarkerKey = null;
+                    //log.debug("next bucket: " + currentBucket);
+                    return hasNext();
+                } else {
+                    //log.debug("next bucket: null");
+                    bucketIterator = null; // done
+                    return false;
+                }
+            }
+
+            return objectIterator.hasNext();
+        }
+
+        @Override
+        public StorageMetadata next() {
+            if (objectIterator == null || !objectIterator.hasNext()) {
+                throw new NoSuchElementException();
+            }
+            StoredObject obj = objectIterator.next();
+            this.nextMarkerKey = obj.getName();
+            
+            return objectToStorageMetadata(icurBucket, obj);
+        }
+        
+    }
+    
+    private class SingleBucketStorageIterator implements Iterator<StorageMetadata> {
+
+        private static final int BATCH_SIZE = 1024;
+        private Iterator<StoredObject> objectIterator;
+        private final String bucketPrefix;
+        private Container swiftContainer;
+        
+        private String nextMarkerKey; // name of last item returned by next()
+        private boolean done = false;
+
+        public SingleBucketStorageIterator(String bucketPrefix) {
+            if (bucketPrefix != null) {
+                this.bucketPrefix = KEY_SCHEME + ":" + bucketPrefix;
+            } else {
+                this.bucketPrefix = null;
+            }
+            this.swiftContainer = client.getContainer(storageBucket);
+        }
+        
+        @Override
+        public boolean hasNext() {
+            if (done) {
+                return false;
+            }
+            
+            if (objectIterator == null || !objectIterator.hasNext()) {
+                Collection<StoredObject> list = swiftContainer.list(bucketPrefix, nextMarkerKey, BATCH_SIZE);
+                log.debug("SingleBucketStorageIterator bucketPrefix=" + bucketPrefix + " size=" + list.size() + " from=" + nextMarkerKey);
                 if (!list.isEmpty()) {
                     objectIterator = list.iterator();
                 } else {
                     objectIterator = null;
                     done = true;
-                    log.debug("StorageMetadataIterator: done");
+                    log.debug("SingleBucketStorageIterator: done");
                 }
             }
 
@@ -687,12 +888,11 @@ public class SwiftStorageAdapter  implements StorageAdapter {
             if (objectIterator == null || !objectIterator.hasNext()) {
                 throw new NoSuchElementException();
             }
-            DirectoryOrObject o = objectIterator.next();
-            StoredObject obj = o.getAsObject();
+            StoredObject obj = objectIterator.next();
             log.debug("next: name=" + obj.getName() + " len=" + obj.getContentLength());
             this.nextMarkerKey = obj.getName();
             
-            return objectToStorageMetadata(obj);
+            return objectToStorageMetadata(null, obj);
         }
         
     }
