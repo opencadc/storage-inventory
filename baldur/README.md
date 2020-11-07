@@ -107,3 +107,14 @@ docker run -it baldur:latest /bin/bash
 ```
 docker run --user tomcat:tomcat --volume=/path/to/external/config:/config:ro --name baldur baldur:latest
 ```
+
+## apply version tags
+```bash
+. VERSION && echo "tags: $TAGS" 
+for t in $TAGS; do
+   docker image tag baldur:latest baldur:$t
+done
+unset TAGS
+docker image list baldur
+```
+

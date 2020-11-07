@@ -395,11 +395,13 @@ public class InventoryHarvesterTest {
         calendar.set(2007, Calendar.SEPTEMBER, 18, 1, 13, 0);
         final Artifact artifactOne = new Artifact(URI.create("cadc:TEST/fileone.ext"), 
                 TestUtil.getRandomMD5(), calendar.getTime(), 8989L);
+        artifactOne.storageLocation = new StorageLocation(URI.create("cadc:TEST/location/1"));
         luskanEnvironment.artifactDAO.put(artifactOne);
 
         calendar.set(2012, Calendar.NOVEMBER, 17, 8, 13, 0);
         final Artifact artifactTwo = new Artifact(URI.create("cadc:INTTEST/filetwo.ext"), 
                 TestUtil.getRandomMD5(), calendar.getTime(), 89898L);
+        artifactTwo.storageLocation = new StorageLocation(URI.create("cadc:INTTEST/location/2"));
         luskanEnvironment.artifactDAO.put(artifactTwo);
 
         final InventoryHarvester testSubject = new InventoryHarvester(inventoryEnvironment.daoConfig,
@@ -416,7 +418,7 @@ public class InventoryHarvesterTest {
     }
     
     @Test
-    public void atestCollisions() throws Exception {
+    public void testCollisions() throws Exception {
         LOGGER.info("testCollisions - START");
         
         StorageSite expectedSite = new StorageSite(URI.create("cadc:TEST/siteone"), "Test Site", true, false);

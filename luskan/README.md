@@ -70,3 +70,13 @@ docker run -it luskan:latest /bin/bash
 ```
 docker run --user tomcat:tomcat --volume=/path/to/external/config:/config:ro --name luskan luskan:latest
 ```
+
+## apply version tags
+```bash
+. VERSION && echo "tags: $TAGS" 
+for t in $TAGS; do
+   docker image tag luskan:latest luskan:$t
+done
+unset TAGS
+docker image list luskan
+```
