@@ -60,4 +60,13 @@ docker run -it fenwick:latest /bin/bash
 ```
 docker run --user opencadc:opencadc -v /path/to/external/config:/config:ro --name fenwick fenwick:latest
 ```
-Note: The **opencadc** user is in the latest cadc-java image.
+
+## apply version tags
+```bash
+. VERSION && echo "tags: $TAGS" 
+for t in $TAGS; do
+   docker image tag fenwick:latest fenwick:$t
+done
+unset TAGS
+docker image list fenwick
+```
