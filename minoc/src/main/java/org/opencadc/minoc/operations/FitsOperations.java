@@ -71,6 +71,7 @@ import ca.nrc.cadc.io.ReadException;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.io.RandomAccessFile;
 import java.util.ArrayList;
 import java.util.List;
@@ -80,6 +81,8 @@ import nom.tam.fits.FitsException;
 import nom.tam.fits.Header;
 import nom.tam.util.RandomAccess;
 import org.apache.log4j.Logger;
+import org.opencadc.fits.slice.NDimensionalSlicer;
+import org.opencadc.fits.slice.Slices;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.storage.StorageAdapter;
 import org.opencadc.inventory.storage.StorageMetadata;
@@ -127,6 +130,30 @@ public class FitsOperations {
                 hdu = fits.readHDU();
             }
             return ret;
+        } catch (FitsException ex) {
+            throw new RuntimeException("invalid fits data: " + sm.getStorageLocation());
+        } catch (IOException ex) {
+            throw new ReadException("failed to read " + sm.getStorageLocation(), ex);
+        }
+    }
+
+    /**
+     * Perform a slice (cutout) of the File identified by the given StorageMetadata.  The cutoutSpec uses the same
+     * specification as the existing Production cutout service
+     * (https://www.cadc-ccda.hia-iha.nrc-cnrc.gc.ca/en/doc/data/#Cutouts).
+     * @param sm                The StorageMetadata to locate the file.
+     * @param cutoutSpec        The cutout specified.  Use the format [EXTENSION_SPEC][{PIXELSTART:PIXELEND}...].
+     * @param outputStream      Where to write the FITS data to.
+     * @throws ReadException    Any errors with I/O.
+     */
+    public void slice(final StorageMetadata sm, final String cutoutSpec, final OutputStream outputStream)
+            throws ReadException {
+        try {
+            final ProxyRandomAccess istream = new ProxyRandomAccess(storageAdapter, sm.getStorageLocation(),
+                                                                    sm.getContentLength());
+            final NDimensionalSlicer slicer = new NDimensionalSlicer();
+
+            slicer.slice(istream, Slices.fromString(cutoutSpec), outputStream);
         } catch (FitsException ex) {
             throw new RuntimeException("invalid fits data: " + sm.getStorageLocation());
         } catch (IOException ex) {

@@ -69,10 +69,19 @@ package org.opencadc.minoc.operations;
 
 import ca.nrc.cadc.util.FileUtil;
 import ca.nrc.cadc.util.Log4jInit;
+
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.URI;
 import java.util.List;
+import java.util.UUID;
+
+import nom.tam.fits.BasicHDU;
+import nom.tam.fits.Fits;
 import nom.tam.fits.Header;
 import nom.tam.fits.HeaderCard;
 import nom.tam.util.Cursor;
@@ -84,6 +93,7 @@ import org.opencadc.inventory.storage.NewArtifact;
 import org.opencadc.inventory.storage.StorageAdapter;
 import org.opencadc.inventory.storage.StorageMetadata;
 import org.opencadc.inventory.storage.fs.OpaqueFileSystemStorageAdapter;
+import org.opencadc.inventory.storage.swift.SwiftStorageAdapter;
 
 /**
  *
@@ -96,10 +106,10 @@ public class FitsOperationsTest {
         Log4jInit.setLevel("org.opencadc.minoc.operations", Level.DEBUG);
         //Log4jInit.setLevel("org.opencadc.inventory.storage.fs", Level.DEBUG);
     }
-     
-    public FitsOperationsTest() { 
+
+    public FitsOperationsTest() {
     }
-    
+
     @Test
     public void testGetPrimaryHeader() {
         try {
@@ -114,10 +124,10 @@ public class FitsOperationsTest {
             NewArtifact na = new NewArtifact(URI.create("cadc:TEST/" + testFile.getName()));
             na.contentLength = testFile.length();
             StorageMetadata sm = sa.put(na, fis);
-            
+
             // caller will construct this from requested Artifact
             StorageMetadata target = new StorageMetadata(sm.getStorageLocation(), sm.getContentChecksum(), sm.getContentLength());
-            
+
             FitsOperations fop = new FitsOperations(sa);
             Header h = fop.getPrimaryHeader(target);
             //h.dumpHeader(System.out);
@@ -127,16 +137,16 @@ public class FitsOperationsTest {
                 log.info(hc.getKey() + " = " + hc.getValue());
             }
             log.info("...");
-            
+
             long nbytes = h.getDataSize();
             log.info("data size: " + nbytes);
-            
+
         } catch (Exception unexpected) {
             log.error("unexpected exception", unexpected);
             Assert.fail("unexpected exception: " + unexpected);
         }
     }
-    
+
     @Test
     public void testGetHeaders() {
         try {
@@ -151,13 +161,13 @@ public class FitsOperationsTest {
             NewArtifact na = new NewArtifact(URI.create("cadc:TEST/" + testFile.getName()));
             na.contentLength = testFile.length();
             StorageMetadata sm = sa.put(na, fis);
-            
+
             // caller will construct this from requested Artifact
             StorageMetadata target = new StorageMetadata(sm.getStorageLocation(), sm.getContentChecksum(), sm.getContentLength());
-            
+
             FitsOperations fop = new FitsOperations(sa);
             List<Header> hdrs = fop.getHeaders(target);
-            
+
             for (int i = 0; i < hdrs.size(); i++) {
                 Header h = hdrs.get(i);
                 log.info("** header: " + i);
@@ -170,7 +180,44 @@ public class FitsOperationsTest {
                 log.info("** data size: " + nbytes);
                 log.info("...");
             }
-            
+
+        } catch (Exception unexpected) {
+            log.error("unexpected exception", unexpected);
+            Assert.fail("unexpected exception: " + unexpected);
+        }
+    }
+
+    @Test
+    public void testCutout() {
+        try {
+            final String cutoutSpec = "[SCI,10][80:220,100:150][1][10:16,70:90][106][8:32,88:112][126]";
+            final File expectedMEFFile = FileUtil.getFileFromResource("test-hst-mef-cutout.fits", FitsOperationsTest.class);
+            final File testMEFFile = FileUtil.getFileFromResource("test-hst-mef.fits", FitsOperationsTest.class);
+            final StorageAdapter storageAdapter = new SwiftStorageAdapter();
+            final FitsOperations testSubject = new FitsOperations(storageAdapter);
+
+            final String artifactName = "swift-int-test-" + UUID.randomUUID();
+            final NewArtifact newArtifact = new NewArtifact(URI.create("cadc:TEST/" + artifactName));
+
+            final StorageMetadata storageMetadata;
+            try (final InputStream inputStream = new FileInputStream(testMEFFile)) {
+                 storageMetadata = storageAdapter.put(newArtifact, inputStream);
+            }
+
+            final File outputFile = File.createTempFile(FitsOperationsTest.class.getSimpleName(), ".fits");
+            outputFile.deleteOnExit();
+
+            try (final OutputStream outputStream = new FileOutputStream(outputFile)) {
+                testSubject.slice(storageMetadata, cutoutSpec, outputStream);
+            }
+
+            final Fits expectedFits = new Fits(expectedMEFFile);
+            final Fits resultFits = new Fits(outputFile);
+
+            final BasicHDU<?>[] expectedHDUList = expectedFits.read();
+            final BasicHDU<?>[] resultHDUList = resultFits.read();
+
+            Assert.assertEquals("Wrong number of HDUs.", expectedHDUList.length, resultHDUList.length);
         } catch (Exception unexpected) {
             log.error("unexpected exception", unexpected);
             Assert.fail("unexpected exception: " + unexpected);
