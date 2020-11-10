@@ -45,6 +45,7 @@ dependencies {
     
     testCompile 'junit:junit:[4.0,)'
     testCompile 'org.opencadc:cadc-storage-adapter-fs:[0.6,)'
+    testCompile 'org.opencadc:cadc-storage-adapter-swift:[0.4,)'
 
     intTestCompile 'org.opencadc:cadc-test-vosi:[1.0.2,)'
 
