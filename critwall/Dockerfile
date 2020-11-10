@@ -1,11 +1,8 @@
-FROM cadc-java
+FROM cadc-java:1
 
-ARG APP_VERSION=0.1
+COPY build/distributions/critwall.tar /
 
-COPY build/distributions/critwall-${APP_VERSION}.tar /
+RUN tar xvf critwall.tar \
+    && rm -f critwall.tar
 
-RUN tar xvf critwall-${APP_VERSION}.tar \
-    && cp -a critwall-${APP_VERSION}/* /usr/local/ \
-    && rm -rf critwall-${APP_VERSION}*
-
-CMD ["/usr/local/bin/critwall"]
+CMD ["/critwall/bin/critwall"]

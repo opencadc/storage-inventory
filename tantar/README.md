@@ -38,7 +38,7 @@ Additional java system properties and/or configuration files may be requires to 
 This Docker image relies on the [Base Java Docker image](https://github.com/opencadc/docker-base/tree/master/cadc-java) built as an image called `cadc-java:latest`.
 
 ```
-gradle -i clean build
+gradle clean build
 docker build -t tantar -f Dockerfile .
 ```
 
@@ -51,4 +51,13 @@ docker run -t tantar:latest /bin/bash
 ```
 docker run -r --user opencadc:opencadc -v /path/to/external/config:/config:ro --name tantar tantar:latest
 ```
-Note: opencadc user is in the latest cadc-java image.
+
+## apply version tags
+```bash
+. VERSION && echo "tags: $TAGS" 
+for t in $TAGS; do
+   docker image tag tantar:latest tantar:$t
+done
+unset TAGS
+docker image list tantar
+```

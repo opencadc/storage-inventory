@@ -54,4 +54,14 @@ docker run -it critwall:latest /bin/bash
 ```
 docker run --user opencadc:opencadc -v /path/to/external/config:/config:ro --name critwall critwall:latest
 ```
-Note: opencadc user is in the latest cadc-java image.
+
+## apply version tags
+```bash
+. VERSION && echo "tags: $TAGS" 
+for t in $TAGS; do
+   docker image tag critwall:latest critwall:$t
+done
+unset TAGS
+docker image list critwall
+```
+

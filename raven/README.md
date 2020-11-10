@@ -63,3 +63,13 @@ docker run -it raven:latest /bin/bash
 ```
 docker run --user tomcat:tomcat --volume=/path/to/external/config:/config:ro --name raven raven:latest
 ```
+
+## apply version tags
+```bash
+. VERSION && echo "tags: $TAGS" 
+for t in $TAGS; do
+   docker image tag raven:latest raven:$t
+done
+unset TAGS
+docker image list raven
+```
