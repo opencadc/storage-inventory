@@ -79,6 +79,7 @@ import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.util.HexUtil;
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
@@ -115,6 +116,7 @@ import org.javaswift.joss.model.StoredObject;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.storage.ByteRange;
+import org.opencadc.inventory.storage.InvalidConfigException;
 import org.opencadc.inventory.storage.NewArtifact;
 import org.opencadc.inventory.storage.StorageAdapter;
 import org.opencadc.inventory.storage.StorageEngageException;
@@ -130,33 +132,32 @@ public class SwiftStorageAdapter  implements StorageAdapter {
     private static final long CEPH_UPLOAD_LIMIT = 5 * 1024L * 1024L * 1024L; // 5 GiB
     private static final String CEPH_UPLOAD_LIMIT_MSG = "5 GiB";
     
-    private static final String CONFIG_FILENAME = "cadc-storage-adapter-swift.properties";
+    static final String CONFIG_FILENAME = "cadc-storage-adapter-swift.properties";
     
-    private static final String CONF_ENDPOINT = SwiftStorageAdapter.class.getName() + ".authEndpoint";
-    private static final String CONF_USER = SwiftStorageAdapter.class.getName() + ".username";
-    private static final String CONF_KEY = SwiftStorageAdapter.class.getName() + ".key";
-    private static final String CONF_SBLEN = SwiftStorageAdapter.class.getName() + ".bucketLength";
-    private static final String CONF_BUCKET = SwiftStorageAdapter.class.getName() + ".bucketName";
-    private static final String CONF_ENABLE_MULTI = SwiftStorageAdapter.class.getName() + ".multiBucket";
+    static final String CONF_ENDPOINT = SwiftStorageAdapter.class.getName() + ".authEndpoint";
+    static final String CONF_USER = SwiftStorageAdapter.class.getName() + ".username";
+    static final String CONF_KEY = SwiftStorageAdapter.class.getName() + ".key";
+    static final String CONF_SBLEN = SwiftStorageAdapter.class.getName() + ".bucketLength";
+    static final String CONF_BUCKET = SwiftStorageAdapter.class.getName() + ".bucketName";
+    static final String CONF_ENABLE_MULTI = SwiftStorageAdapter.class.getName() + ".multiBucket";
 
-    static final String KEY_SCHEME = "sb";
+    private static final String KEY_SCHEME = "sb";
 
-    static final String DEFAULT_CHECKSUM_ALGORITHM = "md5";
+    private static final String DEFAULT_CHECKSUM_ALGORITHM = "md5";
     
     // ceph or swift does all kinds of mangling of metadata keys (char substitution, truncation, case changes)
     // javaswift lib seems to at least force keys in the Map to lower case to protect against some of it
-    static final String ARTIFACT_ID_ATTR = "org.opencadc.artifactid";
-    static final String CONTENT_CHECKSUM_ATTR = "org.opencadc.contentchecksum";
+    private static final String ARTIFACT_ID_ATTR = "org.opencadc.artifactid";
+    private static final String CONTENT_CHECKSUM_ATTR = "org.opencadc.contentchecksum";
     
     private static final int CIRC_BUFFERS = 3;
     private static final int CIRC_BUFFERSIZE = 64 * 1024;
 
-    private final int storageBucketLength;
-    private final String storageBucket;
+    // test code checks these
+    final int storageBucketLength;
+    final String storageBucket;
+    boolean multiBucket; // not final: intTest need to set this so both modes can be tested with one config file 
     private final Account client;
-    
-    // intTest need to set this so both modes can be tested with one config file 
-    boolean multiBucket;
     
     // ctor for unit tests that do not connect
     SwiftStorageAdapter(String storageBucket, int storageBucketLength, boolean multiBucket) {
@@ -166,7 +167,8 @@ public class SwiftStorageAdapter  implements StorageAdapter {
         this.client = null;
     }
     
-    public SwiftStorageAdapter() {
+    public SwiftStorageAdapter() throws InvalidConfigException, StorageEngageException {
+        final AccountConfig ac = new AccountConfig();
         try {
             File config = new File(System.getProperty("user.home") + "/config/" + CONFIG_FILENAME);
             Properties props = new Properties();
@@ -177,7 +179,7 @@ public class SwiftStorageAdapter  implements StorageAdapter {
             boolean ok = true;
             
             final String suri = props.getProperty(CONF_ENDPOINT);
-            sb.append("\n\t" + CONF_ENDPOINT + ": ");
+            sb.append("\n\t").append(CONF_ENDPOINT).append(": ");
             if (suri == null) {
                 sb.append("MISSING");
                 ok = false;
@@ -186,7 +188,7 @@ public class SwiftStorageAdapter  implements StorageAdapter {
             }
 
             final String sbl = props.getProperty(CONF_SBLEN);
-            sb.append("\n\t" + CONF_SBLEN + ": ");
+            sb.append("\n\t").append(CONF_SBLEN).append(": ");
             if (sbl == null) {
                 sb.append("MISSING");
                 ok = false;
@@ -195,7 +197,7 @@ public class SwiftStorageAdapter  implements StorageAdapter {
             }
 
             final String bn = props.getProperty(CONF_BUCKET);
-            sb.append("\n\t" + CONF_BUCKET + ": ");
+            sb.append("\n\t").append(CONF_BUCKET).append(": ");
             if (bn == null) {
                 sb.append("MISSING");
                 ok = false;
@@ -204,7 +206,7 @@ public class SwiftStorageAdapter  implements StorageAdapter {
             }
             
             final String emb = props.getProperty(CONF_ENABLE_MULTI);
-            sb.append("\n\t" + CONF_ENABLE_MULTI + ": ");
+            sb.append("\n\t").append(CONF_ENABLE_MULTI).append(": ");
             if (emb == null) {
                 sb.append("MISSING");
                 ok = false;
@@ -213,7 +215,7 @@ public class SwiftStorageAdapter  implements StorageAdapter {
             }
             
             final String user = props.getProperty(CONF_USER);
-            sb.append("\n\t" + CONF_USER + ": ");
+            sb.append("\n\t").append(CONF_USER).append(": ");
             if (user == null) {
                 sb.append("MISSING");
                 ok = false;
@@ -222,7 +224,7 @@ public class SwiftStorageAdapter  implements StorageAdapter {
             }
             
             final String key = props.getProperty(CONF_KEY);
-            sb.append("\n\t" + CONF_KEY + ": ");
+            sb.append("\n\t").append(CONF_KEY).append(": ");
             if (bn == null) {
                 sb.append("MISSING");
                 ok = false;
@@ -231,13 +233,12 @@ public class SwiftStorageAdapter  implements StorageAdapter {
             }
             
             if (!ok) {
-                throw new IllegalStateException(sb.toString());
+                throw new InvalidConfigException(sb.toString());
             }
            
             this.storageBucket = bn;
-            this.storageBucketLength = Integer.parseInt(sbl);
+            this.storageBucketLength = Integer.parseInt(sbl.trim());
             this.multiBucket = Boolean.parseBoolean(emb);
-            AccountConfig ac = new AccountConfig();
 
             // work around because uvic ceph auth returns wrong storage url
             //URL authURL = new URL(suri);
@@ -248,22 +249,27 @@ public class SwiftStorageAdapter  implements StorageAdapter {
             ac.setUsername(user);
             ac.setPassword(key);
             ac.setAuthUrl(suri);
-            //ac.setTenantId("swift");
             
+        } catch (FileNotFoundException ex) {
+            throw new InvalidConfigException("missing config", ex);
+        } catch (Exception ex) {
+            throw new InvalidConfigException("invalid config", ex);
+        }
+        
+        try {
             this.client = new AccountFactory(ac).createAccount();
-            
             checkConnectivity();
-        } catch (Exception fatal) {
-            throw new RuntimeException("invalid config", fatal);
+        } catch (Exception ex) {
+            throw new StorageEngageException("connectiviy check failed", ex);
         }
     }
 
     private void checkConnectivity() {
         client.getServerTime();
         if (multiBucket) {
-            // TODO: create a meta bucket to store config and check that 
-            // nothing changed in the bucket/data layout... meta bucket
-            // has to not get picked up by the BucketIterator
+            // TODO: create/check meta bucket
+            // - store config and check that nothing changed in the bucket/data layout
+            // - meta bucket has to not get picked up by the BucketIterator
         } else {
             Container c = client.getContainer(storageBucket);
             if (!c.exists()) {
