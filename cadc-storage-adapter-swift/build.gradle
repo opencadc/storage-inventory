@@ -15,7 +15,7 @@ sourceCompatibility = 1.8
 
 group = 'org.opencadc'
 
-version = '0.4'
+version = '0.4.1'
 
 apply from: '../opencadc.gradle'
 
@@ -23,7 +23,7 @@ dependencies {
     compile 'log4j:log4j:[1.2,)'
     compile 'org.opencadc:cadc-util:[1.3.10,)'
     compile 'org.opencadc:cadc-inventory:[0.7,)'
-    compile 'org.opencadc:cadc-storage-adapter:[0.7,)'
+    compile 'org.opencadc:cadc-storage-adapter:[0.7.1,)'
 
     // swift API
     //compile 'org.javaswift:joss:0.10.4-pdowler'

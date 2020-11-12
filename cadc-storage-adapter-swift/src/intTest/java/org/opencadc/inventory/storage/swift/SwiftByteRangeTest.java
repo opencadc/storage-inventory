@@ -92,7 +92,7 @@ public class SwiftByteRangeTest extends StorageAdapterByteRangeTest {
     
     final SwiftStorageAdapter swiftAdapter;
     
-    public SwiftByteRangeTest() {
+    public SwiftByteRangeTest() throws Exception {
         super(new SwiftStorageAdapter());
         this.swiftAdapter = (SwiftStorageAdapter) super.adapter;
         swiftAdapter.multiBucket = false; // override config

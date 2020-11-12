@@ -65,109 +65,21 @@
 ************************************************************************
 */
 
-package org.opencadc.inventory.storage.swift;
-
-import ca.nrc.cadc.io.ByteLimitExceededException;
-import ca.nrc.cadc.util.Log4jInit;
-import java.io.InputStream;
-import java.net.URI;
-import java.util.Iterator;
-import org.apache.log4j.Level;
-import org.apache.log4j.Logger;
-import org.javaswift.joss.model.Container;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Test;
-import org.opencadc.inventory.StorageLocation;
-import org.opencadc.inventory.storage.NewArtifact;
-import org.opencadc.inventory.storage.StorageMetadata;
-import org.opencadc.inventory.storage.test.StorageAdapterBasicTest;
-import org.opencadc.inventory.storage.test.TestUtil;
+package org.opencadc.inventory.storage;
 
 /**
- *
+ * Runtime exception that can be thrown by StorageAdapter constructors if the
+ * configuration is not valid.
+ * 
  * @author pdowler
  */
-public class SingleBucketSwiftStorageAdapterTest extends StorageAdapterBasicTest {
-    private static final Logger log = Logger.getLogger(SingleBucketSwiftStorageAdapterTest.class);
+public class InvalidConfigException extends Exception {
 
-    static {
-        Log4jInit.setLevel("org.opencadc.inventory", Level.INFO);
-        Log4jInit.setLevel("org.javaswift.joss.client", Level.INFO);
+    public InvalidConfigException(String msg) { 
+        super(msg);
     }
-    
-    final SwiftStorageAdapter swiftAdapter;
-    
-    public SingleBucketSwiftStorageAdapterTest() throws Exception {
-        super(new SwiftStorageAdapter());
-        this.swiftAdapter = (SwiftStorageAdapter) super.adapter;
-        swiftAdapter.multiBucket = false; // override config
+
+    public InvalidConfigException(String msg, Throwable cause) {
+        super(msg, cause);
     }
-    
-    @Before
-    public void cleanupBefore() throws Exception {
-        log.info("cleanupBefore: START");
-        Iterator<StorageMetadata> sbi = swiftAdapter.iterator();
-        while (sbi.hasNext()) {
-            StorageLocation loc = sbi.next().getStorageLocation();
-            swiftAdapter.delete(loc);
-            log.info("\tdeleted: " + loc);
-        }
-        log.info("cleanupBefore: DONE");        
-    }
-    
-    @Test
-    public void testCleanupOnly() {
-        log.info("testCleanupOnly: no-op");
-    }
-    
-    @Test
-    public void testPutLargeStreamReject() {
-        URI artifactURI = URI.create("cadc:TEST/testPutLargeStreamReject");
-        
-        final NewArtifact na = new NewArtifact(artifactURI);
-        
-        // ceph limit of 5GiB
-        long numBytes = (long) 6 * 1024 * 1024 * 1024; 
-        na.contentLength = numBytes;
-            
-        try {
-            InputStream istream = TestUtil.getInputStreamThatFails();
-            log.info("testPutCheckDeleteLargeStreamReject put: " + artifactURI + " " + numBytes);
-            StorageMetadata sm = swiftAdapter.put(na, istream);
-            Assert.fail("expected ByteLimitExceededException, got: " + sm);
-        } catch (ByteLimitExceededException expected) {
-            log.info("caught: " + expected);
-        } catch (Exception ex) {
-            log.error("unexpected exception", ex);
-            Assert.fail("unexpected exception: " + ex);
-        }
-    }
-    
-    // normally disabled because this has to actually upload ~5GiB of garbage before it fails
-    //@Test
-    public void testPutLargeStreamFail() {
-        URI artifactURI = URI.create("cadc:TEST/testPutLargeStreamFail");
-        
-        final NewArtifact na = new NewArtifact(artifactURI);
-        
-        // ceph limit of 5GiB
-        long numBytes = (long) 6 * 1024 * 1024 * 1024; 
-            
-        try {
-            InputStream istream = TestUtil.getInputStreamOfRandomBytes(numBytes);
-            log.info("testPutCheckDeleteLargeStreamFail put: " + artifactURI + " " + numBytes);
-            StorageMetadata sm = swiftAdapter.put(na, istream);
-            
-            Assert.assertFalse("put should have failed, but object exists", swiftAdapter.exists(sm.getStorageLocation()));
-            
-            Assert.fail("expected ByteLimitExceededException, got: " + sm);
-        } catch (ByteLimitExceededException expected) {
-            log.info("caught: " + expected);
-        } catch (Exception ex) {
-            log.error("unexpected exception", ex);
-            Assert.fail("unexpected exception: " + ex);
-        }
-    }
-    
 }
