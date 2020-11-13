@@ -94,7 +94,7 @@ public class MultiBucketSwiftStorageAdapterTest extends StorageAdapterBasicTest 
     
     final SwiftStorageAdapter swiftAdapter;
     
-    public MultiBucketSwiftStorageAdapterTest() {
+    public MultiBucketSwiftStorageAdapterTest() throws Exception {
         super(new SwiftStorageAdapter());
         
         this.swiftAdapter = (SwiftStorageAdapter) super.adapter;
