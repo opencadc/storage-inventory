@@ -16,6 +16,14 @@ jobs:
       with:
         java-version: 1.8
         
+    - name: local build of nom-tam-fits fork
+      run: |
+        cd ..
+        git clone --single-branch --branch random-access https://github.com/pdowler/nom-tam-fits.git
+        cd nom-tam-fits
+        git branch
+        gradle assemble install
+        
     - name: build and test storage-inventory-dm
       run: cd storage-inventory-dm && gradle --info clean build xslt
       
