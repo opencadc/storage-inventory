@@ -71,6 +71,9 @@ import ca.nrc.cadc.auth.AuthenticationUtil;
 import ca.nrc.cadc.auth.SSLUtil;
 import ca.nrc.cadc.db.ConnectionConfig;
 import ca.nrc.cadc.io.ResourceIterator;
+import ca.nrc.cadc.log.EventLogInfo;
+import ca.nrc.cadc.log.EventStartKVP;
+import ca.nrc.cadc.log.EventStartKey;
 import ca.nrc.cadc.vosi.Availability;
 import ca.nrc.cadc.vosi.AvailabilityClient;
 
@@ -236,6 +239,7 @@ public class FileSync implements Runnable {
         // idle time from when jobs finish until next query
         long idle = 10 * poll;
 
+        String label = FileSync.class.getName() + " START";
         boolean ok = true;
         long loopCount = 0;
         while (ok) {
@@ -256,18 +260,34 @@ public class FileSync implements Runnable {
                 final Subject currentUser = AuthenticationUtil.getCurrentSubject();
                 Iterator<String> bi = selector.getBucketIterator();
                 while (bi.hasNext()) {
+                    EventLogInfo queryEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, label, "QUERY");
                     String bucket = bi.next();
                     log.debug("FileSync.QUERY bucket=" + bucket);
+                    long queryStartTime = System.currentTimeMillis();
                     try (final ResourceIterator<Artifact> unstoredArtifacts = artifactDAO.unstoredIterator(bucket)) {
+                        queryEventLogInfo.setElapsedTime(System.currentTimeMillis() - queryStartTime);
+                        queryEventLogInfo.setStartKVP(new EventStartKVP(EventStartKey.BUCKET, bucket));
+                        queryEventLogInfo.singleEvent();
+                    
+                    
+                        String putLabel = FileSync.class.getName();
                         while (unstoredArtifacts.hasNext()) {
+                            EventLogInfo createEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, putLabel, "CREATE");
                             // TODO:  handle errors from this more sanely after they
                             // are available from the cadc-inventory-db API
                             Artifact curArtifact = unstoredArtifacts.next();
                             log.debug("create job: " + curArtifact.getURI());
+                            createEventLogInfo.setArtifactURI(curArtifact.getURI());
+                            createEventLogInfo.setEntityID(curArtifact.getID());
+                            createEventLogInfo.setValue(bucket);
                             FileSyncJob fsj = new FileSyncJob(curArtifact.getID(), this.locatorService,
                                                               this.storageAdapter, this.jobArtifactDAO, currentUser);
 
+                            long startTime = System.currentTimeMillis();
                             jobQueue.put(fsj); // blocks when queue capacity is reached
+                            createEventLogInfo.setElapsedTime(System.currentTimeMillis() - startTime);
+                            createEventLogInfo.setSuccess(true);
+                            createEventLogInfo.singleEvent();
                             log.info("FileSync.CREATE: " + curArtifact.getURI());
                             num++;
                         }

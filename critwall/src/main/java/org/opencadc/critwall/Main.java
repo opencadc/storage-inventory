@@ -91,6 +91,8 @@ import org.opencadc.inventory.util.BucketSelector;
  * Main entry point for critwall.
  */
 public class Main {
+    public static final String APPLICATION_NAME = "critwall";
+
     private static final Logger log = Logger.getLogger(Main.class);
     private static final String CONFIG_PREFIX = Main.class.getPackage().getName();
     private static final String SQLGENERATOR_CONFIG_KEY = SQLGenerator.class.getName();
