@@ -87,6 +87,8 @@ import org.apache.log4j.Logger;
  */
 public class Main {
     private static final String LOGGING_KEY = Main.class.getPackage().getName() + ".logging";
+    
+    public static final String APPLICATION_NAME = "tantar";
 
     public static void main(final String[] args) {
         Log4jInit.setLevel("ca.nrc.cadc", Level.WARN);

@@ -73,6 +73,8 @@ import ca.nrc.cadc.db.ConnectionConfig;
 import ca.nrc.cadc.db.DBUtil;
 import ca.nrc.cadc.db.TransactionManager;
 import ca.nrc.cadc.io.ResourceIterator;
+import ca.nrc.cadc.log.EventLifeCycle;
+import ca.nrc.cadc.log.EventLogInfo;
 import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.profiler.Profiler;
 import ca.nrc.cadc.util.MultiValuedProperties;
@@ -98,8 +100,6 @@ import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.DeletedArtifactEventDAO;
 import org.opencadc.inventory.db.DeletedStorageLocationEventDAO;
 import org.opencadc.inventory.db.EntityNotFoundException;
-import org.opencadc.inventory.db.ObsoleteStorageLocation;
-import org.opencadc.inventory.db.ObsoleteStorageLocationDAO;
 import org.opencadc.inventory.db.SQLGenerator;
 import org.opencadc.inventory.db.version.InitDatabase;
 import org.opencadc.inventory.storage.StorageAdapter;
@@ -357,6 +357,8 @@ public class BucketValidator implements ValidateEventListener {
     public void clearStorageLocation(final Artifact artifact) {
         if (canTakeAction()) {
             final TransactionManager transactionManager = artifactDAO.getTransactionManager();
+            String label = "Artifact";
+            EventLogInfo clearEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, label, "CLEAR STORAGE LOCATION");
 
             try {
                 LOGGER.debug("Start transaction.");
@@ -364,9 +366,14 @@ public class BucketValidator implements ValidateEventListener {
                 
                 artifactDAO.lock(artifact);
                 Artifact curArtifact = artifactDAO.get(artifact.getID());
+                clearEventLogInfo.setArtifactURI(artifact.getURI());
+                clearEventLogInfo.setEntityID(curArtifact.getID());
+                clearEventLogInfo.setLifeCycle(EventLifeCycle.PROPAGATE);
                 final DeletedStorageLocationEventDAO deletedEventDAO = new DeletedStorageLocationEventDAO(artifactDAO);
+                long startTime = System.currentTimeMillis();
                 deletedEventDAO.put(new DeletedStorageLocationEvent(artifact.getID()));
                 artifactDAO.setStorageLocation(curArtifact, null);
+                clearEventLogInfo.setElapsedTime(System.currentTimeMillis() - startTime);
                 
                 transactionManager.commitTransaction();
             } catch (EntityNotFoundException ex) {
@@ -374,15 +381,22 @@ public class BucketValidator implements ValidateEventListener {
                 transactionManager.rollbackTransaction();
                 LOGGER.debug("Rollback Transaction: OK");
             } catch (Exception e) {
+                clearEventLogInfo.setSuccess(false);
+                clearEventLogInfo.singleEvent();
                 LOGGER.error(String.format("Failed to mark Artifact as new %s.", artifact.getURI()), e);
                 transactionManager.rollbackTransaction();
                 LOGGER.debug("Rollback Transaction: OK");
                 throw e;
             } finally {
                 if (transactionManager.isOpen()) {
+                    clearEventLogInfo.setSuccess(false);
+                    clearEventLogInfo.singleEvent();
                     LOGGER.error("BUG - Open transaction in finally");
                     transactionManager.rollbackTransaction();
                     LOGGER.error("Transaction rolled back successfully.");
+                } else {
+                    clearEventLogInfo.setSuccess(true);
+                    clearEventLogInfo.singleEvent();
                 }
             }
         }
@@ -413,6 +427,11 @@ public class BucketValidator implements ValidateEventListener {
     public void delete(final Artifact artifact) {
         if (canTakeAction()) {
             final TransactionManager transactionManager = artifactDAO.getTransactionManager();
+            String label = "Artifact";
+            EventLogInfo putEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, label, "DELETE");
+            putEventLogInfo.setLifeCycle(EventLifeCycle.CREATE);
+            putEventLogInfo.setEntityID(artifact.getID());
+            putEventLogInfo.setArtifactURI(artifact.getURI());
             try {
                 LOGGER.debug("start transaction...");
                 transactionManager.startTransaction();
@@ -423,7 +442,9 @@ public class BucketValidator implements ValidateEventListener {
                 final DeletedArtifactEventDAO deletedEventDAO = new DeletedArtifactEventDAO(artifactDAO);
                 deletedEventDAO.put(new DeletedArtifactEvent(artifact.getID()));
                 
+                long startTime = System.currentTimeMillis();
                 artifactDAO.delete(artifact.getID());
+                putEventLogInfo.setElapsedTime(System.currentTimeMillis() - startTime);
 
                 LOGGER.debug("commit transaction...");
                 transactionManager.commitTransaction();
@@ -431,15 +452,22 @@ public class BucketValidator implements ValidateEventListener {
             } catch (EntityNotFoundException ex) {
                 LOGGER.debug("failed to lock Artifact " + artifact.getID() + " : already deleted");
             } catch (Exception e) {
+                putEventLogInfo.setSuccess(false);
+                putEventLogInfo.singleEvent();
                 LOGGER.error(String.format("Failed to delete Artifact %s.", artifact.getURI()), e);
                 transactionManager.rollbackTransaction();
                 LOGGER.debug("Rollback Transaction: OK");
                 throw e;
             } finally {
                 if (transactionManager.isOpen()) {
+                    putEventLogInfo.setSuccess(false);
+                    putEventLogInfo.singleEvent();
                     LOGGER.error("BUG - Open transaction in finally");
                     transactionManager.rollbackTransaction();
                     LOGGER.error("Transaction rolled back successfully.");
+                } else {
+                    putEventLogInfo.setSuccess(true);
+                    putEventLogInfo.singleEvent();
                 }
             }
         }
@@ -482,22 +510,36 @@ public class BucketValidator implements ValidateEventListener {
             }
                 
             final TransactionManager transactionManager = artifactDAO.getTransactionManager();
+            String label = "Artifact";
+            EventLogInfo putEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, label, "CREATE PUT");
+            putEventLogInfo.setLifeCycle(EventLifeCycle.CREATE);
+            putEventLogInfo.setEntityID(artifact.getID());
+            putEventLogInfo.setArtifactURI(artifact.getURI());
 
             try {
                 LOGGER.debug("Start transaction.");
                 transactionManager.startTransaction();
+                long startTime = System.currentTimeMillis();
                 artifactDAO.put(artifact);
+                putEventLogInfo.setElapsedTime(System.currentTimeMillis() - startTime);
                 transactionManager.commitTransaction();
             } catch (Exception e) {
+                putEventLogInfo.setSuccess(false);
+                putEventLogInfo.singleEvent();
                 LOGGER.error(String.format("Failed to create Artifact %s.", artifact.getURI()), e);
                 transactionManager.rollbackTransaction();
                 LOGGER.debug("Rollback Transaction: OK");
                 throw e;
             } finally {
                 if (transactionManager.isOpen()) {
+                    putEventLogInfo.setSuccess(false);
+                    putEventLogInfo.singleEvent();
                     LOGGER.error("BUG - Open transaction in finally");
                     transactionManager.rollbackTransaction();
                     LOGGER.error("Transaction rolled back successfully.");
+                } else {
+                    putEventLogInfo.setSuccess(true);
+                    putEventLogInfo.singleEvent();
                 }
             }
         }
@@ -515,6 +557,10 @@ public class BucketValidator implements ValidateEventListener {
     public void replaceArtifact(final Artifact artifact, final StorageMetadata storageMetadata) {
         if (canTakeAction()) {
             final TransactionManager transactionManager = artifactDAO.getTransactionManager();
+            boolean putStarted = false;
+            String label = "Artifact";
+            EventLogInfo deleteEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, label, "REPLACE DELETE");
+            EventLogInfo putEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, label, "REPLACE PUT");
 
             try {
                 LOGGER.debug("Start transaction.");
@@ -524,29 +570,56 @@ public class BucketValidator implements ValidateEventListener {
                     artifactDAO.lock(artifact);
                     
                     DeletedArtifactEventDAO deletedEventDAO = new DeletedArtifactEventDAO(artifactDAO);
+                    long startTime = System.currentTimeMillis();
                     deletedEventDAO.put(new DeletedArtifactEvent(artifact.getID()));
                     
                     artifactDAO.delete(artifact.getID());
+                    deleteEventLogInfo.setElapsedTime(System.currentTimeMillis() - startTime);
+                    deleteEventLogInfo.setLifeCycle(EventLifeCycle.PROPAGATE);
+                    deleteEventLogInfo.setEntityID(artifact.getID());
+                    deleteEventLogInfo.setArtifactURI(artifact.getURI());
+                    deleteEventLogInfo.setSuccess(true);
+                    deleteEventLogInfo.singleEvent();
                 } catch (EntityNotFoundException ex) {
+                    deleteEventLogInfo.setSuccess(false);
+                    deleteEventLogInfo.singleEvent();
                     // artifact deleted since start of iteration - continue 
                     LOGGER.debug("artifact to be replaced was already deleted... continuing to create replacement");
                 }
 
                 final Artifact replacementArtifact = toArtifact(storageMetadata);
                 
+                putStarted = true;
+                putEventLogInfo.setArtifactURI(replacementArtifact.getURI());
+                putEventLogInfo.setEntityID(replacementArtifact.getID());
+                putEventLogInfo.setLifeCycle(EventLifeCycle.PROPAGATE);
+                long startTime = System.currentTimeMillis();
                 artifactDAO.put(replacementArtifact);
+                putEventLogInfo.setElapsedTime(System.currentTimeMillis() - startTime);
 
                 transactionManager.commitTransaction();
             } catch (Exception e) {
+                if (putStarted) {
+                    putEventLogInfo.setSuccess(false);
+                    putEventLogInfo.singleEvent();
+                }
+
                 LOGGER.error(String.format("Failed to create Artifact %s.", storageMetadata.artifactURI), e);
                 transactionManager.rollbackTransaction();
                 LOGGER.debug("Rollback Transaction: OK");
                 throw e;
             } finally {
                 if (transactionManager.isOpen()) {
+                    if (putStarted) {
+                        putEventLogInfo.setSuccess(false);
+                        putEventLogInfo.singleEvent();
+                    }
                     LOGGER.error("BUG - Open transaction in finally");
                     transactionManager.rollbackTransaction();
                     LOGGER.error("Transaction rolled back successfully.");
+                } else {
+                    putEventLogInfo.setSuccess(true);
+                    putEventLogInfo.singleEvent();
                 }
             }
         }
@@ -564,6 +637,11 @@ public class BucketValidator implements ValidateEventListener {
     public void updateArtifact(final Artifact artifact, final StorageMetadata storageMetadata) throws Exception {
         if (canTakeAction()) {
             final TransactionManager transactionManager = artifactDAO.getTransactionManager();
+            String label = "Artifact";
+            EventLogInfo updateEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, label, "UPDATE");
+            updateEventLogInfo.setArtifactURI(artifact.getURI());
+            updateEventLogInfo.setEntityID(artifact.getID());
+            updateEventLogInfo.setLifeCycle(EventLifeCycle.PROPAGATE);
 
             try {
                 LOGGER.debug("Start transaction.");
@@ -577,21 +655,30 @@ public class BucketValidator implements ValidateEventListener {
                 artifact.contentType = storageMetadata.contentType;
                 artifact.storageLocation = storageMetadata.getStorageLocation();
 
+                long startTime = System.currentTimeMillis();
                 artifactDAO.put(artifact);
+                updateEventLogInfo.setElapsedTime(System.currentTimeMillis() - startTime);
 
                 transactionManager.commitTransaction();
             } catch (EntityNotFoundException ex) {
                 LOGGER.debug("failed to lock Artifact " + artifact.getID() + " : already deleted");
             } catch (Exception e) {
+                updateEventLogInfo.setSuccess(false);
+                updateEventLogInfo.singleEvent();
                 LOGGER.error(String.format("Failed to update Artifact %s.", storageMetadata.artifactURI), e);
                 transactionManager.rollbackTransaction();
                 LOGGER.debug("Rollback Transaction: OK");
                 throw e;
             } finally {
                 if (transactionManager.isOpen()) {
+                    updateEventLogInfo.setSuccess(false);
+                    updateEventLogInfo.singleEvent();
                     LOGGER.error("BUG - Open transaction in finally");
                     transactionManager.rollbackTransaction();
                     LOGGER.error("Transaction rolled back successfully.");
+                } else {
+                    updateEventLogInfo.setSuccess(true);
+                    updateEventLogInfo.singleEvent();
                 }
             }
         }
