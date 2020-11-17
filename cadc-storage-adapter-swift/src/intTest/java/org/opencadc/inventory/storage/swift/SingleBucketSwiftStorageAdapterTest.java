@@ -74,6 +74,7 @@ import java.net.URI;
 import java.util.Iterator;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
+import org.javaswift.joss.model.Container;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
@@ -87,8 +88,8 @@ import org.opencadc.inventory.storage.test.TestUtil;
  *
  * @author pdowler
  */
-public class SwiftStorageAdapterTest extends StorageAdapterBasicTest {
-    private static final Logger log = Logger.getLogger(SwiftStorageAdapterTest.class);
+public class SingleBucketSwiftStorageAdapterTest extends StorageAdapterBasicTest {
+    private static final Logger log = Logger.getLogger(SingleBucketSwiftStorageAdapterTest.class);
 
     static {
         Log4jInit.setLevel("org.opencadc.inventory", Level.INFO);
@@ -97,9 +98,10 @@ public class SwiftStorageAdapterTest extends StorageAdapterBasicTest {
     
     final SwiftStorageAdapter swiftAdapter;
     
-    public SwiftStorageAdapterTest() {
+    public SingleBucketSwiftStorageAdapterTest() throws Exception {
         super(new SwiftStorageAdapter());
         this.swiftAdapter = (SwiftStorageAdapter) super.adapter;
+        swiftAdapter.multiBucket = false; // override config
     }
     
     @Before
@@ -112,6 +114,11 @@ public class SwiftStorageAdapterTest extends StorageAdapterBasicTest {
             log.info("\tdeleted: " + loc);
         }
         log.info("cleanupBefore: DONE");        
+    }
+    
+    @Test
+    public void testCleanupOnly() {
+        log.info("testCleanupOnly: no-op");
     }
     
     @Test
@@ -162,6 +169,5 @@ public class SwiftStorageAdapterTest extends StorageAdapterBasicTest {
             Assert.fail("unexpected exception: " + ex);
         }
     }
-    
     
 }

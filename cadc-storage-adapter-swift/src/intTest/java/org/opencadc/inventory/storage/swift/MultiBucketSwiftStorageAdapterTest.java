@@ -71,42 +71,60 @@ import ca.nrc.cadc.util.Log4jInit;
 import java.util.Iterator;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
+import org.javaswift.joss.model.Container;
 import org.junit.Before;
+import org.junit.Test;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.storage.StorageMetadata;
-import org.opencadc.inventory.storage.test.StorageAdapterByteRangeTest;
+import org.opencadc.inventory.storage.test.StorageAdapterBasicTest;
 
 /**
- * Integration tests that interact with the file system. These tests require a file system
- * that supports posix extended attributes.
- * 
+ *
  * @author pdowler
  */
-public class SwiftByteRangeTest extends StorageAdapterByteRangeTest {
-    private static final Logger log = Logger.getLogger(SwiftByteRangeTest.class);
+public class MultiBucketSwiftStorageAdapterTest extends StorageAdapterBasicTest {
+    private static final Logger log = Logger.getLogger(SingleBucketSwiftStorageAdapterTest.class);
 
     static {
         Log4jInit.setLevel("org.opencadc.inventory", Level.INFO);
-        //Log4jInit.setLevel("org.javaswift.joss", Level.INFO);
+        Log4jInit.setLevel("org.javaswift.joss", Level.INFO);
+        
+        Log4jInit.setLevel("org.opencadc.inventory.storage.swift", Level.DEBUG);
     }
     
     final SwiftStorageAdapter swiftAdapter;
     
-    public SwiftByteRangeTest() throws Exception {
+    public MultiBucketSwiftStorageAdapterTest() throws Exception {
         super(new SwiftStorageAdapter());
+        
         this.swiftAdapter = (SwiftStorageAdapter) super.adapter;
-        swiftAdapter.multiBucket = false; // override config
+        swiftAdapter.multiBucket = true; // override config
     }
     
     @Before
     public void cleanupBefore() throws Exception {
-        log.info("cleanupBefore: START");
+        log.info("cleanupBefore: objects...");
+        
         Iterator<StorageMetadata> sbi = swiftAdapter.iterator();
         while (sbi.hasNext()) {
             StorageLocation loc = sbi.next().getStorageLocation();
+            //log.info("found object: " + loc);
             swiftAdapter.delete(loc);
             log.info("\tdeleted: " + loc);
         }
+        log.info("cleanupBefore: containers...");  
+        Iterator<Container> bi = swiftAdapter.bucketIterator();
+        while (bi.hasNext()) {
+            Container c = bi.next();
+            //log.info("found bucket: " + c.getName());
+            swiftAdapter.deleteBucket(c);
+            log.info("\tdeleted bucket: " + c.getName());
+        }
         log.info("cleanupBefore: DONE");        
     }
-}    
+    
+    @Test
+    public void testCleanupOnly() {
+        log.info("testCleanupOnly: no-op");
+    }
+}

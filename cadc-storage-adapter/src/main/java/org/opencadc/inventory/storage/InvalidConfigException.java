@@ -65,48 +65,21 @@
 ************************************************************************
 */
 
-package org.opencadc.inventory.storage.swift;
-
-import ca.nrc.cadc.util.Log4jInit;
-import java.util.Iterator;
-import org.apache.log4j.Level;
-import org.apache.log4j.Logger;
-import org.junit.Before;
-import org.opencadc.inventory.StorageLocation;
-import org.opencadc.inventory.storage.StorageMetadata;
-import org.opencadc.inventory.storage.test.StorageAdapterByteRangeTest;
+package org.opencadc.inventory.storage;
 
 /**
- * Integration tests that interact with the file system. These tests require a file system
- * that supports posix extended attributes.
+ * Runtime exception that can be thrown by StorageAdapter constructors if the
+ * configuration is not valid.
  * 
  * @author pdowler
  */
-public class SwiftByteRangeTest extends StorageAdapterByteRangeTest {
-    private static final Logger log = Logger.getLogger(SwiftByteRangeTest.class);
+public class InvalidConfigException extends Exception {
 
-    static {
-        Log4jInit.setLevel("org.opencadc.inventory", Level.INFO);
-        //Log4jInit.setLevel("org.javaswift.joss", Level.INFO);
+    public InvalidConfigException(String msg) { 
+        super(msg);
     }
-    
-    final SwiftStorageAdapter swiftAdapter;
-    
-    public SwiftByteRangeTest() throws Exception {
-        super(new SwiftStorageAdapter());
-        this.swiftAdapter = (SwiftStorageAdapter) super.adapter;
-        swiftAdapter.multiBucket = false; // override config
+
+    public InvalidConfigException(String msg, Throwable cause) {
+        super(msg, cause);
     }
-    
-    @Before
-    public void cleanupBefore() throws Exception {
-        log.info("cleanupBefore: START");
-        Iterator<StorageMetadata> sbi = swiftAdapter.iterator();
-        while (sbi.hasNext()) {
-            StorageLocation loc = sbi.next().getStorageLocation();
-            swiftAdapter.delete(loc);
-            log.info("\tdeleted: " + loc);
-        }
-        log.info("cleanupBefore: DONE");        
-    }
-}    
+}

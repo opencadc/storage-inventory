@@ -85,7 +85,8 @@ import java.util.SortedSet;
 import org.opencadc.inventory.StorageLocation;
 
 /**
- * The interface to storage implementations.
+ * The interface to storage implementations. Implementations may throw InvalidConfigException
+ * or StorageEngageException from the constructor.
  * 
  * @author majorb
  *
@@ -137,7 +138,10 @@ public interface StorageAdapter {
      * @throws WriteException if the client failed to stream
      * @throws StorageEngageException if the adapter failed to interact with storage
      * @throws TransientException if an unexpected, temporary exception occurred
+     * 
+     * @deprecated intending to remove this method and perform operations outside StorageAdapter
      */
+    @Deprecated
     public void get(StorageLocation storageLocation, OutputStream dest, Set<String> operations)
         throws InterruptedException, ResourceNotFoundException, ReadException, WriteException, StorageEngageException, TransientException;
     
