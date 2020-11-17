@@ -93,6 +93,8 @@ import org.opencadc.inventory.db.SQLGenerator;
  */
 public class Main {
 
+    public static final String APPLICATION_NAME = "fenwick";
+
     private static final Logger log = Logger.getLogger(Main.class);
     private static final String CONFIG_FILE_NAME = "fenwick.properties";
     private static final String CONFIG_PREFIX = Main.class.getPackage().getName();
@@ -105,7 +107,7 @@ public class Main {
     private static final String QUERY_SERVICE_CONFIG_KEY = CONFIG_PREFIX + ".queryService";
     private static final String TRACK_SITE_LOCATIONS_CONFIG_KEY = CONFIG_PREFIX + ".trackSiteLocations";
     private static final String ARTIFACT_SELECTOR_CONFIG_KEY = ArtifactSelector.class.getName();
-
+    
     // Used to verify configuration items.  See the README for descriptions.
     private static final String[] MANDATORY_PROPERTY_KEYS = {
         ARTIFACT_SELECTOR_CONFIG_KEY,

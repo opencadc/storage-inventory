@@ -71,6 +71,8 @@ package org.opencadc.fenwick;
 import ca.nrc.cadc.auth.NotAuthenticatedException;
 import ca.nrc.cadc.io.ByteLimitExceededException;
 import ca.nrc.cadc.io.ResourceIterator;
+import ca.nrc.cadc.log.EventLifeCycle;
+import ca.nrc.cadc.log.EventLogInfo;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
 
@@ -96,6 +98,7 @@ import org.opencadc.tap.TapClient;
 public class StorageSiteSync {
     private static final Logger log = Logger.getLogger(StorageSiteSync.class);
 
+    private static final String LABEL = StorageSiteSync.class.getName();
     // column order folllowing model declarations
     private static final String STORAGE_SITE_QUERY =
             "SELECT resourceid, name, allowRead, allowWrite, id, lastmodified, metachecksum FROM inventory.storagesite";
@@ -134,14 +137,25 @@ public class StorageSiteSync {
                                      IllegalArgumentException, TransientException, IOException,
                                      InterruptedException {
         StorageSite storageSite;
+        EventLogInfo eventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, LABEL, "QUERY");
+        long start = System.currentTimeMillis();
         try (final ResourceIterator<StorageSite> storageSiteIterator = queryStorageSites()) {
+            eventLogInfo.setElapsedTime(System.currentTimeMillis() - start);
+            eventLogInfo.setLifeCycle(EventLifeCycle.CREATE);
             if (storageSiteIterator.hasNext()) {
                 storageSite = storageSiteIterator.next();
+                eventLogInfo.setEntityID(storageSite.getID());
+                eventLogInfo.setSuccess(true);
                 // Ensure there is only one returned.
                 if (storageSiteIterator.hasNext()) {
+                    eventLogInfo.setSuccess(false);
+                    eventLogInfo.singleEvent();
                     throw new IllegalStateException("More than one Storage Site found.");
                 }
+                eventLogInfo.singleEvent();
             } else {
+                eventLogInfo.setSuccess(false);
+                eventLogInfo.singleEvent();
                 throw new IllegalStateException("No storage sites available to sync.");
             }
         }
