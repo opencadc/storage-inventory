@@ -382,7 +382,7 @@ public class BucketValidator implements ValidateEventListener {
                 LOGGER.debug("Rollback Transaction: OK");
             } catch (Exception e) {
                 clearEventLogInfo.setSuccess(false);
-                clearEventLogInfo.singleEvent();
+                LOGGER.info(clearEventLogInfo.singleEvent());
                 LOGGER.error(String.format("Failed to mark Artifact as new %s.", artifact.getURI()), e);
                 transactionManager.rollbackTransaction();
                 LOGGER.debug("Rollback Transaction: OK");
@@ -390,13 +390,13 @@ public class BucketValidator implements ValidateEventListener {
             } finally {
                 if (transactionManager.isOpen()) {
                     clearEventLogInfo.setSuccess(false);
-                    clearEventLogInfo.singleEvent();
+                    LOGGER.info(clearEventLogInfo.singleEvent());
                     LOGGER.error("BUG - Open transaction in finally");
                     transactionManager.rollbackTransaction();
                     LOGGER.error("Transaction rolled back successfully.");
                 } else {
                     clearEventLogInfo.setSuccess(true);
-                    clearEventLogInfo.singleEvent();
+                    LOGGER.info(clearEventLogInfo.singleEvent());
                 }
             }
         }
@@ -453,7 +453,7 @@ public class BucketValidator implements ValidateEventListener {
                 LOGGER.debug("failed to lock Artifact " + artifact.getID() + " : already deleted");
             } catch (Exception e) {
                 putEventLogInfo.setSuccess(false);
-                putEventLogInfo.singleEvent();
+                LOGGER.info(putEventLogInfo.singleEvent());
                 LOGGER.error(String.format("Failed to delete Artifact %s.", artifact.getURI()), e);
                 transactionManager.rollbackTransaction();
                 LOGGER.debug("Rollback Transaction: OK");
@@ -461,13 +461,13 @@ public class BucketValidator implements ValidateEventListener {
             } finally {
                 if (transactionManager.isOpen()) {
                     putEventLogInfo.setSuccess(false);
-                    putEventLogInfo.singleEvent();
+                    LOGGER.info(putEventLogInfo.singleEvent());
                     LOGGER.error("BUG - Open transaction in finally");
                     transactionManager.rollbackTransaction();
                     LOGGER.error("Transaction rolled back successfully.");
                 } else {
                     putEventLogInfo.setSuccess(true);
-                    putEventLogInfo.singleEvent();
+                    LOGGER.info(putEventLogInfo.singleEvent());
                 }
             }
         }
@@ -525,7 +525,7 @@ public class BucketValidator implements ValidateEventListener {
                 transactionManager.commitTransaction();
             } catch (Exception e) {
                 putEventLogInfo.setSuccess(false);
-                putEventLogInfo.singleEvent();
+                LOGGER.info(putEventLogInfo.singleEvent());
                 LOGGER.error(String.format("Failed to create Artifact %s.", artifact.getURI()), e);
                 transactionManager.rollbackTransaction();
                 LOGGER.debug("Rollback Transaction: OK");
@@ -533,13 +533,13 @@ public class BucketValidator implements ValidateEventListener {
             } finally {
                 if (transactionManager.isOpen()) {
                     putEventLogInfo.setSuccess(false);
-                    putEventLogInfo.singleEvent();
+                    LOGGER.info(putEventLogInfo.singleEvent());
                     LOGGER.error("BUG - Open transaction in finally");
                     transactionManager.rollbackTransaction();
                     LOGGER.error("Transaction rolled back successfully.");
                 } else {
                     putEventLogInfo.setSuccess(true);
-                    putEventLogInfo.singleEvent();
+                    LOGGER.info(putEventLogInfo.singleEvent());
                 }
             }
         }
@@ -579,10 +579,10 @@ public class BucketValidator implements ValidateEventListener {
                     deleteEventLogInfo.setEntityID(artifact.getID());
                     deleteEventLogInfo.setArtifactURI(artifact.getURI());
                     deleteEventLogInfo.setSuccess(true);
-                    deleteEventLogInfo.singleEvent();
+                    LOGGER.info(deleteEventLogInfo.singleEvent());
                 } catch (EntityNotFoundException ex) {
                     deleteEventLogInfo.setSuccess(false);
-                    deleteEventLogInfo.singleEvent();
+                    LOGGER.info(deleteEventLogInfo.singleEvent());
                     // artifact deleted since start of iteration - continue 
                     LOGGER.debug("artifact to be replaced was already deleted... continuing to create replacement");
                 }
@@ -601,7 +601,7 @@ public class BucketValidator implements ValidateEventListener {
             } catch (Exception e) {
                 if (putStarted) {
                     putEventLogInfo.setSuccess(false);
-                    putEventLogInfo.singleEvent();
+                    LOGGER.info(putEventLogInfo.singleEvent());
                 }
 
                 LOGGER.error(String.format("Failed to create Artifact %s.", storageMetadata.artifactURI), e);
@@ -612,14 +612,14 @@ public class BucketValidator implements ValidateEventListener {
                 if (transactionManager.isOpen()) {
                     if (putStarted) {
                         putEventLogInfo.setSuccess(false);
-                        putEventLogInfo.singleEvent();
+                        LOGGER.info(putEventLogInfo.singleEvent());
                     }
                     LOGGER.error("BUG - Open transaction in finally");
                     transactionManager.rollbackTransaction();
                     LOGGER.error("Transaction rolled back successfully.");
                 } else {
                     putEventLogInfo.setSuccess(true);
-                    putEventLogInfo.singleEvent();
+                    LOGGER.info(putEventLogInfo.singleEvent());
                 }
             }
         }
@@ -664,7 +664,7 @@ public class BucketValidator implements ValidateEventListener {
                 LOGGER.debug("failed to lock Artifact " + artifact.getID() + " : already deleted");
             } catch (Exception e) {
                 updateEventLogInfo.setSuccess(false);
-                updateEventLogInfo.singleEvent();
+                LOGGER.info(updateEventLogInfo.singleEvent());
                 LOGGER.error(String.format("Failed to update Artifact %s.", storageMetadata.artifactURI), e);
                 transactionManager.rollbackTransaction();
                 LOGGER.debug("Rollback Transaction: OK");
@@ -672,13 +672,13 @@ public class BucketValidator implements ValidateEventListener {
             } finally {
                 if (transactionManager.isOpen()) {
                     updateEventLogInfo.setSuccess(false);
-                    updateEventLogInfo.singleEvent();
+                    LOGGER.info(updateEventLogInfo.singleEvent());
                     LOGGER.error("BUG - Open transaction in finally");
                     transactionManager.rollbackTransaction();
                     LOGGER.error("Transaction rolled back successfully.");
                 } else {
                     updateEventLogInfo.setSuccess(true);
-                    updateEventLogInfo.singleEvent();
+                    LOGGER.info(updateEventLogInfo.singleEvent());
                 }
             }
         }

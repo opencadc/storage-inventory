@@ -319,7 +319,7 @@ public class InventoryHarvester implements Runnable {
             deletedStorageLocationEventSync.getEvents()) {
             queryEventLogInfo.setElapsedTime(System.currentTimeMillis() - queryStartTime);
             queryEventLogInfo.setStartKVP(new EventStartKVP(EventStartKey.LASTMODIFIED, start));
-            queryEventLogInfo.start();
+            log.info(queryEventLogInfo.start());
 
             String putLabel = DeletedStorageLocationEvent.class.getName();
             while (deletedStorageLocationEventResourceIterator.hasNext()) {
@@ -366,7 +366,7 @@ public class InventoryHarvester implements Runnable {
                         transactionManager.commitTransaction();
                     } catch (Exception exception) {
                         putEventLogInfo.setSuccess(false);
-                        putEventLogInfo.singleEvent();
+                        log.info(putEventLogInfo.singleEvent());
                         if (transactionManager.isOpen()) {
                             log.error("Exception in transaction.  Rolling back...");
                             transactionManager.rollbackTransaction();
@@ -377,14 +377,14 @@ public class InventoryHarvester implements Runnable {
                     } finally {
                         if (transactionManager.isOpen()) {
                             putEventLogInfo.setSuccess(false);
-                            putEventLogInfo.singleEvent();
+                            log.info(putEventLogInfo.singleEvent());
                             log.error("BUG: transaction open in finally. Rolling back...");
                             transactionManager.rollbackTransaction();
                             log.error("Rollback: OK");
                             throw new RuntimeException("BUG: transaction open in finally");
                         } else {
                             putEventLogInfo.setSuccess(true);
-                            putEventLogInfo.singleEvent();
+                            log.info(putEventLogInfo.singleEvent());
                         }
                     }
                 }
@@ -433,7 +433,7 @@ public class InventoryHarvester implements Runnable {
                      = deletedArtifactEventSync.getEvents()) {
             queryEventLogInfo.setElapsedTime(System.currentTimeMillis() - queryStartTime);
             queryEventLogInfo.setStartKVP(new EventStartKVP(EventStartKey.LASTMODIFIED, start));
-            queryEventLogInfo.start();
+            log.info(queryEventLogInfo.start());
 
             String putLabel = DeletedArtifactEvent.class.getName();
             while (deletedArtifactEventResourceIterator.hasNext()) {
@@ -465,7 +465,7 @@ public class InventoryHarvester implements Runnable {
                     transactionManager.commitTransaction();
                 } catch (Exception exception) {
                     putEventLogInfo.setSuccess(false);
-                    putEventLogInfo.singleEvent();
+                    log.info(putEventLogInfo.singleEvent());
 
                     if (transactionManager.isOpen()) {
                         log.error("Exception in transaction.  Rolling back...");
@@ -480,11 +480,11 @@ public class InventoryHarvester implements Runnable {
                         transactionManager.rollbackTransaction();
                         log.error("Rollback: OK");
                         putEventLogInfo.setSuccess(false);
-                        putEventLogInfo.singleEvent();
+                        log.info(putEventLogInfo.singleEvent());
                         throw new RuntimeException("BUG: transaction open in finally");
                     } else {
                         putEventLogInfo.setSuccess(true);
-                        putEventLogInfo.singleEvent();
+                        log.info(putEventLogInfo.singleEvent());
                     }
                 }
             }
@@ -533,7 +533,7 @@ public class InventoryHarvester implements Runnable {
         try (final ResourceIterator<Artifact> artifactResourceIterator = artifactSync.iterator()) {
             queryEventLogInfo.setElapsedTime(System.currentTimeMillis() - queryStartTime);
             queryEventLogInfo.setStartKVP(new EventStartKVP(EventStartKey.LASTMODIFIED, start));
-            queryEventLogInfo.start();
+            log.info(queryEventLogInfo.start());
         
             String putLabel = "Artifact";
             String staleLabel = "STALE artifact: skip";
@@ -600,7 +600,7 @@ public class InventoryHarvester implements Runnable {
                             staleEventLogInfo.setEntityID(artifact.getID());
                             staleEventLogInfo.setValue(lastModified);
                             staleEventLogInfo.setSuccess(true);
-                            staleEventLogInfo.singleEvent();
+                            log.info(staleEventLogInfo.singleEvent());
                             log.info("STALE Artifact: skip " 
                                     + artifact.getID() + "|" + artifact.getURI() + "|" + lastModified);
                             transactionManager.rollbackTransaction();
@@ -631,7 +631,7 @@ public class InventoryHarvester implements Runnable {
                             skipEventLogInfo.setEntityID(artifact.getID());
                             skipEventLogInfo.setValue(lastModified);
                             skipEventLogInfo.setSuccess(true);
-                            skipEventLogInfo.singleEvent();
+                            log.info(skipEventLogInfo.singleEvent());
                             log.info("Artifact.uri COLLISION: skip " 
                                     + artifact.getID() + " " + artifact.getURI() + " " + df.format(artifact.getLastModified()));
                             transactionManager.rollbackTransaction();
@@ -672,7 +672,7 @@ public class InventoryHarvester implements Runnable {
                     log.debug("END: Process Artifact " + artifact.getID() + " " + artifact.getURI());
                 } catch (Exception exception) {
                     putEventLogInfo.setSuccess(false);
-                    putEventLogInfo.singleEvent();
+                    log.info(putEventLogInfo.singleEvent());
                     if (transactionManager.isOpen()) {
                         log.error("Exception in transaction.  Rolling back...");
                         transactionManager.rollbackTransaction();
@@ -683,14 +683,14 @@ public class InventoryHarvester implements Runnable {
                 } finally {
                     if (transactionManager.isOpen()) {
                         putEventLogInfo.setSuccess(false);
-                        putEventLogInfo.singleEvent();
+                        log.info(putEventLogInfo.singleEvent());
                         log.error("BUG: transaction open in finally. Rolling back...");
                         transactionManager.rollbackTransaction();
                         log.error("Rollback: OK");
                         throw new RuntimeException("BUG: transaction open in finally");
                     } else {
                         putEventLogInfo.setSuccess(true);
-                        putEventLogInfo.singleEvent();
+                        log.info(putEventLogInfo.singleEvent());
                     }
                 }
             }

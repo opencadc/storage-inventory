@@ -267,7 +267,7 @@ public class FileSync implements Runnable {
                     try (final ResourceIterator<Artifact> unstoredArtifacts = artifactDAO.unstoredIterator(bucket)) {
                         queryEventLogInfo.setElapsedTime(System.currentTimeMillis() - queryStartTime);
                         queryEventLogInfo.setStartKVP(new EventStartKVP(EventStartKey.BUCKET, bucket));
-                        queryEventLogInfo.singleEvent();
+                        log.info(queryEventLogInfo.singleEvent());
                     
                     
                         String putLabel = FileSync.class.getName();
@@ -287,7 +287,7 @@ public class FileSync implements Runnable {
                             jobQueue.put(fsj); // blocks when queue capacity is reached
                             createEventLogInfo.setElapsedTime(System.currentTimeMillis() - startTime);
                             createEventLogInfo.setSuccess(true);
-                            createEventLogInfo.singleEvent();
+                            log.info(createEventLogInfo.singleEvent());
                             log.info("FileSync.CREATE: " + curArtifact.getURI());
                             num++;
                         }

@@ -149,13 +149,13 @@ public class StorageSiteSync {
                 // Ensure there is only one returned.
                 if (storageSiteIterator.hasNext()) {
                     eventLogInfo.setSuccess(false);
-                    eventLogInfo.singleEvent();
+                    log.info(eventLogInfo.singleEvent());
                     throw new IllegalStateException("More than one Storage Site found.");
                 }
-                eventLogInfo.singleEvent();
+                log.info(eventLogInfo.singleEvent());
             } else {
                 eventLogInfo.setSuccess(false);
-                eventLogInfo.singleEvent();
+                log.info(eventLogInfo.singleEvent());
                 throw new IllegalStateException("No storage sites available to sync.");
             }
         }
