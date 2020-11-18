@@ -73,7 +73,6 @@ import ca.nrc.cadc.db.DBUtil;
 import ca.nrc.cadc.io.ResourceIterator;
 import ca.nrc.cadc.util.HexUtil;
 import ca.nrc.cadc.util.Log4jInit;
-
 import java.net.URI;
 import java.security.MessageDigest;
 import java.util.Comparator;
@@ -84,9 +83,7 @@ import java.util.SortedSet;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.UUID;
-
 import javax.sql.DataSource;
-
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
@@ -750,6 +747,71 @@ public class ArtifactDAOTest {
                 Thread.sleep(sleep);
                 log.info("testIteratorClose: sleep DONE");
             }
+            
+        } catch (Exception unexpected) {
+            log.error("unexpected exception", unexpected);
+            Assert.fail("unexpected exception: " + unexpected);
+        }
+    }
+    
+    @Test
+    public void testArtifactIterator() {
+        int num = 10;
+        try {
+            int numArtifacts = 0;
+            int numExpected = 0;
+            // artifacts with storageLocation
+            String collection = "STUFF";
+            for (int i = 0; i < num; i++) {
+                if (i == num / 2) {
+                    collection = "NONSENSE";
+                }
+                Artifact a = new Artifact(
+                        URI.create("cadc:" + collection + "/filename" + i),
+                        URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"),
+                        new Date(),
+                        new Long(666L));
+                a.storageLocation = new StorageLocation(URI.create("foo:" + UUID.randomUUID()));
+                a.storageLocation.storageBucket = InventoryUtil.computeBucket(a.storageLocation.getStorageID(), 3);
+                originDAO.put(a);
+                log.debug("put: " + a);
+                numArtifacts++;
+                if (collection.equals("STUFF")) {
+                    numExpected++;
+                }
+            }
+            // some artifacts with no storageLocation
+            collection = "STUFF";
+            for (int i = num; i < 2 * num; i++) {
+                if (i == num + num / 2) {
+                    collection = "NONSENSE";
+                }
+                Artifact a = new Artifact(
+                        URI.create("cadc:" + collection + "/filename" + i),
+                        URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"),
+                        new Date(),
+                        new Long(666L));
+                // no storageLocation
+                originDAO.put(a);
+                log.debug("put: " + a);
+                numArtifacts++;
+                if (collection.equals("STUFF")) {
+                    numExpected++;
+                }
+            }
+            log.info("added: " + numArtifacts);
+            
+            int count = 0;
+            try (ResourceIterator<Artifact> iter = originDAO.iterator("uri like 'cadc:STUFF/%'", null)) {
+                while (iter.hasNext()) {
+                    Artifact actual = iter.next();
+                    count++;
+
+                    log.info("found: " + actual.getURI());
+                    Assert.assertTrue("STUFF", actual.getURI().toASCIIString().startsWith("cadc:STUFF/"));
+                }
+            }
+            Assert.assertEquals("count", numExpected, count);
             
         } catch (Exception unexpected) {
             log.error("unexpected exception", unexpected);
