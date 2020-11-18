@@ -532,6 +532,7 @@ public class SQLGenerator {
 
         private boolean withStorageLocation;
         private String prefix;
+        private String whereClause;
 
         public ArtifactIteratorQuery(boolean withStorageLocation) {
             this.withStorageLocation = withStorageLocation;
@@ -541,6 +542,10 @@ public class SQLGenerator {
         public void setPrefix(String prefix) {
             this.prefix = prefix;
         }
+
+        public void setWhereClause(String whereClause) {
+            this.whereClause = whereClause;
+        }
         
         @Override
         public ResourceIterator<Artifact> query(DataSource ds) {
@@ -548,7 +553,17 @@ public class SQLGenerator {
             StringBuilder sb = getSelectFromSQL(Artifact.class, false);
             sb.append(" WHERE ");
             
-            if (withStorageLocation) {
+            // one of: 
+            // - arbitrary where clause referencing Artifact fields
+            // - artifacts with storageLocation not null
+            // - artifacts with storageLocation null
+            if (whereClause != null) {
+                if (prefix != null) {
+                    sb.append("uriBucket LIKE ? AND");
+                }
+                sb.append(whereClause);
+                
+            } else if (withStorageLocation) {
                 if (prefix != null) {
                     sb.append("storageLocation_storageBucket LIKE ? AND");
                 }
@@ -564,7 +579,7 @@ public class SQLGenerator {
                     sb.append("uriBucket LIKE ? AND");
                 }
                 sb.append(" storageLocation_storageID IS NULL");
-                sb.append(" ORDER BY lastModified");
+                sb.append(" ORDER BY uri");
             }
             String sql = sb.toString();
             log.debug("sql: " + sql);

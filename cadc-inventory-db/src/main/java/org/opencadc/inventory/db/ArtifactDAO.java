@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2019.                            (c) 2019.
+*  (c) 2020.                            (c) 2020.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -69,12 +69,9 @@ package org.opencadc.inventory.db;
 
 import ca.nrc.cadc.io.ResourceIterator;
 import java.net.URI;
-import java.util.Date;
 import java.util.UUID;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
-import org.opencadc.inventory.Entity;
-import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.SiteLocation;
 import org.opencadc.inventory.StorageLocation;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -161,14 +158,15 @@ public class ArtifactDAO extends AbstractDAO<Artifact> {
     
     /**
      * Iterate over Artifacts in StorageLocation order. This only shows artifacts with
-     * a storageLocation value and is used to validate inventory vs storage.
+     * a storageLocation value. The iteration is ordered by StorageLocation.
+     * 
+     * <p>Use case: implement  file-validate (inventory vs storage).
      * 
      * @param storageBucketPrefix null, prefix, or complete storageBucket string
-     * @return iterator over artifacts sorted by StorageLocation
+     * @return iterator over artifacts with a StorageLocation
      */
     public ResourceIterator storedIterator(String storageBucketPrefix) {
         checkInit();
-        log.debug("iterator: " + storageBucketPrefix);
         long t = System.currentTimeMillis();
 
         try {
@@ -183,19 +181,46 @@ public class ArtifactDAO extends AbstractDAO<Artifact> {
     
     /**
      * Iterate over Artifacts with no StorageLocation. This only returns artifacts with
-     * no storageLocation value so the content can be downloaded and stored locally.
+     * no storageLocation value. The result is currently not ordered.
+     * 
+     * <p>Use case: implement file-sync where content can be downloaded and stored locally
      * 
      * @param uriBucketPrefix null, prefix, or complete Artifact.uriBucket string
-     * @return iterator over artifacts with no StorageLocation
+     * @return iterator over artifacts without a StorageLocation
      */
     public ResourceIterator unstoredIterator(String uriBucketPrefix) {
         checkInit();
-        //log.debug("iterator: ");
         long t = System.currentTimeMillis();
 
         try {
             SQLGenerator.ArtifactIteratorQuery iter = (SQLGenerator.ArtifactIteratorQuery) gen.getEntityIteratorQuery(Artifact.class, false);
             iter.setPrefix(uriBucketPrefix);
+            return iter.query(dataSource);
+        } finally {
+            long dt = System.currentTimeMillis() - t;
+            log.debug("iterator: " + dt + "ms");
+        }
+    }
+    
+    /**
+     * Iterate over Artifacts that match criteria. The criteria are expressed as SQL
+     * conditions on fields of the Artifact using the field names for column references.
+     * Example: <code>uri like 'ad:bar/%'</code>. The result is currently not ordered.
+     * 
+     * <p>Use case: to implement metadata-validate (cleanup) after a local filter policy was changed.
+     * 
+     * @param criteria conditions for selecting artifacts
+     * @param uriBucketPrefix null, prefix, or complete Artifact.uriBucket string
+     * @return iterator over artifacts without a StorageLocation
+     */
+    public ResourceIterator iterator(String criteria, String uriBucketPrefix) {
+        checkInit();
+        long t = System.currentTimeMillis();
+
+        try {
+            SQLGenerator.ArtifactIteratorQuery iter = (SQLGenerator.ArtifactIteratorQuery) gen.getEntityIteratorQuery(Artifact.class, false);
+            iter.setPrefix(uriBucketPrefix);
+            iter.setWhereClause(criteria);
             return iter.query(dataSource);
         } finally {
             long dt = System.currentTimeMillis() - t;
