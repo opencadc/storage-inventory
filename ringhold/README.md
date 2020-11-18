@@ -7,7 +7,7 @@ See the [cadc-java](https://github.com/opencadc/docker-base/tree/master/cadc-jav
 
 A file called `ringhold.properties` must be made available via the `/config` directory.
 
-### fenwick.properties
+### ringhold.properties
 ```
 org.opencadc.ringhold.logging = {info|debug}
 
@@ -20,8 +20,10 @@ org.opencadc.ringhold.db.url=jdbc:postgresql://{server}/{database}
 ```
 
 ### artifact-deselector.sql
-
-TODO
+Contains a SQL clause used as a WHERE constraint. The clause returns Artifact's that match the URI pattern.
+```
+WHERE uri LIKE 'cadc:CFHT/%'
+```
 
 ### cadcproxy.pem -- UNUSED
 In future, `ringhold` will use this certificate to authenticate to the remote (luskan) service.

@@ -67,10 +67,16 @@
 
 package org.opencadc.ringhold;
 
+import ca.nrc.cadc.db.TransactionManager;
+import ca.nrc.cadc.io.ResourceIterator;
+import ca.nrc.cadc.net.ResourceNotFoundException;
+import java.io.IOException;
 import java.util.Map;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
+import org.opencadc.inventory.DeletedArtifactEvent;
 import org.opencadc.inventory.db.ArtifactDAO;
+import org.opencadc.inventory.db.DeletedArtifactEventDAO;
 
 /**
  * Validate local inventory. This currently supports cleanup after a change in
@@ -80,11 +86,10 @@ import org.opencadc.inventory.db.ArtifactDAO;
  */
 public class InventoryValidator implements Runnable {
     private static final Logger log = Logger.getLogger(InventoryValidator.class);
-    
-    private static final String FILTER_FILENAME = "artifact-deselector.sql";
 
     private final ArtifactDAO iteratorDAO;
     private final ArtifactDAO artifactDAO;
+    private final String constraint;
     
     public InventoryValidator(Map<String, Object> txnConfig, Map<String, Object> iterConfig) { 
         this.artifactDAO = new ArtifactDAO();
@@ -92,13 +97,57 @@ public class InventoryValidator implements Runnable {
         
         this.iteratorDAO = new ArtifactDAO();
         iteratorDAO.setConfig(iterConfig);
-        
-        // TODO: read FILTER_FILENAME, check and fail here
-        
+
+        DeleteArtifacts deleteArtifacts = new DeleteArtifacts();
+        try {
+            this.constraint = deleteArtifacts.getConstraint();
+        } catch (ResourceNotFoundException ex) {
+            throw new IllegalArgumentException("missing required configuration: "
+                                                   + DeleteArtifacts.SQL_FILTER_FILE_NAME, ex);
+        } catch (IOException ex) {
+            throw new IllegalArgumentException("unable to read config: " + DeleteArtifacts.SQL_FILTER_FILE_NAME, ex);
+        }
     }
 
+    // The tool finds an artifact with a urI pattern that is in the deselector,
+    // deletes the artifact and generates a deleted storage location event.
+    // Caution must be taken to not mistake a missing configuration for a delete-everything action.
     @Override
     public void run() {
-        throw new UnsupportedOperationException("NOT IMPLEMENTED");
+        final TransactionManager transactionManager = this.artifactDAO.getTransactionManager();
+        final DeletedArtifactEventDAO deletedArtifactEventDAO = new DeletedArtifactEventDAO(this.artifactDAO);
+
+        ResourceIterator<Artifact> deleteArtifactIter = this.iteratorDAO.iterator(this.constraint, null);
+        while (deleteArtifactIter.hasNext()) {
+            Artifact deleteArtifact = deleteArtifactIter.next();
+            log.debug("START: Process Artifact " + deleteArtifact.getID() + " " + deleteArtifact.getURI());
+
+            try {
+                transactionManager.startTransaction();
+
+                this.artifactDAO.delete(deleteArtifact.getID());
+                DeletedArtifactEvent deletedArtifactEvent = new DeletedArtifactEvent(deleteArtifact.getID());
+                deletedArtifactEventDAO.put(deletedArtifactEvent);
+
+                transactionManager.commitTransaction();
+                log.debug("END: Process Artifact " + deleteArtifact.getID() + " " + deleteArtifact.getURI());
+            } catch (Exception exception) {
+                if (transactionManager.isOpen()) {
+                    log.error("Exception in transaction.  Rolling back...");
+                    transactionManager.rollbackTransaction();
+                    log.error("Rollback: OK");
+                }
+                throw exception;
+            } finally {
+                if (transactionManager.isOpen()) {
+                    log.error("BUG: transaction open in finally. Rolling back...");
+                    transactionManager.rollbackTransaction();
+                    log.error("Rollback: OK");
+                    throw new RuntimeException("BUG: transaction open in finally");
+                }
+            }
+        }
+
     }
+
 }
