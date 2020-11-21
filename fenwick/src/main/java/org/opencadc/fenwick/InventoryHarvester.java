@@ -365,8 +365,6 @@ public class InventoryHarvester implements Runnable {
 
                         transactionManager.commitTransaction();
                     } catch (Exception exception) {
-                        putEventLogInfo.setSuccess(false);
-                        log.info(putEventLogInfo.singleEvent());
                         if (transactionManager.isOpen()) {
                             log.error("Exception in transaction.  Rolling back...");
                             transactionManager.rollbackTransaction();
@@ -464,9 +462,6 @@ public class InventoryHarvester implements Runnable {
                     putEventLogInfo.setElapsedTime(System.currentTimeMillis() - putStartTime);
                     transactionManager.commitTransaction();
                 } catch (Exception exception) {
-                    putEventLogInfo.setSuccess(false);
-                    log.info(putEventLogInfo.singleEvent());
-
                     if (transactionManager.isOpen()) {
                         log.error("Exception in transaction.  Rolling back...");
                         transactionManager.rollbackTransaction();
@@ -671,8 +666,6 @@ public class InventoryHarvester implements Runnable {
                     transactionManager.commitTransaction();
                     log.debug("END: Process Artifact " + artifact.getID() + " " + artifact.getURI());
                 } catch (Exception exception) {
-                    putEventLogInfo.setSuccess(false);
-                    log.info(putEventLogInfo.singleEvent());
                     if (transactionManager.isOpen()) {
                         log.error("Exception in transaction.  Rolling back...");
                         transactionManager.rollbackTransaction();

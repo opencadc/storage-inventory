@@ -381,8 +381,6 @@ public class BucketValidator implements ValidateEventListener {
                 transactionManager.rollbackTransaction();
                 LOGGER.debug("Rollback Transaction: OK");
             } catch (Exception e) {
-                clearEventLogInfo.setSuccess(false);
-                LOGGER.info(clearEventLogInfo.singleEvent());
                 LOGGER.error(String.format("Failed to mark Artifact as new %s.", artifact.getURI()), e);
                 transactionManager.rollbackTransaction();
                 LOGGER.debug("Rollback Transaction: OK");
@@ -452,8 +450,6 @@ public class BucketValidator implements ValidateEventListener {
             } catch (EntityNotFoundException ex) {
                 LOGGER.debug("failed to lock Artifact " + artifact.getID() + " : already deleted");
             } catch (Exception e) {
-                putEventLogInfo.setSuccess(false);
-                LOGGER.info(putEventLogInfo.singleEvent());
                 LOGGER.error(String.format("Failed to delete Artifact %s.", artifact.getURI()), e);
                 transactionManager.rollbackTransaction();
                 LOGGER.debug("Rollback Transaction: OK");
@@ -524,8 +520,6 @@ public class BucketValidator implements ValidateEventListener {
                 putEventLogInfo.setElapsedTime(System.currentTimeMillis() - startTime);
                 transactionManager.commitTransaction();
             } catch (Exception e) {
-                putEventLogInfo.setSuccess(false);
-                LOGGER.info(putEventLogInfo.singleEvent());
                 LOGGER.error(String.format("Failed to create Artifact %s.", artifact.getURI()), e);
                 transactionManager.rollbackTransaction();
                 LOGGER.debug("Rollback Transaction: OK");
@@ -599,11 +593,6 @@ public class BucketValidator implements ValidateEventListener {
 
                 transactionManager.commitTransaction();
             } catch (Exception e) {
-                if (putStarted) {
-                    putEventLogInfo.setSuccess(false);
-                    LOGGER.info(putEventLogInfo.singleEvent());
-                }
-
                 LOGGER.error(String.format("Failed to create Artifact %s.", storageMetadata.artifactURI), e);
                 transactionManager.rollbackTransaction();
                 LOGGER.debug("Rollback Transaction: OK");
@@ -663,8 +652,6 @@ public class BucketValidator implements ValidateEventListener {
             } catch (EntityNotFoundException ex) {
                 LOGGER.debug("failed to lock Artifact " + artifact.getID() + " : already deleted");
             } catch (Exception e) {
-                updateEventLogInfo.setSuccess(false);
-                LOGGER.info(updateEventLogInfo.singleEvent());
                 LOGGER.error(String.format("Failed to update Artifact %s.", storageMetadata.artifactURI), e);
                 transactionManager.rollbackTransaction();
                 LOGGER.debug("Rollback Transaction: OK");
