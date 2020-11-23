@@ -310,7 +310,6 @@ public class InventoryHarvester implements Runnable {
         if (harvestState.curLastModified != null) {
             start = df.format(harvestState.curLastModified);
         }
-        log.info("QUERY: DeletedStorageLocationEvent from=" + start);
         String queryLabel = DeletedStorageLocationEvent.class.getName();
         EventLogInfo queryEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, queryLabel, "QUERY");
         boolean first = true;
@@ -353,8 +352,6 @@ public class InventoryHarvester implements Runnable {
                             final SiteLocation siteLocation = new SiteLocation(storageSite.getID());
                             // TODO: this message could also log the artifact and site that was removed
                             String lastModified = df.format(deletedStorageLocationEvent.getLastModified());
-                            log.info("PUT: DeletedStorageLocationEvent " + deletedStorageLocationEvent.getID()
-                                     + " " + lastModified);
                             putEventLogInfo.setValue(lastModified);
                             putEventLogInfo.setArtifactURI(artifact.getURI());
                             artifactDAO.removeSiteLocation(artifact, siteLocation);
@@ -422,7 +419,6 @@ public class InventoryHarvester implements Runnable {
         if (harvestState.curLastModified != null) {
             start = df.format(harvestState.curLastModified);
         }
-        log.info("QUERY: DeletedArtifactEvent from=" + start);
         String queryLabel = DeletedArtifactEvent.class.getName();
         EventLogInfo queryEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, queryLabel, "QUERY");
         boolean first = true;
@@ -452,7 +448,6 @@ public class InventoryHarvester implements Runnable {
                     // no need to acquire lock on artifact
                     final long putStartTime = System.currentTimeMillis();
                     String lastModified = df.format(deletedArtifactEvent.getLastModified());
-                    log.info("PUT: DeletedArtifactEvent " + deletedArtifactEvent.getID() + " " + lastModified);
                     putEventLogInfo.setValue(lastModified);
                     deletedArtifactEventDeletedEventDAO.put(deletedArtifactEvent);
                     artifactDAO.delete(deletedArtifactEvent.getID());
@@ -520,7 +515,6 @@ public class InventoryHarvester implements Runnable {
         if (harvestState.curLastModified != null) {
             start = df.format(harvestState.curLastModified);
         }
-        log.info("QUERY: Artifact from=" + start);
         String queryLabel = "Artifact";
         EventLogInfo queryEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, queryLabel, "QUERY");
         boolean first = true;
@@ -596,8 +590,6 @@ public class InventoryHarvester implements Runnable {
                             staleEventLogInfo.setValue(lastModified);
                             staleEventLogInfo.setSuccess(true);
                             log.info(staleEventLogInfo.singleEvent());
-                            log.info("STALE Artifact: skip " 
-                                    + artifact.getID() + "|" + artifact.getURI() + "|" + lastModified);
                             transactionManager.rollbackTransaction();
                             continue;
                         }
@@ -609,9 +601,6 @@ public class InventoryHarvester implements Runnable {
                             // putEventLogInfo will log contenLastModified instead of lastModified
                             lastModified = df.format(artifact.getContentLastModified());
                             final String currentContentLastModified = df.format(currentArtifact.getContentLastModified());
-                            log.info("Artifact.uri COLLISION: replace " 
-                                    + currentArtifact.getID() + "|" + currentArtifact.getURI() + "|" + currentContentLastModified
-                                    + " with " + artifact.getID() + "|" + artifact.getURI() + "|" + df.format(artifact.getContentLastModified()));
                             replaceEventLogInfo.setLifeCycle(EventLifeCycle.PROPAGATE);
                             replaceEventLogInfo.setArtifactURI(currentArtifact.getURI());
                             replaceEventLogInfo.setEntityID(currentArtifact.getID());
@@ -627,8 +616,6 @@ public class InventoryHarvester implements Runnable {
                             skipEventLogInfo.setValue(lastModified);
                             skipEventLogInfo.setSuccess(true);
                             log.info(skipEventLogInfo.singleEvent());
-                            log.info("Artifact.uri COLLISION: skip " 
-                                    + artifact.getID() + " " + artifact.getURI() + " " + df.format(artifact.getLastModified()));
                             transactionManager.rollbackTransaction();
                             continue;
                         }
@@ -638,7 +625,6 @@ public class InventoryHarvester implements Runnable {
                     putEventLogInfo.setEntityID(artifact.getID());
                     putEventLogInfo.setArtifactURI(artifact.getURI());
                     putEventLogInfo.setValue(lastModified);
-                    log.info("PUT: artifact " + artifact.getID() + " " + artifact.getURI() + " " + lastModified);
                     if (storageSite != null && currentArtifact != null && artifact.getMetaChecksum().equals(currentArtifact.getMetaChecksum())) {
                         // only adding a SiteLocation
                         artifactDAO.addSiteLocation(currentArtifact, new SiteLocation(storageSite.getID()));
