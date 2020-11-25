@@ -247,7 +247,11 @@ public class BucketValidator implements ValidateEventListener {
             DataSource ds = ca.nrc.cadc.db.DBUtil.findJNDIDataSource("jdbc/inventory");
             InitDatabase init = new InitDatabase(ds, database, schema);
             init.doInit();
-            LOGGER.info("initDatabase: " + schema + " OK");
+            String msg = "initDatabase: " + schema + " OK";
+            EventLogInfo dbEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, BucketValidator.class.getName(), "INITDB");
+            dbEventLogInfo.setMessage(msg);
+            dbEventLogInfo.setSuccess(true);
+            LOGGER.info(dbEventLogInfo.singleEvent());
         } catch (Exception ex) {
             throw new IllegalStateException("check/init database failed", ex);
         }

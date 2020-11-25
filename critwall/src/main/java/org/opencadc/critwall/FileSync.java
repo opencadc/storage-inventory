@@ -103,6 +103,7 @@ import org.opencadc.inventory.util.DBUtil;
 public class FileSync implements Runnable {
     private static final Logger log = Logger.getLogger(FileSync.class);
 
+    private static final String LABEL = FileSync.class.getName();
     private static final int MAX_THREADS = 16;
 
     // The number of hours that the validity checker for the current Subject will request ahead to see if the Subject's
@@ -179,7 +180,11 @@ public class FileSync implements Runnable {
                 DataSource ds = ca.nrc.cadc.db.DBUtil.findJNDIDataSource(fileSyncDS);
                 InitDatabase init = new InitDatabase(ds, database, schema);
                 init.doInit();
-                log.info("initDatabase: " + schema + " OK");
+                String msg = "initDatabase: " + schema + " OK";
+                EventLogInfo dbEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, LABEL, "INITDB");
+                dbEventLogInfo.setMessage(msg);
+                dbEventLogInfo.setSuccess(true);
+                log.info(dbEventLogInfo.singleEvent());
             } catch (Exception ex) {
                 throw new IllegalStateException("check/init database failed", ex);
             }
@@ -239,7 +244,6 @@ public class FileSync implements Runnable {
         // idle time from when jobs finish until next query
         long idle = 10 * poll;
 
-        String label = FileSync.class.getName() + " START";
         boolean ok = true;
         long loopCount = 0;
         while (ok) {
@@ -256,23 +260,21 @@ public class FileSync implements Runnable {
 
                 long startQ = System.currentTimeMillis();
                 long num = 0L;
-                log.info("FileSync.QUERY START");
                 final Subject currentUser = AuthenticationUtil.getCurrentSubject();
                 Iterator<String> bi = selector.getBucketIterator();
                 while (bi.hasNext()) {
-                    EventLogInfo queryEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, label, "QUERY");
+                    EventLogInfo queryEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, LABEL, "QUERY");
                     String bucket = bi.next();
                     log.debug("FileSync.QUERY bucket=" + bucket);
                     long queryStartTime = System.currentTimeMillis();
                     try (final ResourceIterator<Artifact> unstoredArtifacts = artifactDAO.unstoredIterator(bucket)) {
                         queryEventLogInfo.setElapsedTime(System.currentTimeMillis() - queryStartTime);
                         queryEventLogInfo.setStartKVP(new EventStartKVP(EventStartKey.BUCKET, bucket));
-                        log.info(queryEventLogInfo.singleEvent());
+                        log.info(queryEventLogInfo.start());
                     
                     
-                        String putLabel = FileSync.class.getName();
                         while (unstoredArtifacts.hasNext()) {
-                            EventLogInfo createEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, putLabel, "CREATE");
+                            EventLogInfo createEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, LABEL, "CREATE");
                             // TODO:  handle errors from this more sanely after they
                             // are available from the cadc-inventory-db API
                             Artifact curArtifact = unstoredArtifacts.next();
@@ -288,7 +290,6 @@ public class FileSync implements Runnable {
                             createEventLogInfo.setElapsedTime(System.currentTimeMillis() - startTime);
                             createEventLogInfo.setSuccess(true);
                             log.info(createEventLogInfo.singleEvent());
-                            log.info("FileSync.CREATE: " + curArtifact.getURI());
                             num++;
                         }
                     } catch (Exception qex) {
@@ -299,7 +300,10 @@ public class FileSync implements Runnable {
 
                 }
                 long dtQ = System.currentTimeMillis() - startQ;
-                log.info("FileSync.QUERY END dt=" + dtQ + " num=" + num);
+                EventLogInfo endEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, LABEL, "QUERY");
+                endEventLogInfo.setElapsedTime(dtQ);
+                endEventLogInfo.setSuccess(true);
+                log.info(endEventLogInfo.end());
 
                 boolean waiting = true;
                 while (waiting) {
@@ -309,11 +313,15 @@ public class FileSync implements Runnable {
                             log.debug("queue empty; jobs complete");
                             waiting = false;
                         } else {
-                            log.info("FileSync.POLL dt=" + poll);
+                            EventLogInfo pollEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, LABEL, "POLL");
+                            pollEventLogInfo.setElapsedTime(poll);
+                            log.info(pollEventLogInfo.singleEvent());
                             Thread.sleep(poll);
                         }
                     } else {
-                        log.info("FileSync.POLL dt=" + poll);
+                        EventLogInfo pollEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, LABEL, "POLL");
+                        pollEventLogInfo.setElapsedTime(poll);
+                        log.info(pollEventLogInfo.singleEvent());
                         Thread.sleep(poll);
                     }
 
@@ -330,7 +338,9 @@ public class FileSync implements Runnable {
             }
             if (ok) {
                 try {
-                    log.info("FileSync.IDLE dt=" + idle);
+                    EventLogInfo pollEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, LABEL, "IDLE");
+                    pollEventLogInfo.setElapsedTime(idle);
+                    log.info(pollEventLogInfo.singleEvent());
                     Thread.sleep(idle);
                 } catch (InterruptedException ex) {
                     ok = false;

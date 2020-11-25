@@ -155,7 +155,11 @@ public class InventoryHarvester implements Runnable {
             DataSource ds = DBUtil.findJNDIDataSource(jndiDataSourceName);
             InitDatabase init = new InitDatabase(ds, database, schema);
             init.doInit();
-            log.info("initDatabase: " + jndiDataSourceName + " " + schema + " OK");
+            String msg = "initDatabase: " + jndiDataSourceName + " " + schema + " OK";
+            EventLogInfo dbEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, InventoryHarvester.class.getName(), "INITDB");
+            dbEventLogInfo.setMessage(msg);
+            dbEventLogInfo.setSuccess(true);
+            log.info(dbEventLogInfo.singleEvent());
         } catch (Exception ex) {
             throw new IllegalStateException("check/init database failed", ex);
         }

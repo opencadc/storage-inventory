@@ -73,6 +73,7 @@ import ca.nrc.cadc.auth.RunnableAction;
 import ca.nrc.cadc.db.TransactionManager;
 import ca.nrc.cadc.io.ByteLimitExceededException;
 import ca.nrc.cadc.io.WriteException;
+import ca.nrc.cadc.log.EventLogInfo;
 import ca.nrc.cadc.net.FileContent;
 import ca.nrc.cadc.net.HttpGet;
 import ca.nrc.cadc.net.HttpPost;
@@ -116,6 +117,7 @@ public class FileSyncJob implements Runnable {
     private static final Logger log = Logger.getLogger(FileSyncJob.class);
 
     private static final long[] RETRY_DELAY = new long[] { 6000L, 12000L };
+    private static final String LABEL = FileSyncJob.class.getName();
 
     private final ArtifactDAO artifactDAO;
     private final UUID artifactID;
@@ -165,11 +167,12 @@ public class FileSyncJob implements Runnable {
     //         Artifact.contentChecksum and Artifact.contentLength are immutable      
     private void doSync() {
         
-        log.info("FileSyncJob.START " + artifactID);
+        EventLogInfo syncEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, LABEL, "SYNC");
+        syncEventLogInfo.setEntityID(artifactID);
+        log.info(syncEventLogInfo.start());
         long start = System.currentTimeMillis();
         boolean success = false;
         String msg = "";
-        
         
         try {
             // get current artifact to sync
@@ -207,7 +210,11 @@ public class FileSyncJob implements Runnable {
                     }
                     
                     // attempt to sync file
-                    log.info("FileSyncJob.SYNC " + artifactLabel + " urls=" + urlList.size() + " attempts=" + retryCount);
+                    EventLogInfo retryEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, LABEL, "SYNC");
+                    retryEventLogInfo.setArtifactURI(artifact.getURI());
+                    retryEventLogInfo.setEntityID(artifact.getID());
+                    retryEventLogInfo.setAttempts(retryCount);
+                    log.info(retryEventLogInfo.singleEvent());
                     StorageMetadata storageMeta = syncArtifact(curArtifact, urlList);
 
                     // sync succeeded: update inventory
@@ -277,7 +284,9 @@ public class FileSyncJob implements Runnable {
                     }
                     
                     if (!success) {
-                        log.info("FileSyncJob.SLEEP dt=" + RETRY_DELAY[retryCount]);
+                        EventLogInfo sleepEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, LABEL, "SLEEP");
+                        sleepEventLogInfo.setElapsedTime(RETRY_DELAY[retryCount]);
+                        log.info(sleepEventLogInfo.singleEvent());
                         Thread.sleep(RETRY_DELAY[retryCount++]);
                     }
                 }
@@ -296,12 +305,11 @@ public class FileSyncJob implements Runnable {
             }
         } finally {
             long dt = System.currentTimeMillis() - start;
-            StringBuilder sb = new StringBuilder();
-            sb.append("FileSyncJob.END ").append(artifactID);
-            sb.append(" dt=").append(dt);
-            sb.append(" success=").append(success);
-            sb.append(" ").append(msg);
-            log.info(sb.toString());
+            EventLogInfo syncEndEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, LABEL, "SYNC");
+            syncEndEventLogInfo.setElapsedTime(dt);
+            syncEndEventLogInfo.setSuccess(success);
+            syncEndEventLogInfo.setMessage(msg);
+            log.info(syncEndEventLogInfo.end());
         }
     }
 
@@ -357,7 +365,10 @@ public class FileSyncJob implements Runnable {
             try {
                 urlList.add(new URL(s));
             } catch (MalformedURLException mue) {
-                log.info("malformed URL returned from transfer negotiation: " + s + " skipping... ");
+                String msg = "malformed URL returned from transfer negotiation: " + s + " skipping... ";
+                EventLogInfo urlEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, LABEL, "CREATE");
+                urlEventLogInfo.setMessage(msg);
+                log.info(urlEventLogInfo.singleEvent());
             }
         }
 

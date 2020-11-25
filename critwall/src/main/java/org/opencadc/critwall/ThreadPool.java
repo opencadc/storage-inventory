@@ -67,6 +67,8 @@
 
 package org.opencadc.critwall;
 
+import ca.nrc.cadc.log.EventLogInfo;
+
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.concurrent.BlockingQueue;
@@ -94,7 +96,8 @@ public class ThreadPool {
         this.taskQueue = blockingQueue;
         this.threads = new ArrayList<>(nthreads);
 
-        log.info(poolBasename + " - starting up");
+        EventLogInfo threadEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, poolBasename, "START");
+        log.info(threadEventLogInfo.singleEvent());
         log.debug("initial thread count: " + threads.size() + " requested size: " + nthreads);
 
         while (threads.size() < nthreads) {
