@@ -523,6 +523,9 @@ public class SwiftStorageAdapter  implements StorageAdapter {
 
             try {
                 obj.uploadObject(up);
+            } catch (Md5ChecksumException ex) {
+                //swift detected
+                throw new PreconditionFailedException("checksum mismatch: " + newArtifact.contentChecksum + " did not match content");
             } catch (CommandException ex) {
                 if (bcis.getByteCount() >= CEPH_UPLOAD_LIMIT && hasWriteFailSocketException(ex)) {
                     throw new ByteLimitExceededException("put exceeds size limit (" + CEPH_UPLOAD_LIMIT_MSG + ") for simple stream", CEPH_UPLOAD_LIMIT);
@@ -530,7 +533,7 @@ public class SwiftStorageAdapter  implements StorageAdapter {
                 if (trap.fail != null) {
                     throw new ReadException("read from input stream failed", trap.fail);
                 }
-                throw ex;
+                throw new WriteException("internal failure: " + ex);
             }
             
             //String etag = obj.getEtag();
@@ -554,16 +557,15 @@ public class SwiftStorageAdapter  implements StorageAdapter {
             Map<String,Object> metadata = new TreeMap<>();
             metadata.put(ARTIFACT_ID_ATTR, newArtifact.getArtifactURI().toASCIIString());
             metadata.put(CONTENT_CHECKSUM_ATTR, contentChecksum.toASCIIString());
-            obj.setMetadata(metadata);
+            obj.setMetadata(metadata); // commit 
             
             return toStorageMetadata(loc, contentChecksum, contentLength, newArtifact.getArtifactURI(), lastModified);
-        } catch (Md5ChecksumException ex) {
-            //swift detected
-            throw new PreconditionFailedException("checksum mismatch: " + newArtifact.contentChecksum + " did not match content");
         } catch (NoSuchAlgorithmException ex) {
             throw new RuntimeException("failed to create MessageDigest: " + DEFAULT_CHECKSUM_ALGORITHM);
         } catch (ResourceNotFoundException ex) {
             throw new RuntimeException("failed to find/create child container: " + loc.storageBucket, ex);
+        } catch (CommandException ex) {
+            throw new StorageEngageException("internal failure: " + ex);
         }
     }
     
