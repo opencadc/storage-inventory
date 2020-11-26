@@ -266,6 +266,7 @@ public class FileSyncJob implements Runnable {
                                 } catch (Exception ex) {
                                     // OK to continue in this case
                                     log.error("failed to remove obsolete stored object: " + obsLoc.getLocation(), ex);
+                                    
                                 }
                             }
                             
@@ -382,6 +383,9 @@ public class FileSyncJob implements Runnable {
         Iterator<URL> urlIterator = urls.iterator();
 
         while (urlIterator.hasNext()) {
+            EventLogInfo syncEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, LABEL, "SYNC");
+            syncEventLogInfo.setArtifactURI(a.getURI());
+            syncEventLogInfo.setEntityID(a.getID());
             URL u = urlIterator.next();
             log.debug("trying " + u);
 
@@ -416,15 +420,21 @@ public class FileSyncJob implements Runnable {
 
             } catch (ByteLimitExceededException | WriteException ex) {
                 // IOException will capture this if not explicitly caught and rethrown
-                log.error("FileSyncJob.FAIL fatal: " + ex);
+                syncEventLogInfo.setMessage("fatal: " + ex.getMessage());
+                syncEventLogInfo.setSuccess(false);
+                log.info(syncEventLogInfo.singleEvent());
                 throw ex;
             } catch (IOException | TransientException ex) {
                 // includes ReadException
                 // - prepare or put throwing this error
                 // - will move to next url
-                log.error("FileSyncJob.FAIL transient: " + ex);
+                syncEventLogInfo.setMessage("transient: " + ex.getMessage());
+                syncEventLogInfo.setSuccess(false);
+                log.info(syncEventLogInfo.singleEvent());
             } catch (ResourceNotFoundException | ResourceAlreadyExistsException | PreconditionFailedException ex) {
-                log.error("FileSyncJob.FAIL remove " + u + " reason: " + ex);
+                syncEventLogInfo.setMessage("remove " + u + " reason: " + ex.getMessage());
+                syncEventLogInfo.setSuccess(false);
+                log.info(syncEventLogInfo.singleEvent());
                 urlIterator.remove();
             }
         }
