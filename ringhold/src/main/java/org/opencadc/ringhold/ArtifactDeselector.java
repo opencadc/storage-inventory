@@ -88,8 +88,8 @@ import org.apache.log4j.Logger;
  *
  * @author pdowler
  */
-public class DeleteArtifacts {
-    private static final Logger log = Logger.getLogger(DeleteArtifacts.class);
+public class ArtifactDeselector {
+    private static final Logger log = Logger.getLogger(ArtifactDeselector.class);
     static final String COMMENT_PREFIX = "--";
     static final String SQL_FILTER_FILE_NAME = "artifact-deselector.sql";
 
@@ -98,7 +98,7 @@ public class DeleteArtifacts {
     /**
      * Empty constructor.
      */
-    public DeleteArtifacts() {
+    public ArtifactDeselector() {
         // Read in the configuration file, and create a usable Map from it.
         final File homeConfigDirectory = new File(System.getProperty("user.home") + "/config");
         selectorConfigDir = homeConfigDirectory.toPath();

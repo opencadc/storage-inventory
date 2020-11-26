@@ -99,8 +99,10 @@ import org.junit.Ignore;
 import org.junit.Test;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.DeletedArtifactEvent;
+import org.opencadc.inventory.DeletedStorageLocationEvent;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.DeletedArtifactEventDAO;
+import org.opencadc.inventory.db.DeletedStorageLocationEventDAO;
 import org.opencadc.inventory.db.SQLGenerator;
 import org.springframework.jdbc.core.JdbcTemplate;
 
@@ -153,13 +155,13 @@ public class InventoryValidatorTest {
     }
 
     final ArtifactDAO artifactDAO;
-    final DeletedArtifactEventDAO deletedArtifactEventDAO;
+    final DeletedStorageLocationEventDAO deletedStorageLocationEventDAO;
     final Map<String, Object> daoConfig = new TreeMap<>();
     final String jndiPath = "jdbc/InventoryEnvironment";
 
     public InventoryValidatorTest() throws Exception {
         artifactDAO = new ArtifactDAO();
-        deletedArtifactEventDAO = new DeletedArtifactEventDAO();
+        deletedStorageLocationEventDAO = new DeletedStorageLocationEventDAO();
 
         final DBConfig dbrc = new DBConfig();
         final ConnectionConfig connectionConfig = dbrc.getConnectionConfig(INVENTORY_SERVER, INVENTORY_DATABASE);
@@ -171,7 +173,7 @@ public class InventoryValidatorTest {
         daoConfig.put("schema", INVENTORY_SCHEMA);
 
         artifactDAO.setConfig(daoConfig);
-        deletedArtifactEventDAO.setConfig(daoConfig);
+        deletedStorageLocationEventDAO.setConfig(daoConfig);
     }
 
     @Before
@@ -208,12 +210,12 @@ public class InventoryValidatorTest {
         a3 = this.artifactDAO.get(a3.getID());
         Assert.assertNotNull(a3);
 
-        DeletedArtifactEvent dae1 = this.deletedArtifactEventDAO.get(a1.getID());
-        Assert.assertNull(dae1);
-        DeletedArtifactEvent dae2 = this.deletedArtifactEventDAO.get(a2.getID());
-        Assert.assertNull(dae2);
-        DeletedArtifactEvent dae3 = this.deletedArtifactEventDAO.get(a3.getID());
-        Assert.assertNull(dae3);
+        DeletedStorageLocationEvent dsle1 = this.deletedStorageLocationEventDAO.get(a1.getID());
+        Assert.assertNull(dsle1);
+        DeletedStorageLocationEvent dsle2 = this.deletedStorageLocationEventDAO.get(a2.getID());
+        Assert.assertNull(dsle1);
+        DeletedStorageLocationEvent dsle3 = this.deletedStorageLocationEventDAO.get(a3.getID());
+        Assert.assertNull(dsle1);
     }
 
     @Test
@@ -236,19 +238,19 @@ public class InventoryValidatorTest {
         InventoryValidator testSubject = new InventoryValidator(this.daoConfig, this.daoConfig);
         testSubject.run();
 
-        DeletedArtifactEvent a_dae1 = this.deletedArtifactEventDAO.get(a1.getID());
-        Assert.assertNotNull(a_dae1);
-        DeletedArtifactEvent a_dae2 = this.deletedArtifactEventDAO.get(a2.getID());
-        Assert.assertNotNull(a_dae2);
-        DeletedArtifactEvent a_dae3 = this.deletedArtifactEventDAO.get(a3.getID());
-        Assert.assertNotNull(a_dae3);
+        DeletedStorageLocationEvent a_dsle1 = this.deletedStorageLocationEventDAO.get(a1.getID());
+        Assert.assertNotNull(a_dsle1);
+        DeletedStorageLocationEvent a_dsle2 = this.deletedStorageLocationEventDAO.get(a2.getID());
+        Assert.assertNotNull(a_dsle2);
+        DeletedStorageLocationEvent a_dsle3 = this.deletedStorageLocationEventDAO.get(a3.getID());
+        Assert.assertNotNull(a_dsle3);
 
-        DeletedArtifactEvent b_dae1 = this.deletedArtifactEventDAO.get(b1.getID());
-        Assert.assertNull(b_dae1);
-        DeletedArtifactEvent b_dae2 = this.deletedArtifactEventDAO.get(b2.getID());
-        Assert.assertNull(b_dae2);
-        DeletedArtifactEvent b_dae3 = this.deletedArtifactEventDAO.get(b3.getID());
-        Assert.assertNull(b_dae3);
+        DeletedStorageLocationEvent b_dsle1 = this.deletedStorageLocationEventDAO.get(b1.getID());
+        Assert.assertNull(b_dsle1);
+        DeletedStorageLocationEvent b_dsle2 = this.deletedStorageLocationEventDAO.get(b2.getID());
+        Assert.assertNull(b_dsle2);
+        DeletedStorageLocationEvent b_dsle3 = this.deletedStorageLocationEventDAO.get(b3.getID());
+        Assert.assertNull(b_dsle3);
 
         ResourceIterator<Artifact> artifacts = this.artifactDAO.iterator("uri LIKE 'cadc:INTTEST/%'", null);
         Assert.assertFalse(artifacts.hasNext());
@@ -285,12 +287,12 @@ public class InventoryValidatorTest {
         ResourceIterator<Artifact> artifacts = this.artifactDAO.iterator("uri LIKE 'cadc:INTTEST/%'", null);
         Assert.assertFalse(artifacts.hasNext());
 
-        DeletedArtifactEvent a_dae1 = this.deletedArtifactEventDAO.get(a1.getID());
-        Assert.assertNotNull(a_dae1);
-        DeletedArtifactEvent a_dae2 = this.deletedArtifactEventDAO.get(a2.getID());
-        Assert.assertNotNull(a_dae2);
-        DeletedArtifactEvent a_dae3 = this.deletedArtifactEventDAO.get(a3.getID());
-        Assert.assertNotNull(a_dae3);
+        DeletedStorageLocationEvent a_dsle1 = this.deletedStorageLocationEventDAO.get(a1.getID());
+        Assert.assertNotNull(a_dsle1);
+        DeletedStorageLocationEvent a_dsle2 = this.deletedStorageLocationEventDAO.get(a2.getID());
+        Assert.assertNotNull(a_dsle2);
+        DeletedStorageLocationEvent a_dsle3 = this.deletedStorageLocationEventDAO.get(a3.getID());
+        Assert.assertNotNull(a_dsle3);
     }
 
     private void writeConfig() throws IOException {

@@ -74,9 +74,9 @@ import java.io.IOException;
 import java.util.Map;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
-import org.opencadc.inventory.DeletedArtifactEvent;
+import org.opencadc.inventory.DeletedStorageLocationEvent;
 import org.opencadc.inventory.db.ArtifactDAO;
-import org.opencadc.inventory.db.DeletedArtifactEventDAO;
+import org.opencadc.inventory.db.DeletedStorageLocationEventDAO;
 
 /**
  * Validate local inventory. This currently supports cleanup after a change in
@@ -87,50 +87,53 @@ import org.opencadc.inventory.db.DeletedArtifactEventDAO;
 public class InventoryValidator implements Runnable {
     private static final Logger log = Logger.getLogger(InventoryValidator.class);
 
-    private final ArtifactDAO iteratorDAO;
+    private final ArtifactDAO artifactIteratorDAO;
     private final ArtifactDAO artifactDAO;
-    private final String constraint;
+    private final String deselector;
     
     public InventoryValidator(Map<String, Object> txnConfig, Map<String, Object> iterConfig) { 
         this.artifactDAO = new ArtifactDAO();
         artifactDAO.setConfig(txnConfig);
         
-        this.iteratorDAO = new ArtifactDAO();
-        iteratorDAO.setConfig(iterConfig);
+        this.artifactIteratorDAO = new ArtifactDAO();
+        artifactIteratorDAO.setConfig(iterConfig);
 
-        DeleteArtifacts deleteArtifacts = new DeleteArtifacts();
+        ArtifactDeselector artifactDeselector = new ArtifactDeselector();
         try {
-            this.constraint = deleteArtifacts.getConstraint();
+            this.deselector = artifactDeselector.getConstraint();
         } catch (ResourceNotFoundException ex) {
             throw new IllegalArgumentException("missing required configuration: "
-                                                   + DeleteArtifacts.SQL_FILTER_FILE_NAME, ex);
+                                                   + ArtifactDeselector.SQL_FILTER_FILE_NAME, ex);
         } catch (IOException ex) {
-            throw new IllegalArgumentException("unable to read config: " + DeleteArtifacts.SQL_FILTER_FILE_NAME, ex);
+            throw new IllegalArgumentException("unable to read config: " + ArtifactDeselector.SQL_FILTER_FILE_NAME, ex);
         }
     }
 
-    // The tool finds an artifact with a urI pattern that is in the deselector,
-    // deletes the artifact and generates a deleted storage location event.
-    // Caution must be taken to not mistake a missing configuration for a delete-everything action.
+    /**
+     * Find an artifact with a uri pattern in the deselector,
+     * delete the artifact and generate a deleted storage location event.
+     */
     @Override
     public void run() {
         final TransactionManager transactionManager = this.artifactDAO.getTransactionManager();
-        final DeletedArtifactEventDAO deletedArtifactEventDAO = new DeletedArtifactEventDAO(this.artifactDAO);
+        final DeletedStorageLocationEventDAO deletedStorageLocationEventDAO =
+            new DeletedStorageLocationEventDAO(this.artifactDAO);
 
-        ResourceIterator<Artifact> deleteArtifactIter = this.iteratorDAO.iterator(this.constraint, null);
-        while (deleteArtifactIter.hasNext()) {
-            Artifact deleteArtifact = deleteArtifactIter.next();
-            log.debug("START: Process Artifact " + deleteArtifact.getID() + " " + deleteArtifact.getURI());
+        ResourceIterator<Artifact> artifactIterator = this.artifactIteratorDAO.iterator(this.deselector, null);
+        while (artifactIterator.hasNext()) {
+            Artifact deselectorArtifact = artifactIterator.next();
+            log.debug("START: Process Artifact " + deselectorArtifact.getID() + " " + deselectorArtifact.getURI());
 
             try {
                 transactionManager.startTransaction();
 
-                this.artifactDAO.delete(deleteArtifact.getID());
-                DeletedArtifactEvent deletedArtifactEvent = new DeletedArtifactEvent(deleteArtifact.getID());
-                deletedArtifactEventDAO.put(deletedArtifactEvent);
+                this.artifactDAO.delete(deselectorArtifact.getID());
+                DeletedStorageLocationEvent deletedStorageLocationEvent =
+                    new DeletedStorageLocationEvent(deselectorArtifact.getID());
+                deletedStorageLocationEventDAO.put(deletedStorageLocationEvent);
 
                 transactionManager.commitTransaction();
-                log.debug("END: Process Artifact " + deleteArtifact.getID() + " " + deleteArtifact.getURI());
+                log.debug("END: Process Artifact " + deselectorArtifact.getID() + " " + deselectorArtifact.getURI());
             } catch (Exception exception) {
                 if (transactionManager.isOpen()) {
                     log.error("Exception in transaction.  Rolling back...");
