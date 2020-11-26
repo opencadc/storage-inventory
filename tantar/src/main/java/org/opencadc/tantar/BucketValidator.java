@@ -373,9 +373,9 @@ public class BucketValidator implements ValidateEventListener {
                 clearEventLogInfo.setArtifactURI(artifact.getURI());
                 clearEventLogInfo.setEntityID(curArtifact.getID());
                 clearEventLogInfo.setLifeCycle(EventLifeCycle.PROPAGATE);
-//                final DeletedStorageLocationEventDAO deletedEventDAO = new DeletedStorageLocationEventDAO(artifactDAO);
+                final DeletedStorageLocationEventDAO deletedEventDAO = new DeletedStorageLocationEventDAO(artifactDAO);
                 long startTime = System.currentTimeMillis();
-//                deletedEventDAO.put(new DeletedStorageLocationEvent(artifact.getID()));
+                deletedEventDAO.put(new DeletedStorageLocationEvent(artifact.getID()));
                 artifactDAO.setStorageLocation(curArtifact, null);
                 clearEventLogInfo.setElapsedTime(System.currentTimeMillis() - startTime);
                 
@@ -441,8 +441,8 @@ public class BucketValidator implements ValidateEventListener {
 
                 artifactDAO.lock(artifact);
                 
-//                final DeletedArtifactEventDAO deletedEventDAO = new DeletedArtifactEventDAO(artifactDAO);
-//                deletedEventDAO.put(new DeletedArtifactEvent(artifact.getID()));
+                final DeletedArtifactEventDAO deletedEventDAO = new DeletedArtifactEventDAO(artifactDAO);
+                deletedEventDAO.put(new DeletedArtifactEvent(artifact.getID()));
                 
                 long startTime = System.currentTimeMillis();
                 artifactDAO.delete(artifact.getID());
@@ -567,9 +567,9 @@ public class BucketValidator implements ValidateEventListener {
                 try {
                     artifactDAO.lock(artifact);
                     
-//                    DeletedArtifactEventDAO deletedEventDAO = new DeletedArtifactEventDAO(artifactDAO);
+                    DeletedArtifactEventDAO deletedEventDAO = new DeletedArtifactEventDAO(artifactDAO);
                     long startTime = System.currentTimeMillis();
-//                    deletedEventDAO.put(new DeletedArtifactEvent(artifact.getID()));
+                    deletedEventDAO.put(new DeletedArtifactEvent(artifact.getID()));
                     
                     artifactDAO.delete(artifact.getID());
                     deleteEventLogInfo.setElapsedTime(System.currentTimeMillis() - startTime);
