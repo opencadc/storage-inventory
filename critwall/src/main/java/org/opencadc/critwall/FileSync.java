@@ -71,15 +71,15 @@ import ca.nrc.cadc.auth.AuthenticationUtil;
 import ca.nrc.cadc.auth.SSLUtil;
 import ca.nrc.cadc.db.ConnectionConfig;
 import ca.nrc.cadc.io.ResourceIterator;
+import ca.nrc.cadc.log.EventIteratorKey;
 import ca.nrc.cadc.log.EventLogInfo;
-import ca.nrc.cadc.log.EventStartKVP;
-import ca.nrc.cadc.log.EventStartKey;
 import ca.nrc.cadc.vosi.Availability;
 import ca.nrc.cadc.vosi.AvailabilityClient;
 
 import java.io.File;
 import java.net.URI;
 import java.security.PrivilegedAction;
+import java.util.EnumMap;
 import java.util.Iterator;
 import java.util.Map;
 
@@ -269,7 +269,9 @@ public class FileSync implements Runnable {
                     long queryStartTime = System.currentTimeMillis();
                     try (final ResourceIterator<Artifact> unstoredArtifacts = artifactDAO.unstoredIterator(bucket)) {
                         queryEventLogInfo.setElapsedTime(System.currentTimeMillis() - queryStartTime);
-                        queryEventLogInfo.setStartKVP(new EventStartKVP(EventStartKey.BUCKET, bucket));
+                        Map<EventIteratorKey, String> item = new EnumMap<EventIteratorKey, String>(EventIteratorKey.class);
+                        item.put(EventIteratorKey.BUCKET, bucket);
+                        queryEventLogInfo.setIteratorItem(item);
                         log.info(queryEventLogInfo.start());
                     
                     
@@ -281,7 +283,9 @@ public class FileSync implements Runnable {
                             log.debug("create job: " + curArtifact.getURI());
                             createEventLogInfo.setArtifactURI(curArtifact.getURI());
                             createEventLogInfo.setEntityID(curArtifact.getID());
-                            createEventLogInfo.setValue(bucket);
+                            item = new EnumMap<EventIteratorKey, String>(EventIteratorKey.class);
+                            item.put(EventIteratorKey.BUCKET, bucket);
+                            queryEventLogInfo.setIteratorItem(item);
                             FileSyncJob fsj = new FileSyncJob(curArtifact.getID(), this.locatorService,
                                                               this.storageAdapter, this.jobArtifactDAO, currentUser);
 
