@@ -73,10 +73,9 @@ import ca.nrc.cadc.date.DateUtil;
 import ca.nrc.cadc.db.DBUtil;
 import ca.nrc.cadc.db.TransactionManager;
 import ca.nrc.cadc.io.ResourceIterator;
+import ca.nrc.cadc.log.EventIteratorKey;
 import ca.nrc.cadc.log.EventLifeCycle;
 import ca.nrc.cadc.log.EventLogInfo;
-import ca.nrc.cadc.log.EventStartKVP;
-import ca.nrc.cadc.log.EventStartKey;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.reg.Capabilities;
@@ -92,6 +91,7 @@ import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
 import java.text.DateFormat;
 import java.util.Date;
+import java.util.EnumMap;
 import java.util.Map;
 import javax.security.auth.Subject;
 import javax.sql.DataSource;
@@ -321,7 +321,9 @@ public class InventoryHarvester implements Runnable {
         try (final ResourceIterator<DeletedStorageLocationEvent> deletedStorageLocationEventResourceIterator =
             deletedStorageLocationEventSync.getEvents()) {
             queryEventLogInfo.setElapsedTime(System.currentTimeMillis() - queryStartTime);
-            queryEventLogInfo.setStartKVP(new EventStartKVP(EventStartKey.LASTMODIFIED, start));
+            Map<EventIteratorKey, String> item = new EnumMap<EventIteratorKey, String>(EventIteratorKey.class);
+            item.put(EventIteratorKey.LASTMODIFIED, start);
+            queryEventLogInfo.setIteratorItem(item);
             log.info(queryEventLogInfo.start());
 
             String putLabel = DeletedStorageLocationEvent.class.getName();
@@ -356,7 +358,9 @@ public class InventoryHarvester implements Runnable {
                             final SiteLocation siteLocation = new SiteLocation(storageSite.getID());
                             // TODO: this message could also log the artifact and site that was removed
                             String lastModified = df.format(deletedStorageLocationEvent.getLastModified());
-                            putEventLogInfo.setValue(lastModified);
+                            item = new EnumMap<EventIteratorKey, String>(EventIteratorKey.class);
+                            item.put(EventIteratorKey.LASTMODIFIED, lastModified);
+                            putEventLogInfo.setIteratorItem(item);
                             putEventLogInfo.setArtifactURI(artifact.getURI());
                             artifactDAO.removeSiteLocation(artifact, siteLocation);
                             harvestState.curLastModified = deletedStorageLocationEvent.getLastModified();
@@ -430,7 +434,9 @@ public class InventoryHarvester implements Runnable {
         try (final ResourceIterator<DeletedArtifactEvent> deletedArtifactEventResourceIterator
                      = deletedArtifactEventSync.getEvents()) {
             queryEventLogInfo.setElapsedTime(System.currentTimeMillis() - queryStartTime);
-            queryEventLogInfo.setStartKVP(new EventStartKVP(EventStartKey.LASTMODIFIED, start));
+            Map<EventIteratorKey, String> item = new EnumMap<EventIteratorKey, String>(EventIteratorKey.class);
+            item.put(EventIteratorKey.LASTMODIFIED, start);
+            queryEventLogInfo.setIteratorItem(item);
             log.info(queryEventLogInfo.start());
 
             String putLabel = DeletedArtifactEvent.class.getName();
@@ -452,7 +458,9 @@ public class InventoryHarvester implements Runnable {
                     // no need to acquire lock on artifact
                     final long putStartTime = System.currentTimeMillis();
                     String lastModified = df.format(deletedArtifactEvent.getLastModified());
-                    putEventLogInfo.setValue(lastModified);
+                    item = new EnumMap<EventIteratorKey, String>(EventIteratorKey.class);
+                    item.put(EventIteratorKey.LASTMODIFIED, lastModified);
+                    queryEventLogInfo.setIteratorItem(item);
                     deletedArtifactEventDeletedEventDAO.put(deletedArtifactEvent);
                     artifactDAO.delete(deletedArtifactEvent.getID());
                     harvestState.curLastModified = deletedArtifactEvent.getLastModified();
@@ -525,7 +533,9 @@ public class InventoryHarvester implements Runnable {
         long queryStartTime = System.currentTimeMillis();
         try (final ResourceIterator<Artifact> artifactResourceIterator = artifactSync.iterator()) {
             queryEventLogInfo.setElapsedTime(System.currentTimeMillis() - queryStartTime);
-            queryEventLogInfo.setStartKVP(new EventStartKVP(EventStartKey.LASTMODIFIED, start));
+            Map<EventIteratorKey, String> item = new EnumMap<EventIteratorKey, String>(EventIteratorKey.class);
+            item.put(EventIteratorKey.LASTMODIFIED, start);
+            queryEventLogInfo.setIteratorItem(item);
             log.info(queryEventLogInfo.start());
         
             String putLabel = "Artifact";
@@ -591,7 +601,9 @@ public class InventoryHarvester implements Runnable {
                             staleEventLogInfo.setLifeCycle(EventLifeCycle.PROPAGATE);
                             staleEventLogInfo.setArtifactURI(artifact.getURI());
                             staleEventLogInfo.setEntityID(artifact.getID());
-                            staleEventLogInfo.setValue(lastModified);
+                            item = new EnumMap<EventIteratorKey, String>(EventIteratorKey.class);
+                            item.put(EventIteratorKey.LASTMODIFIED, lastModified);
+                            queryEventLogInfo.setIteratorItem(item);
                             staleEventLogInfo.setSuccess(true);
                             log.info(staleEventLogInfo.singleEvent());
                             transactionManager.rollbackTransaction();
@@ -608,7 +620,9 @@ public class InventoryHarvester implements Runnable {
                             replaceEventLogInfo.setLifeCycle(EventLifeCycle.PROPAGATE);
                             replaceEventLogInfo.setArtifactURI(currentArtifact.getURI());
                             replaceEventLogInfo.setEntityID(currentArtifact.getID());
-                            replaceEventLogInfo.setValue(currentContentLastModified);
+                            item = new EnumMap<EventIteratorKey, String>(EventIteratorKey.class);
+                            item.put(EventIteratorKey.LASTMODIFIED, currentContentLastModified);
+                            queryEventLogInfo.setIteratorItem(item);
                             daeDAO.put(new DeletedArtifactEvent(currentArtifact.getID()));
                             replaceEventLogInfo.setElapsedTime(System.currentTimeMillis() - startTime);
                             artifactDAO.delete(currentArtifact.getID());
@@ -617,7 +631,9 @@ public class InventoryHarvester implements Runnable {
                             skipEventLogInfo.setLifeCycle(EventLifeCycle.PROPAGATE);
                             skipEventLogInfo.setArtifactURI(artifact.getURI());
                             skipEventLogInfo.setEntityID(artifact.getID());
-                            skipEventLogInfo.setValue(lastModified);
+                            item = new EnumMap<EventIteratorKey, String>(EventIteratorKey.class);
+                            item.put(EventIteratorKey.LASTMODIFIED, lastModified);
+                            queryEventLogInfo.setIteratorItem(item);
                             skipEventLogInfo.setSuccess(true);
                             log.info(skipEventLogInfo.singleEvent());
                             transactionManager.rollbackTransaction();
@@ -628,7 +644,9 @@ public class InventoryHarvester implements Runnable {
                     skipEventLogInfo.setLifeCycle(EventLifeCycle.CREATE);
                     putEventLogInfo.setEntityID(artifact.getID());
                     putEventLogInfo.setArtifactURI(artifact.getURI());
-                    putEventLogInfo.setValue(lastModified);
+                    item = new EnumMap<EventIteratorKey, String>(EventIteratorKey.class);
+                    item.put(EventIteratorKey.LASTMODIFIED, lastModified);
+                    queryEventLogInfo.setIteratorItem(item);
                     if (storageSite != null && currentArtifact != null && artifact.getMetaChecksum().equals(currentArtifact.getMetaChecksum())) {
                         // only adding a SiteLocation
                         artifactDAO.addSiteLocation(currentArtifact, new SiteLocation(storageSite.getID()));
