@@ -119,38 +119,42 @@ public class InventoryValidator implements Runnable {
         final DeletedStorageLocationEventDAO deletedStorageLocationEventDAO =
             new DeletedStorageLocationEventDAO(this.artifactDAO);
 
-        ResourceIterator<Artifact> artifactIterator = this.artifactIteratorDAO.iterator(this.deselector, null);
-        while (artifactIterator.hasNext()) {
-            Artifact deselectorArtifact = artifactIterator.next();
-            log.debug("START: Process Artifact " + deselectorArtifact.getID() + " " + deselectorArtifact.getURI());
+        try (final ResourceIterator<Artifact> artifactIterator =
+            this.artifactIteratorDAO.iterator(this.deselector, null)) {
+            while (artifactIterator.hasNext()) {
+                Artifact deselectorArtifact = artifactIterator.next();
+                log.debug("START: Process Artifact " + deselectorArtifact.getID() + " " + deselectorArtifact.getURI());
 
-            try {
-                transactionManager.startTransaction();
+                try {
+                    transactionManager.startTransaction();
 
-                this.artifactDAO.delete(deselectorArtifact.getID());
-                DeletedStorageLocationEvent deletedStorageLocationEvent =
-                    new DeletedStorageLocationEvent(deselectorArtifact.getID());
-                deletedStorageLocationEventDAO.put(deletedStorageLocationEvent);
+                    this.artifactDAO.delete(deselectorArtifact.getID());
+                    DeletedStorageLocationEvent deletedStorageLocationEvent =
+                        new DeletedStorageLocationEvent(deselectorArtifact.getID());
+                    deletedStorageLocationEventDAO.put(deletedStorageLocationEvent);
 
-                transactionManager.commitTransaction();
-                log.debug("END: Process Artifact " + deselectorArtifact.getID() + " " + deselectorArtifact.getURI());
-            } catch (Exception exception) {
-                if (transactionManager.isOpen()) {
-                    log.error("Exception in transaction.  Rolling back...");
-                    transactionManager.rollbackTransaction();
-                    log.error("Rollback: OK");
-                }
-                throw exception;
-            } finally {
-                if (transactionManager.isOpen()) {
-                    log.error("BUG: transaction open in finally. Rolling back...");
-                    transactionManager.rollbackTransaction();
-                    log.error("Rollback: OK");
-                    throw new RuntimeException("BUG: transaction open in finally");
+                    transactionManager.commitTransaction();
+                    log.debug("END: Process Artifact " + deselectorArtifact.getID() + " "
+                                  + deselectorArtifact.getURI());
+                } catch (Exception exception) {
+                    if (transactionManager.isOpen()) {
+                        log.error("Exception in transaction.  Rolling back...");
+                        transactionManager.rollbackTransaction();
+                        log.error("Rollback: OK");
+                    }
+                    throw exception;
+                } finally {
+                    if (transactionManager.isOpen()) {
+                        log.error("BUG: transaction open in finally. Rolling back...");
+                        transactionManager.rollbackTransaction();
+                        log.error("Rollback: OK");
+                        throw new RuntimeException("BUG: transaction open in finally");
+                    }
                 }
             }
+        } catch (IOException e) {
+            log.error("Error iterating artifacts: " + e.getMessage());
+            throw new RuntimeException("Error iterating artifacts: " + e.getMessage());
         }
-
     }
-
 }

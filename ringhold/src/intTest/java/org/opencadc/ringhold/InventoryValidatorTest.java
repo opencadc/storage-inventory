@@ -72,7 +72,6 @@ package org.opencadc.ringhold;
 import ca.nrc.cadc.db.ConnectionConfig;
 import ca.nrc.cadc.db.DBConfig;
 import ca.nrc.cadc.db.DBUtil;
-import ca.nrc.cadc.io.ResourceIterator;
 import ca.nrc.cadc.util.FileUtil;
 import ca.nrc.cadc.util.HexUtil;
 import ca.nrc.cadc.util.Log4jInit;
@@ -95,13 +94,10 @@ import org.apache.log4j.Logger;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.opencadc.inventory.Artifact;
-import org.opencadc.inventory.DeletedArtifactEvent;
 import org.opencadc.inventory.DeletedStorageLocationEvent;
 import org.opencadc.inventory.db.ArtifactDAO;
-import org.opencadc.inventory.db.DeletedArtifactEventDAO;
 import org.opencadc.inventory.db.DeletedStorageLocationEventDAO;
 import org.opencadc.inventory.db.SQLGenerator;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -126,6 +122,8 @@ public class InventoryValidatorTest {
     static String INVENTORY_SERVER = "RINGHOLD_TEST";
     static String INVENTORY_DATABASE = "cadctest";
     static String INVENTORY_SCHEMA = "inventory";
+    static String TMP_DIR = "build/tmp";
+    static String USER_HOME = System.getProperty("user.home");
 
     static {
         try {
@@ -150,8 +148,7 @@ public class InventoryValidatorTest {
             throw new RuntimeException(oops.getMessage(), oops);
         }
 
-        log.debug("intTest database config: " + INVENTORY_SERVER + " " + INVENTORY_DATABASE + " "
-                      + INVENTORY_SCHEMA);
+        log.debug("intTest database config: " + INVENTORY_SERVER + " " + INVENTORY_DATABASE + " " + INVENTORY_SCHEMA);
     }
 
     final ArtifactDAO artifactDAO;
@@ -178,6 +175,7 @@ public class InventoryValidatorTest {
 
     @Before
     public void setup() throws Exception {
+        writeConfig();
         truncateTables();
     }
 
@@ -188,8 +186,6 @@ public class InventoryValidatorTest {
 
     @Test
     public void noArtifactsMatchFilter() throws Exception {
-        writeConfig();
-
         Artifact a1 = getTestArtifact("cadc:TEST/one.txt");
         this.artifactDAO.put(a1);
         Artifact a2 = getTestArtifact("cadc:INT/two.txt");
@@ -197,11 +193,13 @@ public class InventoryValidatorTest {
         Artifact a3 = getTestArtifact("cadc:CADC/three.txt");
         this.artifactDAO.put(a3);
 
-        InventoryValidator testSubject = new InventoryValidator(this.daoConfig, this.daoConfig);
-        testSubject.run();
-
-        ResourceIterator<Artifact> artifacts = this.artifactDAO.iterator("uri LIKE 'cadc:INTTEST/%'", null);
-        Assert.assertFalse(artifacts.hasNext());
+        try {
+            System.setProperty("user.home", TMP_DIR);
+            InventoryValidator testSubject = new InventoryValidator(this.daoConfig, this.daoConfig);
+            testSubject.run();
+        } finally {
+            System.setProperty("user.home", USER_HOME);
+        }
 
         a1 = this.artifactDAO.get(a1.getID());
         Assert.assertNotNull(a1);
@@ -213,15 +211,13 @@ public class InventoryValidatorTest {
         DeletedStorageLocationEvent dsle1 = this.deletedStorageLocationEventDAO.get(a1.getID());
         Assert.assertNull(dsle1);
         DeletedStorageLocationEvent dsle2 = this.deletedStorageLocationEventDAO.get(a2.getID());
-        Assert.assertNull(dsle1);
+        Assert.assertNull(dsle2);
         DeletedStorageLocationEvent dsle3 = this.deletedStorageLocationEventDAO.get(a3.getID());
-        Assert.assertNull(dsle1);
+        Assert.assertNull(dsle3);
     }
 
     @Test
     public void someArtifactsMatchFilter() throws Exception {
-        writeConfig();
-
         Artifact b1 = getTestArtifact("cadc:INT/one.txt");
         this.artifactDAO.put(b1);
         Artifact b2 = getTestArtifact("cadc:INT_TEST/two.txt");
@@ -235,8 +231,13 @@ public class InventoryValidatorTest {
         Artifact b3 = getTestArtifact("cadc:TEST/six.txt");
         this.artifactDAO.put(b3);
 
-        InventoryValidator testSubject = new InventoryValidator(this.daoConfig, this.daoConfig);
-        testSubject.run();
+        try {
+            System.setProperty("user.home", TMP_DIR);
+            InventoryValidator testSubject = new InventoryValidator(this.daoConfig, this.daoConfig);
+            testSubject.run();
+        } finally {
+            System.setProperty("user.home", USER_HOME);
+        }
 
         DeletedStorageLocationEvent a_dsle1 = this.deletedStorageLocationEventDAO.get(a1.getID());
         Assert.assertNotNull(a_dsle1);
@@ -251,9 +252,6 @@ public class InventoryValidatorTest {
         Assert.assertNull(b_dsle2);
         DeletedStorageLocationEvent b_dsle3 = this.deletedStorageLocationEventDAO.get(b3.getID());
         Assert.assertNull(b_dsle3);
-
-        ResourceIterator<Artifact> artifacts = this.artifactDAO.iterator("uri LIKE 'cadc:INTTEST/%'", null);
-        Assert.assertFalse(artifacts.hasNext());
 
         a1 = this.artifactDAO.get(a1.getID());
         Assert.assertNull(a1);
@@ -272,8 +270,6 @@ public class InventoryValidatorTest {
 
     @Test
     public void allArtifactsMatchFilter() throws Exception {
-        writeConfig();
-
         Artifact a1 = getTestArtifact("cadc:INTTEST/one.txt");
         this.artifactDAO.put(a1);
         Artifact a2 = getTestArtifact("cadc:INTTEST/two.txt");
@@ -281,11 +277,13 @@ public class InventoryValidatorTest {
         Artifact a3 = getTestArtifact("cadc:INTTEST/three.txt");
         this.artifactDAO.put(a3);
 
-        InventoryValidator testSubject = new InventoryValidator(this.daoConfig, this.daoConfig);
-        testSubject.run();
-
-        ResourceIterator<Artifact> artifacts = this.artifactDAO.iterator("uri LIKE 'cadc:INTTEST/%'", null);
-        Assert.assertFalse(artifacts.hasNext());
+        try {
+            System.setProperty("user.home", TMP_DIR);
+            InventoryValidator testSubject = new InventoryValidator(this.daoConfig, this.daoConfig);
+            testSubject.run();
+        } finally {
+            System.setProperty("user.home", USER_HOME);
+        }
 
         DeletedStorageLocationEvent a_dsle1 = this.deletedStorageLocationEventDAO.get(a1.getID());
         Assert.assertNotNull(a_dsle1);
@@ -296,12 +294,9 @@ public class InventoryValidatorTest {
     }
 
     private void writeConfig() throws IOException {
-        log.debug("Looking for includes in " + System.getProperty("user.home") + "/config");
-        final Path includePath = new File(System.getProperty("user.home") + "/config/").toPath();
+        final Path includePath = new File(TMP_DIR + "/config").toPath();
         Files.createDirectories(includePath);
-
         final File includeFile = new File(includePath.toFile(), "artifact-deselector.sql");
-        includeFile.deleteOnExit();
 
         final FileWriter fileWriter = new FileWriter(includeFile);
         fileWriter.write("WHERE uri LIKE 'cadc:INTTEST/%'");
