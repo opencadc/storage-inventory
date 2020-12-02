@@ -224,61 +224,87 @@ If L is a storage site, then this set is all artifacts in the database.
 
 **Remote R**: This set is the artifacts in the remote site that match the current filter policy.
 
-The approach is to iterate through sets L and R, look for discrepancies, and fix L. There are only minor differences if validating global L.
+The approach is to iterate through sets L and R, look for discrepancies, and fix L. There are only 
+minor differences if validating global L. Note: Except for explanation0 which are strictly local effects, 
+the explanation #s match -- they are the same explanation seen from both sides.
 
-*discrepancy*: artifact in L && not in R
+*discrepancy*: artifact in L && artifact not in R
 
-    explanation: deleted from R, pending/missed DeletedArtifactEvent in L
+    explanation0: filter policy at L changed to exclude artifact in R
+    evidence: Artifact in R without filter
+    action: delete Artifact, if (L==storage) create DeletedStorageLocationEvent 
+
+    explanation1: deleted from R, pending/missed DeletedArtifactEvent in L
     evidence: DeletedArtifactEvent in R 
     action: put DAE, delete artifact
     
-    explanation: L==global, deleted from R, pending/missed DeletedStorageLocationEvent in L
+    explanation2: L==global, deleted from R, pending/missed DeletedStorageLocationEvent in L
     evidence: DeletedStorageLocationEvent in R 
-    action: remove siteID from Artifact.storageLocations
+    action: remove siteID from Artifact.storageLocations (see below)
 
-    explanation: new Artifact in L, pending/missed new Artifact event in R
+    explanation3: L==global, new Artifact in L, pending/missed Artifact or sync in R
     evidence: ?
-    action: ?
-
-    explanation: filter policy at L changed to exclude artifact in R
-    evidence: Artifact in R without filter
-    action: delete Artifact, if (L=storage) create DeletedStorageLocationEvent 
-
-    explanation: lost DeletedArtifactEvent
+    action: remove siteID from Artifact.storageLocations (see below)
+    
+    explanation4: L==storage, new Artifact in L, pending/missed new Artifact event in R
     evidence: ?
-    action: ?
+    action: none
+
+    explanation6: deleted from R, lost DeletedArtifactEvent
+    evidence: ?
+    action: assume explanation3
+    
+    explanation7: L==global, lost DeletedStorageLocationEvent
+    evidence: ?
+    action: assume explanation3
+    
+    note: when removing siteID from Artifact.storageLocations in global, if the Artifact.siteLocations becomes empty
+        the artifact should be deleted (metadata-sync needs to also do this in response to a DeletedStorageLocationEvent)
+        TBD: must this also create a DeletedArtifactEvent?
 
 *discrepancy*: artifact not in L && artifact in R
 
-    explanation: deleted from L, pending/missed DeletedArtifactEvent in R
-    evidence: DeletedArtifactEvent in L?
-    action: do nothing
+    explantion0: filter policy at L changed to include artifact in R
+    evidence: ?
+    action: equivalent to missed Artifact event (explanation3 below)
+    
+    explanation1: deleted from L, pending/missed DeletedArtifactEvent in R
+    evidence: DeletedArtifactEvent in L
+    action: none
 
-    explanation: new Artifact in R, pending/missed new Artifact event in L
-    evidence: Artifact not in L without siteLocation constraint
+    explanation2: L==storage, deleted from L, pending/missed DeletedStorageLocationEvent in R
+    evidence: DeletedStorageLocationEvent in L
+    action: none
+
+    explanation3: L==storage, new Artifact in R, pending/missed new Artifact event in L
+    evidence: ?
     action: insert Artifact
     
-    explanation: L==global, synced Artifact in R, pending/missed new Artifact event in L
-    evidence: Artifact in local db, siteLocation does not include remote siteID
-    action: add remote siteID to Artifact.siteLocations
-
-    explanation: lost DeletedArtifactEvent
+    explanation4: L==global, new Artifact in R, pending/missed changed Artifact event in L
+    evidence: Artifact in local db but siteLocations does not include remote siteID
+    action: add siteID to Artifact.siteLocations
+    
+    explanation6: deleted from L, lost DeletedArtifactEvent
     evidence: ?
-    action: ?
+    action: assume explanation3
+    
+    explanation7: L==storage, deleted from L, lost DeletedStorageLocationEvent
+    evidence: ?
+    action: assume explanation3
 
 *discrepancy*: artifact.uri in both && artifact.id mismatch
 
-    explantion: same ID collision due to race condition that metadata-sync has to handle
-    evidence: ?
+    explantion1: same ID collision due to race condition that metadata-sync has to handle
+    evidence: no more evidence needed
     action: pick winner, create DeletedArtifactEvent for loser, delete loser if it is in L
 
 *discrepancy*: artifact in both && valid metaChecksum mismatch
 
-    explanation: pending/missed artifact update in L
+    explanation1: pending/missed artifact update in L
     evidence: ??
     action: put Artifact
     
-    explanation: pending/missed artifact update in R
+    explanation2: pending/missed artifact update in R
     evidence: ??
     action: do nothing
 
@@ -315,22 +341,20 @@ The cadc-storage-adapter API places requirements on the implementation:
 5. support random access: resumable download, metadata extraction (fhead, fwcs), cutouts
 6. support iterator (ordered by StorageLocation) *or* batched list (by storageBucket): **preferably both**
 
-Y=yes NS=not scalable X=not possible
+Y=yes S=scalability issues N=not possible
 
 |feature|opaque filesystem|mountable fs (RO)|mountable fs (RW)|ceph+rados|ceph+S3|ceph+swift|AD + /data|
 |-------|:---------------:|:---------------:|:---------------:|:--------:|:-----:|:--------:|:--------:|
-|fixed overhead|Y|Y?|Y?|Y|Y|Y|Y|
-|store/retrieve metadata|Y|Y|Y|?|Y|Y|Y|
-|update metadata        |Y|Y|Y|?|X|Y|X|
-|streaming write        |Y|Y|Y|?|X?|Y|Y|
-|consistent timestamp   |Y|Y|Y|?|NS|?|Y|
-|random access          |Y|Y|Y|Y?|Y?|Y|Y|
-|batch list (obsiolete) |Y|NS|NS|Y?|Y|Y|NS|
-|prefix batch list (obsolete) |Y|NS|NS|Y?|Y|Y|X|
-|iterator               |Y|NS|NS|?|Y|Y|Y|
-|prefix iterator        |Y|NS|NS|?|Y|Y|X|
-|batch iterator         |Y|NS|NS|?|Y|Y|Y|
-|prefix batch iterator  |Y|NS|NS|?|Y|Y|X|
+|fixed overhead         |Y |Y?|Y?|Y |Y |Y|Y|
+|store/retrieve metadata|Y |Y |Y |? |Y |Y|Y|
+|update metadata        |Y |Y |Y |? |X |Y|N|
+|streaming write        |Y |Y |Y |? |N |Y|Y|
+|consistent timestamp   |Y |Y |Y |? |S?|Y|Y|
+|random access          |Y |Y |Y |Y?|Y?|Y|Y|
+|iterator               |Y |S |S |? |Y |Y|Y|
+|prefix iterator        |Y |S |S |? |Y |Y|N|
+|batch iterator         |Y |S |S |? |Y |Y|Y|
+|prefix batch iterator  |Y |S |S |? |Y |Y|N|
 
 For opaque fs: random hierarchical "hex" bucket scheme can give many buckets with few files, so scalability comes from
 using the directory structure (buckets) to maintain finite memory footprint. The hex bucket scheme is implementing a B-tree scheme with directories (more or less).
@@ -348,14 +372,11 @@ out of band and the iterator/list implementation would have to not expose the fi
 For ceph+rados: native code is required so not all features were explored in detail.
 
 For ceph+S3: the S3 API requires content-length before a write and treats stored objects as immutable so you cannot update
-metadata once an object is written. Ceph+S3 also has a maximum size for writing an object (5GiB), after which clients *must*
-use the multi-part upload API... that would have to be exposed to clients (not a bad idea, but the limit is modest).
+metadata once an object is written. Ceph+S3 also has a maximum size for writing an object (5GiB), after which clients must
+use the multi-part upload API... that would have to be exposed to clients.
 
-For ceph+swift: the Swift API does not appear to treat stored objects as immutable but this has not been verified with 
-working code.
+For ceph+swift: the Swift API allows changes to stored object metadata and allows streaming,. although still subject to a 5GiB
+default object size limit before multi-part API must be used.
 
 For AD: storageBucket = {archive} so there is no control over batch size via prefixing the bucket.
 
-{1}: Buckets are not a notion in `RADOS`.  They are part of the Object ID in the format 
-of `{bucket_marker}_{numeric_id}.{key_id}`.  The `bucket_marker` is looked up in the `default.rgw.meta` pool by name.  This
-is how the S3 endpoint is supported within Ceph.
