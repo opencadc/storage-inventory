@@ -23,7 +23,7 @@ org.opencadc.fenwick.db.url=jdbc:postgresql://{server}/{database}
 org.opencadc.fenwick.trackSiteLocations={true|false}
 
 # remote inventory query service (luskan)
-org.opencadc.fenwick.queryService={resorceID of remote TAP service with inventory data model}
+org.opencadc.fenwick.queryService={resourceID of remote TAP service with inventory data model}
 
 # selectivity
 org.opencadc.fenwick.ArtifactSelector={fully qualified classname of ArtifactSelector implementation}
