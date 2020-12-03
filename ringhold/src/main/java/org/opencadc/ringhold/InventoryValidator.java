@@ -153,8 +153,7 @@ public class InventoryValidator implements Runnable {
                 }
             }
         } catch (IOException e) {
-            log.error("Error iterating artifacts: " + e.getMessage());
-            throw new RuntimeException("Error iterating artifacts: " + e.getMessage());
+            log.error("Error closing iterator: " + e.getMessage());
         }
     }
 }

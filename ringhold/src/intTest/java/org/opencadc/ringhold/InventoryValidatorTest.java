@@ -89,9 +89,9 @@ import java.util.MissingResourceException;
 import java.util.Properties;
 import java.util.TreeMap;
 import java.util.UUID;
+import javax.sql.DataSource;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
-import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
@@ -100,6 +100,7 @@ import org.opencadc.inventory.DeletedStorageLocationEvent;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.DeletedStorageLocationEventDAO;
 import org.opencadc.inventory.db.SQLGenerator;
+import org.opencadc.inventory.db.version.InitDatabase;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
@@ -164,6 +165,15 @@ public class InventoryValidatorTest {
         final ConnectionConfig connectionConfig = dbrc.getConnectionConfig(INVENTORY_SERVER, INVENTORY_DATABASE);
         DBUtil.createJNDIDataSource(jndiPath, connectionConfig);
 
+        try {
+            DataSource dataSource = DBUtil.findJNDIDataSource(jndiPath);
+            InitDatabase init = new InitDatabase(dataSource, INVENTORY_DATABASE, INVENTORY_SCHEMA);
+            init.doInit();
+            log.debug("initDatabase: " + jndiPath + " " + INVENTORY_SCHEMA + " OK");
+        } catch (Exception ex) {
+            throw new IllegalStateException("check/init database failed", ex);
+        }
+
         daoConfig.put(SQLGenerator.class.getName(), SQLGenerator.class);
         daoConfig.put("jndiDataSourceName", jndiPath);
         daoConfig.put("database", INVENTORY_DATABASE);
@@ -176,11 +186,6 @@ public class InventoryValidatorTest {
     @Before
     public void setup() throws Exception {
         writeConfig();
-        truncateTables();
-    }
-
-    @After
-    public void cleanup() throws Exception {
         truncateTables();
     }
 
