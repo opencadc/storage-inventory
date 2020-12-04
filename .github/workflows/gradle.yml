@@ -78,6 +78,9 @@ jobs:
     - name: java build -- ringhold
       run: cd ringhold && gradle --info clean build javadoc checkstyleMain
 
+    - name: java build -- ratik
+      run: cd ratik && gradle --info clean build javadoc checkstyleMain
+
 ## TODO: docker build depends on cadc-tomcat base image from docker-base.git
 #    - name: docker build -- baldur
 #      run: cd baldur && docker build . --file Dockerfile --tag baldur:$(date +%s)
