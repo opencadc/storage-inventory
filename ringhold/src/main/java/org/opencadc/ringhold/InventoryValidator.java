@@ -77,6 +77,9 @@ import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.DeletedStorageLocationEvent;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.DeletedStorageLocationEventDAO;
+import org.opencadc.inventory.db.EntityNotFoundException;
+import org.opencadc.inventory.db.ObsoleteStorageLocation;
+import org.opencadc.inventory.db.ObsoleteStorageLocationDAO;
 
 /**
  * Validate local inventory. This currently supports cleanup after a change in
@@ -118,6 +121,7 @@ public class InventoryValidator implements Runnable {
         final TransactionManager transactionManager = this.artifactDAO.getTransactionManager();
         final DeletedStorageLocationEventDAO deletedStorageLocationEventDAO =
             new DeletedStorageLocationEventDAO(this.artifactDAO);
+        final ObsoleteStorageLocationDAO obsoleteStorageLocationDAO = new ObsoleteStorageLocationDAO(this.artifactDAO);
 
         try (final ResourceIterator<Artifact> artifactIterator =
             this.artifactIteratorDAO.iterator(this.deselector, null)) {
@@ -128,14 +132,28 @@ public class InventoryValidator implements Runnable {
                 try {
                     transactionManager.startTransaction();
 
-                    this.artifactDAO.delete(deselectorArtifact.getID());
-                    DeletedStorageLocationEvent deletedStorageLocationEvent =
-                        new DeletedStorageLocationEvent(deselectorArtifact.getID());
-                    deletedStorageLocationEventDAO.put(deletedStorageLocationEvent);
+                    try {
+                        this.artifactDAO.lock(deselectorArtifact);
+                        deselectorArtifact = this.artifactDAO.get(deselectorArtifact.getID());
+                    } catch (EntityNotFoundException e) {
+                        deselectorArtifact = null;
+                    }
 
-                    transactionManager.commitTransaction();
-                    log.debug("END: Process Artifact " + deselectorArtifact.getID() + " "
-                                  + deselectorArtifact.getURI());
+                    if (deselectorArtifact != null) {
+                        DeletedStorageLocationEvent deletedStorageLocationEvent =
+                            new DeletedStorageLocationEvent(deselectorArtifact.getID());
+                        deletedStorageLocationEventDAO.put(deletedStorageLocationEvent);
+                        ObsoleteStorageLocation obsoleteStorageLocation =
+                            new ObsoleteStorageLocation(deselectorArtifact.storageLocation);
+                        obsoleteStorageLocationDAO.put(obsoleteStorageLocation);
+                        this.artifactDAO.delete(deselectorArtifact.getID());
+                        transactionManager.commitTransaction();
+                        log.debug("END: Process Artifact " + deselectorArtifact.getID() + " "
+                                      + deselectorArtifact.getURI());
+                    } else {
+                        transactionManager.rollbackTransaction();
+                        log.debug("END: Artifact not found");
+                    }
                 } catch (Exception exception) {
                     if (transactionManager.isOpen()) {
                         log.error("Exception in transaction.  Rolling back...");

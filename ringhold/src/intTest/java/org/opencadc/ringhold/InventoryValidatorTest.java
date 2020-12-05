@@ -97,8 +97,11 @@ import org.junit.Before;
 import org.junit.Test;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.DeletedStorageLocationEvent;
+import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.DeletedStorageLocationEventDAO;
+import org.opencadc.inventory.db.ObsoleteStorageLocation;
+import org.opencadc.inventory.db.ObsoleteStorageLocationDAO;
 import org.opencadc.inventory.db.SQLGenerator;
 import org.opencadc.inventory.db.version.InitDatabase;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -117,7 +120,7 @@ public class InventoryValidatorTest {
         Log4jInit.setLevel("org.opencadc.inventory", Level.INFO);
         Log4jInit.setLevel("org.opencadc.inventory.db", Level.INFO);
         Log4jInit.setLevel("ca.nrc.cadc.db", Level.INFO);
-        Log4jInit.setLevel("org.opencadc.ringhold", Level.INFO);
+        Log4jInit.setLevel("org.opencadc.ringhold", Level.DEBUG);
     }
 
     static String INVENTORY_SERVER = "RINGHOLD_TEST";
@@ -154,12 +157,14 @@ public class InventoryValidatorTest {
 
     final ArtifactDAO artifactDAO;
     final DeletedStorageLocationEventDAO deletedStorageLocationEventDAO;
+    final ObsoleteStorageLocationDAO obsoleteStorageLocationDAO;
     final Map<String, Object> daoConfig = new TreeMap<>();
     final String jndiPath = "jdbc/InventoryEnvironment";
 
     public InventoryValidatorTest() throws Exception {
         artifactDAO = new ArtifactDAO();
         deletedStorageLocationEventDAO = new DeletedStorageLocationEventDAO();
+        obsoleteStorageLocationDAO = new ObsoleteStorageLocationDAO();
 
         final DBConfig dbrc = new DBConfig();
         final ConnectionConfig connectionConfig = dbrc.getConnectionConfig(INVENTORY_SERVER, INVENTORY_DATABASE);
@@ -181,6 +186,7 @@ public class InventoryValidatorTest {
 
         artifactDAO.setConfig(daoConfig);
         deletedStorageLocationEventDAO.setConfig(daoConfig);
+        obsoleteStorageLocationDAO.setConfig(daoConfig);
     }
 
     @Before
@@ -190,12 +196,130 @@ public class InventoryValidatorTest {
     }
 
     @Test
-    public void noArtifactsMatchFilter() throws Exception {
+    public void missingConfigTest() throws Exception {
+        final Path includePath = new File(TMP_DIR + "/config").toPath();
+        Files.createDirectories(includePath);
+        final File includeFile = new File(includePath.toFile(), "artifact-deselector.sql");
+        boolean deleted = includeFile.delete();
+        Assert.assertTrue("include file not deleted", deleted);
+
+        configTest();
+    }
+
+    @Test
+    public void emptyConfigTest() throws Exception {
+        final Path includePath = new File(TMP_DIR + "/config").toPath();
+        Files.createDirectories(includePath);
+        final File includeFile = new File(includePath.toFile(), "artifact-deselector.sql");
+
+        final FileWriter fileWriter = new FileWriter(includeFile);
+        fileWriter.write("");
+        fileWriter.flush();
+        fileWriter.close();
+
+        configTest();
+    }
+
+    @Test
+    public void onlyCommentsConfigTest() throws Exception {
+        final Path includePath = new File(TMP_DIR + "/config").toPath();
+        Files.createDirectories(includePath);
+        final File includeFile = new File(includePath.toFile(), "artifact-deselector.sql");
+
+        final FileWriter fileWriter = new FileWriter(includeFile);
+        fileWriter.write("# WHERE uri LIKE 'cadc:INTTEST/%'");
+        fileWriter.flush();
+        fileWriter.close();
+
+        configTest();
+    }
+
+    @Test
+    public void doesNotStartWithWhereConfigTest() throws Exception {
+        final Path includePath = new File(TMP_DIR + "/config").toPath();
+        Files.createDirectories(includePath);
+        final File includeFile = new File(includePath.toFile(), "artifact-deselector.sql");
+
+        final FileWriter fileWriter = new FileWriter(includeFile);
+        fileWriter.write("uri LIKE 'cadc:INTTEST/%'\r\n");
+        fileWriter.flush();
+        fileWriter.close();
+
+        configTest();
+    }
+
+    @Test
+    public void multipleWhereConfigTest() throws Exception {
+        final Path includePath = new File(TMP_DIR + "/config").toPath();
+        Files.createDirectories(includePath);
+        final File includeFile = new File(includePath.toFile(), "artifact-deselector.sql");
+
+        final FileWriter fileWriter = new FileWriter(includeFile);
+        fileWriter.write("WHERE uri LIKE 'cadc:INTTEST/%'\r\n");
+        fileWriter.write("WHERE uri LIKE 'cadc:TEST/%'");
+        fileWriter.flush();
+        fileWriter.close();
+
+        configTest();
+    }
+
+    public void configTest() {
+        StorageLocation storageLocation = new StorageLocation(URI.create("ivo://cadc.nrc.ca/foo"));
+
         Artifact a1 = getTestArtifact("cadc:TEST/one.txt");
+        a1.storageLocation = storageLocation;
         this.artifactDAO.put(a1);
         Artifact a2 = getTestArtifact("cadc:INT/two.txt");
+        a2.storageLocation = storageLocation;
         this.artifactDAO.put(a2);
         Artifact a3 = getTestArtifact("cadc:CADC/three.txt");
+        a3.storageLocation = storageLocation;
+        this.artifactDAO.put(a3);
+
+        try {
+            System.setProperty("user.home", TMP_DIR);
+            InventoryValidator testSubject = new InventoryValidator(this.daoConfig, this.daoConfig);
+            testSubject.run();
+            Assert.fail("should throw an exception for invalid config");
+        } catch (Exception expected) {
+            // exception expected
+        } finally {
+            System.setProperty("user.home", USER_HOME);
+        }
+
+        a1 = this.artifactDAO.get(a1.getID());
+        Assert.assertNotNull(a1);
+        a2 = this.artifactDAO.get(a2.getID());
+        Assert.assertNotNull(a2);
+        a3 = this.artifactDAO.get(a3.getID());
+        Assert.assertNotNull(a3);
+
+        DeletedStorageLocationEvent dsle1 = this.deletedStorageLocationEventDAO.get(a1.getID());
+        Assert.assertNull(dsle1);
+        DeletedStorageLocationEvent dsle2 = this.deletedStorageLocationEventDAO.get(a2.getID());
+        Assert.assertNull(dsle2);
+        DeletedStorageLocationEvent dsle3 = this.deletedStorageLocationEventDAO.get(a3.getID());
+
+        ObsoleteStorageLocation osl1 = this.obsoleteStorageLocationDAO.get(a1.storageLocation);
+        Assert.assertNull(osl1);
+        ObsoleteStorageLocation osl2 = this.obsoleteStorageLocationDAO.get(a2.storageLocation);
+        Assert.assertNull(osl2);
+        ObsoleteStorageLocation osl3 = this.obsoleteStorageLocationDAO.get(a3.storageLocation);
+        Assert.assertNull(osl3);
+    }
+
+    @Test
+    public void noArtifactsMatchFilter() throws Exception {
+        StorageLocation storageLocation = new StorageLocation(URI.create("ivo://cadc.nrc.ca/foo"));
+
+        Artifact a1 = getTestArtifact("cadc:TEST/one.txt");
+        a1.storageLocation = storageLocation;
+        this.artifactDAO.put(a1);
+        Artifact a2 = getTestArtifact("cadc:INT/two.txt");
+        a2.storageLocation = storageLocation;
+        this.artifactDAO.put(a2);
+        Artifact a3 = getTestArtifact("cadc:CADC/three.txt");
+        a3.storageLocation = storageLocation;
         this.artifactDAO.put(a3);
 
         try {
@@ -219,21 +343,37 @@ public class InventoryValidatorTest {
         Assert.assertNull(dsle2);
         DeletedStorageLocationEvent dsle3 = this.deletedStorageLocationEventDAO.get(a3.getID());
         Assert.assertNull(dsle3);
+
+        ObsoleteStorageLocation osl1 = this.obsoleteStorageLocationDAO.get(a1.storageLocation);
+        Assert.assertNull(osl1);
+        ObsoleteStorageLocation osl2 = this.obsoleteStorageLocationDAO.get(a2.storageLocation);
+        Assert.assertNull(osl2);
+        ObsoleteStorageLocation osl3 = this.obsoleteStorageLocationDAO.get(a3.storageLocation);
+        Assert.assertNull(osl3);
     }
 
     @Test
     public void someArtifactsMatchFilter() throws Exception {
+        StorageLocation a_storageLocation = new StorageLocation(URI.create("ivo://cadc.nrc.ca/foo"));
+        StorageLocation b_storageLocation = new StorageLocation(URI.create("ivo://cadc.nrc.ca/bar"));
+
         Artifact b1 = getTestArtifact("cadc:INT/one.txt");
+        b1.storageLocation = b_storageLocation;
         this.artifactDAO.put(b1);
         Artifact b2 = getTestArtifact("cadc:INT_TEST/two.txt");
+        b2.storageLocation = b_storageLocation;
         this.artifactDAO.put(b2);
         Artifact a1 = getTestArtifact("cadc:INTTEST/three.txt");
+        a1.storageLocation = a_storageLocation;
         this.artifactDAO.put(a1);
         Artifact a2 = getTestArtifact("cadc:INTTEST/four.txt");
+        a2.storageLocation = a_storageLocation;
         this.artifactDAO.put(a2);
         Artifact a3 = getTestArtifact("cadc:INTTEST/five.txt");
+        a3.storageLocation = a_storageLocation;
         this.artifactDAO.put(a3);
         Artifact b3 = getTestArtifact("cadc:TEST/six.txt");
+        b3.storageLocation = b_storageLocation;
         this.artifactDAO.put(b3);
 
         try {
@@ -258,6 +398,20 @@ public class InventoryValidatorTest {
         DeletedStorageLocationEvent b_dsle3 = this.deletedStorageLocationEventDAO.get(b3.getID());
         Assert.assertNull(b_dsle3);
 
+        ObsoleteStorageLocation a_osl1 = this.obsoleteStorageLocationDAO.get(a1.storageLocation);
+        Assert.assertNotNull(a_osl1);
+        ObsoleteStorageLocation a_osl2 = this.obsoleteStorageLocationDAO.get(a2.storageLocation);
+        Assert.assertNotNull(a_osl2);
+        ObsoleteStorageLocation a_osl3 = this.obsoleteStorageLocationDAO.get(a3.storageLocation);
+        Assert.assertNotNull(a_osl3);
+
+        ObsoleteStorageLocation b_osl1 = this.obsoleteStorageLocationDAO.get(b1.storageLocation);
+        Assert.assertNull(b_osl1);
+        ObsoleteStorageLocation b_osl2 = this.obsoleteStorageLocationDAO.get(b2.storageLocation);
+        Assert.assertNull(b_osl2);
+        ObsoleteStorageLocation b_osl3 = this.obsoleteStorageLocationDAO.get(b3.storageLocation);
+        Assert.assertNull(b_osl3);
+
         a1 = this.artifactDAO.get(a1.getID());
         Assert.assertNull(a1);
         a2 = this.artifactDAO.get(a2.getID());
@@ -275,11 +429,16 @@ public class InventoryValidatorTest {
 
     @Test
     public void allArtifactsMatchFilter() throws Exception {
+        StorageLocation storageLocation = new StorageLocation(URI.create("ivo://cadc.nrc.ca/foo"));
+
         Artifact a1 = getTestArtifact("cadc:INTTEST/one.txt");
+        a1.storageLocation = storageLocation;
         this.artifactDAO.put(a1);
         Artifact a2 = getTestArtifact("cadc:INTTEST/two.txt");
+        a2.storageLocation = storageLocation;
         this.artifactDAO.put(a2);
         Artifact a3 = getTestArtifact("cadc:INTTEST/three.txt");
+        a3.storageLocation = storageLocation;
         this.artifactDAO.put(a3);
 
         try {
@@ -296,6 +455,20 @@ public class InventoryValidatorTest {
         Assert.assertNotNull(a_dsle2);
         DeletedStorageLocationEvent a_dsle3 = this.deletedStorageLocationEventDAO.get(a3.getID());
         Assert.assertNotNull(a_dsle3);
+
+        ObsoleteStorageLocation a_osl1 = this.obsoleteStorageLocationDAO.get(a1.storageLocation);
+        Assert.assertNotNull(a_osl1);
+        ObsoleteStorageLocation a_osl2 = this.obsoleteStorageLocationDAO.get(a2.storageLocation);
+        Assert.assertNotNull(a_osl2);
+        ObsoleteStorageLocation a_osl3 = this.obsoleteStorageLocationDAO.get(a3.storageLocation);
+        Assert.assertNotNull(a_osl3);
+
+        a1 = this.artifactDAO.get(a1.getID());
+        Assert.assertNull(a1);
+        a2 = this.artifactDAO.get(a2.getID());
+        Assert.assertNull(a2);
+        a3 = this.artifactDAO.get(a3.getID());
+        Assert.assertNull(a3);
     }
 
     private void writeConfig() throws IOException {
@@ -320,6 +493,7 @@ public class InventoryValidatorTest {
         final JdbcTemplate jdbcTemplate = new JdbcTemplate(DBUtil.findJNDIDataSource(jndiPath));
         jdbcTemplate.execute("TRUNCATE TABLE " + INVENTORY_SCHEMA + ".deletedArtifactEvent");
         jdbcTemplate.execute("TRUNCATE TABLE " + INVENTORY_SCHEMA + ".deletedStorageLocationEvent");
+        jdbcTemplate.execute("TRUNCATE TABLE " + INVENTORY_SCHEMA + ".obsoleteStorageLocation");
         jdbcTemplate.execute("TRUNCATE TABLE " + INVENTORY_SCHEMA + ".storageSite");
         jdbcTemplate.execute("TRUNCATE TABLE " + INVENTORY_SCHEMA + ".harvestState");
         jdbcTemplate.execute("TRUNCATE TABLE " + INVENTORY_SCHEMA + ".Artifact");
