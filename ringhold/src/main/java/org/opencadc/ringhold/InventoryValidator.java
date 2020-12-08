@@ -67,10 +67,19 @@
 
 package org.opencadc.ringhold;
 
+import ca.nrc.cadc.db.TransactionManager;
+import ca.nrc.cadc.io.ResourceIterator;
+import ca.nrc.cadc.net.ResourceNotFoundException;
+import java.io.IOException;
 import java.util.Map;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
+import org.opencadc.inventory.DeletedStorageLocationEvent;
 import org.opencadc.inventory.db.ArtifactDAO;
+import org.opencadc.inventory.db.DeletedStorageLocationEventDAO;
+import org.opencadc.inventory.db.EntityNotFoundException;
+import org.opencadc.inventory.db.ObsoleteStorageLocation;
+import org.opencadc.inventory.db.ObsoleteStorageLocationDAO;
 
 /**
  * Validate local inventory. This currently supports cleanup after a change in
@@ -80,25 +89,89 @@ import org.opencadc.inventory.db.ArtifactDAO;
  */
 public class InventoryValidator implements Runnable {
     private static final Logger log = Logger.getLogger(InventoryValidator.class);
-    
-    private static final String FILTER_FILENAME = "artifact-deselector.sql";
 
-    private final ArtifactDAO iteratorDAO;
+    private final ArtifactDAO artifactIteratorDAO;
     private final ArtifactDAO artifactDAO;
+    private final String deselector;
     
     public InventoryValidator(Map<String, Object> txnConfig, Map<String, Object> iterConfig) { 
         this.artifactDAO = new ArtifactDAO();
         artifactDAO.setConfig(txnConfig);
         
-        this.iteratorDAO = new ArtifactDAO();
-        iteratorDAO.setConfig(iterConfig);
-        
-        // TODO: read FILTER_FILENAME, check and fail here
-        
+        this.artifactIteratorDAO = new ArtifactDAO();
+        artifactIteratorDAO.setConfig(iterConfig);
+
+        ArtifactDeselector artifactDeselector = new ArtifactDeselector();
+        try {
+            this.deselector = artifactDeselector.getConstraint();
+        } catch (ResourceNotFoundException ex) {
+            throw new IllegalArgumentException("missing required configuration: "
+                                                   + ArtifactDeselector.SQL_FILTER_FILE_NAME, ex);
+        } catch (IOException ex) {
+            throw new IllegalArgumentException("unable to read config: " + ArtifactDeselector.SQL_FILTER_FILE_NAME, ex);
+        }
     }
 
+    /**
+     * Find an artifact with a uri pattern in the deselector,
+     * delete the artifact and generate a deleted storage location event.
+     */
     @Override
     public void run() {
-        throw new UnsupportedOperationException("NOT IMPLEMENTED");
+        final TransactionManager transactionManager = this.artifactDAO.getTransactionManager();
+        final DeletedStorageLocationEventDAO deletedStorageLocationEventDAO =
+            new DeletedStorageLocationEventDAO(this.artifactDAO);
+        final ObsoleteStorageLocationDAO obsoleteStorageLocationDAO = new ObsoleteStorageLocationDAO(this.artifactDAO);
+
+        try (final ResourceIterator<Artifact> artifactIterator =
+            this.artifactIteratorDAO.iterator(this.deselector, null)) {
+            while (artifactIterator.hasNext()) {
+                Artifact deselectorArtifact = artifactIterator.next();
+                log.debug("START: Process Artifact " + deselectorArtifact.getID() + " " + deselectorArtifact.getURI());
+
+                try {
+                    transactionManager.startTransaction();
+
+                    try {
+                        this.artifactDAO.lock(deselectorArtifact);
+                        deselectorArtifact = this.artifactDAO.get(deselectorArtifact.getID());
+                    } catch (EntityNotFoundException e) {
+                        deselectorArtifact = null;
+                    }
+
+                    if (deselectorArtifact != null) {
+                        DeletedStorageLocationEvent deletedStorageLocationEvent =
+                            new DeletedStorageLocationEvent(deselectorArtifact.getID());
+                        deletedStorageLocationEventDAO.put(deletedStorageLocationEvent);
+                        ObsoleteStorageLocation obsoleteStorageLocation =
+                            new ObsoleteStorageLocation(deselectorArtifact.storageLocation);
+                        obsoleteStorageLocationDAO.put(obsoleteStorageLocation);
+                        this.artifactDAO.delete(deselectorArtifact.getID());
+                        transactionManager.commitTransaction();
+                        log.debug("END: Process Artifact " + deselectorArtifact.getID() + " "
+                                      + deselectorArtifact.getURI());
+                    } else {
+                        transactionManager.rollbackTransaction();
+                        log.debug("END: Artifact not found");
+                    }
+                } catch (Exception exception) {
+                    if (transactionManager.isOpen()) {
+                        log.error("Exception in transaction.  Rolling back...");
+                        transactionManager.rollbackTransaction();
+                        log.error("Rollback: OK");
+                    }
+                    throw exception;
+                } finally {
+                    if (transactionManager.isOpen()) {
+                        log.error("BUG: transaction open in finally. Rolling back...");
+                        transactionManager.rollbackTransaction();
+                        log.error("Rollback: OK");
+                        throw new RuntimeException("BUG: transaction open in finally");
+                    }
+                }
+            }
+        } catch (IOException e) {
+            log.error("Error closing iterator: " + e.getMessage());
+        }
     }
 }

@@ -72,7 +72,6 @@ import ca.nrc.cadc.db.DBUtil;
 import ca.nrc.cadc.util.Log4jInit;
 import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.util.PropertiesReader;
-import java.net.URI;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.Set;
@@ -80,9 +79,7 @@ import java.util.TreeMap;
 import javax.naming.NamingException;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
-import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.db.SQLGenerator;
-
 
 /**
  * Main entry point for ringhold.
@@ -144,7 +141,6 @@ public class Main {
             
             final Map<String, Object> daoConfig = new TreeMap<>();
             daoConfig.put("schema", props.getFirstPropertyValue(DB_SCHEMA_CONFIG_KEY));
-            //daoConfig.put("database", null);
             daoConfig.put("jndiDataSourceName", "jdbc/inventory-txn");
             final String configuredSQLGenerator = props.getFirstPropertyValue(SQLGENERATOR_CONFIG_KEY);
             daoConfig.put(SQLGENERATOR_CONFIG_KEY, Class.forName(configuredSQLGenerator));
