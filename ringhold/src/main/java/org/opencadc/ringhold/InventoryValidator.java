@@ -148,12 +148,13 @@ public class InventoryValidator implements Runnable {
                         obsoleteStorageLocationDAO.put(obsoleteStorageLocation);
                         this.artifactDAO.delete(deselectorArtifact.getID());
                         transactionManager.commitTransaction();
-                        log.debug("END: Process Artifact " + deselectorArtifact.getID() + " "
-                                      + deselectorArtifact.getURI());
+                        log.info("DELETE: Artifact " + deselectorArtifact.getID() + " " + deselectorArtifact.getURI());
                     } else {
                         transactionManager.rollbackTransaction();
-                        log.debug("END: Artifact not found");
+                        log.debug("Artifact not found");
                     }
+                    log.debug("END: Process Artifact " + deselectorArtifact.getID() + " "
+                                  + deselectorArtifact.getURI());
                 } catch (Exception exception) {
                     if (transactionManager.isOpen()) {
                         log.error("Exception in transaction.  Rolling back...");
