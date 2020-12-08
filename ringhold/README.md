@@ -1,6 +1,7 @@
-# Storage Inventory metadata-validate process (ringhold)
+# Storage Inventory local artifact removal process (ringhold)
 
-Process to validate metadata changes between storage sites and global inventory(ies). 
+Process to remove local artifacts that are no longer being synchronised by fenwick. This tool is used
+to perform quick cleanup at a storage site after changing the fenwick artifact-filter policy.
 
 ## configuration
 See the [cadc-java](https://github.com/opencadc/docker-base/tree/master/cadc-java) image docs for general config requirements.
@@ -24,10 +25,6 @@ Contains a SQL clause used as a WHERE constraint. The clause returns Artifact's 
 ```
 WHERE uri LIKE 'cadc:CFHT/%'
 ```
-
-### cadcproxy.pem -- UNUSED
-In future, `ringhold` will use this certificate to authenticate to the remote (luskan) service.
-
 
 ## building it
 ```
