@@ -128,7 +128,7 @@ public class Main {
             }
 
             final String configuredLogging = props.getFirstPropertyValue(LOGGING_KEY);
-            Log4jInit.setLevel("org.opencadc.fenwick", Level.toLevel(configuredLogging.toUpperCase()));
+            Log4jInit.setLevel("org.opencadc.ringhold", Level.toLevel(configuredLogging.toUpperCase()));
             Log4jInit.setLevel("org.opencadc.inventory", Level.toLevel(configuredLogging.toUpperCase()));
 
             // DAO Configuration
