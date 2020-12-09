@@ -123,10 +123,13 @@ public class Main {
         try {
             final PropertiesReader propertiesReader = new PropertiesReader(CONFIG_FILE_NAME);
             final MultiValuedProperties props = propertiesReader.getAllProperties();
+            if (props == null) {
+                log.fatal(String.format("Configuration file not found: %s\n", CONFIG_FILE_NAME));
+                System.exit(2);
+            }
             final String[] missingKeys = Main.verifyConfiguration(props);
-
             if (missingKeys.length > 0) {
-                log.fatal(String.format("\nConfiguration file %s missing one or more values: %s.\n", CONFIG_FILE_NAME,
+                log.fatal(String.format("Configuration file %s missing one or more values: %s.\n", CONFIG_FILE_NAME,
                                         Arrays.toString(missingKeys)));
                 System.exit(2);
             }
