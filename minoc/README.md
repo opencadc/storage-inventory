@@ -14,7 +14,9 @@ minoc.invadm.username={}
 minoc.invadm.password={}
 minoc.invadm.url=jdbc:postgresql://{server}/{database}
 ```
-Additional java system properties may be required by libraries.
+The `invadm` account owns and manages (create, alter, drop) inventory database objects. The database is specified 
+in the JDBC URL and the schema is specified in the minoc.proeprties (below). Failure to connect or initialize
+the database will show up in logs and in the VOSI-availability output.
 
 ### minoc.properties
 A minoc.properties file in /config is required to run this service.  The following keys are required:
