@@ -15,7 +15,7 @@ minoc.invadm.password={}
 minoc.invadm.url=jdbc:postgresql://{server}/{database}
 ```
 The `invadm` account owns and manages (create, alter, drop) inventory database objects. The database is specified 
-in the JDBC URL and the schema is specified in the minoc.proeprties (below). Failure to connect or initialize
+in the JDBC URL and the schema is specified in the minoc.properties (below). Failure to connect or initialize
 the database will show up in logs and in the VOSI-availability output.
 
 ### minoc.properties
