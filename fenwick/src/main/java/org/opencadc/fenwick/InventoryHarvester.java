@@ -315,7 +315,7 @@ public class InventoryHarvester implements Runnable {
         if (harvestState.curLastModified != null) {
             start = df.format(harvestState.curLastModified);
         }
-        EventLogInfo queryEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, CLASS_NAME, DeletedStorageLocationEvent.class.getName() + "QUERY");
+        EventLogInfo queryEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, CLASS_NAME, DeletedStorageLocationEvent.class.getName() + " QUERY");
         boolean first = true;
         long queryStartTime = System.currentTimeMillis();
         try (final ResourceIterator<DeletedStorageLocationEvent> deletedStorageLocationEventResourceIterator =
@@ -337,7 +337,7 @@ public class InventoryHarvester implements Runnable {
                     continue; // ugh
                 }
 
-                EventLogInfo putEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, CLASS_NAME, DeletedStorageLocationEvent.class.getName() + "PUT");
+                EventLogInfo putEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, CLASS_NAME, DeletedStorageLocationEvent.class.getName() + " PUT");
                 Artifact artifact = this.artifactDAO.get(deletedStorageLocationEvent.getID());
                 putEventLogInfo.setEntityID(deletedStorageLocationEvent.getID());
                 putEventLogInfo.setLifeCycle(EventLifeCycle.PROPAGATE);
@@ -426,7 +426,7 @@ public class InventoryHarvester implements Runnable {
         if (harvestState.curLastModified != null) {
             start = df.format(harvestState.curLastModified);
         }
-        EventLogInfo queryEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, CLASS_NAME, DeletedArtifactEvent.class.getName() + "QUERY");
+        EventLogInfo queryEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, CLASS_NAME, DeletedArtifactEvent.class.getName() + " QUERY");
         boolean first = true;
         long queryStartTime = System.currentTimeMillis();
         try (final ResourceIterator<DeletedArtifactEvent> deletedArtifactEventResourceIterator
@@ -447,7 +447,7 @@ public class InventoryHarvester implements Runnable {
                     continue; // ugh
                 }
                 
-                EventLogInfo putEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, CLASS_NAME, DeletedArtifactEvent.class.getName() + "PUT");
+                EventLogInfo putEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, CLASS_NAME, DeletedArtifactEvent.class.getName() + " PUT");
                 putEventLogInfo.setEntityID(deletedArtifactEvent.getID());
                 putEventLogInfo.setLifeCycle(EventLifeCycle.PROPAGATE);
                 try {
