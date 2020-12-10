@@ -117,6 +117,7 @@ public class BucketValidator implements ValidateEventListener {
 
     private static final Logger LOGGER = Logger.getLogger(BucketValidator.class);
 
+    private static final String CLASS_NAME = BucketValidator.class.getName();
     private static final String APPLICATION_CONFIG_KEY_PREFIX = "org.opencadc.tantar";
 
     private final List<String> bucketPrefixes = new ArrayList<>();
@@ -248,7 +249,7 @@ public class BucketValidator implements ValidateEventListener {
             InitDatabase init = new InitDatabase(ds, database, schema);
             init.doInit();
             String msg = "initDatabase: " + schema + " OK";
-            EventLogInfo dbEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, BucketValidator.class.getName(), "INITDB");
+            EventLogInfo dbEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, CLASS_NAME, "INITDB");
             dbEventLogInfo.setMessage(msg);
             dbEventLogInfo.setSuccess(true);
             LOGGER.info(dbEventLogInfo.singleEvent());
@@ -361,8 +362,7 @@ public class BucketValidator implements ValidateEventListener {
     public void clearStorageLocation(final Artifact artifact) {
         if (canTakeAction()) {
             final TransactionManager transactionManager = artifactDAO.getTransactionManager();
-            String label = "Artifact";
-            EventLogInfo clearEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, label, "CLEAR STORAGE LOCATION");
+            EventLogInfo clearEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, CLASS_NAME, "CLEAR STORAGE LOCATION");
 
             try {
                 LOGGER.debug("Start transaction.");
@@ -429,8 +429,7 @@ public class BucketValidator implements ValidateEventListener {
     public void delete(final Artifact artifact) {
         if (canTakeAction()) {
             final TransactionManager transactionManager = artifactDAO.getTransactionManager();
-            String label = "Artifact";
-            EventLogInfo putEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, label, "DELETE");
+            EventLogInfo putEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, CLASS_NAME, "DELETE");
             putEventLogInfo.setLifeCycle(EventLifeCycle.CREATE);
             putEventLogInfo.setEntityID(artifact.getID());
             putEventLogInfo.setArtifactURI(artifact.getURI());
@@ -510,8 +509,7 @@ public class BucketValidator implements ValidateEventListener {
             }
                 
             final TransactionManager transactionManager = artifactDAO.getTransactionManager();
-            String label = "Artifact";
-            EventLogInfo putEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, label, "CREATE PUT");
+            EventLogInfo putEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, CLASS_NAME, "CREATE PUT");
             putEventLogInfo.setLifeCycle(EventLifeCycle.CREATE);
             putEventLogInfo.setEntityID(artifact.getID());
             putEventLogInfo.setArtifactURI(artifact.getURI());
@@ -556,9 +554,8 @@ public class BucketValidator implements ValidateEventListener {
         if (canTakeAction()) {
             final TransactionManager transactionManager = artifactDAO.getTransactionManager();
             boolean putStarted = false;
-            String label = "Artifact";
-            EventLogInfo deleteEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, label, "REPLACE DELETE");
-            EventLogInfo putEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, label, "REPLACE PUT");
+            EventLogInfo deleteEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, CLASS_NAME, "REPLACE DELETE");
+            EventLogInfo putEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, CLASS_NAME, "REPLACE PUT");
 
             try {
                 LOGGER.debug("Start transaction.");
@@ -630,8 +627,7 @@ public class BucketValidator implements ValidateEventListener {
     public void updateArtifact(final Artifact artifact, final StorageMetadata storageMetadata) throws Exception {
         if (canTakeAction()) {
             final TransactionManager transactionManager = artifactDAO.getTransactionManager();
-            String label = "Artifact";
-            EventLogInfo updateEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, label, "UPDATE");
+            EventLogInfo updateEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, CLASS_NAME, "UPDATE");
             updateEventLogInfo.setArtifactURI(artifact.getURI());
             updateEventLogInfo.setEntityID(artifact.getID());
             updateEventLogInfo.setLifeCycle(EventLifeCycle.PROPAGATE);

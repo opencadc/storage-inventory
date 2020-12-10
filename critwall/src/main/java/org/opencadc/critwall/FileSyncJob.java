@@ -117,7 +117,7 @@ public class FileSyncJob implements Runnable {
     private static final Logger log = Logger.getLogger(FileSyncJob.class);
 
     private static final long[] RETRY_DELAY = new long[] { 6000L, 12000L };
-    private static final String LABEL = FileSyncJob.class.getName();
+    private static final String CLASS_NAME = FileSyncJob.class.getName();
 
     private final ArtifactDAO artifactDAO;
     private final UUID artifactID;
@@ -167,7 +167,7 @@ public class FileSyncJob implements Runnable {
     //         Artifact.contentChecksum and Artifact.contentLength are immutable      
     private void doSync() {
         
-        EventLogInfo syncEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, LABEL, "SYNC");
+        EventLogInfo syncEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, CLASS_NAME, "SYNC");
         syncEventLogInfo.setEntityID(artifactID);
         log.info(syncEventLogInfo.start());
         long start = System.currentTimeMillis();
@@ -210,7 +210,7 @@ public class FileSyncJob implements Runnable {
                     }
                     
                     // attempt to sync file
-                    EventLogInfo retryEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, LABEL, "SYNC");
+                    EventLogInfo retryEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, CLASS_NAME, "SYNC");
                     retryEventLogInfo.setArtifactURI(artifact.getURI());
                     retryEventLogInfo.setEntityID(artifact.getID());
                     retryEventLogInfo.setAttempts(retryCount);
@@ -285,7 +285,7 @@ public class FileSyncJob implements Runnable {
                     }
                     
                     if (!success) {
-                        EventLogInfo sleepEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, LABEL, "SLEEP");
+                        EventLogInfo sleepEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, CLASS_NAME, "SLEEP");
                         sleepEventLogInfo.setElapsedTime(RETRY_DELAY[retryCount]);
                         log.info(sleepEventLogInfo.singleEvent());
                         Thread.sleep(RETRY_DELAY[retryCount++]);
@@ -306,7 +306,7 @@ public class FileSyncJob implements Runnable {
             }
         } finally {
             long dt = System.currentTimeMillis() - start;
-            EventLogInfo syncEndEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, LABEL, "SYNC");
+            EventLogInfo syncEndEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, CLASS_NAME, "SYNC");
             syncEndEventLogInfo.setElapsedTime(dt);
             syncEndEventLogInfo.setSuccess(success);
             syncEndEventLogInfo.setMessage(msg);
@@ -367,7 +367,7 @@ public class FileSyncJob implements Runnable {
                 urlList.add(new URL(s));
             } catch (MalformedURLException mue) {
                 String msg = "malformed URL returned from transfer negotiation: " + s + " skipping... ";
-                EventLogInfo urlEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, LABEL, "CREATE");
+                EventLogInfo urlEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, CLASS_NAME, "CREATE");
                 urlEventLogInfo.setMessage(msg);
                 log.info(urlEventLogInfo.singleEvent());
             }
@@ -383,7 +383,7 @@ public class FileSyncJob implements Runnable {
         Iterator<URL> urlIterator = urls.iterator();
 
         while (urlIterator.hasNext()) {
-            EventLogInfo syncEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, LABEL, "SYNC");
+            EventLogInfo syncEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, CLASS_NAME, "SYNC");
             syncEventLogInfo.setArtifactURI(a.getURI());
             syncEventLogInfo.setEntityID(a.getID());
             URL u = urlIterator.next();

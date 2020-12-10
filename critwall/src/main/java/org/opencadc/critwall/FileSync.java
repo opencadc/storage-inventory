@@ -103,7 +103,7 @@ import org.opencadc.inventory.util.DBUtil;
 public class FileSync implements Runnable {
     private static final Logger log = Logger.getLogger(FileSync.class);
 
-    private static final String LABEL = FileSync.class.getName();
+    private static final String CLASS_NAME = FileSync.class.getName();
     private static final int MAX_THREADS = 16;
 
     // The number of hours that the validity checker for the current Subject will request ahead to see if the Subject's
@@ -181,7 +181,7 @@ public class FileSync implements Runnable {
                 InitDatabase init = new InitDatabase(ds, database, schema);
                 init.doInit();
                 String msg = "initDatabase: " + schema + " OK";
-                EventLogInfo dbEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, LABEL, "INITDB");
+                EventLogInfo dbEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, CLASS_NAME, "INITDB");
                 dbEventLogInfo.setMessage(msg);
                 dbEventLogInfo.setSuccess(true);
                 log.info(dbEventLogInfo.singleEvent());
@@ -263,7 +263,7 @@ public class FileSync implements Runnable {
                 final Subject currentUser = AuthenticationUtil.getCurrentSubject();
                 Iterator<String> bi = selector.getBucketIterator();
                 while (bi.hasNext()) {
-                    EventLogInfo queryEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, LABEL, "QUERY");
+                    EventLogInfo queryEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, CLASS_NAME, "QUERY");
                     String bucket = bi.next();
                     log.debug("FileSync.QUERY bucket=" + bucket);
                     long queryStartTime = System.currentTimeMillis();
@@ -276,7 +276,7 @@ public class FileSync implements Runnable {
                     
                     
                         while (unstoredArtifacts.hasNext()) {
-                            EventLogInfo createEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, LABEL, "CREATE");
+                            EventLogInfo createEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, CLASS_NAME, "CREATE");
                             // TODO:  handle errors from this more sanely after they
                             // are available from the cadc-inventory-db API
                             Artifact curArtifact = unstoredArtifacts.next();
@@ -304,7 +304,7 @@ public class FileSync implements Runnable {
 
                 }
                 long dtQ = System.currentTimeMillis() - startQ;
-                EventLogInfo endEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, LABEL, "QUERY");
+                EventLogInfo endEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, CLASS_NAME, "QUERY");
                 endEventLogInfo.setElapsedTime(dtQ);
                 endEventLogInfo.setSuccess(true);
                 log.info(endEventLogInfo.end());
@@ -317,13 +317,13 @@ public class FileSync implements Runnable {
                             log.debug("queue empty; jobs complete");
                             waiting = false;
                         } else {
-                            EventLogInfo pollEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, LABEL, "POLL");
+                            EventLogInfo pollEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, CLASS_NAME, "POLL");
                             pollEventLogInfo.setElapsedTime(poll);
                             log.info(pollEventLogInfo.singleEvent());
                             Thread.sleep(poll);
                         }
                     } else {
-                        EventLogInfo pollEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, LABEL, "POLL");
+                        EventLogInfo pollEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, CLASS_NAME, "POLL");
                         pollEventLogInfo.setElapsedTime(poll);
                         log.info(pollEventLogInfo.singleEvent());
                         Thread.sleep(poll);
@@ -342,7 +342,7 @@ public class FileSync implements Runnable {
             }
             if (ok) {
                 try {
-                    EventLogInfo pollEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, LABEL, "IDLE");
+                    EventLogInfo pollEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, CLASS_NAME, "IDLE");
                     pollEventLogInfo.setElapsedTime(idle);
                     log.info(pollEventLogInfo.singleEvent());
                     Thread.sleep(idle);

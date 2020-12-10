@@ -22,7 +22,7 @@ dependencies {
     compile 'log4j:log4j:[1.2,)'
     compile 'org.opencadc:cadc-storage-adapter:[0.3,1.0)'
     compile 'org.opencadc:cadc-util:[1.3.12,2.0)'
-    compile 'org.opencadc:cadc-log:[1.1.3,)'
+    compile 'org.opencadc:cadc-log:[1.1.4,)'
     compile 'org.opencadc:cadc-inventory:[0.7,2.0)'
     compile 'org.opencadc:cadc-inventory-db:[0.9.1,1.0)'
     compile 'org.opencadc:cadc-inventory-util:[0.1.1,1.0)'

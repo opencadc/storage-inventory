@@ -119,6 +119,7 @@ public class InventoryHarvester implements Runnable {
 
     private static final Logger log = Logger.getLogger(InventoryHarvester.class);
     public static final String CERTIFICATE_FILE_LOCATION = System.getProperty("user.home") + "/.ssl/cadcproxy.pem";
+    private static final String CLASS_NAME = InventoryHarvester.class.getName();
 
     private final ArtifactDAO artifactDAO;
     private final URI resourceID;
@@ -156,7 +157,7 @@ public class InventoryHarvester implements Runnable {
             InitDatabase init = new InitDatabase(ds, database, schema);
             init.doInit();
             String msg = "initDatabase: " + jndiDataSourceName + " " + schema + " OK";
-            EventLogInfo dbEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, InventoryHarvester.class.getName(), "INITDB");
+            EventLogInfo dbEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, CLASS_NAME, "INITDB");
             dbEventLogInfo.setMessage(msg);
             dbEventLogInfo.setSuccess(true);
             log.info(dbEventLogInfo.singleEvent());
@@ -314,8 +315,7 @@ public class InventoryHarvester implements Runnable {
         if (harvestState.curLastModified != null) {
             start = df.format(harvestState.curLastModified);
         }
-        String queryLabel = DeletedStorageLocationEvent.class.getName();
-        EventLogInfo queryEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, queryLabel, "QUERY");
+        EventLogInfo queryEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, CLASS_NAME, DeletedStorageLocationEvent.class.getName() + "QUERY");
         boolean first = true;
         long queryStartTime = System.currentTimeMillis();
         try (final ResourceIterator<DeletedStorageLocationEvent> deletedStorageLocationEventResourceIterator =
@@ -326,7 +326,6 @@ public class InventoryHarvester implements Runnable {
             queryEventLogInfo.setIteratorItem(item);
             log.info(queryEventLogInfo.start());
 
-            String putLabel = DeletedStorageLocationEvent.class.getName();
             while (deletedStorageLocationEventResourceIterator.hasNext()) {
                 final DeletedStorageLocationEvent deletedStorageLocationEvent =
                         deletedStorageLocationEventResourceIterator.next();
@@ -338,7 +337,7 @@ public class InventoryHarvester implements Runnable {
                     continue; // ugh
                 }
 
-                EventLogInfo putEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, putLabel, "PUT");
+                EventLogInfo putEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, CLASS_NAME, DeletedStorageLocationEvent.class.getName() + "PUT");
                 Artifact artifact = this.artifactDAO.get(deletedStorageLocationEvent.getID());
                 putEventLogInfo.setEntityID(deletedStorageLocationEvent.getID());
                 putEventLogInfo.setLifeCycle(EventLifeCycle.PROPAGATE);
@@ -427,8 +426,7 @@ public class InventoryHarvester implements Runnable {
         if (harvestState.curLastModified != null) {
             start = df.format(harvestState.curLastModified);
         }
-        String queryLabel = DeletedArtifactEvent.class.getName();
-        EventLogInfo queryEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, queryLabel, "QUERY");
+        EventLogInfo queryEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, CLASS_NAME, DeletedArtifactEvent.class.getName() + "QUERY");
         boolean first = true;
         long queryStartTime = System.currentTimeMillis();
         try (final ResourceIterator<DeletedArtifactEvent> deletedArtifactEventResourceIterator
@@ -439,7 +437,6 @@ public class InventoryHarvester implements Runnable {
             queryEventLogInfo.setIteratorItem(item);
             log.info(queryEventLogInfo.start());
 
-            String putLabel = DeletedArtifactEvent.class.getName();
             while (deletedArtifactEventResourceIterator.hasNext()) {
                 final DeletedArtifactEvent deletedArtifactEvent = deletedArtifactEventResourceIterator.next();
                 if (first 
@@ -450,7 +447,7 @@ public class InventoryHarvester implements Runnable {
                     continue; // ugh
                 }
                 
-                EventLogInfo putEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, putLabel, "PUT");
+                EventLogInfo putEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, CLASS_NAME, DeletedArtifactEvent.class.getName() + "PUT");
                 putEventLogInfo.setEntityID(deletedArtifactEvent.getID());
                 putEventLogInfo.setLifeCycle(EventLifeCycle.PROPAGATE);
                 try {
@@ -527,8 +524,7 @@ public class InventoryHarvester implements Runnable {
         if (harvestState.curLastModified != null) {
             start = df.format(harvestState.curLastModified);
         }
-        String queryLabel = "Artifact";
-        EventLogInfo queryEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, queryLabel, "QUERY");
+        EventLogInfo queryEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, CLASS_NAME, "Artifact QUERY");
         boolean first = true;
         long queryStartTime = System.currentTimeMillis();
         try (final ResourceIterator<Artifact> artifactResourceIterator = artifactSync.iterator()) {
@@ -538,10 +534,6 @@ public class InventoryHarvester implements Runnable {
             queryEventLogInfo.setIteratorItem(item);
             log.info(queryEventLogInfo.start());
         
-            String putLabel = "Artifact";
-            String staleLabel = "STALE artifact: skip";
-            String replaceLabel = "Artifact.uri COLLISION: replace";
-            String skipLabel = "Artifact.uri COLLISION skip";
             while (artifactResourceIterator.hasNext()) {
                 final Artifact artifact = artifactResourceIterator.next();
 
@@ -569,10 +561,10 @@ public class InventoryHarvester implements Runnable {
                     collidingArtifact = null;
                 }
 
-                EventLogInfo putEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, putLabel, "PUT");
-                EventLogInfo staleEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, staleLabel, "PUT");
-                EventLogInfo replaceEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, replaceLabel, "PUT");
-                EventLogInfo skipEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, skipLabel, "PUT");
+                EventLogInfo putEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, CLASS_NAME, "Artifact PUT");
+                EventLogInfo staleEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, CLASS_NAME, "SKIP");
+                EventLogInfo replaceEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, CLASS_NAME, "REPLACE");
+                EventLogInfo skipEventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, CLASS_NAME, "SKIP");
                 try {
                     transactionManager.startTransaction();
 
@@ -601,6 +593,7 @@ public class InventoryHarvester implements Runnable {
                             staleEventLogInfo.setLifeCycle(EventLifeCycle.PROPAGATE);
                             staleEventLogInfo.setArtifactURI(artifact.getURI());
                             staleEventLogInfo.setEntityID(artifact.getID());
+                            staleEventLogInfo.setAdditionalInfo("STALE artifact");;
                             item = new EnumMap<EventIteratorKey, String>(EventIteratorKey.class);
                             item.put(EventIteratorKey.LASTMODIFIED, lastModified);
                             queryEventLogInfo.setIteratorItem(item);
@@ -620,17 +613,20 @@ public class InventoryHarvester implements Runnable {
                             replaceEventLogInfo.setLifeCycle(EventLifeCycle.PROPAGATE);
                             replaceEventLogInfo.setArtifactURI(currentArtifact.getURI());
                             replaceEventLogInfo.setEntityID(currentArtifact.getID());
+                            replaceEventLogInfo.setAdditionalInfo("Artifact.uri COLLISION");
                             item = new EnumMap<EventIteratorKey, String>(EventIteratorKey.class);
                             item.put(EventIteratorKey.LASTMODIFIED, currentContentLastModified);
                             queryEventLogInfo.setIteratorItem(item);
                             daeDAO.put(new DeletedArtifactEvent(currentArtifact.getID()));
                             replaceEventLogInfo.setElapsedTime(System.currentTimeMillis() - startTime);
+                            log.info(replaceEventLogInfo.singleEvent());
                             artifactDAO.delete(currentArtifact.getID());
                         } else {
                             skipEventLogInfo.setElapsedTime(System.currentTimeMillis() - startTime);
                             skipEventLogInfo.setLifeCycle(EventLifeCycle.PROPAGATE);
                             skipEventLogInfo.setArtifactURI(artifact.getURI());
                             skipEventLogInfo.setEntityID(artifact.getID());
+                            skipEventLogInfo.setAdditionalInfo("Artifact.uri COLLISION");
                             item = new EnumMap<EventIteratorKey, String>(EventIteratorKey.class);
                             item.put(EventIteratorKey.LASTMODIFIED, lastModified);
                             queryEventLogInfo.setIteratorItem(item);
@@ -641,7 +637,7 @@ public class InventoryHarvester implements Runnable {
                         }
                     }
  
-                    skipEventLogInfo.setLifeCycle(EventLifeCycle.CREATE);
+                    putEventLogInfo.setLifeCycle(EventLifeCycle.CREATE);
                     putEventLogInfo.setEntityID(artifact.getID());
                     putEventLogInfo.setArtifactURI(artifact.getURI());
                     item = new EnumMap<EventIteratorKey, String>(EventIteratorKey.class);

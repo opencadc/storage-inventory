@@ -98,7 +98,7 @@ import org.opencadc.tap.TapClient;
 public class StorageSiteSync {
     private static final Logger log = Logger.getLogger(StorageSiteSync.class);
 
-    private static final String LABEL = StorageSiteSync.class.getName();
+    private static final String CLASS_NAME = StorageSiteSync.class.getName();
     // column order folllowing model declarations
     private static final String STORAGE_SITE_QUERY =
             "SELECT resourceid, name, allowRead, allowWrite, id, lastmodified, metachecksum FROM inventory.storagesite";
@@ -137,7 +137,7 @@ public class StorageSiteSync {
                                      IllegalArgumentException, TransientException, IOException,
                                      InterruptedException {
         StorageSite storageSite;
-        EventLogInfo eventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, LABEL, "QUERY");
+        EventLogInfo eventLogInfo = new EventLogInfo(Main.APPLICATION_NAME, CLASS_NAME, "QUERY");
         long start = System.currentTimeMillis();
         try (final ResourceIterator<StorageSite> storageSiteIterator = queryStorageSites()) {
             eventLogInfo.setElapsedTime(System.currentTimeMillis() - start);
