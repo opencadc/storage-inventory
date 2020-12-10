@@ -72,7 +72,6 @@ import ca.nrc.cadc.db.DBUtil;
 import ca.nrc.cadc.util.Log4jInit;
 import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.util.PropertiesReader;
-import java.net.URI;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.Set;
@@ -80,9 +79,7 @@ import java.util.TreeMap;
 import javax.naming.NamingException;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
-import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.db.SQLGenerator;
-
 
 /**
  * Main entry point for ringhold.
@@ -118,16 +115,20 @@ public class Main {
         try {
             final PropertiesReader propertiesReader = new PropertiesReader(CONFIG_FILE_NAME);
             final MultiValuedProperties props = propertiesReader.getAllProperties();
+            if (props == null) {
+                log.fatal(String.format("Configuration file not found: %s\n", CONFIG_FILE_NAME));
+                System.exit(2);
+            }
             final String[] missingKeys = Main.verifyConfiguration(props);
 
             if (missingKeys.length > 0) {
-                log.fatal(String.format("\nConfiguration file %s missing one or more values: %s.\n", CONFIG_FILE_NAME,
+                log.fatal(String.format("Configuration file %s missing one or more values: %s\n", CONFIG_FILE_NAME,
                                         Arrays.toString(missingKeys)));
                 System.exit(2);
             }
 
             final String configuredLogging = props.getFirstPropertyValue(LOGGING_KEY);
-            Log4jInit.setLevel("org.opencadc.fenwick", Level.toLevel(configuredLogging.toUpperCase()));
+            Log4jInit.setLevel("org.opencadc.ringhold", Level.toLevel(configuredLogging.toUpperCase()));
             Log4jInit.setLevel("org.opencadc.inventory", Level.toLevel(configuredLogging.toUpperCase()));
 
             // DAO Configuration
@@ -144,7 +145,6 @@ public class Main {
             
             final Map<String, Object> daoConfig = new TreeMap<>();
             daoConfig.put("schema", props.getFirstPropertyValue(DB_SCHEMA_CONFIG_KEY));
-            //daoConfig.put("database", null);
             daoConfig.put("jndiDataSourceName", "jdbc/inventory-txn");
             final String configuredSQLGenerator = props.getFirstPropertyValue(SQLGENERATOR_CONFIG_KEY);
             daoConfig.put(SQLGENERATOR_CONFIG_KEY, Class.forName(configuredSQLGenerator));
