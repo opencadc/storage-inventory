@@ -83,6 +83,8 @@ import org.apache.log4j.Logger;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.version.InitDatabase;
+import org.opencadc.inventory.util.ArtifactSelector;
+import org.opencadc.inventory.util.BucketSelector;
 
 /**
  * Validate local inventory.
@@ -92,24 +94,33 @@ public class InventoryValidator implements Runnable {
 
     private final ArtifactDAO artifactDAO;
     private final URI resourceID;
-    private final String uriBuckets;
+    private final ArtifactSelector artifactSelector;
+    private final BucketSelector bucketSelector;
+    private final boolean trackSiteLocations;
 
     /**
      * Constructor.
      *
      * @param daoConfig          config map to pass to cadc-inventory-db DAO classes
      * @param resourceID         identifier for the remote query service
-     * @param uriBuckets         uri buckets
+     * @param artifactSelector   artifact selector implementation
+     * @param bucketSelector     uri buckets
+     * @param trackSiteLocations local site type
      */
-    public InventoryValidator(Map<String, Object> daoConfig, URI resourceID, String uriBuckets) {
+    public InventoryValidator(Map<String, Object> daoConfig, URI resourceID, ArtifactSelector artifactSelector,
+                              BucketSelector bucketSelector, boolean trackSiteLocations) {
         InventoryUtil.assertNotNull(InventoryValidator.class, "daoConfig", daoConfig);
         InventoryUtil.assertNotNull(InventoryValidator.class, "resourceID", resourceID);
-        InventoryUtil.assertNotNull(InventoryValidator.class, "selector", uriBuckets);
+        InventoryUtil.assertNotNull(InventoryValidator.class, "artifactSelector", artifactSelector);
+        InventoryUtil.assertNotNull(InventoryValidator.class, "bucketSelector", bucketSelector);
+        InventoryUtil.assertNotNull(InventoryValidator.class, "trackSiteLocations", trackSiteLocations);
 
         this.artifactDAO = new ArtifactDAO(false);
         this.artifactDAO.setConfig(daoConfig);
         this.resourceID = resourceID;
-        this.uriBuckets = uriBuckets;
+        this.artifactSelector = artifactSelector;
+        this.bucketSelector = bucketSelector;
+        this.trackSiteLocations = trackSiteLocations;
 
         try {
             String jndiDataSourceName = (String) daoConfig.get("jndiDataSourceName");

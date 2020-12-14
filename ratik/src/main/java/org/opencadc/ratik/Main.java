@@ -82,8 +82,10 @@ import javax.naming.NamingException;
 
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
+import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.db.SQLGenerator;
-
+import org.opencadc.inventory.util.ArtifactSelector;
+import org.opencadc.inventory.util.BucketSelector;
 
 /**
  * Main entry point for ratik.
@@ -103,6 +105,8 @@ public class Main {
     private static final String DB_PASSWORD_CONFIG_KEY = CONFIG_PREFIX + ".db.password";
     private static final String QUERY_SERVICE_CONFIG_KEY = CONFIG_PREFIX + ".queryService";
     private static final String URI_BUCKETS_CONFIG_KEY = CONFIG_PREFIX + ".buckets";
+    private static final String TRACK_SITE_LOCATIONS_CONFIG_KEY = CONFIG_PREFIX + ".trackSiteLocations";
+    private static final String ARTIFACT_SELECTOR_CONFIG_KEY = CONFIG_PREFIX + ".artifactSelector";
 
     // Used to verify configuration items.  See the README for descriptions.
     private static final String[] MANDATORY_PROPERTY_KEYS = {
@@ -113,7 +117,8 @@ public class Main {
         LOGGING_KEY,
         QUERY_SERVICE_CONFIG_KEY,
         SQLGENERATOR_CONFIG_KEY,
-        URI_BUCKETS_CONFIG_KEY
+        URI_BUCKETS_CONFIG_KEY,
+        TRACK_SITE_LOCATIONS_CONFIG_KEY
     };
 
     public static void main(final String[] args) {
@@ -165,8 +170,16 @@ public class Main {
             final URI resourceID = URI.create(configuredQueryService);
 
             final String configuredUriBuckets = props.getFirstPropertyValue(URI_BUCKETS_CONFIG_KEY);
+            final BucketSelector bucketSelector = new BucketSelector(configuredUriBuckets);
 
-            final InventoryValidator doit = new InventoryValidator(daoConfig, resourceID, configuredUriBuckets);
+            final String configuredArtifactSelector = props.getFirstPropertyValue(ARTIFACT_SELECTOR_CONFIG_KEY);
+            final ArtifactSelector artifactSelector = InventoryUtil.loadPlugin(configuredArtifactSelector);
+
+            final String configuredTrackSiteLocations = props.getFirstPropertyValue(TRACK_SITE_LOCATIONS_CONFIG_KEY);
+            final boolean trackSiteLocations = Boolean.parseBoolean(configuredTrackSiteLocations);
+
+            final InventoryValidator doit =
+                new InventoryValidator(daoConfig, resourceID, artifactSelector, bucketSelector, trackSiteLocations);
             doit.run();
         } catch (Throwable unexpected) {
             log.fatal("Unexpected failure", unexpected);

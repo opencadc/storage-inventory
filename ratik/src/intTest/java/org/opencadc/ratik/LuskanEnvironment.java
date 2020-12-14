@@ -72,10 +72,12 @@ import ca.nrc.cadc.db.ConnectionConfig;
 import ca.nrc.cadc.db.DBConfig;
 import ca.nrc.cadc.db.DBUtil;
 
+import java.net.URI;
 import java.util.Map;
 import java.util.TreeMap;
 
 import org.apache.log4j.Logger;
+import org.opencadc.inventory.StorageSite;
 import org.opencadc.inventory.db.DeletedArtifactEventDAO;
 import org.opencadc.inventory.db.DeletedStorageLocationEventDAO;
 import org.opencadc.inventory.db.ArtifactDAO;
@@ -127,5 +129,16 @@ public class LuskanEnvironment {
         jdbcTemplate.execute("TRUNCATE TABLE " + TestUtil.LUSKAN_SCHEMA + ".Artifact");
     }
     
-    
+    void initStorageSite(URI resourceID) throws Exception {
+        // assume cleanTestEnvironment has been run and table is empty
+        final JdbcTemplate jdbcTemplate = new JdbcTemplate(DBUtil.findJNDIDataSource(jndiPath));
+        String name = resourceID.getPath();
+        if (name.charAt(0) == '/') {
+            name = name.substring(1);
+        }
+        boolean allowRead = true;
+        boolean allowWrite = false;
+        StorageSite storageSite = new StorageSite(resourceID, name, allowRead, allowWrite);
+        storageSiteDAO.put(storageSite);
+    }
 }
