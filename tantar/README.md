@@ -32,11 +32,13 @@ org.opencadc.tantar.db.url=jdbc:postgresql://{server}/{database}
 ## storage adapter settings
 org.opencadc.inventory.storage.StorageAdapter={fully-qualified-classname of implementation}
 ```
+The database account owns and manages (create, alter, drop) inventory database objects and modifies the content. 
+The database is specified in the JDBC URL. Failure to connect or initialize the database will show up in logs and cause
+the application to exit.
+
 Additional java system properties and/or configuration files may be requires to configure the storage adapter.
 
 ## building it
-This Docker image relies on the [Base Java Docker image](https://github.com/opencadc/docker-base/tree/master/cadc-java) built as an image called `cadc-java:latest`.
-
 ```
 gradle clean build
 docker build -t tantar -f Dockerfile .
