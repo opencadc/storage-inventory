@@ -8,11 +8,16 @@ See the [cadc-tomcat](https://github.com/opencadc/docker-base/tree/master/cadc-t
 for expected deployment and common config requirements.
 
 This service instance is expected to have a database backend to store the TAP metadata and which also includes the 
-storage inventory tables. The container expects that a directory is attached to /conf and containing the following:
+storage inventory tables. The container expects that a directory is attached to /config and containing the following:
 
 ### catalina.properties
 ```
 # database connection pools
+luskan.uws.maxActive={}
+luskan.uws.username={}
+luskan.uws.password={}
+luskan.uws.url=jdbc:postgresql://{server}/{database}
+
 luskan.tapadm.maxActive={}
 luskan.tapadm.username={}
 luskan.tapadm.password={}
@@ -22,12 +27,14 @@ luskan.tapuser.maxActive={}
 luskan.tapuser.username={}
 luskan.tapuser.password={}
 luskan.tapuser.url=jdbc:postgresql://{server}/{database}
-
-luskan.uws.maxActive={}
-luskan.uws.username={}
-luskan.uws.password={}
-luskan.uws.url=jdbc:postgresql://{server}/{database}
 ```
+The `tapadm` pool manages (create, alter, drop) uws and tap_schema tables and manages the tap_schema content. The `uws` 
+pool creates and modifies jobs in the uws schema when created and executed by users. These two pools currently must use 
+the same database account.
+
+The `tapuser` pool is used to run TAP queries, including creating tables in the tap_upload schema. 
+
+All three pools have the same JDCB URL.
 
 ### luskan.properties
 ```
