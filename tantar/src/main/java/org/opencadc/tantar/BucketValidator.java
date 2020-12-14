@@ -201,7 +201,7 @@ public class BucketValidator implements ValidateEventListener {
                                                           sqlGeneratorKey));
         }
 
-        final String jdbcConfigKeyPrefix = "org.opencadc.tantar.db";
+        final String jdbcConfigKeyPrefix = APPLICATION_CONFIG_KEY_PREFIX + ".inventory";
         final String jdbcSchemaKey = String.format("%s.schema", jdbcConfigKeyPrefix);
         final String jdbcUsernameKey = String.format("%s.username", jdbcConfigKeyPrefix);
         final String jdbcPasswordKey = String.format("%s.password", jdbcConfigKeyPrefix);

@@ -124,7 +124,7 @@ public class PostAction extends RestAction {
     static final String JNDI_DATASOURCE = "jdbc/inventory"; // context.xml
 
     private static final String KEY_BASE = PostAction.class.getPackage().getName();
-    static final String SCHEMA_KEY =  KEY_BASE + ".db.schema";
+    static final String SCHEMA_KEY =  KEY_BASE + ".inventory.schema";
     static final String PUBKEY_KEY = KEY_BASE + ".publicKeyFile";
     static final String PRIVATEKEY_KEY = KEY_BASE + ".privateKeyFile";
     static final String READ_GRANTS_KEY = KEY_BASE + ".readGrantProvider";

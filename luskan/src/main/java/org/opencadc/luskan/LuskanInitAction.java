@@ -93,7 +93,7 @@ public class LuskanInitAction extends InitAction {
             InitDatabaseTS tsi = new InitDatabaseTS(tapadm, null, "tap_schema");
             tsi.doInit();
 
-            DataSource uws = DBUtil.findJNDIDataSource("jdbc/tapadm");
+            DataSource uws = DBUtil.findJNDIDataSource("jdbc/uws");
             InitDatabaseUWS uwsi = new InitDatabaseUWS(uws, null, "uws");
             uwsi.doInit();
             
