@@ -69,23 +69,19 @@ package org.opencadc.critwall;
 
 import ca.nrc.cadc.db.ConnectionConfig;
 import ca.nrc.cadc.util.Log4jInit;
-
 import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.util.PropertiesReader;
 import ca.nrc.cadc.util.StringUtil;
-
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
-
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.db.SQLGenerator;
 import org.opencadc.inventory.storage.StorageAdapter;
 import org.opencadc.inventory.util.BucketSelector;
-
 
 /**
  * Main entry point for critwall.
@@ -94,10 +90,11 @@ public class Main {
     private static final Logger log = Logger.getLogger(Main.class);
     private static final String CONFIG_PREFIX = Main.class.getPackage().getName();
     private static final String SQLGENERATOR_CONFIG_KEY = SQLGenerator.class.getName();
-    private static final String DB_SCHEMA_CONFIG_KEY = CONFIG_PREFIX + ".db.schema";
-    private static final String DB_CONFIG_KEY = CONFIG_PREFIX + ".db.url";
-    private static final String DB_USERNAME_CONFIG_KEY = CONFIG_PREFIX + ".db.username";
-    private static final String DB_PASSWORD_CONFIG_KEY = CONFIG_PREFIX + ".db.password";
+    
+    private static final String DB_SCHEMA_CONFIG_KEY = CONFIG_PREFIX + ".inventory.schema";
+    private static final String DB_CONFIG_KEY = CONFIG_PREFIX + ".inventory.url";
+    private static final String DB_USERNAME_CONFIG_KEY = CONFIG_PREFIX + ".inventory.username";
+    private static final String DB_PASSWORD_CONFIG_KEY = CONFIG_PREFIX + ".inventory.password";
     private static final String BUCKETSEL_CONFIG_KEY = CONFIG_PREFIX + ".buckets";
     private static final String NTHREADS_CONFIG_KEY = CONFIG_PREFIX + ".threads";
     private static final String LOCATOR_SERVICE_CONFIG_KEY = CONFIG_PREFIX + ".locatorService";
@@ -122,17 +119,15 @@ public class Main {
 
             // Set up logging before parsing file otherwise it's hard to report errors sanely
             String logCfg = props.getFirstPropertyValue(LOGGING_CONFIG_KEY);
-            Level cfg = Level.INFO;
+            Level logLevel = Level.INFO;
             if (StringUtil.hasLength(logCfg)) {
-                cfg = Level.toLevel(logCfg);
+                logLevel = Level.toLevel(logCfg);
             }
+            Log4jInit.setLevel("org.opencadc.inventory", logLevel);
+            Log4jInit.setLevel("org.opencadc.critwall", logLevel);
+            Log4jInit.setLevel("ca.nrc.cadc.reg", logLevel);
 
-            Log4jInit.setLevel("org.opencadc.inventory", cfg);
-            Log4jInit.setLevel("org.opencadc.tap", cfg);
-            Log4jInit.setLevel("org.opencadc.reg", cfg);
-            Log4jInit.setLevel("org.opencadc.critwall", cfg);
-
-            log.debug("log level: " + cfg);
+            log.debug("log level: " + logLevel);
             log.debug("properties: " + props.toString());
 
             // parse config file

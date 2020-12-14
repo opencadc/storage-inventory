@@ -9,9 +9,9 @@
         factory="org.apache.tomcat.jdbc.pool.DataSourceFactory" closeMethod="close"
         minEvictableIdleTimeMillis="60000" timeBetweenEvictionRunsMillis="30000"
         maxWait="20000"
-        initialSize="0" minIdle="0" maxIdle="${minoc.invadm.maxActive}" maxActive="${minoc.invadm.maxActive}"
-        username="${minoc.invadm.username}" password="${minoc.invadm.password}"
-        driverClassName="org.postgresql.Driver" url="${minoc.invadm.url}"
+        initialSize="0" minIdle="0" maxIdle="${org.opencadc.minoc.inventory.maxActive}" maxActive="${org.opencadc.minoc.inventory.maxActive}"
+        username="${org.opencadc.minoc.inventory.username}" password="${org.opencadc.minoc.inventory.password}"
+        driverClassName="org.postgresql.Driver" url="${org.opencadc.minoc.inventory.url}"
         removeAbandoned="false"
         testOnBorrow="true" validationQuery="select 123" />
     

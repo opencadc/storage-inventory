@@ -72,19 +72,17 @@ import ca.nrc.cadc.db.DBUtil;
 import ca.nrc.cadc.util.Log4jInit;
 import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.util.PropertiesReader;
-
+import ca.nrc.cadc.util.StringUtil;
 import java.net.URI;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import javax.naming.NamingException;
-
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.db.SQLGenerator;
-
 
 /**
  * Main entry point for fenwick.
@@ -97,11 +95,12 @@ public class Main {
     private static final String CONFIG_FILE_NAME = "fenwick.properties";
     private static final String CONFIG_PREFIX = Main.class.getPackage().getName();
     private static final String SQLGENERATOR_CONFIG_KEY = SQLGenerator.class.getName();
-    private static final String DB_SCHEMA_CONFIG_KEY = CONFIG_PREFIX + ".db.schema";
-    private static final String LOGGING_KEY = CONFIG_PREFIX + ".logging";
-    private static final String DB_URL_CONFIG_KEY = CONFIG_PREFIX + ".db.url";
-    private static final String DB_USERNAME_CONFIG_KEY = CONFIG_PREFIX + ".db.username";
-    private static final String DB_PASSWORD_CONFIG_KEY = CONFIG_PREFIX + ".db.password";
+    
+    private static final String LOGGING_CONFIG_KEY = CONFIG_PREFIX + ".logging";
+    private static final String DB_SCHEMA_CONFIG_KEY = CONFIG_PREFIX + ".inventory.schema";
+    private static final String DB_USERNAME_CONFIG_KEY = CONFIG_PREFIX + ".inventory.username";
+    private static final String DB_PASSWORD_CONFIG_KEY = CONFIG_PREFIX + ".inventory.password";
+    private static final String DB_URL_CONFIG_KEY = CONFIG_PREFIX + ".inventory.url";
     private static final String QUERY_SERVICE_CONFIG_KEY = CONFIG_PREFIX + ".queryService";
     private static final String TRACK_SITE_LOCATIONS_CONFIG_KEY = CONFIG_PREFIX + ".trackSiteLocations";
     private static final String ARTIFACT_SELECTOR_CONFIG_KEY = ArtifactSelector.class.getName();
@@ -113,7 +112,7 @@ public class Main {
         DB_SCHEMA_CONFIG_KEY,
         DB_URL_CONFIG_KEY,
         DB_USERNAME_CONFIG_KEY,
-        LOGGING_KEY,
+        LOGGING_CONFIG_KEY,
         QUERY_SERVICE_CONFIG_KEY,
         SQLGENERATOR_CONFIG_KEY,
         TRACK_SITE_LOCATIONS_CONFIG_KEY
@@ -134,9 +133,15 @@ public class Main {
                 System.exit(2);
             }
 
-            final String configuredLogging = props.getFirstPropertyValue(LOGGING_KEY);
-            Log4jInit.setLevel("org.opencadc.fenwick", Level.toLevel(configuredLogging.toUpperCase()));
-            Log4jInit.setLevel("org.opencadc.inventory", Level.toLevel(configuredLogging.toUpperCase()));
+            // Set up logging before parsing file otherwise it's hard to report errors sanely
+            String logCfg = props.getFirstPropertyValue(LOGGING_CONFIG_KEY);
+            Level logLevel = Level.INFO;
+            if (StringUtil.hasLength(logCfg)) {
+                logLevel = Level.toLevel(logCfg);
+            }
+            Log4jInit.setLevel("org.opencadc.inventory", logLevel);
+            Log4jInit.setLevel("org.opencadc.fenwick", logLevel);
+            Log4jInit.setLevel("ca.nrc.cadc.reg", logLevel);
 
             // DAO Configuration
             final Map<String, Object> daoConfig = new TreeMap<>();
