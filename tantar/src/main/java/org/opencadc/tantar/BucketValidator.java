@@ -117,7 +117,14 @@ public class BucketValidator implements ValidateEventListener {
 
     private static final Logger LOGGER = Logger.getLogger(BucketValidator.class);
 
-    private static final String APPLICATION_CONFIG_KEY_PREFIX = "org.opencadc.tantar";
+    private static final String CONFIG_BASE = Main.class.getPackage().getName();
+    private static final String REPORT_ONLY_KEY = CONFIG_BASE + ".reportOnly";
+    private static final String BUCKETS_KEY = CONFIG_BASE + ".buckets";
+    private static final String DB_SCHEMA_KEY = CONFIG_BASE + ".inventory.schema";
+    private static final String DB_USERNAME_KEY = CONFIG_BASE + ".inventory.username";
+    private static final String DB_PASSWORD_KEY = CONFIG_BASE + ".inventory.password";
+    private static final String JDBC_URL_KEY = CONFIG_BASE + ".inventory.url";
+    
 
     private final List<String> bucketPrefixes = new ArrayList<>();
     private final StorageAdapter storageAdapter;
@@ -141,24 +148,29 @@ public class BucketValidator implements ValidateEventListener {
     BucketValidator(final MultiValuedProperties properties, final Reporter reporter, final Subject runUser) {
         this.runUser = runUser;
 
-        final String storageAdapterClassName =
-                properties.getFirstPropertyValue(StorageAdapter.class.getCanonicalName());
+        final String configuredReportOnly = properties.getFirstPropertyValue(REPORT_ONLY_KEY);
+        this.reportOnlyFlag = StringUtil.hasText(configuredReportOnly) && Boolean.parseBoolean(configuredReportOnly);
+        
+        // ResolutionPolicy
+        final String policyClassName = properties.getFirstPropertyValue(ResolutionPolicy.class.getName());
+        if (StringUtil.hasLength(policyClassName)) {
+            this.resolutionPolicy = InventoryUtil.loadPlugin(policyClassName, this, reporter);
+        } else {
+            throw new IllegalStateException("required config property missing: " + ResolutionPolicy.class.getName());
+        }
+
+        // StorageAdapter
+        final String storageAdapterClassName = properties.getFirstPropertyValue(StorageAdapter.class.getName());
         if (StringUtil.hasLength(storageAdapterClassName)) {
             this.storageAdapter = InventoryUtil.loadPlugin(storageAdapterClassName);
         } else {
-            throw new IllegalStateException(
-                    String.format(
-                            "Storage Adapter is mandatory.  Please set the %s property to a fully qualified class "
-                            + "name.",
-                            StorageAdapter.class.getCanonicalName()));
+            throw new IllegalStateException("required config property missing: " + StorageAdapter.class.getName());
         }
-
-        final String bucketRange =
-                properties.getFirstPropertyValue(String.format("%s.buckets", APPLICATION_CONFIG_KEY_PREFIX));
+        
+        // buckets
+        final String bucketRange = properties.getFirstPropertyValue(BUCKETS_KEY);
         if (!StringUtil.hasLength(bucketRange)) {
-            throw new IllegalStateException(String.format("Bucket(s) is/are mandatory.  Please set the %s property.",
-                                                          String.format("%s.buckets",
-                                                                        APPLICATION_CONFIG_KEY_PREFIX)));
+            throw new IllegalStateException("required config property missing: " + BUCKETS_KEY);
         } else {
             // Ugly hack to support single Bucket names.
             if (this.storageAdapter.getClass().getName().endsWith("AdStorageAdapter")) {
@@ -171,50 +183,38 @@ public class BucketValidator implements ValidateEventListener {
                 }
             }
         }
-
-        final String configuredReportOnly =
-                properties.getFirstPropertyValue(String.format("%s.reportOnly", APPLICATION_CONFIG_KEY_PREFIX));
-        this.reportOnlyFlag = StringUtil.hasText(configuredReportOnly) && Boolean.parseBoolean(configuredReportOnly);
-
-        final String policyClassName = properties.getFirstPropertyValue(ResolutionPolicy.class.getCanonicalName());
-        if (StringUtil.hasLength(policyClassName)) {
-            this.resolutionPolicy = InventoryUtil.loadPlugin(policyClassName, this, reporter);
-        } else {
-            throw new IllegalStateException(
-                    String.format("Policy is mandatory.  Please set the %s property to a fully qualified class name.",
-                                  ResolutionPolicy.class.getCanonicalName()));
-        }
-
-        // DAO configuration
+        
+        // database
         final Map<String, Object> config = new HashMap<>();
-        final String sqlGeneratorKey = SQLGenerator.class.getName();
-        final String sqlGeneratorClass = properties.getFirstPropertyValue(sqlGeneratorKey);
+        final String sqlGeneratorClass = properties.getFirstPropertyValue(SQLGenerator.class.getName());
 
         if (StringUtil.hasLength(sqlGeneratorClass)) {
             try {
-                config.put(sqlGeneratorKey, Class.forName(sqlGeneratorClass));
+                config.put(SQLGenerator.class.getName(), Class.forName(sqlGeneratorClass));
             } catch (ClassNotFoundException e) {
                 throw new IllegalStateException("could not load SQLGenerator class: " + e.getMessage(), e);
             }
         } else {
-            throw new IllegalStateException(String.format("A value for %s is required in tantar.properties",
-                                                          sqlGeneratorKey));
+            throw new IllegalStateException("required config property missing: " + SQLGenerator.class.getName());
         }
-
-        final String jdbcConfigKeyPrefix = APPLICATION_CONFIG_KEY_PREFIX + ".inventory";
-        final String jdbcSchemaKey = String.format("%s.schema", jdbcConfigKeyPrefix);
-        final String jdbcUsernameKey = String.format("%s.username", jdbcConfigKeyPrefix);
-        final String jdbcPasswordKey = String.format("%s.password", jdbcConfigKeyPrefix);
-        final String jdbcURLKey = String.format("%s.url", jdbcConfigKeyPrefix);
+        
+        // database
         final String jdbcDriverClassname = "org.postgresql.Driver";
-
-        final String schemaName = properties.getFirstPropertyValue(jdbcSchemaKey);
-
-        final ConnectionConfig cc = new ConnectionConfig(null, null,
-                                                         properties.getFirstPropertyValue(jdbcUsernameKey),
-                                                         properties.getFirstPropertyValue(jdbcPasswordKey),
-                                                         jdbcDriverClassname,
-                                                         properties.getFirstPropertyValue(jdbcURLKey));
+        final String schemaName = properties.getFirstPropertyValue(DB_SCHEMA_KEY);
+        if (StringUtil.hasLength(schemaName)) {
+            config.put("schema", schemaName);
+        } else {
+            throw new IllegalStateException("required config property missing: " + DB_SCHEMA_KEY);
+        }
+        // not currently used: correct database must be in the JDBC URL
+        //config.put("database", "???");
+        
+        final String dbUsername = properties.getFirstPropertyValue(DB_USERNAME_KEY);
+        final String dbPassword = properties.getFirstPropertyValue(DB_PASSWORD_KEY);
+        final String jdbcURL = properties.getFirstPropertyValue(JDBC_URL_KEY);
+        LOGGER.warn("database props: " + schemaName + "," + dbUsername + "," + dbPassword + "," + jdbcURL);
+        final ConnectionConfig cc = new ConnectionConfig(null, null, dbUsername, dbPassword, jdbcDriverClassname, jdbcURL);
+                                                         
         try {
             // Register two datasources.
             DBUtil.createJNDIDataSource("jdbc/inventory", cc);
@@ -222,16 +222,6 @@ public class BucketValidator implements ValidateEventListener {
         } catch (NamingException ne) {
             throw new IllegalStateException("Unable to access Inventory Database.", ne);
         }
-
-        if (StringUtil.hasLength(schemaName)) {
-            config.put("schema", schemaName);
-        } else {
-            throw new IllegalStateException(
-                    String.format("A value for %s is required in tantar.properties", jdbcSchemaKey));
-        }
-
-        // not currently used in the SQL; correct database must be in the JDBC URL
-        //config.put("database", "inventory");
 
         config.put("jndiDataSourceName", "jdbc/txinventory");
         this.artifactDAO = new ArtifactDAO();
@@ -282,7 +272,7 @@ public class BucketValidator implements ValidateEventListener {
      *
      * @throws Exception Pass up any errors to the caller, which is most likely the Main.
      */
-    void validate() throws Exception {
+    public void validate() throws Exception {
         final Profiler profiler = new Profiler(BucketValidator.class);
         LOGGER.debug("Acquiring iterators.");
         final Iterator<StorageMetadata> storageMetadataIterator = iterateStorage();
