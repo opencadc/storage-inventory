@@ -212,7 +212,7 @@ public class BucketValidator implements ValidateEventListener {
         final String dbUsername = properties.getFirstPropertyValue(DB_USERNAME_KEY);
         final String dbPassword = properties.getFirstPropertyValue(DB_PASSWORD_KEY);
         final String jdbcURL = properties.getFirstPropertyValue(JDBC_URL_KEY);
-        LOGGER.warn("database props: " + schemaName + "," + dbUsername + "," + dbPassword + "," + jdbcURL);
+        LOGGER.debug("database props: " + schemaName + "," + dbUsername + "," + dbPassword + "," + jdbcURL);
         final ConnectionConfig cc = new ConnectionConfig(null, null, dbUsername, dbPassword, jdbcDriverClassname, jdbcURL);
                                                          
         try {
