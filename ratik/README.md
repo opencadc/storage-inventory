@@ -13,10 +13,10 @@ org.opencadc.ratik.logging = {info|debug}
 
 # inventory database settings
 org.opencadc.inventory.db.SQLGenerator=org.opencadc.inventory.db.SQLGenerator
-org.opencadc.ratik.db.schema={schema}
-org.opencadc.ratik.db.username={dbuser}
-org.opencadc.ratik.db.password={dbpassword}
-org.opencadc.ratik.db.url=jdbc:postgresql://{server}/{database}
+org.opencadc.ratik.inventory.schema={schema}
+org.opencadc.ratik.inventory.username={dbuser}
+org.opencadc.ratik.inventory.password={dbpassword}
+org.opencadc.ratik.inventory.url=jdbc:postgresql://{server}/{database}
 
 # remote inventory query service (luskan)
 org.opencadc.ratik.queryService={resourceID of remote TAP service with inventory data model}
@@ -25,7 +25,7 @@ org.opencadc.ratik.queryService={resourceID of remote TAP service with inventory
 org.opencadc.ratik.buckets={uriBucket prefix or range of prefixes}
 
 # selectivity
-org.opencadc.ratik.artifactSelector={fully qualified classname of ArtifactSelector implementation}
+org.opencadc.inventory.util.ArtifactSelector={fully qualified classname of ArtifactSelector implementation}
 
 # local site type, true = global site, false = storage site
 org.opencadc.ratik.trackSiteLocations={true|false}

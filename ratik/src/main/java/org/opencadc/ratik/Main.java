@@ -106,7 +106,7 @@ public class Main {
     private static final String QUERY_SERVICE_CONFIG_KEY = CONFIG_PREFIX + ".queryService";
     private static final String URI_BUCKETS_CONFIG_KEY = CONFIG_PREFIX + ".buckets";
     private static final String TRACK_SITE_LOCATIONS_CONFIG_KEY = CONFIG_PREFIX + ".trackSiteLocations";
-    private static final String ARTIFACT_SELECTOR_CONFIG_KEY = CONFIG_PREFIX + ".artifactSelector";
+    private static final String ARTIFACT_SELECTOR_CONFIG_KEY = ArtifactSelector.class.getName();
 
     // Used to verify configuration items.  See the README for descriptions.
     private static final String[] MANDATORY_PROPERTY_KEYS = {

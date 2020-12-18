@@ -113,7 +113,6 @@ public class InventoryValidator implements Runnable {
         InventoryUtil.assertNotNull(InventoryValidator.class, "resourceID", resourceID);
         InventoryUtil.assertNotNull(InventoryValidator.class, "artifactSelector", artifactSelector);
         InventoryUtil.assertNotNull(InventoryValidator.class, "bucketSelector", bucketSelector);
-        InventoryUtil.assertNotNull(InventoryValidator.class, "trackSiteLocations", trackSiteLocations);
 
         this.artifactDAO = new ArtifactDAO(false);
         this.artifactDAO.setConfig(daoConfig);
