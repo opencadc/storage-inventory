@@ -35,8 +35,8 @@ The range of uriBucket prefixes is specified with two values separated by a sing
 ### cadcproxy.pem
 Remote calls will use this certificate to authenticate.
 
-### SQL includes
-When the `org.opencadc.ratik.artifactSelector` ArtifactSelector is specified, the `/config/artifact-filter.sql` SQL file specifying the included Artifacts is required.
+### artifact-filter.sql (optional)
+When the `org.opencadc.inventory.util.ArtifactSelector` ArtifactSelector is specified, this config file specifying the included Artifacts is required.
 The single clause in the SQL file *MUST* begin with the `WHERE` keyword.
 
 > `artifact-filter.sql`

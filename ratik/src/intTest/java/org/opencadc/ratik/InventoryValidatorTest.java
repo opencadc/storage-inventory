@@ -69,7 +69,6 @@
 
 package org.opencadc.ratik;
 
-import ca.nrc.cadc.db.DBUtil;
 import ca.nrc.cadc.util.FileUtil;
 import ca.nrc.cadc.util.Log4jInit;
 import java.io.File;
@@ -95,7 +94,6 @@ import org.opencadc.inventory.DeletedArtifactEvent;
 import org.opencadc.inventory.DeletedStorageLocationEvent;
 import org.opencadc.inventory.SiteLocation;
 import org.opencadc.inventory.util.IncludeArtifacts;
-import org.springframework.jdbc.core.JdbcTemplate;
 
 public class InventoryValidatorTest {
     private static final Logger log = Logger.getLogger(InventoryValidatorTest.class);
@@ -112,7 +110,7 @@ public class InventoryValidatorTest {
     static String INVENTORY_SCHEMA = "inventory";
     static String TMP_DIR = "build/tmp";
     static String USER_HOME = System.getProperty("user.home");
-    static URI REMOTE_RESOURCEID = URI.create("ivo://cadc.nrc.ca/minoc");
+    static URI REMOTE_STORAGE_SITE = URI.create("ivo://cadc.nrc.ca/minoc");
 
     static {
         try {
@@ -313,7 +311,7 @@ public class InventoryValidatorTest {
      */
     @Test
     public void explanation2_ArtifactInLocal_LocalIsGlobal() throws Exception {
-        this.remoteEnvironment.initStorageSite(REMOTE_RESOURCEID);
+        this.remoteEnvironment.initStorageSite(REMOTE_STORAGE_SITE);
 
         // case 1
         UUID remoteSiteID = this.remoteEnvironment.storageSiteDAO.list().iterator().next().getID();
@@ -349,7 +347,7 @@ public class InventoryValidatorTest {
         // cleanup between tests
         this.localEnvironment.cleanTestEnvironment();
         this.remoteEnvironment.cleanTestEnvironment();
-        this.remoteEnvironment.initStorageSite(REMOTE_RESOURCEID);
+        this.remoteEnvironment.initStorageSite(REMOTE_STORAGE_SITE);
 
         // case 2
         remoteSiteID = this.remoteEnvironment.storageSiteDAO.list().iterator().next().getID();
@@ -396,7 +394,7 @@ public class InventoryValidatorTest {
      */
     @Test
     public void explanation3_ArtifactInLocal_LocalIsGlobal() throws Exception {
-        this.remoteEnvironment.initStorageSite(REMOTE_RESOURCEID);
+        this.remoteEnvironment.initStorageSite(REMOTE_STORAGE_SITE);
 
         // case 1
         UUID remoteSiteID = this.remoteEnvironment.storageSiteDAO.list().iterator().next().getID();
@@ -429,7 +427,7 @@ public class InventoryValidatorTest {
         // cleanup between tests
         this.localEnvironment.cleanTestEnvironment();
         this.remoteEnvironment.cleanTestEnvironment();
-        this.remoteEnvironment.initStorageSite(REMOTE_RESOURCEID);
+        this.remoteEnvironment.initStorageSite(REMOTE_STORAGE_SITE);
 
         // case 2
         remoteSiteID = this.remoteEnvironment.storageSiteDAO.list().iterator().next().getID();
@@ -628,7 +626,7 @@ public class InventoryValidatorTest {
      */
     @Test
     public void explanation4_ArtifactNotInL_LocalIsGlobal() throws Exception {
-        this.remoteEnvironment.initStorageSite(REMOTE_RESOURCEID);
+        this.remoteEnvironment.initStorageSite(REMOTE_STORAGE_SITE);
         UUID remoteSiteID = this.remoteEnvironment.storageSiteDAO.list().iterator().next().getID();
         UUID randomSiteID = UUID.randomUUID();
 
@@ -680,7 +678,7 @@ public class InventoryValidatorTest {
      * local Artifact contentModifiedDate before remote Artifact contentModifiedDate, delete local Artifact.
      * before: Artifact.uri in L && R, L Artifact.id != R Artifact.id,
      *         L Artifact.contentModifiedDate < R Artifact.contentModifiedDate
-     * after:  Artifact not in L, DeletedArtifactEvent in L
+     * after:  L Artifact deleted, R Artifact in L, DeletedArtifactEvent in L
      *
      * case 2:
      * local Artifact contentModifiedDate after remote Artifact contentModifiedDate, no action
@@ -700,18 +698,17 @@ public class InventoryValidatorTest {
 
     public void artifactUriCollision(boolean trackSiteLocations) throws Exception {
         // case 1: local contentModifiedDate before remote contentModifiedDate
+        URI artifactURI = URI.create("cadc:INTTEST/one.ext");
         URI contentCheckSum = TestUtil.getRandomMD5();
         UUID localID = UUID.randomUUID();
         UUID remoteID = UUID.randomUUID();
         Calendar contentModifiedDate = Calendar.getInstance();
 
-        Artifact remoteArtifact = new Artifact(remoteID, URI.create("cadc:INTTEST/one.ext"), contentCheckSum,
-                                               contentModifiedDate.getTime(), 1024L);
+        Artifact remoteArtifact = new Artifact(remoteID, artifactURI, contentCheckSum, contentModifiedDate.getTime(), 1024L);
         this.remoteEnvironment.artifactDAO.put(remoteArtifact);
 
         contentModifiedDate.roll(Calendar.YEAR, false);
-        Artifact localArtifact = new Artifact(localID, URI.create("cadc:INTTEST/one.ext"), contentCheckSum,
-                                              contentModifiedDate.getTime(), 1024L);
+        Artifact localArtifact = new Artifact(localID, artifactURI, contentCheckSum, contentModifiedDate.getTime(), 1024L);
         this.localEnvironment.artifactDAO.put(localArtifact);
 
         try {
@@ -725,7 +722,8 @@ public class InventoryValidatorTest {
         }
 
         localArtifact = this.localEnvironment.artifactDAO.get(localArtifact.getID());
-        Assert.assertNull("local artifact found", localArtifact);
+        Assert.assertNotNull("local artifact not found", localArtifact);
+        Assert.assertEquals("local artifact id != remote artifact id", remoteArtifact.getID(), localArtifact.getID());
 
         DeletedArtifactEvent deletedArtifactEvent = this.localEnvironment.deletedArtifactEventDAO.get(localID);
         Assert.assertNotNull("DeletedArtifactEvent not found", deletedArtifactEvent);
@@ -733,13 +731,11 @@ public class InventoryValidatorTest {
         // case 2: local contentModifiedDate after remote contentModifiedDate
         contentModifiedDate = Calendar.getInstance();
 
-        remoteArtifact = new Artifact(remoteID, URI.create("cadc:INTTEST/one.ext"), contentCheckSum,
-                                      contentModifiedDate.getTime(), 1024L);
+        remoteArtifact = new Artifact(remoteID, artifactURI, contentCheckSum, contentModifiedDate.getTime(), 1024L);
         this.remoteEnvironment.artifactDAO.put(remoteArtifact);
 
         contentModifiedDate.roll(Calendar.YEAR, true);
-        localArtifact = new Artifact(localID, URI.create("cadc:INTTEST/one.ext"), contentCheckSum,
-                                     contentModifiedDate.getTime(), 1024L);
+        localArtifact = new Artifact(localID, artifactURI, contentCheckSum, contentModifiedDate.getTime(), 1024L);
         this.localEnvironment.artifactDAO.put(localArtifact);
 
         try {
@@ -793,6 +789,7 @@ public class InventoryValidatorTest {
         Artifact artifact = new Artifact(artifactID, artifactURI, TestUtil.getRandomMD5(),
                                               new Date(), 1024L);
         this.localEnvironment.artifactDAO.put(artifact);
+        Thread.sleep(50);   // increase entity lastModified delta
         this.remoteEnvironment.artifactDAO.put(artifact);
 
         artifact.contentType = "image/fits";
@@ -810,8 +807,8 @@ public class InventoryValidatorTest {
 
         Artifact localArtifact = this.localEnvironment.artifactDAO.get(artifact.getID());
         Assert.assertNotNull("local artifact not found", localArtifact);
-        Assert.assertSame("local artifact metachecksum does not match",
-                          artifact.getMetaChecksum(), localArtifact.getMetaChecksum());
+        Assert.assertEquals("local artifact is right and remote is wrong so discrepancy not be fixed",
+                            artifact.getMetaChecksum(), localArtifact.getMetaChecksum());
     }
 
     @Test
@@ -848,8 +845,8 @@ public class InventoryValidatorTest {
 
         Artifact localArtifact = this.localEnvironment.artifactDAO.get(artifact.getID());
         Assert.assertNotNull("local artifact not found", localArtifact);
-        Assert.assertSame("local artifact metachecksum does not match",
-                          artifact.getMetaChecksum(), localArtifact.getMetaChecksum());
+        Assert.assertEquals("local artifact is right and remote is wrong so discrepancy not be fixed",
+                            artifact.getMetaChecksum(), localArtifact.getMetaChecksum());
     }
 
 }
