@@ -700,16 +700,14 @@ public class InventoryValidatorTest {
         // case 1: local contentModifiedDate before remote contentModifiedDate
         URI artifactURI = URI.create("cadc:INTTEST/one.ext");
         URI contentCheckSum = TestUtil.getRandomMD5();
-        UUID localID = UUID.randomUUID();
-        UUID remoteID = UUID.randomUUID();
-        Calendar contentModifiedDate = Calendar.getInstance();
+        Date nowDate = new Date();
+        Date olderDate = new Date(nowDate.getTime() - 5000);
 
-        Artifact remoteArtifact = new Artifact(remoteID, artifactURI, contentCheckSum, contentModifiedDate.getTime(), 1024L);
-        this.remoteEnvironment.artifactDAO.put(remoteArtifact);
-
-        contentModifiedDate.roll(Calendar.YEAR, false);
-        Artifact localArtifact = new Artifact(localID, artifactURI, contentCheckSum, contentModifiedDate.getTime(), 1024L);
+        Artifact localArtifact = new Artifact(artifactURI, contentCheckSum, olderDate, 1024L);
         this.localEnvironment.artifactDAO.put(localArtifact);
+
+        Artifact remoteArtifact = new Artifact(artifactURI, contentCheckSum, nowDate, 1024L);
+        this.remoteEnvironment.artifactDAO.put(remoteArtifact);
 
         try {
             System.setProperty("user.home", TMP_DIR);
@@ -725,17 +723,14 @@ public class InventoryValidatorTest {
         Assert.assertNotNull("local artifact not found", localArtifact);
         Assert.assertEquals("local artifact id != remote artifact id", remoteArtifact.getID(), localArtifact.getID());
 
-        DeletedArtifactEvent deletedArtifactEvent = this.localEnvironment.deletedArtifactEventDAO.get(localID);
+        DeletedArtifactEvent deletedArtifactEvent = this.localEnvironment.deletedArtifactEventDAO.get(localArtifact.getID());
         Assert.assertNotNull("DeletedArtifactEvent not found", deletedArtifactEvent);
 
         // case 2: local contentModifiedDate after remote contentModifiedDate
-        contentModifiedDate = Calendar.getInstance();
-
-        remoteArtifact = new Artifact(remoteID, artifactURI, contentCheckSum, contentModifiedDate.getTime(), 1024L);
+        remoteArtifact = new Artifact(artifactURI, contentCheckSum, olderDate, 1024L);
         this.remoteEnvironment.artifactDAO.put(remoteArtifact);
 
-        contentModifiedDate.roll(Calendar.YEAR, true);
-        localArtifact = new Artifact(localID, artifactURI, contentCheckSum, contentModifiedDate.getTime(), 1024L);
+        localArtifact = new Artifact(artifactURI, contentCheckSum, nowDate, 1024L);
         this.localEnvironment.artifactDAO.put(localArtifact);
 
         try {
@@ -751,7 +746,7 @@ public class InventoryValidatorTest {
         localArtifact = this.localEnvironment.artifactDAO.get(localArtifact.getID());
         Assert.assertNotNull("local artifact not found", localArtifact);
 
-        deletedArtifactEvent = this.localEnvironment.deletedArtifactEventDAO.get(localID);
+        deletedArtifactEvent = this.localEnvironment.deletedArtifactEventDAO.get(localArtifact.getID());
         Assert.assertNull("DeletedArtifactEvent found", deletedArtifactEvent);
     }
 
