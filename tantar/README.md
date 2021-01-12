@@ -6,9 +6,8 @@ correct. This process is intended to be run periodically at a storage site to ke
 ## configuration
 See the [cadc-java](https://github.com/opencadc/docker-base/tree/master/cadc-java) image docs for general config requirements.
 
-A file called `tantar.properties` must be made available via the `/config` directory.  All properties in the file are loaded and set as Java system properties.
-Additionally, a `cadcproxy.pem` file _may_ be required in the `/config` directory if iterations require authentication.
-
+Runtime configuration must be made available via the `/config` directory.
+<!--  -->
 ### tantar.properties
 ```
 org.opencadc.tantar.logging = {info|debug}
@@ -24,19 +23,24 @@ org.opencadc.tantar.reportOnly = {true|false}
 
 ## inventory database settings
 org.opencadc.inventory.db.SQLGenerator=org.opencadc.inventory.db.SQLGenerator
-org.opencadc.tantar.db.schema={schema}
-org.opencadc.tantar.db.username={dbuser}
-org.opencadc.tantar.db.password={dbpassword}
-org.opencadc.tantar.db.url=jdbc:postgresql://{server}/{database}
+org.opencadc.tantar.inventory.schema={schema for inventory database objects}
+org.opencadc.tantar.inventory.username={username for inventory admin pool}
+org.opencadc.tantar.inventory.password={password for inventory admin pool}
+org.opencadc.tantar.inventory.url=jdbc:postgresql://{server}/{database}
 
 ## storage adapter settings
 org.opencadc.inventory.storage.StorageAdapter={fully-qualified-classname of implementation}
 ```
+The `inventory` database account owns and manages (create, alter, drop) inventory database objects and modifies the content. 
+The database is specified in the JDBC URL. Failure to connect or initialize the database will show up in logs and cause
+the application to exit.
+
 Additional java system properties and/or configuration files may be requires to configure the storage adapter.
 
-## building it
-This Docker image relies on the [Base Java Docker image](https://github.com/opencadc/docker-base/tree/master/cadc-java) built as an image called `cadc-java:latest`.
+### cadcproxy.pem
+This client certificate may be used by the StorageAdapter implementation.
 
+## building it
 ```
 gradle clean build
 docker build -t tantar -f Dockerfile .

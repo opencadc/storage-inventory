@@ -68,70 +68,89 @@
 
 package org.opencadc.tantar;
 
+import ca.nrc.cadc.auth.AuthenticationUtil;
+import ca.nrc.cadc.auth.RunnableAction;
 import ca.nrc.cadc.auth.SSLUtil;
 import ca.nrc.cadc.util.Log4jInit;
 import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.util.PropertiesReader;
 import ca.nrc.cadc.util.StringUtil;
-
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
-
+import javax.security.auth.Subject;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
+import org.opencadc.inventory.db.SQLGenerator;
+import org.opencadc.tantar.policy.ResolutionPolicy;
 
 
 /**
  * Main application entry.  This class expects a tantar.properties file to be available and readable.
  */
 public class Main {
-    private static final String LOGGING_KEY = Main.class.getPackage().getName() + ".logging";
-
+    private final static Logger log = Logger.getLogger(Main.class);
+    
+    private static final String CONFIG_BASE = Main.class.getPackage().getName();
+    private static final String LOGGING_KEY = CONFIG_BASE + ".logging";
+    private static final String REPORT_ONLY_KEY = CONFIG_BASE + ".reportOnly";
+    
+    private static final String BUCKETS_KEY = CONFIG_BASE + ".buckets";
+    private static final String POLICY_KEY = ResolutionPolicy.class.getName();
+    private static final String GENERATOR_KEY = SQLGenerator.class.getName();
+    
+    private static final String DB_SCHEMA_KEY = CONFIG_BASE + ".inventory.schema";
+    private static final String DB_USERNAME_KEY = CONFIG_BASE + ".inventory.username";
+    private static final String DB_PASSWORD_KEY = CONFIG_BASE + ".inventory.password";
+    private static final String JDBC_URL_KEY = CONFIG_BASE + ".inventory.url";
+    
     public static void main(final String[] args) {
-        Log4jInit.setLevel("ca.nrc.cadc", Level.WARN);
-        Log4jInit.setLevel("org.opencadc", Level.WARN);
-
-        final String certificateFileLocation = String.format("%s/%s/cadcproxy.pem", System.getProperty("user.home"),
-                                                             ".ssl");
-        final Logger logger = Logger.getLogger(Main.class);
-        final Reporter reporter = new Reporter(logger);
-
-        reporter.start();
-
+            
+        final Reporter reporter = new Reporter(log);
         try {
-            final PropertiesReader propertiesReader = new PropertiesReader("tantar.properties");
-            final MultiValuedProperties applicationProperties = propertiesReader.getAllProperties();
+            Log4jInit.setLevel("ca.nrc.cadc", Level.WARN);
+            Log4jInit.setLevel("org.opencadc", Level.WARN);
+            PropertiesReader pr = new PropertiesReader("tantar.properties");
+            MultiValuedProperties props = pr.getAllProperties();
 
+            String logCfg = props.getFirstPropertyValue(LOGGING_KEY);
+            Level logLevel = Level.INFO;
+            if (StringUtil.hasLength(logCfg)) {
+                logLevel = Level.toLevel(logCfg);
+            }
+            Log4jInit.setLevel("org.opencadc.inventory", logLevel);
+            Log4jInit.setLevel("org.opencadc.tantar", logLevel);
+            
+            reporter.start();
+        
             // The PropertiesReader won't throw a FileNotFoundException if the given file doesn't exist at all.  We'll
             // need to throw it here as an appropriate way to notify users.
-            if (applicationProperties == null) {
+            if (props == null) {
                 throw new FileNotFoundException("Unable to locate configuration file.");
             }
 
-            final String configuredLogging = applicationProperties.getFirstPropertyValue(LOGGING_KEY);
-
-            Log4jInit.setLevel("org.opencadc.tantar", StringUtil.hasText(configuredLogging)
-                                                       ? Level.toLevel(configuredLogging.toUpperCase()) : Level.INFO);
-
-            final BucketValidator bucketValidator = new BucketValidator(applicationProperties, reporter,
-                                                                        SSLUtil.createSubject(
-                                                                                new File(certificateFileLocation)));
-
+            File certFile = new File(System.getProperty("user.home") + "/.ssl/cadcproxy.pem");
+            Subject s = AuthenticationUtil.getAnonSubject();
+            if (certFile.exists()) {
+                s = SSLUtil.createSubject(certFile);
+            }
+            
+            BucketValidator bucketValidator = new BucketValidator(props, reporter, s);
             bucketValidator.validate();
+            
         } catch (IllegalStateException e) {
             // IllegalStateExceptions are thrown for missing but required configuration.
-            logger.fatal(e.getMessage(), e);
+            log.fatal(e.getMessage(), e);
             System.exit(3);
         } catch (FileNotFoundException e) {
-            logger.fatal(e.getMessage(), e);
+            log.fatal(e.getMessage(), e);
             System.exit(1);
         } catch (IOException e) {
-            logger.fatal(e.getMessage(), e);
+            log.fatal(e.getMessage(), e);
             System.exit(2);
         } catch (Exception e) {
             // Used to catch everything else, such as a RuntimeException when a file cannot be obtained and put.
-            logger.fatal(e.getMessage(), e);
+            log.fatal(e.getMessage(), e);
             System.exit(4);
         } finally {
             reporter.end();

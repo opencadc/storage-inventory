@@ -100,7 +100,7 @@ public class MinocInitAction extends InitAction {
     
     static final String SQLGEN_KEY = SQLGenerator.class.getName();
     
-    static final String SCHEMA_KEY = MINOC_KEY + ".db.schema";
+    static final String SCHEMA_KEY = MINOC_KEY + ".inventory.schema";
     
     static final String SA_KEY = StorageAdapter.class.getName();
     

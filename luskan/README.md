@@ -8,26 +8,37 @@ See the [cadc-tomcat](https://github.com/opencadc/docker-base/tree/master/cadc-t
 for expected deployment and common config requirements.
 
 This service instance is expected to have a database backend to store the TAP metadata and which also includes the 
-storage inventory tables. The container expects that a directory is attached to /conf and containing the following:
+storage inventory tables.
+
+Runtime configuration must be made available via the `/config` directory.
 
 ### catalina.properties
 ```
 # database connection pools
-luskan.tapadm.maxActive={}
-luskan.tapadm.username={}
-luskan.tapadm.password={}
-luskan.tapadm.url=jdbc:postgresql://{server}/{database}
+org.opencadc.luskan.uws.maxActive={max connections for jobs pool}
+org.opencadc.luskan.uws.username={database username for jobs pool}
+org.opencadc.luskan.uws.password={database password for jobs pool}
+org.opencadc.luskan.uws.url=jdbc:postgresql://{server}/{database}
 
-luskan.tapuser.maxActive={}
-luskan.tapuser.username={}
-luskan.tapuser.password={}
-luskan.tapuser.url=jdbc:postgresql://{server}/{database}
+org.opencadc.luskan.tapadm.maxActive={max connections for TAP admin pool}
+org.opencadc.luskan.tapadm.username={username for TAP admin pool}
+org.opencadc.luskan.tapadm.password={password for TAP admin pool }
+org.opencadc.luskan.tapadm.url=jdbc:postgresql://{server}/{database}
 
-luskan.uws.maxActive={}
-luskan.uws.username={}
-luskan.uws.password={}
-luskan.uws.url=jdbc:postgresql://{server}/{database}
+org.opencadc.luskan.query.maxActive={max connections for user query pool}
+org.opencadc.luskan.query.username={username for user query pool}
+org.opencadc.luskan.query.password={password for user query pool}
+org.opencadc.luskan.query.url=jdbc:postgresql://{server}/{database}
 ```
+The `tapadm` pool manages (create, alter, drop) tap_schema tables and manages the tap_schema content. The `uws` 
+pool manages (create, alter, drop) uws tables and manages the uws content (creates and modifies jobs in the uws
+schema when jobs are created and executed by users.
+
+The `query` pool is used to run TAP queries, including creating tables in the tap_upload schema. 
+
+All three pools must have the same JDBC URL (e.g. use the same database) with PostgreSQL. This may be relaxed in future.
+In addition, the TAP service does not currerently support a configurable schema name: it assumes a schema named `inventory`
+holds the content.
 
 ### luskan.properties
 ```
@@ -54,6 +65,9 @@ ivo://ivoa.net/std/UMS#login-0.1 = ivo://cadc.nrc.ca/gms
 ivo://ivoa.net/std/CDP#delegate-1.0 = ivo://cadc.nrc.ca/cred
 ivo://ivoa.net/std/CDP#proxy-1.0 = ivo://cadc.nrc.ca/cred
 ```
+
+### cadcproxy.pem
+This client certificate is used to make server-to-server calls for system-level A&A purposes.
 
 ## building it
 ```
