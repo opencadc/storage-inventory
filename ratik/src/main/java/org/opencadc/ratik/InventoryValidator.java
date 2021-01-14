@@ -69,28 +69,45 @@
 
 package org.opencadc.ratik;
 
+import ca.nrc.cadc.auth.SSLUtil;
 import ca.nrc.cadc.db.DBUtil;
+import ca.nrc.cadc.db.TransactionManager;
+import ca.nrc.cadc.io.ResourceIterator;
 import ca.nrc.cadc.net.ResourceNotFoundException;
+import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.reg.Capabilities;
 import ca.nrc.cadc.reg.Capability;
 import ca.nrc.cadc.reg.Standards;
 import ca.nrc.cadc.reg.client.RegistryClient;
+import ca.nrc.cadc.util.StringUtil;
+import java.io.File;
 import java.io.IOException;
 import java.net.URI;
+import java.security.PrivilegedActionException;
+import java.security.PrivilegedExceptionAction;
+import java.util.Date;
+import java.util.List;
 import java.util.Map;
+import java.util.UUID;
+import javax.security.auth.Subject;
 import javax.sql.DataSource;
 import org.apache.log4j.Logger;
+import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.version.InitDatabase;
 import org.opencadc.inventory.util.ArtifactSelector;
 import org.opencadc.inventory.util.BucketSelector;
+import org.opencadc.tap.TapClient;
+import org.opencadc.tap.TapRowMapper;
 
 /**
  * Validate local inventory.
  */
 public class InventoryValidator implements Runnable {
     private static final Logger log = Logger.getLogger(InventoryValidator.class);
+
+    public static final String CERTIFICATE_FILE_LOCATION = System.getProperty("user.home") + "/.ssl/cadcproxy.pem";
 
     private final ArtifactDAO artifactDAO;
     private final URI resourceID;
@@ -150,7 +167,190 @@ public class InventoryValidator implements Runnable {
     }
 
     @Override public void run() {
+        try {
+            final Subject subject = SSLUtil.createSubject(new File(CERTIFICATE_FILE_LOCATION));
+            Subject.doAs(subject, (PrivilegedExceptionAction<Void>) () -> {
+                doit();
+                return null;
+            });
+        } catch (PrivilegedActionException privilegedActionException) {
+            final Exception exception = privilegedActionException.getException();
+            throw new IllegalStateException(exception.getMessage(), exception);
+        }
+    }
+
+    /**
+     * Perform a validate between local Artifacts matching the given uri bucket range
+     * and remote Artifacts included constraints in this harvester's selector.
+     *
+     * @throws ResourceNotFoundException For any missing required configuration that is missing.
+     * @throws IOException               For unreadable configuration files.
+     * @throws IllegalStateException     For any invalid configuration.
+     * @throws TransientException        temporary failure of TAP service: same call could work in future
+     * @throws InterruptedException      thread interrupted
+     */
+    void doit() throws ResourceNotFoundException, IOException, IllegalStateException, TransientException,
+                       InterruptedException {
+
+        final TransactionManager transactionManager = this.artifactDAO.getTransactionManager();
+
+        try (final ResourceIterator<Artifact> localIterator = localIterator();
+            final ResourceIterator<Artifact> remoteIterator = remoteIterator()) {
+
+            Artifact localArtifact = null;
+            Artifact remoteArtifact = null;
+            boolean artifactsToValidate = true;
+            while (artifactsToValidate) {
+                if (localArtifact == null) {
+                    localArtifact = localIterator.hasNext() ? localIterator.next() : null;
+                }
+                if (remoteArtifact == null) {
+                    remoteArtifact = remoteIterator.hasNext() ? remoteIterator.next() : null;
+                }
+                log.debug(String.format("Comparing Artifact's: local %s - remote %s", localArtifact, remoteArtifact));
+
+                // TODO sanity check? if either iterator has no results in the first loop, exit?
+                if (localArtifact == null && remoteArtifact == null) {
+                    artifactsToValidate = false;
+                    continue;
+                }
+
+                // check if Artifacts are equal, or if the local or remote Artifact
+                // is 'greater' than the other.
+                int compare = compare(localArtifact, remoteArtifact);
+                try {
+                    transactionManager.startTransaction();
+                    switch (compare) {
+                        case 0:
+                            log.debug("local == remote");
+                            validate(localArtifact, remoteArtifact);
+                            localArtifact = null;
+                            remoteArtifact = null;
+                            break;
+                        case 1:
+                            log.debug("local > remote");
+                            validate(localArtifact, null);
+                            localArtifact = null;
+                            break;
+                        case -1:
+                            log.debug("remote > local");
+                            validate(null, remoteArtifact);
+                            remoteArtifact = null;
+                            break;
+                    }
+                    transactionManager.commitTransaction();
+                } catch (Exception exception) {
+                    if (transactionManager.isOpen()) {
+                        log.error("Exception in transaction.  Rolling back...");
+                        transactionManager.rollbackTransaction();
+                        log.error("Rollback: OK");
+                    }
+                    throw exception;
+                } finally {
+                    if (transactionManager.isOpen()) {
+                        log.error("BUG: transaction open in finally. Rolling back...");
+                        transactionManager.rollbackTransaction();
+                        log.error("Rollback: OK");
+                        throw new RuntimeException("BUG: transaction open in finally");
+                    }
+                }
+            }
+        } catch (IOException e) {
+            log.error("Error closing iterator: " + e.getMessage());
+        }
+    }
+
+    void validate(Artifact localArtifact, Artifact remoteArtifact) {
+        log.debug(String.format("validating local=%s remote=%s", localArtifact, remoteArtifact));
+    }
+
+    /**
+     * Compare two Artifacts on ???
+     * - equal return 0
+     * - local > remote return 1
+     * - local < remote return -1
+     */
+    int compare(Artifact localArtifact, Artifact remoteArtifact) {
+        if (localArtifact == null) {
+            return -1;
+        } else if (remoteArtifact == null) {
+            return 1;
+        }
+        //TODO comparison
+        return 0;
+    }
+
+    /**
+     * Get local artifacts matching the uriBuckets.
+     *
+     * @return ResourceIterator over Artifact's matching the uri buckets.
+     */
+    ResourceIterator<Artifact> localIterator() {
         throw new UnsupportedOperationException("NOT IMPLEMENTED");
+    }
+
+    /**
+     * Execute the query and return the iterator back.
+     *
+     * @return ResourceIterator over Artifact's matching the remote filter policy.
+     *
+     * @throws ResourceNotFoundException For any missing required configuration that is missing.
+     * @throws IOException               For unreadable configuration files.
+     * @throws IllegalStateException     For any invalid configuration.
+     * @throws TransientException        temporary failure of TAP service: same call could work in future
+     * @throws InterruptedException      thread interrupted
+     */
+    ResourceIterator<Artifact> remoteIterator()
+        throws ResourceNotFoundException, IOException, IllegalStateException, TransientException, InterruptedException {
+        final TapClient<Artifact> tapClient = new TapClient<>(this.resourceID);
+        final String query = buildRemoteQuery();
+        log.debug("\nExecuting query '" + query + "'\n");
+        return tapClient.execute(query, new InventoryValidator.ArtifactRowMapper());
+    }
+
+    /**
+     * Assemble the WHERE clause and return the full query.  Very useful for testing separately.
+     *
+     * @return  String query.  Never null.
+     */
+    String buildRemoteQuery() throws ResourceNotFoundException, IOException {
+        final StringBuilder query = new StringBuilder();
+        query.append("SELECT id, uri, contentChecksum, contentLastModified, contentLength, contentType, ")
+            .append("contentEncoding, lastModified, metaChecksum FROM inventory.Artifact");
+
+        if (StringUtil.hasText(this.artifactSelector.getConstraint())) {
+            log.debug("\nInjecting clause '" + this.artifactSelector.getConstraint() + "'\n");
+
+            if (query.indexOf("WHERE") < 0) {
+                query.append(" WHERE ");
+            } else {
+                query.append(" AND ");
+            }
+            query.append("(").append(this.artifactSelector.getConstraint().trim()).append(")");
+        }
+        query.append(" ORDER BY lastModified");
+        return query.toString();
+    }
+
+    static class ArtifactRowMapper implements TapRowMapper<Artifact> {
+
+        @Override
+        public Artifact mapRow(final List<Object> row) {
+            int index = 0;
+            final Artifact artifact = new Artifact((UUID) row.get(index++),
+                                                   (URI) row.get(index++),
+                                                   (URI) row.get(index++),
+                                                   (Date) row.get(index++),
+                                                   (Long) row.get(index++));
+
+            artifact.contentType = (String) row.get(index++);
+            artifact.contentEncoding = (String) row.get(index++);
+
+            InventoryUtil.assignLastModified(artifact, (Date) row.get(index++));
+            InventoryUtil.assignMetaChecksum(artifact, (URI) row.get(index));
+
+            return artifact;
+        }
     }
 
 }
