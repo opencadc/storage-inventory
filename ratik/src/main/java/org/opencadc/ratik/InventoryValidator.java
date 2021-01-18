@@ -328,7 +328,7 @@ public class InventoryValidator implements Runnable {
             }
             query.append("(").append(this.artifactSelector.getConstraint().trim()).append(")");
         }
-        query.append(" ORDER BY lastModified");
+        query.append(" ORDER BY uri");
         return query.toString();
     }
 
