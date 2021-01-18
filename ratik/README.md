@@ -13,20 +13,38 @@ org.opencadc.ratik.logging = {info|debug}
 
 # inventory database settings
 org.opencadc.inventory.db.SQLGenerator=org.opencadc.inventory.db.SQLGenerator
-org.opencadc.ratik.db.schema={schema}
-org.opencadc.ratik.db.username={dbuser}
-org.opencadc.ratik.db.password={dbpassword}
-org.opencadc.ratik.db.url=jdbc:postgresql://{server}/{database}
+org.opencadc.ratik.inventory.schema={schema}
+org.opencadc.ratik.inventory.username={dbuser}
+org.opencadc.ratik.inventory.password={dbpassword}
+org.opencadc.ratik.inventory.url=jdbc:postgresql://{server}/{database}
 
 # remote inventory query service (luskan)
 org.opencadc.ratik.queryService={resourceID of remote TAP service with inventory data model}
 
-org.opencadc.ratik.buckets = {uriBucket prefix or range of prefixes}
+# artifact uri bucket filter
+org.opencadc.ratik.buckets={uriBucket prefix or range of prefixes}
+
+# selectivity
+org.opencadc.inventory.util.ArtifactSelector={fully qualified classname of ArtifactSelector implementation}
+
+# local site type, true = global site, false = storage site
+org.opencadc.ratik.trackSiteLocations={true|false}
 ```
 The range of uriBucket prefixes is specified with two values separated by a single - (dash) character; whitespace is ignored.
 
 ### cadcproxy.pem
 Remote calls will use this certificate to authenticate.
+
+### artifact-filter.sql (optional)
+When the `org.opencadc.inventory.util.ArtifactSelector` ArtifactSelector is specified, this config file specifying the included Artifacts is required.
+The single clause in the SQL file *MUST* begin with the `WHERE` keyword.
+
+> `artifact-filter.sql`
+```sql
+WHERE uri LIKE '%SOME CONDITION%'
+```
+
+Will restrict the included Artifacts to _only_ those that match the SQL condition.
 
 
 ## building it
