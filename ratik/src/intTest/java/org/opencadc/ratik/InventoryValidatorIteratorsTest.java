@@ -160,18 +160,23 @@ public class InventoryValidatorIteratorsTest {
         fileWriter.close();
     }
 
+    private void logValidate(Artifact localArtifact, Artifact remoteArtifact) {
+        String local = (localArtifact == null ? "null" : localArtifact.getURI().toString());
+        String remote = (remoteArtifact == null ? "null" : remoteArtifact.getURI().toString());
+        log.info(String.format("local=%s remote=%s", local, remote));
+    }
     /**
      * 2 Artifacts in both local and remote.
      * 2 iterator loops should validate the same Artifact.
      */
     @Test
     public void artifactsEqual() throws Exception {
-        URI uri1 = URI.create("cadc:INTTEST/one.ext");
+        URI uri1 = URI.create("cadc:INTTEST/file1.ext");
         Artifact artifact1 = new Artifact(uri1, TestUtil.getRandomMD5(), new Date(), 1024L);
         this.localEnvironment.artifactDAO.put(artifact1);
         this.remoteEnvironment.artifactDAO.put(artifact1);
 
-        URI uri2 = URI.create("cadc:INTTEST/two.ext");
+        URI uri2 = URI.create("cadc:INTTEST/file2.ext");
         Artifact artifact2 = new Artifact(uri2, TestUtil.getRandomMD5(), new Date(), 1024L);
         this.localEnvironment.artifactDAO.put(artifact2);
         this.remoteEnvironment.artifactDAO.put(artifact2);
@@ -186,6 +191,7 @@ public class InventoryValidatorIteratorsTest {
                 void validate(Artifact localArtifact, Artifact remoteArtifact) {
                     artifacts.add(localArtifact);
                     artifacts.add(remoteArtifact);
+                    logValidate(localArtifact, remoteArtifact);
                 }
             };
             testSubject.run();
@@ -217,11 +223,11 @@ public class InventoryValidatorIteratorsTest {
      */
     @Test
     public void localOnly() throws Exception {
-        URI uri1 = URI.create("cadc:INTTEST/one.ext");
+        URI uri1 = URI.create("cadc:INTTEST/file1.ext");
         Artifact localArtifact1 = new Artifact(uri1, TestUtil.getRandomMD5(), new Date(), 1024L);
         this.localEnvironment.artifactDAO.put(localArtifact1);
 
-        URI uri2 = URI.create("cadc:INTTEST/two.ext");
+        URI uri2 = URI.create("cadc:INTTEST/file2.ext");
         Artifact localArtifact2 = new Artifact(uri2, TestUtil.getRandomMD5(), new Date(), 1024L);
         this.localEnvironment.artifactDAO.put(localArtifact2);
 
@@ -235,6 +241,7 @@ public class InventoryValidatorIteratorsTest {
                 void validate(Artifact localArtifact, Artifact remoteArtifact) {
                     artifacts.add(localArtifact);
                     artifacts.add(remoteArtifact);
+                    logValidate(localArtifact, remoteArtifact);
                 }
             };
             testSubject.run();
@@ -264,11 +271,11 @@ public class InventoryValidatorIteratorsTest {
      */
     @Test
     public void remoteOnly() throws Exception {
-        URI uri1 = URI.create("cadc:INTTEST/one.ext");
+        URI uri1 = URI.create("cadc:INTTEST/file1.ext");
         Artifact remoteArtifact1 = new Artifact(uri1, TestUtil.getRandomMD5(), new Date(), 1024L);
         this.remoteEnvironment.artifactDAO.put(remoteArtifact1);
 
-        URI uri2 = URI.create("cadc:INTTEST/one.ext");
+        URI uri2 = URI.create("cadc:INTTEST/file2.ext");
         Artifact remoteArtifact2 = new Artifact(uri2, TestUtil.getRandomMD5(), new Date(), 1024L);
         this.remoteEnvironment.artifactDAO.put(remoteArtifact2);
 
@@ -282,6 +289,7 @@ public class InventoryValidatorIteratorsTest {
                 void validate(Artifact localArtifact, Artifact remoteArtifact) {
                     artifacts.add(localArtifact);
                     artifacts.add(remoteArtifact);
+                    logValidate(localArtifact, remoteArtifact);
                 }
             };
             testSubject.run();
@@ -313,15 +321,15 @@ public class InventoryValidatorIteratorsTest {
      */
     @Test
     public void localGreaterThanRemote() throws Exception {
-        URI uri1 = URI.create("cadc:INTTEST/one.ext");
+        URI uri1 = URI.create("cadc:INTTEST/file1.ext");
         Artifact localArtifact1 = new Artifact(uri1, TestUtil.getRandomMD5(), new Date(), 1024L);
         this.localEnvironment.artifactDAO.put(localArtifact1);
 
-        URI uri2 = URI.create("cadc:INTTEST/two.ext");
+        URI uri2 = URI.create("cadc:INTTEST/file2.ext");
         Artifact localArtifact2 = new Artifact(uri2, TestUtil.getRandomMD5(), new Date(), 1024L);
         this.localEnvironment.artifactDAO.put(localArtifact2);
 
-        URI uri3 = URI.create("cadc:INTTEST/three.ext");
+        URI uri3 = URI.create("cadc:INTTEST/file3.ext");
         Artifact remoteArtifact = new Artifact(uri3, TestUtil.getRandomMD5(), new Date(), 1024L);
         this.remoteEnvironment.artifactDAO.put(remoteArtifact);
 
@@ -335,6 +343,7 @@ public class InventoryValidatorIteratorsTest {
                 void validate(Artifact localArtifact, Artifact remoteArtifact) {
                     artifacts.add(localArtifact);
                     artifacts.add(remoteArtifact);
+                    logValidate(localArtifact, remoteArtifact);
                 }
             };
             testSubject.run();
@@ -373,15 +382,15 @@ public class InventoryValidatorIteratorsTest {
      */
     @Test
     public void remoteGreaterThanLocal() throws Exception {
-        URI uri1 = URI.create("cadc:INTTEST/three.ext");
+        URI uri1 = URI.create("cadc:INTTEST/file3.ext");
         Artifact localArtifact = new Artifact(uri1, TestUtil.getRandomMD5(), new Date(), 1024L);
         this.localEnvironment.artifactDAO.put(localArtifact);
 
-        URI uri2 = URI.create("cadc:INTTEST/one.ext");
+        URI uri2 = URI.create("cadc:INTTEST/file1.ext");
         Artifact remoteArtifact1 = new Artifact(uri2, TestUtil.getRandomMD5(), new Date(), 1024L);
         this.remoteEnvironment.artifactDAO.put(remoteArtifact1);
 
-        URI uri3 = URI.create("cadc:INTTEST/two.ext");
+        URI uri3 = URI.create("cadc:INTTEST/file2.ext");
         Artifact remoteArtifact2 = new Artifact(uri3, TestUtil.getRandomMD5(), new Date(), 1024L);
         this.remoteEnvironment.artifactDAO.put(remoteArtifact2);
 
@@ -395,6 +404,7 @@ public class InventoryValidatorIteratorsTest {
                 void validate(Artifact localArtifact, Artifact remoteArtifact) {
                     artifacts.add(localArtifact);
                     artifacts.add(remoteArtifact);
+                    logValidate(localArtifact, remoteArtifact);
                 }
             };
             testSubject.run();
@@ -432,19 +442,19 @@ public class InventoryValidatorIteratorsTest {
      */
     @Test
     public void alternatingArtifacts() throws Exception {
-        URI uri1 = URI.create("cadc:INTTEST/one.ext");
+        URI uri1 = URI.create("cadc:INTTEST/file1.ext");
         Artifact localArtifact1 = new Artifact(uri1, TestUtil.getRandomMD5(), new Date(), 1024L);
         this.localEnvironment.artifactDAO.put(localArtifact1);
 
-        URI uri2 = URI.create("cadc:INTTEST/two.ext");
+        URI uri2 = URI.create("cadc:INTTEST/file2.ext");
         Artifact remoteArtifact1 = new Artifact(uri2, TestUtil.getRandomMD5(), new Date(), 1024L);
         this.remoteEnvironment.artifactDAO.put(remoteArtifact1);
 
-        URI uri3 = URI.create("cadc:INTTEST/three.ext");
+        URI uri3 = URI.create("cadc:INTTEST/file3.ext");
         Artifact localArtifact2 = new Artifact(uri3, TestUtil.getRandomMD5(), new Date(), 1024L);
         this.localEnvironment.artifactDAO.put(localArtifact2);
 
-        URI uri4 = URI.create("cadc:INTTEST/four.ext");
+        URI uri4 = URI.create("cadc:INTTEST/file4.ext");
         Artifact remoteArtifact2 = new Artifact(uri4, TestUtil.getRandomMD5(), new Date(), 1024L);
         this.remoteEnvironment.artifactDAO.put(remoteArtifact2);
 
@@ -458,6 +468,7 @@ public class InventoryValidatorIteratorsTest {
                 void validate(Artifact localArtifact, Artifact remoteArtifact) {
                     artifacts.add(localArtifact);
                     artifacts.add(remoteArtifact);
+                    logValidate(localArtifact, remoteArtifact);
                 }
             };
             testSubject.run();

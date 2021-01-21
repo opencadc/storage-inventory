@@ -71,7 +71,6 @@ package org.opencadc.ratik;
 
 import ca.nrc.cadc.auth.SSLUtil;
 import ca.nrc.cadc.db.DBUtil;
-import ca.nrc.cadc.db.TransactionManager;
 import ca.nrc.cadc.io.ResourceIterator;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
@@ -192,7 +191,8 @@ public class InventoryValidator implements Runnable {
     void doit() throws ResourceNotFoundException, IOException, IllegalStateException, TransientException,
                        InterruptedException {
 
-        final TransactionManager transactionManager = this.artifactDAO.getTransactionManager();
+        ArtifactValidator artifactValidator = new ArtifactValidator(this.artifactDAO, this.resourceID,
+                                                                    this.trackSiteLocations);
 
         try (final ResourceIterator<Artifact> localIterator = localIterator();
             final ResourceIterator<Artifact> remoteIterator = remoteIterator()) {
@@ -215,44 +215,22 @@ public class InventoryValidator implements Runnable {
                     continue;
                 }
 
-                // check if Artifacts are equal, or if the local or remote Artifact
-                // is 'greater' than the other.
+                // check if Artifacts are the same, or if the local Artifact
+                // precedes or follows the remote Artifact.
                 int compare = compare(localArtifact, remoteArtifact);
-                try {
-                    transactionManager.startTransaction();
-                    switch (compare) {
-                        case 0:
-                            log.debug("local == remote");
-                            validate(localArtifact, remoteArtifact);
-                            localArtifact = null;
-                            remoteArtifact = null;
-                            break;
-                        case 1:
-                            log.debug("local > remote");
-                            validate(localArtifact, null);
-                            localArtifact = null;
-                            break;
-                        case -1:
-                            log.debug("remote > local");
-                            validate(null, remoteArtifact);
-                            remoteArtifact = null;
-                            break;
-                    }
-                    transactionManager.commitTransaction();
-                } catch (Exception exception) {
-                    if (transactionManager.isOpen()) {
-                        log.error("Exception in transaction.  Rolling back...");
-                        transactionManager.rollbackTransaction();
-                        log.error("Rollback: OK");
-                    }
-                    throw exception;
-                } finally {
-                    if (transactionManager.isOpen()) {
-                        log.error("BUG: transaction open in finally. Rolling back...");
-                        transactionManager.rollbackTransaction();
-                        log.error("Rollback: OK");
-                        throw new RuntimeException("BUG: transaction open in finally");
-                    }
+                if (compare == 0) {
+                    log.debug("local equals remote");
+                    artifactValidator.validate(localArtifact, remoteArtifact);
+                    localArtifact = null;
+                    remoteArtifact = null;
+                } else if (compare < 0) {
+                    log.debug("local before remote");
+                    artifactValidator.validate(localArtifact, null);
+                    localArtifact = null;
+                } else {
+                    log.debug("local after remote");
+                    artifactValidator.validate(null, remoteArtifact);
+                    remoteArtifact = null;
                 }
             }
         } catch (IOException e) {
@@ -265,19 +243,20 @@ public class InventoryValidator implements Runnable {
     }
 
     /**
-     * Compare two Artifacts on ???
-     * - equal return 0
-     * - local > remote return 1
-     * - local < remote return -1
+     * Compare two Artifacts on the String representation of Artifact.uri.
+     * Must match the ordering of a postgresql ORDER BY ASC on Artifact.uri.
+     * - if local equals remote returns 0.
+     * - if local lexicographically precedes remote returns a negative value.
+     * - if local lexicographically follows remote returns a positive value.
      */
     int compare(Artifact localArtifact, Artifact remoteArtifact) {
         if (localArtifact == null) {
             return -1;
         } else if (remoteArtifact == null) {
             return 1;
+        } else {
+            return localArtifact.getURI().toString().compareTo(remoteArtifact.getURI().toString());
         }
-        //TODO comparison
-        return 0;
     }
 
     /**
@@ -328,7 +307,7 @@ public class InventoryValidator implements Runnable {
             }
             query.append("(").append(this.artifactSelector.getConstraint().trim()).append(")");
         }
-        query.append(" ORDER BY uri");
+        query.append(" ORDER BY uri asc");
         return query.toString();
     }
 
