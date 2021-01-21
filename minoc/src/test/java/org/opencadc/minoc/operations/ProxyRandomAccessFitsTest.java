@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2020.                            (c) 2020.
+*  (c) 2021.                            (c) 2021.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -67,76 +67,112 @@
 
 package org.opencadc.minoc.operations;
 
-import ca.nrc.cadc.io.ReadException;
+import ca.nrc.cadc.util.FileUtil;
+import ca.nrc.cadc.util.Log4jInit;
 import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.IOException;
-import java.io.RandomAccessFile;
-import java.util.ArrayList;
+import java.io.FileInputStream;
+import java.net.URI;
 import java.util.List;
-import nom.tam.fits.BasicHDU;
-import nom.tam.fits.Fits;
-import nom.tam.fits.FitsException;
 import nom.tam.fits.Header;
-import nom.tam.util.RandomAccess;
+import nom.tam.fits.HeaderCard;
+import nom.tam.util.Cursor;
+import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
-import org.opencadc.inventory.StorageLocation;
+import org.junit.Assert;
+import org.junit.Test;
+import org.opencadc.fits.FitsOperations;
+import org.opencadc.inventory.storage.NewArtifact;
 import org.opencadc.inventory.storage.StorageAdapter;
 import org.opencadc.inventory.storage.StorageMetadata;
+import org.opencadc.inventory.storage.fs.OpaqueFileSystemStorageAdapter;
 
 /**
- * Operation on FITS files.
+ * Test ProxyRandomAccessFits wrapper using filesystem storage adapter for the back end.
  * 
  * @author pdowler
  */
-public class FitsOperations {
-    private static final Logger log = Logger.getLogger(FitsOperations.class);
+public class ProxyRandomAccessFitsTest {
+    private static final Logger log = Logger.getLogger(ProxyRandomAccessFitsTest.class);
 
-    private final StorageAdapter storageAdapter;
-    
-    public FitsOperations(StorageAdapter storageAdapter) {
-        this.storageAdapter = storageAdapter;
+    static {
+        Log4jInit.setLevel("org.opencadc.minoc.operations", Level.DEBUG);
+        //Log4jInit.setLevel("org.opencadc.inventory.storage.fs", Level.DEBUG);
     }
-
-    public Header getPrimaryHeader(StorageMetadata sm) throws ReadException {
-        try {
-            ProxyRandomAccess istream = new ProxyRandomAccess(storageAdapter, sm.getStorageLocation(), sm.getContentLength());
-            Fits fits = new Fits(istream);
-            
-            BasicHDU hdu = fits.readHDU();
-            Header ret = hdu.getHeader();
-            
-            return ret;
-        } catch (FitsException ex) {
-            throw new RuntimeException("invalid fits data: " + sm.getStorageLocation());
-        } catch (IOException ex) {
-            throw new ReadException("failed to read " + sm.getStorageLocation(), ex);
-        }
+     
+    public ProxyRandomAccessFitsTest() { 
     }
     
-    public List<Header> getHeaders(StorageMetadata sm) throws ReadException {
+    @Test
+    public void testGetPrimaryHeader() {
         try {
-            List<Header> ret = new ArrayList<>();
-            ProxyRandomAccess istream = new ProxyRandomAccess(storageAdapter, sm.getStorageLocation(), sm.getContentLength());
-            Fits fits = new Fits(istream);
-            
-            BasicHDU hdu = fits.readHDU();
-            while (hdu != null) {
-                Header h = hdu.getHeader();
-                ret.add(h);
-                hdu = fits.readHDU();
+            // setup
+            File testFile = FileUtil.getFileFromResource("sample-mef.fits", ProxyRandomAccessFitsTest.class);
+            FileInputStream fis = new FileInputStream(testFile);
+            File rootDir = new File("build/tmp/saroot");
+            if (!rootDir.exists()) {
+                rootDir.mkdirs();
             }
-            return ret;
-        } catch (FitsException ex) {
-            throw new RuntimeException("invalid fits data: " + sm.getStorageLocation());
-        } catch (IOException ex) {
-            throw new ReadException("failed to read " + sm.getStorageLocation(), ex);
+            StorageAdapter sa = new OpaqueFileSystemStorageAdapter(rootDir, 1);
+            NewArtifact na = new NewArtifact(URI.create("cadc:TEST/" + testFile.getName()));
+            na.contentLength = testFile.length();
+            StorageMetadata sm = sa.put(na, fis);
+            ProxyRandomAccessFits in = new ProxyRandomAccessFits(sa, sm.getStorageLocation(), testFile.length());
+            
+            FitsOperations fop = new FitsOperations(in);
+            Header h = fop.getPrimaryHeader();
+            //h.dumpHeader(System.out);
+            Cursor<String,HeaderCard> iter = h.iterator();
+            for (int i = 0; i <= 5; i++) {
+                HeaderCard hc = iter.next();
+                log.info(hc.getKey() + " = " + hc.getValue());
+            }
+            log.info("...");
+            
+            long nbytes = h.getDataSize();
+            log.info("data size: " + nbytes);
+            
+        } catch (Exception unexpected) {
+            log.error("unexpected exception", unexpected);
+            Assert.fail("unexpected exception: " + unexpected);
         }
     }
     
-    private void scratch() {
-        
-        
+    @Test
+    public void testGetHeaders() {
+        try {
+            // setup
+            File testFile = FileUtil.getFileFromResource("sample-mef.fits", ProxyRandomAccessFitsTest.class);
+            FileInputStream fis = new FileInputStream(testFile);
+            File rootDir = new File("build/tmp/saroot");
+            if (!rootDir.exists()) {
+                rootDir.mkdirs();
+            }
+            StorageAdapter sa = new OpaqueFileSystemStorageAdapter(rootDir, 1);
+            NewArtifact na = new NewArtifact(URI.create("cadc:TEST/" + testFile.getName()));
+            na.contentLength = testFile.length();
+            StorageMetadata sm = sa.put(na, fis);
+            ProxyRandomAccessFits in = new ProxyRandomAccessFits(sa, sm.getStorageLocation(), testFile.length());
+            
+            
+            FitsOperations fop = new FitsOperations(in);
+            List<Header> hdrs = fop.getHeaders();
+            
+            for (int i = 0; i < hdrs.size(); i++) {
+                Header h = hdrs.get(i);
+                log.info("** header: " + i);
+                Cursor<String,HeaderCard> iter = h.iterator();
+                for (int c = 0; c <= 5; c++) {
+                    HeaderCard hc = iter.next();
+                    log.info(hc.getKey() + " = " + hc.getValue());
+                }
+                long nbytes = h.getDataSize();
+                log.info("** data size: " + nbytes);
+                log.info("...");
+            }
+            
+        } catch (Exception unexpected) {
+            log.error("unexpected exception", unexpected);
+            Assert.fail("unexpected exception: " + unexpected);
+        }
     }
-    
 }

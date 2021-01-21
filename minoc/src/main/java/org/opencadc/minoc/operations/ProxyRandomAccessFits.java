@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2020.                            (c) 2020.
+*  (c) 2021.                            (c) 2021.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -80,11 +80,13 @@ import org.opencadc.inventory.storage.ByteRange;
 import org.opencadc.inventory.storage.StorageAdapter;
 
 /**
- *
+ * This class supports random read-only access to FITS files using the
+ * nom-tam FITS library.
+ * 
  * @author pdowler
  */
-public class ProxyRandomAccess implements RandomAccessDataObject {
-    private static final Logger log = Logger.getLogger(ProxyRandomAccess.class);
+public class ProxyRandomAccessFits implements RandomAccessDataObject {
+    private static final Logger log = Logger.getLogger(ProxyRandomAccessFits.class);
 
     private final StorageAdapter adapter;
     private final StorageLocation sloc;
@@ -94,7 +96,7 @@ public class ProxyRandomAccess implements RandomAccessDataObject {
     private long markpos = -1L;
     
     
-    public ProxyRandomAccess(StorageAdapter adapter, StorageLocation sloc, long contentLength) {
+    public ProxyRandomAccessFits(StorageAdapter adapter, StorageLocation sloc, long contentLength) {
         this.adapter = adapter;
         this.sloc = sloc;
         this.contentLength = contentLength;
