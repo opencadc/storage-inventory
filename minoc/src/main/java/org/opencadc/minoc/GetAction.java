@@ -68,10 +68,19 @@
 package org.opencadc.minoc;
 
 import ca.nrc.cadc.io.WriteException;
+import ca.nrc.cadc.util.StringUtil;
 import org.apache.log4j.Logger;
+import org.opencadc.fits.FitsOperations;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.StorageLocation;
+import org.opencadc.minoc.operations.ProxyRandomAccess;
 import org.opencadc.permissions.ReadGrant;
+import org.opencadc.soda.ExtensionSlice;
+import org.opencadc.soda.SodaParamValidator;
+
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Interface with storage and inventory to get an artifact.
@@ -81,6 +90,10 @@ import org.opencadc.permissions.ReadGrant;
 public class GetAction extends ArtifactAction {
     
     private static final Logger log = Logger.getLogger(GetAction.class);
+    private static final SodaParamValidator SODA_PARAM_VALIDATOR = new SodaParamValidator();
+
+    // Allow implementor to set the name of the query parameter expected.  Default is left to SODA.
+    private static final String SUB_PARAMETER_NAME_KEY = "sub-parameter";
 
     /**
      * Default, no-arg constructor.
@@ -99,12 +112,27 @@ public class GetAction extends ArtifactAction {
         
         Artifact artifact = getArtifact(artifactURI);
         HeadAction.setHeaders(artifact, syncOutput);
-        
+
+        final String configuredSubKey = initParams.get(SUB_PARAMETER_NAME_KEY);
+        final String subKey = StringUtil.hasText(configuredSubKey) ? configuredSubKey : SodaParamValidator.SUB;
+        final List<String> requestedSubs = syncInput.getParameters(subKey);
+
         StorageLocation storageLocation = new StorageLocation(artifact.storageLocation.getStorageID());
         storageLocation.storageBucket = artifact.storageLocation.storageBucket;
         log.debug("retrieving artifact from storage...");
         try {
-            storageAdapter.get(storageLocation, syncOutput.getOutputStream());
+            if (requestedSubs == null || requestedSubs.isEmpty()) {
+                storageAdapter.get(storageLocation, syncOutput.getOutputStream());
+            } else {
+                // If any cutouts were requested
+                final Map<String, List<String>> subMap = new HashMap<>();
+                subMap.put(subKey, requestedSubs);
+                final List<ExtensionSlice> slices = SODA_PARAM_VALIDATOR.validateSUB(subMap);
+                final FitsOperations fitsOperations =
+                        new FitsOperations(new ProxyRandomAccess(this.storageAdapter, artifact.storageLocation,
+                                                                 artifact.getContentLength()));
+                fitsOperations.cutoutToStream(slices, syncOutput.getOutputStream());
+            }
         } catch (WriteException e) {
             // error on client write
             String msg = "write output error";
