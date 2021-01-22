@@ -85,6 +85,7 @@ import java.net.URI;
 import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
 import java.util.Date;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -144,7 +145,7 @@ public class InventoryValidator implements Runnable {
             DataSource ds = DBUtil.findJNDIDataSource(jndiDataSourceName);
             InitDatabase init = new InitDatabase(ds, database, schema);
             init.doInit();
-            log.info("initDatabase: " + jndiDataSourceName + " " + schema + " OK");
+            log.info(String.format("initDatabase: %s %s", jndiDataSourceName, schema));
         } catch (Exception ex) {
             throw new IllegalStateException("check/init database failed", ex);
         }
@@ -194,47 +195,53 @@ public class InventoryValidator implements Runnable {
         ArtifactValidator artifactValidator = new ArtifactValidator(this.artifactDAO, this.resourceID,
                                                                     this.trackSiteLocations);
 
-        try (final ResourceIterator<Artifact> localIterator = localIterator();
-            final ResourceIterator<Artifact> remoteIterator = remoteIterator()) {
+        Iterator<String> bucketIterator = this.bucketSelector.getBucketIterator();
+        while (bucketIterator.hasNext()) {
+            final String bucket = bucketIterator.next();
+            log.debug("processing bucket: " + bucket);
+            try (final ResourceIterator<Artifact> localIterator = getLocalIterator(bucket);
+                final ResourceIterator<Artifact> remoteIterator = getRemoteIterator(bucket)) {
 
-            Artifact localArtifact = null;
-            Artifact remoteArtifact = null;
-            boolean artifactsToValidate = true;
-            while (artifactsToValidate) {
-                if (localArtifact == null) {
-                    localArtifact = localIterator.hasNext() ? localIterator.next() : null;
-                }
-                if (remoteArtifact == null) {
-                    remoteArtifact = remoteIterator.hasNext() ? remoteIterator.next() : null;
-                }
-                log.debug(String.format("Comparing Artifact's: local %s - remote %s", localArtifact, remoteArtifact));
+                Artifact localArtifact = null;
+                Artifact remoteArtifact = null;
+                boolean artifactsToValidate = true;
+                while (artifactsToValidate) {
+                    if (localArtifact == null) {
+                        localArtifact = localIterator.hasNext() ? localIterator.next() : null;
+                    }
+                    if (remoteArtifact == null) {
+                        remoteArtifact = remoteIterator.hasNext() ? remoteIterator.next() : null;
+                    }
+                    log.debug(String.format("validating Artifacts:\nlocal %s\nremote %s",
+                                            localArtifact, remoteArtifact));
 
-                // TODO sanity check? if either iterator has no results in the first loop, exit?
-                if (localArtifact == null && remoteArtifact == null) {
-                    artifactsToValidate = false;
-                    continue;
-                }
+                    // TODO sanity check? if either iterator has no results in the first loop, exit?
+                    if (localArtifact == null && remoteArtifact == null) {
+                        artifactsToValidate = false;
+                        continue;
+                    }
 
-                // check if Artifacts are the same, or if the local Artifact
-                // precedes or follows the remote Artifact.
-                int compare = compare(localArtifact, remoteArtifact);
-                if (compare == 0) {
-                    log.debug("local equals remote");
-                    artifactValidator.validate(localArtifact, remoteArtifact);
-                    localArtifact = null;
-                    remoteArtifact = null;
-                } else if (compare < 0) {
-                    log.debug("local before remote");
-                    artifactValidator.validate(localArtifact, null);
-                    localArtifact = null;
-                } else {
-                    log.debug("local after remote");
-                    artifactValidator.validate(null, remoteArtifact);
-                    remoteArtifact = null;
+                    // check if Artifacts are the same, or if the local Artifact
+                    // precedes or follows the remote Artifact.
+                    int compare = compare(localArtifact, remoteArtifact);
+                    if (compare == 0) {
+                        log.debug("local equals remote");
+                        artifactValidator.validate(localArtifact, remoteArtifact);
+                        localArtifact = null;
+                        remoteArtifact = null;
+                    } else if (compare < 0) {
+                        log.debug("local before remote");
+                        artifactValidator.validate(localArtifact, null);
+                        localArtifact = null;
+                    } else {
+                        log.debug("local after remote");
+                        artifactValidator.validate(null, remoteArtifact);
+                        remoteArtifact = null;
+                    }
                 }
+            } catch (IOException e) {
+                log.error("Error closing iterator: " + e.getMessage());
             }
-        } catch (IOException e) {
-            log.error("Error closing iterator: " + e.getMessage());
         }
     }
 
@@ -250,28 +257,34 @@ public class InventoryValidator implements Runnable {
      * - if local lexicographically follows remote returns a positive value.
      */
     int compare(Artifact localArtifact, Artifact remoteArtifact) {
+        log.debug(String.format("compare local%s - remote%s", localArtifact, remoteArtifact));
+        int result;
         if (localArtifact == null) {
-            return -1;
+            result = -1;
         } else if (remoteArtifact == null) {
-            return 1;
+            result = 1;
         } else {
-            return localArtifact.getURI().toString().compareTo(remoteArtifact.getURI().toString());
+            result = localArtifact.getURI().toString().compareTo(remoteArtifact.getURI().toString());
         }
+        log.debug("compare result: " + result);
+        return result;
     }
 
     /**
      * Get local artifacts matching the uriBuckets.
      *
-     * @return ResourceIterator over Artifact's matching the uri buckets.
+     * @param bucket The bucket prefix.
+     * @return ResourceIterator over Artifact's matching the remote filter policy and the uri buckets.
      */
-    ResourceIterator<Artifact> localIterator() {
+    ResourceIterator<Artifact> getLocalIterator(final String bucket) {
         throw new UnsupportedOperationException("NOT IMPLEMENTED");
     }
 
     /**
      * Execute the query and return the iterator back.
      *
-     * @return ResourceIterator over Artifact's matching the remote filter policy.
+     * @param bucket The bucket prefix.
+     * @return ResourceIterator over Artifact's matching the remote filter policy and the uri buckets.
      *
      * @throws ResourceNotFoundException For any missing required configuration that is missing.
      * @throws IOException               For unreadable configuration files.
@@ -279,27 +292,29 @@ public class InventoryValidator implements Runnable {
      * @throws TransientException        temporary failure of TAP service: same call could work in future
      * @throws InterruptedException      thread interrupted
      */
-    ResourceIterator<Artifact> remoteIterator()
+    ResourceIterator<Artifact> getRemoteIterator(final String bucket)
         throws ResourceNotFoundException, IOException, IllegalStateException, TransientException, InterruptedException {
         final TapClient<Artifact> tapClient = new TapClient<>(this.resourceID);
-        final String query = buildRemoteQuery();
-        log.debug("\nExecuting query '" + query + "'\n");
+        final String query = buildRemoteQuery(bucket);
+        log.debug(String.format("\nExecuting query '%s'\n", query));
         return tapClient.execute(query, new InventoryValidator.ArtifactRowMapper());
     }
 
     /**
      * Assemble the WHERE clause and return the full query.  Very useful for testing separately.
      *
+     * @param bucket The current bucket.
      * @return  String query.  Never null.
      */
-    String buildRemoteQuery() throws ResourceNotFoundException, IOException {
+    String buildRemoteQuery(final String bucket)
+        throws ResourceNotFoundException, IOException {
         final StringBuilder query = new StringBuilder();
         query.append("SELECT id, uri, contentChecksum, contentLastModified, contentLength, contentType, ")
-            .append("contentEncoding, lastModified, metaChecksum FROM inventory.Artifact");
+            .append("contentEncoding, lastModified, metaChecksum FROM inventory.Artifact ");
 
         if (StringUtil.hasText(this.artifactSelector.getConstraint())) {
-            log.debug("\nInjecting clause '" + this.artifactSelector.getConstraint() + "'\n");
-
+            log.debug(String.format("\nInjecting artifact selector clause '%s'\n",
+                                    this.artifactSelector.getConstraint()));
             if (query.indexOf("WHERE") < 0) {
                 query.append(" WHERE ");
             } else {
@@ -307,7 +322,17 @@ public class InventoryValidator implements Runnable {
             }
             query.append("(").append(this.artifactSelector.getConstraint().trim()).append(")");
         }
-        query.append(" ORDER BY uri asc");
+
+        if (StringUtil.hasText(bucket)) {
+            log.debug(String.format("\nInjecting bucket selector clause '%s'\n", bucket));
+            if (query.indexOf("WHERE") < 0) {
+                query.append(" WHERE ");
+            } else {
+                query.append(" AND ");
+            }
+            query.append("(uribucket LIKE '").append(bucket.trim()).append("%')");
+        }
+        query.append(" ORDER BY uri ASC");
         return query.toString();
     }
 
