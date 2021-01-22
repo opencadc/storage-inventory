@@ -4,17 +4,22 @@
 See the [cadc-java](https://github.com/opencadc/docker-base/tree/master/cadc-java) image docs 
 for expected deployment and general config requirements.
 
+Runtime configuration must be made available via the `/config` directory.
+
 ### catalina.properties
 When running minoc.war in tomcat, parameters of the connection pool in META-INF/context.xml need
 to be configured in catalina.properties:
 ```
 # database connection pools
-minoc.invadm.maxActive={}
-minoc.invadm.username={}
-minoc.invadm.password={}
-minoc.invadm.url=jdbc:postgresql://{server}/{database}
+org.opencadc.minoc.inventory.maxActive={max connections for inventory admin pool}
+org.opencadc.minoc.inventory.username={username for inventory admin pool}
+org.opencadc.minoc.inventory.password={password for inventory admin pool}
+org.opencadc.minoc.inventory.url=jdbc:postgresql://{server}/{database}
 ```
-Additional java system properties may be required by libraries.
+The `inventory` account owns and manages (create, alter, drop) inventory database objects and manages
+all the content (insert, update, delete). The database is specified in the JDBC URL and the schema is specified 
+in the minoc.properties (below). Failure to connect or initialize the database will show up in logs and in the 
+VOSI-availability output.
 
 ### minoc.properties
 A minoc.properties file in /config is required to run this service.  The following keys are required:
@@ -27,7 +32,7 @@ org.opencadc.inventory.storage.StorageAdapter={fully qualified classname of Stor
 
 # inventory database settings
 org.opencadc.inventory.db.SQLGenerator=org.opencadc.inventory.db.SQLGenerator
-org.opencadc.minoc.db.schema={schema}
+org.opencadc.minoc.inventory.schema={schema for inventory database objects}
 
 org.opencadc.minoc.publicKeyFile={public key file from raven}
 ```
@@ -67,6 +72,9 @@ ivo://ivoa.net/std/CDP#delegate-1.0 = ivo://cadc.nrc.ca/cred
 ivo://ivoa.net/std/CDP#proxy-1.0 = ivo://cadc.nrc.ca/cred
 ```
 
+### cadcproxy.pem
+This client certificate is used to make server-to-server calls for system-level A&A purposes.
+
 ## building it
 ```
 gradle clean build
@@ -83,3 +91,12 @@ docker run -it minoc:latest /bin/bash
 docker run --user tomcat:tomcat --volume=/path/to/external/config:/config:ro --name minoc minoc:latest
 ```
 
+## apply semantic version tags
+```bash
+. VERSION && echo "tags: $TAGS" 
+for t in $TAGS; do
+   docker image tag minoc:latest minoc:$t
+done
+unset TAGS
+docker image list minoc
+```

@@ -7,7 +7,7 @@ within that process.
 ## configuration
 See the [cadc-java](https://github.com/opencadc/docker-base/tree/master/cadc-java) image docs for general config requirements.
 
-A file called `critwall.properties` must be made available via the `/config` directory.
+Runtime configuration must be made available via the `/config` directory.
 
 ### critwall.properties
 ```
@@ -15,10 +15,10 @@ org.opencadc.critwall.logging = {info|debug}
 
 # inventory database settings
 org.opencadc.inventory.db.SQLGenerator=org.opencadc.inventory.db.SQLGenerator
-org.opencadc.critwall.db.schema={schema}
-org.opencadc.critwall.db.username={dbuser}
-org.opencadc.critwall.db.password={dbpassword}
-org.opencadc.critwall.db.url=jdbc:postgresql://{server}/{database}
+org.opencadc.critwall.inventory.schema={schema for inventory database objects}
+org.opencadc.critwall.inventory.username={username for inventory admin}
+org.opencadc.critwall.inventory.password={password for inventory admin}
+org.opencadc.critwall.inventory.url=jdbc:postgresql://{server}/{database}
 
 # global transfer negotiation service (raven)
 org.opencadc.critwall.locatorService={resorceID of global transfer negotiation service}
@@ -30,11 +30,17 @@ org.opencadc.inventory.storage.StorageAdapter={fully qualified class name for St
 org.opencadc.critwall.buckets = {uriBucket prefix or range of prefixes}
 org.opencadc.critwall.threads = {number of download threads}
 ```
+The `inventory` account owns and manages (create, alter, drop) inventory database objects and manages
+all the content (insert, update, delete) in the inventory schema. The database is specified in the JDBC URL. 
+Failure to connect or initialize the database will show up in logs.
+
 The range of uriBucket prefixes is specified with two values separated by a single - (dash) character; whitespace is ignored.
 
+The number of download threads indirectly configures a database connection pool that is shared between file sync jobs
+(approximately 3 threads per connection).
+
 ### cadcproxy.pem
-Querying the global locator service (raven) and downloading files (minoc) requires permission. `critwall` uses 
-this certificate file located in /config to authenticate.
+Querying the global locator service (raven) and downloading files (minoc) may require permission.
 
 ### addtional configuration
 Additional configuration file(s) may be needed for the StorageAdapter that is configured.
@@ -54,4 +60,14 @@ docker run -it critwall:latest /bin/bash
 ```
 docker run --user opencadc:opencadc -v /path/to/external/config:/config:ro --name critwall critwall:latest
 ```
-Note: opencadc user is in the latest cadc-java image.
+
+## apply version tags
+```bash
+. VERSION && echo "tags: $TAGS" 
+for t in $TAGS; do
+   docker image tag critwall:latest critwall:$t
+done
+unset TAGS
+docker image list critwall
+```
+

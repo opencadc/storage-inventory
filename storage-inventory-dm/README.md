@@ -149,9 +149,10 @@ for transfer negotiation.
 <img alt="global storage inventory deployment" style="border-width:0" 
 src="https://raw.githubusercontent.com/opencadc/storage-inventory/master/storage-inventory-dm/docs/global-inventory-deploy.png" />
 
-# patterns, ideas, and incomplete thoughts...
+# patterns, ideas, and sometimes incomplete thoughts...
 
-files (basic put/get/update/delete):
+## file operations
+Basic put/get/update/delete operations:
 - put: PUT /srv/files/{uri}
 - get: GET /srv/files/{uri}
 - upate: POST /srv/files/{uri}
@@ -161,7 +162,8 @@ files (basic put/get/update/delete):
 - POST can modify mutable metadata: Artifact.uri (rename), Artifact.contentType, Artifact.contentEncoding
 
 
-locate (transfer negotiation):
+## locate 
+Files are located and accessed using transfer negotiation:
 - GET: negotiate with global, locate available copies, return URL(s), order by proximity
 - PUT: negotiate with global, locate writable sites, return URL(s), order by proximity -- try to match policy? (like--)
 - POST and DELETE: negotiate with global, locate available copies at writable sites, return URL(s), order by proximity
@@ -171,12 +173,14 @@ locate (transfer negotiation):
 - vault transfer negotiation maps vos {path} to DataNode.uuid and then negotiates with global (eg, for Artifact.uri ~ vault:{uuid})
 - vault implementation could maintain it's own global inventory of vault files (policy)
 
-how does a curl/wget user download a file without knowing where it is?
+## curl-wget
+How does a curl/wget user download a file without knowing where it is?
 - an endpoint like the files endpoint that supports GET only can be implemented as part of global deployment
 - this is a convenience feature so it is not part of the core design (just for clarity)
 - a simple "I'm feeling lucky" implementation could just redirect to the highest ranked negotiated transfer
 
-overwrite a file at storage site: atomic delete + create
+## overwrite a file 
+Overwriting a file at storage site: atomic delete + create
 - create DeletedArtifactEvent with old UUID
 - create a new Artifact (new UUID), Artifact.lastModified/metaChecksum must change, global harvests, sites harvest
 - before global harvests: eventually consistent (but detectable by clients in principle)
@@ -185,53 +189,144 @@ overwrite a file at storage site: atomic delete + create
 - sequence of events: DeletedArtifactEvent.lastModified <= new Artifact.lastModified -> metadata-sync tries to process events in order
 - **race condition** - put at two different sites -> two Artifact(s) with same uri but different id: resolve collision by keeping the one with max(Artifact.contentLastModified)
 
-how does delete file get propagated?
+## propagate delete 
+How does delete file get propagated?
 - delete from any site with a copy; delete harvested to global and then to other sites
 - process harvested delete by Artifact.id so it is decoupled from put new file with same name
 - **race condition** - delete and put at different sites -> the put wins by nature 
 - **eventual consistency**: if caller wants to put *then* delete a file the client must be aware of eventual consistency
 - delete by Artifact UUID is idempotent so duplicate DeletedArtifactEvent records are ok
 
-how does global learn about copies at sites other than the original?
+## lastModified updates
+How does global learn about copies at sites other than the original?
 - when a site syncs a file (adds a local StorageLocation): update the Artifact.lastModified
 - global metadata-sync from site(s) will see this and add a SiteLocation
 - metadata-sync never modifies Entity metdata: id, metaChecksum, lastModified never change during sync
 - eventually: Artifact.lastModified will be the latest change at all sites, but that doesn't stop metadata-sync from processing an "event" out of order and merging in the new SiteLocation
 
-how would a temporary cache instance at a site be maintained?
+## cache site
+How would a temporary cache instance at a site be maintained?
 - site could accept writes to a "cache" instance for Artifact(s) that do not match local policy
 - site could delete once global has other SiteLocation(s), update Artifact.lastModified so global will detect 
   and remove SiteLocation
 - files could sit there orphaned if no one else wants/copies them
 - this feature is not planned, just speculation
 
-how does global inventory validate vs site?  how does site validate vs global (w.r.t. policy)?
-- get list of Artifact(s) from the site and compare with Artifact+SiteLocation
-- add missing Artifact(s)
-- add missing SiteLocation(s)
-- update mutable Artifact metadata (validate sees it before metadata-sync)
-- remove orphaned SiteLocation(s)
-- remove Artifact(s) with no SiteLocation??
-- use uriBucket to do validation in batches/parallel
-- use streaming (merge-join) to minimise memory requirements
+## metadata-validate
+How does global inventory validate vs a storage site?  how does a storage site validate vs global?
+- validation is a *set* operation between equivalent sets: local vs remote
+- validation can only repair the local set
+- validate subsets of artifacts (in parallel) using Artifact.uriBucket prefix
+- validate ordered streams to minimise memory requirements (large sets)
 
-how does a storage site validate vs local storage system?
+**Local L** If L is global, then this set has artifacts where Artifact.siteLocations includes remote siteID.
+If L is a storage site, then this set is all artifacts in the database.
+
+**Remote R**: This set is the artifacts in the remote site that match the current filter policy.
+
+The approach is to iterate through sets L and R, look for discrepancies, and fix L. There are only 
+minor differences if validating global L. Note: Except for explanation0 which are strictly local effects, 
+the explanation #s match -- they are the same explanation seen from both sides.
+
+*discrepancy*: artifact in L && artifact not in R
+
+    explanation0: filter policy at L changed to exclude artifact in R
+    evidence: Artifact in R without filter
+    action: delete Artifact, if (L==storage) create DeletedStorageLocationEvent 
+
+    explanation1: deleted from R, pending/missed DeletedArtifactEvent in L
+    evidence: DeletedArtifactEvent in R 
+    action: put DAE, delete artifact
+    
+    explanation2: L==global, deleted from R, pending/missed DeletedStorageLocationEvent in L
+    evidence: DeletedStorageLocationEvent in R 
+    action: remove siteID from Artifact.storageLocations (see below)
+
+    explanation3: L==global, new Artifact in L, pending/missed Artifact or sync in R
+    evidence: ?
+    action: remove siteID from Artifact.storageLocations (see below)
+    
+    explanation4: L==storage, new Artifact in L, pending/missed new Artifact event in R
+    evidence: ?
+    action: none
+
+    explanation6: deleted from R, lost DeletedArtifactEvent
+    evidence: ?
+    action: assume explanation3
+    
+    explanation7: L==global, lost DeletedStorageLocationEvent
+    evidence: ?
+    action: assume explanation3
+    
+    note: when removing siteID from Artifact.storageLocations in global, if the Artifact.siteLocations becomes empty
+        the artifact should be deleted (metadata-sync needs to also do this in response to a DeletedStorageLocationEvent)
+        TBD: must this also create a DeletedArtifactEvent?
+
+*discrepancy*: artifact not in L && artifact in R
+
+    explantion0: filter policy at L changed to include artifact in R
+    evidence: ?
+    action: equivalent to missed Artifact event (explanation3 below)
+    
+    explanation1: deleted from L, pending/missed DeletedArtifactEvent in R
+    evidence: DeletedArtifactEvent in L
+    action: none
+
+    explanation2: L==storage, deleted from L, pending/missed DeletedStorageLocationEvent in R
+    evidence: DeletedStorageLocationEvent in L
+    action: none
+
+    explanation3: L==storage, new Artifact in R, pending/missed new Artifact event in L
+    evidence: ?
+    action: insert Artifact
+    
+    explanation4: L==global, new Artifact in R, pending/missed changed Artifact event in L
+    evidence: Artifact in local db but siteLocations does not include remote siteID
+    action: add siteID to Artifact.siteLocations
+    
+    explanation6: deleted from L, lost DeletedArtifactEvent
+    evidence: ?
+    action: assume explanation3
+    
+    explanation7: L==storage, deleted from L, lost DeletedStorageLocationEvent
+    evidence: ?
+    action: assume explanation3
+
+*discrepancy*: artifact.uri in both && artifact.id mismatch
+
+    explantion1: same ID collision due to race condition that metadata-sync has to handle
+    evidence: no more evidence needed
+    action: pick winner, create DeletedArtifactEvent for loser, delete loser if it is in L
+
+*discrepancy*: artifact in both && valid metaChecksum mismatch
+
+    explanation1: pending/missed artifact update in L
+    evidence: ??
+    action: put Artifact
+    
+    explanation2: pending/missed artifact update in R
+    evidence: ??
+    action: do nothing
+
+## file-validate
+How does a storage site validate vs local storage system?
 - compare List of Artifact+StorageLocation vs storage content using storageID
-- use storageBucket prefix to batch validation?
-- use sorted iterator to stream (merge join) for validation?
+- use storageBucket prefix to batch validation
+- use sorted iterator to stream (merge join) for validation, order by StorageLocation
 - if file in inventory & not in storage: pending file-sync job
-- if file in storage and not in inventory && can generate Artifact.uri: query global, create StorageLocation, maybe create Artifact
+- if file in storage and not in inventory && can generate Artifact.uri: query global for existing Artifact, create StorageLocation, maybe create Artifact
 - if file in storage and not in inventory && cannot generate Artifact.uri: delete from storage? alert operator?
 - if file in storage and inventory: compare checksum and length && act on discrepancies
 
-what happens when a storage site detects that a Artifact.contentChecksum != storage.checksum?
+## bit-rot
+What happens when a storage site detects that a Artifact.contentChecksum != storage.checksum?
 - depends on whether the storage checksum matches bytes or is simply an attached attribute
 - if attached attr: can be used to detect that file was overwritten but inventory update failed
 - if actual storage checksum: how to disambiguate bit-rot from update inconsistency?
 - if copies-in-global: delete the Artifact and the stored file, fire DeletedStorageLocationEvent, re-sync w.r.t policy?
 - if !copies-in-global: mark it bad && human intervention
 
-should harvesting detect if site Artifact.lastModified stream is out of whack?
+## should harvesting detect if site Artifact.lastModified stream is out of whack?
 - non-monotonic, except for volatile head of stack?
 - clock skew
 
@@ -246,22 +341,20 @@ The cadc-storage-adapter API places requirements on the implementation:
 5. support random access: resumable download, metadata extraction (fhead, fwcs), cutouts
 6. support iterator (ordered by StorageLocation) *or* batched list (by storageBucket): **preferably both**
 
-Y=yes NS=not scalable X=not possible
+Y=yes S=scalability issues N=not possible
 
 |feature|opaque filesystem|mountable fs (RO)|mountable fs (RW)|ceph+rados|ceph+S3|ceph+swift|AD + /data|
 |-------|:---------------:|:---------------:|:---------------:|:--------:|:-----:|:--------:|:--------:|
-|fixed overhead|Y|Y?|Y?|Y|Y|Y|Y|
-|store/retrieve metadata|Y|Y|Y|?|Y|Y|Y|
-|update metadata        |Y|Y|Y|?|X|Y|X|
-|streaming write        |Y|Y|Y|?|X?|Y|Y|
-|consistent timestamp   |Y|Y|Y|?|NS|?|Y|
-|random access          |Y|Y|Y|Y?|Y?|Y|Y|
-|batch list (obsiolete) |Y|NS|NS|Y?|Y|Y|NS|
-|prefix batch list (obsolete) |Y|NS|NS|Y?|Y|Y|X|
-|iterator               |Y|NS|NS|?|Y|Y|Y|
-|prefix iterator        |Y|NS|NS|?|Y|Y|X|
-|batch iterator         |Y|NS|NS|?|Y|Y|Y|
-|prefix batch iterator  |Y|NS|NS|?|Y|Y|X|
+|fixed overhead         |Y |Y?|Y?|Y |Y |Y|Y|
+|store/retrieve metadata|Y |Y |Y |? |Y |Y|Y|
+|update metadata        |Y |Y |Y |? |X |Y|N|
+|streaming write        |Y |Y |Y |? |N |Y|Y|
+|consistent timestamp   |Y |Y |Y |? |S?|Y|Y|
+|random access          |Y |Y |Y |Y?|Y?|Y|Y|
+|iterator               |Y |S |S |? |Y |Y|Y|
+|prefix iterator        |Y |S |S |? |Y |Y|N|
+|batch iterator         |Y |S |S |? |Y |Y|Y|
+|prefix batch iterator  |Y |S |S |? |Y |Y|N|
 
 For opaque fs: random hierarchical "hex" bucket scheme can give many buckets with few files, so scalability comes from
 using the directory structure (buckets) to maintain finite memory footprint. The hex bucket scheme is implementing a B-tree scheme with directories (more or less).
@@ -279,14 +372,11 @@ out of band and the iterator/list implementation would have to not expose the fi
 For ceph+rados: native code is required so not all features were explored in detail.
 
 For ceph+S3: the S3 API requires content-length before a write and treats stored objects as immutable so you cannot update
-metadata once an object is written. Ceph+S3 also has a maximum size for writing an object (5GiB), after which clients *must*
-use the multi-part upload API... that would have to be exposed to clients (not a bad idea, but the limit is modest).
+metadata once an object is written. Ceph+S3 also has a maximum size for writing an object (5GiB), after which clients must
+use the multi-part upload API... that would have to be exposed to clients.
 
-For ceph+swift: the Swift API does not appear to treat stored objects as immutable but this has not been verified with 
-working code.
+For ceph+swift: the Swift API allows changes to stored object metadata and allows streaming,. although still subject to a 5GiB
+default object size limit before multi-part API must be used.
 
 For AD: storageBucket = {archive} so there is no control over batch size via prefixing the bucket.
 
-{1}: Buckets are not a notion in `RADOS`.  They are part of the Object ID in the format 
-of `{bucket_marker}_{numeric_id}.{key_id}`.  The `bucket_marker` is looked up in the `default.rgw.meta` pool by name.  This
-is how the S3 endpoint is supported within Ceph.

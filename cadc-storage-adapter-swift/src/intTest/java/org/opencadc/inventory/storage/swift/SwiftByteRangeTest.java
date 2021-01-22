@@ -67,30 +67,12 @@
 
 package org.opencadc.inventory.storage.swift;
 
-import ca.nrc.cadc.io.ByteCountOutputStream;
-import ca.nrc.cadc.io.DiscardOutputStream;
-import ca.nrc.cadc.util.HexUtil;
 import ca.nrc.cadc.util.Log4jInit;
-import java.io.IOException;
-import java.io.InputStream;
-import java.net.URI;
-import java.security.DigestOutputStream;
-import java.security.MessageDigest;
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Iterator;
-import java.util.List;
-import java.util.Random;
-import java.util.SortedSet;
-import java.util.TreeSet;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
-import org.junit.Assert;
 import org.junit.Before;
-import org.junit.Test;
 import org.opencadc.inventory.StorageLocation;
-import org.opencadc.inventory.storage.ByteRange;
-import org.opencadc.inventory.storage.NewArtifact;
 import org.opencadc.inventory.storage.StorageMetadata;
 import org.opencadc.inventory.storage.test.StorageAdapterByteRangeTest;
 
@@ -110,9 +92,10 @@ public class SwiftByteRangeTest extends StorageAdapterByteRangeTest {
     
     final SwiftStorageAdapter swiftAdapter;
     
-    public SwiftByteRangeTest() {
+    public SwiftByteRangeTest() throws Exception {
         super(new SwiftStorageAdapter());
         this.swiftAdapter = (SwiftStorageAdapter) super.adapter;
+        swiftAdapter.multiBucket = false; // override config
     }
     
     @Before

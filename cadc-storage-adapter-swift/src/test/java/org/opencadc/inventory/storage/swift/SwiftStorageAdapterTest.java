@@ -67,10 +67,20 @@
 
 package org.opencadc.inventory.storage.swift;
 
+import ca.nrc.cadc.util.Log4jInit;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.io.PrintWriter;
+import java.util.ArrayList;
+import java.util.List;
+import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.Test;
 import org.opencadc.inventory.StorageLocation;
+import org.opencadc.inventory.storage.InvalidConfigException;
+import org.opencadc.inventory.storage.StorageEngageException;
 
 /**
  *
@@ -79,28 +89,157 @@ import org.opencadc.inventory.StorageLocation;
 public class SwiftStorageAdapterTest {
     private static final Logger log = Logger.getLogger(SwiftStorageAdapterTest.class);
 
-    SwiftStorageAdapter swiftAdapter;
+    static {
+        Log4jInit.setLevel("org.opencadc.inventory", Level.INFO);
+    }
+    
     
     public SwiftStorageAdapterTest() { 
-        this.swiftAdapter = new SwiftStorageAdapter("test-bucket", 0);
+        
     }
     
     @Test
     public void testGenerateID() throws Exception {
+        SwiftStorageAdapter swiftAdapter = new SwiftStorageAdapter("test-bucket", 3, false);
         // enough to verify that randomness in the scheme doesn't create invalid URI?
         for (int i = 0; i < 20; i++) {
             StorageLocation loc = swiftAdapter.generateStorageLocation();
-            log.info("testGenerateID: " + loc);
+            log.info("testGenerateID (single-bucket): " + loc);
+        }
+        
+        swiftAdapter = new SwiftStorageAdapter("test-bucket", 3, true);
+        // enough to verify that randomness in the scheme doesn't create invalid URI?
+        for (int i = 0; i < 20; i++) {
+            StorageLocation loc = swiftAdapter.generateStorageLocation();
+            log.info("testGenerateID (multi-bucket): " + loc);
         }
     }
     
     @Test
-    public void testBucketeering() throws Exception {
+    public void testBucketeeringSingle() throws Exception {
+        SwiftStorageAdapter swiftAdapter = new SwiftStorageAdapter("test-bucket", 3, false);
         StorageLocation loc = swiftAdapter.generateStorageLocation();
         log.info("testBucketeering created: " + loc);
         
         SwiftStorageAdapter.InternalBucket ibucket = swiftAdapter.toInternalBucket(loc);
+        log.info("internal: " + ibucket);
         StorageLocation actual = swiftAdapter.toExternal(ibucket, loc.getStorageID().toASCIIString());
+        log.info("single-bucket: " + loc + " -> " + ibucket + " -> " + actual);
         Assert.assertEquals(loc, actual);
+    }
+    
+     @Test
+    public void testBucketeeringMulti() throws Exception {
+        SwiftStorageAdapter swiftAdapter = new SwiftStorageAdapter("test-bucket", 3, true);
+        StorageLocation loc = swiftAdapter.generateStorageLocation();
+        log.info("testBucketeering created: " + loc);
+        
+        SwiftStorageAdapter.InternalBucket ibucket = swiftAdapter.toInternalBucket(loc);
+        log.info("internal: " + ibucket);
+        StorageLocation actual = swiftAdapter.toExternal(ibucket, loc.getStorageID().toASCIIString());
+        log.info("single-bucket: " + loc + " -> " + ibucket + " -> " + actual);
+        Assert.assertEquals(loc, actual);
+    }
+    
+    @Test
+    public void testConfigParsing() throws Exception {
+        List<String[]> config = new ArrayList<>();
+        // verify whitespace handling on first three by added extra whitespace
+        config.add(new String[] { SwiftStorageAdapter.CONF_BUCKET, " foo " });
+        config.add(new String[] { SwiftStorageAdapter.CONF_SBLEN, " 3 " });
+        config.add(new String[] { SwiftStorageAdapter.CONF_ENABLE_MULTI, " true " });
+        config.add(new String[] { SwiftStorageAdapter.CONF_ENDPOINT, "https://example.net/v1/auth" });
+        config.add(new String[] { SwiftStorageAdapter.CONF_USER, "somebody" });
+        config.add(new String[] { SwiftStorageAdapter.CONF_KEY, "sombody-has-a-key" });
+        
+        String userHome = System.getProperty("user.home");
+        try {
+            
+            File testHome = new File("build/tmp/test-home");
+            if (!testHome.exists()) {
+                testHome.mkdirs();
+            }
+            System.setProperty("user.home", testHome.getAbsolutePath());
+            
+            File testConfig = new File(testHome, "config");
+            
+            // missing config dir
+            if (testConfig.exists()) {
+                recursiveDelete(testConfig);
+            }
+            
+            try {
+                SwiftStorageAdapter swiftAdapter = new SwiftStorageAdapter();
+                Assert.fail("expected InvalidConfigException - created " + swiftAdapter);
+            } catch (InvalidConfigException expected) {
+                log.info("missing config dir: " + expected);
+            }
+            
+            testConfig.mkdir();
+            
+            // missing config file
+            
+            try {
+                SwiftStorageAdapter swiftAdapter = new SwiftStorageAdapter();
+                Assert.fail("expected InvalidConfigException - created " + swiftAdapter);
+            } catch (InvalidConfigException expected) {
+                log.info("missing config file: " + expected);
+            }
+            
+            File cf = new File(testConfig, SwiftStorageAdapter.CONFIG_FILENAME);
+            
+            // missing config items
+            for (int i = 0; i < config.size() - 1; i++) {
+                writeProps(i, config, cf);
+                try {
+                    SwiftStorageAdapter sa = new SwiftStorageAdapter();
+                    Assert.fail("expected InvalidConfigException - created " + sa);
+                } catch (InvalidConfigException expected) {
+                    log.info("missing config items: " + expected);
+                }
+                cf.delete();
+            }
+
+            // valid config to verify test
+            writeProps(6, config, cf);
+            try {
+                SwiftStorageAdapter swiftAdapter = new SwiftStorageAdapter();
+                Assert.assertEquals("storageBucket", swiftAdapter.storageBucket, "foo");
+                Assert.assertEquals("bucketLength", swiftAdapter.storageBucketLength, 3);
+                Assert.assertTrue("multiBucket", swiftAdapter.multiBucket);
+            } catch (InvalidConfigException ex) {
+                log.error("valid config failed", ex);
+                Assert.fail("syntactically valid config failed: " + ex);
+            } catch (StorageEngageException expected) {
+                log.info("bogus connection info: " + expected);
+            }
+            //cf.delete();
+            
+            
+        } finally {
+            System.setProperty("user.home", userHome);
+        }
+    }
+    
+    private void recursiveDelete(File dir) {
+        if (dir.exists()) {
+            if (dir.isDirectory()) {
+                File[] files = dir.listFiles();
+                for (File f : files) {
+                    recursiveDelete(f);
+                }
+            }
+            dir.delete();
+        }
+    }
+    
+    private void writeProps(int num, List<String[]> props, File f) throws IOException {
+        PrintWriter w = new PrintWriter(f);
+        for (int i = 0; i < num; i++) {
+            String[] ci = props.get(i);
+            w.println(ci[0] + "=" + ci[1]);
+        }
+        w.flush();
+        w.close();
     }
 }

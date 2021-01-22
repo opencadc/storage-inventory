@@ -65,103 +65,27 @@
 ************************************************************************
 */
 
-package org.opencadc.inventory.storage.swift;
+package org.opencadc.inventory.util;
 
-import ca.nrc.cadc.io.ByteLimitExceededException;
-import ca.nrc.cadc.util.Log4jInit;
-import java.io.InputStream;
-import java.net.URI;
-import java.util.Iterator;
-import org.apache.log4j.Level;
-import org.apache.log4j.Logger;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Test;
-import org.opencadc.inventory.StorageLocation;
-import org.opencadc.inventory.storage.NewArtifact;
-import org.opencadc.inventory.storage.StorageMetadata;
-import org.opencadc.inventory.storage.test.StorageAdapterBasicTest;
-import org.opencadc.inventory.storage.test.TestUtil;
+import ca.nrc.cadc.net.ResourceNotFoundException;
+import java.io.IOException;
+
 
 /**
+ * A Selector to provide the InventoryHarvester with a means to gather include (additive) clauses to select appropriate
+ * Artifacts to be included in the metadata sync merge.
  *
  * @author pdowler
  */
-public class SwiftStorageAdapterTest extends StorageAdapterBasicTest {
-    private static final Logger log = Logger.getLogger(SwiftStorageAdapterTest.class);
-
-    static {
-        Log4jInit.setLevel("org.opencadc.inventory", Level.INFO);
-        Log4jInit.setLevel("org.javaswift.joss.client", Level.INFO);
-    }
-    
-    final SwiftStorageAdapter swiftAdapter;
-    
-    public SwiftStorageAdapterTest() {
-        super(new SwiftStorageAdapter());
-        this.swiftAdapter = (SwiftStorageAdapter) super.adapter;
-    }
-    
-    @Before
-    public void cleanupBefore() throws Exception {
-        log.info("cleanupBefore: START");
-        Iterator<StorageMetadata> sbi = swiftAdapter.iterator();
-        while (sbi.hasNext()) {
-            StorageLocation loc = sbi.next().getStorageLocation();
-            swiftAdapter.delete(loc);
-            log.info("\tdeleted: " + loc);
-        }
-        log.info("cleanupBefore: DONE");        
-    }
-    
-    @Test
-    public void testPutLargeStreamReject() {
-        URI artifactURI = URI.create("cadc:TEST/testPutLargeStreamReject");
-        
-        final NewArtifact na = new NewArtifact(artifactURI);
-        
-        // ceph limit of 5GiB
-        long numBytes = (long) 6 * 1024 * 1024 * 1024; 
-        na.contentLength = numBytes;
-            
-        try {
-            InputStream istream = TestUtil.getInputStreamThatFails();
-            log.info("testPutCheckDeleteLargeStreamReject put: " + artifactURI + " " + numBytes);
-            StorageMetadata sm = swiftAdapter.put(na, istream);
-            Assert.fail("expected ByteLimitExceededException, got: " + sm);
-        } catch (ByteLimitExceededException expected) {
-            log.info("caught: " + expected);
-        } catch (Exception ex) {
-            log.error("unexpected exception", ex);
-            Assert.fail("unexpected exception: " + ex);
-        }
-    }
-    
-    // normally disabled because this has to actually upload ~5GiB of garbage before it fails
-    //@Test
-    public void testPutLargeStreamFail() {
-        URI artifactURI = URI.create("cadc:TEST/testPutLargeStreamFail");
-        
-        final NewArtifact na = new NewArtifact(artifactURI);
-        
-        // ceph limit of 5GiB
-        long numBytes = (long) 6 * 1024 * 1024 * 1024; 
-            
-        try {
-            InputStream istream = TestUtil.getInputStreamOfRandomBytes(numBytes);
-            log.info("testPutCheckDeleteLargeStreamFail put: " + artifactURI + " " + numBytes);
-            StorageMetadata sm = swiftAdapter.put(na, istream);
-            
-            Assert.assertFalse("put should have failed, but object exists", swiftAdapter.exists(sm.getStorageLocation()));
-            
-            Assert.fail("expected ByteLimitExceededException, got: " + sm);
-        } catch (ByteLimitExceededException expected) {
-            log.info("caught: " + expected);
-        } catch (Exception ex) {
-            log.error("unexpected exception", ex);
-            Assert.fail("unexpected exception: " + ex);
-        }
-    }
-    
-    
+public interface ArtifactSelector {
+    /**
+     * Obtain a condition used to build a query to include the Artifacts being merged that can be added to the WHERE
+     * clause of artifact sync queries.
+     *
+     * @return SQL constraint for use in the WHERE clause; possibly null
+     * @throws ResourceNotFoundException    For any missing required configuration that is missing.
+     * @throws IOException      For unreadable configuration files.
+     * @throws IllegalStateException    For any invalid configuration.
+     */
+    String getConstraint() throws ResourceNotFoundException, IOException, IllegalStateException;
 }

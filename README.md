@@ -8,24 +8,33 @@ This is the storage inventory data model and architecture documentation.
 These are libraries used in multiple services and applications.
 
 ## baldur
-This is an implementation of the cadc-permissions service API.
+This is an implementation of the **cadc-permissions** service API.
 
 ## critwall
-This is an implementation of the file-sync process that runs at a storage site and downloads files.
+This is an implementation of the **file-sync** process that runs at a storage site and downloads files.
 
 ## fenwick
-This is an implementation of the metadata-sync process that runs at both global inventory and at
+This is an implementation of the **metadata-sync** process that runs at both global inventory and at
 storage sites.
 
 ## luskan
-This is an implementation of an IVOA TAP-1.1 service that enables querying the storage inventory at
+This is an implementation of the IVOA **TAP** service that enables querying the storage inventory at
 both global inventory and storage sites.
 
 ## minoc
-This is an implementation of a file service that supports HEAD, GET, PUT, POST, DELETE operations.
+This is an implementation of a **file** service that supports HEAD, GET, PUT, POST, DELETE operations.
 
 ## raven
-This is an implementation of the global locator service that supports transfer negotiation.
+This is an implementation of the global **locator** service that supports transfer negotiation.
+
+## ratik
+This is an implementation of the **metadata-validate** process that runs at both global inventory and at
+storage sites.
+
+## ringhold
+This is an implementation of part of the **metadata-validate** process that cleans up after a change in 
+local (fenwick) filter policy. This is used if the new fenwick policy excludes artifacts previously
+synced.
 
 ## tantar
-This is an implementation of the file-validate process that compares the inventory database against a back end storage at a storage site.
+This is an implementation of the **file-validate** process that compares the inventory database against a back end storage at a storage site.

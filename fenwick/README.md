@@ -6,7 +6,7 @@ incremental mode (single process running continuously to update a local inventor
 ## configuration
 See the [cadc-java](https://github.com/opencadc/docker-base/tree/master/cadc-java) image docs for general config requirements.
 
-A file called `fenwick.properties` must be made available via the `/config` directory.
+Runtime configuration must be made available via the `/config` directory.
 
 ### fenwick.properties
 ```
@@ -14,28 +14,32 @@ org.opencadc.fenwick.logging = {info|debug}
 
 # inventory database settings
 org.opencadc.inventory.db.SQLGenerator=org.opencadc.inventory.db.SQLGenerator
-org.opencadc.fenwick.db.schema={schema}
-org.opencadc.fenwick.db.username={dbuser}
-org.opencadc.fenwick.db.password={dbpassword}
-org.opencadc.fenwick.db.url=jdbc:postgresql://{server}/{database}
+org.opencadc.fenwick.inventory.schema={schema for inventory database objects}
+org.opencadc.fenwick.inventory.username={username for inventory admin}
+org.opencadc.fenwick.inventory.password={password for inventory admin}
+org.opencadc.fenwick.inventory.url=jdbc:postgresql://{server}/{database}
 
 # Enable Storage Site lookup to synchronize site locations on Artifacts
 org.opencadc.fenwick.trackSiteLocations={true|false}
 
 # remote inventory query service (luskan)
-org.opencadc.fenwick.queryService={resorceID of remote TAP service with inventory data model}
+org.opencadc.fenwick.queryService={resourceID of remote TAP service with inventory data model}
 
 # selectivity
 org.opencadc.fenwick.ArtifactSelector={fully qualified classname of ArtifactSelector implementation}
 ```
+The `inventory` account owns and manages (create, alter, drop) inventory database objects and manages
+all the content (insert, update, delete) in the inventory schema. The database is specified in the JDBC URL. 
+Failure to connect or initialize the database will show up in logs.
 
 ### cadcproxy.pem
 Querying the remote query service (luskan) requires permission. `fenwick` uses this certificate file located
 in /config to authenticate.
 
-### SQL includes
-When the `org.opencadc.fenwick.IncludeArtifacts` ArtifactSelector is specified, the `/config/artifact-filter.sql` SQL file specifying the included Artifacts is required.
-The single clause in the SQL file *MUST* begin with the `WHERE` keyword.
+### artifact-filter.sql (optional)
+When the `org.opencadc.fenwick.IncludeArtifacts` ArtifactSelector is specified, this config file
+specifying the included Artifacts is required. The single clause in the SQL file *MUST* begin with the 
+`WHERE` keyword.
 
 > `artifact-filter.sql`
 ```sql
@@ -60,4 +64,13 @@ docker run -it fenwick:latest /bin/bash
 ```
 docker run --user opencadc:opencadc -v /path/to/external/config:/config:ro --name fenwick fenwick:latest
 ```
-Note: The **opencadc** user is in the latest cadc-java image.
+
+## apply version tags
+```bash
+. VERSION && echo "tags: $TAGS" 
+for t in $TAGS; do
+   docker image tag fenwick:latest fenwick:$t
+done
+unset TAGS
+docker image list fenwick
+```
