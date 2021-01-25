@@ -3,7 +3,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2020.                            (c) 2020.
+ *  (c) 2021.                            (c) 2021.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -114,6 +114,7 @@ public class InventoryValidator implements Runnable {
     private final ArtifactSelector artifactSelector;
     private final BucketSelector bucketSelector;
     private final boolean trackSiteLocations;
+    private final ArtifactValidator artifactValidator;
 
     /**
      * Constructor.
@@ -137,6 +138,7 @@ public class InventoryValidator implements Runnable {
         this.artifactSelector = artifactSelector;
         this.bucketSelector = bucketSelector;
         this.trackSiteLocations = trackSiteLocations;
+        this.artifactValidator = new ArtifactValidator(this.artifactDAO, this.resourceID, this.trackSiteLocations);
 
         try {
             String jndiDataSourceName = (String) daoConfig.get("jndiDataSourceName");
@@ -180,8 +182,7 @@ public class InventoryValidator implements Runnable {
     }
 
     /**
-     * Perform a validate between local Artifacts matching the given uri bucket range
-     * and remote Artifacts included constraints in this harvester's selector.
+     * Validates local and remote sets of Artifacts.
      *
      * @throws ResourceNotFoundException For any missing required configuration that is missing.
      * @throws IOException               For unreadable configuration files.
@@ -191,9 +192,6 @@ public class InventoryValidator implements Runnable {
      */
     void doit() throws ResourceNotFoundException, IOException, IllegalStateException, TransientException,
                        InterruptedException {
-
-        ArtifactValidator artifactValidator = new ArtifactValidator(this.artifactDAO, this.resourceID,
-                                                                    this.trackSiteLocations);
 
         Iterator<String> bucketIterator = this.bucketSelector.getBucketIterator();
         while (bucketIterator.hasNext()) {
@@ -226,16 +224,16 @@ public class InventoryValidator implements Runnable {
                     int compare = compare(localArtifact, remoteArtifact);
                     if (compare == 0) {
                         log.debug("local equals remote");
-                        artifactValidator.validate(localArtifact, remoteArtifact);
+                        validate(localArtifact, remoteArtifact);
                         localArtifact = null;
                         remoteArtifact = null;
                     } else if (compare < 0) {
                         log.debug("local before remote");
-                        artifactValidator.validate(localArtifact, null);
+                        validate(localArtifact, null);
                         localArtifact = null;
                     } else {
                         log.debug("local after remote");
-                        artifactValidator.validate(null, remoteArtifact);
+                        validate(null, remoteArtifact);
                         remoteArtifact = null;
                     }
                 }
@@ -245,8 +243,15 @@ public class InventoryValidator implements Runnable {
         }
     }
 
+    /**
+     * Useful for overriding in tests.
+     *
+     * @param localArtifact the local Artifact.
+     * @param remoteArtifact the remote Artifact.
+     */
     void validate(Artifact localArtifact, Artifact remoteArtifact) {
-        log.debug(String.format("validating local=%s remote=%s", localArtifact, remoteArtifact));
+        log.debug(String.format("validating local %s remote %s", localArtifact, remoteArtifact));
+        artifactValidator.validate(localArtifact, remoteArtifact);
     }
 
     /**
@@ -275,9 +280,18 @@ public class InventoryValidator implements Runnable {
      *
      * @param bucket The bucket prefix.
      * @return ResourceIterator over Artifact's matching the remote filter policy and the uri buckets.
+     *
+     * @throws ResourceNotFoundException For any missing required configuration that is missing.
+     * @throws IOException               For unreadable configuration files.
      */
-    ResourceIterator<Artifact> getLocalIterator(final String bucket) {
-        throw new UnsupportedOperationException("NOT IMPLEMENTED");
+    ResourceIterator<Artifact> getLocalIterator(final String bucket)
+        throws ResourceNotFoundException, IOException {
+        String constraint = null;
+        if (StringUtil.hasText(this.artifactSelector.getConstraint())) {
+            constraint = this.artifactSelector.getConstraint().trim();
+        }
+        boolean sorted = true;
+        return this.artifactDAO.iterator(constraint, bucket); //, sorted
     }
 
     /**
@@ -297,7 +311,7 @@ public class InventoryValidator implements Runnable {
         final TapClient<Artifact> tapClient = new TapClient<>(this.resourceID);
         final String query = buildRemoteQuery(bucket);
         log.debug(String.format("\nExecuting query '%s'\n", query));
-        return tapClient.execute(query, new InventoryValidator.ArtifactRowMapper());
+        return tapClient.execute(query, new ArtifactRowMapper());
     }
 
     /**
