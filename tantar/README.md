@@ -35,6 +35,12 @@ The `inventory` database account owns and manages (create, alter, drop) inventor
 The database is specified in the JDBC URL. Failure to connect or initialize the database will show up in logs and cause
 the application to exit.
 
+The StorageAdapter is a plugin implementation to support the back end storage system. These are implemented in separate libraries; each available implementation is in a library named cadc-storage-adapter-{impl} and the fully qualified class name to use is documented there.
+
+The SQLGenerator is a plugin implementation to support the database. There is currently only one implementation that is tested with PostgeSQL (10+). Making this work with other database servers in future may require a different implementation.
+
+The inventory schema name is the name of the database schema used for all created database objects (tables, indices, etc). This currently must be "inventory" due to configuration limitations in luskan.
+
 Additional java system properties and/or configuration files may be requires to configure the storage adapter.
 
 ### cadcproxy.pem
