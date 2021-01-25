@@ -35,11 +35,35 @@ The `inventory` database account owns and manages (create, alter, drop) inventor
 The database is specified in the JDBC URL. Failure to connect or initialize the database will show up in logs and cause
 the application to exit.
 
-The StorageAdapter is a plugin implementation to support the back end storage system. These are implemented in separate libraries; each available implementation is in a library named cadc-storage-adapter-{impl} and the fully qualified class name to use is documented there.
+The _buckets_ value indicates a subset of inventory database and back end storage to validate. This uses the 
+Artifact.storageLocation.storageBucket values so the exact usage and behaviour depends on the StorageAdapter being used for the
+site. There are two kinds of buckets in use: some StorageAdapter(s) use a short string of hex characters as the bucket and one can
+prefix it to denote fewer but larger buckets (e.g. bucket prefix "0" denotes ~1/16 of the storage locations; the prefix range "0-f"
+denotes the entire storage range). 
 
-The SQLGenerator is a plugin implementation to support the database. There is currently only one implementation that is tested with PostgeSQL (10+). Making this work with other database servers in future may require a different implementation.
+Note: This does not really belong here, but tantar has specific temporary code to support this: the AD StorageAdapter uses archive 
+name as the bucket, so there is no prefixing to subdivide further and no range of buckets: just a single bucket (archive) per tantar instance.
 
-The inventory schema name is the name of the database schema used for all created database objects (tables, indices, etc). This currently must be "inventory" due to configuration limitations in luskan.
+The _StorageAdapter_ is a plugin implementation to support the back end storage system. These are implemented in separate libraries; 
+each available implementation is in a library named cadc-storage-adapter-{impl} and the fully qualified class name to use is documented 
+there.
+
+The _SQLGenerator_ is a plugin implementation to support the database. There is currently only one implementation that is tested with 
+PostgeSQL (10+). Making this work with other database servers in future may require a different implementation.
+
+The inventory _schema name_ is the name of the database schema used for all created database objects (tables, indices, etc). This 
+currently must be "inventory" due to configuration limitations in luskan.
+
+The _ResolutionPolicy_ is a plugin implementation that controls how discrepancies between the inventory database and the back end storage 
+are resolved. The policy specified that one is the definitive source of information about the existence of an Artifact or file and fixes 
+the discrepancy accordingly. The standard policy one would normally use is _org.opencadc.tantar.policy.InventoryIsAlwaysRight_: an Artifact 
+in the database indicates the correct state and a file without an Artifact should be deleted.
+
+To support a read-only storage site where files are added or removed out-of-band, one must use the 
+_org.opencadc.tantar.policy.StorageIsAlwaysRight_ policy. This policy will never delete stored files but it will delete Artifact(s) from the 
+inventory datbase that do not match a stored file (including generate a DeletedArtifactEvent that will propagate to other sites), create new 
+Artifact(s) for files that do not match an existing one, and may modify Artifact metadata in the inventory database to match values from storage.
+This policy makes the back end storage of this site the definitive source for the existence of files.
 
 Additional java system properties and/or configuration files may be requires to configure the storage adapter.
 
