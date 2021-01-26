@@ -68,7 +68,6 @@
 package org.opencadc.minoc;
 
 import ca.nrc.cadc.io.WriteException;
-import ca.nrc.cadc.util.StringUtil;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -91,8 +90,6 @@ public class GetAction extends ArtifactAction {
     private static final Logger log = Logger.getLogger(GetAction.class);
     private static final SodaParamValidator SODA_PARAM_VALIDATOR = new SodaParamValidator();
 
-    // Allow implementor to set the name of the query parameter expected.  Default is left to SODA.
-    private static final String SUB_PARAMETER_NAME_KEY = "sub-parameter";
 
     /**
      * Default, no-arg constructor.
@@ -112,9 +109,7 @@ public class GetAction extends ArtifactAction {
         Artifact artifact = getArtifact(artifactURI);
         HeadAction.setHeaders(artifact, syncOutput);
 
-        final String configuredSubKey = initParams.get(SUB_PARAMETER_NAME_KEY);
-        final String subKey = StringUtil.hasText(configuredSubKey) ? configuredSubKey : SodaParamValidator.SUB;
-        final List<String> requestedSubs = syncInput.getParameters(subKey);
+        final List<String> requestedSubs = syncInput.getParameters(SodaParamValidator.SUB);
 
         StorageLocation storageLocation = new StorageLocation(artifact.storageLocation.getStorageID());
         storageLocation.storageBucket = artifact.storageLocation.storageBucket;
@@ -125,7 +120,7 @@ public class GetAction extends ArtifactAction {
             } else {
                 // If any cutouts were requested
                 final Map<String, List<String>> subMap = new HashMap<>();
-                subMap.put(subKey, requestedSubs);
+                subMap.put(SodaParamValidator.SUB, requestedSubs);
                 final List<ExtensionSlice> slices = SODA_PARAM_VALIDATOR.validateSUB(subMap);
                 final FitsOperations fitsOperations =
                         new FitsOperations(new ProxyRandomAccessFits(this.storageAdapter, artifact.storageLocation,
