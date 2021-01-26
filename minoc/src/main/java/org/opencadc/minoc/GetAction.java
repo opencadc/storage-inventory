@@ -69,6 +69,9 @@ package org.opencadc.minoc;
 
 import ca.nrc.cadc.io.WriteException;
 import ca.nrc.cadc.util.StringUtil;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import org.apache.log4j.Logger;
 import org.opencadc.fits.FitsOperations;
 import org.opencadc.inventory.Artifact;
@@ -77,10 +80,6 @@ import org.opencadc.minoc.operations.ProxyRandomAccessFits;
 import org.opencadc.permissions.ReadGrant;
 import org.opencadc.soda.ExtensionSlice;
 import org.opencadc.soda.SodaParamValidator;
-
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
 
 /**
  * Interface with storage and inventory to get an artifact.
