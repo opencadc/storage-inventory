@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2020.                            (c) 2020.
+*  (c) 2021.                            (c) 2021.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -67,103 +67,146 @@
 
 package org.opencadc.minoc.operations;
 
-import ca.nrc.cadc.io.ReadException;
-import java.io.File;
-import java.io.FileNotFoundException;
+import java.io.ByteArrayOutputStream;
+import java.io.FileDescriptor;
 import java.io.IOException;
-import java.io.OutputStream;
-import java.io.RandomAccessFile;
-import java.util.ArrayList;
-import java.util.List;
-import nom.tam.fits.BasicHDU;
-import nom.tam.fits.Fits;
-import nom.tam.fits.FitsException;
-import nom.tam.fits.Header;
-import nom.tam.util.RandomAccess;
+import java.nio.channels.FileChannel;
+import java.util.SortedSet;
+import java.util.TreeSet;
+import nom.tam.util.RandomAccessDataObject;
 import org.apache.log4j.Logger;
-import org.opencadc.fits.slice.NDimensionalSlicer;
-import org.opencadc.fits.slice.Slices;
 import org.opencadc.inventory.StorageLocation;
+import org.opencadc.inventory.storage.ByteRange;
 import org.opencadc.inventory.storage.StorageAdapter;
-import org.opencadc.inventory.storage.StorageMetadata;
 
 /**
- * Operation on FITS files.
+ * This class supports random read-only access to FITS files using the
+ * nom-tam FITS library.
  * 
  * @author pdowler
  */
-public class FitsOperations {
-    private static final Logger log = Logger.getLogger(FitsOperations.class);
+public class ProxyRandomAccessFits implements RandomAccessDataObject {
+    private static final Logger log = Logger.getLogger(ProxyRandomAccessFits.class);
 
-    private final StorageAdapter storageAdapter;
+    private final StorageAdapter adapter;
+    private final StorageLocation sloc;
+    private final long contentLength;
     
-    public FitsOperations(StorageAdapter storageAdapter) {
-        this.storageAdapter = storageAdapter;
+    private long curpos = 0L;
+    private long markpos = -1L;
+    
+    
+    public ProxyRandomAccessFits(StorageAdapter adapter, StorageLocation sloc, long contentLength) {
+        this.adapter = adapter;
+        this.sloc = sloc;
+        this.contentLength = contentLength;
     }
 
-    public Header getPrimaryHeader(StorageMetadata sm) throws ReadException {
-        try {
-            ProxyRandomAccess istream = new ProxyRandomAccess(storageAdapter, sm.getStorageLocation(), sm.getContentLength());
-            Fits fits = new Fits(istream);
-            
-            BasicHDU hdu = fits.readHDU();
-            Header ret = hdu.getHeader();
-            
-            return ret;
-        } catch (FitsException ex) {
-            throw new RuntimeException("invalid fits data: " + sm.getStorageLocation());
-        } catch (IOException ex) {
-            throw new ReadException("failed to read " + sm.getStorageLocation(), ex);
+    @Override
+    public void close() throws IOException {
+        this.curpos = -1L;
+    }
+
+    @Override
+    public long length() throws IOException {
+        return contentLength;
+    }
+
+    @Override
+    public void seek(long pos) throws IOException {
+        if (pos < 0L || pos > contentLength) {
+            throw new IOException("invalid seek: " + pos);
         }
+        this.curpos = pos;
     }
-    
-    public List<Header> getHeaders(StorageMetadata sm) throws ReadException {
+
+    @Override
+    public long getFilePointer() throws IOException {
+        return curpos;
+    }
+
+    @Override
+    public int read() throws IOException {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public int read(byte[] bytes) throws IOException {
+        return read(bytes, 0, bytes.length);
+    }
+
+    @Override
+    public int read(byte[] bytes, int off, int len) throws IOException {
+        if (curpos == -1L) {
+            throw new IOException("closed");
+        }
         try {
-            List<Header> ret = new ArrayList<>();
-            ProxyRandomAccess istream = new ProxyRandomAccess(storageAdapter, sm.getStorageLocation(), sm.getContentLength());
-            Fits fits = new Fits(istream);
-            
-            BasicHDU hdu = fits.readHDU();
-            while (hdu != null) {
-                Header h = hdu.getHeader();
-                ret.add(h);
-                hdu = fits.readHDU();
+            long avail = Math.min(len, contentLength - curpos); 
+            if (avail == 0) {
+                return -1;
             }
+            ByteRange range = new ByteRange(curpos, avail);
+            SortedSet<ByteRange> ranges = new TreeSet<>();
+            ranges.add(range);
+            ByteArrayOutputStream bos = new ByteArrayOutputStream(len);
+            //log.warn("calling  StorageAdapter.get: curpos=" + curpos + " len=" + len);
+            adapter.get(sloc, bos, ranges);
+            byte[] result = bos.toByteArray();
+
+            int ret = bos.size();
+            System.arraycopy(result, 0, bytes, off, ret);
+            curpos += ret;
+            log.warn("ProxyRandomAccess.read(" + off + "," + len + " read " + ret + " (curpos:" + curpos + ")");
             return ret;
-        } catch (FitsException ex) {
-            throw new RuntimeException("invalid fits data: " + sm.getStorageLocation());
-        } catch (IOException ex) {
-            throw new ReadException("failed to read " + sm.getStorageLocation(), ex);
+        } catch (Exception ex) {
+            throw new IOException("read failed", ex);
         }
     }
 
-    /**
-     * Perform a slice (cutout) of the File identified by the given StorageMetadata.  The cutoutSpec uses the same
-     * specification as the existing Production cutout service
-     * (https://www.cadc-ccda.hia-iha.nrc-cnrc.gc.ca/en/doc/data/#Cutouts).
-     * @param sm                The StorageMetadata to locate the file.
-     * @param cutoutSpec        The cutout specified.  Use the format [EXTENSION_SPEC][{PIXELSTART:PIXELEND}...].
-     * @param outputStream      Where to write the FITS data to.
-     * @throws ReadException    Any errors with I/O.
-     */
-    public void slice(final StorageMetadata sm, final String cutoutSpec, final OutputStream outputStream)
-            throws ReadException {
-        try {
-            final ProxyRandomAccess istream = new ProxyRandomAccess(storageAdapter, sm.getStorageLocation(),
-                                                                    sm.getContentLength());
-            final NDimensionalSlicer slicer = new NDimensionalSlicer();
+    @Override
+    public String readUTF() throws IOException {
+        throw new UnsupportedOperationException();
+    }
 
-            slicer.slice(istream, Slices.fromString(cutoutSpec), outputStream);
-        } catch (FitsException ex) {
-            throw new RuntimeException("invalid fits data: " + sm.getStorageLocation());
-        } catch (IOException ex) {
-            throw new ReadException("failed to read " + sm.getStorageLocation(), ex);
-        }
+    @Override
+    public String readLine() throws IOException {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public void setLength(long l) throws IOException {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public void write(byte[] bytes, int i, int i1) throws IOException {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public void write(byte[] bytes) throws IOException {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public void write(int i) throws IOException {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public void writeUTF(String s) throws IOException {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public FileChannel getChannel() {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public FileDescriptor getFD() throws IOException {
+        throw new UnsupportedOperationException();
     }
     
-    private void scratch() {
-        
-        
-    }
     
 }

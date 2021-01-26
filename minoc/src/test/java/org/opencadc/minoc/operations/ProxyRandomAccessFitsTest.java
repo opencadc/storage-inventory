@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2020.                            (c) 2020.
+*  (c) 2021.                            (c) 2021.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -73,11 +73,11 @@ import ca.nrc.cadc.util.Log4jInit;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
-import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URI;
+import java.nio.file.Files;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
 
 import nom.tam.fits.BasicHDU;
 import nom.tam.fits.Fits;
@@ -88,32 +88,35 @@ import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.Test;
+import org.opencadc.fits.FitsOperations;
 import org.opencadc.inventory.storage.NewArtifact;
 import org.opencadc.inventory.storage.StorageAdapter;
 import org.opencadc.inventory.storage.StorageMetadata;
 import org.opencadc.inventory.storage.fs.OpaqueFileSystemStorageAdapter;
-import org.opencadc.inventory.storage.swift.SwiftStorageAdapter;
+import org.opencadc.soda.ExtensionSlice;
+import org.opencadc.soda.ExtensionSliceFormat;
 
 /**
- *
+ * Test ProxyRandomAccessFits wrapper using filesystem storage adapter for the back end.
+ * 
  * @author pdowler
  */
-public class FitsOperationsTest {
-    private static final Logger log = Logger.getLogger(FitsOperationsTest.class);
+public class ProxyRandomAccessFitsTest {
+    private static final Logger log = Logger.getLogger(ProxyRandomAccessFitsTest.class);
 
     static {
         Log4jInit.setLevel("org.opencadc.minoc.operations", Level.DEBUG);
         //Log4jInit.setLevel("org.opencadc.inventory.storage.fs", Level.DEBUG);
     }
 
-    public FitsOperationsTest() {
+    public ProxyRandomAccessFitsTest() { 
     }
 
     @Test
     public void testGetPrimaryHeader() {
         try {
             // setup
-            File testFile = FileUtil.getFileFromResource("sample-mef.fits", FitsOperationsTest.class);
+            File testFile = FileUtil.getFileFromResource("sample-mef.fits", ProxyRandomAccessFitsTest.class);
             FileInputStream fis = new FileInputStream(testFile);
             File rootDir = new File("build/tmp/saroot");
             if (!rootDir.exists()) {
@@ -123,12 +126,10 @@ public class FitsOperationsTest {
             NewArtifact na = new NewArtifact(URI.create("cadc:TEST/" + testFile.getName()));
             na.contentLength = testFile.length();
             StorageMetadata sm = sa.put(na, fis);
-
-            // caller will construct this from requested Artifact
-            StorageMetadata target = new StorageMetadata(sm.getStorageLocation(), sm.getContentChecksum(), sm.getContentLength());
-
-            FitsOperations fop = new FitsOperations(sa);
-            Header h = fop.getPrimaryHeader(target);
+            ProxyRandomAccessFits in = new ProxyRandomAccessFits(sa, sm.getStorageLocation(), testFile.length());
+            
+            FitsOperations fop = new FitsOperations(in);
+            Header h = fop.getPrimaryHeader();
             //h.dumpHeader(System.out);
             Cursor<String,HeaderCard> iter = h.iterator();
             for (int i = 0; i <= 5; i++) {
@@ -150,7 +151,7 @@ public class FitsOperationsTest {
     public void testGetHeaders() {
         try {
             // setup
-            File testFile = FileUtil.getFileFromResource("sample-mef.fits", FitsOperationsTest.class);
+            File testFile = FileUtil.getFileFromResource("sample-mef.fits", ProxyRandomAccessFitsTest.class);
             FileInputStream fis = new FileInputStream(testFile);
             File rootDir = new File("build/tmp/saroot");
             if (!rootDir.exists()) {
@@ -160,13 +161,11 @@ public class FitsOperationsTest {
             NewArtifact na = new NewArtifact(URI.create("cadc:TEST/" + testFile.getName()));
             na.contentLength = testFile.length();
             StorageMetadata sm = sa.put(na, fis);
+            ProxyRandomAccessFits in = new ProxyRandomAccessFits(sa, sm.getStorageLocation(), testFile.length());
 
-            // caller will construct this from requested Artifact
-            StorageMetadata target = new StorageMetadata(sm.getStorageLocation(), sm.getContentChecksum(), sm.getContentLength());
-
-            FitsOperations fop = new FitsOperations(sa);
-            List<Header> hdrs = fop.getHeaders(target);
-
+            FitsOperations fop = new FitsOperations(in);
+            List<Header> hdrs = fop.getHeaders();
+            
             for (int i = 0; i < hdrs.size(); i++) {
                 Header h = hdrs.get(i);
                 log.info("** header: " + i);
@@ -187,36 +186,55 @@ public class FitsOperationsTest {
     }
 
     @Test
-    public void testCutout() {
+    public void testCutoutToStream() {
         try {
-            final String cutoutSpec = "[SCI,10][80:220,100:150][1][10:16,70:90][106][8:32,88:112][126]";
-            final File expectedMEFFile = FileUtil.getFileFromResource("test-hst-mef-cutout.fits", FitsOperationsTest.class);
-            final File testMEFFile = FileUtil.getFileFromResource("test-hst-mef.fits", FitsOperationsTest.class);
-            final StorageAdapter storageAdapter = new SwiftStorageAdapter();
-            final FitsOperations testSubject = new FitsOperations(storageAdapter);
+            final List<ExtensionSlice> slices = new ArrayList<>();
+            final ExtensionSliceFormat format = new ExtensionSliceFormat();
 
-            final String artifactName = "swift-int-test-" + UUID.randomUUID();
-            final NewArtifact newArtifact = new NewArtifact(URI.create("cadc:TEST/" + artifactName));
+            slices.add(format.parse("[2][10:20,40:90]"));
+            slices.add(format.parse("[3][*,40:90]"));
 
-            final StorageMetadata storageMetadata;
-            try (final InputStream inputStream = new FileInputStream(testMEFFile)) {
-                 storageMetadata = storageAdapter.put(newArtifact, inputStream);
+            File testFile = FileUtil.getFileFromResource("sample-mef.fits", ProxyRandomAccessFitsTest.class);
+            FileInputStream fis = new FileInputStream(testFile);
+            File rootDir = new File("build/tmp/saroot");
+            if (!rootDir.exists()) {
+                rootDir.mkdirs();
             }
 
-            final File outputFile = File.createTempFile(FitsOperationsTest.class.getSimpleName(), ".fits");
+            StorageAdapter sa = new OpaqueFileSystemStorageAdapter(rootDir, 1);
+            NewArtifact na = new NewArtifact(URI.create("cadc:TEST/" + testFile.getName()));
+            na.contentLength = testFile.length();
+            StorageMetadata sm = sa.put(na, fis);
+
+            ProxyRandomAccessFits in = new ProxyRandomAccessFits(sa, sm.getStorageLocation(), testFile.length());
+            FitsOperations fop = new FitsOperations(in);
+
+            final File outputFile =
+                    Files.createTempFile(ProxyRandomAccessFitsTest.class.getSimpleName() + "-", ".fits").toFile();
             outputFile.deleteOnExit();
-
             try (final OutputStream outputStream = new FileOutputStream(outputFile)) {
-                testSubject.slice(storageMetadata, cutoutSpec, outputStream);
+                fop.cutoutToStream(slices, outputStream);
+                outputStream.flush();
             }
 
-            final Fits expectedFits = new Fits(expectedMEFFile);
-            final Fits resultFits = new Fits(outputFile);
+            // The NOM TAM FITS library ought ot be able to read it in without issue.
+            final Fits expectedFits = new Fits(outputFile);
+            BasicHDU<?> hdu;
+            int index = 0;
 
-            final BasicHDU<?>[] expectedHDUList = expectedFits.read();
-            final BasicHDU<?>[] resultHDUList = resultFits.read();
-
-            Assert.assertEquals("Wrong number of HDUs.", expectedHDUList.length, resultHDUList.length);
+            while ((hdu = expectedFits.readHDU()) != null) {
+                Header h = hdu.getHeader();
+                log.info("** header: " + index);
+                Cursor<String,HeaderCard> iter = h.iterator();
+                for (int c = 0; c <= 5; c++) {
+                    HeaderCard hc = iter.next();
+                    log.info(hc.getKey() + " = " + hc.getValue());
+                }
+                long nbytes = h.getDataSize();
+                log.info("** data size: " + nbytes);
+                log.info("...");
+                index++;
+            }
         } catch (Exception unexpected) {
             log.error("unexpected exception", unexpected);
             Assert.fail("unexpected exception: " + unexpected);

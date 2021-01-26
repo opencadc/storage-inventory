@@ -131,100 +131,65 @@ public class FitsOperationsTest extends MinocTest {
     @Test
     public void testCompressed() throws Exception {
         final String testFilePrefix = "test-compressed";
-        final URI artifactURI = URI.create("cadc:TEST/" + testFilePrefix + ".fz");
-        ensureFile(artifactURI);
+        final String testFileExtension = "fz";
+        final URI artifactURI = URI.create("cadc:TEST/" + testFilePrefix + "." + testFileExtension);
+        final String[] cutoutSpecs = new String[] {
+                "[0][*,100:400]"
+        };
 
-        final String cutoutSpec = "[0][*,100:400]";
-        final URL artifactSUBURL = new URL(filesURL + "/" + artifactURI.toString() + "?SUB="
-                                           + NetUtil.encode(cutoutSpec));
-        final File outputFile = Files.createTempFile(testFilePrefix + "-", ".fits").toFile();
-        LOGGER.debug("Writing cutout to " + outputFile);
-
-        // Perform the cutout.
-        Subject.doAs(userSubject, (PrivilegedExceptionAction<Boolean>) () -> {
-            LOGGER.debug("Testing cutout with " + artifactSUBURL);
-            try (final FileOutputStream fileOutputStream = new FileOutputStream(outputFile)) {
-                final HttpGet cutoutClient = new HttpGet(artifactSUBURL, fileOutputStream);
-                cutoutClient.setFollowRedirects(true);
-                cutoutClient.run();
-                fileOutputStream.flush();
-            }
-
-            LOGGER.debug("Cutout complete -> " + artifactURI);
-            return Boolean.TRUE;
-        });
-
-        // setup
-        final File expectedFile = new File(DEFAULT_DATA_PATH.toFile(), testFilePrefix + "-cutout.fits");
-        ensureLocalFile(expectedFile);
-        final RandomAccessDataObject expectedCutout = new RandomAccessFileExt(expectedFile, "r");
-        final Fits expectedFits = new Fits(expectedCutout);
-
-        final RandomAccessDataObject resultCutout = new RandomAccessFileExt(outputFile, "r");
-        final Fits resultFits = new Fits(resultCutout);
-
-        FitsTest.assertFitsEqual(expectedFits, resultFits);
+        uploadAndCompare(artifactURI, cutoutSpecs, testFilePrefix, testFileExtension);
     }
 
     @Test
     public void testSimple() throws Exception {
         final String testFilePrefix = "test-simple";
-        final URI artifactURI = URI.create("cadc:TEST/" + testFilePrefix + ".fits");
-        ensureFile(artifactURI);
+        final String testFileExtension = "fits";
+        final URI artifactURI = URI.create("cadc:TEST/" + testFilePrefix + "." + testFileExtension);
+        final String[] cutoutSpecs = new String[] {
+                "[0][200:350,100:300]"
+        };
 
-        final String cutoutSpec = "[0][200:350,100:300]";
-        final URL artifactSUBURL = new URL(filesURL + "/" + artifactURI.toString() + "?SUB="
-                                           + NetUtil.encode(cutoutSpec));
-        final File outputFile = Files.createTempFile(testFilePrefix + "-", ".fits").toFile();
-        LOGGER.debug("Writing cutout to " + outputFile);
-
-        // Perform the cutout.
-        Subject.doAs(userSubject, (PrivilegedExceptionAction<Boolean>) () -> {
-            LOGGER.debug("Testing cutout with " + artifactSUBURL);
-            try (final FileOutputStream fileOutputStream = new FileOutputStream(outputFile)) {
-                final HttpGet cutoutClient = new HttpGet(artifactSUBURL, fileOutputStream);
-                cutoutClient.setFollowRedirects(true);
-                cutoutClient.run();
-                fileOutputStream.flush();
-            }
-
-            LOGGER.debug("Cutout complete -> " + artifactURI);
-            return Boolean.TRUE;
-        });
-
-        // setup
-        final File expectedFile = new File(DEFAULT_DATA_PATH.toFile(), testFilePrefix + "-cutout.fits");
-        ensureLocalFile(expectedFile);
-        final RandomAccessDataObject expectedCutout = new RandomAccessFileExt(expectedFile, "r");
-        final Fits expectedFits = new Fits(expectedCutout);
-
-        final RandomAccessDataObject resultCutout = new RandomAccessFileExt(outputFile, "r");
-        final Fits resultFits = new Fits(resultCutout);
-
-        FitsTest.assertFitsEqual(expectedFits, resultFits);
+        uploadAndCompare(artifactURI, cutoutSpecs, testFilePrefix, testFileExtension);
     }
 
     @Test
     public void testMEF() throws Exception {
         final String testFilePrefix = "test-mef";
-        final URI artifactURI = URI.create("cadc:TEST/" + testFilePrefix + ".fits");
-        ensureFile(artifactURI);
-
+        final String testFileExtension = "fits";
+        final URI artifactURI = URI.create("cadc:TEST/" + testFilePrefix + "." + testFileExtension);
         final String[] cutoutSpecs = new String[]{
                 "[116][100:250,*]",
                 "[SCI,14][100:125,100:175]",
                 "[91][*,90:255]"
         };
 
+        uploadAndCompare(artifactURI, cutoutSpecs, testFilePrefix, testFileExtension);
+    }
+
+    @Test
+    public void testFITSCompliance() throws Exception {
+        final String testFilePrefix = "test-fits-compliance";
+        final String testFileExtension = "fits";
+        final URI artifactURI = URI.create("cadc:TEST/" + testFilePrefix + "." + testFileExtension);
+        final String[] cutoutSpecs = new String[] {
+                "[3][*,1:100]",
+                "[4][50:90,*]"
+        };
+
+        uploadAndCompare(artifactURI, cutoutSpecs, testFilePrefix, testFileExtension);
+    }
+
+    private void uploadAndCompare(final URI artifactURI, final String[] cutoutSpecs, final String testFilePrefix,
+                                  final String testFileExtension) throws Exception {
+        ensureFile(artifactURI);
         final StringBuilder queryStringBuilder = new StringBuilder("?");
-        Arrays.stream(cutoutSpecs).forEach(cut -> {
-            queryStringBuilder.append("SUB=").append(NetUtil.encode(cut)).append("&");
-        });
+        Arrays.stream(cutoutSpecs).
+                forEach(cut -> queryStringBuilder.append("SUB=").append(NetUtil.encode(cut)).append("&"));
 
         queryStringBuilder.deleteCharAt(queryStringBuilder.lastIndexOf("&"));
 
         final URL artifactSUBURL = new URL(filesURL + "/" + artifactURI.toString() + queryStringBuilder.toString());
-        final File outputFile = Files.createTempFile(testFilePrefix + "-", ".fits").toFile();
+        final File outputFile = Files.createTempFile(testFilePrefix + "-", "." + testFileExtension).toFile();
         LOGGER.debug("Writing cutout to " + outputFile);
 
         // Perform the cutout.
@@ -254,6 +219,11 @@ public class FitsOperationsTest extends MinocTest {
         FitsTest.assertFitsEqual(expectedFits, resultFits);
     }
 
+    /**
+     * Perform an upload to the local Minoc, then perform the cutout against it in the service.
+     * @param artifactURI   The URI to ensure.
+     * @throws Exception    Any errors.
+     */
     private void ensureFile(final URI artifactURI) throws Exception {
         LOGGER.info("ensureLocalFile(" + artifactURI + ")");
         final URL artifactURL = new URL(filesURL + "/" + artifactURI.toString());
@@ -282,10 +252,8 @@ public class FitsOperationsTest extends MinocTest {
 
         final String schemePath = artifactURI.getSchemeSpecificPart();
         final String fileName = schemePath.substring(schemePath.lastIndexOf("/") + 1);
-
-        LOGGER.info("Downloading " + artifactURI);
-
         final File localFile = new File(DEFAULT_DATA_PATH.toFile(), fileName);
+
         ensureLocalFile(localFile);
 
         try (final FileInputStream fileInputStream = new FileInputStream(localFile)) {

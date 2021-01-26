@@ -73,7 +73,7 @@ import org.apache.log4j.Logger;
 import org.opencadc.fits.FitsOperations;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.StorageLocation;
-import org.opencadc.minoc.operations.ProxyRandomAccess;
+import org.opencadc.minoc.operations.ProxyRandomAccessFits;
 import org.opencadc.permissions.ReadGrant;
 import org.opencadc.soda.ExtensionSlice;
 import org.opencadc.soda.SodaParamValidator;
@@ -129,8 +129,8 @@ public class GetAction extends ArtifactAction {
                 subMap.put(subKey, requestedSubs);
                 final List<ExtensionSlice> slices = SODA_PARAM_VALIDATOR.validateSUB(subMap);
                 final FitsOperations fitsOperations =
-                        new FitsOperations(new ProxyRandomAccess(this.storageAdapter, artifact.storageLocation,
-                                                                 artifact.getContentLength()));
+                        new FitsOperations(new ProxyRandomAccessFits(this.storageAdapter, artifact.storageLocation,
+                                                                     artifact.getContentLength()));
                 fitsOperations.cutoutToStream(slices, syncOutput.getOutputStream());
             }
         } catch (WriteException e) {
