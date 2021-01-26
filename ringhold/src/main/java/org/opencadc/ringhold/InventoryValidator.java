@@ -124,7 +124,7 @@ public class InventoryValidator implements Runnable {
         final ObsoleteStorageLocationDAO obsoleteStorageLocationDAO = new ObsoleteStorageLocationDAO(this.artifactDAO);
 
         try (final ResourceIterator<Artifact> artifactIterator =
-            this.artifactIteratorDAO.iterator(this.deselector, null)) {
+            this.artifactIteratorDAO.iterator(this.deselector, null, false)) {
             while (artifactIterator.hasNext()) {
                 Artifact deselectorArtifact = artifactIterator.next();
                 log.debug("START: Process Artifact " + deselectorArtifact.getID() + " " + deselectorArtifact.getURI());
