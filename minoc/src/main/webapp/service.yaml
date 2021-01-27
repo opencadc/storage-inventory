@@ -1,6 +1,6 @@
 swagger: '2.0'
 info:
-  version: '0.1'
+  version: '0.6'
   title: Artifact storage and management service (minoc)
   description: 'A programmatic interface for storing, retrieving and managing artifacts at a storage site.<br/><br/>Clients may authenticate to this service in one of three ways:<br/>1.  By supplying an authentication token and using it as the auth-token parameter in the path.  URLs containing auth-tokens can be retrieved from the global locate service.<br/>2.  By providing a cookie in the Cookie header<br/>3.  By using a client certificate over SSL.'
 basePath: '/minoc'
@@ -15,7 +15,7 @@ paths:
       required: true
     get:
       description: |
-        Download the file identified by parameter artifact-uri.
+        Download the file identified by parameter artifact-uri, optionally cutting a specific sub-region of an image (if applicable).
       tags:
         - Artifact transfer
       summary: Download a file
@@ -50,9 +50,9 @@ paths:
         '503':
           description: Service busy
       parameters:
-       - name: cutout
+       - name: SUB
          in: query
-         description: cutouts to be applied on fits files
+         description: sub-region of a FITS file image (e.g. "?SUB=[0][100:300]&SUB=[SCI,3][300:500,*]")
          required: false
          type: array
          items:
@@ -233,9 +233,9 @@ paths:
         '503':
           description: Service busy
       parameters:
-       - name: cutout
+       - name: SUB
          in: query
-         description: cutouts to be applied on fits files
+         description: sub-region of a FITS file image (e.g. "?SUB=[0][100:300]&SUB=[SCI,3][300:500,*]")
          required: false
          type: array
          items:
