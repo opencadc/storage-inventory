@@ -210,29 +210,25 @@ public class InventoryValidator implements Runnable {
                     if (remoteArtifact == null) {
                         remoteArtifact = remoteIterator.hasNext() ? remoteIterator.next() : null;
                     }
-                    log.debug(String.format("validating Artifacts:\nlocal %s\nremote %s",
-                                            localArtifact, remoteArtifact));
-
                     // TODO sanity check? if either iterator has no results in the first loop, exit?
                     if (localArtifact == null && remoteArtifact == null) {
                         artifactsToValidate = false;
                         continue;
                     }
+                    log.debug(String.format("comparing Artifacts:\n local - %s\nremote - %s",
+                                            localArtifact, remoteArtifact));
 
                     // check if Artifacts are the same, or if the local Artifact
                     // precedes or follows the remote Artifact.
-                    int compare = compare(localArtifact, remoteArtifact);
-                    if (compare == 0) {
-                        log.debug("local equals remote");
+                    int order = orderArtifacts(localArtifact, remoteArtifact);
+                    if (order == 0) {
                         validate(localArtifact, remoteArtifact);
                         localArtifact = null;
                         remoteArtifact = null;
-                    } else if (compare < 0) {
-                        log.debug("local before remote");
+                    } else if (order < 0) {
                         validate(localArtifact, null);
                         localArtifact = null;
                     } else {
-                        log.debug("local after remote");
                         validate(null, remoteArtifact);
                         remoteArtifact = null;
                     }
@@ -250,28 +246,40 @@ public class InventoryValidator implements Runnable {
      * @param remoteArtifact the remote Artifact.
      */
     void validate(Artifact localArtifact, Artifact remoteArtifact) {
-        log.debug(String.format("validating local %s remote %s", localArtifact, remoteArtifact));
+        log.debug(String.format("validating:\n local - %s\nremote - %s", localArtifact, remoteArtifact));
         artifactValidator.validate(localArtifact, remoteArtifact);
     }
 
     /**
-     * Compare two Artifacts on the String representation of Artifact.uri.
+     * Order two Artifacts on the String representation of Artifact.uri.
      * Must match the ordering of a postgresql ORDER BY ASC on Artifact.uri.
      * - if local equals remote returns 0.
      * - if local lexicographically precedes remote returns a negative value.
      * - if local lexicographically follows remote returns a positive value.
      */
-    int compare(Artifact localArtifact, Artifact remoteArtifact) {
-        log.debug(String.format("compare local%s - remote%s", localArtifact, remoteArtifact));
+    int orderArtifacts(Artifact localArtifact, Artifact remoteArtifact) {
+        log.debug(String.format("order artifact uri's:\n local - %s\nremote - %s",
+                                localArtifact == null ? "null" : localArtifact.getURI(),
+                                remoteArtifact == null ? "null" : remoteArtifact.getURI()));
         int result;
         if (localArtifact == null) {
-            result = -1;
-        } else if (remoteArtifact == null) {
             result = 1;
+        } else if (remoteArtifact == null) {
+            result = -1;
         } else {
             result = localArtifact.getURI().toString().compareTo(remoteArtifact.getURI().toString());
         }
-        log.debug("compare result: " + result);
+        if (log.isDebugEnabled()) {
+            String message;
+            if (result == 0) {
+                message = "local equals remote";
+            } else if (result < 0) {
+                message = "local before remote";
+            } else {
+                message = "local after remote";
+            }
+            log.debug("order: " + message);
+        }
         return result;
     }
 
@@ -290,8 +298,9 @@ public class InventoryValidator implements Runnable {
         if (StringUtil.hasText(this.artifactSelector.getConstraint())) {
             constraint = this.artifactSelector.getConstraint().trim();
         }
-        boolean sorted = true;
-        return this.artifactDAO.iterator(constraint, bucket); //, sorted
+        // order query results by Artifact.uri
+        boolean ordered = true;
+        return this.artifactDAO.iterator(constraint, bucket, ordered);
     }
 
     /**
