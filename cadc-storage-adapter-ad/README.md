@@ -10,3 +10,6 @@ This library currently provides a partial implementation of the StorageAdapter p
 _org.opencadc.inventory.storage.ad.AdStorageAdapter_ 
 supports get and iterator (streaming list) so can be used in a read-only minoc instance and a tantar instance with the 
 _StorageIsAlwaysRight_ policy.
+
+The AdStorageAdapter must authenticate to the AD TAP service for storage back end queries; this uses the cadcproxy.pem client certificate. 
+The identity used must have permission to query the archive(s).
