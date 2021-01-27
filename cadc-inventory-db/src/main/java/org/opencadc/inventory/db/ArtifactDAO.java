@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2020.                            (c) 2020.
+*  (c) 2021.                            (c) 2021.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -170,7 +170,9 @@ public class ArtifactDAO extends AbstractDAO<Artifact> {
         long t = System.currentTimeMillis();
 
         try {
-            SQLGenerator.ArtifactIteratorQuery iter = (SQLGenerator.ArtifactIteratorQuery) gen.getEntityIteratorQuery(Artifact.class, true);
+            SQLGenerator.ArtifactIteratorQuery iter = (SQLGenerator.ArtifactIteratorQuery) gen.getEntityIteratorQuery(Artifact.class);
+            iter.setStorageLocationRequired(true);
+            iter.setOrderedOutput(true);
             iter.setPrefix(storageBucketPrefix);
             return iter.query(dataSource);
         } finally {
@@ -193,7 +195,9 @@ public class ArtifactDAO extends AbstractDAO<Artifact> {
         long t = System.currentTimeMillis();
 
         try {
-            SQLGenerator.ArtifactIteratorQuery iter = (SQLGenerator.ArtifactIteratorQuery) gen.getEntityIteratorQuery(Artifact.class, false);
+            SQLGenerator.ArtifactIteratorQuery iter = (SQLGenerator.ArtifactIteratorQuery) gen.getEntityIteratorQuery(Artifact.class);
+            iter.setStorageLocationRequired(false);
+            iter.setOrderedOutput(true);
             iter.setPrefix(uriBucketPrefix);
             return iter.query(dataSource);
         } finally {
@@ -211,16 +215,19 @@ public class ArtifactDAO extends AbstractDAO<Artifact> {
      * 
      * @param criteria conditions for selecting artifacts
      * @param uriBucketPrefix null, prefix, or complete Artifact.uriBucket string
-     * @return iterator over artifacts without a StorageLocation
+     * @param ordered order by Artifact.uri (true) or not ordered (false)
+     * @return iterator over artifacts matching criteria
      */
-    public ResourceIterator iterator(String criteria, String uriBucketPrefix) {
+    public ResourceIterator iterator(String criteria, String uriBucketPrefix, boolean ordered) {
         checkInit();
         long t = System.currentTimeMillis();
 
         try {
-            SQLGenerator.ArtifactIteratorQuery iter = (SQLGenerator.ArtifactIteratorQuery) gen.getEntityIteratorQuery(Artifact.class, false);
+            SQLGenerator.ArtifactIteratorQuery iter = (SQLGenerator.ArtifactIteratorQuery) gen.getEntityIteratorQuery(Artifact.class);
+            //iter.setStorageLocationRequired(null); // null aka all artifacts
             iter.setPrefix(uriBucketPrefix);
-            iter.setWhereClause(criteria);
+            iter.setCriteria(criteria);
+            iter.setOrderedOutput(ordered);
             return iter.query(dataSource);
         } finally {
             long dt = System.currentTimeMillis() - t;
