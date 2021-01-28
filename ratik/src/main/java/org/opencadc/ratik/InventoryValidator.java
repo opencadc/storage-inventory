@@ -245,7 +245,8 @@ public class InventoryValidator implements Runnable {
      * @param localArtifact the local Artifact.
      * @param remoteArtifact the remote Artifact.
      */
-    void validate(Artifact localArtifact, Artifact remoteArtifact) {
+    void validate(Artifact localArtifact, Artifact remoteArtifact)
+        throws InterruptedException, ResourceNotFoundException, TransientException, IOException {
         log.debug(String.format("validating:\n local - %s\nremote - %s", localArtifact, remoteArtifact));
         artifactValidator.validate(localArtifact, remoteArtifact);
     }
