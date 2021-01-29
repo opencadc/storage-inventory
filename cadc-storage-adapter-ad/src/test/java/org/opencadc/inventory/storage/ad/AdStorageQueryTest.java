@@ -71,134 +71,89 @@ package org.opencadc.inventory.storage.ad;
 import ca.nrc.cadc.util.Log4jInit;
 import java.net.URI;
 import java.util.ArrayList;
-import java.util.Iterator;
+import java.util.Date;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
-import org.junit.Ignore;
 import org.junit.Test;
-import org.opencadc.inventory.StorageLocation;
+
 import org.opencadc.inventory.storage.StorageMetadata;
+import org.opencadc.tap.TapRowMapper;
 
-public class AdStorageIteratorTest {
 
-    private static final Logger log = Logger.getLogger(AdStorageIteratorTest.class);
+public class AdStorageQueryTest {
+
+    private static final Logger log = Logger.getLogger(AdStorageQueryTest.class);
 
     static {
         Log4jInit.setLevel("org.opencadc.inventory.storage", Level.DEBUG);
     }
 
     @Test
-    public void testGetIterator() throws Exception {
-        ArrayList<StorageMetadata> duplicates = new ArrayList<StorageMetadata>();
+    public void testStorageURI() throws Exception {
+        // Gemini cadc scheme
+        AdStorageQuery query = new AdStorageQuery("Gemini");
+        TapRowMapper mapper = query.getRowMapper();
+        ArrayList<Object> row = new ArrayList<>(7);
+        row.add("Gemini");
+        row.add(new URI("cadc:Gemini/foo_th.jpg"));
+        row.add(new URI("abc"));
+        row.add(new Long(33));
+        row.add("");
+        row.add("application/fits");
+        Date now = new Date(System.currentTimeMillis());
+        row.add(now);
+        StorageMetadata metadata = (StorageMetadata) mapper.mapRow(row);
+        Assert.assertTrue("ad:GEM/foo_th.jpg".equals(metadata.getStorageLocation().getStorageID().toString()));
+        Assert.assertTrue(metadata.getStorageLocation().storageBucket.equals("Gemini"));
+        Assert.assertTrue(metadata.getContentChecksum().toString().equals("md5:abc"));
+        Assert.assertEquals(33, metadata.getContentLength().longValue());
+        Assert.assertTrue(metadata.contentEncoding.equals(""));
+        Assert.assertTrue(metadata.contentType.equals("application/fits"));
+        Assert.assertEquals(now, metadata.contentLastModified);
+        Assert.assertTrue(metadata.artifactURI.toString().equals("cadc:Gemini/foo_th.jpg"));
 
-        for (int i = 0; i < 7; i++) {
-            duplicates.add(getStorageMetadata(i));
-        }
+        // Gemini gemini scheme
+        query = new AdStorageQuery("Gemini");
+        mapper = query.getRowMapper();
+        row = new ArrayList<>(7);
+        row.add("Gemini");
+        row.add(new URI("gemini:Gemini/foo.fits"));
+        row.add(new URI("md5:abc"));
+        row.add(new Long(33));
+        row.add("");
+        row.add("application/fits");
+        row.add(new Date(System.currentTimeMillis()));
+        metadata = (StorageMetadata) mapper.mapRow(row);
+        Assert.assertTrue("gemini:GEM/foo.fits".equals(metadata.getStorageLocation().getStorageID().toString()));
 
-        duplicates.add(0, duplicates.get(0));
-        duplicates.add(5, duplicates.get(5));
-        duplicates.add(8, duplicates.get(8));
+        // MAST
+        query = new AdStorageQuery("HST");
+        mapper = query.getRowMapper();
+        row = new ArrayList<>(7);
+        row.add("HST");
+        row.add(new URI("mast:HST/foo.fits"));
+        row.add(new URI("md5:abc"));
+        row.add(new Long(33));
+        row.add("");
+        row.add("application/fits");
+        row.add(new Date(System.currentTimeMillis()));
+        metadata = (StorageMetadata) mapper.mapRow(row);
+        Assert.assertTrue("mast:HST/foo.fits".equals(metadata.getStorageLocation().getStorageID().toString()));
 
-        int count = 0;
-        Iterator<StorageMetadata> dupIter = duplicates.iterator();
-        while (dupIter.hasNext()) {
-            StorageMetadata curMeta = dupIter.next();
-            count++;
-            log.debug("position: " + count + ": " + curMeta);
-        }
-
-        Assert.assertEquals("expected array count is 10 but got " + count, 10, count);
-
-        log.debug("array with duplicates size:  " + count + "\n");
-
-        AdStorageIterator asi = new AdStorageIterator(duplicates.iterator());
-
-        count = 0;
-        while (asi.hasNext()) {
-            StorageMetadata curMeta = asi.next();
-            count++;
-            log.debug("position: " + count + ": " + curMeta);
-        }
-
-        Assert.assertEquals("expected filtered array count is 7 but got " + count, 7, count);
-        log.debug("total items from AdStorageIterator: " + count);
-    }
-    
-    @Test
-    public void testGetIteratorFirstRowNull() throws Exception {
-        ArrayList<StorageMetadata> rows = new ArrayList<StorageMetadata>();
-
-        rows.add(null);
-        int numRows = 3;
-        for (int i = 0; i < numRows; i++) {
-            rows.add(getStorageMetadata(i));
-        }
-
-        int count = 0;
-        AdStorageIterator iterator = new AdStorageIterator(rows.iterator());
-        while (iterator.hasNext()) {
-            StorageMetadata storageMetadata = iterator.next();
-            count++;
-            log.debug("position: " + count + ": " + storageMetadata);
-        }
-        Assert.assertEquals("expected rows: " + numRows + ", actual rows: " + count, numRows, count);
-    }
-
-    @Test
-    public void testGetIteratorWithNull() throws Exception {
-        ArrayList<StorageMetadata> rows = new ArrayList<StorageMetadata>();
-
-        int numRows = 6;
-        for (int i = 0; i < numRows; i++) {
-            if (i == 2) {
-                rows.add(null);
-            }
-            if (i == 4) {
-                rows.add(null);
-                rows.add(null);
-            }
-            rows.add(getStorageMetadata(i));
-        }
-
-        int count = 0;
-        AdStorageIterator iterator = new AdStorageIterator(rows.iterator());
-        while (iterator.hasNext()) {
-            StorageMetadata storageMetadata = iterator.next();
-            count++;
-            log.debug("position: " + count + ": " + storageMetadata);
-        }
-        Assert.assertEquals("expected rows: " + numRows + ", actual rows: " + count, numRows, count);
-    }
-
-    @Test
-    public void testGetIteratorLastRowNull() throws Exception {
-        ArrayList<StorageMetadata> rows = new ArrayList<StorageMetadata>();
-
-        int numRows = 3;
-        for (int i = 0; i < numRows; i++) {
-            rows.add(getStorageMetadata(i));
-        }
-        rows.add(null);
-
-        int count = 0;
-        AdStorageIterator iterator = new AdStorageIterator(rows.iterator());
-        while (iterator.hasNext()) {
-            StorageMetadata storageMetadata = iterator.next();
-            count++;
-            log.debug("position: " + count + ": " + storageMetadata);
-        }
-        Assert.assertEquals("expected rows: " + numRows + ", actual rows: " + count, numRows, count);
-    }
-
-    private StorageMetadata getStorageMetadata(int i) throws Exception {
-        String uriStr = "ad:/TEST/fileuri_" + i + ".txt";
-        URI uri = new URI(uriStr);
-        StorageLocation storageLocation = new StorageLocation(uri);
-        storageLocation.storageBucket = "testBucket";
-        StorageMetadata storageMetadata = new StorageMetadata(storageLocation, new URI("md5:12345"), 12345L);
-        storageMetadata.artifactURI = uri;
-        return storageMetadata;
+        // CFHT
+        query = new AdStorageQuery("CFHT");
+        mapper = query.getRowMapper();
+        row = new ArrayList<>(7);
+        row.add("CFHT");
+        row.add(new URI("cadc:CFHT/foo.fits"));
+        row.add(new URI("md5:abc"));
+        row.add(new Long(33));
+        row.add("");
+        row.add("application/fits");
+        row.add(new Date(System.currentTimeMillis()));
+        metadata = (StorageMetadata) mapper.mapRow(row);
+        Assert.assertTrue("ad:CFHT/foo.fits".equals(metadata.getStorageLocation().getStorageID().toString()));
     }
 
 }

@@ -115,44 +115,30 @@ public class AdStorageQuery {
             String storageBucket = (String) i.next();
 
             // archive_files.uri
-            URI storageID = (URI) i.next();
+            URI artifactID = (URI) i.next();
+            // check for null uri(storageID) and log error
+            if (artifactID == null) {
+                String sb = "ERROR: uri=null in ad.archive_files for archiveName=" + storageBucket;
+                log.error(sb);
+                return null;
+            }
 
             // archive_files.contentMD5 is just the hex value
             URI contentChecksum = null;
             try {
                 contentChecksum = new URI(MD5_ENCODING_SCHEME + i.next());
             } catch (URISyntaxException u) {
-                log.debug("checksum error: " + storageID.toString() + ": " + u.getMessage());
+                log.debug("checksum error: " + artifactID.toString() + ": " + u.getMessage());
             }
 
             // archive_files.fileSize
             Long contentLength = (Long) i.next();
             if (contentLength == null) {
-                log.debug("content length error (null): " + storageID.toString());
-            }
-
-            // archive_files.contentEncoding
-            String contentEncoding = (String) i.next();
-
-            // archive_files.contentType
-            String contentType = (String) i.next();
-
-            // archive_files.ingestDate
-            Date contentLastModified = (Date) i.next();
-
-            // check for null uri(storageID) and log error
-            if (storageID == null) {
-                String sb =
-                    "ERROR: uri=null in ad.archive_files for archiveName=" + storageBucket
-                        + ",contentMD5=" + contentChecksum + ",fileSize=" + contentLength
-                        + ",contentEncoding=" + contentEncoding + ",contentType=" + contentType
-                        + ",ingestDate=" + contentLastModified;
-                log.error(sb);
-                return null;
+                log.debug("content length error (null): " + artifactID.toString());
             }
 
             // Set up StorageLocation object first
-            StorageLocation storageLocation = new StorageLocation(storageID);
+            StorageLocation storageLocation = new StorageLocation(deduceStorageURI(artifactID));
             storageLocation.storageBucket = storageBucket;
 
             // Build StorageMetadata object
@@ -162,15 +148,35 @@ public class AdStorageQuery {
             } else {
                 storageMetadata = new StorageMetadata(storageLocation, contentChecksum, contentLength);
             }
-            storageMetadata.artifactURI = storageID;
+            storageMetadata.artifactURI = artifactID;
 
             // Set optional values into ret at this point - allowed to be null
-            storageMetadata.contentEncoding = contentEncoding;
-            storageMetadata.contentType = contentType;
-            storageMetadata.contentLastModified = contentLastModified;
+            storageMetadata.contentEncoding = (String) i.next();
+            storageMetadata.contentType = (String) i.next();
+            storageMetadata.contentLastModified = (Date) i.next();
 
             log.debug("StorageMetadata: " + storageMetadata);
             return storageMetadata;
+        }
+
+        private URI deduceStorageURI(final URI artifactURI) {
+            // AD TAP returns the artifact URI which in some cases is different than AD storage URI
+            String filePath = artifactURI.getSchemeSpecificPart();
+            String scheme = artifactURI.getScheme();
+            if (scheme.equals("cadc")) {
+                scheme = "ad";
+            }
+            String[] pathComp = filePath.split("/");
+            if (pathComp[0].equals("Gemini")) {
+                pathComp[0] = "GEM"; // This is how Gemini archive is known to data WS
+            }
+            URI result = null;
+            try {
+                result = new URI(scheme, String.join("/", pathComp), null);
+            } catch (URISyntaxException ex) {
+                log.error("BUG: Wrong deduced storage URI: " + ex.getMessage());
+            }
+            return result;
         }
     }
 
