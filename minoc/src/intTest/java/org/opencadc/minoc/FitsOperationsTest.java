@@ -78,6 +78,7 @@ import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.reg.Standards;
 import ca.nrc.cadc.reg.client.RegistryClient;
 import ca.nrc.cadc.util.Log4jInit;
+import ca.nrc.cadc.util.StringUtil;
 import nom.tam.fits.Fits;
 import nom.tam.util.RandomAccessDataObject;
 import nom.tam.util.RandomAccessFileExt;
@@ -109,7 +110,7 @@ import java.util.Arrays;
  */
 public class FitsOperationsTest extends MinocTest {
     private final static Logger LOGGER = Logger.getLogger(FitsOperationsTest.class);
-    private final static URI FILES_URI = URI.create("ivo://cadc.nrc.ca/files");
+    private final static URI VOSPACE_URI = URI.create("ivo://cadc.nrc.ca/vault");
     private final static Path DEFAULT_DATA_PATH = new File(System.getProperty("user.home")
                                                            + "/.config/test-data").toPath();
 
@@ -124,8 +125,9 @@ public class FitsOperationsTest extends MinocTest {
         super();
 
         final RegistryClient regClient = new RegistryClient();
-        filesVaultURL = new URL(regClient.getServiceURL(FILES_URI, Standards.DATA_10, AuthMethod.ANON)
-                                + "/vault/CADC/test-data/cutouts");
+        filesVaultURL = new URL(regClient.getServiceURL(VOSPACE_URI, Standards.VOSPACE_FILES_20, AuthMethod.ANON)
+                                + "/CADC/test-data/cutouts");
+        DEFAULT_DATA_PATH.toFile().mkdirs();
     }
 
     @Test
@@ -200,6 +202,19 @@ public class FitsOperationsTest extends MinocTest {
                 cutoutClient.setFollowRedirects(true);
                 cutoutClient.run();
                 fileOutputStream.flush();
+
+                Assert.assertEquals("Wrong content type.",
+                                    cutoutClient.getResponseHeader(HttpTransfer.CONTENT_TYPE), "application/fits");
+                Assert.assertNotNull("Should include Content-Disposition ("
+                                     + cutoutClient.getResponseHeader("Content-Disposition") + ")",
+                                     cutoutClient.getResponseHeader("Content-Disposition"));
+
+                Assert.assertEquals("Should NOT contain " + HttpTransfer.CONTENT_LENGTH, -1L,
+                                  cutoutClient.getContentLength());
+                Assert.assertFalse("Should NOT contain " + HttpTransfer.CONTENT_MD5,
+                                   StringUtil.hasText(cutoutClient.getContentMD5()));
+                Assert.assertFalse("Should NOT contain " + HttpTransfer.CONTENT_ENCODING,
+                                   StringUtil.hasText(cutoutClient.getContentEncoding()));
             }
 
             LOGGER.debug("Cutout complete -> " + artifactURI);

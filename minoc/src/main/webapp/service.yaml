@@ -15,7 +15,7 @@ paths:
       required: true
     get:
       description: |
-        Download the file identified by parameter artifact-uri, optionally cutting a specific sub-region of an image (if applicable).
+        Download the file identified by parameter artifact-uri, optionally cutting a subset of a FITS file.
       tags:
         - Artifact transfer
       summary: Download a file
@@ -52,11 +52,9 @@ paths:
       parameters:
        - name: SUB
          in: query
-         description: sub-region of a FITS file image (e.g. "?SUB=[0][100:300]&SUB=[SCI,3][300:500,*]")
+         description: 'Sub-region of a FITS file image.  Multiple SUB parameters are allowed and will generate MEF output in file order. Examples: entire extensions (SUB=[1]&SUB=[SCI,2]), or more general purpose (SUB=[SCI,3][400:500]).'
          required: false
-         type: array
-         items:
-           type: string
+         type: string
          collectionFormat: multi
     put:
       description: |
@@ -233,14 +231,12 @@ paths:
         '503':
           description: Service busy
       parameters:
-       - name: SUB
-         in: query
-         description: sub-region of a FITS file image (e.g. "?SUB=[0][100:300]&SUB=[SCI,3][300:500,*]")
-         required: false
-         type: array
-         items:
-           type: string
-         collectionFormat: multi
+        - name: SUB
+          in: query
+          description: 'Sub-region of a FITS file image.  Multiple SUB parameters are allowed and will generate MEF output in file order. Examples: entire extensions (SUB=[1]&SUB=[SCI,2]), or more general purpose (SUB=[SCI,3][400:500]).'
+          required: false
+          type: string
+          collectionFormat: multi
     put:
       description: |
         Upload a file identified by parameter artifact-uri.

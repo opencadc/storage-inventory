@@ -68,6 +68,7 @@
 package org.opencadc.minoc;
 
 import ca.nrc.cadc.io.WriteException;
+import ca.nrc.cadc.net.HttpTransfer;
 
 import java.util.HashMap;
 import java.util.List;
@@ -112,7 +113,6 @@ public class GetAction extends ArtifactAction {
         initAndAuthorize(ReadGrant.class);
         
         Artifact artifact = getArtifact(artifactURI);
-        HeadAction.setHeaders(artifact, syncOutput);
 
         final List<String> requestedSubs = syncInput.getParameters(SodaParamValidator.SUB);
 
@@ -121,6 +121,7 @@ public class GetAction extends ArtifactAction {
         log.debug("retrieving artifact from storage...");
         try {
             if (requestedSubs == null || requestedSubs.isEmpty()) {
+                HeadAction.setHeaders(artifact, syncOutput);
                 storageAdapter.get(storageLocation, syncOutput.getOutputStream());
             } else {
                 // If any cutouts were requested
@@ -132,6 +133,7 @@ public class GetAction extends ArtifactAction {
                 final CutoutFileNameFormat cutoutFileNameFormat = new CutoutFileNameFormat(fileName);
                 syncOutput.setHeader(CONTENT_DISPOSITION, "inline; filename=\""
                                                           + cutoutFileNameFormat.format(slices) + "\"");
+                syncOutput.setHeader(HttpTransfer.CONTENT_TYPE, "application/fits");
                 final FitsOperations fitsOperations =
                         new FitsOperations(new ProxyRandomAccessFits(this.storageAdapter, artifact.storageLocation,
                                                                      artifact.getContentLength()));

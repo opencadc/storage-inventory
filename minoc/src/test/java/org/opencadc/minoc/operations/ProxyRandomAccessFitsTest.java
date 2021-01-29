@@ -72,15 +72,9 @@ import ca.nrc.cadc.util.Log4jInit;
 
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.OutputStream;
 import java.net.URI;
-import java.nio.file.Files;
-import java.util.ArrayList;
 import java.util.List;
 
-import nom.tam.fits.BasicHDU;
-import nom.tam.fits.Fits;
 import nom.tam.fits.Header;
 import nom.tam.fits.HeaderCard;
 import nom.tam.util.Cursor;
@@ -93,8 +87,6 @@ import org.opencadc.inventory.storage.NewArtifact;
 import org.opencadc.inventory.storage.StorageAdapter;
 import org.opencadc.inventory.storage.StorageMetadata;
 import org.opencadc.inventory.storage.fs.OpaqueFileSystemStorageAdapter;
-import org.opencadc.soda.ExtensionSlice;
-import org.opencadc.soda.ExtensionSliceFormat;
 
 /**
  * Test ProxyRandomAccessFits wrapper using filesystem storage adapter for the back end.
@@ -179,62 +171,6 @@ public class ProxyRandomAccessFitsTest {
                 log.info("...");
             }
 
-        } catch (Exception unexpected) {
-            log.error("unexpected exception", unexpected);
-            Assert.fail("unexpected exception: " + unexpected);
-        }
-    }
-
-    @Test
-    public void testCutoutToStream() {
-        try {
-            final List<ExtensionSlice> slices = new ArrayList<>();
-            final ExtensionSliceFormat format = new ExtensionSliceFormat();
-
-            slices.add(format.parse("[2][10:20,40:90]"));
-            slices.add(format.parse("[3][*,40:90]"));
-
-            File testFile = FileUtil.getFileFromResource("sample-mef.fits", ProxyRandomAccessFitsTest.class);
-            FileInputStream fis = new FileInputStream(testFile);
-            File rootDir = new File("build/tmp/saroot");
-            if (!rootDir.exists()) {
-                rootDir.mkdirs();
-            }
-
-            StorageAdapter sa = new OpaqueFileSystemStorageAdapter(rootDir, 1);
-            NewArtifact na = new NewArtifact(URI.create("cadc:TEST/" + testFile.getName()));
-            na.contentLength = testFile.length();
-            StorageMetadata sm = sa.put(na, fis);
-
-            ProxyRandomAccessFits in = new ProxyRandomAccessFits(sa, sm.getStorageLocation(), testFile.length());
-            FitsOperations fop = new FitsOperations(in);
-
-            final File outputFile =
-                    Files.createTempFile(ProxyRandomAccessFitsTest.class.getSimpleName() + "-", ".fits").toFile();
-            outputFile.deleteOnExit();
-            try (final OutputStream outputStream = new FileOutputStream(outputFile)) {
-                fop.cutoutToStream(slices, outputStream);
-                outputStream.flush();
-            }
-
-            // The NOM TAM FITS library ought ot be able to read it in without issue.
-            final Fits expectedFits = new Fits(outputFile);
-            BasicHDU<?> hdu;
-            int index = 0;
-
-            while ((hdu = expectedFits.readHDU()) != null) {
-                Header h = hdu.getHeader();
-                log.info("** header: " + index);
-                Cursor<String,HeaderCard> iter = h.iterator();
-                for (int c = 0; c <= 5; c++) {
-                    HeaderCard hc = iter.next();
-                    log.info(hc.getKey() + " = " + hc.getValue());
-                }
-                long nbytes = h.getDataSize();
-                log.info("** data size: " + nbytes);
-                log.info("...");
-                index++;
-            }
         } catch (Exception unexpected) {
             log.error("unexpected exception", unexpected);
             Assert.fail("unexpected exception: " + unexpected);
