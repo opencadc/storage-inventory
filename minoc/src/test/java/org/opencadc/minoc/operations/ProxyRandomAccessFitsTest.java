@@ -69,10 +69,12 @@ package org.opencadc.minoc.operations;
 
 import ca.nrc.cadc.util.FileUtil;
 import ca.nrc.cadc.util.Log4jInit;
+
 import java.io.File;
 import java.io.FileInputStream;
 import java.net.URI;
 import java.util.List;
+
 import nom.tam.fits.Header;
 import nom.tam.fits.HeaderCard;
 import nom.tam.util.Cursor;
@@ -98,10 +100,10 @@ public class ProxyRandomAccessFitsTest {
         Log4jInit.setLevel("org.opencadc.minoc.operations", Level.DEBUG);
         //Log4jInit.setLevel("org.opencadc.inventory.storage.fs", Level.DEBUG);
     }
-     
+
     public ProxyRandomAccessFitsTest() { 
     }
-    
+
     @Test
     public void testGetPrimaryHeader() {
         try {
@@ -127,16 +129,16 @@ public class ProxyRandomAccessFitsTest {
                 log.info(hc.getKey() + " = " + hc.getValue());
             }
             log.info("...");
-            
+
             long nbytes = h.getDataSize();
             log.info("data size: " + nbytes);
-            
+
         } catch (Exception unexpected) {
             log.error("unexpected exception", unexpected);
             Assert.fail("unexpected exception: " + unexpected);
         }
     }
-    
+
     @Test
     public void testGetHeaders() {
         try {
@@ -152,8 +154,7 @@ public class ProxyRandomAccessFitsTest {
             na.contentLength = testFile.length();
             StorageMetadata sm = sa.put(na, fis);
             ProxyRandomAccessFits in = new ProxyRandomAccessFits(sa, sm.getStorageLocation(), testFile.length());
-            
-            
+
             FitsOperations fop = new FitsOperations(in);
             List<Header> hdrs = fop.getHeaders();
             
@@ -169,7 +170,7 @@ public class ProxyRandomAccessFitsTest {
                 log.info("** data size: " + nbytes);
                 log.info("...");
             }
-            
+
         } catch (Exception unexpected) {
             log.error("unexpected exception", unexpected);
             Assert.fail("unexpected exception: " + unexpected);

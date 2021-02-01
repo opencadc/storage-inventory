@@ -1,6 +1,6 @@
 swagger: '2.0'
 info:
-  version: '0.1'
+  version: '0.6'
   title: Artifact storage and management service (minoc)
   description: 'A programmatic interface for storing, retrieving and managing artifacts at a storage site.<br/><br/>Clients may authenticate to this service in one of three ways:<br/>1.  By supplying an authentication token and using it as the auth-token parameter in the path.  URLs containing auth-tokens can be retrieved from the global locate service.<br/>2.  By providing a cookie in the Cookie header<br/>3.  By using a client certificate over SSL.'
 basePath: '/minoc'
@@ -15,7 +15,7 @@ paths:
       required: true
     get:
       description: |
-        Download the file identified by parameter artifact-uri.
+        Download the file identified by parameter artifact-uri, optionally cutting a subset of a FITS file.
       tags:
         - Artifact transfer
       summary: Download a file
@@ -50,13 +50,11 @@ paths:
         '503':
           description: Service busy
       parameters:
-       - name: cutout
+       - name: SUB
          in: query
-         description: cutouts to be applied on fits files
+         description: 'Sub-region of a FITS file image.  Multiple SUB parameters are allowed and will generate MEF output in file order. Examples: entire extensions (SUB=[1]&SUB=[SCI,2]), or more general purpose (SUB=[SCI,3][400:500]).'
          required: false
-         type: array
-         items:
-           type: string
+         type: string
          collectionFormat: multi
     put:
       description: |
@@ -233,14 +231,12 @@ paths:
         '503':
           description: Service busy
       parameters:
-       - name: cutout
-         in: query
-         description: cutouts to be applied on fits files
-         required: false
-         type: array
-         items:
-           type: string
-         collectionFormat: multi
+        - name: SUB
+          in: query
+          description: 'Sub-region of a FITS file image.  Multiple SUB parameters are allowed and will generate MEF output in file order. Examples: entire extensions (SUB=[1]&SUB=[SCI,2]), or more general purpose (SUB=[SCI,3][400:500]).'
+          required: false
+          type: string
+          collectionFormat: multi
     put:
       description: |
         Upload a file identified by parameter artifact-uri.
