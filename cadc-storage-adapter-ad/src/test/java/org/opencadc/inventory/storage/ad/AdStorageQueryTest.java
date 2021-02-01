@@ -99,11 +99,13 @@ public class AdStorageQueryTest {
         row.add(new URI("cadc:Gemini/foo_th.jpg"));
         row.add(new URI("abc"));
         row.add(new Long(33));
+        row.add(new URI("ad:GEM/foo_th.jpg"));
         row.add("");
         row.add("application/fits");
         Date now = new Date(System.currentTimeMillis());
         row.add(now);
         StorageMetadata metadata = (StorageMetadata) mapper.mapRow(row);
+        Assert.assertTrue("cadc:Gemini/foo_th.jpg".equals(metadata.artifactURI.toString()));
         Assert.assertTrue("ad:GEM/foo_th.jpg".equals(metadata.getStorageLocation().getStorageID().toString()));
         Assert.assertTrue(metadata.getStorageLocation().storageBucket.equals("Gemini"));
         Assert.assertTrue(metadata.getContentChecksum().toString().equals("md5:abc"));
@@ -121,10 +123,12 @@ public class AdStorageQueryTest {
         row.add(new URI("gemini:Gemini/foo.fits"));
         row.add(new URI("md5:abc"));
         row.add(new Long(33));
+        row.add(new URI("gemini:GEM/foo.fits"));
         row.add("");
         row.add("application/fits");
         row.add(new Date(System.currentTimeMillis()));
         metadata = (StorageMetadata) mapper.mapRow(row);
+        Assert.assertTrue("gemini:Gemini/foo.fits".equals(metadata.artifactURI.toString()));
         Assert.assertTrue("gemini:GEM/foo.fits".equals(metadata.getStorageLocation().getStorageID().toString()));
 
         // MAST
@@ -135,10 +139,12 @@ public class AdStorageQueryTest {
         row.add(new URI("mast:HST/foo.fits"));
         row.add(new URI("md5:abc"));
         row.add(new Long(33));
+        row.add(new URI("mast:HST/foo.fits"));
         row.add("");
         row.add("application/fits");
         row.add(new Date(System.currentTimeMillis()));
         metadata = (StorageMetadata) mapper.mapRow(row);
+        Assert.assertTrue("mast:HST/foo.fits".equals(metadata.artifactURI.toString()));
         Assert.assertTrue("mast:HST/foo.fits".equals(metadata.getStorageLocation().getStorageID().toString()));
 
         // CFHT
@@ -149,10 +155,12 @@ public class AdStorageQueryTest {
         row.add(new URI("cadc:CFHT/foo.fits"));
         row.add(new URI("md5:abc"));
         row.add(new Long(33));
+        row.add(new URI("ad:CFHT/foo.fits"));
         row.add("");
         row.add("application/fits");
         row.add(new Date(System.currentTimeMillis()));
         metadata = (StorageMetadata) mapper.mapRow(row);
+        Assert.assertTrue("cadc:CFHT/foo.fits".equals(metadata.artifactURI.toString()));
         Assert.assertTrue("ad:CFHT/foo.fits".equals(metadata.getStorageLocation().getStorageID().toString()));
     }
 

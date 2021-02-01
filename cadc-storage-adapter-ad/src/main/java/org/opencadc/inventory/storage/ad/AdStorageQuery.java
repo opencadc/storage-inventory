@@ -88,7 +88,8 @@ import org.opencadc.tap.TapRowMapper;
 public class AdStorageQuery {
     private static final Logger log = Logger.getLogger(AdStorageQuery.class);
     // Query to use that will pull data in the order required by the mapRow function
-    private String queryTemplate = "select archiveName, uri, contentMD5, fileSize, contentEncoding, contentType, ingestDate"
+    private String queryTemplate = "select archiveName, inventoryURI, contentMD5, fileSize,"
+            + " uri, contentEncoding, contentType, ingestDate"
             + " from archive_files where archiveName='%s' order by uri asc, ingestDate desc";
     private String query = "";
 
@@ -114,8 +115,9 @@ public class AdStorageQuery {
             // archive_files.archiveName
             String storageBucket = (String) i.next();
 
-            // archive_files.uri
+            // archive_files.inventoryURI
             URI artifactID = (URI) i.next();
+
             // check for null uri(storageID) and log error
             if (artifactID == null) {
                 String sb = "ERROR: uri=null in ad.archive_files for archiveName=" + storageBucket;
@@ -137,8 +139,11 @@ public class AdStorageQuery {
                 log.debug("content length error (null): " + artifactID.toString());
             }
 
+            // archive_files.uri
+            URI storageID = (URI) i.next();
+
             // Set up StorageLocation object first
-            StorageLocation storageLocation = new StorageLocation(deduceStorageURI(artifactID));
+            StorageLocation storageLocation = new StorageLocation(storageID);
             storageLocation.storageBucket = storageBucket;
 
             // Build StorageMetadata object
@@ -157,26 +162,6 @@ public class AdStorageQuery {
 
             log.debug("StorageMetadata: " + storageMetadata);
             return storageMetadata;
-        }
-
-        private URI deduceStorageURI(final URI artifactURI) {
-            // AD TAP returns the artifact URI which in some cases is different than AD storage URI
-            String filePath = artifactURI.getSchemeSpecificPart();
-            String scheme = artifactURI.getScheme();
-            if (scheme.equals("cadc")) {
-                scheme = "ad";
-            }
-            String[] pathComp = filePath.split("/");
-            if (pathComp[0].equals("Gemini")) {
-                pathComp[0] = "GEM"; // This is how Gemini archive is known to data WS
-            }
-            URI result = null;
-            try {
-                result = new URI(scheme, String.join("/", pathComp), null);
-            } catch (URISyntaxException ex) {
-                log.error("BUG: Wrong deduced storage URI: " + ex.getMessage());
-            }
-            return result;
         }
     }
 
