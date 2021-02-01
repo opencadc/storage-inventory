@@ -185,28 +185,4 @@
     <url-pattern>/results/*</url-pattern>
   </servlet-mapping>
 
-  <!-- Define a security constraint for auth servlet -->
-  <security-constraint>
-    <web-resource-collection>
-      <web-resource-name>auth</web-resource-name>
-      <description/>
-      <http-method>GET</http-method>
-      <http-method>POST</http-method>
-      <http-method>HEAD</http-method>
-      <http-method>PUT</http-method>
-      <http-method>OPTIONS</http-method>
-      <http-method>TRACE</http-method>
-      <http-method>DELETE</http-method>
-    </web-resource-collection>
-    <auth-constraint>
-      <description>force authentication for all requests</description>
-      <role-name>public</role-name>
-    </auth-constraint>
-  </security-constraint>
-
-  <login-config>
-    <auth-method>BASIC</auth-method>
-    <realm-name>Canadian Astronomy Data Centre</realm-name>
-  </login-config>
-
 </web-app>

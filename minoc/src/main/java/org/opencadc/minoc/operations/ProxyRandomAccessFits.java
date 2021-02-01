@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2020.                            (c) 2020.
+*  (c) 2021.                            (c) 2021.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -65,90 +65,148 @@
 ************************************************************************
 */
 
-package org.opencadc.minoc;
+package org.opencadc.minoc.operations;
 
-import ca.nrc.cadc.io.WriteException;
-import ca.nrc.cadc.net.HttpTransfer;
-
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
+import java.io.ByteArrayOutputStream;
+import java.io.FileDescriptor;
+import java.io.IOException;
+import java.nio.channels.FileChannel;
+import java.util.SortedSet;
+import java.util.TreeSet;
+import nom.tam.util.RandomAccessDataObject;
 import org.apache.log4j.Logger;
-import org.opencadc.fits.FitsOperations;
-import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.StorageLocation;
-import org.opencadc.minoc.operations.CutoutFileNameFormat;
-import org.opencadc.minoc.operations.ProxyRandomAccessFits;
-import org.opencadc.permissions.ReadGrant;
-import org.opencadc.soda.ExtensionSlice;
-import org.opencadc.soda.SodaParamValidator;
+import org.opencadc.inventory.storage.ByteRange;
+import org.opencadc.inventory.storage.StorageAdapter;
 
 /**
- * Interface with storage and inventory to get an artifact.
- *
- * @author majorb
+ * This class supports random read-only access to FITS files using the
+ * nom-tam FITS library.
+ * 
+ * @author pdowler
  */
-public class GetAction extends ArtifactAction {
+public class ProxyRandomAccessFits implements RandomAccessDataObject {
+    private static final Logger log = Logger.getLogger(ProxyRandomAccessFits.class);
+
+    private final StorageAdapter adapter;
+    private final StorageLocation sloc;
+    private final long contentLength;
     
-    private static final Logger log = Logger.getLogger(GetAction.class);
-    private static final String CONTENT_DISPOSITION = "Content-Disposition";
-    private static final SodaParamValidator SODA_PARAM_VALIDATOR = new SodaParamValidator();
-
-
-    /**
-     * Default, no-arg constructor.
-     */
-    public GetAction() {
-        super();
+    private long curpos = 0L;
+    private long markpos = -1L;
+    
+    
+    public ProxyRandomAccessFits(StorageAdapter adapter, StorageLocation sloc, long contentLength) {
+        this.adapter = adapter;
+        this.sloc = sloc;
+        this.contentLength = contentLength;
     }
 
-    /**
-     * Download the artifact or cutouts of the artifact.  In the event that an optional cutout was requested, then
-     * mangle the output filename to reflect the requested values.
-     */
     @Override
-    public void doAction() throws Exception {
-        
-        initAndAuthorize(ReadGrant.class);
-        
-        Artifact artifact = getArtifact(artifactURI);
-
-        final List<String> requestedSubs = syncInput.getParameters(SodaParamValidator.SUB);
-
-        StorageLocation storageLocation = new StorageLocation(artifact.storageLocation.getStorageID());
-        storageLocation.storageBucket = artifact.storageLocation.storageBucket;
-        log.debug("retrieving artifact from storage...");
-        try {
-            if (requestedSubs == null || requestedSubs.isEmpty()) {
-                HeadAction.setHeaders(artifact, syncOutput);
-                storageAdapter.get(storageLocation, syncOutput.getOutputStream());
-            } else {
-                // If any cutouts were requested
-                final Map<String, List<String>> subMap = new HashMap<>();
-                subMap.put(SodaParamValidator.SUB, requestedSubs);
-                final List<ExtensionSlice> slices = SODA_PARAM_VALIDATOR.validateSUB(subMap);
-                final String schemePath = artifactURI.getSchemeSpecificPart();
-                final String fileName = schemePath.substring(schemePath.lastIndexOf("/") + 1);
-                final CutoutFileNameFormat cutoutFileNameFormat = new CutoutFileNameFormat(fileName);
-                syncOutput.setHeader(CONTENT_DISPOSITION, "inline; filename=\""
-                                                          + cutoutFileNameFormat.format(slices) + "\"");
-                syncOutput.setHeader(HttpTransfer.CONTENT_TYPE, "application/fits");
-                final FitsOperations fitsOperations =
-                        new FitsOperations(new ProxyRandomAccessFits(this.storageAdapter, artifact.storageLocation,
-                                                                     artifact.getContentLength()));
-                fitsOperations.cutoutToStream(slices, syncOutput.getOutputStream());
-            }
-        } catch (WriteException e) {
-            // error on client write
-            String msg = "write output error";
-            log.debug(msg, e);
-            if (e.getMessage() != null) {
-                msg += ": " + e.getMessage();
-            }
-            throw new IllegalArgumentException(msg, e);
-        }
-        log.debug("retrieved artifact from storage");
-
+    public void close() throws IOException {
+        this.curpos = -1L;
     }
+
+    @Override
+    public long length() throws IOException {
+        return contentLength;
+    }
+
+    @Override
+    public void seek(long pos) throws IOException {
+        if (pos < 0L || pos > contentLength) {
+            throw new IOException("invalid seek: " + pos);
+        }
+        this.curpos = pos;
+    }
+
+    @Override
+    public long getFilePointer() throws IOException {
+        return curpos;
+    }
+
+    @Override
+    public int read() throws IOException {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public int read(byte[] bytes) throws IOException {
+        return read(bytes, 0, bytes.length);
+    }
+
+    @Override
+    public int read(byte[] bytes, int off, int len) throws IOException {
+        if (curpos == -1L) {
+            throw new IOException("closed");
+        }
+        try {
+            long avail = Math.min(len, contentLength - curpos); 
+            if (avail == 0) {
+                return -1;
+            }
+            ByteRange range = new ByteRange(curpos, avail);
+            SortedSet<ByteRange> ranges = new TreeSet<>();
+            ranges.add(range);
+            ByteArrayOutputStream bos = new ByteArrayOutputStream(len);
+            //log.warn("calling  StorageAdapter.get: curpos=" + curpos + " len=" + len);
+            adapter.get(sloc, bos, ranges);
+            byte[] result = bos.toByteArray();
+
+            int ret = bos.size();
+            System.arraycopy(result, 0, bytes, off, ret);
+            curpos += ret;
+            log.warn("ProxyRandomAccess.read(" + off + "," + len + " read " + ret + " (curpos:" + curpos + ")");
+            return ret;
+        } catch (Exception ex) {
+            throw new IOException("read failed", ex);
+        }
+    }
+
+    @Override
+    public String readUTF() throws IOException {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public String readLine() throws IOException {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public void setLength(long l) throws IOException {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public void write(byte[] bytes, int i, int i1) throws IOException {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public void write(byte[] bytes) throws IOException {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public void write(int i) throws IOException {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public void writeUTF(String s) throws IOException {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public FileChannel getChannel() {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public FileDescriptor getFD() throws IOException {
+        throw new UnsupportedOperationException();
+    }
+    
+    
 }

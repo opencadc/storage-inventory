@@ -69,6 +69,7 @@ package org.opencadc.inventory.db;
 
 import ca.nrc.cadc.date.DateUtil;
 import ca.nrc.cadc.io.ResourceIterator;
+import ca.nrc.cadc.util.StringUtil;
 import java.io.IOException;
 import java.net.URI;
 import java.sql.Connection;
@@ -239,9 +240,9 @@ public class SQLGenerator {
         throw new UnsupportedOperationException("entity-get: " + c.getName());
     }
     
-    public EntityIteratorQuery getEntityIteratorQuery(Class c, boolean withStorageLocation) {
+    public EntityIteratorQuery getEntityIteratorQuery(Class c) {
         if (Artifact.class.equals(c)) {
-            return new ArtifactIteratorQuery(withStorageLocation);
+            return new ArtifactIteratorQuery();
         }
         throw new UnsupportedOperationException("entity-list: " + c.getName());
     }
@@ -530,21 +531,35 @@ public class SQLGenerator {
     
     class ArtifactIteratorQuery implements EntityIteratorQuery<Artifact> {
 
-        private boolean withStorageLocation;
+        private Boolean storageLocationRequired;
         private String prefix;
         private String whereClause;
+        private boolean ordered;
 
-        public ArtifactIteratorQuery(boolean withStorageLocation) {
-            this.withStorageLocation = withStorageLocation;
+        public ArtifactIteratorQuery() {
         }
 
+        /**
+         * true: Artifact.storageLocation not null
+         * null: all artifacts
+         * false: Artifact.storageLocation is null
+         * 
+         * @param slr whether Artifact.storageLocation is required or not
+         */
+        public void setStorageLocationRequired(Boolean slr) {
+            this.storageLocationRequired = slr;
+        }
         
         public void setPrefix(String prefix) {
             this.prefix = prefix;
         }
 
-        public void setWhereClause(String whereClause) {
+        public void setCriteria(String whereClause) {
             this.whereClause = whereClause;
+        }
+
+        public void setOrderedOutput(boolean ordered) {
+            this.ordered = ordered;
         }
         
         @Override
@@ -553,18 +568,9 @@ public class SQLGenerator {
             StringBuilder sb = getSelectFromSQL(Artifact.class, false);
             sb.append(" WHERE ");
             
-            // one of: 
-            // - arbitrary where clause referencing Artifact fields
-            // - artifacts with storageLocation not null
-            // - artifacts with storageLocation null
-            if (whereClause != null) {
-                if (prefix != null) {
-                    sb.append("uriBucket LIKE ? AND");
-                }
-                sb.append(whereClause);
-                
-            } else if (withStorageLocation) {
-                if (prefix != null) {
+            if (storageLocationRequired != null && storageLocationRequired) {
+                // ArtifactDAO.storedIterator
+                if (StringUtil.hasText(prefix)) {
                     sb.append("storageLocation_storageBucket LIKE ? AND");
                 }
                 sb.append(" storageLocation_storageID IS NOT NULL");
@@ -573,14 +579,37 @@ public class SQLGenerator {
                 // null storageBucket to come after non-null
                 // postgresql: the default order is equivalent to explicitly specifying ASC NULLS LAST
                 // default behaviour may not be db-agnostic
-                sb.append(" ORDER BY storageLocation_storageBucket, storageLocation_storageID");
-            } else {
-                if (prefix != null) {
+                if (ordered) {
+                    sb.append(" ORDER BY storageLocation_storageBucket, storageLocation_storageID");
+                }
+            } else if (storageLocationRequired != null && !storageLocationRequired) {
+                // ArtifactDAO.unstoredIterator
+                if (StringUtil.hasText(prefix)) {
                     sb.append("uriBucket LIKE ? AND");
                 }
                 sb.append(" storageLocation_storageID IS NULL");
-                sb.append(" ORDER BY uri");
+                if (ordered) {
+                    sb.append(" ORDER BY uri");
+                }
+            } else {
+                boolean noCond = true;
+                if (StringUtil.hasText(prefix)) {
+                    sb.append("uriBucket LIKE ? AND");
+                    noCond = false;
+                }
+                if (StringUtil.hasText(whereClause)) {
+                    sb.append(whereClause);
+                    noCond = false;
+                }
+                if (noCond) {
+                    // trim off " WHERE "
+                    sb.delete(sb.length() - 7, sb.length());
+                }
+                if (ordered) {
+                    sb.append(" ORDER BY uri");
+                }
             }
+            
             String sql = sb.toString();
             log.debug("sql: " + sql);
             
