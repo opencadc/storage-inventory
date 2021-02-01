@@ -292,11 +292,11 @@ the explanation #s match -- they are the same explanation seen from both sides.
     evidence: ?
     action: assume explanation3
 
-*discrepancy*: artifact.uri in both && artifact.id mismatch
+*discrepancy*: artifact.uri in both && artifact.id mismatch (collision)
 
     explantion1: same ID collision due to race condition that metadata-sync has to handle
     evidence: no more evidence needed
-    action: pick winner, create DeletedArtifactEvent for loser, delete loser if it is in L
+    action: pick winner, create DeletedArtifactEvent for loser, delete loser if it is in L, insert winner if winner was in R
 
 *discrepancy*: artifact in both && valid metaChecksum mismatch
 
