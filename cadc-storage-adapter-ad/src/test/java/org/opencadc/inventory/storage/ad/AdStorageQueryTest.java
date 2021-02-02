@@ -62,120 +62,106 @@
  *  <http://www.gnu.org/licenses/>.      pas le cas, consultez :
  *                                       <http://www.gnu.org/licenses/>.
  *
- *  $Revision: 4 $
  *
  ************************************************************************
  */
 
 package org.opencadc.inventory.storage.ad;
 
+import ca.nrc.cadc.util.Log4jInit;
 import java.net.URI;
-import java.net.URISyntaxException;
+import java.util.ArrayList;
 import java.util.Date;
-import java.util.Iterator;
-import java.util.List;
-
+import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
-import org.opencadc.inventory.InventoryUtil;
-import org.opencadc.inventory.StorageLocation;
+import org.junit.Assert;
+import org.junit.Test;
+
 import org.opencadc.inventory.storage.StorageMetadata;
 import org.opencadc.tap.TapRowMapper;
 
-/**
- * Provide query and RowMapper instance for grabbing data from ad.
- * RowMapper maps from ad's archive_files table to a StorageMetadata object.
- */
-public class AdStorageQuery {
-    private static final Logger log = Logger.getLogger(AdStorageQuery.class);
-    // Query to use that will pull data in the order required by the mapRow function
-    private String queryTemplate = "select archiveName, inventoryURI, contentMD5, fileSize,"
-            + " uri, contentEncoding, contentType, ingestDate"
-            + " from archive_files where archiveName='%s' order by uri asc, ingestDate desc";
-    private String query = "";
 
-    private static String MD5_ENCODING_SCHEME = "md5:";
+public class AdStorageQueryTest {
 
-    AdStorageQuery(String storageBucket) {
-        InventoryUtil.assertNotNull(AdStorageQuery.class, "storageBucket", storageBucket);
-        setQuery(storageBucket);
+    private static final Logger log = Logger.getLogger(AdStorageQueryTest.class);
+
+    static {
+        Log4jInit.setLevel("org.opencadc.inventory.storage", Level.DEBUG);
     }
 
-    public TapRowMapper<StorageMetadata> getRowMapper() {
-        return new AdStorageMetadataRowMapper();
+    @Test
+    public void testStorageURI() throws Exception {
+        // Gemini cadc scheme
+        AdStorageQuery query = new AdStorageQuery("Gemini");
+        TapRowMapper mapper = query.getRowMapper();
+        ArrayList<Object> row = new ArrayList<>(7);
+        row.add("Gemini");
+        row.add(new URI("cadc:Gemini/foo_th.jpg"));
+        row.add(new URI("abc"));
+        row.add(new Long(33));
+        row.add(new URI("ad:GEM/foo_th.jpg"));
+        row.add("");
+        row.add("application/fits");
+        Date now = new Date(System.currentTimeMillis());
+        row.add(now);
+        StorageMetadata metadata = (StorageMetadata) mapper.mapRow(row);
+        Assert.assertTrue("cadc:Gemini/foo_th.jpg".equals(metadata.artifactURI.toString()));
+        Assert.assertTrue("ad:GEM/foo_th.jpg".equals(metadata.getStorageLocation().getStorageID().toString()));
+        Assert.assertTrue(metadata.getStorageLocation().storageBucket.equals("Gemini"));
+        Assert.assertTrue(metadata.getContentChecksum().toString().equals("md5:abc"));
+        Assert.assertEquals(33, metadata.getContentLength().longValue());
+        Assert.assertTrue(metadata.contentEncoding.equals(""));
+        Assert.assertTrue(metadata.contentType.equals("application/fits"));
+        Assert.assertEquals(now, metadata.contentLastModified);
+        Assert.assertTrue(metadata.artifactURI.toString().equals("cadc:Gemini/foo_th.jpg"));
+
+        // Gemini gemini scheme
+        query = new AdStorageQuery("Gemini");
+        mapper = query.getRowMapper();
+        row = new ArrayList<>(7);
+        row.add("Gemini");
+        row.add(new URI("gemini:Gemini/foo.fits"));
+        row.add(new URI("md5:abc"));
+        row.add(new Long(33));
+        row.add(new URI("gemini:GEM/foo.fits"));
+        row.add("");
+        row.add("application/fits");
+        row.add(new Date(System.currentTimeMillis()));
+        metadata = (StorageMetadata) mapper.mapRow(row);
+        Assert.assertTrue("gemini:Gemini/foo.fits".equals(metadata.artifactURI.toString()));
+        Assert.assertTrue("gemini:GEM/foo.fits".equals(metadata.getStorageLocation().getStorageID().toString()));
+
+        // MAST
+        query = new AdStorageQuery("HST");
+        mapper = query.getRowMapper();
+        row = new ArrayList<>(7);
+        row.add("HST");
+        row.add(new URI("mast:HST/foo.fits"));
+        row.add(new URI("md5:abc"));
+        row.add(new Long(33));
+        row.add(new URI("mast:HST/foo.fits"));
+        row.add("");
+        row.add("application/fits");
+        row.add(new Date(System.currentTimeMillis()));
+        metadata = (StorageMetadata) mapper.mapRow(row);
+        Assert.assertTrue("mast:HST/foo.fits".equals(metadata.artifactURI.toString()));
+        Assert.assertTrue("mast:HST/foo.fits".equals(metadata.getStorageLocation().getStorageID().toString()));
+
+        // CFHT
+        query = new AdStorageQuery("CFHT");
+        mapper = query.getRowMapper();
+        row = new ArrayList<>(7);
+        row.add("CFHT");
+        row.add(new URI("cadc:CFHT/foo.fits"));
+        row.add(new URI("md5:abc"));
+        row.add(new Long(33));
+        row.add(new URI("ad:CFHT/foo.fits"));
+        row.add("");
+        row.add("application/fits");
+        row.add(new Date(System.currentTimeMillis()));
+        metadata = (StorageMetadata) mapper.mapRow(row);
+        Assert.assertTrue("cadc:CFHT/foo.fits".equals(metadata.artifactURI.toString()));
+        Assert.assertTrue("ad:CFHT/foo.fits".equals(metadata.getStorageLocation().getStorageID().toString()));
     }
 
-    class AdStorageMetadataRowMapper implements TapRowMapper<StorageMetadata> {
-
-        public AdStorageMetadataRowMapper() { }
-
-        @Override
-        public StorageMetadata mapRow(List<Object> row) {
-            Iterator i = row.iterator();
-
-            // archive_files.archiveName
-            String storageBucket = (String) i.next();
-
-            // archive_files.inventoryURI
-            URI artifactID = (URI) i.next();
-
-            // check for null uri(storageID) and log error
-            if (artifactID == null) {
-                String sb = "ERROR: uri=null in ad.archive_files for archiveName=" + storageBucket;
-                log.error(sb);
-                return null;
-            }
-
-            // archive_files.contentMD5 is just the hex value
-            URI contentChecksum = null;
-            try {
-                contentChecksum = new URI(MD5_ENCODING_SCHEME + i.next());
-            } catch (URISyntaxException u) {
-                log.debug("checksum error: " + artifactID.toString() + ": " + u.getMessage());
-            }
-
-            // archive_files.fileSize
-            Long contentLength = (Long) i.next();
-            if (contentLength == null) {
-                log.debug("content length error (null): " + artifactID.toString());
-            }
-
-            // archive_files.uri
-            URI storageID = (URI) i.next();
-
-            // Set up StorageLocation object first
-            StorageLocation storageLocation = new StorageLocation(storageID);
-            storageLocation.storageBucket = storageBucket;
-
-            // Build StorageMetadata object
-            StorageMetadata storageMetadata;
-            if (contentChecksum == null || (contentLength == null || contentLength == 0)) {
-                storageMetadata = new StorageMetadata(storageLocation);
-            } else {
-                storageMetadata = new StorageMetadata(storageLocation, contentChecksum, contentLength);
-            }
-            storageMetadata.artifactURI = artifactID;
-
-            // Set optional values into ret at this point - allowed to be null
-            storageMetadata.contentEncoding = (String) i.next();
-            storageMetadata.contentType = (String) i.next();
-            storageMetadata.contentLastModified = (Date) i.next();
-
-            log.debug("StorageMetadata: " + storageMetadata);
-            return storageMetadata;
-        }
-    }
-
-    // Getters & Setters
-
-    public String getQuery() {
-        return this.query;
-    }
-
-    public void setQuery(String storageBucket) {
-        if (storageBucket == null || storageBucket.length() == 0) {
-            throw new IllegalArgumentException("Storage bucket (archive) an not be null.");
-        }
-        this.query = String.format(this.queryTemplate, storageBucket);
-    }
 }
-
