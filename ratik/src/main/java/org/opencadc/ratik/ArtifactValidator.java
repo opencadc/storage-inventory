@@ -139,30 +139,14 @@ public class ArtifactValidator {
      */
     public void validate(Artifact local, Artifact remote)
         throws InterruptedException, IOException, ResourceNotFoundException, TransientException {
-        try {
-            if (local == null && remote == null) {
-                throw new IllegalArgumentException("local and remote Artifact can not both be null");
-            } else if (remote == null) {
-                validateLocal(local);
-            } else if (local == null) {
-                validateRemote(remote);
-            } else {
-                validateLocalAndRemote(local, remote);
-            }
-        } catch (Exception exception) {
-            if (this.transactionManager.isOpen()) {
-                log.error("Exception in transaction.  Rolling back...");
-                this.transactionManager.rollbackTransaction();
-                log.error("Rollback: OK");
-            }
-            throw exception;
-        } finally {
-            if (this.transactionManager.isOpen()) {
-                log.error("BUG: transaction open in finally. Rolling back...");
-                this.transactionManager.rollbackTransaction();
-                log.error("Rollback: OK");
-                throw new RuntimeException("BUG: transaction open in finally");
-            }
+        if (local == null && remote == null) {
+            throw new IllegalArgumentException("local and remote Artifact can not both be null");
+        } else if (remote == null) {
+            validateLocal(local);
+        } else if (local == null) {
+            validateRemote(remote);
+        } else {
+            validateLocalAndRemote(local, remote);
         }
     }
 
@@ -370,7 +354,7 @@ public class ArtifactValidator {
         }
     }
 
-    private Artifact getRemoteArtifact(URI uri)
+    Artifact getRemoteArtifact(URI uri)
         throws InterruptedException, IOException, ResourceNotFoundException, TransientException {
         final TapClient<Artifact> tapClient = new TapClient<>(this.resourceID);
         final String query = String.format("SELECT id, uri, contentChecksum, contentLastModified, contentLength, "
@@ -385,7 +369,7 @@ public class ArtifactValidator {
         return returned;
     }
 
-    private DeletedArtifactEvent getRemoteDeletedArtifactEvent(UUID id)
+    DeletedArtifactEvent getRemoteDeletedArtifactEvent(UUID id)
         throws InterruptedException, IOException, ResourceNotFoundException, TransientException {
         final TapClient<DeletedArtifactEvent> tapClient = new TapClient<>(this.resourceID);
         final String query = String.format("SELECT id, lastModified, metaChecksum FROM inventory.DeletedArtifactEvent "
@@ -403,7 +387,7 @@ public class ArtifactValidator {
     /**
      * Get the DeletedStorageLocalEvent
      */
-    private DeletedStorageLocationEvent getRemoteDeletedStorageLocationEvent(UUID id)
+    DeletedStorageLocationEvent getRemoteDeletedStorageLocationEvent(UUID id)
         throws InterruptedException, IOException, ResourceNotFoundException, TransientException {
         final TapClient<DeletedStorageLocationEvent> tapClient = new TapClient<>(this.resourceID);
         final String query = String.format("SELECT id, lastModified, metaChecksum "
@@ -421,7 +405,7 @@ public class ArtifactValidator {
     /**
      * Get the StorageSite for the instance resourceID;
      */
-    private StorageSite getRemoteStorageSite()
+    StorageSite getRemoteStorageSite()
         throws InterruptedException, IOException, ResourceNotFoundException, TransientException {
         final TapClient<StorageSite> tapClient = new TapClient<>(this.resourceID);
         final String query = String.format("SELECT id, resourceID, name, allowRead, allowWrite, lastModified, "
