@@ -101,9 +101,9 @@ public class AdStorageIteratorTest {
         duplicates.add(8, duplicates.get(8));
 
         int count = 0;
-        Iterator<StorageMetadata> dIter = duplicates.iterator();
-        while (dIter.hasNext()) {
-            StorageMetadata curMeta = dIter.next();
+        Iterator<StorageMetadata> dupIter = duplicates.iterator();
+        while (dupIter.hasNext()) {
+            StorageMetadata curMeta = dupIter.next();
             count++;
             log.debug("position: " + count + ": " + curMeta);
         }
