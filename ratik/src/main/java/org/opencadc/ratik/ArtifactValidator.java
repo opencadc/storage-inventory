@@ -199,8 +199,9 @@ public class ArtifactValidator {
         // action: delete Artifact, if (L==storage) create DeletedStorageLocationEvent
         Artifact remote = getRemoteArtifact(local.getURI());
         if (remote != null) {
-            log.info(String.format("Explanation0: Artifact in R without filter."
-                                       + "\nlocal Artifact: %s\nremote Artifact: %s", local, remote));
+            log.info(String.format("Artifact in L && not in R - Explanation0: Artifact in R without filter\n"
+                                       + "action: delete Artifact, if (L==storage) create DeletedStorageLocationEvent\n"
+                                       + " local - %s\nremote - %s", local, remote));
             return;
         }
 
@@ -209,8 +210,9 @@ public class ArtifactValidator {
         // action: put DAE, delete artifact
         DeletedArtifactEvent remoteDeletedArtifactEvent = getRemoteDeletedArtifactEvent(local.getID());
         if (remoteDeletedArtifactEvent != null) {
-            log.info(String.format("Explanation1: DeletedArtifactEvent in R."
-                                       + "\nlocal Artifact: %s\nremote DeletedArtifactEvent: %s",
+            log.info(String.format("Artifact in L && not in R - Explanation1: DeletedArtifactEvent in R\n"
+                                       + "action: put DeletedArtifactEvent, delete Artifact\n"
+                                       + " local Artifact: %s\nremote DeletedArtifactEvent: %s",
                                    local, remoteDeletedArtifactEvent));
             return;
         }
@@ -220,8 +222,9 @@ public class ArtifactValidator {
         DeletedStorageLocationEvent remoteDeletedStorageLocationEvent =
             getRemoteDeletedStorageLocationEvent(local.getID());
         if (remoteDeletedStorageLocationEvent != null) {
-            log.info(String.format("Explanation2: DeletedStorageLocationEvent in R."
-                                       + "\nlocal Artifact: %s\nremote DeletedStorageLocationEvent: %s",
+            log.info(String.format("Artifact in L && not in R - Explanation2: DeletedStorageLocationEvent in R\n"
+                                       + "action: remove siteID from Artifact.storageLocations\n"
+                                       + " local Artifact: %s\nremote DeletedStorageLocationEvent: %s",
                                    local, remoteDeletedStorageLocationEvent));
             return;
         }
@@ -232,7 +235,8 @@ public class ArtifactValidator {
         // explanation7: L==global, lost DeletedStorageLocationEvent
         // evidence: ?
         // action: remove siteID from Artifact.storageLocations
-        log.info(String.format("Explanation3,4,6,7: \nlocal Artifact: %s", local));
+        log.info(String.format("Artifact in L && not in R - Explanation3,4,6,7\n"
+                                   + "remove siteID from Artifact.storageLocations\nlocal Artifact: %s", local));
     }
 
     /**
@@ -265,7 +269,7 @@ public class ArtifactValidator {
      * <p>explanation7: L==storage, deleted from L, lost DeletedStorageLocationEvent
      * evidence: ?
      * action: assume explanation3
-     *
+c     *
      * @param remote                        The remote Artifact.
      * @throws InterruptedException         Thread interrupted.
      * @throws IOException                  For unreadable configuration files.
@@ -279,8 +283,9 @@ public class ArtifactValidator {
         // action: none
         DeletedArtifactEvent localDeletedArtifactEvent = this.deletedArtifactEventDAO.get(remote.getID());
         if (localDeletedArtifactEvent != null) {
-            log.info(String.format("Explanation1: DeletedArtifactEvent in L."
-                                       + "\nremote Artifact: %s\nlocal DeletedArtifactEvent: %s",
+            log.info(String.format("Artifact not in L && in R - Explanation1: DeletedArtifactEvent in L\n"
+                                       + "action: no action necessary\n"
+                                       + "remote - %s\nlocal DeletedArtifactEvent - %s",
                                    remote, localDeletedArtifactEvent));
             return;
         }
@@ -291,8 +296,9 @@ public class ArtifactValidator {
         DeletedStorageLocationEvent localDeletedStorageLocationEvent =
             this.deletedStorageLocationEventDAO.get(remote.getID());
         if (localDeletedStorageLocationEvent != null) {
-            log.info(String.format("Explanation2: DeletedStorageLocationEvent in L."
-                                       + "\nremote Artifact: %s\nlocal DeletedStorageLocationEvent: %s",
+            log.info(String.format("Artifact not in L && in R - Explanation2: DeletedStorageLocationEvent in L\n"
+                                       + "action: no action necessary"
+                                       + "\nremote - %s\nlocal DeletedStorageLocationEvent - %s",
                                    remote, localDeletedStorageLocationEvent));
             return;
         }
@@ -306,8 +312,10 @@ public class ArtifactValidator {
                 StorageSite remoteStorageSite = getRemoteStorageSite();
                 SiteLocation remoteSiteLocation = new SiteLocation(remoteStorageSite.getID());
                 if (!local.siteLocations.contains(remoteSiteLocation)) {
-                    log.info(String.format("Explanation4: Artifact in local db but siteLocations does not include "
-                                               + "remote siteID.\nArtifact: %s", remote));
+                    log.info(String.format("Artifact not in L && in R - Explanation4: Artifact in local db but "
+                                               + "siteLocations does not include remote siteID\n"
+                                               + "action: add siteID to Artifact.siteLocations\n"
+                                               + "remote - %s", remote));
                     return;
                 }
             }
@@ -316,7 +324,8 @@ public class ArtifactValidator {
         // explanation3: L==storage, new Artifact in R, pending/missed new Artifact event in L
         // evidence: ?
         // action: insert Artifact
-        log.info(String.format("Explanation3,0,6,7: \nremote Artifact: %s", remote));
+        log.info(String.format("Artifact not in L && in R - Explanation3,0,6,7\naction: insert Artifact\n"
+                                   + "remote - %s", remote));
     }
 
     /**
@@ -343,7 +352,8 @@ public class ArtifactValidator {
         if (local.getID().equals(remote.getID())) {
             log.info(String.format("ID's equal: - %s", local));
         } else if (!local.getID().equals(remote.getID())) {
-            log.info(String.format("ID mismatch:\nuri - %s\n local - %s %s\nremote - %s %s", local.getURI(),
+            log.info(String.format("ID mismatch:\npick winner\nuri - %s\n local - %s %s\nremote - %s %s",
+                                   local.getURI(),
                                    local.getID(), dateFormat.format(local.getLastModified()),
                                    remote.getID(), dateFormat.format(remote.getLastModified())));
         } else if (!local.getMetaChecksum().equals(remote.getMetaChecksum())) {
@@ -354,6 +364,10 @@ public class ArtifactValidator {
         }
     }
 
+
+    /**
+     * Get a remote Artifact
+     */
     Artifact getRemoteArtifact(URI uri)
         throws InterruptedException, IOException, ResourceNotFoundException, TransientException {
         final TapClient<Artifact> tapClient = new TapClient<>(this.resourceID);
@@ -369,6 +383,9 @@ public class ArtifactValidator {
         return returned;
     }
 
+    /**
+     * Get a remote DeletedArtifactEvent
+     */
     DeletedArtifactEvent getRemoteDeletedArtifactEvent(UUID id)
         throws InterruptedException, IOException, ResourceNotFoundException, TransientException {
         final TapClient<DeletedArtifactEvent> tapClient = new TapClient<>(this.resourceID);
@@ -385,7 +402,7 @@ public class ArtifactValidator {
     }
 
     /**
-     * Get the DeletedStorageLocalEvent
+     * Get a remote DeletedStorageLocalEvent
      */
     DeletedStorageLocationEvent getRemoteDeletedStorageLocationEvent(UUID id)
         throws InterruptedException, IOException, ResourceNotFoundException, TransientException {
@@ -403,7 +420,7 @@ public class ArtifactValidator {
     }
 
     /**
-     * Get the StorageSite for the instance resourceID;
+     * Get the StorageSite for the remote instance resourceID;
      */
     StorageSite getRemoteStorageSite()
         throws InterruptedException, IOException, ResourceNotFoundException, TransientException {
