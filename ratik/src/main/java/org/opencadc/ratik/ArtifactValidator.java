@@ -93,6 +93,10 @@ import org.opencadc.inventory.db.DeletedStorageLocationEventDAO;
 import org.opencadc.tap.TapClient;
 import org.opencadc.tap.TapRowMapper;
 
+/**
+ * Class that compares and validates two Artifacts, repairing the local Artifact to
+ * resolve any discrepancies.
+ */
 public class ArtifactValidator {
     private static final Logger log = Logger.getLogger(ArtifactValidator.class);
 
@@ -106,7 +110,7 @@ public class ArtifactValidator {
     private final DateFormat dateFormat;
 
     /**
-     * Class to compare and validate two Artifacts.
+     * Constructor
      *
      * @param artifactDAO local inventory database.
      * @param resourceID remote service resourceID.
