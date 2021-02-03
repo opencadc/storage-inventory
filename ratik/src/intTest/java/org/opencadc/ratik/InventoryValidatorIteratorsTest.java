@@ -425,10 +425,10 @@ public class InventoryValidatorIteratorsTest {
                                                                     TestUtil.LUSKAN_URI, new IncludeArtifacts(),
                                                                     new BucketSelector("a"), false) {
                 @Override
-                void validate(Artifact localArtifact, Artifact remoteArtifact) {
-                    orderedArtifacts.add(localArtifact);
+                void validate(Artifact local, Artifact remoteArtifact) {
+                    orderedArtifacts.add(local);
                     orderedArtifacts.add(remoteArtifact);
-                    logOrdered(localArtifact, remoteArtifact);
+                    logOrdered(local, remoteArtifact);
                 }
 
                 @Override ResourceIterator<Artifact> getLocalIterator(String bucket)

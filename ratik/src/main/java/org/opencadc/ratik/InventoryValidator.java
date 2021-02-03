@@ -168,6 +168,17 @@ public class InventoryValidator implements Runnable {
         }
     }
 
+    // Package access constructor for unit testing.
+    InventoryValidator() {
+        this.artifactDAO = null;
+        this.resourceID = null;
+        this.artifactSelector = null;
+        this.bucketSelector = null;
+        this.trackSiteLocations = false;
+        this.artifactValidator = null;
+    }
+
+
     @Override public void run() {
         try {
             final Subject subject = SSLUtil.createSubject(new File(CERTIFICATE_FILE_LOCATION));
@@ -200,37 +211,45 @@ public class InventoryValidator implements Runnable {
             try (final ResourceIterator<Artifact> localIterator = getLocalIterator(bucket);
                 final ResourceIterator<Artifact> remoteIterator = getRemoteIterator(bucket)) {
 
-                Artifact localArtifact = null;
-                Artifact remoteArtifact = null;
+                Artifact local = null;
+                Artifact remote = null;
                 boolean artifactsToValidate = true;
                 while (artifactsToValidate) {
-                    if (localArtifact == null) {
-                        localArtifact = localIterator.hasNext() ? localIterator.next() : null;
+                    if (local == null) {
+                        local = localIterator.hasNext() ? localIterator.next() : null;
                     }
-                    if (remoteArtifact == null) {
-                        remoteArtifact = remoteIterator.hasNext() ? remoteIterator.next() : null;
+                    if (remote == null) {
+                        remote = remoteIterator.hasNext() ? remoteIterator.next() : null;
                     }
                     // TODO sanity check? if either iterator has no results in the first loop, exit?
-                    if (localArtifact == null && remoteArtifact == null) {
+                    if (local == null && remote == null) {
                         artifactsToValidate = false;
                         continue;
                     }
                     log.debug(String.format("comparing Artifacts:\n local - %s\nremote - %s",
-                                            localArtifact, remoteArtifact));
+                                            local, remote));
 
                     // check if Artifacts are the same, or if the local Artifact
                     // precedes or follows the remote Artifact.
-                    int order = orderArtifacts(localArtifact, remoteArtifact);
-                    if (order == 0) {
-                        validate(localArtifact, remoteArtifact);
-                        localArtifact = null;
-                        remoteArtifact = null;
-                    } else if (order < 0) {
-                        validate(localArtifact, null);
-                        localArtifact = null;
-                    } else {
-                        validate(null, remoteArtifact);
-                        remoteArtifact = null;
+                    int order = orderArtifacts(local, remote);
+                    switch (order)  {
+                        case -1:
+                            validate(local, null);
+                            local = null;
+                            break;
+                        case 0:
+                            validate(local, remote);
+                            local = null;
+                            remote = null;
+                            break;
+                        case 1:
+                            validate(null, remote);
+                            remote = null;
+                            break;
+                        default:
+                            String message = String.format("Illegal Artifact order %s for:\n local - %s\remote - %s",
+                                                           order, local, remote);
+                            throw new IllegalStateException(message);
                     }
                 }
             } catch (IOException e) {
@@ -242,45 +261,50 @@ public class InventoryValidator implements Runnable {
     /**
      * Useful for overriding in tests.
      *
-     * @param localArtifact the local Artifact.
-     * @param remoteArtifact the remote Artifact.
+     * @param local the local Artifact.
+     * @param remote the remote Artifact.
      */
-    void validate(Artifact localArtifact, Artifact remoteArtifact) {
-        log.debug(String.format("validating:\n local - %s\nremote - %s", localArtifact, remoteArtifact));
-        artifactValidator.validate(localArtifact, remoteArtifact);
+    void validate(Artifact local, Artifact remote) {
+        log.debug(String.format("validating:\n local - %s\nremote - %s", local, remote));
+        artifactValidator.validate(local, remote);
     }
 
     /**
      * Order two Artifacts on the String representation of Artifact.uri.
      * Must match the ordering of a postgresql ORDER BY ASC on Artifact.uri.
-     * - if local equals remote returns 0.
-     * - if local lexicographically precedes remote returns a negative value.
-     * - if local lexicographically follows remote returns a positive value.
+     * If one Artifact is null it is considered to follow the other Artifact.
+     *
+     * <p>returns -1:
+     *  - if remote is null (remote orders after local)
+     *  - if local uri lexicographically orders before remote uri
+     * return 0:
+     *  - if local and remote are null
+     *  - if local uri equals remote uri
+     * return 1:
+     *  - if local is null (local orders after remote)
+     *  - if local uri lexicographically orders after remote uri
      */
-    int orderArtifacts(Artifact localArtifact, Artifact remoteArtifact) {
+    int orderArtifacts(Artifact local, Artifact remote) {
         log.debug(String.format("order artifact uri's:\n local - %s\nremote - %s",
-                                localArtifact == null ? "null" : localArtifact.getURI(),
-                                remoteArtifact == null ? "null" : remoteArtifact.getURI()));
-        int result;
-        if (localArtifact == null) {
-            result = 1;
-        } else if (remoteArtifact == null) {
-            result = -1;
+                                local == null ? "null" : local.getURI(),
+                                remote == null ? "null" : remote.getURI()));
+        int order;
+        if (local == null && remote == null) {
+            order = 0;
+        } else if (remote == null) {
+            order = -1;
+        } else if (local == null) {
+            order = 1;
         } else {
-            result = localArtifact.getURI().toString().compareTo(remoteArtifact.getURI().toString());
+            // returns int < 0 if local precedes remote
+            // returns 0 if local equals remote
+            // returns int > 0 if local follows remote
+            int uriOrder = local.getURI().compareTo(remote.getURI());
+
+            // returns -1 if uriOrder < 0, 0 if uriOrder = 0, 1 if uriOrder > 0
+            order = Integer.compare(uriOrder, 0);
         }
-        if (log.isDebugEnabled()) {
-            String message;
-            if (result == 0) {
-                message = "local equals remote";
-            } else if (result < 0) {
-                message = "local before remote";
-            } else {
-                message = "local after remote";
-            }
-            log.debug("order: " + message);
-        }
-        return result;
+        return order;
     }
 
     /**
@@ -336,8 +360,6 @@ public class InventoryValidator implements Runnable {
             .append("contentEncoding, lastModified, metaChecksum FROM inventory.Artifact ");
 
         if (StringUtil.hasText(this.artifactSelector.getConstraint())) {
-            log.debug(String.format("\nInjecting artifact selector clause '%s'\n",
-                                    this.artifactSelector.getConstraint()));
             if (query.indexOf("WHERE") < 0) {
                 query.append(" WHERE ");
             } else {
@@ -347,7 +369,6 @@ public class InventoryValidator implements Runnable {
         }
 
         if (StringUtil.hasText(bucket)) {
-            log.debug(String.format("\nInjecting bucket selector clause '%s'\n", bucket));
             if (query.indexOf("WHERE") < 0) {
                 query.append(" WHERE ");
             } else {
