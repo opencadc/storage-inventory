@@ -105,7 +105,7 @@ public class ArtifactDAOTest {
 
     static {
         Log4jInit.setLevel("org.opencadc.inventory", Level.INFO);
-        Log4jInit.setLevel("org.opencadc.inventory.db", Level.INFO);
+        Log4jInit.setLevel("org.opencadc.inventory.db", Level.DEBUG);
         Log4jInit.setLevel("ca.nrc.cadc.db", Level.INFO);
     }
     
@@ -801,14 +801,56 @@ public class ArtifactDAOTest {
             }
             log.info("added: " + numArtifacts);
             
+            log.info("count all...");
             int count = 0;
+            try (ResourceIterator<Artifact> iter = originDAO.iterator(null, null, false)) {
+                while (iter.hasNext()) {
+                    Artifact actual = iter.next();
+                    count++;
+                    log.info("found: " + actual.getURI());
+                }
+            }
+            Assert.assertEquals("count", numArtifacts, count);
+            
+            log.info("count with criteria...");
+            count = 0;
             try (ResourceIterator<Artifact> iter = originDAO.iterator("uri like 'cadc:STUFF/%'", null, false)) {
                 while (iter.hasNext()) {
                     Artifact actual = iter.next();
                     count++;
-
                     log.info("found: " + actual.getURI());
                     Assert.assertTrue("STUFF", actual.getURI().toASCIIString().startsWith("cadc:STUFF/"));
+                }
+            }
+            Assert.assertEquals("count", numExpected, count);
+            
+            log.info("count in buckets...");
+            count = 0;
+            for (byte b = 0; b < 16; b++) {
+                String bpre = HexUtil.toHex(b).substring(1);
+                log.debug("bucket prefix: " + bpre);
+                try (ResourceIterator<Artifact> iter = originDAO.iterator(null, bpre, false)) {
+                    while (iter.hasNext()) {
+                        Artifact actual = iter.next();
+                        count++;
+                        log.info("found: " + actual.getURI());
+                    }
+                }
+            }
+            Assert.assertEquals("count", numArtifacts, count);
+            
+            log.info("count with criteria + in buckets...");
+            count = 0;
+            for (byte b = 0; b < 16; b++) {
+                String bpre = HexUtil.toHex(b).substring(1);
+                log.debug("bucket prefix: " + bpre);
+                try (ResourceIterator<Artifact> iter = originDAO.iterator("uri like 'cadc:STUFF/%'", bpre, false)) {
+                    while (iter.hasNext()) {
+                        Artifact actual = iter.next();
+                        count++;
+                        log.info("found: " + actual.getURI());
+                        Assert.assertTrue("STUFF", actual.getURI().toASCIIString().startsWith("cadc:STUFF/"));
+                    }
                 }
             }
             Assert.assertEquals("count", numExpected, count);
