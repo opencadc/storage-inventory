@@ -280,7 +280,7 @@ public class AdStorageAdapter implements StorageAdapter {
         try {
             tc = new TapClient(URI.create(TAP_SERVICE_URI));
         } catch (ResourceNotFoundException rnfe) {
-            throw new StorageEngageException("Unable to connect to tap client: " + rnfe.getMessage());
+            throw new StorageEngageException("Unable to connect to tap client: ", rnfe);
         }
         AdStorageQuery adQuery = new AdStorageQuery(storageBucket);
         Iterator<StorageMetadata> storageMetadataIterator = null;

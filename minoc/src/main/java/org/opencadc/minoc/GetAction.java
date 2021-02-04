@@ -68,10 +68,21 @@
 package org.opencadc.minoc;
 
 import ca.nrc.cadc.io.WriteException;
+import ca.nrc.cadc.net.HttpTransfer;
+
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
 import org.apache.log4j.Logger;
+import org.opencadc.fits.FitsOperations;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.StorageLocation;
+import org.opencadc.minoc.operations.CutoutFileNameFormat;
+import org.opencadc.minoc.operations.ProxyRandomAccessFits;
 import org.opencadc.permissions.ReadGrant;
+import org.opencadc.soda.ExtensionSlice;
+import org.opencadc.soda.SodaParamValidator;
 
 /**
  * Interface with storage and inventory to get an artifact.
@@ -81,6 +92,9 @@ import org.opencadc.permissions.ReadGrant;
 public class GetAction extends ArtifactAction {
     
     private static final Logger log = Logger.getLogger(GetAction.class);
+    private static final String CONTENT_DISPOSITION = "Content-Disposition";
+    private static final SodaParamValidator SODA_PARAM_VALIDATOR = new SodaParamValidator();
+
 
     /**
      * Default, no-arg constructor.
@@ -90,7 +104,8 @@ public class GetAction extends ArtifactAction {
     }
 
     /**
-     * Download the artifact or cutouts of the artifact.
+     * Download the artifact or cutouts of the artifact.  In the event that an optional cutout was requested, then
+     * mangle the output filename to reflect the requested values.
      */
     @Override
     public void doAction() throws Exception {
@@ -98,13 +113,32 @@ public class GetAction extends ArtifactAction {
         initAndAuthorize(ReadGrant.class);
         
         Artifact artifact = getArtifact(artifactURI);
-        HeadAction.setHeaders(artifact, syncOutput);
-        
+
+        final List<String> requestedSubs = syncInput.getParameters(SodaParamValidator.SUB);
+
         StorageLocation storageLocation = new StorageLocation(artifact.storageLocation.getStorageID());
         storageLocation.storageBucket = artifact.storageLocation.storageBucket;
         log.debug("retrieving artifact from storage...");
         try {
-            storageAdapter.get(storageLocation, syncOutput.getOutputStream());
+            if (requestedSubs == null || requestedSubs.isEmpty()) {
+                HeadAction.setHeaders(artifact, syncOutput);
+                storageAdapter.get(storageLocation, syncOutput.getOutputStream());
+            } else {
+                // If any cutouts were requested
+                final Map<String, List<String>> subMap = new HashMap<>();
+                subMap.put(SodaParamValidator.SUB, requestedSubs);
+                final List<ExtensionSlice> slices = SODA_PARAM_VALIDATOR.validateSUB(subMap);
+                final String schemePath = artifactURI.getSchemeSpecificPart();
+                final String fileName = schemePath.substring(schemePath.lastIndexOf("/") + 1);
+                final CutoutFileNameFormat cutoutFileNameFormat = new CutoutFileNameFormat(fileName);
+                syncOutput.setHeader(CONTENT_DISPOSITION, "inline; filename=\""
+                                                          + cutoutFileNameFormat.format(slices) + "\"");
+                syncOutput.setHeader(HttpTransfer.CONTENT_TYPE, "application/fits");
+                final FitsOperations fitsOperations =
+                        new FitsOperations(new ProxyRandomAccessFits(this.storageAdapter, artifact.storageLocation,
+                                                                     artifact.getContentLength()));
+                fitsOperations.cutoutToStream(slices, syncOutput.getOutputStream());
+            }
         } catch (WriteException e) {
             // error on client write
             String msg = "write output error";
@@ -117,5 +151,4 @@ public class GetAction extends ArtifactAction {
         log.debug("retrieved artifact from storage");
 
     }
-
 }

@@ -62,120 +62,95 @@
  *  <http://www.gnu.org/licenses/>.      pas le cas, consultez :
  *                                       <http://www.gnu.org/licenses/>.
  *
- *  $Revision: 4 $
  *
  ************************************************************************
  */
 
-package org.opencadc.inventory.storage.ad;
+package org.opencadc.minoc;
 
-import java.net.URI;
-import java.net.URISyntaxException;
-import java.util.Date;
-import java.util.Iterator;
-import java.util.List;
+import java.util.Arrays;
 
+import ca.nrc.cadc.util.Log4jInit;
+import nom.tam.fits.BasicHDU;
+import nom.tam.fits.Fits;
+import nom.tam.fits.Header;
+import nom.tam.fits.HeaderCard;
+import nom.tam.fits.header.IFitsHeader;
+import nom.tam.fits.header.Standard;
+import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
-import org.opencadc.inventory.InventoryUtil;
-import org.opencadc.inventory.StorageLocation;
-import org.opencadc.inventory.storage.StorageMetadata;
-import org.opencadc.tap.TapRowMapper;
+import org.junit.Assert;
 
-/**
- * Provide query and RowMapper instance for grabbing data from ad.
- * RowMapper maps from ad's archive_files table to a StorageMetadata object.
- */
-public class AdStorageQuery {
-    private static final Logger log = Logger.getLogger(AdStorageQuery.class);
-    // Query to use that will pull data in the order required by the mapRow function
-    private String queryTemplate = "select archiveName, inventoryURI, contentMD5, fileSize,"
-            + " uri, contentEncoding, contentType, ingestDate"
-            + " from archive_files where archiveName='%s' order by uri asc, ingestDate desc";
-    private String query = "";
 
-    private static String MD5_ENCODING_SCHEME = "md5:";
+public class FitsTest {
+    private static final Logger LOGGER = Logger.getLogger(FitsTest.class);
 
-    AdStorageQuery(String storageBucket) {
-        InventoryUtil.assertNotNull(AdStorageQuery.class, "storageBucket", storageBucket);
-        setQuery(storageBucket);
+    static {
+        Log4jInit.setLevel("org.opencadc", Level.DEBUG);
     }
 
-    public TapRowMapper<StorageMetadata> getRowMapper() {
-        return new AdStorageMetadataRowMapper();
-    }
+    private static final IFitsHeader[] HEADER_CARD_KEYS_TO_CHECK = new IFitsHeader[]{
+            Standard.BITPIX, Standard.NAXIS, Standard.EXTNAME, Standard.XTENSION, Standard.SIMPLE, Standard.EXTVER,
+            Standard.BSCALE, Standard.BUNIT
+    };
 
-    class AdStorageMetadataRowMapper implements TapRowMapper<StorageMetadata> {
+    public static void assertFitsEqual(final Fits expected, final Fits result) throws Exception {
+        final BasicHDU<?>[] expectedHDUList = expected.read();
+        final BasicHDU<?>[] resultHDUList = result.read();
 
-        public AdStorageMetadataRowMapper() { }
+        Assert.assertEquals("Wrong number of HDUs.", expectedHDUList.length, resultHDUList.length);
 
-        @Override
-        public StorageMetadata mapRow(List<Object> row) {
-            Iterator i = row.iterator();
+        for (int expectedIndex = 0; expectedIndex < expectedHDUList.length; expectedIndex++) {
+            final BasicHDU<?> nextExpectedHDU = expectedHDUList[expectedIndex];
+            final BasicHDU<?> nextResultHDU = resultHDUList[expectedIndex];
 
-            // archive_files.archiveName
-            String storageBucket = (String) i.next();
-
-            // archive_files.inventoryURI
-            URI artifactID = (URI) i.next();
-
-            // check for null uri(storageID) and log error
-            if (artifactID == null) {
-                String sb = "ERROR: uri=null in ad.archive_files for archiveName=" + storageBucket;
-                log.error(sb);
-                return null;
-            }
-
-            // archive_files.contentMD5 is just the hex value
-            URI contentChecksum = null;
             try {
-                contentChecksum = new URI(MD5_ENCODING_SCHEME + i.next());
-            } catch (URISyntaxException u) {
-                log.debug("checksum error: " + artifactID.toString() + ": " + u.getMessage());
+                FitsTest.assertHDUEqual(nextExpectedHDU, nextResultHDU);
+            } catch (AssertionError assertionError) {
+                LOGGER.error("On Extension at index " + expectedIndex);
+                throw assertionError;
             }
+        }
+    }
 
-            // archive_files.fileSize
-            Long contentLength = (Long) i.next();
-            if (contentLength == null) {
-                log.debug("content length error (null): " + artifactID.toString());
-            }
+    public static void assertHDUEqual(final BasicHDU<?> expectedHDU, final BasicHDU<?> resultHDU) throws Exception {
+        final Header expectedHeader = expectedHDU.getHeader();
+        final Header resultHeader = resultHDU.getHeader();
 
-            // archive_files.uri
-            URI storageID = (URI) i.next();
+        FitsTest.assertHeadersEqual(expectedHeader, resultHeader);
+    }
 
-            // Set up StorageLocation object first
-            StorageLocation storageLocation = new StorageLocation(storageID);
-            storageLocation.storageBucket = storageBucket;
+    public static void assertHeadersEqual(final Header expectedHeader, final Header resultHeader) throws Exception {
+        Arrays.stream(HEADER_CARD_KEYS_TO_CHECK).forEach(headerCardKey -> {
+            final HeaderCard expectedCard = expectedHeader.findCard(headerCardKey);
+            final HeaderCard resultCard = resultHeader.findCard(headerCardKey);
 
-            // Build StorageMetadata object
-            StorageMetadata storageMetadata;
-            if (contentChecksum == null || (contentLength == null || contentLength == 0)) {
-                storageMetadata = new StorageMetadata(storageLocation);
+            if (expectedCard == null) {
+                Assert.assertNull("Card " + headerCardKey.key() + " should be null.", resultCard);
             } else {
-                storageMetadata = new StorageMetadata(storageLocation, contentChecksum, contentLength);
+                Assert.assertNotNull("Header " + headerCardKey.key() + " should not be null.", resultCard);
+                Assert.assertEquals("Header " + headerCardKey.key() + " has the wrong value.",
+                                    expectedCard.getValue(), resultCard.getValue());
             }
-            storageMetadata.artifactURI = artifactID;
+        });
 
-            // Set optional values into ret at this point - allowed to be null
-            storageMetadata.contentEncoding = (String) i.next();
-            storageMetadata.contentType = (String) i.next();
-            storageMetadata.contentLastModified = (Date) i.next();
+        final int axes = expectedHeader.getIntValue(Standard.NAXIS);
+        Assert.assertEquals("Wrong NAXIS value.", axes, resultHeader.getIntValue(Standard.NAXIS));
+        for (int i = 1; i <= axes; i++) {
+            final int expectedAxes = expectedHeader.getIntValue(Standard.NAXISn.n(i));
+            final int resultAxes = resultHeader.getIntValue(Standard.NAXISn.n(i));
 
-            log.debug("StorageMetadata: " + storageMetadata);
-            return storageMetadata;
+            Assert.assertEquals("Wrong NAXIS" + i + " value.", expectedAxes, resultAxes, 0.1);
+
+            final double expectedCRPix = expectedHeader.getDoubleValue(Standard.CRPIXn.n(i));
+            final double resultCRPix = resultHeader.getDoubleValue(Standard.CRPIXn.n(i));
+
+            Assert.assertEquals("Wrong CRPIX" + i + " value.", expectedCRPix, resultCRPix, 0.1);
+
+            final double expectedCRVal = expectedHeader.getDoubleValue(Standard.CRVALn.n(i));
+            final double resultCRVal = resultHeader.getDoubleValue(Standard.CRVALn.n(i));
+
+            Assert.assertEquals("Wrong CRVAL" + i + " value.", expectedCRVal, resultCRVal, 0.1);
         }
-    }
-
-    // Getters & Setters
-
-    public String getQuery() {
-        return this.query;
-    }
-
-    public void setQuery(String storageBucket) {
-        if (storageBucket == null || storageBucket.length() == 0) {
-            throw new IllegalArgumentException("Storage bucket (archive) an not be null.");
-        }
-        this.query = String.format(this.queryTemplate, storageBucket);
     }
 }
-
