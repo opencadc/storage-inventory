@@ -168,16 +168,16 @@ public class InventoryValidator implements Runnable {
         }
     }
 
-    // Package access constructor for unit testing.
-    InventoryValidator() {
-        this.artifactDAO = null;
-        this.resourceID = null;
-        this.artifactSelector = null;
-        this.bucketSelector = null;
-        this.trackSiteLocations = false;
-        this.artifactValidator = null;
+    // Package access constructor for testing.
+    InventoryValidator(ArtifactDAO artifactDAO, URI resourceID, ArtifactSelector artifactSelector,
+                       BucketSelector bucketSelector, boolean trackSiteLocations, ArtifactValidator artifactValidator) {
+        this.artifactDAO = artifactDAO;
+        this.resourceID = resourceID;
+        this.artifactSelector = artifactSelector;
+        this.trackSiteLocations = trackSiteLocations;
+        this.bucketSelector = bucketSelector;
+        this.artifactValidator = artifactValidator;
     }
-
 
     @Override public void run() {
         try {
@@ -204,57 +204,76 @@ public class InventoryValidator implements Runnable {
     void doit() throws ResourceNotFoundException, IOException, IllegalStateException, TransientException,
                        InterruptedException {
 
-        Iterator<String> bucketIterator = this.bucketSelector.getBucketIterator();
-        while (bucketIterator.hasNext()) {
-            final String bucket = bucketIterator.next();
-            log.debug("processing bucket: " + bucket);
-            try (final ResourceIterator<Artifact> localIterator = getLocalIterator(bucket);
-                final ResourceIterator<Artifact> remoteIterator = getRemoteIterator(bucket)) {
-
-                Artifact local = null;
-                Artifact remote = null;
-                boolean artifactsToValidate = true;
-                while (artifactsToValidate) {
-                    if (local == null) {
-                        local = localIterator.hasNext() ? localIterator.next() : null;
-                    }
-                    if (remote == null) {
-                        remote = remoteIterator.hasNext() ? remoteIterator.next() : null;
-                    }
-                    // TODO sanity check? if either iterator has no results in the first loop, exit?
-                    if (local == null && remote == null) {
-                        artifactsToValidate = false;
-                        continue;
-                    }
-                    log.debug(String.format("comparing Artifacts:\n local - %s\nremote - %s",
-                                            local, remote));
-
-                    // check if Artifacts are the same, or if the local Artifact
-                    // precedes or follows the remote Artifact.
-                    int order = orderArtifacts(local, remote);
-                    switch (order)  {
-                        case -1:
-                            validate(local, null);
-                            local = null;
-                            break;
-                        case 0:
-                            validate(local, remote);
-                            local = null;
-                            remote = null;
-                            break;
-                        case 1:
-                            validate(null, remote);
-                            remote = null;
-                            break;
-                        default:
-                            String message = String.format("Illegal Artifact order %s for:\n local - %s\remote - %s",
-                                                           order, local, remote);
-                            throw new IllegalStateException(message);
-                    }
-                }
-            } catch (IOException e) {
-                log.error("Error closing iterator: " + e.getMessage());
+        if (this.bucketSelector == null) {
+            iterateBucket(null);
+        } else {
+            Iterator<String> bucketIterator = this.bucketSelector.getBucketIterator();
+            while (bucketIterator.hasNext()) {
+                iterateBucket(bucketIterator.next());
             }
+        }
+    }
+
+    /**
+     * Validates sets of Artifacts from the given bucket.
+     *
+     * @param bucket    The Artifact bucket to validate.
+     * @throws ResourceNotFoundException For any missing required configuration that is missing.
+     * @throws IOException               For unreadable configuration files.
+     * @throws IllegalStateException     For any invalid configuration.
+     * @throws TransientException        temporary failure of TAP service: same call could work in future
+     * @throws InterruptedException      thread interrupted
+     */
+    void iterateBucket(String bucket)
+        throws ResourceNotFoundException, IOException, IllegalStateException, TransientException,
+               InterruptedException {
+        log.debug("processing bucket: " + bucket);
+        try (final ResourceIterator<Artifact> localIterator = getLocalIterator(bucket);
+            final ResourceIterator<Artifact> remoteIterator = getRemoteIterator(bucket)) {
+
+            Artifact local = null;
+            Artifact remote = null;
+            boolean artifactsToValidate = true;
+            while (artifactsToValidate) {
+                if (local == null) {
+                    local = localIterator.hasNext() ? localIterator.next() : null;
+                }
+                if (remote == null) {
+                    remote = remoteIterator.hasNext() ? remoteIterator.next() : null;
+                }
+                // TODO sanity check? if either iterator has no results in the first loop, exit?
+                if (local == null && remote == null) {
+                    artifactsToValidate = false;
+                    continue;
+                }
+                log.debug(String.format("comparing Artifacts:\n local - %s\nremote - %s",
+                                        local, remote));
+
+                // check if Artifacts are the same, or if the local Artifact
+                // precedes or follows the remote Artifact.
+                int order = orderArtifacts(local, remote);
+                switch (order)  {
+                    case -1:
+                        validate(local, null);
+                        local = null;
+                        break;
+                    case 0:
+                        validate(local, remote);
+                        local = null;
+                        remote = null;
+                        break;
+                    case 1:
+                        validate(null, remote);
+                        remote = null;
+                        break;
+                    default:
+                        String message = String.format("Illegal Artifact order %s for:\n local - %s\remote - %s",
+                                                       order, local, remote);
+                        throw new IllegalStateException(message);
+                }
+            }
+        } catch (IOException e) {
+            log.error("Error closing iterator: " + e.getMessage());
         }
     }
 
@@ -375,6 +394,7 @@ public class InventoryValidator implements Runnable {
                 query.append(" AND ");
             }
             query.append("(uribucket LIKE '").append(bucket.trim()).append("%')");
+            log.debug("************query: " + query.toString());
         }
         query.append(" ORDER BY uri ASC");
         return query.toString();

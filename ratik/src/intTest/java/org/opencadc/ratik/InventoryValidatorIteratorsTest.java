@@ -71,9 +71,6 @@ package org.opencadc.ratik;
 
 import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
 
-import ca.nrc.cadc.io.ResourceIterator;
-import ca.nrc.cadc.net.ResourceNotFoundException;
-import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.util.Log4jInit;
 import java.io.File;
 import java.io.FileWriter;
@@ -84,7 +81,6 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Date;
-import java.util.Iterator;
 import java.util.List;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
@@ -99,23 +95,25 @@ public class InventoryValidatorIteratorsTest {
     private static final Logger log = Logger.getLogger(InventoryValidatorIteratorsTest.class);
 
     static {
-        Log4jInit.setLevel("org.opencadc.ratik", Level.INFO);
+        Log4jInit.setLevel("org.opencadc.ratik", Level.DEBUG);
         Log4jInit.setLevel("org.opencadc.inventory", Level.INFO);
-        Log4jInit.setLevel("org.opencadc.inventory.db", Level.INFO);
+        Log4jInit.setLevel("org.opencadc.inventory.db", Level.DEBUG);
         Log4jInit.setLevel("ca.nrc.cadc.db", Level.INFO);
     }
 
     static String TMP_DIR = "build/tmp";
     static String USER_HOME = System.getProperty("user.home");
+
     private final InventoryEnvironment localEnvironment = new InventoryEnvironment();
+    private final LuskanEnvironment remoteEnvironment = new LuskanEnvironment();
 
-    public InventoryValidatorIteratorsTest() throws Exception {
-
-    }
+    public InventoryValidatorIteratorsTest() throws Exception {}
 
     @Before
     public void beforeTest() throws Exception {
         writeConfig();
+        this.localEnvironment.cleanTestEnvironment();
+        this.remoteEnvironment.cleanTestEnvironment();
     }
 
     private void writeConfig() throws IOException {
@@ -137,30 +135,66 @@ public class InventoryValidatorIteratorsTest {
         Files.copy(sourcePath, destPath, REPLACE_EXISTING);
     }
 
+    @Test
+    public void foo() throws Exception {
+        Artifact artifact1 = buildArtifact("cadc:INTTEST/file1.ext");
+        Artifact artifact2 = buildArtifact("cadc:INTTEST/file2.ext");
+        Artifact artifact3 = buildArtifact("cadc:INTTEST/file3.ext");
+
+        this.localEnvironment.artifactDAO.put(artifact1);
+        this.localEnvironment.artifactDAO.put(artifact2);
+        this.localEnvironment.artifactDAO.put(artifact3);
+        this.remoteEnvironment.artifactDAO.put(artifact1);
+        this.remoteEnvironment.artifactDAO.put(artifact2);
+        this.remoteEnvironment.artifactDAO.put(artifact3);
+
+        logArtifact(artifact1, "local ");
+        logArtifact(artifact2, "local ");
+        logArtifact(artifact3, "local ");
+        logArtifact(artifact1, "remote");
+        logArtifact(artifact2, "remote");
+        logArtifact(artifact3, "remote");
+
+        String bucket2 = artifact2.getBucket().substring(0, 1);
+
+        List<Artifact> ordered = new ArrayList<>();
+        orderArtifacts(ordered, bucket2);
+        Assert.assertEquals(2, ordered.size());
+
+        // 1st iterator loop
+        Artifact local = ordered.get(0);
+        Assert.assertNotNull(local);
+        Assert.assertEquals(artifact2, local);
+
+        Artifact remote = ordered.get(1);
+        Assert.assertNotNull(remote);
+        Assert.assertEquals(artifact2, remote);
+    }
+
     /**
      * 2 Artifacts in both local and remote.
      * 2 iterator loops should validate the same Artifact.
      */
     @Test
     public void artifactsEqual() throws Exception {
-        List<Artifact> locals = new ArrayList<>();
-        List<Artifact> remotes = new ArrayList<>();
-
         Artifact artifact1 = buildArtifact("cadc:INTTEST/file1.ext");
         Artifact artifact2 = buildArtifact("cadc:INTTEST/file2.ext");
-        locals.add(artifact1);
-        locals.add(artifact2);
-        remotes.add(artifact1);
-        remotes.add(artifact2);
 
-        logArtifacts(locals, " local");
-        logArtifacts(remotes, "remote");
+        this.localEnvironment.artifactDAO.put(artifact1);
+        this.localEnvironment.artifactDAO.put(artifact2);
+        this.remoteEnvironment.artifactDAO.put(artifact1);
+        this.remoteEnvironment.artifactDAO.put(artifact2);
+
+        logArtifact(artifact1, "local ");
+        logArtifact(artifact2, "local ");
+        logArtifact(artifact1, "remote");
+        logArtifact(artifact2, "remote");
 
         List<Artifact> ordered = new ArrayList<>();
-        orderArtifacts(locals, remotes, ordered);
+        orderArtifacts(ordered, null);
         Assert.assertEquals(4, ordered.size());
 
-        // 1st iterator loop
+        // 1st iterator loop [artifact1, artifact1]
         Artifact local = ordered.get(0);
         Assert.assertNotNull(local);
         Assert.assertEquals(artifact1, local);
@@ -169,7 +203,7 @@ public class InventoryValidatorIteratorsTest {
         Assert.assertNotNull(remote);
         Assert.assertEquals(artifact1, remote);
 
-        // 2nd iterator loop
+        // 2nd iterator loop [artifact2, artifact2]
         local = ordered.get(2);
         Assert.assertNotNull(local);
         Assert.assertEquals(artifact2, local);
@@ -185,19 +219,15 @@ public class InventoryValidatorIteratorsTest {
      */
     @Test
     public void localOnly() throws Exception {
-        List<Artifact> locals = new ArrayList<>();
-        List<Artifact> remotes = new ArrayList<>();
-
         Artifact artifact1 = buildArtifact("cadc:INTTEST/file1.ext");
         Artifact artifact2 = buildArtifact("cadc:INTTEST/file2.ext");
-        locals.add(artifact1);
-        locals.add(artifact2);
-
-        logArtifacts(locals, " local");
-        logArtifacts(remotes, "remote");
+        this.localEnvironment.artifactDAO.put(artifact1);
+        this.localEnvironment.artifactDAO.put(artifact2);
+        logArtifact(artifact1, "local ");
+        logArtifact(artifact2, "local ");
 
         List<Artifact> ordered = new ArrayList<>();
-        orderArtifacts(locals, remotes, ordered);
+        orderArtifacts(ordered, null);
         Assert.assertEquals(4, ordered.size());
 
         // 1st iterator loop [artifact1, null]
@@ -223,19 +253,15 @@ public class InventoryValidatorIteratorsTest {
      */
     @Test
     public void remoteOnly() throws Exception {
-        List<Artifact> locals = new ArrayList<>();
-        List<Artifact> remotes = new ArrayList<>();
-
         Artifact artifact1 = buildArtifact("cadc:INTTEST/file1.ext");
         Artifact artifact2 = buildArtifact("cadc:INTTEST/file2.ext");
-        remotes.add(artifact1);
-        remotes.add(artifact2);
-
-        logArtifacts(locals, " local");
-        logArtifacts(remotes, "remote");
+        this.remoteEnvironment.artifactDAO.put(artifact1);
+        this.remoteEnvironment.artifactDAO.put(artifact2);
+        logArtifact(artifact1, "remote");
+        logArtifact(artifact2, "remote");
 
         List<Artifact> ordered = new ArrayList<>();
-        orderArtifacts(locals, remotes, ordered);
+        orderArtifacts(ordered, null);
         Assert.assertEquals(4, ordered.size());
 
         // 1st iterator loop [null, artifact1]
@@ -263,22 +289,19 @@ public class InventoryValidatorIteratorsTest {
      */
     @Test
     public void localBeforeRemote() throws Exception {
-        List<Artifact> locals = new ArrayList<>();
-        List<Artifact> remotes = new ArrayList<>();
-
         Artifact artifact1 = buildArtifact("cadc:INTTEST/file1.ext");
         Artifact artifact2 = buildArtifact("cadc:INTTEST/file2.ext");
-        locals.add(artifact1);
-        locals.add(artifact2);
+        this.localEnvironment.artifactDAO.put(artifact1);
+        this.localEnvironment.artifactDAO.put(artifact2);
+        logArtifact(artifact1, "local ");
+        logArtifact(artifact2, "local ");
 
         Artifact artifact3 = buildArtifact("cadc:INTTEST/file3.ext");
-        remotes.add(artifact3);
-
-        logArtifacts(locals, " local");
-        logArtifacts(remotes, "remote");
+        this.remoteEnvironment.artifactDAO.put(artifact3);
+        logArtifact(artifact3, "remote");
 
         List<Artifact> ordered = new ArrayList<>();
-        orderArtifacts(locals, remotes, ordered);
+        orderArtifacts(ordered, null);
         Assert.assertEquals(6, ordered.size());
 
         // 1st iterator loop [artifact1, null]
@@ -314,22 +337,19 @@ public class InventoryValidatorIteratorsTest {
      */
     @Test
     public void localAfterRemote() throws Exception {
-        List<Artifact> locals = new ArrayList<>();
-        List<Artifact> remotes = new ArrayList<>();
-
         Artifact artifact3 = buildArtifact("cadc:INTTEST/file3.ext");
-        locals.add(artifact3);
+        this.localEnvironment.artifactDAO.put(artifact3);
+        logArtifact(artifact3, "local ");
 
         Artifact artifact1 = buildArtifact("cadc:INTTEST/file1.ext");
         Artifact artifact2 = buildArtifact("cadc:INTTEST/file2.ext");
-        remotes.add(artifact1);
-        remotes.add(artifact2);
-
-        logArtifacts(locals, " local");
-        logArtifacts(remotes, "remote");
+        this.remoteEnvironment.artifactDAO.put(artifact1);
+        this.remoteEnvironment.artifactDAO.put(artifact2);
+        logArtifact(artifact1, "remote");
+        logArtifact(artifact2, "remote");
 
         List<Artifact> ordered = new ArrayList<>();
-        orderArtifacts(locals, remotes, ordered);
+        orderArtifacts(ordered, null);
         Assert.assertEquals(6, ordered.size());
 
         // 1st iterator loop [null, artifact1]
@@ -364,24 +384,22 @@ public class InventoryValidatorIteratorsTest {
      */
     @Test
     public void alternatingOrder() throws Exception {
-        List<Artifact> locals = new ArrayList<>();
-        List<Artifact> remotes = new ArrayList<>();
-
         Artifact artifact1 = buildArtifact("cadc:INTTEST/file1.ext");
         Artifact artifact3 = buildArtifact("cadc:INTTEST/file3.ext");
-        locals.add(artifact1);
-        locals.add(artifact3);
+        this.localEnvironment.artifactDAO.put(artifact1);
+        this.localEnvironment.artifactDAO.put(artifact3);
+        logArtifact(artifact1, "local ");
+        logArtifact(artifact3, "local ");
 
         Artifact artifact2 = buildArtifact("cadc:INTTEST/file2.ext");
         Artifact artifact4 = buildArtifact("cadc:INTTEST/file4.ext");
-        remotes.add(artifact2);
-        remotes.add(artifact4);
-
-        logArtifacts(locals, " local");
-        logArtifacts(remotes, "remote");
+        this.remoteEnvironment.artifactDAO.put(artifact2);
+        this.remoteEnvironment.artifactDAO.put(artifact4);
+        logArtifact(artifact2, "remote");
+        logArtifact(artifact4, "remote");
 
         List<Artifact> ordered = new ArrayList<>();
-        orderArtifacts(locals, remotes, ordered);
+        orderArtifacts(ordered, null);
         Assert.assertEquals(8, ordered.size());
 
         // 1st iterator loop [artifact1, null]
@@ -417,31 +435,22 @@ public class InventoryValidatorIteratorsTest {
         Assert.assertEquals(artifact4, remote);
     }
 
-    private void orderArtifacts(List<Artifact> localArtifacts, List<Artifact> remoteArtifacts,
-                                List<Artifact> orderedArtifacts) {
+    private void orderArtifacts(List<Artifact> ordered, String bucket) {
+        BucketSelector bucketSelector = null;
+        if (bucket != null) {
+            bucketSelector = new BucketSelector(bucket);
+        }
         try {
             System.setProperty("user.home", TMP_DIR);
-            InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.daoConfig,
+            InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.artifactDAO,
                                                                     TestUtil.LUSKAN_URI, new IncludeArtifacts(),
-                                                                    new BucketSelector("a"), false) {
+                                                                    bucketSelector, false, null) {
                 @Override
                 void validate(Artifact local, Artifact remoteArtifact) {
-                    orderedArtifacts.add(local);
-                    orderedArtifacts.add(remoteArtifact);
+                    ordered.add(local);
+                    ordered.add(remoteArtifact);
                     logOrdered(local, remoteArtifact);
                 }
-
-                @Override ResourceIterator<Artifact> getLocalIterator(String bucket)
-                    throws ResourceNotFoundException, IOException {
-                    return new ArtifactIterator<Artifact>(localArtifacts);
-                }
-
-                @Override ResourceIterator<Artifact> getRemoteIterator(String bucket)
-                    throws ResourceNotFoundException, IOException, IllegalStateException,
-                           TransientException, InterruptedException {
-                    return new ArtifactIterator<Artifact>(remoteArtifacts);
-                }
-
             };
             testSubject.run();
         } finally {
@@ -454,38 +463,14 @@ public class InventoryValidatorIteratorsTest {
         return new Artifact(URI.create(uri), TestUtil.getRandomMD5(), new Date(), 1024L);
     }
 
-    private void logArtifacts(List<Artifact> artifacts, String site) {
-        for (Artifact artifact: artifacts) {
-            log.info(String.format("%s Artifact - %s", site, artifact.getURI()));
-        }
+    private void logArtifact(Artifact artifact, String site) {
+        log.info(String.format("%s Artifact - %s", site, artifact.getURI()));
     }
 
     private void logOrdered(Artifact localArtifact, Artifact remoteArtifact) {
         String local = (localArtifact == null ? "null" : localArtifact.getURI().toString());
         String remote = (remoteArtifact == null ? "null" : remoteArtifact.getURI().toString());
-        log.info(String.format("ordered:\n local - %s\nremote - %s", local, remote));
-    }
-
-    static class ArtifactIterator<Artifact> implements ResourceIterator<Artifact> {
-
-        Iterator<Artifact> iterator;
-
-        public ArtifactIterator(List<Artifact> artifacts) throws IOException {
-            this.iterator = artifacts.iterator();
-        }
-
-        @Override
-        public boolean hasNext() {
-            return iterator.hasNext();
-        }
-
-        @Override
-        public Artifact next() {
-            return iterator.next();
-        }
-
-        @Override
-        public void close() throws IOException { }
+        log.info(String.format("ordered:\nlocal  - %s\nremote - %s", local, remote));
     }
 
 }
