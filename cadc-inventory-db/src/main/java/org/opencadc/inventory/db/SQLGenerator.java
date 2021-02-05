@@ -551,11 +551,19 @@ public class SQLGenerator {
         }
         
         public void setPrefix(String prefix) {
-            this.prefix = prefix;
+            if (StringUtil.hasText(prefix)) {
+                this.prefix = prefix.trim();
+            } else {
+                this.prefix = null;
+            }
         }
 
         public void setCriteria(String whereClause) {
-            this.whereClause = whereClause;
+            if (StringUtil.hasText(whereClause)) {
+                this.whereClause = whereClause.trim();
+            } else {
+                this.whereClause = null;
+            }
         }
 
         public void setOrderedOutput(boolean ordered) {
@@ -566,12 +574,12 @@ public class SQLGenerator {
         public ResourceIterator<Artifact> query(DataSource ds) {
             
             StringBuilder sb = getSelectFromSQL(Artifact.class, false);
-            sb.append(" WHERE ");
+            sb.append(" WHERE");
             
             if (storageLocationRequired != null && storageLocationRequired) {
                 // ArtifactDAO.storedIterator
                 if (StringUtil.hasText(prefix)) {
-                    sb.append("storageLocation_storageBucket LIKE ? AND");
+                    sb.append(" storageLocation_storageBucket LIKE ? AND");
                 }
                 sb.append(" storageLocation_storageID IS NOT NULL");
             
@@ -585,25 +593,22 @@ public class SQLGenerator {
             } else if (storageLocationRequired != null && !storageLocationRequired) {
                 // ArtifactDAO.unstoredIterator
                 if (StringUtil.hasText(prefix)) {
-                    sb.append("uriBucket LIKE ? AND");
+                    sb.append(" uriBucket LIKE ? AND");
                 }
                 sb.append(" storageLocation_storageID IS NULL");
                 if (ordered) {
                     sb.append(" ORDER BY uri");
                 }
             } else {
-                boolean noCond = true;
-                if (StringUtil.hasText(prefix)) {
-                    sb.append("uriBucket LIKE ? AND");
-                    noCond = false;
-                }
-                if (StringUtil.hasText(whereClause)) {
-                    sb.append(whereClause);
-                    noCond = false;
-                }
-                if (noCond) {
-                    // trim off " WHERE "
-                    sb.delete(sb.length() - 7, sb.length());
+                if (prefix != null && whereClause != null) {
+                    sb.append(" uriBucket LIKE ? AND ( ").append(whereClause).append(" )");
+                } else if (prefix != null) {
+                    sb.append(" uriBucket LIKE ?");
+                } else if (whereClause != null) {
+                    sb.append(" (").append(whereClause).append(" )");
+                } else {
+                    // trim off " WHERE"
+                    sb.delete(sb.length() - 6, sb.length());
                 }
                 if (ordered) {
                     sb.append(" ORDER BY uri");
@@ -623,7 +628,7 @@ public class SQLGenerator {
                 ps.setFetchDirection(ResultSet.FETCH_FORWARD);
                 if (prefix != null) {
                     String val = prefix + "%";
-                    log.debug("value: " + val);
+                    log.debug("bucket prefix: " + val);
                     ps.setString(1, val);
                 }
                 ResultSet rs = ps.executeQuery();

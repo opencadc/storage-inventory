@@ -62,61 +62,66 @@
  *  <http://www.gnu.org/licenses/>.      pas le cas, consultez :
  *                                       <http://www.gnu.org/licenses/>.
  *
- *  : 5 $
  *
  ************************************************************************
  */
 
-package org.opencadc.ratik;
+package org.opencadc.minoc.operations;
 
-import java.net.URI;
-import java.util.Date;
 import org.junit.Assert;
 import org.junit.Test;
-import org.opencadc.inventory.Artifact;
+import org.opencadc.soda.ExtensionSlice;
+import org.opencadc.soda.ExtensionSliceFormat;
+import org.opencadc.soda.PixelRange;
 
-public class InventoryValidatorTest {
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.stream.Collectors;
 
+public class CutoutFileNameFormatTest {
+    /**
+     * Simple two extension MEF cutout.
+     * [2]
+     * [SCI,3][400:500]
+     */
     @Test
-    public void testOrderArtifacts() throws Exception {
+    public void testFileNameMangleSimple() {
+        final CutoutFileNameFormat testSubject = new CutoutFileNameFormat("my_file.fits");
+        final List<ExtensionSlice> testSlices = new ArrayList<>();
+        testSlices.add(new ExtensionSlice(2));
 
-        InventoryValidator testSubject = new InventoryValidator(null, null, null,
-                                                                null, false, null);
+        final ExtensionSlice slice2 = new ExtensionSlice("SCI", 3);
+        slice2.getPixelRanges().add(new PixelRange(400, 500));
+        testSlices.add(slice2);
 
-        // Artifact A orders before Artifact B
-        URI contentCheckSum = URI.create("md5:d41d8cd98f00b204e9800998ecf8427e");
-        Artifact A = new Artifact(URI.create("cadc:TEST/1.ext"), contentCheckSum, new Date(), 1024L);
-        Artifact B = new Artifact(URI.create("cadc:TEST/1.extx"), contentCheckSum, new Date(), 1024L);
+        final String result = testSubject.format(testSlices);
+        final String expected = "my_file.2____SCI_3__400_500.fits";
 
-        // local = A
-        // remote = null
-        int order = testSubject.orderArtifacts(A, null);
-        Assert.assertEquals("local orders before remote, expect -1", -1, order);
-
-        // local = null
-        // remote = A
-        order = testSubject.orderArtifacts(null, A);
-        Assert.assertEquals("local orders after remote, expect 1", 1, order);
-
-        // local = null
-        // remote = null
-        order = testSubject.orderArtifacts(null, null);
-        Assert.assertEquals("local equals remote, expect 0", 0, order);
-
-        // local = A
-        // remote = A
-        order = testSubject.orderArtifacts(A, A);
-        Assert.assertEquals("local equals remote, expect 0", 0, order);
-
-        // local = A
-        // remote = B
-        order = testSubject.orderArtifacts(A, B);
-        Assert.assertEquals("local orders before remote, expect -1", -1, order);
-
-        // local = B
-        // remote = A
-        order = testSubject.orderArtifacts(B, A);
-        Assert.assertEquals("local orders after remote, expect 1", 1, order);
+        Assert.assertEquals("Wrong output.", expected, result);
     }
 
+    /**
+     * Larger MEF cutout with full length pixel ranges (<code>*</code>).
+     * [116][100:250,*]
+     * [SCI,14][100:125,100:175]
+     * [91][*,90:255]
+     */
+    @Test
+    public void testFileNameMangleComplex() {
+        final ExtensionSliceFormat format = new ExtensionSliceFormat();
+        final String[] cutouts = new String[] {
+                "[116][100:250,*]",
+                "[SCI,14][100:125,100:175]",
+                "[91][*,90:255]",
+                "[101]"
+        };
+        final List<ExtensionSlice> testSlices = Arrays.stream(cutouts).map(format::parse).collect(Collectors.toList());
+        final CutoutFileNameFormat testSubject = new CutoutFileNameFormat("myfile_raw.fits");
+
+        final String result = testSubject.format(testSlices);
+        final String expected = "myfile_raw.116__100_250_____SCI_14__100_125_100_175___91____90_255___101.fits";
+
+        Assert.assertEquals("Wrong output.", expected, result);
+    }
 }

@@ -62,61 +62,79 @@
  *  <http://www.gnu.org/licenses/>.      pas le cas, consultez :
  *                                       <http://www.gnu.org/licenses/>.
  *
- *  : 5 $
  *
  ************************************************************************
  */
 
-package org.opencadc.ratik;
+package org.opencadc.minoc.operations;
 
-import java.net.URI;
-import java.util.Date;
-import org.junit.Assert;
-import org.junit.Test;
-import org.opencadc.inventory.Artifact;
+import ca.nrc.cadc.util.StringUtil;
 
-public class InventoryValidatorTest {
+import java.util.List;
 
-    @Test
-    public void testOrderArtifacts() throws Exception {
+import org.opencadc.soda.ExtensionSlice;
+import org.opencadc.soda.PixelRange;
 
-        InventoryValidator testSubject = new InventoryValidator(null, null, null,
-                                                                null, false, null);
 
-        // Artifact A orders before Artifact B
-        URI contentCheckSum = URI.create("md5:d41d8cd98f00b204e9800998ecf8427e");
-        Artifact A = new Artifact(URI.create("cadc:TEST/1.ext"), contentCheckSum, new Date(), 1024L);
-        Artifact B = new Artifact(URI.create("cadc:TEST/1.extx"), contentCheckSum, new Date(), 1024L);
+/**
+ * Calculate an appropriate output filename based on some requested cutout specification.
+ */
+public class CutoutFileNameFormat {
+    private static final String OUTPUT_DELIMITER = "_";
+    private final String originalFileName;
 
-        // local = A
-        // remote = null
-        int order = testSubject.orderArtifacts(A, null);
-        Assert.assertEquals("local orders before remote, expect -1", -1, order);
 
-        // local = null
-        // remote = A
-        order = testSubject.orderArtifacts(null, A);
-        Assert.assertEquals("local orders after remote, expect 1", 1, order);
-
-        // local = null
-        // remote = null
-        order = testSubject.orderArtifacts(null, null);
-        Assert.assertEquals("local equals remote, expect 0", 0, order);
-
-        // local = A
-        // remote = A
-        order = testSubject.orderArtifacts(A, A);
-        Assert.assertEquals("local equals remote, expect 0", 0, order);
-
-        // local = A
-        // remote = B
-        order = testSubject.orderArtifacts(A, B);
-        Assert.assertEquals("local orders before remote, expect -1", -1, order);
-
-        // local = B
-        // remote = A
-        order = testSubject.orderArtifacts(B, A);
-        Assert.assertEquals("local orders after remote, expect 1", 1, order);
+    public CutoutFileNameFormat(final String originalFileName) {
+        this.originalFileName = originalFileName;
     }
 
+    /**
+     * Obtain a new file name based on the provided slices.  This is done by replacing values with underscores, and then
+     * inserting this underscore value into the file name after the last period.
+     * @param slices    The slices to use as format elements.
+     * @return      New filename String.  Never null.
+     */
+    public String format(final List<ExtensionSlice> slices) {
+        final StringBuilder appendage = new StringBuilder();
+
+        for (final ExtensionSlice slice : slices) {
+            if (slice.extensionIndex != null) {
+                appendage.append(slice.extensionIndex);
+            } else if (StringUtil.hasLength(slice.extensionName)) {
+                appendage.append(slice.extensionName);
+                if (slice.extensionVersion != null) {
+                    appendage.append(OUTPUT_DELIMITER).append(slice.extensionVersion);
+                }
+            } else {
+                // Assume the default extension, which is zero.
+                appendage.append(0);
+            }
+
+            // Double underscore to separate extension from pixel ranges.
+            appendage.append(OUTPUT_DELIMITER).append(OUTPUT_DELIMITER);
+
+            for (final PixelRange pixelRange : slice.getPixelRanges()) {
+                // Indicates ALL (*) value
+                if (pixelRange.upperBound == Integer.MAX_VALUE) {
+                    appendage.append(OUTPUT_DELIMITER);
+                } else {
+                    appendage.append(pixelRange.lowerBound).append(OUTPUT_DELIMITER).append(pixelRange.upperBound);
+                }
+
+                appendage.append(OUTPUT_DELIMITER);
+            }
+
+            appendage.append(OUTPUT_DELIMITER).append(OUTPUT_DELIMITER);
+        }
+
+        // Strip off last underscore.
+        while (appendage.lastIndexOf(OUTPUT_DELIMITER) == (appendage.length() - 1)) {
+            appendage.deleteCharAt(appendage.lastIndexOf(OUTPUT_DELIMITER));
+        }
+
+        final StringBuilder fileBuilder = new StringBuilder(originalFileName);
+        fileBuilder.insert(fileBuilder.lastIndexOf(".") + 1, appendage.toString() + ".");
+
+        return fileBuilder.toString();
+    }
 }

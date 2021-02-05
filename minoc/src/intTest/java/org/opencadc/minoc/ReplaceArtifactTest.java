@@ -206,6 +206,11 @@ public class ReplaceArtifactTest extends MinocTest {
                     Artifact a = new Artifact(artifactURI, URI.create("md5:985b343f03d927ffb32e9de086d15730"), new Date(), 15L);
                     dao.put(a);
                     log.info("put: " + a);
+
+                    long sleepWaitMillis = 1200L;
+                    log.info("sleep millis: " + sleepWaitMillis);
+                    Thread.sleep(sleepWaitMillis);
+                    log.info("sleep millis OK: " + sleepWaitMillis);
                     
                     // try to overwrite with actual
                     InputStream in = new ByteArrayInputStream(data2.getBytes());
