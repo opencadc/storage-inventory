@@ -151,7 +151,7 @@ public class ArtifactValidator {
     }
 
     /**
-     * discrepancy: artifact in L && artifact not in R
+     * discrepancy: artifact in L AND artifact not in R
      *
      * @param local                         The local Artifact.
      * @throws InterruptedException         Thread interrupted.
@@ -219,7 +219,7 @@ public class ArtifactValidator {
     }
 
     /**
-     * discrepancy: artifact not in L && artifact in R
+     * discrepancy: artifact not in L AND artifact in R
      *
      * @param remote                        The remote Artifact.
      * @throws InterruptedException         Thread interrupted.
@@ -299,7 +299,7 @@ public class ArtifactValidator {
     }
 
     /**
-     * Artifact in local && remote
+     * Artifact in local AND remote
      *
      * @param local     The local Artifact.
      * @param remote    The remote Artifact.
