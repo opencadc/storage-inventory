@@ -279,7 +279,7 @@ public class ArtifactValidator {
         // explanation4: L==global, new Artifact in R, pending/missed changed Artifact event in L
         // evidence: Artifact in local db but siteLocations does not include remote siteID
         // action: add siteID to Artifact.siteLocations
-            log.debug("checking explanation 4");
+        log.debug("checking explanation 4");
         if (this.trackSiteLocations) {
             Artifact local = this.artifactDAO.get(remote.getID());
             if (local != null) {
