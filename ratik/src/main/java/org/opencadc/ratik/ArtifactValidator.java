@@ -153,38 +153,6 @@ public class ArtifactValidator {
     /**
      * discrepancy: artifact in L && artifact not in R
      *
-     * <p>explanation0: filter policy at L changed to exclude artifact in R
-     * evidence: Artifact in R without filter
-     * action: delete Artifact, if (L==storage) create DeletedStorageLocationEvent
-     *
-     * <p>explanation1: deleted from R, pending/missed DeletedArtifactEvent in L
-     * evidence: DeletedArtifactEvent in R
-     * action: put DAE, delete artifact
-     *
-     * <p>explanation2: L==global, deleted from R, pending/missed DeletedStorageLocationEvent in L
-     * evidence: DeletedStorageLocationEvent in R
-     * action: remove siteID from Artifact.storageLocations (see below)
-     *
-     * <p>explanation3: L==global, new Artifact in L, pending/missed Artifact or sync in R
-     * evidence: ?
-     * action: remove siteID from Artifact.storageLocations (see below)
-     *
-     * <p>explanation4: L==storage, new Artifact in L, pending/missed new Artifact event in R
-     * evidence: ?
-     * action: none
-     *
-     * <p>explanation6: deleted from R, lost DeletedArtifactEvent
-     * evidence: ?
-     * action: assume explanation3
-     *
-     * <p>explanation7: L==global, lost DeletedStorageLocationEvent
-     * evidence: ?
-     * action: assume explanation3
-     *
-     * <p>note: when removing siteID from Artifact.storageLocations in global, if the Artifact.siteLocations becomes empty
-     * the artifact should be deleted (metadata-sync needs to also do this in response to a DeletedStorageLocationEvent)
-     * TBD: must this also create a DeletedArtifactEvent?
-     *
      * @param local                         The local Artifact.
      * @throws InterruptedException         Thread interrupted.
      * @throws IOException                  For unreadable configuration files.
@@ -197,79 +165,62 @@ public class ArtifactValidator {
         // explanation0: filter policy at L changed to exclude artifact in R
         // evidence: Artifact in R without filter
         // action: delete Artifact, if (L==storage) create DeletedStorageLocationEvent
+        log.debug("checking explanation 0");
         Artifact remote = getRemoteArtifact(local.getURI());
         if (remote != null) {
             log.info(String.format("Artifact in L && not in R - Explanation0: Artifact in R without filter\n"
                                        + "action: delete Artifact, if (L==storage) create DeletedStorageLocationEvent\n"
                                        + " local - %s\nremote - %s", local, remote));
+            //TODO do action
             return;
         }
 
         // explanation1: deleted from R, pending/missed DeletedArtifactEvent in L
         // evidence: DeletedArtifactEvent in R
         // action: put DAE, delete artifact
+        log.debug("checking explanation 1");
         DeletedArtifactEvent remoteDeletedArtifactEvent = getRemoteDeletedArtifactEvent(local.getID());
         if (remoteDeletedArtifactEvent != null) {
             log.info(String.format("Artifact in L && not in R - Explanation1: DeletedArtifactEvent in R\n"
                                        + "action: put DeletedArtifactEvent, delete Artifact\n"
                                        + " local Artifact: %s\nremote DeletedArtifactEvent: %s",
                                    local, remoteDeletedArtifactEvent));
+            //TODO do action
             return;
         }
 
         // 2. DeletedStorageLocationEvent in R
         // remove siteID from Artifact.storageLocations
-        DeletedStorageLocationEvent remoteDeletedStorageLocationEvent =
-            getRemoteDeletedStorageLocationEvent(local.getID());
-        if (remoteDeletedStorageLocationEvent != null) {
-            log.info(String.format("Artifact in L && not in R - Explanation2: DeletedStorageLocationEvent in R\n"
-                                       + "action: remove siteID from Artifact.storageLocations\n"
-                                       + " local Artifact: %s\nremote DeletedStorageLocationEvent: %s",
-                                   local, remoteDeletedStorageLocationEvent));
-            return;
+        log.debug("checking explanation 2");
+        if (this.trackSiteLocations) {
+            DeletedStorageLocationEvent remoteDeletedStorageLocationEvent =
+                getRemoteDeletedStorageLocationEvent(local.getID());
+            if (remoteDeletedStorageLocationEvent != null) {
+                log.info(String.format("Artifact in L && not in R - Explanation2: DeletedStorageLocationEvent in R\n"
+                                           + "action: remove siteID from Artifact.storageLocations\n"
+                                           + " local Artifact: %s\nremote DeletedStorageLocationEvent: %s",
+                                       local, remoteDeletedStorageLocationEvent));
+                //TODO do action
+                return;
+            }
         }
 
         // explanation3: L==global, new Artifact in L, pending/missed Artifact or sync in R
+        // also
         // explanation4: L==storage, new Artifact in L, pending/missed new Artifact event in R
         // explanation6: deleted from R, lost DeletedArtifactEvent
         // explanation7: L==global, lost DeletedStorageLocationEvent
         // evidence: ?
         // action: remove siteID from Artifact.storageLocations
+        log.debug("explanation 3");
         log.info(String.format("Artifact in L && not in R - Explanation3,4,6,7\n"
                                    + "remove siteID from Artifact.storageLocations\nlocal Artifact: %s", local));
+        //TODO do action
     }
 
     /**
      * discrepancy: artifact not in L && artifact in R
      *
-     * <p>explanation0: filter policy at L changed to include artifact in R
-     * evidence: ?
-     * action: equivalent to missed Artifact event (explanation3 below)
-     *
-     * <p>explanation1: deleted from L, pending/missed DeletedArtifactEvent in R
-     * evidence: DeletedArtifactEvent in L
-     * action: none
-     *
-     * <p>explanation2: L==storage, deleted from L, pending/missed DeletedStorageLocationEvent in R
-     * evidence: DeletedStorageLocationEvent in L
-     * action: none
-     *
-     * <p>explanation3: L==storage, new Artifact in R, pending/missed new Artifact event in L
-     * evidence: ?
-     * action: insert Artifact
-     *
-     * <p>explanation4: L==global, new Artifact in R, pending/missed changed Artifact event in L
-     * evidence: Artifact in local db but siteLocations does not include remote siteID
-     * action: add siteID to Artifact.siteLocations
-     *
-     * <p>explanation6: deleted from L, lost DeletedArtifactEvent
-     * evidence: ?
-     * action: assume explanation3
-     *
-     * <p>explanation7: L==storage, deleted from L, lost DeletedStorageLocationEvent
-     * evidence: ?
-     * action: assume explanation3
-c     *
      * @param remote                        The remote Artifact.
      * @throws InterruptedException         Thread interrupted.
      * @throws IOException                  For unreadable configuration files.
@@ -281,6 +232,7 @@ c     *
         // explanation1: deleted from L, pending/missed DeletedArtifactEvent in R
         // evidence: DeletedArtifactEvent in L
         // action: none
+        log.debug("checking explanation 1");
         DeletedArtifactEvent localDeletedArtifactEvent = this.deletedArtifactEventDAO.get(remote.getID());
         if (localDeletedArtifactEvent != null) {
             log.info(String.format("Artifact not in L && in R - Explanation1: DeletedArtifactEvent in L\n"
@@ -293,19 +245,41 @@ c     *
         // explanation2: L==storage, deleted from L, pending/missed DeletedStorageLocationEvent in R
         // evidence: DeletedStorageLocationEvent in L
         // action: none
-        DeletedStorageLocationEvent localDeletedStorageLocationEvent =
-            this.deletedStorageLocationEventDAO.get(remote.getID());
-        if (localDeletedStorageLocationEvent != null) {
-            log.info(String.format("Artifact not in L && in R - Explanation2: DeletedStorageLocationEvent in L\n"
-                                       + "action: no action necessary"
-                                       + "\nremote - %s\nlocal DeletedStorageLocationEvent - %s",
-                                   remote, localDeletedStorageLocationEvent));
-            return;
+        log.debug("checking explanation 2");
+        if (!this.trackSiteLocations) {
+            DeletedStorageLocationEvent localDeletedStorageLocationEvent = this.deletedStorageLocationEventDAO.get(remote.getID());
+            if (localDeletedStorageLocationEvent != null) {
+                log.info(String.format("Artifact not in L && in R - Explanation2: DeletedStorageLocationEvent in L\n"
+                                           + "action: no action necessary"
+                                           + "\nremote - %s\nlocal DeletedStorageLocationEvent - %s",
+                                       remote, localDeletedStorageLocationEvent));
+                return;
+            }
+        }
+
+        // explanation3: L==storage, new Artifact in R, pending/missed new Artifact event in L
+        // also
+        // explanation0: filter policy at L changed to include artifact in R
+        // explanation6: deleted from L, lost DeletedArtifactEvent
+        // explanation7: L==storage, deleted from L, lost DeletedStorageLocationEvent
+        // evidence: ?
+        // action: insert Artifact
+        log.debug("checking explanation 3");
+        if (!this.trackSiteLocations) {
+            Artifact local = this.artifactDAO.get(remote.getID());
+            if (local == null) {
+                log.info(String.format("Artifact not in L && in R - Explanation0,3,6,7\naction: insert Artifact\n"
+                                            + "remote - %s",
+                                        remote));
+                //TODO do action
+                return;
+            }
         }
 
         // explanation4: L==global, new Artifact in R, pending/missed changed Artifact event in L
         // evidence: Artifact in local db but siteLocations does not include remote siteID
         // action: add siteID to Artifact.siteLocations
+            log.debug("checking explanation 4");
         if (this.trackSiteLocations) {
             Artifact local = this.artifactDAO.get(remote.getID());
             if (local != null) {
@@ -315,52 +289,60 @@ c     *
                     log.info(String.format("Artifact not in L && in R - Explanation4: Artifact in local db but "
                                                + "siteLocations does not include remote siteID\n"
                                                + "action: add siteID to Artifact.siteLocations\n"
-                                               + "remote - %s", remote));
+                                               + "remote - %s\nremote StorageSite - %s", remote, remoteStorageSite));
+                    //TODO do action
                     return;
                 }
             }
         }
 
-        // explanation3: L==storage, new Artifact in R, pending/missed new Artifact event in L
-        // evidence: ?
-        // action: insert Artifact
-        log.info(String.format("Artifact not in L && in R - Explanation3,0,6,7\naction: insert Artifact\n"
-                                   + "remote - %s", remote));
     }
 
     /**
-     * discrepancy: artifact.uri in both && artifact.id mismatch (collision)
-     *
-     * <p>explantion1: same ID collision due to race condition that metadata-sync has to handle
-     * evidence: no more evidence needed
-     * action: pick winner, create DeletedArtifactEvent for loser, delete loser if it is in L, insert winner if winner was in R
-     *
-     * <p>discrepancy: artifact in both && valid metaChecksum mismatch
-     *
-     * <p>explanation1: pending/missed artifact update in L
-     * evidence: ??
-     * action: put Artifact
-     *
-     * <p>explanation2: pending/missed artifact update in R
-     * evidence: ??
-     * action: do nothing
+     * Artifact in local && remote
      *
      * @param local     The local Artifact.
      * @param remote    The remote Artifact.
      */
     protected void validateLocalAndRemote(Artifact local, Artifact remote) {
-        if (local.getID().equals(remote.getID())) {
-            log.info(String.format("ID's equal: - %s", local));
-        } else if (!local.getID().equals(remote.getID())) {
+        // discrepancy: artifact.uri in both && artifact.id mismatch (collision)
+        // explanation1: same ID collision due to race condition that metadata-sync has to handle
+        // evidence: no more evidence needed
+        // action: pick winner, create DeletedArtifactEvent for loser, delete loser if it is in L, insert winner if winner was in R
+        log.debug("checking artifact.id mismatch");
+        if (!local.getID().equals(remote.getID())) {
             log.info(String.format("ID mismatch:\npick winner\nuri - %s\n local - %s %s\nremote - %s %s",
                                    local.getURI(),
                                    local.getID(), dateFormat.format(local.getLastModified()),
                                    remote.getID(), dateFormat.format(remote.getLastModified())));
-        } else if (!local.getMetaChecksum().equals(remote.getMetaChecksum())) {
+            if (local.getContentLastModified().before(remote.getContentLastModified())) {
+                //TODO do action
+            }
+            return;
+        }
+
+        // discrepancy: artifact in both && valid metaChecksum mismatch
+        log.debug("checking valid metaChecksum mismatch");
+        if (!local.getMetaChecksum().equals(remote.getMetaChecksum())) {
             log.info(String.format("MetaChecksum mismatch:\n uri - %s %s\n local - %s %s\nremote - %s %s",
-                                   local.getURI(), local.getID(),
-                                   local.getMetaChecksum(), dateFormat.format(local.getLastModified()),
-                                   remote.getMetaChecksum(), dateFormat.format(remote.getLastModified())));
+                                   local.getURI(), local.getID(), local.getMetaChecksum(),
+                                   dateFormat.format(local.getLastModified()), remote.getMetaChecksum(),
+                                   dateFormat.format(remote.getLastModified())));
+            // explanation1: pending/missed artifact update in L
+            // evidence: ??
+            // action: put Artifact
+            //TODO determine action
+
+            // explanation2: pending/missed artifact update in R
+            // evidence: ??
+            // action: do nothing
+            //TODO determine action
+            return;
+        }
+
+        // Local & remote Artifact's have the same ID.
+        if (local.getID().equals(remote.getID())) {
+            log.info(String.format("Valid: - %s", local));
         }
     }
 
