@@ -6,7 +6,7 @@ for expected deployment and general config requirements.
 
 Runtime configuration must be made available via the `/config` directory.
 
-### catalina.properties
+### catalina.properties (cadc-tomcat)
 When running minoc.war in tomcat, parameters of the connection pool in META-INF/context.xml need
 to be configured in catalina.properties:
 ```
@@ -87,7 +87,12 @@ ivo://ivoa.net/std/CDP#delegate-1.0 = ivo://cadc.nrc.ca/cred
 ivo://ivoa.net/std/CDP#proxy-1.0 = ivo://cadc.nrc.ca/cred
 ```
 
-### cadcproxy.pem
+### war-rename.conf (cadc-tomcat)
+The war file for `minoc` can be renamed at deployment time in order to support an alternate service name, including
+introducing additional path elements (by using tomcat war file naming conventions: 
+https://tomcat.apache.org/tomcat-9.0-doc/config/context.html).
+
+### cadcproxy.pem (cadc-tomcat)
 This client certificate is used to make server-to-server calls for system-level A&A purposes.
 
 ## building it
@@ -98,12 +103,12 @@ docker build -t minoc -f Dockerfile .
 
 ## checking it
 ```
-docker run -it minoc:latest /bin/bash
+docker run --rm -it minoc:latest /bin/bash
 ```
 
 ## running it
 ```
-docker run --user tomcat:tomcat --volume=/path/to/external/config:/config:ro --name minoc minoc:latest
+docker run --rm --user tomcat:tomcat --volume=/path/to/external/config:/config:ro --name minoc minoc:latest
 ```
 
 ## apply semantic version tags
