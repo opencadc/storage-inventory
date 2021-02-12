@@ -134,7 +134,7 @@ public class SingleBucketSwiftStorageAdapterTest extends StorageAdapterBasicTest
         try {
             InputStream istream = TestUtil.getInputStreamThatFails();
             log.info("testPutCheckDeleteLargeStreamReject put: " + artifactURI + " " + numBytes);
-            StorageMetadata sm = swiftAdapter.put(na, istream);
+            StorageMetadata sm = swiftAdapter.put(na, istream, null);
             Assert.fail("expected ByteLimitExceededException, got: " + sm);
         } catch (ByteLimitExceededException expected) {
             log.info("caught: " + expected);
@@ -157,7 +157,7 @@ public class SingleBucketSwiftStorageAdapterTest extends StorageAdapterBasicTest
         try {
             InputStream istream = TestUtil.getInputStreamOfRandomBytes(numBytes);
             log.info("testPutCheckDeleteLargeStreamFail put: " + artifactURI + " " + numBytes);
-            StorageMetadata sm = swiftAdapter.put(na, istream);
+            StorageMetadata sm = swiftAdapter.put(na, istream, null);
             
             Assert.assertFalse("put should have failed, but object exists", swiftAdapter.exists(sm.getStorageLocation()));
             
