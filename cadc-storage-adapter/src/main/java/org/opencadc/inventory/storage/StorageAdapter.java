@@ -126,26 +126,6 @@ public interface StorageAdapter {
         throws InterruptedException, ResourceNotFoundException, ReadException, WriteException, StorageEngageException, TransientException;
             
     /**
-     * Get from storage the artifact identified by storageLocation.
-     * 
-     * @param storageLocation the storage location containing storageID and storageBucket
-     * @param dest the destination stream
-     * @param operations operations to be applied to the artifact
-     * 
-     * @throws java.lang.InterruptedException if thread receives an interrupt
-     * @throws ResourceNotFoundException if the artifact could not be found
-     * @throws ReadException if the storage system failed to stream
-     * @throws WriteException if the client failed to stream
-     * @throws StorageEngageException if the adapter failed to interact with storage
-     * @throws TransientException if an unexpected, temporary exception occurred
-     * 
-     * @deprecated intending to remove this method and perform operations outside StorageAdapter
-     */
-    @Deprecated
-    public void get(StorageLocation storageLocation, OutputStream dest, Set<String> operations)
-        throws InterruptedException, ResourceNotFoundException, ReadException, WriteException, StorageEngageException, TransientException;
-    
-    /**
      * Write an artifact to storage. The returned storage location will be used for future get and 
      * delete calls. if the storage implementation overwrites a previously used StorageLocation, it must
      * perform an atomic replace and leave the previously stored bytes intact if the put fails. The storage
@@ -161,6 +141,7 @@ public interface StorageAdapter {
      * @param newArtifact The holds information about the incoming artifact.  if the contentChecksum
      *     and contentLength are set, they will be used to validate the bytes received.
      * @param source The stream from which to read.
+     * @param transactionID null for auto-commit, "true" to start a transaction, or existing transactionID
      * @return result StorageMetadata
      * 
      * @throws ByteLimitExceededException if content length exceeds internal limit
@@ -175,7 +156,7 @@ public interface StorageAdapter {
      * @throws StorageEngageException if the adapter failed to interact with storage.
      * @throws TransientException if an unexpected, temporary exception occurred.
      */
-    public StorageMetadata put(NewArtifact newArtifact, InputStream source)
+    public StorageMetadata put(NewArtifact newArtifact, InputStream source, String transactionID)
         throws ByteLimitExceededException, IllegalArgumentException, IncorrectContentChecksumException, IncorrectContentLengthException, 
             InterruptedException, ReadException, WriteException, StorageEngageException, TransientException;
         
