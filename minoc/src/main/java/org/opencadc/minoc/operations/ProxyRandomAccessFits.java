@@ -197,16 +197,4 @@ public class ProxyRandomAccessFits implements RandomAccessDataObject {
     public void writeUTF(String s) throws IOException {
         throw new UnsupportedOperationException();
     }
-
-    @Override
-    public FileChannel getChannel() {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public FileDescriptor getFD() throws IOException {
-        throw new UnsupportedOperationException();
-    }
-    
-    
 }
