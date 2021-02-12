@@ -69,7 +69,6 @@
 
 package org.opencadc.inventory.storage.s3;
 
-import ca.nrc.cadc.io.ByteCountOutputStream;
 import ca.nrc.cadc.io.ByteLimitExceededException;
 import ca.nrc.cadc.net.PreconditionFailedException;
 import ca.nrc.cadc.net.ResourceNotFoundException;
@@ -80,15 +79,12 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
-import java.security.DigestOutputStream;
 import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Random;
-import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import org.apache.log4j.Level;
@@ -144,7 +140,7 @@ abstract class S3StorageAdapterTest {
             log.debug("testPutGetDelete random data: " + data.length + " " + expectedChecksum);
             
             log.debug("testPutGetDelete put: " + artifactURI);
-            StorageMetadata sm = adapter.put(na, new ByteArrayInputStream(data));
+            StorageMetadata sm = adapter.put(na, new ByteArrayInputStream(data), null);
             log.info("testPutGetDelete put: " + artifactURI + " to " + sm.getStorageLocation());
             
             // verify data stored
@@ -197,7 +193,7 @@ abstract class S3StorageAdapterTest {
             log.debug("testPutGetDeleteMinimal random data: " + data.length + " " + expectedChecksum);
             
             log.debug("testPutGetDeleteMinimal put: " + artifactURI);
-            StorageMetadata sm = adapter.put(na, new ByteArrayInputStream(data));
+            StorageMetadata sm = adapter.put(na, new ByteArrayInputStream(data), null);
             log.info("testPutGetDeleteMinimal put: " + artifactURI + " to " + sm.getStorageLocation());
             
             // verify data stored
@@ -241,7 +237,7 @@ abstract class S3StorageAdapterTest {
             
             try {
                 log.debug("testPutGetDeleteWrongMD5 put: " + artifactURI);
-                StorageMetadata sm = adapter.put(na, new ByteArrayInputStream(data));
+                StorageMetadata sm = adapter.put(na, new ByteArrayInputStream(data), null);
                 Assert.fail("testPutGetDeleteWrongMD5 put: " + artifactURI + " to " + sm.getStorageLocation());
             } catch (PreconditionFailedException expected) {
                 log.info("testPutGetDeleteWrongMD5 caught: " + expected);
@@ -267,7 +263,7 @@ abstract class S3StorageAdapterTest {
         try {
             InputStream istream = getInputStreamThatFails();
             log.info("testPutCheckDeleteLargeStreamReject put: " + artifactURI + " " + numBytes);
-            StorageMetadata sm = adapter.put(na, istream);
+            StorageMetadata sm = adapter.put(na, istream, null);
             Assert.fail("expected ByteLimitExceededException, got: " + sm);
         } catch (ByteLimitExceededException expected) {
             log.info("caught: " + expected);
@@ -289,7 +285,7 @@ abstract class S3StorageAdapterTest {
         try {
             InputStream istream = getInputStreamOfRandomBytes(numBytes);
             log.info("testPutCheckDeleteLargeStreamFail put: " + artifactURI + " " + numBytes);
-            StorageMetadata sm = adapter.put(na, istream);
+            StorageMetadata sm = adapter.put(na, istream, null);
             
             Assert.assertFalse("put should have failed, but object exists", adapter.exists(sm.getStorageLocation()));
             
@@ -331,7 +327,7 @@ abstract class S3StorageAdapterTest {
             md.update(data);
             na.contentChecksum = URI.create("md5:" + HexUtil.toHex(md.digest()));
             na.contentLength = (long) data.length;
-            StorageMetadata sm = adapter.put(na, new ByteArrayInputStream(data));
+            StorageMetadata sm = adapter.put(na, new ByteArrayInputStream(data), null);
             log.info("testPutGetDelete put: " + artifactURI + " to " + sm.getStorageLocation());
             
             doesNotExist.storageBucket = sm.getStorageLocation().storageBucket; // existing bucket
@@ -368,7 +364,7 @@ abstract class S3StorageAdapterTest {
                 // contentChecksum currently required for round-trip
                 na.contentChecksum = URI.create("md5:" + HexUtil.toHex(md.digest()));
                 na.contentLength = (long) data.length;
-                StorageMetadata sm = adapter.put(na, new ByteArrayInputStream(data));
+                StorageMetadata sm = adapter.put(na, new ByteArrayInputStream(data), null);
                 Assert.assertNotNull(sm.artifactURI);
                 //Assert.assertNotNull(sm.contentLastModified);
                 log.debug("testIterator put: " + artifactURI + " to " + sm.getStorageLocation());
@@ -426,7 +422,7 @@ abstract class S3StorageAdapterTest {
                 md.update(data);
                 na.contentChecksum = URI.create("md5:" + HexUtil.toHex(md.digest()));
                 na.contentLength = (long) data.length;
-                StorageMetadata sm = adapter.put(na, new ByteArrayInputStream(data));
+                StorageMetadata sm = adapter.put(na, new ByteArrayInputStream(data), null);
                 log.debug("testList put: " + artifactURI + " to " + sm.getStorageLocation());
                 expected.add(sm);
             }

@@ -338,25 +338,6 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
     }
     
     /**
-     * Get from storage the artifact identified by storageLocation.
-     * 
-     * @param storageLocation The storage location containing storageID and storageBucket.
-     * @param dest The destination stream.
-     * @param cutouts Cutouts to be applied to the artifact
-     * 
-     * @throws ResourceNotFoundException If the artifact could not be found.
-     * @throws ReadException If the storage system failed to stream.
-     * @throws WriteException If the client failed to stream.
-     * @throws StorageEngageException If the adapter failed to interact with storage.
-     * @throws TransientException If an unexpected, temporary exception occurred. 
-     */
-    @Override
-    public void get(StorageLocation storageLocation, OutputStream dest, Set<String> cutouts)
-        throws ResourceNotFoundException, ReadException, WriteException, StorageEngageException, TransientException {
-        throw new UnsupportedOperationException("cutouts not supported");
-    }
-    
-    /**
      * Write an artifact to storage.
      * The value of storageBucket in the returned StorageMetadata and StorageLocation can be used to
      * retrieve batches of artifacts in some of the iterator signatures defined in this interface.
@@ -367,6 +348,7 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
      * @param newArtifact The holds information about the incoming artifact.  If the contentChecksum
      *     and contentLength are set, they will be used to validate the bytes received.
      * @param source The stream from which to read.
+     * @param transactionID null for auto-commit, "true" to start a transaction, or existing transactionID
      * @return The storage metadata.
      * 
      * @throws IncorrectContentChecksumException If the calculated checksum does not the expected checksum.
@@ -377,12 +359,16 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
      * @throws TransientException If an unexpected, temporary exception occurred.
      */
     @Override
-    public StorageMetadata put(NewArtifact newArtifact, InputStream source)
+    public StorageMetadata put(NewArtifact newArtifact, InputStream source, String transactionID)
         throws IncorrectContentChecksumException, IncorrectContentLengthException, ReadException, WriteException,
             StorageEngageException, TransientException {
         InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "artifact", newArtifact);
         InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "source", source);
 
+        if (transactionID != null) {
+            throw new UnsupportedOperationException("put with transaction");
+        }
+        
         Path txnTarget = null;
         URI artifactURI = newArtifact.getArtifactURI();
         log.debug("put: artifactURI: " + artifactURI.toString());

@@ -162,7 +162,7 @@ public class FileSystemStorageAdapterTest {
             ByteArrayInputStream source = new ByteArrayInputStream(data);
 
             FileSystemStorageAdapter fs = new FileSystemStorageAdapter(testDir, bucketMode, bucketLen);
-            StorageMetadata storageMetadata = fs.put(newArtifact, source);
+            StorageMetadata storageMetadata = fs.put(newArtifact, source, null);
 
             Assert.assertEquals("artifactURI",  artifactURI, storageMetadata.artifactURI);
             
@@ -288,7 +288,7 @@ public class FileSystemStorageAdapterTest {
                 
                 ByteArrayInputStream source = new ByteArrayInputStream(data);
 
-                StorageMetadata meta = fs.put(newArtifact, source);
+                StorageMetadata meta = fs.put(newArtifact, source, null);
                 storageMetadataList.add(meta);
                 log.info("added " + meta.getStorageLocation());
             }
@@ -379,7 +379,7 @@ public class FileSystemStorageAdapterTest {
                 
                 ByteArrayInputStream source = new ByteArrayInputStream(data);
 
-                StorageMetadata meta = fs.put(newArtifact, source);
+                StorageMetadata meta = fs.put(newArtifact, source, null);
                 storageMetadataList.add(meta);
                 log.info("added " + meta.getStorageLocation());
             }

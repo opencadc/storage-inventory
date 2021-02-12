@@ -190,28 +190,12 @@ public class AdStorageAdapter implements StorageAdapter {
     }
     
     /**
-     * Get with operations not supported.
-     * @param storageLocation
-     * @param dest
-     * @param operations
-     * @throws ResourceNotFoundException
-     * @throws ReadException
-     * @throws WriteException
-     * @throws StorageEngageException
-     * @throws TransientException 
-     */
-    @Override
-    public void get(StorageLocation storageLocation, OutputStream dest, Set<String> operations)
-        throws ResourceNotFoundException, ReadException, WriteException, StorageEngageException, TransientException {
-        throw new UnsupportedOperationException("not supported");
-    }
-    
-    /**
      * Write not supported.
      * 
      * @param newArtifact The holds information about the incoming artifact.  If the contentChecksum
      *     and contentLength are set, they will be used to validate the bytes received.
      * @param source The stream from which to read.
+     * @param transactionID null for auto-commit, "true" to start a transaction, or existing transactionID 
      * @return The storage metadata.
      * 
      * @throws IncorrectContentChecksumException If the calculated checksum does not the expected
@@ -224,7 +208,7 @@ public class AdStorageAdapter implements StorageAdapter {
      * @throws TransientException If an unexpected, temporary exception occurred.
      */
     @Override
-    public StorageMetadata put(NewArtifact newArtifact, InputStream source)
+    public StorageMetadata put(NewArtifact newArtifact, InputStream source, String transactionID)
         throws IncorrectContentChecksumException, IncorrectContentLengthException, ReadException,
             WriteException, StorageEngageException, TransientException {
         throw new UnsupportedOperationException("not supported");

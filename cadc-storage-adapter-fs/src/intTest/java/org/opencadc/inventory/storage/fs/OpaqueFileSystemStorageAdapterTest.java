@@ -175,7 +175,7 @@ public class OpaqueFileSystemStorageAdapterTest extends StorageAdapterBasicTest 
                 newArtifact.contentChecksum = checksum;
                 newArtifact.contentLength = (long) data.length;
                 ByteArrayInputStream source = new ByteArrayInputStream(data);
-                StorageMetadata meta = adapter.put(newArtifact, source);
+                StorageMetadata meta = adapter.put(newArtifact, source, null);
                 explist.add(meta);
                 log.info("added file: " + meta.getStorageLocation());
             }
@@ -191,7 +191,7 @@ public class OpaqueFileSystemStorageAdapterTest extends StorageAdapterBasicTest 
                 newArtifact.contentChecksum = checksum;
                 newArtifact.contentLength = (long) data.length;
                 ByteArrayInputStream source = new ByteArrayInputStream(data);
-                StorageMetadata meta = sap2.put(newArtifact, source);
+                StorageMetadata meta = sap2.put(newArtifact, source, null);
                 explist.add(meta);
                 log.info("added file: " + meta.getStorageLocation().storageBucket);
             }

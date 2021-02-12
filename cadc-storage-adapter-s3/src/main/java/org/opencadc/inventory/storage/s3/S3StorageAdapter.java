@@ -347,58 +347,6 @@ abstract class S3StorageAdapter implements StorageAdapter {
         throw new UnsupportedOperationException();
     }
 
-    @Override
-    public void get(StorageLocation storageLocation, OutputStream dest, Set<String> cutouts)
-            throws ResourceNotFoundException, ReadException, WriteException, StorageEngageException {
-        throw new UnsupportedOperationException("preflight data operations not implemented");
-        /*
-        if ((cutouts == null) || cutouts.isEmpty()) {
-            get(storageLocation, dest);
-            return;
-        } else {
-            final long start = System.currentTimeMillis();
-            try (final InputStream inputStream = toObjectInputStream(storageLocation)) {
-                final Fits fitsFile = new Fits(inputStream);
-                final ArrayDataOutput dataOutput = new BufferedDataOutputStream(dest);
-
-                // Just get the first cutout for now.
-                BasicHDU<?> hdu;
-                long beforeHDU = System.currentTimeMillis();
-                int count = 1;
-                while ((hdu = fitsFile.readHDU()) != null) {
-                    final Header header = hdu.getHeader();
-                    final long afterReadHDU = System.currentTimeMillis();
-                    final HeaderCard headerNameCard = header.findCard("EXTNAME");
-                    LOGGER.debug(String.format("%d,\"%s\",%d,\"milliseconds\"",
-                            count,
-                            headerNameCard == null ? "N/A" : headerNameCard.getValue(),
-                            afterReadHDU - beforeHDU));
-                    beforeHDU = System.currentTimeMillis();
-                    if (hdu.getAxes() != null) {
-                        final int axesCount = hdu.getAxes().length;
-                        for (int i = 0; i < axesCount; i++) {
-                            header.findCard(String.format("NAXIS%d", i + 1)).setValue(0);
-                        }
-                    }
-
-                    header.write(dataOutput);
-                    dataOutput.write(new short[0]);
-                    count++;
-                }
-            } catch (FitsException e) {
-                throw new ReadException("Unable to process FITS file.", e);
-            } catch (NoSuchKeyException e) {
-                throw new ResourceNotFoundException(e.getMessage(), e);
-            } catch (S3Exception | SdkClientException e) {
-                throw new StorageEngageException(e.getMessage(), e);
-            } catch (IOException e) {
-                throw new ReadException(e.getMessage(), e);
-            }
-            LOGGER.debug(String.format("Read and wrote HDUs in %d milliseconds.", System.currentTimeMillis() - start));
-        }
-        */
-    }
-
     // internal bucket management used for init, dynamic buckets, and intTest cleanup
     void createBucket(InternalBucket bucket) throws ResourceAlreadyExistsException, SdkClientException, S3Exception {
         final CreateBucketRequest createBucketRequest = CreateBucketRequest.builder().bucket(bucket.name).build();
@@ -457,6 +405,7 @@ abstract class S3StorageAdapter implements StorageAdapter {
      *
      * @param newArtifact known information about the incoming artifact
      * @param source stream from which to read
+     * @param transactionID null for auto-commit, "true" to start a transaction, or existing transactionID
      * @return storage metadata after write
      *
      * @throws IncorrectContentChecksumException checksum of the data stream did not match the value in newArtifact
@@ -466,7 +415,7 @@ abstract class S3StorageAdapter implements StorageAdapter {
      * @throws StorageEngageException If the adapter failed to interact with storage.
      */
     @Override
-    public StorageMetadata put(NewArtifact newArtifact, InputStream source)
+    public StorageMetadata put(NewArtifact newArtifact, InputStream source, String transactionID)
             throws ByteLimitExceededException, 
             IncorrectContentChecksumException, IncorrectContentLengthException, 
             ReadException, WriteException,
@@ -476,6 +425,10 @@ abstract class S3StorageAdapter implements StorageAdapter {
         
         if (newArtifact.contentChecksum == null || newArtifact.contentLength == null) {
             throw new UnsupportedOperationException("put requires contentChecksum and contentLength");
+        }
+        
+        if (transactionID != null) {
+            throw new UnsupportedOperationException("put with transaction");
         }
         
         final StorageLocation loc = generateStorageLocation();

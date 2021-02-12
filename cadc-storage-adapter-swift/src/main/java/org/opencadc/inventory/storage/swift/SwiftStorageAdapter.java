@@ -452,25 +452,6 @@ public class SwiftStorageAdapter  implements StorageAdapter {
             throw new ReadException("close stream failure", ex);
         }
     }
-    
-    
-    /**
-     * Get from storage the artifact identified by storageLocation with cutout specifications. Currently needs full
-     * implementation.
-     *
-     * @param storageLocation The storage location containing storageID and storageBucket.
-     * @param dest The destination stream.
-     * @param cutouts Cutouts to be applied to the artifact
-     * @throws ResourceNotFoundException If the artifact could not be found.
-     * @throws ReadException If the storage system failed to stream.
-     * @throws WriteException If writing failed.
-     * @throws StorageEngageException If the adapter failed to interact with storage.
-     */
-    @Override
-    public void get(StorageLocation storageLocation, OutputStream dest, Set<String> cutouts)
-            throws ResourceNotFoundException, ReadException, WriteException, StorageEngageException {
-        throw new UnsupportedOperationException();
-    }
 
     /**
      * Write an artifact to storage.
@@ -482,6 +463,7 @@ public class SwiftStorageAdapter  implements StorageAdapter {
      *
      * @param newArtifact known information about the incoming artifact
      * @param source stream from which to read
+     * @param transactionID null for auto-commit, "true" to start a transaction, or existing transactionID
      * @return storage metadata after write
      * @throws ca.nrc.cadc.io.ByteLimitExceededException if content length exceeds limit
      * @throws IncorrectContentChecksumException checksum of the data stream did not match the value in newArtifact
@@ -491,13 +473,17 @@ public class SwiftStorageAdapter  implements StorageAdapter {
      * @throws StorageEngageException If the adapter failed to interact with storage.
      */
     @Override
-    public StorageMetadata put(NewArtifact newArtifact, InputStream source)
+    public StorageMetadata put(NewArtifact newArtifact, InputStream source, String transactionID)
             throws ByteLimitExceededException, 
             IncorrectContentChecksumException, IncorrectContentLengthException, 
             ReadException, WriteException,
             StorageEngageException {
-        InventoryUtil.assertNotNull(SwiftStorageAdapter.class, "newArtifact", newArtifact);
-        log.debug("put: " + newArtifact);
+        InventoryUtil.assertNotNull(SwiftStorageAdapter.class, "artifact", newArtifact);
+        InventoryUtil.assertNotNull(SwiftStorageAdapter.class, "source", source);
+        
+        if (transactionID != null) {
+            throw new UnsupportedOperationException("put with transaction");
+        }
         
         if (newArtifact.contentLength != null && newArtifact.contentLength > CEPH_UPLOAD_LIMIT) {
             throw new ByteLimitExceededException("put exceeds size limit (" + CEPH_UPLOAD_LIMIT_MSG + ") for simple stream", CEPH_UPLOAD_LIMIT);

@@ -15,7 +15,7 @@ sourceCompatibility = 1.8
 
 group = 'org.opencadc'
 
-version = '0.2.5'
+version = '0.3.0'
 
 dependencies {
     compile 'log4j:log4j:[1.2,)'
@@ -23,7 +23,7 @@ dependencies {
     compile 'org.opencadc:cadc-dali:[1.2.1,)'
     compile 'org.opencadc:cadc-tap:[1.0.1,)'
     compile 'org.opencadc:cadc-inventory:[0.7,)'
-    compile 'org.opencadc:cadc-storage-adapter:[0.7,)'
+    compile 'org.opencadc:cadc-storage-adapter:[0.8,)'
     compile 'org.opencadc:cadc-registry:[1.0,)'
 
     testCompile 'junit:junit:[4.0,)'
