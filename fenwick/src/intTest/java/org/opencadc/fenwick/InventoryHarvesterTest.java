@@ -92,6 +92,8 @@ import org.opencadc.inventory.SiteLocation;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.StorageSite;
 import org.opencadc.inventory.db.HarvestState;
+import org.opencadc.inventory.util.AllArtifacts;
+import org.opencadc.inventory.util.IncludeArtifacts;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 
