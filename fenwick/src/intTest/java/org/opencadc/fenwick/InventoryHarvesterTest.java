@@ -424,26 +424,23 @@ public class InventoryHarvesterTest {
         StorageSite expectedSite = new StorageSite(URI.create("cadc:TEST/siteone"), "Test Site", true, false);
         luskanEnvironment.storageSiteDAO.put(expectedSite);
         
-        // create an Artifacty.uri collision where existing artifact is newer and harvested gets skipped
+        // create an Artifact.uri collision where existing artifact is newer and harvested gets skipped
         final Artifact artifactCollision1 = new Artifact(URI.create("cadc:TEST/collision1"), TestUtil.getRandomMD5(), new Date(), 78787L);
         artifactCollision1.storageLocation = new StorageLocation(URI.create("foo:bar/baz"));
         luskanEnvironment.artifactDAO.put(artifactCollision1);
-        
-        Date newerCLM = new Date(artifactCollision1.getContentLastModified().getTime() + 20000L);
-        final Artifact artifactCollisionKeeper1 = new Artifact(URI.create("cadc:TEST/collision1"), TestUtil.getRandomMD5(), newerCLM, 78787L);
+        Thread.sleep(50L);
+
+        final Artifact artifactCollisionKeeper1 = new Artifact(URI.create("cadc:TEST/collision1"), TestUtil.getRandomMD5(), new Date(), 78787L);
         inventoryEnvironment.artifactDAO.put(artifactCollisionKeeper1);
-        Thread.sleep(20L);
-        
-        // create an Artifacty.uri collision where existing artifact is nwewer and harvested gets skipped
+
+        final Artifact artifactCollision2 = new Artifact(URI.create("cadc:TEST/collision2"), TestUtil.getRandomMD5(), new Date(), 78787L);
+        inventoryEnvironment.artifactDAO.put(artifactCollision2);
+        Thread.sleep(50L);
+
+        // create an Artifact.uri collision where existing artifact is newer and harvested gets skipped
         final Artifact artifactCollisionKeeper2 = new Artifact(URI.create("cadc:TEST/collision2"), TestUtil.getRandomMD5(), new Date(), 78787L);
         artifactCollisionKeeper2.storageLocation = new StorageLocation(URI.create("foo:bar/baz2"));
         luskanEnvironment.artifactDAO.put(artifactCollisionKeeper2);
-        
-        Date olderCLM = new Date(artifactCollisionKeeper2.getContentLastModified().getTime() - 20000L);
-        final Artifact artifactCollision2 = new Artifact(URI.create("cadc:TEST/collision2"), TestUtil.getRandomMD5(), olderCLM, 78787L);
-        luskanEnvironment.artifactDAO.put(artifactCollisionKeeper2);
-        inventoryEnvironment.artifactDAO.put(artifactCollision2);
-        Thread.sleep(20L);
         
         final InventoryHarvester testSubject = new InventoryHarvester(inventoryEnvironment.daoConfig, TestUtil.LUSKAN_URI, new AllArtifacts(), true);
         Subject.doAs(this.testUser, (PrivilegedExceptionAction<Object>) () -> {

@@ -538,11 +538,11 @@ public class InventoryHarvester implements Runnable {
                     }
 
                     if (collidingArtifact != null && currentArtifact != null) {
-                        // resolve collision using Artifact.contentLastModified
-                        if (currentArtifact.getContentLastModified().before(artifact.getContentLastModified())) {
+                        // resolve collision using Artifact.lastModified
+                        if (currentArtifact.getLastModified().before(artifact.getLastModified())) {
                             log.info("Artifact.uri COLLISION: replace " 
-                                    + currentArtifact.getID() + "|" + currentArtifact.getURI() + "|" + df.format(currentArtifact.getContentLastModified())
-                                    + " with " + artifact.getID() + "|" + artifact.getURI() + "|" + df.format(artifact.getContentLastModified()));
+                                    + currentArtifact.getID() + "|" + currentArtifact.getURI() + "|" + df.format(currentArtifact.getLastModified())
+                                    + " with " + artifact.getID() + "|" + artifact.getURI() + "|" + df.format(artifact.getLastModified()));
                             daeDAO.put(new DeletedArtifactEvent(currentArtifact.getID()));
                             artifactDAO.delete(currentArtifact.getID());
                         } else {
