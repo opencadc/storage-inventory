@@ -102,7 +102,7 @@ import org.opencadc.tantar.policy.StorageIsAlwaysRight;
 public class BucketValidatorTest {
 
     static {
-        Log4jInit.setLevel("org.opencadc.tantar", Level.DEBUG);
+        Log4jInit.setLevel("org.opencadc.tantar", Level.INFO);
     }
 
     /**
@@ -159,7 +159,7 @@ public class BucketValidatorTest {
         final BucketValidator testSubject =
                 new BucketValidator(Arrays.asList("a", "b", "c"), null,
                                     new Subject(), true, new InventoryIsAlwaysRight(testEventListener, reporter),
-                                    null, null) {
+                                    null, null, null) {
                     @Override
                     Iterator<StorageMetadata> iterateStorage() {
                         return testStorageMetadataList.iterator();
@@ -169,6 +169,9 @@ public class BucketValidatorTest {
                     Iterator<Artifact> iterateInventory() {
                         return testArtifactList.iterator();
                     }
+
+                    @Override
+                    void checkObsoleteStorageLocation(StorageMetadata storageMetadata) {}
                 };
 
         testSubject.validate();
@@ -228,7 +231,7 @@ public class BucketValidatorTest {
         final BucketValidator testSubject =
                 new BucketValidator(Arrays.asList("a", "b", "c"), null,
                                     new Subject(), true, new InventoryIsAlwaysRight(testEventListener, reporter),
-                                    null, null) {
+                                    null, null, null) {
                     @Override
                     Iterator<StorageMetadata> iterateStorage() {
                         return Collections.emptyIterator();
@@ -238,6 +241,9 @@ public class BucketValidatorTest {
                     Iterator<Artifact> iterateInventory() {
                         return testArtifactList.iterator();
                     }
+
+                    @Override
+                    void checkObsoleteStorageLocation(StorageMetadata storageMetadata) {}
                 };
 
         testSubject.validate();
@@ -307,7 +313,7 @@ public class BucketValidatorTest {
         final BucketValidator testSubject =
                 new BucketValidator(Arrays.asList("a", "b", "c"), null,
                                     new Subject(), true, new StorageIsAlwaysRight(testEventListener, reporter),
-                                    null, null) {
+                                    null, null, null) {
                     @Override
                     Iterator<StorageMetadata> iterateStorage() {
                         return testStorageMetadataList.iterator();
@@ -317,6 +323,9 @@ public class BucketValidatorTest {
                     Iterator<Artifact> iterateInventory() {
                         return testArtifactList.iterator();
                     }
+
+                    @Override
+                    void checkObsoleteStorageLocation(StorageMetadata storageMetadata) {}
                 };
 
         testSubject.validate();
@@ -369,7 +378,7 @@ public class BucketValidatorTest {
         final BucketValidator testSubject =
                 new BucketValidator(Arrays.asList("a", "b", "c"), null,
                                     new Subject(), true, new StorageIsAlwaysRight(testEventListener, reporter),
-                                    null, null) {
+                                    null, null, null) {
                     @Override
                     Iterator<StorageMetadata> iterateStorage() {
                         return testStorageMetadataList.iterator();
@@ -379,6 +388,9 @@ public class BucketValidatorTest {
                     Iterator<Artifact> iterateInventory() {
                         return Collections.emptyIterator();
                     }
+
+                    @Override
+                    void checkObsoleteStorageLocation(StorageMetadata storageMetadata) {}
                 };
 
         testSubject.validate();
@@ -425,7 +437,7 @@ public class BucketValidatorTest {
         final BucketValidator testSubject =
                 new BucketValidator(Arrays.asList("a", "b", "c"), null,
                                     new Subject(), true, new RecoverFromStorage(testEventListener, reporter),
-                                    null, null) {
+                                    null, null, null) {
                     @Override
                     Iterator<StorageMetadata> iterateStorage() {
                         return testStorageMetadataList.iterator();
@@ -435,6 +447,9 @@ public class BucketValidatorTest {
                     Iterator<Artifact> iterateInventory() {
                         return Collections.emptyIterator();
                     }
+
+                    @Override
+                    void checkObsoleteStorageLocation(StorageMetadata storageMetadata) {}
                 };
 
         testSubject.validate();

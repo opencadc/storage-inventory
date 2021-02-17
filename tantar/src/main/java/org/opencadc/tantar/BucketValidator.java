@@ -135,6 +135,7 @@ public class BucketValidator implements ValidateEventListener {
     // Cached ArtifactDAO used for transactional access.
     private final ArtifactDAO artifactDAO;
     private final ArtifactDAO iteratorDAO;
+    private final ObsoleteStorageLocationDAO obsoleteStorageLocationDAO;
 
 
     /**
@@ -230,6 +231,7 @@ public class BucketValidator implements ValidateEventListener {
         config.put("jndiDataSourceName", "jdbc/inventory");
         this.iteratorDAO = new ArtifactDAO();
         this.iteratorDAO.setConfig(config);
+        this.obsoleteStorageLocationDAO = new ObsoleteStorageLocationDAO(this.artifactDAO);
         
         try {
             String database = (String) config.get("database");
@@ -253,10 +255,12 @@ public class BucketValidator implements ValidateEventListener {
      * @param resolutionPolicy The policy that dictates handling conflicts.
      * @param artifactDAO      The Transactional artifact DAO for CRUD operations.
      * @param iteratorDAO      The bare artifact DAO for iterating.
+     * @param obsoleteStorageLocationDAO ObsoleteStorageLocation DAO.
      */
     BucketValidator(final List<String> bucketPrefixes, final StorageAdapter storageAdapter, final Subject runUser,
                     final boolean reportOnlyFlag, final ResolutionPolicy resolutionPolicy,
-                    final ArtifactDAO artifactDAO, final ArtifactDAO iteratorDAO) {
+                    final ArtifactDAO artifactDAO, final ArtifactDAO iteratorDAO,
+                    final ObsoleteStorageLocationDAO obsoleteStorageLocationDAO) {
         this.bucketPrefixes.addAll(bucketPrefixes);
         this.storageAdapter = storageAdapter;
         this.runUser = runUser;
@@ -264,6 +268,7 @@ public class BucketValidator implements ValidateEventListener {
         this.resolutionPolicy = resolutionPolicy;
         this.artifactDAO = artifactDAO;
         this.iteratorDAO = iteratorDAO;
+        this.obsoleteStorageLocationDAO = obsoleteStorageLocationDAO;
     }
 
     /**
@@ -291,6 +296,8 @@ public class BucketValidator implements ValidateEventListener {
             final Artifact artifact = (unresolvedArtifact == null) ? inventoryIterator.next() : unresolvedArtifact;
             final StorageMetadata storageMetadata =
                     (unresolvedStorageMetadata == null) ? storageMetadataIterator.next() : unresolvedStorageMetadata;
+
+            checkObsoleteStorageLocation(storageMetadata);
 
             final int comparison = artifact.storageLocation.compareTo(storageMetadata.getStorageLocation());
 
@@ -666,4 +673,44 @@ public class BucketValidator implements ValidateEventListener {
             }
         };
     }
+
+    /**
+     * Check the StorageMetadata for a matching ObsoleteStorageLocation and if found
+     * delete the file from storage and delete the ObsoleteStorageLocation.
+     */
+    void checkObsoleteStorageLocation(StorageMetadata storageMetadata) throws Exception {
+        ObsoleteStorageLocation obsoleteStorageLocation =
+            this.obsoleteStorageLocationDAO.get(storageMetadata.getStorageLocation());
+        if (obsoleteStorageLocation != null) {
+
+            delete(storageMetadata);
+
+            TransactionManager transactionManager = this.artifactDAO.getTransactionManager();
+            try {
+                LOGGER.debug("start transaction...");
+                transactionManager.startTransaction();
+                LOGGER.debug("start transaction... OK");
+
+                this.obsoleteStorageLocationDAO.delete(obsoleteStorageLocation.getID());
+                LOGGER.debug(String.format("deleted %s", obsoleteStorageLocation));
+
+                LOGGER.debug("commit transaction...");
+                transactionManager.commitTransaction();
+                LOGGER.debug("commit transaction... OK");
+            } catch (Exception e) {
+                LOGGER.error(String.format("Failed to delete ObsoleteStorageLocation %s.",
+                                           obsoleteStorageLocation.getID()), e);
+                transactionManager.rollbackTransaction();
+                LOGGER.debug("Rollback Transaction: OK");
+                throw e;
+            } finally {
+                if (transactionManager.isOpen()) {
+                    LOGGER.error("BUG - Open transaction in finally");
+                    transactionManager.rollbackTransaction();
+                    LOGGER.error("Transaction rolled back successfully.");
+                }
+            }
+        }
+    }
+
 }
