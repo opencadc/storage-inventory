@@ -405,7 +405,7 @@ abstract class S3StorageAdapter implements StorageAdapter {
      *
      * @param newArtifact known information about the incoming artifact
      * @param source stream from which to read
-     * @param transactionID null for auto-commit, "true" to start a transaction, or existing transactionID
+     * @param transactionID null for auto-commit or existing transactionID
      * @return storage metadata after write
      *
      * @throws IncorrectContentChecksumException checksum of the data stream did not match the value in newArtifact
@@ -558,6 +558,26 @@ abstract class S3StorageAdapter implements StorageAdapter {
             // jenkinsd 2020.01.20
             throw new WriteException(e.getMessage(), e);
         }
+    }
+
+    @Override
+    public String startTransaction(URI uri) throws StorageEngageException, TransientException {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public StorageMetadata commitTransaction(String string) throws ResourceNotFoundException, StorageEngageException, TransientException {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public void abortTransaction(String string) throws ResourceNotFoundException, StorageEngageException, TransientException {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public StorageMetadata getTransactionStatus(String string) throws ResourceNotFoundException, StorageEngageException, TransientException {
+        throw new UnsupportedOperationException();
     }
 
     // used by intTest

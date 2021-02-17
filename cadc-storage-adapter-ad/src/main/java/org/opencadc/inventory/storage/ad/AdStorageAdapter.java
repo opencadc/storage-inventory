@@ -98,7 +98,6 @@ import java.security.AccessControlException;
 import java.security.cert.CertificateExpiredException;
 import java.security.cert.CertificateNotYetValidException;
 import java.util.Iterator;
-import java.util.Set;
 import java.util.SortedSet;
 import javax.security.auth.Subject;
 import org.apache.log4j.Logger;
@@ -195,7 +194,7 @@ public class AdStorageAdapter implements StorageAdapter {
      * @param newArtifact The holds information about the incoming artifact.  If the contentChecksum
      *     and contentLength are set, they will be used to validate the bytes received.
      * @param source The stream from which to read.
-     * @param transactionID null for auto-commit, "true" to start a transaction, or existing transactionID 
+     * @param transactionID null for auto-commit or existing transactionID 
      * @return The storage metadata.
      * 
      * @throws IncorrectContentChecksumException If the calculated checksum does not the expected
@@ -228,6 +227,26 @@ public class AdStorageAdapter implements StorageAdapter {
     public void delete(StorageLocation storageLocation)
         throws ResourceNotFoundException, IOException, StorageEngageException, TransientException {
         throw new UnsupportedOperationException("not supported");
+    }
+
+    @Override
+    public String startTransaction(URI uri) throws StorageEngageException, TransientException {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public StorageMetadata commitTransaction(String string) throws ResourceNotFoundException, StorageEngageException, TransientException {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public void abortTransaction(String string) throws ResourceNotFoundException, StorageEngageException, TransientException {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public StorageMetadata getTransactionStatus(String string) throws ResourceNotFoundException, StorageEngageException, TransientException {
+        throw new UnsupportedOperationException();
     }
     
     /**

@@ -98,7 +98,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Properties;
-import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeMap;
 import java.util.UUID;
@@ -592,6 +591,26 @@ public class SwiftStorageAdapter  implements StorageAdapter {
                 throw ex;
             }
         }
+    }
+
+    @Override
+    public String startTransaction(URI uri) throws StorageEngageException, TransientException {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public StorageMetadata commitTransaction(String string) throws ResourceNotFoundException, StorageEngageException, TransientException {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public void abortTransaction(String string) throws ResourceNotFoundException, StorageEngageException, TransientException {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public StorageMetadata getTransactionStatus(String string) throws ResourceNotFoundException, StorageEngageException, TransientException {
+        throw new UnsupportedOperationException();
     }
     
     // main use: iterator
