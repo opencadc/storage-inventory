@@ -399,7 +399,7 @@ public class FileSyncJob implements Runnable {
                 na.contentChecksum = a.getContentChecksum();
                 na.contentLength = a.getContentLength();
 
-                storageMeta = this.storageAdapter.put(na, get.getInputStream());
+                storageMeta = this.storageAdapter.put(na, get.getInputStream(), null);
                 log.debug("storage meta returned: " + storageMeta.getStorageLocation());
                 return storageMeta;
 
