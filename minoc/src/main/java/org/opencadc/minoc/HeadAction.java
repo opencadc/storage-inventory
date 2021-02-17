@@ -67,10 +67,13 @@
 
 package org.opencadc.minoc;
 
+import ca.nrc.cadc.date.DateUtil;
 import ca.nrc.cadc.rest.SyncOutput;
+import java.text.DateFormat;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.InventoryUtil;
+import org.opencadc.inventory.storage.StorageMetadata;
 import org.opencadc.permissions.ReadGrant;
 
 /**
@@ -97,7 +100,17 @@ public class HeadAction extends ArtifactAction {
         
         initAndAuthorize(ReadGrant.class);
         
-        Artifact artifact = getArtifact(artifactURI);
+        String txnID = syncInput.getHeader(PUT_TXN);
+        log.debug("transactionID: " + txnID);
+        Artifact artifact;
+        if (txnID != null) {
+            StorageMetadata sm = storageAdapter.getTransactionStatus(txnID);
+            artifact = new Artifact(sm.artifactURI, sm.getContentChecksum(), sm.contentLastModified, sm.getContentLength());
+            syncOutput.setHeader(PUT_TXN, txnID);
+            super.logInfo.setMessage("transaction: " + txnID);
+        } else {
+            artifact = getArtifact(artifactURI);
+        }
         setHeaders(artifact, syncOutput);
     }
     
@@ -109,8 +122,13 @@ public class HeadAction extends ArtifactAction {
     public static void setHeaders(Artifact artifact, SyncOutput syncOutput) {
         syncOutput.setHeader("Content-MD5", artifact.getContentChecksum().getSchemeSpecificPart());
         syncOutput.setHeader("Content-Length", artifact.getContentLength());
+        
+        DateFormat df = DateUtil.getDateFormat(DateUtil.HTTP_DATE_FORMAT, DateUtil.GMT);
+        syncOutput.setHeader("Last-Modified", df.format(artifact.getContentLastModified()));
+
         String filename = InventoryUtil.computeArtifactFilename(artifact.getURI());
         syncOutput.setHeader("Content-Disposition", "attachment; filename=\"" + filename + "\"");
+
         if (artifact.contentEncoding != null) {
             syncOutput.setHeader("Content-Encoding", artifact.contentEncoding);
         }

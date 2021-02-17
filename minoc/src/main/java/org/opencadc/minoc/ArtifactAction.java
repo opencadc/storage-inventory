@@ -109,6 +109,8 @@ import org.opencadc.permissions.WriteGrant;
 public abstract class ArtifactAction extends RestAction {
     private static final Logger log = Logger.getLogger(ArtifactAction.class);
     
+    static final String PUT_TXN = "X-Put-Txn";
+    
     // The target artifact
     URI artifactURI;
     

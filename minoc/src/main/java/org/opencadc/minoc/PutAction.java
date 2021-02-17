@@ -164,7 +164,13 @@ public class PutAction extends ArtifactAction {
         }
         log.debug("Content-MD5: " + contentMD5);
         log.debug("Content-Length: " + contentLength);
-                
+        
+        String txnID = syncInput.getHeader(PUT_TXN);
+        if ("true".equals(txnID)) {
+            txnID = storageAdapter.startTransaction(artifactURI);
+        }
+        log.debug("transactionID: " + txnID);
+        
         NewArtifact newArtifact = new NewArtifact(artifactURI);
         newArtifact.contentChecksum = contentMD5;
         newArtifact.contentLength = contentLength;
@@ -178,40 +184,45 @@ public class PutAction extends ArtifactAction {
 
         profiler.checkpoint("content.init");
 
+        // commit transaction or write data
         StorageMetadata artifactMetadata = null;
-        
-        log.debug("writing new artifact to " + storageAdapter.getClass().getName());
-        try {
-            artifactMetadata = storageAdapter.put(newArtifact, in);
-            profiler.checkpoint("storageAdapter.put.ok");
-        } catch (ReadException ex) {
-            profiler.checkpoint("storageAdapter.put.fail");
-            if (contentLength != null) {
-                Throwable cause = ex.getCause();
-                while (cause != null) {
-                    if (cause instanceof EOFException) {
-                        throw new PreconditionFailedException("premature end-of-stream: expected content-length " + contentLength, cause);
+        if (txnID != null && contentLength != null && contentLength == 0) {
+            artifactMetadata = storageAdapter.commitTransaction(txnID);
+            txnID = null;
+            profiler.checkpoint("storageAdapter.put.commit.ok");
+        } else {
+            log.debug("writing new artifact to " + storageAdapter.getClass().getName());
+            try {
+                artifactMetadata = storageAdapter.put(newArtifact, in, txnID);
+                profiler.checkpoint("storageAdapter.put.write.ok");
+            } catch (ReadException ex) {
+                profiler.checkpoint("storageAdapter.put.write.fail");
+                if (contentLength != null) {
+                    Throwable cause = ex.getCause();
+                    while (cause != null) {
+                        if (cause instanceof EOFException) {
+                            throw new PreconditionFailedException("premature end-of-stream: expected content-length " + contentLength, cause);
+                        }
+                        cause = cause.getCause();
                     }
-                    cause = cause.getCause();
                 }
+                throw new IllegalArgumentException("read input failure", ex);
+            } catch (StorageEngageException | WriteException ex) {
+                profiler.checkpoint("storageAdapter.put.write.fail");
+                throw new RuntimeException("backend storage failure", ex);
+            } catch (ByteLimitExceededException | PreconditionFailedException | TransientException ex) {
+                profiler.checkpoint("storageAdapter.put.write.fail");
+                throw ex;
             }
-            throw new IllegalArgumentException("read input failure", ex);
-        } catch (StorageEngageException | WriteException ex) {
-            profiler.checkpoint("storageAdapter.put.fail");
-            throw new RuntimeException("backend storage failure", ex);
-        } catch (ByteLimitExceededException | PreconditionFailedException 
-                | TransientException ex) {
-            profiler.checkpoint("storageAdapter.put.fail");
-            throw ex;
+            log.debug("writing new artifact to " + storageAdapter.getClass().getName() + " OK");
         }
-        log.debug("writing new artifact to " + storageAdapter.getClass().getName() + " OK");
         
-        log.debug("wrote new artifact to storage");
         if (artifactMetadata.contentLastModified == null) {
             // not provided by StorageAdapter
             artifactMetadata.contentLastModified = new Date();
         }
         
+        // the artifact so far
         Artifact artifact = new Artifact(
             artifactURI, artifactMetadata.getContentChecksum(),
             artifactMetadata.contentLastModified, artifactMetadata.getContentLength());
@@ -219,6 +230,14 @@ public class PutAction extends ArtifactAction {
         artifact.contentType = typeHeader;
         artifact.storageLocation = artifactMetadata.getStorageLocation();
 
+        if (txnID != null) {
+            syncOutput.setCode(202); // accepted
+            syncOutput.setHeader(PUT_TXN, txnID);
+            HeadAction.setHeaders(artifact, syncOutput);
+            super.logInfo.setMessage("transaction: " + txnID);
+            return;
+        }
+        
         ObsoleteStorageLocationDAO locDAO = new ObsoleteStorageLocationDAO(artifactDAO);
         Artifact existing = artifactDAO.get(artifactURI);
         profiler.checkpoint("artifactDAO.get.ok");
@@ -278,6 +297,9 @@ public class PutAction extends ArtifactAction {
             txnMgr.commitTransaction();
             profiler.checkpoint("transaction.commit.ok");
             log.debug("commit txn: OK");
+            
+            syncOutput.setCode(201); // created
+            HeadAction.setHeaders(artifact, syncOutput);
             
             // this block could be passed off to a thread so request completes??
             if (newOSL != null) {

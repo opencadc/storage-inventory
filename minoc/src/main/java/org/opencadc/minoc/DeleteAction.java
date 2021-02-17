@@ -102,6 +102,15 @@ public class DeleteAction extends ArtifactAction {
         
         initAndAuthorize(WriteGrant.class);
         
+        String txnID = syncInput.getHeader(PUT_TXN);
+        log.debug("transactionID: " + txnID);
+        
+        if (txnID != null) {
+            storageAdapter.abortTransaction(txnID);
+            syncOutput.setCode(204);
+            return;
+        }
+        
         Artifact existing = artifactDAO.get(artifactURI);
         if (existing == null) {
             throw new ResourceNotFoundException("not found: " + artifactURI);
@@ -143,6 +152,8 @@ public class DeleteAction extends ArtifactAction {
             log.debug("committing transaction");
             txnMgr.commitTransaction();
             log.debug("commit txn: OK");
+            
+            syncOutput.setCode(204); // no content
             
             // this block could be passed off to a thread so request completes
             if (dsl != null) {

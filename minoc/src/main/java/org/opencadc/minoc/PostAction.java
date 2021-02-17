@@ -144,6 +144,9 @@ public class PostAction extends ArtifactAction {
         
             txnMgr.commitTransaction();
             log.debug("commit txn: OK");
+            
+            syncOutput.setCode(202); // Accepted
+            HeadAction.setHeaders(existing, syncOutput);
         } catch (Exception e) {
             log.error("failed to persist " + artifactURI, e);
             txnMgr.rollbackTransaction();

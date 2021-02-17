@@ -113,7 +113,7 @@ public class BasicOpsTest extends MinocTest {
     }
     
     @Test
-    public void testAllMethodsSimple() {
+    public void testPutGetUpdateHeadDelete() {
         try {
             URI artifactURI = URI.create("cadc:TEST/file.txt");
             URL artifactURL = new URL(filesURL + "/" + artifactURI.toString());
@@ -131,6 +131,7 @@ public class BasicOpsTest extends MinocTest {
 
             Subject.doAs(userSubject, new RunnableAction(put));
             Assert.assertNull(put.getThrowable());
+            Assert.assertEquals("Created", 201, put.getResponseCode());
 
             // get
             OutputStream out = new ByteArrayOutputStream();
@@ -156,13 +157,13 @@ public class BasicOpsTest extends MinocTest {
             HttpPost post = new HttpPost(artifactURL, params, false);
             Subject.doAs(userSubject, new RunnableAction(post));
             Assert.assertNull(post.getThrowable());
+            Assert.assertEquals("Accepted", 202, post.getResponseCode());
 
             // head
             ByteArrayOutputStream bos = new ByteArrayOutputStream();
             HttpGet head = new HttpGet(artifactURL, bos);
             head.setHeadOnly(true);
             Subject.doAs(userSubject, new RunnableAction(head));
-            log.warn("head output: " + bos.toString());
             Assert.assertNull(head.getThrowable());
             contentMD5 = head.getContentMD5();
             contentLength = head.getContentLength();
@@ -177,7 +178,8 @@ public class BasicOpsTest extends MinocTest {
             HttpDelete delete = new HttpDelete(artifactURL, false);
             Subject.doAs(userSubject, new RunnableAction(delete));
             Assert.assertNull(delete.getThrowable());
-
+            Assert.assertEquals("no content", 204, delete.getResponseCode());
+            
             // get
             get = new HttpGet(artifactURL, out);
             Subject.doAs(userSubject, new RunnableAction(get));
