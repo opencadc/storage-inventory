@@ -67,11 +67,9 @@
 
 package org.opencadc.inventory.storage.fs;
 
-import ca.nrc.cadc.net.PreconditionFailedException;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.util.HexUtil;
 import ca.nrc.cadc.util.Log4jInit;
-
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -86,7 +84,6 @@ import java.security.MessageDigest;
 import java.util.Iterator;
 import java.util.SortedSet;
 import java.util.TreeSet;
-
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
@@ -96,7 +93,6 @@ import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.storage.NewArtifact;
 import org.opencadc.inventory.storage.StorageAdapter;
 import org.opencadc.inventory.storage.StorageMetadata;
-import static org.opencadc.inventory.storage.fs.OpaqueByteRangeTest.root;
 import org.opencadc.inventory.storage.test.StorageAdapterBasicTest;
 
 /**
@@ -150,6 +146,101 @@ public class OpaqueFileSystemStorageAdapterTest extends StorageAdapterBasicTest 
         log.info("cleanupBefore: delete all content from " + ofsAdapter.contentPath + " DONE");
     }
     
+    @Test
+    public void testPutTransactionCommit() {
+        try {
+            String dataString = "abcdefghijklmnopqrstuvwxyz";
+            byte[] data = dataString.getBytes();
+            URI uri = URI.create("cadc:TEST/testPutTransactionCommit");
+            NewArtifact newArtifact = new NewArtifact(uri);
+            ByteArrayInputStream source = new ByteArrayInputStream(data);
+            
+            String transactionID = ofsAdapter.startTransaction(uri);
+            StorageMetadata meta = adapter.put(newArtifact, source, transactionID);
+            
+            Assert.assertNotNull(meta);
+            
+            Iterator<StorageMetadata> iter = adapter.iterator();
+            Assert.assertFalse("content not committed", iter.hasNext());
+            
+            StorageMetadata meta2 = ofsAdapter.getTransactionStatus(transactionID);
+            log.info("testPutTransactionCommit: " + meta2 + " in " + transactionID);
+            Assert.assertNotNull(meta2);
+            Assert.assertTrue("valid", meta2.isValid());
+            Assert.assertNotNull("artifactURI", meta2.artifactURI);
+            
+            StorageMetadata meta3 = ofsAdapter.commitTransaction(transactionID);
+            
+            try {
+                StorageMetadata oldtxn = ofsAdapter.getTransactionStatus(transactionID);
+                Assert.fail("expected ResourceNotFoundException, got: " + oldtxn);
+            } catch (ResourceNotFoundException expected) {
+                log.info("caught expected: " + expected);
+            }
+            
+            // get to verify
+            ByteArrayOutputStream bos = new ByteArrayOutputStream();
+            adapter.get(meta3.getStorageLocation(), bos);
+            MessageDigest md = MessageDigest.getInstance("MD5");
+            byte[] actual = bos.toByteArray();
+            md.update(actual);
+            URI actualChecksum = URI.create("md5:" + HexUtil.toHex(md.digest()));
+            log.info("testPutTransactionCommit get: " + actual.length + " " + actualChecksum);
+            Assert.assertEquals("length", (long) meta3.getContentLength(), actual.length);
+            Assert.assertEquals("checksum", meta3.getContentChecksum(), actualChecksum);
+
+            // delete
+            adapter.delete(meta3.getStorageLocation());
+        } catch (Exception unexpected) {
+            log.error("unexpected exception", unexpected);
+            Assert.fail("unexpected exception: " + unexpected);
+        }
+    }
+    
+    @Test
+    public void testPutTransactionAbort() {
+        try {
+            String dataString = "abcdefghijklmnopqrstuvwxyz";
+            byte[] data = dataString.getBytes();
+            URI uri = URI.create("cadc:TEST/testPutTransactionAbort");
+            NewArtifact newArtifact = new NewArtifact(uri);
+            ByteArrayInputStream source = new ByteArrayInputStream(data);
+            
+            String transactionID = ofsAdapter.startTransaction(uri);
+            StorageMetadata meta = adapter.put(newArtifact, source, transactionID);
+            
+            Assert.assertNotNull(meta);
+            
+            Iterator<StorageMetadata> iter = adapter.iterator();
+            Assert.assertFalse("content not committed", iter.hasNext());
+            
+            StorageMetadata meta2 = ofsAdapter.getTransactionStatus(transactionID);
+            log.info("testPutTransactionAbort: " + meta2 + " in " + transactionID);
+            Assert.assertNotNull(meta2);
+            Assert.assertTrue("valid", meta2.isValid());
+            Assert.assertNotNull("artifactURI", meta2.artifactURI);
+            
+            ofsAdapter.abortTransaction(transactionID);
+            
+            try {
+                StorageMetadata oldtxn = ofsAdapter.getTransactionStatus(transactionID);
+                Assert.fail("expected ResourceNotFoundException, got: " + oldtxn);
+            } catch (ResourceNotFoundException expected) {
+                log.info("verify txn gone: caught expected: " + expected);
+            }
+            
+            try {
+                ByteArrayOutputStream bos = new ByteArrayOutputStream();
+                adapter.get(meta2.getStorageLocation(), bos);
+                Assert.fail("expected ResourceNotFoundException, get succeeded");
+            } catch (ResourceNotFoundException expected) {
+                log.info("verify file gone: caught expected: " + expected);
+            }
+        } catch (Exception unexpected) {
+            log.error("unexpected exception", unexpected);
+            Assert.fail("unexpected exception: " + unexpected);
+        }
+    }
     
     // the code currently works correctly if you put files with different storageBucket depths
     // but it is probably a bad idea because you mix bucket directories and files and thus have

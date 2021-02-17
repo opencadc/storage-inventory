@@ -83,13 +83,16 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.RandomAccessFile;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.nio.file.FileSystem;
+import java.nio.file.FileSystemException;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.LinkOption;
+import java.nio.file.OpenOption;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
@@ -98,7 +101,6 @@ import java.security.DigestOutputStream;
 import java.security.MessageDigest;
 import java.util.Date;
 import java.util.Iterator;
-import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.UUID;
@@ -153,7 +155,7 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
     private static final String MD5_CHECKSUM_SCHEME = "md5";
     private static final int CIRC_BUFFERS = 3;
     private static final int CIRC_BUFFERSIZE = 64 * 1024;
-    
+
     final Path txnPath;
     final Path contentPath;
     private final int bucketLength;
@@ -263,7 +265,7 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
      */
     @Override
     public void get(StorageLocation storageLocation, OutputStream dest)
-        throws ResourceNotFoundException, ReadException, WriteException, StorageEngageException, TransientException {
+        throws ResourceNotFoundException, ReadException, WriteException, WriteException, StorageEngageException, TransientException {
         InventoryUtil.assertNotNull(OpaqueFileSystemStorageAdapter.class, "storageLocation", storageLocation);
         InventoryUtil.assertNotNull(OpaqueFileSystemStorageAdapter.class, "dest", dest);
         log.debug("get: " + storageLocation);
@@ -360,40 +362,48 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
      */
     @Override
     public StorageMetadata put(NewArtifact newArtifact, InputStream source, String transactionID)
-        throws IncorrectContentChecksumException, IncorrectContentLengthException, ReadException, WriteException,
+        throws IncorrectContentChecksumException, IncorrectContentLengthException, 
+            ReadException, WriteException,
             StorageEngageException, TransientException {
         InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "artifact", newArtifact);
         InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "source", source);
 
-        if (transactionID != null) {
-            throw new UnsupportedOperationException("put with transaction");
-        }
-        
-        Path txnTarget = null;
-        URI artifactURI = newArtifact.getArtifactURI();
-        log.debug("put: artifactURI: " + artifactURI.toString());
-        
+        Path txnTarget;
         try {
-            // add UUID to txnPath to make it unique
-            txnTarget = createTmpFile();
-            log.debug("resolved txnTarget file: " + txnTarget + " based on " + txnPath);
+            boolean joinExisting = false;
+            if (transactionID != null) {
+                // validate
+                UUID.fromString(transactionID);
+                txnTarget = txnPath.resolve(transactionID);
+                if (!Files.exists(txnTarget)) {
+                    throw new IllegalArgumentException("unknown transaction: " + transactionID);
+                }
+                // TODO check that artifact URI matches stored attr
+                joinExisting = true;
+            } else {
+                String tmp = UUID.randomUUID().toString();
+                txnTarget = txnPath.resolve(tmp);
+            }
 
-            if (Files.exists(txnTarget)) {
-                // This is an error as the name in the transaction directory should be unique
-                log.debug("file/directory exists");
-                throw new IllegalArgumentException(txnPath + " already exists.");
+            if (!joinExisting && Files.exists(txnTarget)) {
+                // unlikely: duplicate UUID in the txnpath directory
+                throw new RuntimeException("BUG: txnTarget already exists: " + txnTarget);
             }
         } catch (InvalidPathException e) {
-            throw new IllegalArgumentException("Illegal path: " + txnPath, e);
+            throw new RuntimeException("BUG: invalid path: " + txnPath, e);
         }
-
+        log.warn("transaction: " + txnTarget.toString() + " transactionID: " + transactionID);
+        
         Throwable throwable = null;
         URI checksum = null;
         Long length = null;
         
         try {
-            DigestOutputStream out = new DigestOutputStream(
-                Files.newOutputStream(txnTarget, StandardOpenOption.WRITE, StandardOpenOption.CREATE_NEW), 
+            OpenOption opt = StandardOpenOption.CREATE_NEW;
+            if (transactionID != null) {
+                opt = StandardOpenOption.APPEND;
+            }
+            DigestOutputStream out = new DigestOutputStream(Files.newOutputStream(txnTarget, StandardOpenOption.WRITE, opt), 
                 MessageDigest.getInstance("MD5"));
             MultiBufferIO io = new MultiBufferIO();
             io.copy(source, out);
@@ -438,42 +448,25 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
             }
 
             // Set file attributes that must be recovered in iterator
-            setFileAttribute(txnTarget, CHECKSUM_ATTR, checksum.toString());
+            setFileAttribute(txnTarget, CHECKSUM_ATTR, checksum.toASCIIString());
             setFileAttribute(txnTarget, ARTIFACTID_ATTR, newArtifact.getArtifactURI().toASCIIString());
-
-            StorageLocation storageLocation = this.pathToStorageLocation(txnTarget);
-            Path contentTarget = this.storageLocationToPath(storageLocation);
-            try {
-                // make sure parent (bucket) directories exist
-                Path parent = contentTarget.getParent();
-                if (!Files.exists(parent)) {
-                    Files.createDirectories(parent);
-                }
-
-                if (Files.exists(contentTarget)) {
-                    // since filename is a UUID this is fatal
-                    throw new RuntimeException("UUID collision on put: " + newArtifact.getArtifactURI() + " -> " + storageLocation);
-                }
-
-                // create this before committing the file so constraints applied
+            
+            StorageLocation storageLocation = pathToStorageLocation(txnTarget);
+            
+            if (transactionID != null) {
+                log.warn("transaction uncommitted: " + transactionID + " " + storageLocation);
+                // transaction will continue
                 StorageMetadata metadata = new StorageMetadata(storageLocation, checksum, length);
-                
-                // to atomic copy into content directory
-                final Path result = Files.move(txnTarget, contentTarget, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-                log.debug("moved file to : " + contentTarget);
-                txnTarget = null;
-                
-                metadata.artifactURI = artifactURI;
-                metadata.contentLastModified = new Date(Files.getLastModifiedTime(result).toMillis());
                 return metadata;
-
-            } catch (InvalidPathException e) {
-                throw new IllegalArgumentException("Illegal path: " + contentTarget, e);
-            } catch (IOException e) {
-                throw new IllegalStateException("Failed to create content file: " + contentTarget, e);
             }
 
+            // create this before committing the file so constraints applied
+            StorageMetadata metadata = new StorageMetadata(storageLocation, checksum, length);
+            metadata.artifactURI = newArtifact.getArtifactURI();
             
+            StorageMetadata ret = commit(metadata, txnTarget);
+            txnTarget = null;
+            return ret;
             
         } catch (ReadException | WriteException | IllegalArgumentException
             | IncorrectContentChecksumException | IncorrectContentLengthException e) {
@@ -488,10 +481,8 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
             // TODO: identify throwables that are transient
             throw new IllegalStateException("Unexpected error", throwable);
         } finally {
-            // if the txnPath file still exists, then something went wrong.
-            // Attempt to clear up the transaction file.
-            // Otherwise put succeeded.
-            if (txnTarget != null) {
+            // txnTarget file still exists and not in a transaction: something went wrong
+            if (txnTarget != null && transactionID == null) {
                 try {
                     log.debug("Deleting transaction file.");
                     Files.delete(txnTarget);
@@ -501,7 +492,94 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
             }
         }
     }
+    
+    @Override
+    public String startTransaction(URI artifactURI) throws StorageEngageException, TransientException {
+        InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "artifactURI", artifactURI);
+        try {
+            String storageID = UUID.randomUUID().toString();
+            Path txnTarget = txnPath.resolve(storageID);
+            OutputStream  ostream = Files.newOutputStream(txnTarget, StandardOpenOption.WRITE, StandardOpenOption.CREATE_NEW);
+            ostream.close();
+            setFileAttribute(txnTarget, CHECKSUM_ATTR, "md5:d41d8cd98f00b204e9800998ecf8427e");
+            setFileAttribute(txnTarget, ARTIFACTID_ATTR, artifactURI.toASCIIString());
+            return storageID;
+        } catch (IOException ex) {
+            throw new StorageEngageException("failed to create transaction", ex);
+        }
+    }
+    
+    @Override
+    public void abortTransaction(String transactionID) throws ResourceNotFoundException, StorageEngageException, TransientException {
+        InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "transactionID", transactionID);
+        try {
+            Path txnTarget = txnPath.resolve(transactionID);
+            if (Files.exists(txnPath)) {
+                Files.delete(txnTarget);
+            } else {
+                throw new ResourceNotFoundException("unknown transaction: " + transactionID);
+            }
+        } catch (IOException ex) {
+            throw new StorageEngageException("failed to create transaction", ex);
+        }
+    }
+    
+    @Override
+    public StorageMetadata getTransactionStatus(String transactionID)
+        throws ResourceNotFoundException, StorageEngageException, TransientException {
+        InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "transactionID", transactionID);
+        try {
+            // validate
+            UUID.fromString(transactionID);
+            Path path = txnPath.resolve(transactionID);
+            if (Files.exists(path)) {
+                StorageMetadata ret = createStorageMetadata(txnPath, path);
+                // txnPath does not have bucket dirs
+                ret.getStorageLocation().storageBucket = InventoryUtil.computeBucket(ret.getStorageLocation().getStorageID(), bucketLength);
+                return ret;
+            }
+        } catch (InvalidPathException e) {
+            throw new RuntimeException("BUG: invalid path: " + txnPath, e);
+        }
+        throw new ResourceNotFoundException("unknown transaction: " + transactionID);
+    }
+    
+    @Override
+    public StorageMetadata commitTransaction(String transactionID)
+        throws ResourceNotFoundException, StorageEngageException, TransientException {
+        StorageMetadata metadata = getTransactionStatus(transactionID);
+        Path txnTarget = txnPath.resolve(transactionID); // again
+        return commit(metadata, txnTarget);
+    }
+    
+    private StorageMetadata commit(StorageMetadata sm, Path txnTarget) throws StorageEngageException {
         
+        try {
+        
+            Path contentTarget = storageLocationToPath(sm.getStorageLocation());
+            // make sure parent (bucket) directories exist
+            Path parent = contentTarget.getParent();
+            if (!Files.exists(parent)) {
+                Files.createDirectories(parent);
+            }
+
+            if (Files.exists(contentTarget)) {
+                // since filename is a UUID this is fatal
+                throw new RuntimeException("BUG: UUID collision on commit: " + sm.getStorageLocation());
+            }
+
+            // to atomic copy into content directory
+            final Path result = Files.move(txnTarget, contentTarget, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+            log.debug("moved file to : " + contentTarget);
+
+
+            sm.contentLastModified = new Date(Files.getLastModifiedTime(result).toMillis());
+            return sm;
+        } catch (IOException ex) {
+            throw new StorageEngageException("failed to finish write to final location", ex);
+        }
+    }
+    
     /**
      * Delete from storage the artifact identified by storageLocation.
      * @param storageLocation Identifies the artifact to delete.
@@ -565,11 +643,6 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
         return ret;
     }
     
-    // temporary location to write stream to
-    Path createTmpFile() {
-        return txnPath.resolve(UUID.randomUUID().toString());
-    }
-    
     // create from tmpfile in the txnPath to re-use UUID
     StorageLocation pathToStorageLocation(Path tmpfile) {
         // re-use the UUID from the tmpfile
@@ -582,6 +655,7 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
         return loc;
     }
     
+    // generate destination path with bucket under contentPath
     Path storageLocationToPath(StorageLocation storageLocation) {
         StringBuilder path = new StringBuilder();
         String bucket = storageLocation.storageBucket;
@@ -634,7 +708,41 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
         } // else: do nothing
     }
 
-    public static String getFileAttribute(Path path, String attributeName) throws IOException {
+    // also used by OpaqueIterator 
+    static StorageMetadata createStorageMetadata(Path base, Path p) {
+        Path rel = base.relativize(p);
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < rel.getNameCount() - 1; i++) {
+            sb.append(rel.getName(i));
+        }
+        String storageBucket = sb.toString();
+        URI storageID = URI.create("uuid:" + rel.getFileName());
+        
+        // take care: if base is txnPath, then storageBucket is empty string
+        
+        log.debug("createStorageMetadata: " + storageBucket + "," + storageID);
+        try {
+            StorageLocation sloc = new StorageLocation(storageID);
+            sloc.storageBucket = storageBucket;
+            try {
+                String csAttr = getFileAttribute(p, OpaqueFileSystemStorageAdapter.CHECKSUM_ATTR);
+                String aidAttr = getFileAttribute(p, OpaqueFileSystemStorageAdapter.ARTIFACTID_ATTR);
+                URI contentChecksum = new URI(csAttr);
+                long contentLength = Files.size(p);
+                StorageMetadata ret = new StorageMetadata(sloc, contentChecksum, contentLength);
+                // optional
+                ret.artifactURI = new URI(aidAttr);
+                ret.contentLastModified = new Date(Files.getLastModifiedTime(p).toMillis());
+                return ret;
+            } catch (FileSystemException | IllegalArgumentException | URISyntaxException ex) {
+                return new StorageMetadata(sloc); // missing attrs: invalid stored object
+            }
+        } catch (IOException ex) {
+            throw new RuntimeException("failed to recreate StorageMetadata: " + storageBucket + "," + storageID, ex);
+        }
+    }
+    
+    static String getFileAttribute(Path path, String attributeName) throws IOException {
         UserDefinedFileAttributeView udv = Files.getFileAttributeView(path,
             UserDefinedFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);
 

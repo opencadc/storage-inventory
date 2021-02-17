@@ -69,7 +69,6 @@ package org.opencadc.inventory.storage.fs;
 
 import ca.nrc.cadc.io.MultiBufferIO;
 import ca.nrc.cadc.io.ReadException;
-import ca.nrc.cadc.io.ThreadedIO;
 import ca.nrc.cadc.io.WriteException;
 import ca.nrc.cadc.net.IncorrectContentChecksumException;
 import ca.nrc.cadc.net.IncorrectContentLengthException;
@@ -98,7 +97,6 @@ import java.nio.file.attribute.UserDefinedFileAttributeView;
 import java.security.DigestOutputStream;
 import java.security.MessageDigest;
 import java.util.Iterator;
-import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.UUID;
@@ -382,7 +380,7 @@ public class FileSystemStorageAdapter implements StorageAdapter {
      * @param newArtifact The holds information about the incoming artifact.  If the contentChecksum
      *     and contentLength are set, they will be used to validate the bytes received.
      * @param source The stream from which to read.
-     * @param transactionID null for auto-commit, "true" to start a transaction, or existing transactionID
+     * @param transactionID null for auto-commit or existing transactionID
      * @return The storage metadata.
      * 
      * @throws IncorrectContentChecksumException If the calculated checksum does not the expected checksum.
@@ -551,6 +549,26 @@ public class FileSystemStorageAdapter implements StorageAdapter {
         InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "storageLocation", storageLocation);
         Path path = createStorageLocationPath(storageLocation);
         Files.delete(path);
+    }
+
+    @Override
+    public String startTransaction(URI uri) throws StorageEngageException, TransientException {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public StorageMetadata commitTransaction(String string) throws ResourceNotFoundException, StorageEngageException, TransientException {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public void abortTransaction(String string) throws ResourceNotFoundException, StorageEngageException, TransientException {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public StorageMetadata getTransactionStatus(String string) throws ResourceNotFoundException, StorageEngageException, TransientException {
+        throw new UnsupportedOperationException();
     }
     
     /**
