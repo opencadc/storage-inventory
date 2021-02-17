@@ -30,7 +30,7 @@ dependencies {
     compile 'org.opencadc:cadc-vos:[1.1.8,)'
 
     runtime 'org.opencadc:cadc-storage-adapter-fs:[0.7,)'
-    runtime 'org.opencadc:cadc-storage-adapter-swift:[0.6,)'
+    runtime 'org.opencadc:cadc-storage-adapter-swift:[0.5,)'
     
     testCompile 'junit:junit:[4.12,5.0)'
     intTestCompile 'org.opencadc:cadc-storage-adapter-fs:[0.7,)'
