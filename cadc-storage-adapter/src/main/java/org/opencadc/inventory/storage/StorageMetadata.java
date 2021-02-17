@@ -81,12 +81,6 @@ import org.opencadc.inventory.StorageLocation;
  *
  */
 public class StorageMetadata implements Comparable<StorageMetadata> {
-
-    /**
-     * Special transactionID value to start a new transaction.
-     */
-    public static final String START_TXN = "true";
-    
     private final StorageLocation storageLocation;
     private final URI contentChecksum;
     private final Long contentLength;
@@ -96,8 +90,6 @@ public class StorageMetadata implements Comparable<StorageMetadata> {
 
     public String contentEncoding;
     public String contentType;
-    
-    public String transactionID;
     
     /**
      * Constructor for a valid stored object.
