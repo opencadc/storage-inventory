@@ -62,53 +62,61 @@
 *  <http://www.gnu.org/licenses/>.      pas le cas, consultez :
 *                                       <http://www.gnu.org/licenses/>.
 *
-*  $Revision: 5 $
-*
 ************************************************************************
- */
+*/
 
 package org.opencadc.raven;
 
-import ca.nrc.cadc.auth.AuthMethod;
-import ca.nrc.cadc.reg.Capabilities;
-import ca.nrc.cadc.reg.Capability;
-import ca.nrc.cadc.reg.Interface;
-import ca.nrc.cadc.reg.Standards;
-import ca.nrc.cadc.util.Log4jInit;
-import ca.nrc.cadc.vosi.CapabilitiesTest;
-import org.apache.log4j.Level;
+import ca.nrc.cadc.rest.SyncOutput;
 import org.apache.log4j.Logger;
-import org.junit.Assert;
+import org.opencadc.inventory.Artifact;
+import org.opencadc.inventory.InventoryUtil;
+import org.opencadc.permissions.ReadGrant;
 
 /**
+ * Interface with inventory to get the metadata of an artifact.
  *
- * @author pdowler
+ * @author adriand
  */
-public class VosiCapabilitiesTest extends CapabilitiesTest {
+public class HeadFilesAction extends ArtifactAction {
+    
+    private static final Logger log = Logger.getLogger(HeadFilesAction.class);
 
-    private static final Logger log = Logger.getLogger(VosiCapabilitiesTest.class);
+    /**
+     * Default, no-arg constructor.
+     */
+    public HeadFilesAction() {
+        super();
+    }
 
-    static {
-        Log4jInit.setLevel("ca.nrc.cadc.vosi", Level.INFO);
-        Log4jInit.setLevel("org.opencadc.inventory", Level.INFO);
+    /**
+     * Return the artifact metadata as response headers.
+     */
+    @Override
+    public void doAction() throws Exception {
+        initAndAuthorize();
+        log.debug("Starting HEAD action for " + artifactURI.toASCIIString());
+        Artifact artifact = artifactDAO.get(artifactURI);
+        setHeaders(artifact, syncOutput);
     }
     
-    public VosiCapabilitiesTest() {
-        super(NegotiationTest.RAVEN_SERVICE_ID);
+    /**
+     * Set the HTTP response headers for an artifact.
+     * @param artifact The artifact with metadata
+     * @param syncOutput The target response
+     */
+    public static void setHeaders(Artifact artifact, SyncOutput syncOutput) {
+        syncOutput.setHeader("Content-MD5", artifact.getContentChecksum().getSchemeSpecificPart());
+        syncOutput.setHeader("Digest", "md5=" + artifact.getContentChecksum().getSchemeSpecificPart());
+        syncOutput.setHeader("Content-Length", artifact.getContentLength());
+        String filename = InventoryUtil.computeArtifactFilename(artifact.getURI());
+        syncOutput.setHeader("Content-Disposition", "attachment; filename=\"" + filename + "\"");
+        if (artifact.contentEncoding != null) {
+            syncOutput.setHeader("Content-Encoding", artifact.contentEncoding);
+        }
+        if (artifact.contentType != null) {
+            syncOutput.setHeader("Content-Type", artifact.contentType);
+        }
     }
 
-    @Override
-    protected void validateContent(Capabilities caps) throws Exception {
-        super.validateContent(caps);
-
-        Capability siLocate = caps.findCapability(Standards.SI_LOCATE);
-        Assert.assertNotNull("files", siLocate);
-        Assert.assertNotNull("cert files", siLocate.findInterface(Standards.SECURITY_METHOD_CERT, Standards.INTERFACE_PARAM_HTTP));
-        Assert.assertNotNull("cookie files", siLocate.findInterface(Standards.SECURITY_METHOD_COOKIE, Standards.INTERFACE_PARAM_HTTP));
-
-        Capability siFiles = caps.findCapability(Standards.SI_FILES);
-        Assert.assertNotNull("files", siFiles);
-        Assert.assertNotNull("cert files", siFiles.findInterface(Standards.SECURITY_METHOD_CERT, Standards.INTERFACE_PARAM_HTTP));
-        Assert.assertNotNull("cookie files", siFiles.findInterface(Standards.SECURITY_METHOD_COOKIE, Standards.INTERFACE_PARAM_HTTP));
-    }
 }

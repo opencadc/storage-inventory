@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2019.                            (c) 2019.
+*  (c) 2021.                            (c) 2021.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -62,53 +62,85 @@
 *  <http://www.gnu.org/licenses/>.      pas le cas, consultez :
 *                                       <http://www.gnu.org/licenses/>.
 *
-*  $Revision: 5 $
-*
 ************************************************************************
- */
+*/
 
 package org.opencadc.raven;
 
 import ca.nrc.cadc.auth.AuthMethod;
+import ca.nrc.cadc.auth.AuthenticationUtil;
+import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.reg.Capabilities;
 import ca.nrc.cadc.reg.Capability;
 import ca.nrc.cadc.reg.Interface;
 import ca.nrc.cadc.reg.Standards;
-import ca.nrc.cadc.util.Log4jInit;
-import ca.nrc.cadc.vosi.CapabilitiesTest;
-import org.apache.log4j.Level;
+import ca.nrc.cadc.reg.client.RegistryClient;
+import ca.nrc.cadc.vos.Direction;
+import ca.nrc.cadc.vos.Protocol;
+import ca.nrc.cadc.vos.Transfer;
+import ca.nrc.cadc.vos.VOS;
 import org.apache.log4j.Logger;
-import org.junit.Assert;
+import org.opencadc.inventory.*;
+import org.opencadc.inventory.db.StorageSiteDAO;
+import org.opencadc.inventory.server.PermissionsCheck;
+import org.opencadc.permissions.ReadGrant;
+import org.opencadc.permissions.TokenTool;
+import org.opencadc.permissions.WriteGrant;
+
+import java.io.IOException;
+import java.net.HttpURLConnection;
+import java.net.URI;
+import java.net.URL;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
+import java.util.UUID;
 
 /**
+ * Interface with storage and inventory to get an artifact.
  *
- * @author pdowler
+ * @author adriand
  */
-public class VosiCapabilitiesTest extends CapabilitiesTest {
+public class GetFilesAction extends PostAction {
 
-    private static final Logger log = Logger.getLogger(VosiCapabilitiesTest.class);
+    private static final Logger log = Logger.getLogger(GetFilesAction.class);
+    private static final String CONTENT_DISPOSITION = "Content-Disposition";
 
-    static {
-        Log4jInit.setLevel("ca.nrc.cadc.vosi", Level.INFO);
-        Log4jInit.setLevel("org.opencadc.inventory", Level.INFO);
+
+    /**
+     * Default, no-arg constructor.
+     */
+    public GetFilesAction() {
+        super();
     }
-    
-    public VosiCapabilitiesTest() {
-        super(NegotiationTest.RAVEN_SERVICE_ID);
-    }
 
+    /**
+     * Download the artifact or cutouts of the artifact.  In the event that an optional cutout was requested, then
+     * mangle the output filename to reflect the requested values.
+     */
     @Override
-    protected void validateContent(Capabilities caps) throws Exception {
-        super.validateContent(caps);
+    public void doAction() throws Exception {
+        initAndAuthorize();
+        syncOutput.setCode(HttpURLConnection.HTTP_SEE_OTHER);
+        syncOutput.setHeader("Location", getFirstURL().toString());
+        log.debug("redirect artifact GET to storage");
+    }
 
-        Capability siLocate = caps.findCapability(Standards.SI_LOCATE);
-        Assert.assertNotNull("files", siLocate);
-        Assert.assertNotNull("cert files", siLocate.findInterface(Standards.SECURITY_METHOD_CERT, Standards.INTERFACE_PARAM_HTTP));
-        Assert.assertNotNull("cookie files", siLocate.findInterface(Standards.SECURITY_METHOD_COOKIE, Standards.INTERFACE_PARAM_HTTP));
 
-        Capability siFiles = caps.findCapability(Standards.SI_FILES);
-        Assert.assertNotNull("files", siFiles);
-        Assert.assertNotNull("cert files", siFiles.findInterface(Standards.SECURITY_METHOD_CERT, Standards.INTERFACE_PARAM_HTTP));
-        Assert.assertNotNull("cookie files", siFiles.findInterface(Standards.SECURITY_METHOD_COOKIE, Standards.INTERFACE_PARAM_HTTP));
+    URL getFirstURL() throws ResourceNotFoundException, IOException {
+        List<Protocol> plist = new ArrayList<Protocol>();
+        Protocol proto = new Protocol(VOS.PROTOCOL_HTTPS_GET);
+        // request already authorized, hence ask for anon security to get a pre-authorized URL
+        proto.setSecurityMethod(Standards.SECURITY_METHOD_ANON);
+        plist.add(proto);
+        Transfer transfer = new Transfer(artifactURI, Direction.pullFromVoSpace, plist);
+
+        List<Protocol> protos = getProtocols(transfer);
+        if (protos.size() == 0) {
+            throw new ResourceNotFoundException("No protocols for artifact " + artifactURI);
+        }
+
+        // for now return the first URL in the list
+        return new URL(protos.get(0).getEndpoint());
     }
 }

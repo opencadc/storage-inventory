@@ -68,6 +68,7 @@
 package org.opencadc.raven;
 
 import ca.nrc.cadc.auth.AuthMethod;
+import ca.nrc.cadc.net.HttpDownload;
 import ca.nrc.cadc.reg.Standards;
 import ca.nrc.cadc.reg.client.LocalAuthority;
 import ca.nrc.cadc.reg.client.RegistryClient;
@@ -77,8 +78,13 @@ import ca.nrc.cadc.vosi.avail.CheckCertificate;
 import ca.nrc.cadc.vosi.avail.CheckException;
 import ca.nrc.cadc.vosi.avail.CheckResource;
 import ca.nrc.cadc.vosi.avail.CheckWebService;
+
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileReader;
 import java.net.URI;
+import java.net.URL;
+
 import org.apache.log4j.Logger;
 
 /**
@@ -137,9 +143,26 @@ public class ServiceAvailability implements AvailabilityPlugin {
 
             CheckResource checkResource;
             URI credURI = localAuthority.getServiceURI(Standards.CRED_PROXY_10.toString());
-            url = reg.getServiceURL(credURI, Standards.VOSI_AVAILABILITY, AuthMethod.ANON).toExternalForm();
+            //url = reg.getServiceURL(credURI, Standards.VOSI_AVAILABILITY, AuthMethod.ANON).toExternalForm();
+            url = "https://localhost.cadc.dao.nrc.ca/baldur/availability";
+            HttpDownload hd = new HttpDownload(new URL(url), new File("/tmp/testcaps.xml"));
+            hd.run();
+            if (hd.failure != null) {
+                log.error(hd.failure);
+            } else {
+                log.info("SUCCESS");
+            }
+//            try (BufferedReader br = new BufferedReader(new FileReader("/tmp/testcaps.xml"))) {
+//                String line;
+//                while ((line = br.readLine()) != null) {
+//                    log.info(line);
+//                }
+//            }
+            log.info("service url: " + url);
             checkResource = new CheckWebService(url);
+            log.info("Checked1");
             checkResource.check();
+            log.info("Checked2");
 
             URI usersURI = localAuthority.getServiceURI(Standards.UMS_USERS_01.toString());
             url = reg.getServiceURL(usersURI, Standards.VOSI_AVAILABILITY, AuthMethod.ANON).toExternalForm();
@@ -157,7 +180,7 @@ public class ServiceAvailability implements AvailabilityPlugin {
             note = ce.getMessage();
         } catch (Throwable t) {
             // the test itself failed
-            log.debug("failure", t);
+            log.info("failure", t);
             isGood = false;
             note = "test failed, reason: " + t;
         }
