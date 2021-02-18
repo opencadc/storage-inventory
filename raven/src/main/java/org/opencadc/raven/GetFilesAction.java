@@ -81,7 +81,7 @@ import java.util.List;
 import org.apache.log4j.Logger;
 
 /**
- * Interface with storage and inventory to get an artifact.
+ * Class to execute a "files" GET action.
  *
  * @author adriand
  */
@@ -97,8 +97,7 @@ public class GetFilesAction extends FilesAction {
     }
 
     /**
-     * Download the artifact or cutouts of the artifact.  In the event that an optional cutout was requested, then
-     * mangle the output filename to reflect the requested values.
+     * GET redirect response to the URL of the first matching file location.
      */
     @Override
     public void doAction() throws Exception {
@@ -109,7 +108,7 @@ public class GetFilesAction extends FilesAction {
     }
 
 
-    URL getFirstURL() throws ResourceNotFoundException, IOException {
+    private URL getFirstURL() throws ResourceNotFoundException, IOException {
         List<Protocol> plist = new ArrayList<Protocol>();
         Protocol proto = new Protocol(VOS.PROTOCOL_HTTPS_GET);
         // request already authorized, hence ask for anon security to get a pre-authorized URL

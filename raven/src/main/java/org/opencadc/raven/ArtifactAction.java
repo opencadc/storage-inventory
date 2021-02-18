@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2019.                            (c) 2019.
+*  (c) 2021.                            (c) 2021.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -71,14 +71,12 @@ import ca.nrc.cadc.auth.AuthMethod;
 import ca.nrc.cadc.auth.AuthenticationUtil;
 import ca.nrc.cadc.rest.RestAction;
 import ca.nrc.cadc.util.MultiValuedProperties;
-import ca.nrc.cadc.util.PropertiesReader;
 import ca.nrc.cadc.vos.Direction;
 import ca.nrc.cadc.vos.Transfer;
 import java.io.File;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -110,7 +108,6 @@ public abstract class ArtifactAction extends RestAction {
     protected final File privateKeyFile;
     protected final List<URI> readGrantServices = new ArrayList<>();
     protected final List<URI> writeGrantServices = new ArrayList<>();
-
 
     protected final boolean authenticateOnly;
 
@@ -210,7 +207,8 @@ public abstract class ArtifactAction extends RestAction {
     }
 
     /**
-     * Method to set the artifactURI of the request as well as other attributes
+     * Method to set the artifactURI of the request as well as other attributes. Information might be in URL path
+     * or sent in the request message (negotiation)
      */
     abstract void parseRequest() throws Exception;
     
@@ -219,38 +217,6 @@ public abstract class ArtifactAction extends RestAction {
         if (artifactURI == null) {
             throw new IllegalArgumentException("Missing artifact URI from path or request content");
         }
-    }
-
-    protected List<String> getReadGrantServices(MultiValuedProperties props) {
-        String key = ReadGrant.class.getName() + ".resourceID";
-        List<String> values = props.getProperty(key);
-        if (values == null) {
-            return Collections.emptyList();
-        }
-        return values;
-    }
-    
-    protected List<String> getWriteGrantServices(MultiValuedProperties props) {
-        String key = WriteGrant.class.getName() + ".resourceID";
-        List<String> values = props.getProperty(key);
-        if (values == null) {
-            return Collections.emptyList();
-        }
-        return values;
-    }
-    
-    static MultiValuedProperties readConfig() {
-        PropertiesReader pr = new PropertiesReader("raven.properties");
-        MultiValuedProperties props = pr.getAllProperties();
-
-        if (log.isDebugEnabled()) {
-            log.debug("raven.properties:");
-            Set<String> keys = props.keySet();
-            for (String key : keys) {
-                log.debug("    " + key + " = " + props.getProperty(key));
-            }
-        }
-        return props;
     }
 
 }

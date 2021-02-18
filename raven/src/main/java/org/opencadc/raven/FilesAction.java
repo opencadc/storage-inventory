@@ -74,7 +74,7 @@ import org.apache.log4j.Logger;
 import org.opencadc.inventory.InventoryUtil;
 
 /**
- * Base class for handling files requests
+ * Base class for handling "files" requests
  *
  * @author adriand
  */
