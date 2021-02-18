@@ -70,16 +70,15 @@ package org.opencadc.raven;
 import ca.nrc.cadc.rest.InitAction;
 import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.util.PropertiesReader;
-import org.apache.log4j.Logger;
-import org.opencadc.inventory.StorageSite;
-import org.opencadc.inventory.db.SQLGenerator;
-import org.opencadc.inventory.db.StorageSiteDAO;
-
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
+import org.apache.log4j.Logger;
+import org.opencadc.inventory.StorageSite;
+import org.opencadc.inventory.db.SQLGenerator;
+import org.opencadc.inventory.db.StorageSiteDAO;
 
 /**
  *

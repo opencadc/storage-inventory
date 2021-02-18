@@ -84,7 +84,6 @@ import ca.nrc.cadc.vos.Transfer;
 import ca.nrc.cadc.vos.TransferParsingException;
 import ca.nrc.cadc.vos.TransferReader;
 import ca.nrc.cadc.vos.TransferWriter;
-
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
@@ -93,9 +92,7 @@ import java.net.URL;
 import java.security.PrivilegedActionException;
 import java.util.Map;
 import java.util.TreeMap;
-
 import javax.security.auth.Subject;
-
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
@@ -109,7 +106,7 @@ import org.opencadc.inventory.db.SQLGenerator;
 public abstract class RavenTest {
     
     private static final Logger log = Logger.getLogger(NegotiationTest.class);
-    public static final URI RAVEN_SERVICE_ID = URI.create("ivo://cadc.nrc.ca/raven");;
+    public static final URI RAVEN_SERVICE_ID = URI.create("ivo://cadc.nrc.ca/raven");
     
     static String SERVER = "INVENTORY_TEST";
     static String DATABASE = "cadctest";

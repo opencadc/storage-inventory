@@ -73,13 +73,12 @@ import ca.nrc.cadc.vos.Direction;
 import ca.nrc.cadc.vos.Protocol;
 import ca.nrc.cadc.vos.Transfer;
 import ca.nrc.cadc.vos.VOS;
-import org.apache.log4j.Logger;
-
 import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
+import org.apache.log4j.Logger;
 
 /**
  * Interface with storage and inventory to get an artifact.

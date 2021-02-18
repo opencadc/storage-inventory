@@ -77,6 +77,14 @@ import ca.nrc.cadc.vos.Direction;
 import ca.nrc.cadc.vos.Protocol;
 import ca.nrc.cadc.vos.Transfer;
 import ca.nrc.cadc.vos.VOS;
+import java.io.File;
+import java.io.IOException;
+import java.net.URI;
+import java.net.URL;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
+import java.util.UUID;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.SiteLocation;
@@ -87,21 +95,12 @@ import org.opencadc.permissions.ReadGrant;
 import org.opencadc.permissions.TokenTool;
 import org.opencadc.permissions.WriteGrant;
 
-import java.io.File;
-import java.io.IOException;
-import java.net.URI;
-import java.net.URL;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Set;
-import java.util.UUID;
-
 /**
  * Class for generating protocol lists corresponding to transfer requests.
  *
  * @author adriand
  */
-public class ProtocolsGenerator{
+public class ProtocolsGenerator {
 
     private static final Logger log = Logger.getLogger(ProtocolsGenerator.class);
 
@@ -109,6 +108,7 @@ public class ProtocolsGenerator{
     private String user;
     private final File publicKeyFile;
     private final File privateKeyFile;
+
     /**
      * Ctor
      */

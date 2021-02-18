@@ -68,11 +68,10 @@
 package org.opencadc.raven;
 
 import ca.nrc.cadc.rest.InlineContentHandler;
-import org.apache.log4j.Logger;
-import org.opencadc.inventory.InventoryUtil;
-
 import java.net.URI;
 import java.net.URISyntaxException;
+import org.apache.log4j.Logger;
+import org.opencadc.inventory.InventoryUtil;
 
 /**
  * Base class for handling files requests
@@ -134,6 +133,8 @@ public abstract class FilesAction extends ArtifactAction {
     }
 
     @Override
-    protected InlineContentHandler getInlineContentHandler() { return null;}
+    protected InlineContentHandler getInlineContentHandler() {
+        return null;
+    }
 
 }

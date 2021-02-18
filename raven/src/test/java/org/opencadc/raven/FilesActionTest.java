@@ -69,12 +69,11 @@
 package org.opencadc.raven;
 
 import ca.nrc.cadc.util.Log4jInit;
+import java.net.URI;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.Test;
-
-import java.net.URI;
 
 public class FilesActionTest {
     private static final Logger log = Logger.getLogger(FilesActionTest.class);
@@ -84,9 +83,10 @@ public class FilesActionTest {
     }
 
     class TestFilesAction extends FilesAction {
-        public TestFilesAction(){
+        public TestFilesAction() {
             super(false);
         }
+
         @Override
         public void doAction() throws Exception {
         }

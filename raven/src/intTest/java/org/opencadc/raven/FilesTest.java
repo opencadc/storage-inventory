@@ -73,7 +73,19 @@ import ca.nrc.cadc.net.HttpGet;
 import ca.nrc.cadc.reg.Standards;
 import ca.nrc.cadc.reg.client.RegistryClient;
 import ca.nrc.cadc.util.Log4jInit;
-import ca.nrc.cadc.vos.*;
+import ca.nrc.cadc.vos.Direction;
+import ca.nrc.cadc.vos.Protocol;
+import ca.nrc.cadc.vos.Transfer;
+import ca.nrc.cadc.vos.VOS;
+import java.net.URI;
+import java.net.URL;
+import java.security.PrivilegedExceptionAction;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
+import java.util.Set;
+import java.util.UUID;
+import javax.security.auth.Subject;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
@@ -86,12 +98,6 @@ import org.opencadc.inventory.StorageSite;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.StorageSiteDAO;
 import org.opencadc.inventory.db.version.InitDatabase;
-
-import javax.security.auth.Subject;
-import java.net.URI;
-import java.net.URL;
-import java.security.PrivilegedExceptionAction;
-import java.util.*;
 
 /**
  * Test files endpoint.

@@ -70,15 +70,19 @@ package org.opencadc.raven;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.rest.InlineContentException;
 import ca.nrc.cadc.rest.InlineContentHandler;
-import ca.nrc.cadc.vos.*;
-import org.apache.log4j.Logger;
-import org.opencadc.inventory.InventoryUtil;
-
+import ca.nrc.cadc.vos.Direction;
+import ca.nrc.cadc.vos.Protocol;
+import ca.nrc.cadc.vos.Transfer;
+import ca.nrc.cadc.vos.TransferReader;
+import ca.nrc.cadc.vos.TransferWriter;
+import ca.nrc.cadc.vos.VOS;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
+import org.apache.log4j.Logger;
+import org.opencadc.inventory.InventoryUtil;
 
 /**
  * Given a transfer request object return a transfer response object with all

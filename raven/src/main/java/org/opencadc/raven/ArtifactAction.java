@@ -74,16 +74,20 @@ import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.util.PropertiesReader;
 import ca.nrc.cadc.vos.Direction;
 import ca.nrc.cadc.vos.Transfer;
+import java.io.File;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.server.PermissionsCheck;
 import org.opencadc.permissions.ReadGrant;
 import org.opencadc.permissions.WriteGrant;
 
-import java.io.File;
-import java.net.URI;
-import java.net.URISyntaxException;
-import java.util.*;
 
 /**
  * Abstract class for all that raven action classes have in common,
