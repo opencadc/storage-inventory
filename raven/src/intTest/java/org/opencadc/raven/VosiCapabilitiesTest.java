@@ -69,10 +69,8 @@
 
 package org.opencadc.raven;
 
-import ca.nrc.cadc.auth.AuthMethod;
 import ca.nrc.cadc.reg.Capabilities;
 import ca.nrc.cadc.reg.Capability;
-import ca.nrc.cadc.reg.Interface;
 import ca.nrc.cadc.reg.Standards;
 import ca.nrc.cadc.util.Log4jInit;
 import ca.nrc.cadc.vosi.CapabilitiesTest;

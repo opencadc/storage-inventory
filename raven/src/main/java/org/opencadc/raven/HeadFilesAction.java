@@ -71,14 +71,13 @@ import ca.nrc.cadc.rest.SyncOutput;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.InventoryUtil;
-import org.opencadc.permissions.ReadGrant;
 
 /**
  * Interface with inventory to get the metadata of an artifact.
  *
  * @author adriand
  */
-public class HeadFilesAction extends ArtifactAction {
+public class HeadFilesAction extends FilesAction {
     
     private static final Logger log = Logger.getLogger(HeadFilesAction.class);
 

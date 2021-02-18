@@ -69,36 +69,20 @@ package org.opencadc.raven;
 
 import ca.nrc.cadc.auth.AuthMethod;
 import ca.nrc.cadc.auth.AuthenticationUtil;
-import ca.nrc.cadc.auth.HttpPrincipal;
-import ca.nrc.cadc.net.ResourceNotFoundException;
-import ca.nrc.cadc.net.TransientException;
-import ca.nrc.cadc.rest.InlineContentException;
-import ca.nrc.cadc.rest.InlineContentHandler;
 import ca.nrc.cadc.rest.RestAction;
 import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.util.PropertiesReader;
 import ca.nrc.cadc.vos.Direction;
 import ca.nrc.cadc.vos.Transfer;
-import ca.nrc.cadc.vos.TransferParsingException;
-import ca.nrc.cadc.vos.TransferReader;
 import org.apache.log4j.Logger;
-import org.opencadc.inventory.Artifact;
-import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.server.PermissionsCheck;
-import org.opencadc.permissions.Grant;
 import org.opencadc.permissions.ReadGrant;
-import org.opencadc.permissions.TokenTool;
 import org.opencadc.permissions.WriteGrant;
 
-import javax.security.auth.Subject;
 import java.io.File;
-import java.io.IOException;
-import java.io.InputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.security.AccessControlException;
-import java.security.cert.CertificateException;
 import java.util.*;
 
 /**
@@ -114,8 +98,6 @@ public abstract class ArtifactAction extends RestAction {
     URI artifactURI;
     Transfer transfer;
 
-    // The (possibly null) authentication token.
-    String authToken;
     String user;
 
     // immutable state set in constructor
@@ -125,8 +107,6 @@ public abstract class ArtifactAction extends RestAction {
     protected final List<URI> readGrantServices = new ArrayList<>();
     protected final List<URI> writeGrantServices = new ArrayList<>();
 
-    private static final String INLINE_CONTENT_TAG = "inputstream";
-    private static final String CONTENT_TYPE = "text/xml";
 
     protected final boolean authenticateOnly;
 
@@ -214,105 +194,26 @@ public abstract class ArtifactAction extends RestAction {
         if ((transfer != null) && (transfer.getDirection().equals(Direction.pushToVoSpace))) {
             grantClass = WriteGrant.class;
         }
-        // do authorization (with token or subject)
-        Subject subject = AuthenticationUtil.getCurrentSubject();
-        if (authToken != null) {
-            TokenTool tk = new TokenTool(publicKeyFile, privateKeyFile);
-            String tokenUser = tk.validateToken(authToken, artifactURI, grantClass);
-            subject.getPrincipals().clear();
-            subject.getPrincipals().add(new HttpPrincipal(tokenUser));
-            logInfo.setSubject(subject);
+        PermissionsCheck permissionsCheck = new PermissionsCheck(this.artifactURI, this.authenticateOnly,
+                                                                 this.logInfo);
+        if (ReadGrant.class.isAssignableFrom(grantClass)) {
+            permissionsCheck.checkReadPermission(this.readGrantServices);
+        } else if (WriteGrant.class.isAssignableFrom(grantClass)) {
+            permissionsCheck.checkWritePermission(this.writeGrantServices);
         } else {
-            PermissionsCheck permissionsCheck = new PermissionsCheck(this.artifactURI, this.authenticateOnly,
-                                                                     this.logInfo);
-            if (ReadGrant.class.isAssignableFrom(grantClass)) {
-                permissionsCheck.checkReadPermission(this.readGrantServices);
-            } else if (WriteGrant.class.isAssignableFrom(grantClass)) {
-                permissionsCheck.checkWritePermission(this.writeGrantServices);
-            } else {
-                throw new IllegalStateException("Unsupported grant class: " + grantClass);
-            }
+            throw new IllegalStateException("Unsupported grant class: " + grantClass);
         }
     }
+
+    /**
+     * Method to set the artifactURI of the request as well as other attributes
+     */
+    abstract void parseRequest() throws Exception;
     
-    void init() throws IOException, TransferParsingException {
-        parsePath();
-        parseContent();
+    void init() throws Exception {
+        parseRequest();
         if (artifactURI == null) {
             throw new IllegalArgumentException("Missing artifact URI from path or request content");
-        }
-    }
-
-    /**
-     * Parse the request path.
-     */
-    void parsePath() {
-        String path = syncInput.getPath();
-        log.debug("path: " + path);
-        if (path == null) {
-            return;
-        }
-        int colonIndex = path.indexOf(":");
-        int firstSlashIndex = path.indexOf("/");
-        
-        if (colonIndex < 0) {
-            if (firstSlashIndex > 0 && path.length() > firstSlashIndex + 1) {
-                throw new IllegalArgumentException(
-                    "missing scheme in artifact URI: "
-                        + path.substring(firstSlashIndex + 1));
-            } else {
-                throw new IllegalArgumentException(
-                    "missing artifact URI in path: " + path);
-            }
-        }
-        
-        if (firstSlashIndex < 0 || firstSlashIndex > colonIndex) {
-            // no auth token--artifact URI is complete path
-            artifactURI = createArtifactURI(path);
-            return;
-        }
-        
-        artifactURI = createArtifactURI(path.substring(firstSlashIndex + 1));
-        
-        authToken = path.substring(0, firstSlashIndex);
-        log.debug("authToken: " + authToken);
-    }
-
-    /**
-     * Parse the content in case of a POST action
-     */
-    void parseContent() throws IOException, TransferParsingException {
-        TransferReader reader = new TransferReader();
-        InputStream in = (InputStream) syncInput.getContent(INLINE_CONTENT_TAG);
-        if (in == null) {
-            return;
-        }
-        transfer = reader.read(in, null);
-
-        log.debug("transfer request: " + transfer);
-        Direction direction = transfer.getDirection();
-        if (!Direction.pullFromVoSpace.equals(direction) && !Direction.pushToVoSpace.equals(direction)) {
-            throw new IllegalArgumentException("direction not supported: " + transfer.getDirection());
-        }
-        artifactURI = transfer.getTarget();
-        InventoryUtil.validateArtifactURI(PostAction.class, artifactURI);
-    }
-
-    /**
-     * Create a valid artifact uri.
-     * @param uri The input string.
-     * @return The artifact uri object.
-     */
-    private URI createArtifactURI(String uri) {
-        try {
-            log.debug("artifactURI: " + uri);
-            artifactURI = new URI(uri);
-            InventoryUtil.validateArtifactURI(ArtifactAction.class, artifactURI);
-            return artifactURI;
-        } catch (URISyntaxException e) {
-            String message = "illegal artifact URI: " + uri;
-            log.debug(message, e);
-            throw new IllegalArgumentException(message);
         }
     }
 
@@ -348,23 +249,4 @@ public abstract class ArtifactAction extends RestAction {
         return props;
     }
 
-    /**
-     * Return the input stream.
-     * @return The Object representing the input stream.
-     */
-    @Override
-    protected InlineContentHandler getInlineContentHandler() {
-        return new InlineContentHandler() {
-            public Content accept(String name, String contentType, InputStream inputStream)
-                    throws InlineContentException, IOException, ResourceNotFoundException {
-                if (!CONTENT_TYPE.equals(contentType)) {
-                    throw new IllegalArgumentException("expecting text/xml input document");
-                }
-                Content content = new Content();
-                content.name = INLINE_CONTENT_TAG;
-                content.value = inputStream;
-                return content;
-            }
-        };
-    }
 }

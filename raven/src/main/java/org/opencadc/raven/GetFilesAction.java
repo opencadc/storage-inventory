@@ -67,45 +67,28 @@
 
 package org.opencadc.raven;
 
-import ca.nrc.cadc.auth.AuthMethod;
-import ca.nrc.cadc.auth.AuthenticationUtil;
 import ca.nrc.cadc.net.ResourceNotFoundException;
-import ca.nrc.cadc.reg.Capabilities;
-import ca.nrc.cadc.reg.Capability;
-import ca.nrc.cadc.reg.Interface;
 import ca.nrc.cadc.reg.Standards;
-import ca.nrc.cadc.reg.client.RegistryClient;
 import ca.nrc.cadc.vos.Direction;
 import ca.nrc.cadc.vos.Protocol;
 import ca.nrc.cadc.vos.Transfer;
 import ca.nrc.cadc.vos.VOS;
 import org.apache.log4j.Logger;
-import org.opencadc.inventory.*;
-import org.opencadc.inventory.db.StorageSiteDAO;
-import org.opencadc.inventory.server.PermissionsCheck;
-import org.opencadc.permissions.ReadGrant;
-import org.opencadc.permissions.TokenTool;
-import org.opencadc.permissions.WriteGrant;
 
 import java.io.IOException;
 import java.net.HttpURLConnection;
-import java.net.URI;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
-import java.util.UUID;
 
 /**
  * Interface with storage and inventory to get an artifact.
  *
  * @author adriand
  */
-public class GetFilesAction extends PostAction {
+public class GetFilesAction extends FilesAction {
 
     private static final Logger log = Logger.getLogger(GetFilesAction.class);
-    private static final String CONTENT_DISPOSITION = "Content-Disposition";
-
 
     /**
      * Default, no-arg constructor.
@@ -135,7 +118,8 @@ public class GetFilesAction extends PostAction {
         plist.add(proto);
         Transfer transfer = new Transfer(artifactURI, Direction.pullFromVoSpace, plist);
 
-        List<Protocol> protos = getProtocols(transfer);
+        ProtocolsGenerator pg = new ProtocolsGenerator(artifactDAO, publicKeyFile, privateKeyFile, user);
+        List<Protocol> protos = pg.getProtocols(transfer);
         if (protos.size() == 0) {
             throw new ResourceNotFoundException("No protocols for artifact " + artifactURI);
         }

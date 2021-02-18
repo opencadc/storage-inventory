@@ -69,14 +69,9 @@ package org.opencadc.raven;
 
 import ca.nrc.cadc.auth.AuthMethod;
 import ca.nrc.cadc.auth.AuthenticationUtil;
-import ca.nrc.cadc.auth.SSLUtil;
-import ca.nrc.cadc.net.FileContent;
 import ca.nrc.cadc.net.HttpGet;
-import ca.nrc.cadc.net.HttpPost;
-import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.reg.Standards;
 import ca.nrc.cadc.reg.client.RegistryClient;
-import ca.nrc.cadc.util.FileUtil;
 import ca.nrc.cadc.util.Log4jInit;
 import ca.nrc.cadc.vos.*;
 import org.apache.log4j.Level;
@@ -93,13 +88,8 @@ import org.opencadc.inventory.db.StorageSiteDAO;
 import org.opencadc.inventory.db.version.InitDatabase;
 
 import javax.security.auth.Subject;
-import java.io.ByteArrayOutputStream;
-import java.io.File;
-import java.io.IOException;
-import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URL;
-import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
 import java.util.*;
 
@@ -118,8 +108,6 @@ public class FilesTest extends RavenTest {
         Log4jInit.setLevel("org.opencadc.raven", Level.INFO);
         Log4jInit.setLevel("ca.nrc.cadc.db", Level.INFO);
     }
-
-
 
     ArtifactDAO artifactDAO;
     StorageSiteDAO siteDAO;
@@ -172,12 +160,15 @@ public class FilesTest extends RavenTest {
             artifactDAO.addSiteLocation(artifact, location1);
             artifact = artifactDAO.get(artifact.getID());
 
-            HttpGet filesGet = new HttpGet(new URL(ravenURL.toString() + "/" + artifactURI.toASCIIString()), false);
-            filesGet.run();
-            Assert.assertEquals("files response", 303, filesGet.getResponseCode());
-            // URL should be of form anonMinocURL1/token/artifactURI
-            Assert.assertTrue("redirect URL start", filesGet.getRedirectURL().toString().startsWith(minocURL1.toString()));
-            Assert.assertTrue("redirec URL end", filesGet.getRedirectURL().toString().endsWith(artifactURI.toASCIIString()));
+            // should work for artifact uri with or without the scheme part
+            for (String au : new String[]{artifactURI.toASCIIString(), artifactURI.getSchemeSpecificPart()}) {
+                HttpGet filesGet = new HttpGet(new URL(ravenURL.toString() + "/" + au), false);
+                filesGet.run();
+                Assert.assertEquals("files response", 303, filesGet.getResponseCode());
+                // URL should be of form anonMinocURL1/token/artifactURI
+                Assert.assertTrue("redirect URL start", filesGet.getRedirectURL().toString().startsWith(minocURL1.toString()));
+                Assert.assertTrue("redirec URL end", filesGet.getRedirectURL().toString().endsWith(artifactURI.toASCIIString()));
+            }
 
             log.info("add: " + location2);
             artifactDAO.addSiteLocation(artifact, location2);
@@ -194,10 +185,13 @@ public class FilesTest extends RavenTest {
             Transfer transferResp = negotiate(transferReq);
             String expectedEndPoint = transferResp.getProtocols().get(0).getEndpoint();
 
-            filesGet = new HttpGet(new URL(ravenURL.toString() + "/" + artifactURI.toASCIIString()), false);
-            filesGet.run();
-            Assert.assertEquals("files response", 303, filesGet.getResponseCode());
-            Assert.assertEquals("files URL", expectedEndPoint, filesGet.getRedirectURL().toString());
+            // should work for artifact uri with or without the scheme part
+            for (String au : new String[]{artifactURI.toASCIIString(), artifactURI.getSchemeSpecificPart()}) {
+                HttpGet filesGet = new HttpGet(new URL(ravenURL.toString() + "/" + artifactURI.toASCIIString()), false);
+                filesGet.run();
+                Assert.assertEquals("files response", 303, filesGet.getResponseCode());
+                Assert.assertEquals("files URL", expectedEndPoint, filesGet.getRedirectURL().toString());
+            }
         } finally {
             // cleanup sites
             siteDAO.delete(site1.getID());
@@ -227,30 +221,6 @@ public class FilesTest extends RavenTest {
     }
 
     @Test
-    public void testPUT() throws Exception {
-       // PUT attempt to the files end point should fail with a NotFound error
-        URI artifactURI = URI.create("cadc:TEST/" + UUID.randomUUID() + ".fits");
-        List<Protocol> plist = new ArrayList<Protocol>();
-        Protocol proto = new Protocol(VOS.PROTOCOL_HTTPS_GET);
-        proto.setSecurityMethod(Standards.SECURITY_METHOD_ANON);
-        plist.add(proto);
-        Transfer transferReq = new Transfer(artifactURI, Direction.pullFromVoSpace, plist);
-        transferReq.version = VOS.VOSPACE_21;
-        RegistryClient regClient = new RegistryClient();
-        URL ravenURL = regClient.getServiceURL(RAVEN_SERVICE_ID, Standards.SI_FILES, AuthMethod.CERT);
-
-        TransferWriter writer = new TransferWriter();
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        writer.write(transferReq, out);
-        FileContent content = new FileContent(out.toByteArray(), "text/xml");
-        HttpPost post = new HttpPost(ravenURL, content, false);
-        post.run();
-        Assert.assertEquals("HTTP code", 400, post.getResponseCode());
-        Assert.assertTrue("Exception type", post.getThrowable() instanceof IllegalArgumentException);
-
-    }
-    
-    @Test
     public void testHEAD() throws Exception {
 
         URI artifactURI = URI.create("cadc:TEST/" + UUID.randomUUID() + ".fits");
@@ -260,28 +230,33 @@ public class FilesTest extends RavenTest {
         try {
             artifactDAO.put(artifact);
             RegistryClient regClient = new RegistryClient();
-            URL ravenURL = regClient.getServiceURL(RAVEN_SERVICE_ID, Standards.SI_FILES, AuthMethod.ANON);
-
-            final URL anonArtifactURL = new URL(ravenURL.toString() + "/" + artifactURI.toASCIIString());
+            final URL anonRavenURL = regClient.getServiceURL(RAVEN_SERVICE_ID, Standards.SI_FILES, AuthMethod.ANON);
             // anon request
             Subject.doAs(anonSubject, new PrivilegedExceptionAction<Object>() {
                 public Object run() throws Exception {
-                    HttpGet request = new HttpGet(anonArtifactURL, false);
-                    request.setHeadOnly(true);
-                    request.run();
-                    checkHeadResult(request, artifactURI, checksum, artifact.contentType);
+                    // should work for artifact uri with or without the scheme part
+                    for (String au : new String[]{artifactURI.toASCIIString(), artifactURI.getSchemeSpecificPart()}) {
+                        URL anonArtifactURL = new URL(anonRavenURL.toString() + "/" + au);
+                        HttpGet request = new HttpGet(anonArtifactURL, false);
+                        request.setHeadOnly(true);
+                        request.run();
+                        checkHeadResult(request, artifactURI, checksum, artifact.contentType);
+                    }
                     return null;
                 }
             });
             // repeat for auth request
-            ravenURL = regClient.getServiceURL(RAVEN_SERVICE_ID, Standards.SI_FILES, AuthMethod.CERT);
-            final URL certArtifactURL = new URL(ravenURL.toString() + "/" + artifactURI.toASCIIString());
+            final URL certRavenURL = regClient.getServiceURL(RAVEN_SERVICE_ID, Standards.SI_FILES, AuthMethod.CERT);
             Subject.doAs(userSubject, new PrivilegedExceptionAction<Object>() {
                 public Object run() throws Exception {
-                    HttpGet request = new HttpGet(certArtifactURL, false);
-                    request.setHeadOnly(true);
-                    request.run();
-                    checkHeadResult(request, artifactURI, checksum, artifact.contentType);
+                    // should work for artifact uri with or without the scheme part
+                    for (String au : new String[]{artifactURI.toASCIIString(), artifactURI.getSchemeSpecificPart()}) {
+                        URL certArtifactURL = new URL(certRavenURL.toString() + "/" + au);
+                        HttpGet request = new HttpGet(certArtifactURL, false);
+                        request.setHeadOnly(true);
+                        request.run();
+                        checkHeadResult(request, artifactURI, checksum, artifact.contentType);
+                    }
                     return null;
                 }
             });
