@@ -71,14 +71,10 @@ import ca.nrc.cadc.rest.InitAction;
 import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.util.PropertiesReader;
 import java.net.URI;
-import java.net.URISyntaxException;
 import java.util.Map;
-import java.util.Set;
 import java.util.TreeMap;
 import org.apache.log4j.Logger;
-import org.opencadc.inventory.StorageSite;
 import org.opencadc.inventory.db.SQLGenerator;
-import org.opencadc.inventory.db.StorageSiteDAO;
 
 /**
  *
@@ -89,7 +85,6 @@ public class RavenInitAction extends InitAction {
 
     // config keys
     private static final String RAVEN_KEY = "org.opencadc.raven";
-    static final String RESOURCE_ID_KEY = RAVEN_KEY + ".resourceID";
 
     static final String JNDI_DATASOURCE = "jdbc/inventory"; // context.xml
 
@@ -114,8 +109,6 @@ public class RavenInitAction extends InitAction {
 
     @Override
     public void doInit() {
-        initConfig();
-        initStorageSite();
     }
 
     /**
@@ -165,57 +158,6 @@ public class RavenInitAction extends InitAction {
 
         return mvp;
     }
-
-
-    private void initConfig() {
-        log.info("initConfig: START");
-        this.props = getConfig();
-        String rid = props.getFirstPropertyValue(RESOURCE_ID_KEY);
-        
-        try {
-            this.resourceID = new URI(rid);
-            log.info("initConfig: OK");
-        } catch (URISyntaxException ex) {
-            throw new IllegalStateException("invalid config: " + RESOURCE_ID_KEY + " must be a valid URI");
-        }
-    }
-
-    private void initStorageSite() {
-        log.info("initStorageSite: START");
-        StorageSiteDAO ssdao = new StorageSiteDAO();
-        ssdao.setConfig(daoConfig);
-        
-        Set<StorageSite> curlist = ssdao.list();
-        if (curlist.size() > 1) {
-            throw new IllegalStateException("found: " + curlist.size() + " StorageSite(s) in database; expected 0 or 1");
-        }
-        // TODO: get display name from config
-        // use path from resourceID as default
-        String name = resourceID.getPath();
-        if (name.charAt(0) == '/') {
-            name = name.substring(1);
-        }
-
-        if (curlist.isEmpty()) {
-            boolean allowRead = !props.getProperty(READ_GRANTS_KEY).isEmpty();
-            boolean allowWrite = !props.getProperty(WRITE_GRANTS_KEY).isEmpty();
-            StorageSite self = new StorageSite(resourceID, name, allowRead, allowWrite);
-            ssdao.put(self);
-        } else if (curlist.size() == 1) {
-            StorageSite cur = curlist.iterator().next();
-            boolean allowRead = !props.getProperty(READ_GRANTS_KEY).isEmpty();
-            boolean allowWrite = !props.getProperty(WRITE_GRANTS_KEY).isEmpty();
-            cur.setResourceID(resourceID);
-            cur.setName(name);
-            cur.setAllowRead(allowRead);
-            cur.setAllowWrite(allowWrite);
-            ssdao.put(cur);
-        } else {
-            throw new IllegalStateException("BUG: found " + curlist.size() + " StorageSite entries");
-        }
-        log.info("initStorageSite: " + resourceID + " OK");
-    }
-
 
     static Map<String,Object> getDaoConfig(MultiValuedProperties props) {
         String cname = props.getFirstPropertyValue(SQLGenerator.class.getName());

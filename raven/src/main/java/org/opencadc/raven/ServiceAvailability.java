@@ -68,7 +68,6 @@
 package org.opencadc.raven;
 
 import ca.nrc.cadc.auth.AuthMethod;
-import ca.nrc.cadc.net.HttpDownload;
 import ca.nrc.cadc.reg.Standards;
 import ca.nrc.cadc.reg.client.LocalAuthority;
 import ca.nrc.cadc.reg.client.RegistryClient;
@@ -80,7 +79,6 @@ import ca.nrc.cadc.vosi.avail.CheckResource;
 import ca.nrc.cadc.vosi.avail.CheckWebService;
 import java.io.File;
 import java.net.URI;
-import java.net.URL;
 import org.apache.log4j.Logger;
 
 /**
@@ -127,27 +125,22 @@ public class ServiceAvailability implements AvailabilityPlugin {
         String note = "service is accepting requests";
         
         try {
+            // check other services we depend on
+            RegistryClient reg = new RegistryClient();
+            String url;
+            LocalAuthority localAuthority = new LocalAuthority();
+
             // check for a certficate needed to perform network ops
             CheckCertificate checkCert = new CheckCertificate(SERVOPS_PEM_FILE);
             checkCert.check();
             log.info("cert check ok");
 
-            String url = "https://localhost.cadc.dao.nrc.ca/baldur/availability";
-            HttpDownload hd = new HttpDownload(new URL(url), new File("/tmp/testcaps.xml"));
-            hd.run();
-            if (hd.failure != null) {
-                log.error(hd.failure);
-            } else {
-                log.info("SUCCESS");
-            }
-            log.info("service url: " + url);
-            CheckResource checkResource = new CheckWebService(url);
-            log.info("Checked1");
+            CheckResource checkResource;
+            URI credURI = localAuthority.getServiceURI(Standards.CRED_PROXY_10.toString());
+            url = reg.getServiceURL(credURI, Standards.VOSI_AVAILABILITY, AuthMethod.ANON).toExternalForm();
+            checkResource = new CheckWebService(url);
             checkResource.check();
-            log.info("Checked2");
 
-            RegistryClient reg = new RegistryClient();
-            LocalAuthority localAuthority = new LocalAuthority();
             URI usersURI = localAuthority.getServiceURI(Standards.UMS_USERS_01.toString());
             url = reg.getServiceURL(usersURI, Standards.VOSI_AVAILABILITY, AuthMethod.ANON).toExternalForm();
             checkResource = new CheckWebService(url);
@@ -164,7 +157,7 @@ public class ServiceAvailability implements AvailabilityPlugin {
             note = ce.getMessage();
         } catch (Throwable t) {
             // the test itself failed
-            log.info("failure", t);
+            log.debug("failure", t);
             isGood = false;
             note = "test failed, reason: " + t;
         }
