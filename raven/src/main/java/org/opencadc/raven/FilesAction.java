@@ -111,20 +111,18 @@ public abstract class FilesAction extends ArtifactAction {
         if (path.indexOf(":") < 0) {
             au = "cadc:" + path;
         }
-        artifactURI = createArtifactURI(au);
+        setArtifactURI(au);
     }
 
     /**
-     * Create a valid artifact uri.
+     * Set the artifact uri local variable.
      * @param uri The input string.
-     * @return The artifact uri object.
      */
-    private URI createArtifactURI(String uri) {
+    private void setArtifactURI(String uri) {
         try {
             log.debug("artifactURI: " + uri);
             artifactURI = new URI(uri);
             InventoryUtil.validateArtifactURI(ArtifactAction.class, artifactURI);
-            return artifactURI;
         } catch (URISyntaxException e) {
             String message = "illegal artifact URI: " + uri;
             log.debug(message, e);
