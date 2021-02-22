@@ -67,108 +67,72 @@
 
 package org.opencadc.raven;
 
-import ca.nrc.cadc.net.ResourceNotFoundException;
-import ca.nrc.cadc.rest.InlineContentException;
 import ca.nrc.cadc.rest.InlineContentHandler;
-import ca.nrc.cadc.vos.Direction;
-import ca.nrc.cadc.vos.Protocol;
-import ca.nrc.cadc.vos.Transfer;
-import ca.nrc.cadc.vos.TransferReader;
-import ca.nrc.cadc.vos.TransferWriter;
-import ca.nrc.cadc.vos.VOS;
-import java.io.IOException;
-import java.io.InputStream;
 import java.net.URI;
-import java.util.ArrayList;
-import java.util.List;
+import java.net.URISyntaxException;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.InventoryUtil;
 
 /**
- * Given a transfer request object return a transfer response object with all
- * available endpoints to the target artifact.
+ * Base class for handling "files" requests
  *
- * @author majorb
+ * @author adriand
  */
-public class PostAction extends ArtifactAction {
+public abstract class FilesAction extends ArtifactAction {
 
-    
-    private static final Logger log = Logger.getLogger(PostAction.class);
-
-    // immutable state set in constructor
-    private final List<URI> readGrantServices = new ArrayList<>();
-    private final List<URI> writeGrantServices = new ArrayList<>();
-
-    private static final String INLINE_CONTENT_TAG = "inputstream";
-    private static final String CONTENT_TYPE = "text/xml";
-
+    private static final Logger log = Logger.getLogger(FilesAction.class);
 
     /**
      * Default, no-arg constructor.
      */
-    public PostAction() {
+    public FilesAction() {
         super();
     }
 
-    @Override
-    void parseRequest() throws Exception {
-        TransferReader reader = new TransferReader();
-        InputStream in = (InputStream) syncInput.getContent(INLINE_CONTENT_TAG);
-        if (in == null) {
-            return;
-        }
-        transfer = reader.read(in, null);
+    // constructor for unit tests with no config/init
+    FilesAction(boolean init) {
+        super(init);
+    }
 
-        log.debug("transfer request: " + transfer);
-        Direction direction = transfer.getDirection();
-        if (!Direction.pullFromVoSpace.equals(direction) && !Direction.pushToVoSpace.equals(direction)) {
-            throw new IllegalArgumentException("direction not supported: " + transfer.getDirection());
+    @Override
+    /**
+     * Parse the request path.
+     */
+    void parseRequest() throws Exception {
+        parsePath(syncInput.getPath());
+    }
+
+    void parsePath(final String path) {
+        log.debug("path: " + path);
+        if (path == null) {
+            throw new IllegalArgumentException("path expected");
         }
-        artifactURI = transfer.getTarget();
-        InventoryUtil.validateArtifactURI(PostAction.class, artifactURI);
+        String au = path;
+        if (path.indexOf(":") < 0) {
+            au = "cadc:" + path;
+        }
+        setArtifactURI(au);
     }
 
     /**
-     * Return the input stream.
-     * @return The Object representing the input stream.
+     * Set the artifact uri local variable.
+     * @param uri The input string.
      */
+    private void setArtifactURI(String uri) {
+        try {
+            log.debug("artifactURI: " + uri);
+            artifactURI = new URI(uri);
+            InventoryUtil.validateArtifactURI(ArtifactAction.class, artifactURI);
+        } catch (URISyntaxException e) {
+            String message = "illegal artifact URI: " + uri;
+            log.debug(message, e);
+            throw new IllegalArgumentException(message);
+        }
+    }
+
     @Override
     protected InlineContentHandler getInlineContentHandler() {
-        return new InlineContentHandler() {
-            public InlineContentHandler.Content accept(String name, String contentType, InputStream inputStream)
-                    throws InlineContentException, IOException, ResourceNotFoundException {
-                if (!CONTENT_TYPE.equals(contentType)) {
-                    throw new IllegalArgumentException("expecting text/xml input document");
-                }
-                Content content = new Content();
-                content.name = INLINE_CONTENT_TAG;
-                content.value = inputStream;
-                return content;
-            }
-        };
+        return null;
     }
-
-
-    /**
-     * Perform transfer negotiation.
-     */
-    @Override
-    public void doAction() throws Exception {
-        initAndAuthorize();
-
-        ProtocolsGenerator pg = new ProtocolsGenerator(artifactDAO, publicKeyFile, privateKeyFile, user);
-        List<Protocol> protos = pg.getProtocols(transfer);
-
-        // TODO: sort protocols as caller will try them in order until success
-        // - depends on client and site proximity
-        // - sort pre-auth before non-pre-auth because we already did the permission check
-        
-        Transfer ret = new Transfer(artifactURI, transfer.getDirection(), protos);
-        ret.version = VOS.VOSPACE_21;
-                        
-        TransferWriter transferWriter = new TransferWriter();
-        transferWriter.write(ret, syncOutput.getOutputStream());
-    }
-
 
 }

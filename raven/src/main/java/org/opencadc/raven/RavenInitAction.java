@@ -67,108 +67,110 @@
 
 package org.opencadc.raven;
 
-import ca.nrc.cadc.net.ResourceNotFoundException;
-import ca.nrc.cadc.rest.InlineContentException;
-import ca.nrc.cadc.rest.InlineContentHandler;
-import ca.nrc.cadc.vos.Direction;
-import ca.nrc.cadc.vos.Protocol;
-import ca.nrc.cadc.vos.Transfer;
-import ca.nrc.cadc.vos.TransferReader;
-import ca.nrc.cadc.vos.TransferWriter;
-import ca.nrc.cadc.vos.VOS;
-import java.io.IOException;
-import java.io.InputStream;
+import ca.nrc.cadc.rest.InitAction;
+import ca.nrc.cadc.util.MultiValuedProperties;
+import ca.nrc.cadc.util.PropertiesReader;
 import java.net.URI;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
 import org.apache.log4j.Logger;
-import org.opencadc.inventory.InventoryUtil;
+import org.opencadc.inventory.db.SQLGenerator;
 
 /**
- * Given a transfer request object return a transfer response object with all
- * available endpoints to the target artifact.
  *
- * @author majorb
+ * @author adriand
  */
-public class PostAction extends ArtifactAction {
+public class RavenInitAction extends InitAction {
+    private static final Logger log = Logger.getLogger(RavenInitAction.class);
 
-    
-    private static final Logger log = Logger.getLogger(PostAction.class);
+    // config keys
+    private static final String RAVEN_KEY = "org.opencadc.raven";
 
-    // immutable state set in constructor
-    private final List<URI> readGrantServices = new ArrayList<>();
-    private final List<URI> writeGrantServices = new ArrayList<>();
+    static final String JNDI_DATASOURCE = "jdbc/inventory"; // context.xml
 
-    private static final String INLINE_CONTENT_TAG = "inputstream";
-    private static final String CONTENT_TYPE = "text/xml";
+    static final String SCHEMA_KEY = RAVEN_KEY + ".inventory.schema";
 
+    static final String PUBKEYFILE_KEY = RAVEN_KEY + ".publicKeyFile";
+    static final String PRIVKEYFILE_KEY = RAVEN_KEY + ".privateKeyFile";
+    static final String READ_GRANTS_KEY = RAVEN_KEY + ".readGrantProvider";
+    static final String WRITE_GRANTS_KEY = RAVEN_KEY + ".writeGrantProvider";
 
-    /**
-     * Default, no-arg constructor.
-     */
-    public PostAction() {
+    static final String DEV_AUTH_ONLY_KEY = RAVEN_KEY + ".authenticateOnly";
+
+    // set init initConfig, used by subsequent init methods
+
+    MultiValuedProperties props;
+    private URI resourceID;
+    private Map<String,Object> daoConfig;
+
+    public RavenInitAction() {
         super();
     }
 
     @Override
-    void parseRequest() throws Exception {
-        TransferReader reader = new TransferReader();
-        InputStream in = (InputStream) syncInput.getContent(INLINE_CONTENT_TAG);
-        if (in == null) {
-            return;
-        }
-        transfer = reader.read(in, null);
-
-        log.debug("transfer request: " + transfer);
-        Direction direction = transfer.getDirection();
-        if (!Direction.pullFromVoSpace.equals(direction) && !Direction.pushToVoSpace.equals(direction)) {
-            throw new IllegalArgumentException("direction not supported: " + transfer.getDirection());
-        }
-        artifactURI = transfer.getTarget();
-        InventoryUtil.validateArtifactURI(PostAction.class, artifactURI);
+    public void doInit() {
     }
 
     /**
-     * Return the input stream.
-     * @return The Object representing the input stream.
+     * Read config file and verify that all required entries are present.
+     *
+     * @return MultiValuedProperties containing the application config
      */
-    @Override
-    protected InlineContentHandler getInlineContentHandler() {
-        return new InlineContentHandler() {
-            public InlineContentHandler.Content accept(String name, String contentType, InputStream inputStream)
-                    throws InlineContentException, IOException, ResourceNotFoundException {
-                if (!CONTENT_TYPE.equals(contentType)) {
-                    throw new IllegalArgumentException("expecting text/xml input document");
-                }
-                Content content = new Content();
-                content.name = INLINE_CONTENT_TAG;
-                content.value = inputStream;
-                return content;
-            }
-        };
+    static MultiValuedProperties getConfig() {
+        PropertiesReader r = new PropertiesReader("raven.properties");
+        MultiValuedProperties mvp = r.getAllProperties();
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("incomplete config: ");
+        boolean ok = true;
+
+        // validate required config here
+        String schema = mvp.getFirstPropertyValue(RavenInitAction.SCHEMA_KEY);
+        sb.append("\n\t").append(RavenInitAction.SCHEMA_KEY).append(": ");
+        if (schema == null) {
+            sb.append("MISSING");
+            ok = false;
+        } else {
+            sb.append("OK");
+        }
+
+        String pub = mvp.getFirstPropertyValue(RavenInitAction.PUBKEYFILE_KEY);
+        sb.append("\n\t").append(RavenInitAction.PUBKEYFILE_KEY).append(": ");
+        if (pub == null) {
+            sb.append("MISSING");
+            ok = false;
+        } else {
+            sb.append("OK");
+        }
+
+        String priv = mvp.getFirstPropertyValue(RavenInitAction.PRIVKEYFILE_KEY);
+        sb.append("\n\t").append(RavenInitAction.PRIVKEYFILE_KEY).append(": ");
+        if (priv == null) {
+            sb.append("MISSING");
+            ok = false;
+        } else {
+            sb.append("OK");
+        }
+
+        if (!ok) {
+            throw new IllegalStateException(sb.toString());
+        }
+
+        return mvp;
     }
 
-
-    /**
-     * Perform transfer negotiation.
-     */
-    @Override
-    public void doAction() throws Exception {
-        initAndAuthorize();
-
-        ProtocolsGenerator pg = new ProtocolsGenerator(artifactDAO, publicKeyFile, privateKeyFile, user);
-        List<Protocol> protos = pg.getProtocols(transfer);
-
-        // TODO: sort protocols as caller will try them in order until success
-        // - depends on client and site proximity
-        // - sort pre-auth before non-pre-auth because we already did the permission check
-        
-        Transfer ret = new Transfer(artifactURI, transfer.getDirection(), protos);
-        ret.version = VOS.VOSPACE_21;
-                        
-        TransferWriter transferWriter = new TransferWriter();
-        transferWriter.write(ret, syncOutput.getOutputStream());
+    static Map<String,Object> getDaoConfig(MultiValuedProperties props) {
+        String cname = props.getFirstPropertyValue(SQLGenerator.class.getName());
+        try {
+            Map<String,Object> ret = new TreeMap<>();
+            Class clz = Class.forName(cname);
+            ret.put(SQLGenerator.class.getName(), clz);
+            ret.put("jndiDataSourceName", RavenInitAction.JNDI_DATASOURCE);
+            ret.put("schema", props.getFirstPropertyValue(RavenInitAction.SCHEMA_KEY));
+            //config.put("database", null);
+            return ret;
+        } catch (ClassNotFoundException ex) {
+            throw new IllegalStateException("invalid config: failed to load SQLGenerator: " + cname);
+        }
     }
-
-
 }
