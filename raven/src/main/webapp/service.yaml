@@ -22,10 +22,92 @@ paths:
         - name: transfer-request
           in: body
           description: 'A transfer object (according to the VOSpace 2.1 specification) containing the target artifact (Artifact URI) and direction (only pullFromVoSpace supported).'
+          schema:
+            type: object
           required: true
       responses:
         '200':
           description: 'A transfer-response object containing the transfer-request information and a list of zero or more pre-authorized download endpoint URLs.'
+        '401':
+          description: If the client does not provide credentials and anonymous access is disallowed.
+        '403':
+          description: If the client does not have permission.
+        '404':
+          description: If the artifact could not be found.
+        '500':
+          description: Internal error
+        '503':
+          description: Service busy
+  '/files/{artifact-uri}':
+    parameters:
+      - name: artifact-uri
+        in: path
+        type: string
+        description: The artifact URI
+        required: true
+    get:
+      description: |
+        Redirect to a URL where the file identified by parameter artifact-uri can be downloaded, optionally cutting a subset of a FITS file.
+      tags:
+        - Artifact transfer
+      summary: Redirect to a URL and download
+      schemes:
+        - https
+      responses:
+        '200':
+          description: Successful response.
+          headers:
+            Content-Disposition:
+              description: 'The content-disposition of the file in the form<br/><br/>Content-Disposition\: inline; filename=\"\<name\>\"<br/><br/>where \<name\> is the last path segment of the URI of the artifact.'
+              type: string
+            Content-Type:
+              description: The content type of the file
+              type: string
+            Content-MD5:
+              description: The content MD5 of the file
+              type: string
+            Content-Length:
+              description: The content length of the file
+              type: string
+        '303':
+          description: Redirect to a URL where download can start.
+          headers:
+            Location:
+              description: URL to download from
+              type: string
+        '401':
+          description: If the client does not provide credentials and anonymous access is disallowed.
+        '403':
+          description: If the client does not have permission.
+        '404':
+          description: If the artifact could not be found.
+        '500':
+          description: Internal error
+        '503':
+          description: Service busy
+    head:
+      description: 'Return metadata about a given artifact indentified by parameter artifact-uri'
+      tags:
+        - Artifact metadata
+      summary: Artifact metadata
+      schemes:
+        - https
+      responses:
+        '200':
+          description: Successful response.
+          headers:
+            Content-Disposition:
+              description: 'The content-disposition of the file in the form<br/><br/>Content-Disposition\: inline; filename=\"\<name\>\"<br/><br/>where \<name\> is the last path segment of the URI of the artifact.'
+              type: string
+            Content-Type:
+              description: The content type of the file
+              type: string
+            Content-MD5:
+              description: The content MD5 of the file
+              type: string
+            Content-Length:
+              description: The content length of the file
+              type: string
         '401':
           description: If the client does not provide credentials and anonymous access is disallowed.
         '403':
