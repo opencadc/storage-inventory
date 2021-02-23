@@ -68,107 +68,61 @@
 package org.opencadc.raven;
 
 import ca.nrc.cadc.net.ResourceNotFoundException;
-import ca.nrc.cadc.rest.InlineContentException;
-import ca.nrc.cadc.rest.InlineContentHandler;
+import ca.nrc.cadc.reg.Standards;
 import ca.nrc.cadc.vos.Direction;
 import ca.nrc.cadc.vos.Protocol;
 import ca.nrc.cadc.vos.Transfer;
-import ca.nrc.cadc.vos.TransferReader;
-import ca.nrc.cadc.vos.TransferWriter;
 import ca.nrc.cadc.vos.VOS;
 import java.io.IOException;
-import java.io.InputStream;
-import java.net.URI;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
 import org.apache.log4j.Logger;
-import org.opencadc.inventory.InventoryUtil;
 
 /**
- * Given a transfer request object return a transfer response object with all
- * available endpoints to the target artifact.
+ * Class to execute a "files" GET action.
  *
- * @author majorb
+ * @author adriand
  */
-public class PostAction extends ArtifactAction {
+public class GetFilesAction extends FilesAction {
 
-    
-    private static final Logger log = Logger.getLogger(PostAction.class);
-
-    // immutable state set in constructor
-    private final List<URI> readGrantServices = new ArrayList<>();
-    private final List<URI> writeGrantServices = new ArrayList<>();
-
-    private static final String INLINE_CONTENT_TAG = "inputstream";
-    private static final String CONTENT_TYPE = "text/xml";
-
+    private static final Logger log = Logger.getLogger(GetFilesAction.class);
 
     /**
      * Default, no-arg constructor.
      */
-    public PostAction() {
+    public GetFilesAction() {
         super();
     }
 
-    @Override
-    void parseRequest() throws Exception {
-        TransferReader reader = new TransferReader();
-        InputStream in = (InputStream) syncInput.getContent(INLINE_CONTENT_TAG);
-        if (in == null) {
-            return;
-        }
-        transfer = reader.read(in, null);
-
-        log.debug("transfer request: " + transfer);
-        Direction direction = transfer.getDirection();
-        if (!Direction.pullFromVoSpace.equals(direction) && !Direction.pushToVoSpace.equals(direction)) {
-            throw new IllegalArgumentException("direction not supported: " + transfer.getDirection());
-        }
-        artifactURI = transfer.getTarget();
-        InventoryUtil.validateArtifactURI(PostAction.class, artifactURI);
-    }
-
     /**
-     * Return the input stream.
-     * @return The Object representing the input stream.
-     */
-    @Override
-    protected InlineContentHandler getInlineContentHandler() {
-        return new InlineContentHandler() {
-            public InlineContentHandler.Content accept(String name, String contentType, InputStream inputStream)
-                    throws InlineContentException, IOException, ResourceNotFoundException {
-                if (!CONTENT_TYPE.equals(contentType)) {
-                    throw new IllegalArgumentException("expecting text/xml input document");
-                }
-                Content content = new Content();
-                content.name = INLINE_CONTENT_TAG;
-                content.value = inputStream;
-                return content;
-            }
-        };
-    }
-
-
-    /**
-     * Perform transfer negotiation.
+     * GET redirect response to the URL of the first matching file location.
      */
     @Override
     public void doAction() throws Exception {
         initAndAuthorize();
-
-        ProtocolsGenerator pg = new ProtocolsGenerator(artifactDAO, publicKeyFile, privateKeyFile, user);
-        List<Protocol> protos = pg.getProtocols(transfer);
-
-        // TODO: sort protocols as caller will try them in order until success
-        // - depends on client and site proximity
-        // - sort pre-auth before non-pre-auth because we already did the permission check
-        
-        Transfer ret = new Transfer(artifactURI, transfer.getDirection(), protos);
-        ret.version = VOS.VOSPACE_21;
-                        
-        TransferWriter transferWriter = new TransferWriter();
-        transferWriter.write(ret, syncOutput.getOutputStream());
+        syncOutput.setCode(HttpURLConnection.HTTP_SEE_OTHER);
+        syncOutput.setHeader("Location", getFirstURL().toString());
+        log.debug("redirect artifact GET to storage");
     }
 
 
+    private URL getFirstURL() throws ResourceNotFoundException, IOException {
+        List<Protocol> plist = new ArrayList<Protocol>();
+        Protocol proto = new Protocol(VOS.PROTOCOL_HTTPS_GET);
+        // request already authorized, hence ask for anon security to get a pre-authorized URL
+        proto.setSecurityMethod(Standards.SECURITY_METHOD_ANON);
+        plist.add(proto);
+        Transfer transfer = new Transfer(artifactURI, Direction.pullFromVoSpace, plist);
+
+        ProtocolsGenerator pg = new ProtocolsGenerator(artifactDAO, publicKeyFile, privateKeyFile, user);
+        List<Protocol> protos = pg.getProtocols(transfer);
+        if (protos.size() == 0) {
+            throw new ResourceNotFoundException("No protocols for artifact " + artifactURI);
+        }
+
+        // for now return the first URL in the list
+        return new URL(protos.get(0).getEndpoint());
+    }
 }

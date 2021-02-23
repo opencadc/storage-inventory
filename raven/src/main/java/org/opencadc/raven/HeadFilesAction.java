@@ -67,108 +67,55 @@
 
 package org.opencadc.raven;
 
-import ca.nrc.cadc.net.ResourceNotFoundException;
-import ca.nrc.cadc.rest.InlineContentException;
-import ca.nrc.cadc.rest.InlineContentHandler;
-import ca.nrc.cadc.vos.Direction;
-import ca.nrc.cadc.vos.Protocol;
-import ca.nrc.cadc.vos.Transfer;
-import ca.nrc.cadc.vos.TransferReader;
-import ca.nrc.cadc.vos.TransferWriter;
-import ca.nrc.cadc.vos.VOS;
-import java.io.IOException;
-import java.io.InputStream;
-import java.net.URI;
-import java.util.ArrayList;
-import java.util.List;
+import ca.nrc.cadc.rest.SyncOutput;
 import org.apache.log4j.Logger;
+import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.InventoryUtil;
 
 /**
- * Given a transfer request object return a transfer response object with all
- * available endpoints to the target artifact.
+ * Interface with inventory to get the metadata of an artifact.
  *
- * @author majorb
+ * @author adriand
  */
-public class PostAction extends ArtifactAction {
-
+public class HeadFilesAction extends FilesAction {
     
-    private static final Logger log = Logger.getLogger(PostAction.class);
-
-    // immutable state set in constructor
-    private final List<URI> readGrantServices = new ArrayList<>();
-    private final List<URI> writeGrantServices = new ArrayList<>();
-
-    private static final String INLINE_CONTENT_TAG = "inputstream";
-    private static final String CONTENT_TYPE = "text/xml";
-
+    private static final Logger log = Logger.getLogger(HeadFilesAction.class);
 
     /**
      * Default, no-arg constructor.
      */
-    public PostAction() {
+    public HeadFilesAction() {
         super();
     }
 
-    @Override
-    void parseRequest() throws Exception {
-        TransferReader reader = new TransferReader();
-        InputStream in = (InputStream) syncInput.getContent(INLINE_CONTENT_TAG);
-        if (in == null) {
-            return;
-        }
-        transfer = reader.read(in, null);
-
-        log.debug("transfer request: " + transfer);
-        Direction direction = transfer.getDirection();
-        if (!Direction.pullFromVoSpace.equals(direction) && !Direction.pushToVoSpace.equals(direction)) {
-            throw new IllegalArgumentException("direction not supported: " + transfer.getDirection());
-        }
-        artifactURI = transfer.getTarget();
-        InventoryUtil.validateArtifactURI(PostAction.class, artifactURI);
-    }
-
     /**
-     * Return the input stream.
-     * @return The Object representing the input stream.
-     */
-    @Override
-    protected InlineContentHandler getInlineContentHandler() {
-        return new InlineContentHandler() {
-            public InlineContentHandler.Content accept(String name, String contentType, InputStream inputStream)
-                    throws InlineContentException, IOException, ResourceNotFoundException {
-                if (!CONTENT_TYPE.equals(contentType)) {
-                    throw new IllegalArgumentException("expecting text/xml input document");
-                }
-                Content content = new Content();
-                content.name = INLINE_CONTENT_TAG;
-                content.value = inputStream;
-                return content;
-            }
-        };
-    }
-
-
-    /**
-     * Perform transfer negotiation.
+     * Response to the "files" HEAD with the artifact metadata as response headers.
      */
     @Override
     public void doAction() throws Exception {
         initAndAuthorize();
-
-        ProtocolsGenerator pg = new ProtocolsGenerator(artifactDAO, publicKeyFile, privateKeyFile, user);
-        List<Protocol> protos = pg.getProtocols(transfer);
-
-        // TODO: sort protocols as caller will try them in order until success
-        // - depends on client and site proximity
-        // - sort pre-auth before non-pre-auth because we already did the permission check
-        
-        Transfer ret = new Transfer(artifactURI, transfer.getDirection(), protos);
-        ret.version = VOS.VOSPACE_21;
-                        
-        TransferWriter transferWriter = new TransferWriter();
-        transferWriter.write(ret, syncOutput.getOutputStream());
+        log.debug("Starting HEAD action for " + artifactURI.toASCIIString());
+        Artifact artifact = artifactDAO.get(artifactURI);
+        setHeaders(artifact, syncOutput);
     }
-
+    
+    /**
+     * Set the HTTP response headers for an artifact.
+     * @param artifact The artifact with metadata
+     * @param syncOutput The target response
+     */
+    public static void setHeaders(Artifact artifact, SyncOutput syncOutput) {
+        syncOutput.setHeader("Content-MD5", artifact.getContentChecksum().getSchemeSpecificPart());
+        syncOutput.setHeader("Digest", "md5=" + artifact.getContentChecksum().getSchemeSpecificPart());
+        syncOutput.setHeader("Content-Length", artifact.getContentLength());
+        String filename = InventoryUtil.computeArtifactFilename(artifact.getURI());
+        syncOutput.setHeader("Content-Disposition", "attachment; filename=\"" + filename + "\"");
+        if (artifact.contentEncoding != null) {
+            syncOutput.setHeader("Content-Encoding", artifact.contentEncoding);
+        }
+        if (artifact.contentType != null) {
+            syncOutput.setHeader("Content-Type", artifact.contentType);
+        }
+    }
 
 }

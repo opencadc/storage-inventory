@@ -4,15 +4,17 @@ This service allows queries to the metadata of the Storage Inventory using
 IVOA <a href="http://www.ivoa.net/documents/TAP/20190927/">TAP-1.1</a> web service API.
 
 ## configuration
-See the [cadc-tomcat](https://github.com/opencadc/docker-base/tree/master/cadc-tomcat) image docs 
-for expected deployment and common config requirements.
+See the [cadc-tomcat](https://github.com/opencadc/docker-base/tree/master/cadc-tomcat) image 
+docs for expected deployment and common config requirements. The `luskan` war file can be renamed
+at deployment time in order to support an alternate service name, including introducing 
+additional path elements (see war-rename.conf).
 
-This service instance is expected to have a database backend to store the TAP metadata and which also includes the 
-storage inventory tables.
+This service instance is expected to have a database backend to store the TAP metadata and which
+also includes the storage inventory tables.
 
 Runtime configuration must be made available via the `/config` directory.
 
-### catalina.properties (cadc-tomcat)
+### catalina.properties
 ```
 # database connection pools
 org.opencadc.luskan.uws.maxActive={max connections for jobs pool}
@@ -65,14 +67,6 @@ ivo://ivoa.net/std/UMS#login-0.1 = ivo://cadc.nrc.ca/gms
 ivo://ivoa.net/std/CDP#delegate-1.0 = ivo://cadc.nrc.ca/cred
 ivo://ivoa.net/std/CDP#proxy-1.0 = ivo://cadc.nrc.ca/cred
 ```
-
-### war-rename.conf (cadc-tomcat)
-The war file for `minoc` can be renamed at deployment time in order to support an alternate service name, including
-introducing additional path elements (by using tomcat war file naming conventions: 
-https://tomcat.apache.org/tomcat-9.0-doc/config/context.html).
-
-### cadcproxy.pem (cadc-tomcat)
-This client certificate is used to make server-to-server calls for system-level A&A purposes.
 
 ## building it
 ```
