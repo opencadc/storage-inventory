@@ -399,6 +399,7 @@ public class InventoryHarvesterTest {
                 TestUtil.getRandomMD5(), calendar.getTime(), 8989L);
         artifactOne.storageLocation = new StorageLocation(URI.create("cadc:TEST/location/1"));
         luskanEnvironment.artifactDAO.put(artifactOne);
+        Thread.sleep(50L);
 
         calendar.set(2012, Calendar.NOVEMBER, 17, 8, 13, 0);
         final Artifact artifactTwo = new Artifact(URI.create("cadc:INTTEST/filetwo.ext"), 
