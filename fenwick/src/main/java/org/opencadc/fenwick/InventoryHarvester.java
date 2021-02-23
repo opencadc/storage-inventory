@@ -106,6 +106,7 @@ import org.opencadc.inventory.db.HarvestState;
 import org.opencadc.inventory.db.HarvestStateDAO;
 import org.opencadc.inventory.db.StorageSiteDAO;
 import org.opencadc.inventory.db.version.InitDatabase;
+import org.opencadc.inventory.util.ArtifactSelector;
 import org.opencadc.tap.TapClient;
 
 

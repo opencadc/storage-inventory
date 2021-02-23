@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2020.                            (c) 2020.
+*  (c) 2021.                            (c) 2021.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -65,27 +65,74 @@
 ************************************************************************
 */
 
-package org.opencadc.fenwick;
+package org.opencadc.raven;
 
-import ca.nrc.cadc.net.ResourceNotFoundException;
-import java.io.IOException;
-
+import ca.nrc.cadc.rest.InlineContentHandler;
+import java.net.URI;
+import java.net.URISyntaxException;
+import org.apache.log4j.Logger;
+import org.opencadc.inventory.InventoryUtil;
 
 /**
- * A Selector to provide the InventoryHarvester with a means to gather include (additive) clauses to select appropriate
- * Artifacts to be included in the metadata sync merge.
+ * Base class for handling "files" requests
  *
- * @author pdowler
+ * @author adriand
  */
-public interface ArtifactSelector {
+public abstract class FilesAction extends ArtifactAction {
+
+    private static final Logger log = Logger.getLogger(FilesAction.class);
+
     /**
-     * Obtain a condition used to build a query to include the Artifacts being merged that can be added to the WHERE
-     * clause of artifact sync queries.
-     *
-     * @return SQL constraint for use in the WHERE clause; possibly null
-     * @throws ResourceNotFoundException    For any missing required configuration that is missing.
-     * @throws IOException      For unreadable configuration files.
-     * @throws IllegalStateException    For any invalid configuration.
+     * Default, no-arg constructor.
      */
-    String getConstraint() throws ResourceNotFoundException, IOException, IllegalStateException;
+    public FilesAction() {
+        super();
+    }
+
+    // constructor for unit tests with no config/init
+    FilesAction(boolean init) {
+        super(init);
+    }
+
+    @Override
+    /**
+     * Parse the request path.
+     */
+    void parseRequest() throws Exception {
+        parsePath(syncInput.getPath());
+    }
+
+    void parsePath(final String path) {
+        log.debug("path: " + path);
+        if (path == null) {
+            throw new IllegalArgumentException("path expected");
+        }
+        String au = path;
+        if (path.indexOf(":") < 0) {
+            au = "cadc:" + path;
+        }
+        setArtifactURI(au);
+    }
+
+    /**
+     * Set the artifact uri local variable.
+     * @param uri The input string.
+     */
+    private void setArtifactURI(String uri) {
+        try {
+            log.debug("artifactURI: " + uri);
+            artifactURI = new URI(uri);
+            InventoryUtil.validateArtifactURI(ArtifactAction.class, artifactURI);
+        } catch (URISyntaxException e) {
+            String message = "illegal artifact URI: " + uri;
+            log.debug(message, e);
+            throw new IllegalArgumentException(message);
+        }
+    }
+
+    @Override
+    protected InlineContentHandler getInlineContentHandler() {
+        return null;
+    }
+
 }
