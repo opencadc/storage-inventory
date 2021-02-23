@@ -133,7 +133,10 @@ public class IncorrectPutMetadataTest extends MinocTest {
                     // put file
                     InputStream in = new ByteArrayInputStream(bytes);
                     HttpUpload put = new HttpUpload(in, artifactURL);
-                    put.setRequestProperty(HttpTransfer.CONTENT_MD5, computeMD5(incorrectData.getBytes()));
+                    URI checksumURI = computeChecksumURI(incorrectData.getBytes());
+                    String algorithm = checksumURI.getScheme();
+                    String checksum = HttpTransfer.base64Encode(checksumURI.getSchemeSpecificPart());
+                    put.setRequestProperty(HttpTransfer.DIGEST, String.format("%s=%s", algorithm, checksum));
                     put.setRequestProperty(HttpTransfer.CONTENT_LENGTH, Long.toString(bytes.length));
                     put.run();
                     log.info("response code: " + put.getResponseCode() + " " + put.getThrowable());
@@ -304,7 +307,10 @@ public class IncorrectPutMetadataTest extends MinocTest {
                     // put file
                     InputStream in = new ByteArrayInputStream(bytes);
                     HttpUpload put = new HttpUpload(in, artifactURL);
-                    put.setRequestProperty(HttpTransfer.CONTENT_MD5, computeMD5(bytes));
+                    URI checksumURI = computeChecksumURI(bytes);
+                    String algorithm = checksumURI.getScheme();
+                    String checksum = HttpTransfer.base64Encode(checksumURI.getSchemeSpecificPart());
+                    put.setRequestProperty(HttpTransfer.DIGEST, String.format("%s=%s", algorithm, checksum));
                     put.setRequestProperty(HttpTransfer.CONTENT_LENGTH, Long.toString((long) bytes.length - 1L));
                     put.run();
                     log.info("response code: " + put.getResponseCode() + " " + put.getThrowable());
@@ -363,7 +369,10 @@ public class IncorrectPutMetadataTest extends MinocTest {
                     // put file
                     InputStream in = new ByteArrayInputStream(bytes);
                     HttpUpload put = new HttpUpload(in, artifactURL);
-                    put.setRequestProperty(HttpTransfer.CONTENT_MD5, computeMD5(bytes));
+                    URI checksumURI = computeChecksumURI(bytes);
+                    String algorithm = checksumURI.getScheme();
+                    String checksum = HttpTransfer.base64Encode(checksumURI.getSchemeSpecificPart());
+                    put.setRequestProperty(HttpTransfer.DIGEST, String.format("%s=%s", algorithm, checksum));
                     put.setRequestProperty(HttpTransfer.CONTENT_LENGTH, Long.toString((long) bytes.length));
 
                     put.run();

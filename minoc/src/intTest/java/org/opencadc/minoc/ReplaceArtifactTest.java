@@ -149,9 +149,9 @@ public class ReplaceArtifactTest extends MinocTest {
                     HttpGet get = new HttpGet(artifactURL, out);
                     get.run();
                     Assert.assertNull(get.getThrowable());
-                    String contentMD5 = get.getContentMD5();
+                    URI digest = get.getDigest();
                     long contentLength = get.getContentLength();
-                    Assert.assertEquals(computeMD5(data1.getBytes()), contentMD5);
+                    Assert.assertEquals(computeChecksumURI(data1.getBytes()), digest);
                     Assert.assertEquals(data1.getBytes().length, contentLength);
                     
                     // replace with new data
@@ -165,9 +165,9 @@ public class ReplaceArtifactTest extends MinocTest {
                     get = new HttpGet(artifactURL, out);
                     get.run();
                     Assert.assertNull(get.getThrowable());
-                    contentMD5 = get.getContentMD5();
+                    digest = get.getDigest();
                     contentLength = get.getContentLength();
-                    Assert.assertEquals(computeMD5(data2.getBytes()), contentMD5);
+                    Assert.assertEquals(computeChecksumURI(data2.getBytes()), digest);
                     Assert.assertEquals(data2.getBytes().length, contentLength);
                     
                     // delete
@@ -223,9 +223,9 @@ public class ReplaceArtifactTest extends MinocTest {
                     HttpGet get = new HttpGet(artifactURL, out);
                     get.run();
                     Assert.assertNull(get.getThrowable());
-                    String contentMD5 = get.getContentMD5();
+                    URI digest = get.getDigest();
                     long contentLength = get.getContentLength();
-                    Assert.assertEquals(computeMD5(data2.getBytes()), contentMD5);
+                    Assert.assertEquals(computeChecksumURI(data2.getBytes()), digest);
                     Assert.assertEquals(data2.getBytes().length, contentLength);
                     
                     Artifact actual = dao.get(artifactURI); // overwrite == new Artifact: get by URI
@@ -233,7 +233,7 @@ public class ReplaceArtifactTest extends MinocTest {
                     Assert.assertNotNull(actual);
                     Assert.assertNotNull("storageLocation", actual.storageLocation);
                     Assert.assertTrue(a.getContentLastModified().before(actual.getContentLastModified()));
-                    Assert.assertEquals(URI.create("md5:" + contentMD5), actual.getContentChecksum());
+                    Assert.assertEquals(digest, actual.getContentChecksum());
                     Assert.assertEquals(contentLength, actual.getContentLength().longValue());
                     
                     // delete

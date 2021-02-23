@@ -137,11 +137,11 @@ public class BasicOpsTest extends MinocTest {
             HttpGet get = new HttpGet(artifactURL, out);
             Subject.doAs(userSubject, new RunnableAction(get));
             Assert.assertNull(get.getThrowable());
-            String contentMD5 = get.getContentMD5();
+            URI checksumURI = get.getDigest();
             long contentLength = get.getContentLength();
             String contentType = get.getContentType();
             String contentEncoding = get.getContentEncoding();
-            Assert.assertEquals(computeMD5(data), contentMD5);
+            Assert.assertEquals(computeChecksumURI(data), checksumURI);
             Assert.assertEquals(data.length, contentLength);
             Assert.assertEquals(type, contentType);
             Assert.assertEquals(encoding, contentEncoding);
@@ -164,11 +164,11 @@ public class BasicOpsTest extends MinocTest {
             Subject.doAs(userSubject, new RunnableAction(head));
             log.warn("head output: " + bos.toString());
             Assert.assertNull(head.getThrowable());
-            contentMD5 = head.getContentMD5();
+            checksumURI = head.getDigest();
             contentLength = head.getContentLength();
             contentType = head.getContentType();
             contentEncoding = head.getContentEncoding();
-            Assert.assertEquals(computeMD5(data), contentMD5);
+            Assert.assertEquals(computeChecksumURI(data), checksumURI);
             Assert.assertEquals(data.length, contentLength);
             Assert.assertEquals(newType, contentType);
             Assert.assertEquals(newEncoding, contentEncoding);
