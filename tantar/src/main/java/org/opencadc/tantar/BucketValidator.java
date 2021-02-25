@@ -679,35 +679,37 @@ public class BucketValidator implements ValidateEventListener {
      * delete the file from storage and delete the ObsoleteStorageLocation.
      */
     void checkObsoleteStorageLocation(StorageMetadata storageMetadata) throws Exception {
-        ObsoleteStorageLocation obsoleteStorageLocation =
-            this.obsoleteStorageLocationDAO.get(storageMetadata.getStorageLocation());
-        if (obsoleteStorageLocation != null) {
+        if (canTakeAction()) {
+            ObsoleteStorageLocation obsoleteStorageLocation =
+                this.obsoleteStorageLocationDAO.get(storageMetadata.getStorageLocation());
+            if (obsoleteStorageLocation != null) {
 
-            delete(storageMetadata);
+                delete(storageMetadata);
 
-            TransactionManager transactionManager = this.artifactDAO.getTransactionManager();
-            try {
-                LOGGER.debug("start transaction...");
-                transactionManager.startTransaction();
-                LOGGER.debug("start transaction... OK");
+                TransactionManager transactionManager = this.artifactDAO.getTransactionManager();
+                try {
+                    LOGGER.debug("start transaction...");
+                    transactionManager.startTransaction();
+                    LOGGER.debug("start transaction... OK");
 
-                this.obsoleteStorageLocationDAO.delete(obsoleteStorageLocation.getID());
-                LOGGER.debug(String.format("deleted %s", obsoleteStorageLocation));
+                    this.obsoleteStorageLocationDAO.delete(obsoleteStorageLocation.getID());
+                    LOGGER.debug(String.format("deleted %s", obsoleteStorageLocation));
 
-                LOGGER.debug("commit transaction...");
-                transactionManager.commitTransaction();
-                LOGGER.debug("commit transaction... OK");
-            } catch (Exception e) {
-                LOGGER.error(String.format("Failed to delete ObsoleteStorageLocation %s.",
-                                           obsoleteStorageLocation.getID()), e);
-                transactionManager.rollbackTransaction();
-                LOGGER.debug("Rollback Transaction: OK");
-                throw e;
-            } finally {
-                if (transactionManager.isOpen()) {
-                    LOGGER.error("BUG - Open transaction in finally");
+                    LOGGER.debug("commit transaction...");
+                    transactionManager.commitTransaction();
+                    LOGGER.debug("commit transaction... OK");
+                } catch (Exception e) {
+                    LOGGER.error(String.format("Failed to delete ObsoleteStorageLocation %s.",
+                                               obsoleteStorageLocation.getID()), e);
                     transactionManager.rollbackTransaction();
-                    LOGGER.error("Transaction rolled back successfully.");
+                    LOGGER.debug("Rollback Transaction: OK");
+                    throw e;
+                } finally {
+                    if (transactionManager.isOpen()) {
+                        LOGGER.error("BUG - Open transaction in finally");
+                        transactionManager.rollbackTransaction();
+                        LOGGER.error("Transaction rolled back successfully.");
+                    }
                 }
             }
         }
