@@ -26,7 +26,7 @@ org.opencadc.fenwick.trackSiteLocations={true|false}
 org.opencadc.fenwick.queryService={resourceID of remote TAP service with inventory data model}
 
 # selectivity
-org.opencadc.fenwick.ArtifactSelector={fully qualified classname of ArtifactSelector implementation}
+org.opencadc.inventory.util.ArtifactSelector={fully qualified classname of ArtifactSelector implementation}
 ```
 The `inventory` account owns and manages (create, alter, drop) inventory database objects and manages
 all the content (insert, update, delete) in the inventory schema. The database is specified in the JDBC URL. 
