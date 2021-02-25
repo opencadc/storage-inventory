@@ -67,6 +67,7 @@
 
 package org.opencadc.minoc;
 
+import ca.nrc.cadc.net.Digest;
 import ca.nrc.cadc.net.HttpTransfer;
 import ca.nrc.cadc.rest.SyncOutput;
 import org.apache.log4j.Logger;
@@ -109,7 +110,7 @@ public class HeadAction extends ArtifactAction {
      */
     public static void setHeaders(Artifact artifact, SyncOutput syncOutput) {
         String algorithm = artifact.getContentChecksum().getScheme();
-        String base64Checksum = HttpTransfer.base64Encode(artifact.getContentChecksum().getSchemeSpecificPart());
+        String base64Checksum = Digest.base64Encode(artifact.getContentChecksum().getSchemeSpecificPart());
         String digest = String.format("%s=%s", algorithm, base64Checksum);
         syncOutput.setHeader("Digest", digest);
         syncOutput.setHeader("Content-Length", artifact.getContentLength());

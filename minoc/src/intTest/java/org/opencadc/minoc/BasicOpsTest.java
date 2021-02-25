@@ -68,6 +68,7 @@
 package org.opencadc.minoc;
 
 import ca.nrc.cadc.auth.RunnableAction;
+import ca.nrc.cadc.net.Digest;
 import ca.nrc.cadc.net.HttpDelete;
 import ca.nrc.cadc.net.HttpGet;
 import ca.nrc.cadc.net.HttpPost;
@@ -137,7 +138,7 @@ public class BasicOpsTest extends MinocTest {
             HttpGet get = new HttpGet(artifactURL, out);
             Subject.doAs(userSubject, new RunnableAction(get));
             Assert.assertNull(get.getThrowable());
-            URI checksumURI = get.getDigest();
+            URI checksumURI = Digest.getURI(get.getDigest());
             long contentLength = get.getContentLength();
             String contentType = get.getContentType();
             String contentEncoding = get.getContentEncoding();
@@ -164,7 +165,7 @@ public class BasicOpsTest extends MinocTest {
             Subject.doAs(userSubject, new RunnableAction(head));
             log.warn("head output: " + bos.toString());
             Assert.assertNull(head.getThrowable());
-            checksumURI = head.getDigest();
+            checksumURI = Digest.getURI(head.getDigest());
             contentLength = head.getContentLength();
             contentType = head.getContentType();
             contentEncoding = head.getContentEncoding();

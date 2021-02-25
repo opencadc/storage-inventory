@@ -70,6 +70,7 @@ package org.opencadc.minoc;
 import ca.nrc.cadc.db.ConnectionConfig;
 import ca.nrc.cadc.db.DBConfig;
 import ca.nrc.cadc.db.DBUtil;
+import ca.nrc.cadc.net.Digest;
 import ca.nrc.cadc.net.HttpDelete;
 import ca.nrc.cadc.net.HttpGet;
 import ca.nrc.cadc.net.HttpUpload;
@@ -149,7 +150,7 @@ public class ReplaceArtifactTest extends MinocTest {
                     HttpGet get = new HttpGet(artifactURL, out);
                     get.run();
                     Assert.assertNull(get.getThrowable());
-                    URI digest = get.getDigest();
+                    URI digest = Digest.getURI(get.getDigest());
                     long contentLength = get.getContentLength();
                     Assert.assertEquals(computeChecksumURI(data1.getBytes()), digest);
                     Assert.assertEquals(data1.getBytes().length, contentLength);
@@ -165,7 +166,7 @@ public class ReplaceArtifactTest extends MinocTest {
                     get = new HttpGet(artifactURL, out);
                     get.run();
                     Assert.assertNull(get.getThrowable());
-                    digest = get.getDigest();
+                    digest = Digest.getURI(get.getDigest());
                     contentLength = get.getContentLength();
                     Assert.assertEquals(computeChecksumURI(data2.getBytes()), digest);
                     Assert.assertEquals(data2.getBytes().length, contentLength);
@@ -223,7 +224,7 @@ public class ReplaceArtifactTest extends MinocTest {
                     HttpGet get = new HttpGet(artifactURL, out);
                     get.run();
                     Assert.assertNull(get.getThrowable());
-                    URI digest = get.getDigest();
+                    URI digest = Digest.getURI(get.getDigest());
                     long contentLength = get.getContentLength();
                     Assert.assertEquals(computeChecksumURI(data2.getBytes()), digest);
                     Assert.assertEquals(data2.getBytes().length, contentLength);

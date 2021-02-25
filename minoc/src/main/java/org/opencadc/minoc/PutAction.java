@@ -71,6 +71,7 @@ import ca.nrc.cadc.db.TransactionManager;
 import ca.nrc.cadc.io.ByteLimitExceededException;
 import ca.nrc.cadc.io.ReadException;
 import ca.nrc.cadc.io.WriteException;
+import ca.nrc.cadc.net.Digest;
 import ca.nrc.cadc.net.HttpTransfer;
 import ca.nrc.cadc.net.PreconditionFailedException;
 import ca.nrc.cadc.net.ResourceNotFoundException;
@@ -147,7 +148,7 @@ public class PutAction extends ArtifactAction {
         log.debug("Content-Encoding: " + encodingHeader);
         log.debug("Content-Type: " + typeHeader);
         
-        URI contentChecksum = HttpTransfer.parseDigest(digestHeader);
+        URI contentChecksum = Digest.getURI(digestHeader);
         Long contentLength = null;
         if (lengthHeader != null) {
             try {
