@@ -67,7 +67,7 @@
 
 package org.opencadc.minoc;
 
-import ca.nrc.cadc.net.Digest;
+import ca.nrc.cadc.net.DigestUtil;
 import ca.nrc.cadc.net.HttpDelete;
 import ca.nrc.cadc.net.HttpGet;
 import ca.nrc.cadc.net.HttpTransfer;
@@ -136,7 +136,7 @@ public class IncorrectPutMetadataTest extends MinocTest {
                     HttpUpload put = new HttpUpload(in, artifactURL);
                     URI checksumURI = computeChecksumURI(incorrectData.getBytes());
                     String algorithm = checksumURI.getScheme();
-                    String checksum = Digest.base64Encode(checksumURI.getSchemeSpecificPart());
+                    String checksum = DigestUtil.base64Encode(checksumURI.getSchemeSpecificPart());
                     put.setRequestProperty(HttpTransfer.DIGEST, String.format("%s=%s", algorithm, checksum));
                     put.setRequestProperty(HttpTransfer.CONTENT_LENGTH, Long.toString(bytes.length));
                     put.run();
@@ -310,7 +310,7 @@ public class IncorrectPutMetadataTest extends MinocTest {
                     HttpUpload put = new HttpUpload(in, artifactURL);
                     URI checksumURI = computeChecksumURI(bytes);
                     String algorithm = checksumURI.getScheme();
-                    String checksum = Digest.base64Encode(checksumURI.getSchemeSpecificPart());
+                    String checksum = DigestUtil.base64Encode(checksumURI.getSchemeSpecificPart());
                     put.setRequestProperty(HttpTransfer.DIGEST, String.format("%s=%s", algorithm, checksum));
                     put.setRequestProperty(HttpTransfer.CONTENT_LENGTH, Long.toString((long) bytes.length - 1L));
                     put.run();
@@ -372,7 +372,7 @@ public class IncorrectPutMetadataTest extends MinocTest {
                     HttpUpload put = new HttpUpload(in, artifactURL);
                     URI checksumURI = computeChecksumURI(bytes);
                     String algorithm = checksumURI.getScheme();
-                    String checksum = Digest.base64Encode(checksumURI.getSchemeSpecificPart());
+                    String checksum = DigestUtil.base64Encode(checksumURI.getSchemeSpecificPart());
                     put.setRequestProperty(HttpTransfer.DIGEST, String.format("%s=%s", algorithm, checksum));
                     put.setRequestProperty(HttpTransfer.CONTENT_LENGTH, Long.toString((long) bytes.length));
 

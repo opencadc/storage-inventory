@@ -71,8 +71,7 @@ import ca.nrc.cadc.db.TransactionManager;
 import ca.nrc.cadc.io.ByteLimitExceededException;
 import ca.nrc.cadc.io.ReadException;
 import ca.nrc.cadc.io.WriteException;
-import ca.nrc.cadc.net.Digest;
-import ca.nrc.cadc.net.HttpTransfer;
+import ca.nrc.cadc.net.DigestUtil;
 import ca.nrc.cadc.net.PreconditionFailedException;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
@@ -83,7 +82,6 @@ import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
-import java.net.URISyntaxException;
 import java.util.Date;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
@@ -148,7 +146,7 @@ public class PutAction extends ArtifactAction {
         log.debug("Content-Encoding: " + encodingHeader);
         log.debug("Content-Type: " + typeHeader);
         
-        URI contentChecksum = Digest.getURI(digestHeader);
+        URI contentChecksum = DigestUtil.getURI(digestHeader);
         Long contentLength = null;
         if (lengthHeader != null) {
             try {
