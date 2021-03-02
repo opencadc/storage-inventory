@@ -108,10 +108,7 @@ public class HeadAction extends ArtifactAction {
      * @param syncOutput The target response
      */
     public static void setHeaders(Artifact artifact, SyncOutput syncOutput) {
-        String algorithm = artifact.getContentChecksum().getScheme();
-        String base64Checksum = DigestUtil.base64Encode(artifact.getContentChecksum().getSchemeSpecificPart());
-        String digest = String.format("%s=%s", algorithm, base64Checksum);
-        syncOutput.setHeader("Digest", digest);
+        syncOutput.setDigest(artifact.getContentChecksum());
         syncOutput.setHeader("Content-Length", artifact.getContentLength());
         String filename = InventoryUtil.computeArtifactFilename(artifact.getURI());
         syncOutput.setHeader("Content-Disposition", "attachment; filename=\"" + filename + "\"");

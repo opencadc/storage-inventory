@@ -138,7 +138,7 @@ public class BasicOpsTest extends MinocTest {
             HttpGet get = new HttpGet(artifactURL, out);
             Subject.doAs(userSubject, new RunnableAction(get));
             Assert.assertNull(get.getThrowable());
-            URI checksumURI = DigestUtil.getURI(get.getDigest());
+            URI checksumURI = get.getDigest();
             long contentLength = get.getContentLength();
             String contentType = get.getContentType();
             String contentEncoding = get.getContentEncoding();
@@ -165,7 +165,7 @@ public class BasicOpsTest extends MinocTest {
             Subject.doAs(userSubject, new RunnableAction(head));
             log.warn("head output: " + bos.toString());
             Assert.assertNull(head.getThrowable());
-            checksumURI = DigestUtil.getURI(head.getDigest());
+            checksumURI = head.getDigest();
             contentLength = head.getContentLength();
             contentType = head.getContentType();
             contentEncoding = head.getContentEncoding();

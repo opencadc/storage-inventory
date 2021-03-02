@@ -150,7 +150,7 @@ public class ReplaceArtifactTest extends MinocTest {
                     HttpGet get = new HttpGet(artifactURL, out);
                     get.run();
                     Assert.assertNull(get.getThrowable());
-                    URI digest = DigestUtil.getURI(get.getDigest());
+                    URI digest = get.getDigest();
                     long contentLength = get.getContentLength();
                     Assert.assertEquals(computeChecksumURI(data1.getBytes()), digest);
                     Assert.assertEquals(data1.getBytes().length, contentLength);
@@ -166,7 +166,7 @@ public class ReplaceArtifactTest extends MinocTest {
                     get = new HttpGet(artifactURL, out);
                     get.run();
                     Assert.assertNull(get.getThrowable());
-                    digest = DigestUtil.getURI(get.getDigest());
+                    digest = get.getDigest();
                     contentLength = get.getContentLength();
                     Assert.assertEquals(computeChecksumURI(data2.getBytes()), digest);
                     Assert.assertEquals(data2.getBytes().length, contentLength);
@@ -224,7 +224,7 @@ public class ReplaceArtifactTest extends MinocTest {
                     HttpGet get = new HttpGet(artifactURL, out);
                     get.run();
                     Assert.assertNull(get.getThrowable());
-                    URI digest = DigestUtil.getURI(get.getDigest());
+                    URI digest = get.getDigest();
                     long contentLength = get.getContentLength();
                     Assert.assertEquals(computeChecksumURI(data2.getBytes()), digest);
                     Assert.assertEquals(data2.getBytes().length, contentLength);
