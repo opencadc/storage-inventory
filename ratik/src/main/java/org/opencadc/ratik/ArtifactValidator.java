@@ -77,21 +77,20 @@ import ca.nrc.cadc.net.TransientException;
 import java.io.IOException;
 import java.net.URI;
 import java.text.DateFormat;
-import java.util.Date;
-import java.util.List;
 import java.util.UUID;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.DeletedArtifactEvent;
 import org.opencadc.inventory.DeletedStorageLocationEvent;
-import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.SiteLocation;
 import org.opencadc.inventory.StorageSite;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.DeletedArtifactEventDAO;
 import org.opencadc.inventory.db.DeletedStorageLocationEventDAO;
-import org.opencadc.tap.TapClient;
-import org.opencadc.tap.TapRowMapper;
+import org.opencadc.inventory.query.ArtifactQuery;
+import org.opencadc.inventory.query.DeletedArtifactEventQuery;
+import org.opencadc.inventory.query.DeletedStorageLocationEventQuery;
+import org.opencadc.inventory.query.StorageSiteQuery;
 
 /**
  * Class that compares and validates two Artifacts, repairing the local Artifact to
@@ -346,23 +345,18 @@ public class ArtifactValidator {
         }
     }
 
-
     /**
      * Get a remote Artifact
      */
     Artifact getRemoteArtifact(URI uri)
         throws InterruptedException, IOException, ResourceNotFoundException, TransientException {
-        final TapClient<Artifact> tapClient = new TapClient<>(this.resourceID);
-        final String query = String.format("SELECT id, uri, contentChecksum, contentLastModified, contentLength, "
-                                               + "contentType, contentEncoding, lastModified, metaChecksum "
-                                               + "FROM inventory.Artifact WHERE uri='%s'", uri.toASCIIString());
-        log.debug("\nExecuting query '" + query + "'\n");
-        Artifact returned = null;
-        ResourceIterator<Artifact> results = tapClient.execute(query, new ArtifactRowMapper());
+        final String where = String.format("WHERE uri = '%s'", uri.toASCIIString());
+        ArtifactQuery artifactQuery = new ArtifactQuery();
+        ResourceIterator<Artifact> results = artifactQuery.execute(where, this.resourceID);
         if (results.hasNext()) {
-            returned = results.next();
+            return results.next();
         }
-        return returned;
+        return null;
     }
 
     /**
@@ -370,17 +364,13 @@ public class ArtifactValidator {
      */
     DeletedArtifactEvent getRemoteDeletedArtifactEvent(UUID id)
         throws InterruptedException, IOException, ResourceNotFoundException, TransientException {
-        final TapClient<DeletedArtifactEvent> tapClient = new TapClient<>(this.resourceID);
-        final String query = String.format("SELECT id, lastModified, metaChecksum FROM inventory.DeletedArtifactEvent "
-                                               + "WHERE id=%s", id);
-        log.debug("\nExecuting query '" + query + "'\n");
-        DeletedArtifactEvent returned = null;
-        ResourceIterator<DeletedArtifactEvent> results =
-            tapClient.execute(query, new DeletedArtifactEventRowMapper());
+        final String where = String.format("WHERE id = '%s'", id);
+        DeletedArtifactEventQuery deletedArtifactEventQuery = new DeletedArtifactEventQuery();
+        ResourceIterator<DeletedArtifactEvent> results = deletedArtifactEventQuery.execute(where, this.resourceID);
         if (results.hasNext()) {
-            returned = results.next();
+            return results.next();
         }
-        return returned;
+        return null;
     }
 
     /**
@@ -388,17 +378,14 @@ public class ArtifactValidator {
      */
     DeletedStorageLocationEvent getRemoteDeletedStorageLocationEvent(UUID id)
         throws InterruptedException, IOException, ResourceNotFoundException, TransientException {
-        final TapClient<DeletedStorageLocationEvent> tapClient = new TapClient<>(this.resourceID);
-        final String query = String.format("SELECT id, lastModified, metaChecksum "
-                                               + "FROM inventory.DeletedStorageLocationEvent WHERE id=%s", id);
-        log.debug("\nExecuting query '" + query + "'\n");
-        DeletedStorageLocationEvent returned = null;
+        final String where = String.format("WHERE id = '%s'", id);
+        DeletedStorageLocationEventQuery deletedStorageLocationEventQuery = new DeletedStorageLocationEventQuery();
         ResourceIterator<DeletedStorageLocationEvent> results =
-            tapClient.execute(query, new DeletedStorageLocationEventRowMapper());
+            deletedStorageLocationEventQuery.execute(where, this.resourceID);
         if (results.hasNext()) {
-            returned = results.next();
+            return results.next();
         }
-        return returned;
+        return null;
     }
 
     /**
@@ -406,96 +393,13 @@ public class ArtifactValidator {
      */
     StorageSite getRemoteStorageSite()
         throws InterruptedException, IOException, ResourceNotFoundException, TransientException {
-        final TapClient<StorageSite> tapClient = new TapClient<>(this.resourceID);
-        final String query = String.format("SELECT id, resourceID, name, allowRead, allowWrite, lastModified, "
-                                               + "metaChecksum FROM inventory.StorageSite where resourceID = %s",
-                                           this.resourceID);
-        log.debug("\nExecuting query '" + query + "'\n");
-        StorageSite returned = null;
-        ResourceIterator<StorageSite> results =
-            tapClient.execute(query, new StorageSiteRowMapper());
+        final String where = String.format("WHERE resourceID = '%s'", this.resourceID);
+        StorageSiteQuery storageSiteQuery = new StorageSiteQuery();
+        ResourceIterator<StorageSite> results = storageSiteQuery.execute(where, this.resourceID);
         if (results.hasNext()) {
-            returned = results.next();
+            return results.next();
         }
-        return returned;
-    }
-
-    /**
-     * Class to map the query results to an Artifact.
-     */
-    static class ArtifactRowMapper implements TapRowMapper<Artifact> {
-
-        @Override
-        public Artifact mapRow(final List<Object> row) {
-            int index = 0;
-            final UUID id = (UUID) row.get(index++);
-            final URI uri = (URI) row.get(index++);
-            final URI contentChecksum = (URI) row.get(index++);
-            final Date contentLastModified = (Date) row.get(index++);
-            final Long contentLength = (Long) row.get(index++);
-
-            final Artifact artifact = new Artifact(id, uri, contentChecksum, contentLastModified, contentLength);
-            artifact.contentType = (String) row.get(index++);
-            artifact.contentEncoding = (String) row.get(index++);
-            InventoryUtil.assignLastModified(artifact, (Date) row.get(index++));
-            InventoryUtil.assignMetaChecksum(artifact, (URI) row.get(index));
-            return artifact;
-        }
-    }
-
-    /**
-     * Class to map the query results to a DeletedArtifactEvent.
-     */
-    static class DeletedArtifactEventRowMapper implements TapRowMapper<DeletedArtifactEvent> {
-
-        @Override
-        public DeletedArtifactEvent mapRow(List<Object> row) {
-            int index = 0;
-            final UUID id = (UUID) row.get(index++);
-
-            final DeletedArtifactEvent deletedArtifactEvent = new DeletedArtifactEvent(id);
-            InventoryUtil.assignLastModified(deletedArtifactEvent, (Date) row.get(index++));
-            InventoryUtil.assignMetaChecksum(deletedArtifactEvent, (URI) row.get(index));
-            return deletedArtifactEvent;
-        }
-    }
-
-    /**
-     * Class to map the query results to a DeletedStorageLocationEvent.
-     */
-    static class DeletedStorageLocationEventRowMapper implements TapRowMapper<DeletedStorageLocationEvent> {
-
-        @Override
-        public DeletedStorageLocationEvent mapRow(List<Object> row) {
-            int index = 0;
-            final UUID id = (UUID) row.get(index++);
-
-            final DeletedStorageLocationEvent deletedStorageLocationEvent = new DeletedStorageLocationEvent(id);
-            InventoryUtil.assignLastModified(deletedStorageLocationEvent, (Date) row.get(index++));
-            InventoryUtil.assignMetaChecksum(deletedStorageLocationEvent, (URI) row.get(index));
-            return deletedStorageLocationEvent;
-        }
-    }
-
-    /**
-     * Class to map the query results to a StorageSite.
-     */
-    static class StorageSiteRowMapper implements TapRowMapper<StorageSite> {
-
-        @Override
-        public StorageSite mapRow(List<Object> row) {
-            int index = 0;
-            final UUID id = (UUID) row.get(index++);
-            final URI resourceID = (URI) row.get(index++);
-            final String name = (String) row.get(index++);
-            final boolean allowRead = (Boolean) row.get(index++);
-            final boolean allowWrite = (Boolean) row.get(index);
-
-            final StorageSite storageSite = new StorageSite(id, resourceID, name, allowRead, allowWrite);
-            InventoryUtil.assignLastModified(storageSite, (Date) row.get(index++));
-            InventoryUtil.assignMetaChecksum(storageSite, (URI) row.get(index));
-            return storageSite;
-        }
+        return null;
     }
 
 }

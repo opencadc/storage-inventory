@@ -84,11 +84,8 @@ import java.io.IOException;
 import java.net.URI;
 import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
-import java.util.Date;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 import javax.security.auth.Subject;
 import javax.sql.DataSource;
 import org.apache.log4j.Logger;
@@ -96,10 +93,9 @@ import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.version.InitDatabase;
+import org.opencadc.inventory.query.ArtifactQuery;
 import org.opencadc.inventory.util.ArtifactSelector;
 import org.opencadc.inventory.util.BucketSelector;
-import org.opencadc.tap.TapClient;
-import org.opencadc.tap.TapRowMapper;
 
 /**
  * Validate local inventory.
@@ -361,65 +357,40 @@ public class InventoryValidator implements Runnable {
      */
     ResourceIterator<Artifact> getRemoteIterator(final String bucket)
         throws ResourceNotFoundException, IOException, IllegalStateException, TransientException, InterruptedException {
-        final TapClient<Artifact> tapClient = new TapClient<>(this.resourceID);
-        final String query = buildRemoteQuery(bucket);
-        log.debug(String.format("\nExecuting query '%s'\n", query));
-        return tapClient.execute(query, new ArtifactRowMapper());
+        final String where = buildWhereClause(bucket);
+        ArtifactQuery artifactQuery = new ArtifactQuery();
+        return artifactQuery.execute(where, this.resourceID);
     }
 
     /**
-     * Assemble the WHERE clause and return the full query.  Very useful for testing separately.
+     * Assemble the WHERE clause.  Very useful for testing separately.
      *
      * @param bucket The current bucket.
-     * @return  String query.  Never null.
+     * @return  String where clause. Never null.
      */
-    String buildRemoteQuery(final String bucket)
+    String buildWhereClause(final String bucket)
         throws ResourceNotFoundException, IOException {
-        final StringBuilder query = new StringBuilder();
-        query.append("SELECT id, uri, contentChecksum, contentLastModified, contentLength, contentType, ")
-            .append("contentEncoding, lastModified, metaChecksum FROM inventory.Artifact ");
+        final StringBuilder where = new StringBuilder();
 
         if (StringUtil.hasText(this.artifactSelector.getConstraint())) {
-            if (query.indexOf("WHERE") < 0) {
-                query.append(" WHERE ");
+            if (where.indexOf("WHERE") < 0) {
+                where.append(" WHERE ");
             } else {
-                query.append(" AND ");
+                where.append(" AND ");
             }
-            query.append("(").append(this.artifactSelector.getConstraint().trim()).append(")");
+            where.append("(").append(this.artifactSelector.getConstraint().trim()).append(")");
         }
 
         if (StringUtil.hasText(bucket)) {
-            if (query.indexOf("WHERE") < 0) {
-                query.append(" WHERE ");
+            if (where.indexOf("WHERE") < 0) {
+                where.append(" WHERE ");
             } else {
-                query.append(" AND ");
+                where.append(" AND ");
             }
-            query.append("(uribucket LIKE '").append(bucket.trim()).append("%')");
-            log.debug("************query: " + query.toString());
+            where.append("(uribucket LIKE '").append(bucket.trim()).append("%')");
+            log.debug("where clause: " + where.toString());
         }
-        query.append(" ORDER BY uri ASC");
-        return query.toString();
-    }
-
-    static class ArtifactRowMapper implements TapRowMapper<Artifact> {
-
-        @Override
-        public Artifact mapRow(final List<Object> row) {
-            int index = 0;
-            final Artifact artifact = new Artifact((UUID) row.get(index++),
-                                                   (URI) row.get(index++),
-                                                   (URI) row.get(index++),
-                                                   (Date) row.get(index++),
-                                                   (Long) row.get(index++));
-
-            artifact.contentType = (String) row.get(index++);
-            artifact.contentEncoding = (String) row.get(index++);
-
-            InventoryUtil.assignLastModified(artifact, (Date) row.get(index++));
-            InventoryUtil.assignMetaChecksum(artifact, (URI) row.get(index));
-
-            return artifact;
-        }
+        return where.toString();
     }
 
 }
