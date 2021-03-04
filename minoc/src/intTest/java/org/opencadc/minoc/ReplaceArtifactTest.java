@@ -70,7 +70,6 @@ package org.opencadc.minoc;
 import ca.nrc.cadc.db.ConnectionConfig;
 import ca.nrc.cadc.db.DBConfig;
 import ca.nrc.cadc.db.DBUtil;
-import ca.nrc.cadc.net.DigestUtil;
 import ca.nrc.cadc.net.HttpDelete;
 import ca.nrc.cadc.net.HttpGet;
 import ca.nrc.cadc.net.HttpUpload;
@@ -142,6 +141,7 @@ public class ReplaceArtifactTest extends MinocTest {
                     // put initial file
                     InputStream in = new ByteArrayInputStream(data1.getBytes());
                     HttpUpload put = new HttpUpload(in, artifactURL);
+                    put.setDigest(computeChecksumURI(data1.getBytes()));
                     put.run();
                     Assert.assertNull(put.getThrowable());
                     
@@ -158,6 +158,7 @@ public class ReplaceArtifactTest extends MinocTest {
                     // replace with new data
                     in = new ByteArrayInputStream(data2.getBytes());
                     put = new HttpUpload(in, artifactURL);
+                    put.setDigest(computeChecksumURI(data2.getBytes()));
                     put.run();
                     Assert.assertNull(put.getThrowable());
                     
@@ -216,6 +217,7 @@ public class ReplaceArtifactTest extends MinocTest {
                     // try to overwrite with actual
                     InputStream in = new ByteArrayInputStream(data2.getBytes());
                     HttpUpload put = new HttpUpload(in, artifactURL);
+                    put.setDigest(computeChecksumURI(data2.getBytes()));
                     put.run();
                     Assert.assertNull(put.getThrowable());
                     

@@ -71,7 +71,6 @@ import ca.nrc.cadc.db.TransactionManager;
 import ca.nrc.cadc.io.ByteLimitExceededException;
 import ca.nrc.cadc.io.ReadException;
 import ca.nrc.cadc.io.WriteException;
-import ca.nrc.cadc.net.DigestUtil;
 import ca.nrc.cadc.net.PreconditionFailedException;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
@@ -137,16 +136,15 @@ public class PutAction extends ArtifactAction {
         
         initAndAuthorize(WriteGrant.class);
 
-        String digestHeader = syncInput.getHeader("Digest");
+        URI digest = syncInput.getDigest();
         String lengthHeader = syncInput.getHeader("Content-Length");
         String encodingHeader = syncInput.getHeader("Content-Encoding");
         String typeHeader = syncInput.getHeader("Content-Type");
-        log.debug("Digest: " + digestHeader);
+        log.debug("Digest: " + (digest == null ? null : digest.toASCIIString()));
         log.debug("Content-Length: " + lengthHeader);
         log.debug("Content-Encoding: " + encodingHeader);
         log.debug("Content-Type: " + typeHeader);
-        
-        URI contentChecksum = DigestUtil.getURI(digestHeader);
+
         Long contentLength = null;
         if (lengthHeader != null) {
             try {
@@ -155,11 +153,10 @@ public class PutAction extends ArtifactAction {
                 throw new IllegalArgumentException("Illegal Content-Length header: " + lengthHeader);
             }
         }
-        log.debug("Content-Checksum: " + contentChecksum);
         log.debug("Content-Length: " + contentLength);
                 
         NewArtifact newArtifact = new NewArtifact(artifactURI);
-        newArtifact.contentChecksum = contentChecksum;
+        newArtifact.contentChecksum = digest;
         newArtifact.contentLength = contentLength;
 
         final Profiler profiler = new Profiler(PutAction.class);

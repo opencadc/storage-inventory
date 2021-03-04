@@ -68,7 +68,6 @@
 package org.opencadc.minoc;
 
 import ca.nrc.cadc.auth.RunnableAction;
-import ca.nrc.cadc.net.DigestUtil;
 import ca.nrc.cadc.net.HttpDelete;
 import ca.nrc.cadc.net.HttpGet;
 import ca.nrc.cadc.net.HttpPost;
@@ -83,11 +82,9 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URI;
 import java.net.URL;
-import java.nio.charset.Charset;
 import java.security.PrivilegedExceptionAction;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.UUID;
 
 import javax.security.auth.Subject;
 
@@ -129,6 +126,7 @@ public class BasicOpsTest extends MinocTest {
             HttpUpload put = new HttpUpload(in, artifactURL);
             put.setRequestProperty(HttpTransfer.CONTENT_TYPE, type);
             put.setRequestProperty(HttpTransfer.CONTENT_ENCODING, encoding);
+            put.setDigest(computeChecksumURI(data));
 
             Subject.doAs(userSubject, new RunnableAction(put));
             Assert.assertNull(put.getThrowable());
@@ -155,6 +153,7 @@ public class BasicOpsTest extends MinocTest {
             params.put("contentEncoding", newEncoding);
             params.put("contentType", newType);
             HttpPost post = new HttpPost(artifactURL, params, false);
+            post.setDigest(computeChecksumURI(data));
             Subject.doAs(userSubject, new RunnableAction(post));
             Assert.assertNull(post.getThrowable());
 

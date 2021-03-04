@@ -67,7 +67,6 @@
 
 package org.opencadc.minoc;
 
-import ca.nrc.cadc.net.DigestUtil;
 import ca.nrc.cadc.net.HttpDelete;
 import ca.nrc.cadc.net.HttpGet;
 import ca.nrc.cadc.net.HttpTransfer;
@@ -134,10 +133,7 @@ public class IncorrectPutMetadataTest extends MinocTest {
                     // put file
                     InputStream in = new ByteArrayInputStream(bytes);
                     HttpUpload put = new HttpUpload(in, artifactURL);
-                    URI checksumURI = computeChecksumURI(incorrectData.getBytes());
-                    String algorithm = checksumURI.getScheme();
-                    String checksum = DigestUtil.base64Encode(checksumURI.getSchemeSpecificPart());
-                    put.setRequestProperty(HttpTransfer.DIGEST, String.format("%s=%s", algorithm, checksum));
+                    put.setDigest(computeChecksumURI(incorrectData.getBytes()));
                     put.setRequestProperty(HttpTransfer.CONTENT_LENGTH, Long.toString(bytes.length));
                     put.run();
                     log.info("response code: " + put.getResponseCode() + " " + put.getThrowable());
@@ -308,10 +304,7 @@ public class IncorrectPutMetadataTest extends MinocTest {
                     // put file
                     InputStream in = new ByteArrayInputStream(bytes);
                     HttpUpload put = new HttpUpload(in, artifactURL);
-                    URI checksumURI = computeChecksumURI(bytes);
-                    String algorithm = checksumURI.getScheme();
-                    String checksum = DigestUtil.base64Encode(checksumURI.getSchemeSpecificPart());
-                    put.setRequestProperty(HttpTransfer.DIGEST, String.format("%s=%s", algorithm, checksum));
+                    put.setDigest(computeChecksumURI(bytes));
                     put.setRequestProperty(HttpTransfer.CONTENT_LENGTH, Long.toString((long) bytes.length - 1L));
                     put.run();
                     log.info("response code: " + put.getResponseCode() + " " + put.getThrowable());
@@ -370,10 +363,7 @@ public class IncorrectPutMetadataTest extends MinocTest {
                     // put file
                     InputStream in = new ByteArrayInputStream(bytes);
                     HttpUpload put = new HttpUpload(in, artifactURL);
-                    URI checksumURI = computeChecksumURI(bytes);
-                    String algorithm = checksumURI.getScheme();
-                    String checksum = DigestUtil.base64Encode(checksumURI.getSchemeSpecificPart());
-                    put.setRequestProperty(HttpTransfer.DIGEST, String.format("%s=%s", algorithm, checksum));
+                    put.setDigest(computeChecksumURI(bytes));
                     put.setRequestProperty(HttpTransfer.CONTENT_LENGTH, Long.toString((long) bytes.length));
 
                     put.run();
