@@ -69,10 +69,8 @@
 
 package org.opencadc.minoc;
 
-import ca.nrc.cadc.auth.AuthMethod;
 import ca.nrc.cadc.reg.Capabilities;
 import ca.nrc.cadc.reg.Capability;
-import ca.nrc.cadc.reg.Interface;
 import ca.nrc.cadc.reg.Standards;
 import ca.nrc.cadc.util.Log4jInit;
 import ca.nrc.cadc.vosi.CapabilitiesTest;
@@ -89,8 +87,8 @@ public class VosiCapabilitiesTest extends CapabilitiesTest {
     private static final Logger log = Logger.getLogger(VosiCapabilitiesTest.class);
 
     static {
-        Log4jInit.setLevel("ca.nrc.cadc.vosi", Level.DEBUG);
-        Log4jInit.setLevel("org.opencadc.inventory", Level.DEBUG);
+        Log4jInit.setLevel("ca.nrc.cadc.vosi", Level.INFO);
+        Log4jInit.setLevel("org.opencadc.inventory", Level.INFO);
     }
     
     public VosiCapabilitiesTest() {
