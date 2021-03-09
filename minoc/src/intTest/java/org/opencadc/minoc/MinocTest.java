@@ -132,7 +132,7 @@ public abstract class MinocTest {
         return ret;
     }
     
-    protected static String computeMD5(byte[] input) throws NoSuchAlgorithmException, IOException {
+    protected static URI computeChecksumURI(byte[] input) throws NoSuchAlgorithmException, IOException {
         MessageDigest md = MessageDigest.getInstance("MD5");
         InputStream in = new ByteArrayInputStream(input);
         DigestInputStream dis = new DigestInputStream(in, md);
@@ -142,7 +142,7 @@ public abstract class MinocTest {
             bytesRead = dis.read(buf);
         }
         byte[] digest = md.digest();
-        return HexUtil.toHex(digest);
+        return URI.create("md5:" + HexUtil.toHex(digest));
     }
 
 }

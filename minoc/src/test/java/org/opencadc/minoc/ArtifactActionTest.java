@@ -83,7 +83,7 @@ public class ArtifactActionTest {
     private static final Logger log = Logger.getLogger(ArtifactActionTest.class);
 
     static {
-        Log4jInit.setLevel("org.opencadc.minoc", Level.DEBUG);
+        Log4jInit.setLevel("org.opencadc.minoc", Level.INFO);
     }
     
     class TestSyncInput extends SyncInput {

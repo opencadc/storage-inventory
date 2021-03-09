@@ -1,8 +1,10 @@
 # Storage Inventory file service (minoc)
 
 ## configuration
-See the [cadc-tomcat](https://github.com/opencadc/docker-base/tree/master/cadc-tomcat) image docs 
-for expected deployment and general config requirements.
+See the [cadc-tomcat](https://github.com/opencadc/docker-base/tree/master/cadc-tomcat) image docs
+for expected deployment and general config requirements. The `minoc` war file can be renamed
+at deployment time in order to support an alternate service name, including introducing 
+additional path elements (see war-rename.conf).
 
 Runtime configuration must be made available via the `/config` directory.
 
@@ -86,14 +88,6 @@ ivo://ivoa.net/std/UMS#login-0.1 = ivo://cadc.nrc.ca/gms
 ivo://ivoa.net/std/CDP#delegate-1.0 = ivo://cadc.nrc.ca/cred
 ivo://ivoa.net/std/CDP#proxy-1.0 = ivo://cadc.nrc.ca/cred
 ```
-
-### war-rename.conf (cadc-tomcat)
-The war file for `minoc` can be renamed at deployment time in order to support an alternate service name, including
-introducing additional path elements (by using tomcat war file naming conventions: 
-https://tomcat.apache.org/tomcat-9.0-doc/config/context.html).
-
-### cadcproxy.pem (cadc-tomcat)
-This client certificate is used to make server-to-server calls for system-level A&A purposes.
 
 ## building it
 ```

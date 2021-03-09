@@ -32,6 +32,19 @@ The `inventory` account owns and manages (create, alter, drop) inventory databas
 all the content (insert, update, delete) in the inventory schema. The database is specified in the JDBC URL. 
 Failure to connect or initialize the database will show up in logs.
 
+If the `trackSiteLocations` is `true`, fenwick will keep track of which remote site(s) have each Artifact; this
+makes the destination database a "global" instance that knows where all the copies of an Artifact are located.
+Set this to `false` when running in a storage site.
+
+The `queryService` is the remote TAP service from which Artifacts are harvested. For a storage site, this is the
+query service at the (a) global inventory. For a global inventory, this is the query service at a storage site; one
+instance of fenwick is needed for each storage site.
+
+Supported ArtifactSelector implementations: `org.opencadc.fenwick.AllArtifacts` (harvest all artifacts from
+remote) and `org.opencadc.fenwick.IncludeArtifacts` (harvest seelcted artifacts from remote: see artifact-filter.sql 
+below). A global inventory and a storage site that should get all Artitacts (files) would run with the AllArtifacts 
+selector. Specialised instances that want to select a subset of all files would use the explicit filtering. 
+
 ### cadcproxy.pem
 Querying the remote query service (luskan) requires permission. `fenwick` uses this certificate file located
 in /config to authenticate.
