@@ -121,6 +121,7 @@ public class Main {
     };
 
     private static final Map<String, String> selectorMap;
+
     static {
         selectorMap = new HashMap<>();
         selectorMap.put("all", "org.opencadc.inventory.util.AllArtifacts");
