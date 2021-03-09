@@ -97,8 +97,8 @@ public class ProxyRandomAccessFitsTest {
     private static final Logger log = Logger.getLogger(ProxyRandomAccessFitsTest.class);
 
     static {
-        Log4jInit.setLevel("org.opencadc.minoc.operations", Level.DEBUG);
-        //Log4jInit.setLevel("org.opencadc.inventory.storage.fs", Level.DEBUG);
+        Log4jInit.setLevel("org.opencadc.minoc.operations", Level.INFO);
+        //Log4jInit.setLevel("org.opencadc.inventory.storage.fs", Level.INFO);
     }
 
     public ProxyRandomAccessFitsTest() { 
