@@ -166,8 +166,10 @@ public class FilesTest extends RavenTest {
             artifactDAO.addSiteLocation(artifact, location1);
             artifact = artifactDAO.get(artifact.getID());
 
-            // should work for artifact uri with or without the scheme part
-            for (String au : new String[]{artifactURI.toASCIIString(), artifactURI.getSchemeSpecificPart()}) {
+            // also test prototype convenience suuport for default scheme
+            //for (String au : new String[]{artifactURI.toASCIIString(), artifactURI.getSchemeSpecificPart()}) {
+            {
+                String au = artifactURI.toASCIIString();
                 HttpGet filesGet = new HttpGet(new URL(ravenURL.toString() + "/" + au), false);
                 filesGet.run();
                 Assert.assertEquals("files response", 303, filesGet.getResponseCode());
@@ -240,8 +242,10 @@ public class FilesTest extends RavenTest {
             // anon request
             Subject.doAs(anonSubject, new PrivilegedExceptionAction<Object>() {
                 public Object run() throws Exception {
-                    // should work for artifact uri with or without the scheme part
-                    for (String au : new String[]{artifactURI.toASCIIString(), artifactURI.getSchemeSpecificPart()}) {
+                    // also test prototype convenience suuport for default scheme
+                    //for (String au : new String[]{artifactURI.toASCIIString(), artifactURI.getSchemeSpecificPart()}) {
+                    {
+                        String au = artifactURI.toASCIIString();
                         URL anonArtifactURL = new URL(anonRavenURL.toString() + "/" + au);
                         HttpGet request = new HttpGet(anonArtifactURL, false);
                         request.setHeadOnly(true);
@@ -255,8 +259,10 @@ public class FilesTest extends RavenTest {
             final URL certRavenURL = regClient.getServiceURL(RAVEN_SERVICE_ID, Standards.SI_FILES, AuthMethod.CERT);
             Subject.doAs(userSubject, new PrivilegedExceptionAction<Object>() {
                 public Object run() throws Exception {
-                    // should work for artifact uri with or without the scheme part
-                    for (String au : new String[]{artifactURI.toASCIIString(), artifactURI.getSchemeSpecificPart()}) {
+                    // also test prototype convenience suuport for default scheme
+                    //for (String au : new String[]{artifactURI.toASCIIString(), artifactURI.getSchemeSpecificPart()}) {
+                    {
+                        String au = artifactURI.toASCIIString();
                         URL certArtifactURL = new URL(certRavenURL.toString() + "/" + au);
                         HttpGet request = new HttpGet(certArtifactURL, false);
                         request.setHeadOnly(true);
