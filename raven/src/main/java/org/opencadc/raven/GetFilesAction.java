@@ -102,9 +102,13 @@ public class GetFilesAction extends FilesAction {
     @Override
     public void doAction() throws Exception {
         initAndAuthorize();
+        URL redirect = getFirstURL();
+        
+        // TODO: append optional params from syncInput
+        
+        log.debug("redirect: " + redirect.toExternalForm());
         syncOutput.setCode(HttpURLConnection.HTTP_SEE_OTHER);
-        syncOutput.setHeader("Location", getFirstURL().toString());
-        log.debug("redirect artifact GET to storage");
+        syncOutput.setHeader("Location", redirect.toExternalForm());
     }
 
 
@@ -118,8 +122,8 @@ public class GetFilesAction extends FilesAction {
 
         ProtocolsGenerator pg = new ProtocolsGenerator(artifactDAO, publicKeyFile, privateKeyFile, user);
         List<Protocol> protos = pg.getProtocols(transfer);
-        if (protos.size() == 0) {
-            throw new ResourceNotFoundException("No protocols for artifact " + artifactURI);
+        if (protos.isEmpty()) {
+            throw new ResourceNotFoundException("not available: " + artifactURI);
         }
 
         // for now return the first URL in the list

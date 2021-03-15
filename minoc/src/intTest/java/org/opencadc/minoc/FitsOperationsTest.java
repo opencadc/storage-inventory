@@ -117,7 +117,7 @@ public class FitsOperationsTest extends MinocTest {
     protected URL filesVaultURL;
 
     static {
-        Log4jInit.setLevel("org.opencadc.minoc", Level.DEBUG);
+        Log4jInit.setLevel("org.opencadc.minoc", Level.INFO);
         Log4jInit.setLevel("ca.nrc.cadc.net", Level.INFO);
     }
 

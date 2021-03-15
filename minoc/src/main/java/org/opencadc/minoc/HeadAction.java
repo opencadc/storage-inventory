@@ -67,6 +67,7 @@
 
 package org.opencadc.minoc;
 
+import ca.nrc.cadc.net.DigestUtil;
 import ca.nrc.cadc.rest.SyncOutput;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
@@ -107,7 +108,7 @@ public class HeadAction extends ArtifactAction {
      * @param syncOutput The target response
      */
     public static void setHeaders(Artifact artifact, SyncOutput syncOutput) {
-        syncOutput.setHeader("Content-MD5", artifact.getContentChecksum().getSchemeSpecificPart());
+        syncOutput.setDigest(artifact.getContentChecksum());
         syncOutput.setHeader("Content-Length", artifact.getContentLength());
         String filename = InventoryUtil.computeArtifactFilename(artifact.getURI());
         syncOutput.setHeader("Content-Disposition", "attachment; filename=\"" + filename + "\"");

@@ -86,7 +86,7 @@ public class FitsTest {
     private static final Logger LOGGER = Logger.getLogger(FitsTest.class);
 
     static {
-        Log4jInit.setLevel("org.opencadc", Level.DEBUG);
+        Log4jInit.setLevel("org.opencadc", Level.INFO);
     }
 
     private static final IFitsHeader[] HEADER_CARD_KEYS_TO_CHECK = new IFitsHeader[]{

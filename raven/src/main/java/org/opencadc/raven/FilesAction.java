@@ -107,24 +107,20 @@ public abstract class FilesAction extends ArtifactAction {
         if (path == null) {
             throw new IllegalArgumentException("path expected");
         }
-        String au = path;
-        if (path.indexOf(":") < 0) {
-            au = "cadc:" + path;
-        }
-        setArtifactURI(au);
-    }
-
-    /**
-     * Set the artifact uri local variable.
-     * @param uri The input string.
-     */
-    private void setArtifactURI(String uri) {
+        
+        // prototype to verify that we could support a default scheme if necessary
+        // default scheme would have to come from configuration
+        //String au = path;
+        //if (path.indexOf(":") < 0) {
+        //    au = "cadc:" + path;
+        //}
+        
         try {
-            log.debug("artifactURI: " + uri);
-            artifactURI = new URI(uri);
+            log.debug("artifactURI: " + path);
+            artifactURI = new URI(path);
             InventoryUtil.validateArtifactURI(ArtifactAction.class, artifactURI);
         } catch (URISyntaxException e) {
-            String message = "illegal artifact URI: " + uri;
+            String message = "illegal artifact URI: " + path;
             log.debug(message, e);
             throw new IllegalArgumentException(message);
         }
@@ -134,5 +130,4 @@ public abstract class FilesAction extends ArtifactAction {
     protected InlineContentHandler getInlineContentHandler() {
         return null;
     }
-
 }
