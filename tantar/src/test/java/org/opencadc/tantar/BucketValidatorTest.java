@@ -171,7 +171,9 @@ public class BucketValidatorTest {
                     }
 
                     @Override
-                    void checkObsoleteStorageLocation(StorageMetadata storageMetadata) {}
+                    boolean isObsoleteStorageLocation(StorageMetadata storageMetadata) {
+                        return false;
+                    }
                 };
 
         testSubject.validate();
@@ -243,7 +245,9 @@ public class BucketValidatorTest {
                     }
 
                     @Override
-                    void checkObsoleteStorageLocation(StorageMetadata storageMetadata) {}
+                    boolean isObsoleteStorageLocation(StorageMetadata storageMetadata) {
+                        return false;
+                    }
                 };
 
         testSubject.validate();
@@ -325,7 +329,9 @@ public class BucketValidatorTest {
                     }
 
                     @Override
-                    void checkObsoleteStorageLocation(StorageMetadata storageMetadata) {}
+                    boolean isObsoleteStorageLocation(StorageMetadata storageMetadata) {
+                        return false;
+                    }
                 };
 
         testSubject.validate();
@@ -390,7 +396,9 @@ public class BucketValidatorTest {
                     }
 
                     @Override
-                    void checkObsoleteStorageLocation(StorageMetadata storageMetadata) {}
+                    boolean isObsoleteStorageLocation(StorageMetadata storageMetadata) {
+                        return false;
+                    }
                 };
 
         testSubject.validate();
@@ -449,7 +457,9 @@ public class BucketValidatorTest {
                     }
 
                     @Override
-                    void checkObsoleteStorageLocation(StorageMetadata storageMetadata) {}
+                    boolean isObsoleteStorageLocation(StorageMetadata storageMetadata) {
+                        return false;
+                    }
                 };
 
         testSubject.validate();

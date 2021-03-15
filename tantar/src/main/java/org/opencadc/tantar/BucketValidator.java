@@ -297,8 +297,6 @@ public class BucketValidator implements ValidateEventListener {
             final StorageMetadata storageMetadata =
                     (unresolvedStorageMetadata == null) ? storageMetadataIterator.next() : unresolvedStorageMetadata;
 
-            checkObsoleteStorageLocation(storageMetadata);
-
             final int comparison = artifact.storageLocation.compareTo(storageMetadata.getStorageLocation());
 
             LOGGER.debug(String.format("Comparing Inventory Storage Location %s with Storage Adapter Location %s (%d)",
@@ -608,6 +606,7 @@ public class BucketValidator implements ValidateEventListener {
     Iterator<StorageMetadata> iterateStorage() throws Exception {
         LOGGER.debug(String.format("Getting iterator for %s running as %s", this.bucketPrefixes, this.runUser.getPrincipals()));
         return new Iterator<StorageMetadata>() {
+            StorageMetadata storageMetadata = null;
             final Iterator<String> bucketPrefixIterator = bucketPrefixes.iterator();
 
             // The bucket range should have at least one value, so calling next() should be safe here.
@@ -618,6 +617,10 @@ public class BucketValidator implements ValidateEventListener {
             @Override
             public boolean hasNext() {
                 if (storageMetadataIterator.hasNext()) {
+                    storageMetadata = storageMetadataIterator.next();
+                    if (isObsoleteStorageLocation(storageMetadata)) {
+                        return hasNext();
+                    }
                     return true;
                 } else if (bucketPrefixIterator.hasNext()) {
                     try {
@@ -635,7 +638,7 @@ public class BucketValidator implements ValidateEventListener {
 
             @Override
             public StorageMetadata next() {
-                return storageMetadataIterator.next();
+                return storageMetadata;
             }
         };
     }
@@ -678,13 +681,19 @@ public class BucketValidator implements ValidateEventListener {
      * Check the StorageMetadata for a matching ObsoleteStorageLocation and if found
      * delete the file from storage and delete the ObsoleteStorageLocation.
      */
-    void checkObsoleteStorageLocation(StorageMetadata storageMetadata) throws Exception {
+    boolean isObsoleteStorageLocation(StorageMetadata storageMetadata) {
         if (canTakeAction()) {
             ObsoleteStorageLocation obsoleteStorageLocation =
                 this.obsoleteStorageLocationDAO.get(storageMetadata.getStorageLocation());
             if (obsoleteStorageLocation != null) {
 
-                delete(storageMetadata);
+                try {
+                    delete(storageMetadata);
+                } catch (Exception e) {
+                    LOGGER.error(String.format("Failed to delete ObsoleteStorageLocation %s",
+                                               obsoleteStorageLocation), e);
+                    throw new IllegalStateException(e);
+                }
 
                 TransactionManager transactionManager = this.artifactDAO.getTransactionManager();
                 try {
@@ -698,6 +707,7 @@ public class BucketValidator implements ValidateEventListener {
                     LOGGER.debug("commit transaction...");
                     transactionManager.commitTransaction();
                     LOGGER.debug("commit transaction... OK");
+                    return true;
                 } catch (Exception e) {
                     LOGGER.error(String.format("Failed to delete ObsoleteStorageLocation %s.",
                                                obsoleteStorageLocation.getID()), e);
@@ -713,6 +723,7 @@ public class BucketValidator implements ValidateEventListener {
                 }
             }
         }
+        return false;
     }
 
 }
