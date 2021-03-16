@@ -161,7 +161,7 @@ public class BucketValidatorTest {
                                     new Subject(), true, new InventoryIsAlwaysRight(testEventListener, reporter),
                                     null, null, null) {
                     @Override
-                    Iterator<StorageMetadata> iterateStorage() {
+                    Iterator<StorageMetadata> getStorageMetadataIterator() {
                         return testStorageMetadataList.iterator();
                     }
 
@@ -174,6 +174,7 @@ public class BucketValidatorTest {
                     boolean isObsoleteStorageLocation(StorageMetadata storageMetadata) {
                         return false;
                     }
+
                 };
 
         testSubject.validate();
@@ -235,7 +236,7 @@ public class BucketValidatorTest {
                                     new Subject(), true, new InventoryIsAlwaysRight(testEventListener, reporter),
                                     null, null, null) {
                     @Override
-                    Iterator<StorageMetadata> iterateStorage() {
+                    Iterator<StorageMetadata> getStorageMetadataIterator() {
                         return Collections.emptyIterator();
                     }
 
@@ -319,7 +320,7 @@ public class BucketValidatorTest {
                                     new Subject(), true, new StorageIsAlwaysRight(testEventListener, reporter),
                                     null, null, null) {
                     @Override
-                    Iterator<StorageMetadata> iterateStorage() {
+                    Iterator<StorageMetadata> getStorageMetadataIterator() {
                         return testStorageMetadataList.iterator();
                     }
 
@@ -386,7 +387,7 @@ public class BucketValidatorTest {
                                     new Subject(), true, new StorageIsAlwaysRight(testEventListener, reporter),
                                     null, null, null) {
                     @Override
-                    Iterator<StorageMetadata> iterateStorage() {
+                    Iterator<StorageMetadata> getStorageMetadataIterator() {
                         return testStorageMetadataList.iterator();
                     }
 
@@ -447,7 +448,7 @@ public class BucketValidatorTest {
                                     new Subject(), true, new RecoverFromStorage(testEventListener, reporter),
                                     null, null, null) {
                     @Override
-                    Iterator<StorageMetadata> iterateStorage() {
+                    Iterator<StorageMetadata> getStorageMetadataIterator() {
                         return testStorageMetadataList.iterator();
                     }
 
