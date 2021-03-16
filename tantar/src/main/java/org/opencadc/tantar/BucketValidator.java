@@ -73,7 +73,6 @@ import ca.nrc.cadc.db.ConnectionConfig;
 import ca.nrc.cadc.db.DBUtil;
 import ca.nrc.cadc.db.TransactionManager;
 import ca.nrc.cadc.io.ResourceIterator;
-import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.profiler.Profiler;
 import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.util.StringUtil;
@@ -103,7 +102,6 @@ import org.opencadc.inventory.db.ObsoleteStorageLocationDAO;
 import org.opencadc.inventory.db.SQLGenerator;
 import org.opencadc.inventory.db.version.InitDatabase;
 import org.opencadc.inventory.storage.StorageAdapter;
-import org.opencadc.inventory.storage.StorageEngageException;
 import org.opencadc.inventory.storage.StorageMetadata;
 import org.opencadc.inventory.util.BucketSelector;
 import org.opencadc.tantar.policy.ResolutionPolicy;
@@ -631,48 +629,30 @@ public class BucketValidator implements ValidateEventListener {
      * delete the file from storage and delete the ObsoleteStorageLocation.
      */
     boolean isObsoleteStorageLocation(StorageMetadata storageMetadata) {
-        if (canTakeAction()) {
-            ObsoleteStorageLocation obsoleteStorageLocation =
-                this.obsoleteStorageLocationDAO.get(storageMetadata.getStorageLocation());
-            if (obsoleteStorageLocation != null) {
-
-                try {
-                    delete(storageMetadata);
-                } catch (Exception e) {
-                    LOGGER.error(String.format("Failed to delete ObsoleteStorageLocation %s",
-                                               obsoleteStorageLocation), e);
-                    throw new IllegalStateException(e);
-                }
-
-                TransactionManager transactionManager = this.artifactDAO.getTransactionManager();
-                try {
-                    LOGGER.debug("start transaction...");
-                    transactionManager.startTransaction();
-                    LOGGER.debug("start transaction... OK");
-
-                    this.obsoleteStorageLocationDAO.delete(obsoleteStorageLocation.getID());
-                    LOGGER.debug(String.format("deleted %s", obsoleteStorageLocation));
-
-                    LOGGER.debug("commit transaction...");
-                    transactionManager.commitTransaction();
-                    LOGGER.debug("commit transaction... OK");
-                    return true;
-                } catch (Exception e) {
-                    LOGGER.error(String.format("Failed to delete ObsoleteStorageLocation %s.",
-                                               obsoleteStorageLocation.getID()), e);
-                    transactionManager.rollbackTransaction();
-                    LOGGER.debug("Rollback Transaction: OK");
-                    throw e;
-                } finally {
-                    if (transactionManager.isOpen()) {
-                        LOGGER.error("BUG - Open transaction in finally");
-                        transactionManager.rollbackTransaction();
-                        LOGGER.error("Transaction rolled back successfully.");
-                    }
-                }
+        ObsoleteStorageLocation obsoleteStorageLocation;
+        try {
+            obsoleteStorageLocation = this.obsoleteStorageLocationDAO.get(storageMetadata.getStorageLocation());
+        } catch (Exception e) {
+            throw new IllegalStateException(
+                String.format("query failed for ObsoleteStorageLocation %s for file %s",
+                              storageMetadata.getStorageLocation().getStorageID().toASCIIString(),
+                              storageMetadata.artifactURI.toASCIIString()), e);
+        }
+        if (obsoleteStorageLocation != null && canTakeAction()) {
+            try {
+                delete(storageMetadata);
+                this.obsoleteStorageLocationDAO.delete(obsoleteStorageLocation.getID());
+                LOGGER.info(String.format("deleted obsolete file %s at %s",
+                                          storageMetadata.artifactURI.toASCIIString(),
+                                          obsoleteStorageLocation.getLocation().getStorageID().toASCIIString()));
+            } catch (Exception e) {
+                LOGGER.error(String.format("delete failed for obsolete file %s at %s",
+                                           storageMetadata.artifactURI.toASCIIString(),
+                                           obsoleteStorageLocation.getLocation().getStorageID().toASCIIString()),
+                             e);
             }
         }
-        return false;
+        return obsoleteStorageLocation != null;
     }
 
     /**
