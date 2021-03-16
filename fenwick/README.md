@@ -26,7 +26,7 @@ org.opencadc.fenwick.trackSiteLocations={true|false}
 org.opencadc.fenwick.queryService={resourceID of remote TAP service with inventory data model}
 
 # selectivity
-org.opencadc.fenwick.ArtifactSelector={fully qualified classname of ArtifactSelector implementation}
+org.opencadc.fenwick.artifactSelector={all|filter}
 ```
 The `inventory` account owns and manages (create, alter, drop) inventory database objects and manages
 all the content (insert, update, delete) in the inventory schema. The database is specified in the JDBC URL. 
@@ -50,7 +50,7 @@ Querying the remote query service (luskan) requires permission. `fenwick` uses t
 in /config to authenticate.
 
 ### artifact-filter.sql (optional)
-When the `org.opencadc.fenwick.IncludeArtifacts` ArtifactSelector is specified, this config file
+When `org.opencadc.fenwick.artifactSelector=filter` is specified, this config file
 specifying the included Artifacts is required. The single clause in the SQL file *MUST* begin with the 
 `WHERE` keyword.
 
