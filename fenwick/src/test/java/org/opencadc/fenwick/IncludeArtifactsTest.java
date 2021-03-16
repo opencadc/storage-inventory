@@ -76,7 +76,7 @@ import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.Test;
-
+import org.opencadc.inventory.util.IncludeArtifacts;
 
 public class IncludeArtifactsTest {
     private static final Logger log = Logger.getLogger(IncludeArtifactsTest.class);
