@@ -78,7 +78,9 @@ import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.List;
 import org.apache.log4j.Logger;
+import org.opencadc.gms.GroupURI;
 
 public class LuskanConfig {
     private static final Logger log = Logger.getLogger(LuskanConfig.class);
@@ -88,6 +90,7 @@ public class LuskanConfig {
     public static final String URI_KEY = LUSKAN_KEY + ".resourceID";
     public static final String TMPDIR_KEY = LUSKAN_KEY + ".resultsDir";
     public static final String STORAGE_SITE_KEY = LUSKAN_KEY + ".isStorageSite";
+    public static final String ALLOWED_GROUP = LUSKAN_KEY + ".allowedGroup";
 
     public LuskanConfig() {
 
@@ -168,6 +171,21 @@ public class LuskanConfig {
             sb.append("OK");
         }
         sb.append("\n");
+
+        List<String> allowedGroups = props.getProperty(ALLOWED_GROUP);
+        if (allowedGroups.isEmpty()) {
+            sb.append("MISSING");
+        } else {
+            for (String allowedGroup : allowedGroups) {
+                sb.append("\n\t").append(ALLOWED_GROUP).append(" - ").append(allowedGroup);
+                try {
+                    new GroupURI(URI.create(allowedGroup));
+                    sb.append(" OK");
+                } catch (IllegalArgumentException e) {
+                    sb.append(" INVALID GroupURI");
+                }
+            }
+        }
 
         if (!ok) {
             throw new IllegalStateException(sb.toString());

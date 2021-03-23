@@ -94,7 +94,7 @@ public class LuskanSyncQueryTest extends TapSyncQueryTest {
 
     public LuskanSyncQueryTest() {
         super(Constants.RESOURCE_ID);
-        File testCertFile = FileUtil.getFileFromResource("x509_CADCAnontest1.pem", LuskanSyncQueryTest.class);
+        File testCertFile = FileUtil.getFileFromResource("x509_CADCAuthtest1.pem", LuskanSyncQueryTest.class);
         setSubject(SSLUtil.createSubject(testCertFile));
         // re-use SyncResultTest files
         File testFile = FileUtil.getFileFromResource("SyncResultTest-ts-columns.properties", LuskanSyncQueryTest.class);
