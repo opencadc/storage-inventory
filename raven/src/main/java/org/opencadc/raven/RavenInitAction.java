@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2019.                            (c) 2019.
+*  (c) 2021.                            (c) 2021.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -65,76 +65,112 @@
 ************************************************************************
 */
 
-package org.opencadc.minoc;
+package org.opencadc.raven;
 
-import ca.nrc.cadc.date.DateUtil;
-import ca.nrc.cadc.rest.SyncOutput;
-import java.text.DateFormat;
+import ca.nrc.cadc.rest.InitAction;
+import ca.nrc.cadc.util.MultiValuedProperties;
+import ca.nrc.cadc.util.PropertiesReader;
+import java.net.URI;
+import java.util.Map;
+import java.util.TreeMap;
 import org.apache.log4j.Logger;
-import org.opencadc.inventory.Artifact;
-import org.opencadc.inventory.InventoryUtil;
-import org.opencadc.inventory.storage.StorageMetadata;
-import org.opencadc.permissions.ReadGrant;
+import org.opencadc.inventory.db.SQLGenerator;
 
 /**
- * Interface with storage and inventory to get the metadata of an artifact.
  *
- * @author majorb
+ * @author adriand
  */
-public class HeadAction extends ArtifactAction {
-    
-    private static final Logger log = Logger.getLogger(HeadAction.class);
+public class RavenInitAction extends InitAction {
+    private static final Logger log = Logger.getLogger(RavenInitAction.class);
 
-    /**
-     * Default, no-arg constructor.
-     */
-    public HeadAction() {
+    // config keys
+    private static final String RAVEN_KEY = "org.opencadc.raven";
+
+    static final String JNDI_DATASOURCE = "jdbc/inventory"; // context.xml
+
+    static final String SCHEMA_KEY = RAVEN_KEY + ".inventory.schema";
+
+    static final String PUBKEYFILE_KEY = RAVEN_KEY + ".publicKeyFile";
+    static final String PRIVKEYFILE_KEY = RAVEN_KEY + ".privateKeyFile";
+    static final String READ_GRANTS_KEY = RAVEN_KEY + ".readGrantProvider";
+    static final String WRITE_GRANTS_KEY = RAVEN_KEY + ".writeGrantProvider";
+
+    static final String DEV_AUTH_ONLY_KEY = RAVEN_KEY + ".authenticateOnly";
+
+    // set init initConfig, used by subsequent init methods
+
+    MultiValuedProperties props;
+    private URI resourceID;
+    private Map<String,Object> daoConfig;
+
+    public RavenInitAction() {
         super();
     }
 
-    /**
-     * Return the artifact metadata as repsonse headers.
-     */
     @Override
-    public void doAction() throws Exception {
-        
-        initAndAuthorize(ReadGrant.class);
-        
-        String txnID = syncInput.getHeader(PUT_TXN);
-        log.debug("transactionID: " + txnID);
-        Artifact artifact;
-        if (txnID != null) {
-            StorageMetadata sm = storageAdapter.getTransactionStatus(txnID);
-            artifact = new Artifact(sm.artifactURI, sm.getContentChecksum(), sm.contentLastModified, sm.getContentLength());
-            syncOutput.setHeader(PUT_TXN, txnID);
-            super.logInfo.setMessage("transaction: " + txnID);
-        } else {
-            artifact = getArtifact(artifactURI);
-        }
-        setHeaders(artifact, syncOutput);
+    public void doInit() {
     }
-    
+
     /**
-     * Set the HTTP response headers for an artifact.
-     * @param artifact The artifact with metadata
-     * @param syncOutput The target response
+     * Read config file and verify that all required entries are present.
+     *
+     * @return MultiValuedProperties containing the application config
      */
-    public static void setHeaders(Artifact artifact, SyncOutput syncOutput) {
-        syncOutput.setDigest(artifact.getContentChecksum());
-        syncOutput.setHeader("Content-Length", artifact.getContentLength());
-        
-        DateFormat df = DateUtil.getDateFormat(DateUtil.HTTP_DATE_FORMAT, DateUtil.GMT);
-        syncOutput.setHeader("Last-Modified", df.format(artifact.getContentLastModified()));
+    static MultiValuedProperties getConfig() {
+        PropertiesReader r = new PropertiesReader("raven.properties");
+        MultiValuedProperties mvp = r.getAllProperties();
 
-        String filename = InventoryUtil.computeArtifactFilename(artifact.getURI());
-        syncOutput.setHeader("Content-Disposition", "attachment; filename=\"" + filename + "\"");
+        StringBuilder sb = new StringBuilder();
+        sb.append("incomplete config: ");
+        boolean ok = true;
 
-        if (artifact.contentEncoding != null) {
-            syncOutput.setHeader("Content-Encoding", artifact.contentEncoding);
+        // validate required config here
+        String schema = mvp.getFirstPropertyValue(RavenInitAction.SCHEMA_KEY);
+        sb.append("\n\t").append(RavenInitAction.SCHEMA_KEY).append(": ");
+        if (schema == null) {
+            sb.append("MISSING");
+            ok = false;
+        } else {
+            sb.append("OK");
         }
-        if (artifact.contentType != null) {
-            syncOutput.setHeader("Content-Type", artifact.contentType);
+
+        String pub = mvp.getFirstPropertyValue(RavenInitAction.PUBKEYFILE_KEY);
+        sb.append("\n\t").append(RavenInitAction.PUBKEYFILE_KEY).append(": ");
+        if (pub == null) {
+            sb.append("MISSING");
+            ok = false;
+        } else {
+            sb.append("OK");
         }
+
+        String priv = mvp.getFirstPropertyValue(RavenInitAction.PRIVKEYFILE_KEY);
+        sb.append("\n\t").append(RavenInitAction.PRIVKEYFILE_KEY).append(": ");
+        if (priv == null) {
+            sb.append("MISSING");
+            ok = false;
+        } else {
+            sb.append("OK");
+        }
+
+        if (!ok) {
+            throw new IllegalStateException(sb.toString());
+        }
+
+        return mvp;
     }
 
+    static Map<String,Object> getDaoConfig(MultiValuedProperties props) {
+        String cname = props.getFirstPropertyValue(SQLGenerator.class.getName());
+        try {
+            Map<String,Object> ret = new TreeMap<>();
+            Class clz = Class.forName(cname);
+            ret.put(SQLGenerator.class.getName(), clz);
+            ret.put("jndiDataSourceName", RavenInitAction.JNDI_DATASOURCE);
+            ret.put("schema", props.getFirstPropertyValue(RavenInitAction.SCHEMA_KEY));
+            //config.put("database", null);
+            return ret;
+        } catch (ClassNotFoundException ex) {
+            throw new IllegalStateException("invalid config: failed to load SQLGenerator: " + cname);
+        }
+    }
 }

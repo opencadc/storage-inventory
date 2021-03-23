@@ -3,10 +3,10 @@ info:
   version: '0.1'
   title: Artifact locate service (raven)
   description: 'A programmatic interface for determining the storage locations of an artifact.  Artifacts may be available at multiple storage sites.  Querying for the location of an artifact will result in a list of zero or more pre-authorized URLs that can be used for downloading the artifact.  For non-public artifacts, credentials must be supplied to gain authorization.  <br/><br/>Clients may authenticate to this service in one of two ways:<br/>1.  By providing a cookie in the Cookie header<br/>2.  By using a client certificate over SSL.'
-basePath: '/raven'
 
+basePath: /raven
 paths:
-  '/locate':
+  /locate:
     post:
       description: 'Find all the download locations of a given artifact by posting a transfer request and receiving a transfer response, with pre-authorized URLs, in return.'
       tags:
@@ -26,6 +26,86 @@ paths:
       responses:
         '200':
           description: 'A transfer-response object containing the transfer-request information and a list of zero or more pre-authorized download endpoint URLs.'
+        '401':
+          description: If the client does not provide credentials and anonymous access is disallowed.
+        '403':
+          description: If the client does not have permission.
+        '404':
+          description: If the artifact could not be found.
+        '500':
+          description: Internal error
+        '503':
+          description: Service busy
+  /files/{artifact-uri}:
+    parameters:
+      - name: artifact-uri
+        in: path
+        type: string
+        description: The artifact URI
+        required: true
+    get:
+      description: |
+        Redirect to a URL where the file identified by parameter artifact-uri can be downloaded, optionally cutting a subset of a FITS file.
+      tags:
+        - Artifact transfer
+      summary: Redirect to a URL and download
+      schemes:
+        - https
+      responses:
+        '200':
+          description: Successful response.
+          headers:
+            Content-Disposition:
+              description: 'The content-disposition of the file in the form<br/><br/>Content-Disposition\: inline; filename=\"\<name\>\"<br/><br/>where \<name\> is the last path segment of the URI of the artifact.'
+              type: string
+            Content-Type:
+              description: The content type of the file
+              type: string
+            Content-MD5:
+              description: The content MD5 of the file
+              type: string
+            Content-Length:
+              description: The content length of the file
+              type: string
+        '303':
+          description: Redirect to a URL where download can start.
+          headers:
+            Location:
+              description: URL to download from
+              type: string
+        '401':
+          description: If the client does not provide credentials and anonymous access is disallowed.
+        '403':
+          description: If the client does not have permission.
+        '404':
+          description: If the artifact could not be found.
+        '500':
+          description: Internal error
+        '503':
+          description: Service busy
+    head:
+      description: 'Return metadata about a given artifact indentified by parameter artifact-uri'
+      tags:
+        - Artifact metadata
+      summary: Artifact metadata
+      schemes:
+        - https
+      responses:
+        '200':
+          description: Successful response.
+          headers:
+            Content-Disposition:
+              description: 'The content-disposition of the file in the form<br/><br/>Content-Disposition\: inline; filename=\"\<name\>\"<br/><br/>where \<name\> is the last path segment of the URI of the artifact.'
+              type: string
+            Content-Type:
+              description: The content type of the file
+              type: string
+            Content-MD5:
+              description: The content MD5 of the file
+              type: string
+            Content-Length:
+              description: The content length of the file
+              type: string
         '401':
           description: If the client does not provide credentials and anonymous access is disallowed.
         '403':

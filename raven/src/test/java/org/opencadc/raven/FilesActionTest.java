@@ -3,7 +3,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2019.                            (c) 2019.
+ *  (c) 2021.                            (c) 2021.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -65,108 +65,73 @@
  ************************************************************************
  */
 
+
 package org.opencadc.raven;
 
-import ca.nrc.cadc.auth.AuthMethod;
-import ca.nrc.cadc.auth.AuthenticationUtil;
-import ca.nrc.cadc.auth.SSLUtil;
-import ca.nrc.cadc.db.ConnectionConfig;
-import ca.nrc.cadc.db.DBConfig;
-import ca.nrc.cadc.db.DBUtil;
-import ca.nrc.cadc.net.FileContent;
-import ca.nrc.cadc.net.HttpPost;
-import ca.nrc.cadc.net.ResourceNotFoundException;
-import ca.nrc.cadc.reg.Standards;
-import ca.nrc.cadc.reg.client.RegistryClient;
-import ca.nrc.cadc.util.FileUtil;
 import ca.nrc.cadc.util.Log4jInit;
-import ca.nrc.cadc.vos.Transfer;
-import ca.nrc.cadc.vos.TransferParsingException;
-import ca.nrc.cadc.vos.TransferReader;
-import ca.nrc.cadc.vos.TransferWriter;
-import java.io.ByteArrayOutputStream;
-import java.io.File;
-import java.io.IOException;
 import java.net.URI;
-import java.net.URL;
-import java.security.PrivilegedActionException;
-import java.util.Map;
-import java.util.TreeMap;
-import javax.security.auth.Subject;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
-import org.opencadc.inventory.db.SQLGenerator;
+import org.junit.Test;
 
-/**
- * Abstract integration test class with general setup and test support.
- * 
- * @author majorb
- */
-public abstract class RavenTest {
-    
-    private static final Logger log = Logger.getLogger(NegotiationTest.class);
-    public static final URI RAVEN_SERVICE_ID = URI.create("ivo://cadc.nrc.ca/raven");
-    
-    static String SERVER = "INVENTORY_TEST";
-    static String DATABASE = "cadctest";
-    static String SCHEMA = "inventory";
+public class FilesActionTest {
+    private static final Logger log = Logger.getLogger(FilesActionTest.class);
 
-    protected URL anonURL;
-    protected URL certURL;
-    protected Subject anonSubject;
-    protected Subject userSubject;
-    
-    Map<String,Object> config;
-    
     static {
-        Log4jInit.setLevel("org.opencadc.raven", Level.INFO);
+        Log4jInit.setLevel("org.opencadc.raven", Level.DEBUG);
     }
-    
-    public RavenTest() throws Exception {
-        RegistryClient regClient = new RegistryClient();
-        anonURL = regClient.getServiceURL(RAVEN_SERVICE_ID, Standards.SI_LOCATE, AuthMethod.ANON);
-        log.info("anonURL: " + anonURL);
-        certURL = regClient.getServiceURL(RAVEN_SERVICE_ID, Standards.SI_LOCATE, AuthMethod.CERT);
-        log.info("certURL: " + certURL);
-        anonSubject = AuthenticationUtil.getAnonSubject();
-        File cert = FileUtil.getFileFromResource("raven-test.pem", RavenTest.class);
-        userSubject = SSLUtil.createSubject(cert);
-        log.info("userSubject: " + userSubject);
-        
+
+    class TestFilesAction extends FilesAction {
+        public TestFilesAction() {
+            super(false);
+        }
+
+        @Override
+        public void doAction() throws Exception {
+        }
+    }
+
+
+    private void assertCorrectPath(String path, String expURI) {
+        FilesAction fa = new TestFilesAction();
         try {
-            DBConfig dbrc = new DBConfig();
-            ConnectionConfig cc = dbrc.getConnectionConfig(SERVER, DATABASE);
-            DBUtil.createJNDIDataSource("jdbc/inventory", cc);
-
-            config = new TreeMap<String,Object>();
-            config.put(SQLGenerator.class.getName(), SQLGenerator.class);
-            config.put("jndiDataSourceName", "jdbc/inventory");
-            config.put("schema", SCHEMA);
-
-        } catch (Exception ex) {
-            log.error("setup failed", ex);
-            throw ex;
+            fa.parsePath(path);
+            Assert.assertEquals("artifactURI", URI.create(expURI), fa.artifactURI);
+        } catch (IllegalArgumentException e) {
+            log.error(e);
+            Assert.fail("Failed to parse legal path: " + path);
         }
     }
-    
-    protected Transfer negotiate(Transfer request)
-        throws IOException, TransferParsingException, PrivilegedActionException, ResourceNotFoundException {
-        TransferWriter writer = new TransferWriter();
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        writer.write(request, out);
-        FileContent content = new FileContent(out.toByteArray(), "text/xml");
-        HttpPost post = new HttpPost(certURL, content, false);
-        post.run();
-        if (post.getThrowable() != null && post.getThrowable() instanceof ResourceNotFoundException) {
-            throw (ResourceNotFoundException) post.getThrowable();
+
+    private void assertIllegalPath(String path) {
+        FilesAction fa = new TestFilesAction();
+        try {
+            fa.parsePath(path);
+            Assert.fail("Should have failed to parse path: " + path);
+        } catch (IllegalArgumentException e) {
+            // expected
+            log.info(e);
         }
-        Assert.assertNull(post.getThrowable());
-        String response = post.getResponseBody();
-        TransferReader reader = new TransferReader();
-        Transfer t = reader.read(response,  null);
-        log.debug("Response transfer: " + t);
-        return t;
     }
 
+    @Test
+    public void testParsePath() throws Exception {
+        assertCorrectPath("cadc:CFHT/700000o.fits", "cadc:CFHT/700000o.fits");
+        //assertCorrectPath("CFHT/700000o.fits", "cadc:CFHT/700000o.fits");
+        //assertCorrectPath("noschemeinuri", "cadc:noschemeinuri");
+
+        assertIllegalPath("token/cadc:CFHT/700000o.fits");
+        assertIllegalPath("");
+        assertIllegalPath("cadc:path#fragment");
+        assertIllegalPath("cadc:path?query");
+        assertIllegalPath("cadc:path#fragment?query");
+        assertIllegalPath("cadc://host/path");
+        assertIllegalPath("cadc://:port/path");
+        assertIllegalPath("artifacts/token1/token2/cadc:FOO/bar");
+        assertIllegalPath("artifacts/token/cadc:ccda:FOO/bar");
+
+        assertIllegalPath(null);
+    }
 }
+

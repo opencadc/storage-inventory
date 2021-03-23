@@ -82,11 +82,9 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URI;
 import java.net.URL;
-import java.nio.charset.Charset;
 import java.security.PrivilegedExceptionAction;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.UUID;
 
 import javax.security.auth.Subject;
 
@@ -128,6 +126,7 @@ public class BasicOpsTest extends MinocTest {
             HttpUpload put = new HttpUpload(in, artifactURL);
             put.setRequestProperty(HttpTransfer.CONTENT_TYPE, type);
             put.setRequestProperty(HttpTransfer.CONTENT_ENCODING, encoding);
+            put.setDigest(computeChecksumURI(data));
 
             Subject.doAs(userSubject, new RunnableAction(put));
             Assert.assertNull(put.getThrowable());
@@ -138,11 +137,11 @@ public class BasicOpsTest extends MinocTest {
             HttpGet get = new HttpGet(artifactURL, out);
             Subject.doAs(userSubject, new RunnableAction(get));
             Assert.assertNull(get.getThrowable());
-            String contentMD5 = get.getContentMD5();
+            URI checksumURI = get.getDigest();
             long contentLength = get.getContentLength();
             String contentType = get.getContentType();
             String contentEncoding = get.getContentEncoding();
-            Assert.assertEquals(computeMD5(data), contentMD5);
+            Assert.assertEquals(computeChecksumURI(data), checksumURI);
             Assert.assertEquals(data.length, contentLength);
             Assert.assertEquals(type, contentType);
             Assert.assertEquals(encoding, contentEncoding);
@@ -155,6 +154,7 @@ public class BasicOpsTest extends MinocTest {
             params.put("contentEncoding", newEncoding);
             params.put("contentType", newType);
             HttpPost post = new HttpPost(artifactURL, params, false);
+            post.setDigest(computeChecksumURI(data));
             Subject.doAs(userSubject, new RunnableAction(post));
             Assert.assertNull(post.getThrowable());
             Assert.assertEquals("Accepted", 202, post.getResponseCode());
@@ -165,11 +165,11 @@ public class BasicOpsTest extends MinocTest {
             head.setHeadOnly(true);
             Subject.doAs(userSubject, new RunnableAction(head));
             Assert.assertNull(head.getThrowable());
-            contentMD5 = head.getContentMD5();
+            checksumURI = head.getDigest();
             contentLength = head.getContentLength();
             contentType = head.getContentType();
             contentEncoding = head.getContentEncoding();
-            Assert.assertEquals(computeMD5(data), contentMD5);
+            Assert.assertEquals(computeChecksumURI(data), checksumURI);
             Assert.assertEquals(data.length, contentLength);
             Assert.assertEquals(newType, contentType);
             Assert.assertEquals(newEncoding, contentEncoding);

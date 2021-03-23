@@ -81,7 +81,6 @@ import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
-import java.net.URISyntaxException;
 import java.util.Date;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
@@ -136,25 +135,17 @@ public class PutAction extends ArtifactAction {
     public void doAction() throws Exception {
         
         initAndAuthorize(WriteGrant.class);
-        
-        String md5Header = syncInput.getHeader("Content-MD5");
+
+        URI digest = syncInput.getDigest();
         String lengthHeader = syncInput.getHeader("Content-Length");
         String encodingHeader = syncInput.getHeader("Content-Encoding");
         String typeHeader = syncInput.getHeader("Content-Type");
-        log.debug("Content-MD5: " + md5Header);
+        log.debug("Digest: " + (digest == null ? null : digest.toASCIIString()));
         log.debug("Content-Length: " + lengthHeader);
         log.debug("Content-Encoding: " + encodingHeader);
         log.debug("Content-Type: " + typeHeader);
-        
-        URI contentMD5 = null;
+
         Long contentLength = null;
-        if (md5Header != null) {
-            try {
-                contentMD5 = new URI("md5:" + md5Header);
-            } catch (URISyntaxException e) {
-                throw new IllegalArgumentException("Illegal Content-MD5 header: " + md5Header);
-            }
-        }
         if (lengthHeader != null) {
             try {
                 contentLength = new Long(lengthHeader);
@@ -162,7 +153,6 @@ public class PutAction extends ArtifactAction {
                 throw new IllegalArgumentException("Illegal Content-Length header: " + lengthHeader);
             }
         }
-        log.debug("Content-MD5: " + contentMD5);
         log.debug("Content-Length: " + contentLength);
         
         String txnID = syncInput.getHeader(PUT_TXN);
@@ -172,7 +162,7 @@ public class PutAction extends ArtifactAction {
         log.debug("transactionID: " + txnID);
         
         NewArtifact newArtifact = new NewArtifact(artifactURI);
-        newArtifact.contentChecksum = contentMD5;
+        newArtifact.contentChecksum = digest;
         newArtifact.contentLength = contentLength;
 
         final Profiler profiler = new Profiler(PutAction.class);

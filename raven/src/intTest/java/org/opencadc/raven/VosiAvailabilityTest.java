@@ -69,7 +69,6 @@
 
 package org.opencadc.raven;
 
-
 import ca.nrc.cadc.util.Log4jInit;
 import ca.nrc.cadc.vosi.AvailabilityTest;
 import org.apache.log4j.Level;
@@ -79,8 +78,7 @@ import org.apache.log4j.Logger;
  *
  * @author pdowler
  */
-public class VosiAvailabilityTest extends AvailabilityTest
-{
+public class VosiAvailabilityTest extends AvailabilityTest {
     private static final Logger log = Logger.getLogger(VosiAvailabilityTest.class);
     
     static {
@@ -88,8 +86,7 @@ public class VosiAvailabilityTest extends AvailabilityTest
         Log4jInit.setLevel("org.opencadc.inventory", Level.INFO);
     }
 
-    public VosiAvailabilityTest() 
-    { 
+    public VosiAvailabilityTest() {
         super(NegotiationTest.RAVEN_SERVICE_ID);
     }
 }

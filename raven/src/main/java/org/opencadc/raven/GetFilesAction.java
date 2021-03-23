@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2019.                            (c) 2019.
+*  (c) 2021.                            (c) 2021.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -65,76 +65,68 @@
 ************************************************************************
 */
 
-package org.opencadc.minoc;
+package org.opencadc.raven;
 
-import ca.nrc.cadc.date.DateUtil;
-import ca.nrc.cadc.rest.SyncOutput;
-import java.text.DateFormat;
+import ca.nrc.cadc.net.ResourceNotFoundException;
+import ca.nrc.cadc.reg.Standards;
+import ca.nrc.cadc.vos.Direction;
+import ca.nrc.cadc.vos.Protocol;
+import ca.nrc.cadc.vos.Transfer;
+import ca.nrc.cadc.vos.VOS;
+import java.io.IOException;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.util.ArrayList;
+import java.util.List;
 import org.apache.log4j.Logger;
-import org.opencadc.inventory.Artifact;
-import org.opencadc.inventory.InventoryUtil;
-import org.opencadc.inventory.storage.StorageMetadata;
-import org.opencadc.permissions.ReadGrant;
 
 /**
- * Interface with storage and inventory to get the metadata of an artifact.
+ * Class to execute a "files" GET action.
  *
- * @author majorb
+ * @author adriand
  */
-public class HeadAction extends ArtifactAction {
-    
-    private static final Logger log = Logger.getLogger(HeadAction.class);
+public class GetFilesAction extends FilesAction {
+
+    private static final Logger log = Logger.getLogger(GetFilesAction.class);
 
     /**
      * Default, no-arg constructor.
      */
-    public HeadAction() {
+    public GetFilesAction() {
         super();
     }
 
     /**
-     * Return the artifact metadata as repsonse headers.
+     * GET redirect response to the URL of the first matching file location.
      */
     @Override
     public void doAction() throws Exception {
+        initAndAuthorize();
+        URL redirect = getFirstURL();
         
-        initAndAuthorize(ReadGrant.class);
+        // TODO: append optional params from syncInput
         
-        String txnID = syncInput.getHeader(PUT_TXN);
-        log.debug("transactionID: " + txnID);
-        Artifact artifact;
-        if (txnID != null) {
-            StorageMetadata sm = storageAdapter.getTransactionStatus(txnID);
-            artifact = new Artifact(sm.artifactURI, sm.getContentChecksum(), sm.contentLastModified, sm.getContentLength());
-            syncOutput.setHeader(PUT_TXN, txnID);
-            super.logInfo.setMessage("transaction: " + txnID);
-        } else {
-            artifact = getArtifact(artifactURI);
-        }
-        setHeaders(artifact, syncOutput);
-    }
-    
-    /**
-     * Set the HTTP response headers for an artifact.
-     * @param artifact The artifact with metadata
-     * @param syncOutput The target response
-     */
-    public static void setHeaders(Artifact artifact, SyncOutput syncOutput) {
-        syncOutput.setDigest(artifact.getContentChecksum());
-        syncOutput.setHeader("Content-Length", artifact.getContentLength());
-        
-        DateFormat df = DateUtil.getDateFormat(DateUtil.HTTP_DATE_FORMAT, DateUtil.GMT);
-        syncOutput.setHeader("Last-Modified", df.format(artifact.getContentLastModified()));
-
-        String filename = InventoryUtil.computeArtifactFilename(artifact.getURI());
-        syncOutput.setHeader("Content-Disposition", "attachment; filename=\"" + filename + "\"");
-
-        if (artifact.contentEncoding != null) {
-            syncOutput.setHeader("Content-Encoding", artifact.contentEncoding);
-        }
-        if (artifact.contentType != null) {
-            syncOutput.setHeader("Content-Type", artifact.contentType);
-        }
+        log.debug("redirect: " + redirect.toExternalForm());
+        syncOutput.setCode(HttpURLConnection.HTTP_SEE_OTHER);
+        syncOutput.setHeader("Location", redirect.toExternalForm());
     }
 
+
+    private URL getFirstURL() throws ResourceNotFoundException, IOException {
+        List<Protocol> plist = new ArrayList<Protocol>();
+        Protocol proto = new Protocol(VOS.PROTOCOL_HTTPS_GET);
+        // request already authorized, hence ask for anon security to get a pre-authorized URL
+        proto.setSecurityMethod(Standards.SECURITY_METHOD_ANON);
+        plist.add(proto);
+        Transfer transfer = new Transfer(artifactURI, Direction.pullFromVoSpace, plist);
+
+        ProtocolsGenerator pg = new ProtocolsGenerator(artifactDAO, publicKeyFile, privateKeyFile, user);
+        List<Protocol> protos = pg.getProtocols(transfer);
+        if (protos.isEmpty()) {
+            throw new ResourceNotFoundException("not available: " + artifactURI);
+        }
+
+        // for now return the first URL in the list
+        return new URL(protos.get(0).getEndpoint());
+    }
 }
