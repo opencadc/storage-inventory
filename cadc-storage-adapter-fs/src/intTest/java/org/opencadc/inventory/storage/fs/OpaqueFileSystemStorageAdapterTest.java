@@ -149,14 +149,19 @@ public class OpaqueFileSystemStorageAdapterTest extends StorageAdapterBasicTest 
     @Test
     public void testPutTransactionCommit() {
         try {
-            String dataString = "abcdefghijklmnopqrstuvwxyz";
+            String dataString = "abcdefghijklmnopqrstuvwxyz\n";
             byte[] data = dataString.getBytes();
             URI uri = URI.create("cadc:TEST/testPutTransactionCommit");
-            NewArtifact newArtifact = new NewArtifact(uri);
-            ByteArrayInputStream source = new ByteArrayInputStream(data);
+            final NewArtifact newArtifact = new NewArtifact(uri);
+            final ByteArrayInputStream source = new ByteArrayInputStream(data);
             
-            String transactionID = ofsAdapter.startTransaction(uri);
+            ofsAdapter.testDiag("init");
+
+            String transactionID = adapter.startTransaction(uri);
+            ofsAdapter.testDiag("start");
+            
             StorageMetadata meta = adapter.put(newArtifact, source, transactionID);
+            ofsAdapter.testDiag("put");
             
             Assert.assertNotNull(meta);
             
@@ -169,10 +174,12 @@ public class OpaqueFileSystemStorageAdapterTest extends StorageAdapterBasicTest 
             Assert.assertTrue("valid", meta2.isValid());
             Assert.assertNotNull("artifactURI", meta2.artifactURI);
             
-            StorageMetadata meta3 = ofsAdapter.commitTransaction(transactionID);
+            StorageMetadata meta3 = adapter.commitTransaction(transactionID);
+            Assert.assertNotNull(meta3);
+            ofsAdapter.testDiag("commit");
             
             try {
-                StorageMetadata oldtxn = ofsAdapter.getTransactionStatus(transactionID);
+                StorageMetadata oldtxn = adapter.getTransactionStatus(transactionID);
                 Assert.fail("expected ResourceNotFoundException, got: " + oldtxn);
             } catch (ResourceNotFoundException expected) {
                 log.info("caught expected: " + expected);
@@ -200,14 +207,19 @@ public class OpaqueFileSystemStorageAdapterTest extends StorageAdapterBasicTest 
     @Test
     public void testPutTransactionAbort() {
         try {
-            String dataString = "abcdefghijklmnopqrstuvwxyz";
+            String dataString = "abcdefghijklmnopqrstuvwxyz\n";
             byte[] data = dataString.getBytes();
             URI uri = URI.create("cadc:TEST/testPutTransactionAbort");
-            NewArtifact newArtifact = new NewArtifact(uri);
-            ByteArrayInputStream source = new ByteArrayInputStream(data);
+            final NewArtifact newArtifact = new NewArtifact(uri);
+            final ByteArrayInputStream source = new ByteArrayInputStream(data);
+            
+            ofsAdapter.testDiag("init");
             
             String transactionID = ofsAdapter.startTransaction(uri);
+            ofsAdapter.testDiag("start");
+            
             StorageMetadata meta = adapter.put(newArtifact, source, transactionID);
+            ofsAdapter.testDiag("put");
             
             Assert.assertNotNull(meta);
             
@@ -221,6 +233,7 @@ public class OpaqueFileSystemStorageAdapterTest extends StorageAdapterBasicTest 
             Assert.assertNotNull("artifactURI", meta2.artifactURI);
             
             ofsAdapter.abortTransaction(transactionID);
+            ofsAdapter.testDiag("abort");
             
             try {
                 StorageMetadata oldtxn = ofsAdapter.getTransactionStatus(transactionID);
@@ -242,6 +255,90 @@ public class OpaqueFileSystemStorageAdapterTest extends StorageAdapterBasicTest 
         }
     }
     
+    @Test
+    public void testPutResumeCommit() {
+        try {
+            String dataString1 = "abcdefghijklmnopqrstuvwxyz\n";
+            String dataString2 = "ABCDEFGHIJKLMNOPQRSTUVWXYZ\n";
+            String dataString = dataString1 + dataString2;
+            MessageDigest md = MessageDigest.getInstance("MD5");
+            byte[] data = dataString.getBytes();
+            md.update(data);
+            URI expectedChecksum = URI.create("md5:" + HexUtil.toHex(md.digest()));
+            long expectedLength = data.length;
+            
+            URI uri = URI.create("cadc:TEST/testPutTransactionCommit");
+            NewArtifact newArtifact = new NewArtifact(uri);
+            newArtifact.contentChecksum = expectedChecksum;
+            newArtifact.contentLength = expectedLength;
+            
+            ofsAdapter.testDiag("init");
+            
+            String transactionID = ofsAdapter.startTransaction(uri);
+            ofsAdapter.testDiag("start");
+            
+            // write part 1
+            data = dataString1.getBytes();
+            ByteArrayInputStream source = new ByteArrayInputStream(data);
+            StorageMetadata meta1 = adapter.put(newArtifact, source, transactionID);
+            Assert.assertNotNull(meta1);
+            Assert.assertEquals("length", data.length, meta1.getContentLength().longValue());
+            ofsAdapter.testDiag("put 1");
+            
+            // check txn status
+            StorageMetadata txnMeta = adapter.getTransactionStatus(transactionID);
+            log.info("after write part 1: " + txnMeta + " in " + transactionID);
+            Assert.assertNotNull(txnMeta);
+            Assert.assertTrue("valid", txnMeta.isValid());
+            Assert.assertNotNull("artifactURI", txnMeta.artifactURI);
+            Assert.assertEquals("length", data.length, txnMeta.getContentLength().longValue());
+
+            // write part 2            
+            data = dataString2.getBytes();
+            source = new ByteArrayInputStream(data);
+            StorageMetadata meta2 = adapter.put(newArtifact, source, transactionID);
+            Assert.assertNotNull(meta2);
+            Assert.assertEquals("length", expectedLength, meta2.getContentLength().longValue());
+            ofsAdapter.testDiag("put 2");
+            
+            // check txn status
+            txnMeta = adapter.getTransactionStatus(transactionID);
+            log.info("after write part 2: " + txnMeta + " in " + transactionID);
+            Assert.assertNotNull(txnMeta);
+            Assert.assertTrue("valid", txnMeta.isValid());
+            Assert.assertNotNull("artifactURI", txnMeta.artifactURI);
+            Assert.assertEquals("length", expectedLength, meta2.getContentLength().longValue());
+            
+            StorageMetadata finalMeta = adapter.commitTransaction(transactionID);
+            ofsAdapter.testDiag("commit");
+            
+            try {
+                StorageMetadata oldtxn = adapter.getTransactionStatus(transactionID);
+                Assert.fail("expected ResourceNotFoundException, got: " + oldtxn);
+            } catch (ResourceNotFoundException expected) {
+                log.info("caught expected: " + expected);
+            }
+            
+            // get to verify
+            ByteArrayOutputStream bos = new ByteArrayOutputStream();
+            adapter.get(finalMeta.getStorageLocation(), bos);
+            byte[] actual = bos.toByteArray();
+            md.reset();
+            md.update(actual);
+            URI actualChecksum = URI.create("md5:" + HexUtil.toHex(md.digest()));
+            log.info("testPutTransactionCommit get: " + actual.length + " " + actualChecksum);
+            Assert.assertEquals("length", expectedLength, actual.length);
+            Assert.assertEquals("length", finalMeta.getContentLength().longValue(), actual.length);
+            Assert.assertEquals("checksum", finalMeta.getContentChecksum(), actualChecksum);
+            Assert.assertEquals("checksum", expectedChecksum, actualChecksum);
+
+            // delete
+            //adapter.delete(finalMeta.getStorageLocation());
+        } catch (Exception unexpected) {
+            log.error("unexpected exception", unexpected);
+            Assert.fail("unexpected exception: " + unexpected);
+        }
+    }
     // the code currently works correctly if you put files with different storageBucket depths
     // but it is probably a bad idea because you mix bucket directories and files and thus have
     // arbitrary sized directory listings to sort

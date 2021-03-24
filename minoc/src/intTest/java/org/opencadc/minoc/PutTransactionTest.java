@@ -72,11 +72,13 @@ import ca.nrc.cadc.net.HttpDelete;
 import ca.nrc.cadc.net.HttpGet;
 import ca.nrc.cadc.net.HttpTransfer;
 import ca.nrc.cadc.net.HttpUpload;
+import ca.nrc.cadc.util.HexUtil;
 import ca.nrc.cadc.util.Log4jInit;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.net.URI;
 import java.net.URL;
+import java.security.MessageDigest;
 import javax.security.auth.Subject;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
@@ -107,6 +109,11 @@ public class PutTransactionTest extends MinocTest {
             String content = "abcdefghijklmnopqrstuvwxyz";
             byte[] data = content.getBytes();
             
+            MessageDigest md = MessageDigest.getInstance("MD5");
+            md.update(data);
+            final URI expectedChecksum = URI.create("md5:" + HexUtil.toHex(md.digest()));
+            final long expectedLength = data.length;
+            
             // delete to be safe
             HttpDelete delete = new HttpDelete(artifactURL, false);
             Subject.doAs(userSubject, new RunnableAction(delete));
@@ -118,12 +125,18 @@ public class PutTransactionTest extends MinocTest {
             Subject.doAs(userSubject, new RunnableAction(put));
             Assert.assertNull(put.getThrowable());
             Assert.assertEquals("Accepted", 202, put.getResponseCode());
-            Assert.assertNotNull("digest", put.getResponseHeader(HttpTransfer.CONTENT_MD5));
+            Assert.assertNotNull("digest", put.getResponseHeader(HttpTransfer.DIGEST));
             Assert.assertNotNull("length", put.getResponseHeader(HttpTransfer.CONTENT_LENGTH));
             String txnID = put.getResponseHeader(ArtifactAction.PUT_TXN);
             Assert.assertNotNull("txnID", txnID);
             log.info("transactionID " + txnID);
-
+            
+            URI actualChecksum = put.getDigest();
+            long actualLength = put.getContentLength();
+            Assert.assertNotNull("contentChecksum", actualChecksum);
+            Assert.assertEquals("contentChecksum", expectedChecksum, actualChecksum);
+            Assert.assertEquals("contentlength", expectedLength, actualLength);
+            
             // head
             HttpGet head = new HttpGet(artifactURL, true);
             head.setHeadOnly(true);
@@ -137,8 +150,14 @@ public class PutTransactionTest extends MinocTest {
             Subject.doAs(userSubject, new RunnableAction(head));
             Assert.assertEquals("found transaction", 200, head.getResponseCode());
             Assert.assertEquals("txnID", txnID, head.getResponseHeader(ArtifactAction.PUT_TXN));
-            Assert.assertNotNull("digest", head.getResponseHeader(HttpTransfer.CONTENT_MD5));
+            Assert.assertNotNull("digest", head.getResponseHeader(HttpTransfer.DIGEST));
             Assert.assertNotNull("length", head.getResponseHeader(HttpTransfer.CONTENT_LENGTH));
+            
+            actualChecksum = head.getDigest();
+            actualLength = head.getContentLength();
+            Assert.assertNotNull("contentChecksum", actualChecksum);
+            Assert.assertEquals("contentChecksum", expectedChecksum, actualChecksum);
+            Assert.assertEquals("contentlength", expectedLength, actualLength);
 
             // commit
             in = new ByteArrayInputStream(new byte[0]);
@@ -148,8 +167,14 @@ public class PutTransactionTest extends MinocTest {
             Subject.doAs(userSubject, new RunnableAction(put));
             Assert.assertNull(put.getThrowable());
             Assert.assertEquals("Created", 201, put.getResponseCode());
-            Assert.assertNotNull("digest", put.getResponseHeader(HttpTransfer.CONTENT_MD5));
+            Assert.assertNotNull("digest", put.getResponseHeader(HttpTransfer.DIGEST));
             Assert.assertNotNull("length", put.getResponseHeader(HttpTransfer.CONTENT_LENGTH));
+            
+            actualChecksum = put.getDigest();
+            actualLength = put.getContentLength();
+            Assert.assertNotNull("contentChecksum", actualChecksum);
+            Assert.assertEquals("contentChecksum", expectedChecksum, actualChecksum);
+            Assert.assertEquals("contentlength", expectedLength, actualLength);
             
             // head in txn
             head = new HttpGet(artifactURL, true);
@@ -164,8 +189,14 @@ public class PutTransactionTest extends MinocTest {
             Subject.doAs(userSubject, new RunnableAction(head));
             Assert.assertEquals("found committed", 200, head.getResponseCode());
             Assert.assertNull("no txn header", head.getResponseHeader(ArtifactAction.PUT_TXN));
-            Assert.assertNotNull("digest", head.getResponseHeader(HttpTransfer.CONTENT_MD5));
+            Assert.assertNotNull("digest", head.getResponseHeader(HttpTransfer.DIGEST));
             Assert.assertNotNull("length", head.getResponseHeader(HttpTransfer.CONTENT_LENGTH));
+            
+            actualChecksum = head.getDigest();
+            actualLength = head.getContentLength();
+            Assert.assertNotNull("contentChecksum", actualChecksum);
+            Assert.assertEquals("contentChecksum", expectedChecksum, actualChecksum);
+            Assert.assertEquals("contentlength", expectedLength, actualLength);
             
             // delete
             delete = new HttpDelete(artifactURL, false);
@@ -177,7 +208,7 @@ public class PutTransactionTest extends MinocTest {
             Assert.fail("unexpected throwable: " + t);
         }
     }
-    
+
     @Test
     public void testPutAbort() {
         try {
@@ -235,4 +266,136 @@ public class PutTransactionTest extends MinocTest {
             Assert.fail("unexpected throwable: " + t);
         }
     }
+
+    @Test
+    public void testPutMultiPartCommit() {
+        try {
+            URI artifactURI = URI.create("cadc:TEST/testPutMultiPartCommit");
+            URL artifactURL = new URL(filesURL + "/" + artifactURI.toString());
+
+            String content1 = "abcdefghijklmnopqrstuvwxyz\n";
+            String content2 = "ABCDEFGHIJKLMNOPQRSTUVWXYZ\n";
+            String content = content1 + content2;
+            
+            byte[] data = content.getBytes();
+            MessageDigest md = MessageDigest.getInstance("MD5");
+            md.update(data);
+            final URI expectedChecksum = URI.create("md5:" + HexUtil.toHex(md.digest()));
+            final long expectedLength = data.length;
+            
+            // delete to be safe
+            HttpDelete delete = new HttpDelete(artifactURL, false);
+            Subject.doAs(userSubject, new RunnableAction(delete));
+            
+            // put part 1 with txn
+            data = content1.getBytes();
+            md.reset();
+            md.update(data);
+            final URI expectedChecksum1 = URI.create("md5:" + HexUtil.toHex(md.digest()));
+            final long expectedLength1 = data.length;
+            InputStream in = new ByteArrayInputStream(data);
+            HttpUpload put = new HttpUpload(in, artifactURL);
+            put.setRequestProperty(ArtifactAction.PUT_TXN, "true");
+            Subject.doAs(userSubject, new RunnableAction(put));
+            Assert.assertNull(put.getThrowable());
+            Assert.assertEquals("Accepted", 202, put.getResponseCode());
+            Assert.assertNotNull("digest", put.getResponseHeader(HttpTransfer.DIGEST));
+            Assert.assertNotNull("length", put.getResponseHeader(HttpTransfer.CONTENT_LENGTH));
+            String txnID = put.getResponseHeader(ArtifactAction.PUT_TXN);
+            Assert.assertNotNull("txnID", txnID);
+            log.info("transactionID " + txnID);
+            
+            URI actualChecksum = put.getDigest();
+            long actualLength = put.getContentLength();
+            Assert.assertNotNull("contentChecksum", actualChecksum);
+            Assert.assertEquals("contentChecksum", expectedChecksum1, actualChecksum);
+            Assert.assertEquals("contentlength", expectedLength1, actualLength);
+
+            // head
+            HttpGet head = new HttpGet(artifactURL, true);
+            head.setHeadOnly(true);
+            Subject.doAs(userSubject, new RunnableAction(head));
+            Assert.assertEquals("not found", 404, head.getResponseCode());
+
+            // head in txn
+            head = new HttpGet(artifactURL, true);
+            head.setHeadOnly(true);
+            head.setRequestProperty(ArtifactAction.PUT_TXN, txnID);
+            Subject.doAs(userSubject, new RunnableAction(head));
+            Assert.assertEquals("found transaction", 200, head.getResponseCode());
+            Assert.assertEquals("txnID", txnID, head.getResponseHeader(ArtifactAction.PUT_TXN));
+            Assert.assertNotNull("digest", head.getResponseHeader(HttpTransfer.DIGEST));
+            Assert.assertNotNull("length", head.getResponseHeader(HttpTransfer.CONTENT_LENGTH));
+            actualChecksum = head.getDigest();
+            actualLength = head.getContentLength();
+            Assert.assertNotNull("contentChecksum", actualChecksum);
+            Assert.assertEquals("contentChecksum", expectedChecksum1, actualChecksum);
+            Assert.assertEquals("contentlength", expectedLength1, actualLength);
+
+            // put part 2 with txn
+            data = content2.getBytes();
+            in = new ByteArrayInputStream(data);
+            put = new HttpUpload(in, artifactURL);
+            put.setRequestProperty(ArtifactAction.PUT_TXN, txnID);
+            Subject.doAs(userSubject, new RunnableAction(put));
+            Assert.assertNull(put.getThrowable());
+            Assert.assertEquals("Accepted", 202, put.getResponseCode());
+            Assert.assertNotNull("digest", put.getResponseHeader(HttpTransfer.DIGEST));
+            Assert.assertNotNull("length", put.getResponseHeader(HttpTransfer.CONTENT_LENGTH));
+            
+            actualChecksum = put.getDigest();
+            actualLength = put.getContentLength();
+            Assert.assertNotNull("contentChecksum", actualChecksum);
+            Assert.assertEquals("contentChecksum", expectedChecksum, actualChecksum);
+            Assert.assertEquals("contentlength", expectedLength, actualLength);
+            
+            // commit
+            in = new ByteArrayInputStream(new byte[0]);
+            put = new HttpUpload(in, artifactURL);
+            put.setRequestProperty(HttpTransfer.CONTENT_LENGTH, "0");
+            put.setRequestProperty(ArtifactAction.PUT_TXN,txnID);
+            Subject.doAs(userSubject, new RunnableAction(put));
+            Assert.assertNull(put.getThrowable());
+            Assert.assertEquals("Created", 201, put.getResponseCode());
+            Assert.assertNotNull("digest", put.getResponseHeader(HttpTransfer.DIGEST));
+            Assert.assertNotNull("length", put.getResponseHeader(HttpTransfer.CONTENT_LENGTH));
+            
+            actualChecksum = put.getDigest();
+            actualLength = put.getContentLength();
+            Assert.assertNotNull("contentChecksum", actualChecksum);
+            Assert.assertEquals("contentChecksum", expectedChecksum, actualChecksum);
+            Assert.assertEquals("contentlength", expectedLength, actualLength);
+            
+            // head in txn
+            head = new HttpGet(artifactURL, true);
+            head.setHeadOnly(true);
+            head.setRequestProperty(ArtifactAction.PUT_TXN, txnID);
+            Subject.doAs(userSubject, new RunnableAction(head));
+            Assert.assertEquals("no more txn", 404, head.getResponseCode());
+            
+            // head
+            head = new HttpGet(artifactURL, true);
+            head.setHeadOnly(true);
+            Subject.doAs(userSubject, new RunnableAction(head));
+            Assert.assertEquals("found committed", 200, head.getResponseCode());
+            Assert.assertNull("no txn header", head.getResponseHeader(ArtifactAction.PUT_TXN));
+            Assert.assertNotNull("digest", head.getResponseHeader(HttpTransfer.DIGEST));
+            Assert.assertNotNull("length", head.getResponseHeader(HttpTransfer.CONTENT_LENGTH));
+            actualChecksum = head.getDigest();
+            actualLength = head.getContentLength();
+            Assert.assertNotNull("contentChecksum", actualChecksum);
+            Assert.assertEquals("contentChecksum", expectedChecksum, actualChecksum);
+            Assert.assertEquals("contentlength", expectedLength, actualLength);
+            
+            // delete
+            delete = new HttpDelete(artifactURL, false);
+            Subject.doAs(userSubject, new RunnableAction(delete));
+            Assert.assertNull(delete.getThrowable());
+            Assert.assertEquals("deleted", 204, delete.getResponseCode());
+        } catch (Exception t) {
+            log.error("unexpected throwable", t);
+            Assert.fail("unexpected throwable: " + t);
+        }
+    }
+
 }

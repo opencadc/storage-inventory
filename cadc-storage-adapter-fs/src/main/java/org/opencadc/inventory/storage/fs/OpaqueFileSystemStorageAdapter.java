@@ -72,6 +72,7 @@ import ca.nrc.cadc.io.ReadException;
 import ca.nrc.cadc.io.WriteException;
 import ca.nrc.cadc.net.IncorrectContentChecksumException;
 import ca.nrc.cadc.net.IncorrectContentLengthException;
+import ca.nrc.cadc.net.PreconditionFailedException;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.util.HexUtil;
@@ -99,9 +100,12 @@ import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.UserDefinedFileAttributeView;
 import java.security.DigestOutputStream;
 import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.Date;
 import java.util.Iterator;
+import java.util.Map;
 import java.util.SortedSet;
+import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.UUID;
 import org.apache.log4j.Logger;
@@ -156,6 +160,9 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
     private static final int CIRC_BUFFERS = 3;
     private static final int CIRC_BUFFERSIZE = 64 * 1024;
 
+    // temporary hack to store intermediate digest state: cannot work across multiple JVMs aka with load balanced deployment
+    private static final Map<String,MessageDigest> txnDigestStore = new TreeMap<>();
+    
     final Path txnPath;
     final Path contentPath;
     private final int bucketLength;
@@ -215,6 +222,13 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
         init(root);
     }
 
+    void testDiag(String s) {
+        log.warn(s + " - DIGEST_CACHE size: " + txnDigestStore.size());
+        for (String key : txnDigestStore.keySet()) {
+            log.warn(s + " - open transaction: " + key);
+        }
+    }
+    
     private void init(Path root) {
         try {
             if (!Files.isDirectory(root)) {
@@ -369,13 +383,15 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
         InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "source", source);
 
         Path txnTarget;
+        MessageDigest txnDigest;
         try {
             boolean joinExisting = false;
             if (transactionID != null) {
                 // validate
                 UUID.fromString(transactionID);
                 txnTarget = txnPath.resolve(transactionID);
-                if (!Files.exists(txnTarget)) {
+                txnDigest = txnDigestStore.get(transactionID);
+                if (!Files.exists(txnTarget) || txnDigest == null) {
                     throw new IllegalArgumentException("unknown transaction: " + transactionID);
                 }
                 // TODO check that artifact URI matches stored attr
@@ -383,6 +399,7 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
             } else {
                 String tmp = UUID.randomUUID().toString();
                 txnTarget = txnPath.resolve(tmp);
+                txnDigest = MessageDigest.getInstance("MD5");
             }
 
             if (!joinExisting && Files.exists(txnTarget)) {
@@ -391,8 +408,10 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
             }
         } catch (InvalidPathException e) {
             throw new RuntimeException("BUG: invalid path: " + txnPath, e);
+        } catch (NoSuchAlgorithmException ex) {
+            throw new RuntimeException("Unexpected error", ex);
         }
-        log.warn("transaction: " + txnTarget.toString() + " transactionID: " + transactionID);
+        log.warn("transaction: " + txnTarget + " transactionID: " + transactionID);
         
         Throwable throwable = null;
         URI checksum = null;
@@ -403,48 +422,38 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
             if (transactionID != null) {
                 opt = StandardOpenOption.APPEND;
             }
-            DigestOutputStream out = new DigestOutputStream(Files.newOutputStream(txnTarget, StandardOpenOption.WRITE, opt), 
-                MessageDigest.getInstance("MD5"));
+            DigestOutputStream out = new DigestOutputStream(Files.newOutputStream(txnTarget, StandardOpenOption.WRITE, opt), txnDigest);
             MultiBufferIO io = new MultiBufferIO();
             io.copy(source, out);
             out.flush();
 
-            String md5Val = HexUtil.toHex(out.getMessageDigest().digest());
+            final MessageDigest md = out.getMessageDigest();
+            // clone so we can persist the current state for resume
+            MessageDigest curMD = (MessageDigest) md.clone();
+            String md5Val = HexUtil.toHex(curMD.digest());
             checksum = URI.create(MD5_CHECKSUM_SCHEME + ":" + md5Val);
-            log.debug("calculated md5sum: " + checksum);
+            log.debug("calculated checksum: " + checksum);
             length = Files.size(txnTarget);
             log.debug("calculated file size: " + length);
             
-            boolean checksumProvided = newArtifact.contentChecksum != null && newArtifact.contentChecksum.getScheme().equals(MD5_CHECKSUM_SCHEME);
-            // checksum comparison
-            if (checksumProvided) {
-                String expectedMD5 = newArtifact.contentChecksum.getSchemeSpecificPart();
-                String actualMD5 = checksum.getSchemeSpecificPart();
-                if (!expectedMD5.equals(actualMD5)) {
-                    throw new IncorrectContentChecksumException(
-                        "expected md5 checksum [" + expectedMD5 + "] "
-                        + "but calculated [" + actualMD5 + "]");
-                }
+            if (transactionID != null && (newArtifact.contentLength == null || length < newArtifact.contentLength)) {
+                // incomplete: no further content checks
+                log.debug("incomplete put in transaction: " + transactionID + " - not verifying checksum");
             } else {
-                log.debug("Uncomparable or no contentChecksum provided.");
-            }
-            
-            // content length comparison
-            if (newArtifact.contentLength != null) {
-                Long expectedLength = newArtifact.contentLength;
-                if (!expectedLength.equals(length)) {
+                boolean checksumProvided = newArtifact.contentChecksum != null && newArtifact.contentChecksum.getScheme().equals(MD5_CHECKSUM_SCHEME);
+                if (checksumProvided) {
+                    if (!newArtifact.contentChecksum.equals(checksum)) {
+                        throw new IncorrectContentChecksumException(newArtifact.contentChecksum + " != " + checksum);
+                    }
+                }
+                if (newArtifact.contentLength != null && !newArtifact.contentLength.equals(length)) {
                     if (checksumProvided) {
                         // likely bug in the client, throw a 400 instead
-                        throw new IllegalArgumentException("correct md5 checksum ["
-                            + newArtifact.contentChecksum + "] but incorrect length ["
-                            + expectedLength + "]");
+                        throw new IllegalArgumentException("length mismatch: " + newArtifact.contentLength + " != " + length
+                            + " when checksum was correct: client BUG?");
                     }
-                    throw new IncorrectContentLengthException(
-                        "expected contentLength [" + expectedLength + "] "
-                        + "but calculated [" + length + "]");
+                    throw new IncorrectContentLengthException(newArtifact.contentLength + " != " + length);
                 }
-            } else {
-                log.debug("No contentLength provided.");
             }
 
             // Set file attributes that must be recovered in iterator
@@ -456,6 +465,7 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
             if (transactionID != null) {
                 log.warn("transaction uncommitted: " + transactionID + " " + storageLocation);
                 // transaction will continue
+                txnDigestStore.put(transactionID, md);
                 StorageMetadata metadata = new StorageMetadata(storageLocation, checksum, length);
                 return metadata;
             }
@@ -479,7 +489,7 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
                 throw new StorageEngageException("put error", throwable);
             }
             // TODO: identify throwables that are transient
-            throw new IllegalStateException("Unexpected error", throwable);
+            throw new RuntimeException("Unexpected error", throwable);
         } finally {
             // txnTarget file still exists and not in a transaction: something went wrong
             if (txnTarget != null && transactionID == null) {
@@ -497,15 +507,24 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
     public String startTransaction(URI artifactURI) throws StorageEngageException, TransientException {
         InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "artifactURI", artifactURI);
         try {
-            String storageID = UUID.randomUUID().toString();
-            Path txnTarget = txnPath.resolve(storageID);
+            String transactionID = UUID.randomUUID().toString();
+            Path txnTarget = txnPath.resolve(transactionID);
             OutputStream  ostream = Files.newOutputStream(txnTarget, StandardOpenOption.WRITE, StandardOpenOption.CREATE_NEW);
             ostream.close();
-            setFileAttribute(txnTarget, CHECKSUM_ATTR, "md5:d41d8cd98f00b204e9800998ecf8427e");
+            
+            MessageDigest md = MessageDigest.getInstance("MD5");
+            MessageDigest curMD = (MessageDigest) md.clone();
+            String md5Val = HexUtil.toHex(curMD.digest());
+            URI checksum = URI.create(MD5_CHECKSUM_SCHEME + ":" + md5Val);
+            txnDigestStore.put(transactionID, md);
+            
+            setFileAttribute(txnTarget, CHECKSUM_ATTR, checksum.toASCIIString());
             setFileAttribute(txnTarget, ARTIFACTID_ATTR, artifactURI.toASCIIString());
-            return storageID;
+            return transactionID;
         } catch (IOException ex) {
             throw new StorageEngageException("failed to create transaction", ex);
+        } catch (CloneNotSupportedException | NoSuchAlgorithmException ex) {
+            throw new RuntimeException("BUG", ex);
         }
     }
     
@@ -516,6 +535,7 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
             Path txnTarget = txnPath.resolve(transactionID);
             if (Files.exists(txnPath)) {
                 Files.delete(txnTarget);
+                txnDigestStore.remove(transactionID);
             } else {
                 throw new ResourceNotFoundException("unknown transaction: " + transactionID);
             }
@@ -549,7 +569,10 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
         throws ResourceNotFoundException, StorageEngageException, TransientException {
         StorageMetadata metadata = getTransactionStatus(transactionID);
         Path txnTarget = txnPath.resolve(transactionID); // again
-        return commit(metadata, txnTarget);
+        
+        StorageMetadata ret = commit(metadata, txnTarget);
+        txnDigestStore.remove(transactionID);
+        return ret;
     }
     
     private StorageMetadata commit(StorageMetadata sm, Path txnTarget) throws StorageEngageException {
