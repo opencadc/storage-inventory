@@ -638,18 +638,16 @@ public class BucketValidator implements ValidateEventListener {
                               storageMetadata.getStorageLocation().getStorageID().toASCIIString(),
                               storageMetadata.artifactURI.toASCIIString()), e);
         }
-        if (obsoleteStorageLocation != null && canTakeAction()) {
-            try {
-                delete(storageMetadata);
-                this.obsoleteStorageLocationDAO.delete(obsoleteStorageLocation.getID());
-                LOGGER.info(String.format("deleted obsolete file %s at %s",
-                                          storageMetadata.artifactURI.toASCIIString(),
-                                          obsoleteStorageLocation.getLocation().getStorageID().toASCIIString()));
-            } catch (Exception e) {
-                LOGGER.error(String.format("delete failed for obsolete file %s at %s",
-                                           storageMetadata.artifactURI.toASCIIString(),
-                                           obsoleteStorageLocation.getLocation().getStorageID().toASCIIString()),
-                             e);
+        if (obsoleteStorageLocation != null) {
+            LOGGER.info(String.format("delete obsolete object: %s (was: %s)", obsoleteStorageLocation,
+                                      storageMetadata.artifactURI.toASCIIString()));
+            if (canTakeAction()) {
+                try {
+                    delete(storageMetadata);
+                    this.obsoleteStorageLocationDAO.delete(obsoleteStorageLocation.getID());
+                } catch (Exception e) {
+                    throw new IllegalStateException("failed to cleanup obsolete " + obsoleteStorageLocation, e);
+                }
             }
         }
         return obsoleteStorageLocation != null;
