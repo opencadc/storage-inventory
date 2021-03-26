@@ -424,17 +424,36 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
             }
             DigestOutputStream out = new DigestOutputStream(Files.newOutputStream(txnTarget, StandardOpenOption.WRITE, opt), txnDigest);
             MultiBufferIO io = new MultiBufferIO();
-            io.copy(source, out);
-            out.flush();
+            if (transactionID != null) {
+                try {
+                    io.copy(source, out);
+                    out.flush();
+                } catch (ReadException ex) {
+                    length = Files.size(txnTarget);
+                    if (length == 0L) {
+                        log.warn("abort transactionID " + transactionID + " after failed input (no bytes): " + ex);
+                        abortTransaction(transactionID);
+                        throw ex;
+                    }
+                    log.warn("proceeding with transaction " + transactionID + " after failed input (" + length + " bytes): " + ex);
+                } catch (WriteException ex) {
+                    log.warn("abort transactionID " + transactionID + " after failed write to back end: ", ex);
+                    abortTransaction(transactionID);
+                    throw ex;
+                }
+            } else {
+                io.copy(source, out);
+                out.flush();
+            }
 
             final MessageDigest md = out.getMessageDigest();
             // clone so we can persist the current state for resume
             MessageDigest curMD = (MessageDigest) md.clone();
             String md5Val = HexUtil.toHex(curMD.digest());
             checksum = URI.create(MD5_CHECKSUM_SCHEME + ":" + md5Val);
-            log.debug("calculated checksum: " + checksum);
+            log.warn("current checksum: " + checksum);
             length = Files.size(txnTarget);
-            log.debug("calculated file size: " + length);
+            log.warn("current file size: " + length);
             
             if (transactionID != null && (newArtifact.contentLength == null || length < newArtifact.contentLength)) {
                 // incomplete: no further content checks
@@ -466,8 +485,10 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
                 log.warn("transaction uncommitted: " + transactionID + " " + storageLocation);
                 // transaction will continue
                 txnDigestStore.put(transactionID, md);
-                StorageMetadata metadata = new StorageMetadata(storageLocation, checksum, length);
-                return metadata;
+                if (length == 0L) {
+                    return new StorageMetadata(storageLocation);
+                }
+                return new StorageMetadata(storageLocation, checksum, length);
             }
 
             // create this before committing the file so constraints applied

@@ -67,6 +67,7 @@
 
 package org.opencadc.inventory.storage.fs;
 
+import ca.nrc.cadc.io.ReadException;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.util.HexUtil;
 import ca.nrc.cadc.util.Log4jInit;
@@ -74,6 +75,7 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.URI;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
@@ -127,7 +129,7 @@ public class OpaqueFileSystemStorageAdapterTest extends StorageAdapterBasicTest 
     
     @Before
     public void cleanupBefore() throws IOException {
-        log.info("cleanupBefore: delete all content from " + ofsAdapter.contentPath);
+        log.info("cleanupBefore: " + ofsAdapter.contentPath.getParent());
         if (Files.exists(ofsAdapter.contentPath)) {
             Files.walkFileTree(ofsAdapter.contentPath, new SimpleFileVisitor<Path>() {
                 @Override
@@ -138,12 +140,23 @@ public class OpaqueFileSystemStorageAdapterTest extends StorageAdapterBasicTest 
 
                 @Override
                 public FileVisitResult postVisitDirectory(Path dir, IOException exc) throws IOException {
-                    Files.delete(dir);
+                    if (!ofsAdapter.contentPath.equals(dir)) {
+                        Files.delete(dir);
+                    }
                     return FileVisitResult.CONTINUE;
                 }
             });
         }
-        log.info("cleanupBefore: delete all content from " + ofsAdapter.contentPath + " DONE");
+        if (Files.exists(ofsAdapter.txnPath)) {
+            Files.walkFileTree(ofsAdapter.txnPath, new SimpleFileVisitor<Path>() {
+                @Override
+                public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+                    Files.delete(file);
+                    return FileVisitResult.CONTINUE;
+                }
+            });
+        }
+        log.info("cleanupBefore: " + ofsAdapter.contentPath.getParent() + " DONE");
     }
     
     @Test
@@ -333,12 +346,163 @@ public class OpaqueFileSystemStorageAdapterTest extends StorageAdapterBasicTest 
             Assert.assertEquals("checksum", expectedChecksum, actualChecksum);
 
             // delete
+            adapter.delete(finalMeta.getStorageLocation());
+        } catch (Exception unexpected) {
+            log.error("unexpected exception", unexpected);
+            Assert.fail("unexpected exception: " + unexpected);
+        }
+    }
+    
+    @Test
+    public void testPut_ReadFailFast_AutoAbort() {
+        try {
+            String dataString1 = "abcdefghijklmnopqrstuvwxyz\n";
+            String dataString2 = "ABCDEFGHIJKLMNOPQRSTUVWXYZ\n";
+            String dataString = dataString1 + dataString2;
+            MessageDigest md = MessageDigest.getInstance("MD5");
+            byte[] data = dataString.getBytes();
+            md.update(data);
+            URI expectedChecksum = URI.create("md5:" + HexUtil.toHex(md.digest()));
+            long expectedLength = data.length;
+            
+            URI uri = URI.create("cadc:TEST/testPutFastFailAutoAbort");
+            NewArtifact newArtifact = new NewArtifact(uri);
+            newArtifact.contentChecksum = expectedChecksum;
+            newArtifact.contentLength = expectedLength;
+            
+            String transactionID = ofsAdapter.startTransaction(uri);
+            
+            // write 
+            data = dataString.getBytes();
+            InputStream source = getFailingInput(0, data); // throw after 0 bytes
+            try {
+                StorageMetadata meta1 = adapter.put(newArtifact, source, transactionID);
+                Assert.fail("expected ReadException, got: " + meta1);
+            } catch (ReadException expected) {
+                log.info("caught expected: " + expected);
+            }
+            
+            try {
+                StorageMetadata oldtxn = adapter.getTransactionStatus(transactionID);
+                Assert.fail("expected ResourceNotFoundException, got: " + oldtxn);
+            } catch (ResourceNotFoundException expected) {
+                log.info("caught expected: " + expected);
+            }
+            
+        } catch (Exception unexpected) {
+            log.error("unexpected exception", unexpected);
+            Assert.fail("unexpected exception: " + unexpected);
+        }
+    }
+
+    @Test
+    public void testPutFailResumeCommit() {
+        try {
+            String dataString1 = "abcdefghijklmnopqrstuvwxyz\n";
+            String dataString2 = "ABCDEFGHIJKLMNOPQRSTUVWXYZ\n";
+            String dataString = dataString1 + dataString2;
+            MessageDigest md = MessageDigest.getInstance("MD5");
+            byte[] data = dataString.getBytes();
+            md.update(data);
+            URI expectedChecksum = URI.create("md5:" + HexUtil.toHex(md.digest()));
+            long expectedLength = data.length;
+            
+            URI uri = URI.create("cadc:TEST/testPutTransactionCommit");
+            NewArtifact newArtifact = new NewArtifact(uri);
+            newArtifact.contentChecksum = expectedChecksum;
+            newArtifact.contentLength = expectedLength;
+            
+            ofsAdapter.testDiag("init");
+            
+            String transactionID = ofsAdapter.startTransaction(uri);
+            ofsAdapter.testDiag("start");
+            
+            // write part 1
+            data = dataString1.getBytes();
+            InputStream source = new ByteArrayInputStream(data);
+            StorageMetadata meta1 = adapter.put(newArtifact, source, transactionID);
+            log.info("after write part 1: " + meta1 + " in " + transactionID);
+            Assert.assertNotNull(meta1);
+            Assert.assertEquals("length", data.length, meta1.getContentLength().longValue());
+            ofsAdapter.testDiag("put 1");
+            
+            // check txn status
+            StorageMetadata txnMeta = adapter.getTransactionStatus(transactionID);
+            log.info("txn status after write part 1: " + txnMeta + " in " + transactionID);
+            Assert.assertNotNull(txnMeta);
+            Assert.assertTrue("valid", txnMeta.isValid());
+            Assert.assertNotNull("artifactURI", txnMeta.artifactURI);
+            Assert.assertEquals("length", data.length, txnMeta.getContentLength().longValue());
+
+            // fail to write part 2
+            data = dataString2.getBytes();
+            source = getFailingInput(0, data);
+            StorageMetadata meta2 = adapter.put(newArtifact, source, transactionID);
+            log.info("after write part 2 fail: " + meta2 + " in " + transactionID);
+            Assert.assertNotNull(meta2);
+            Assert.assertEquals("length", txnMeta.getContentLength(), meta2.getContentLength());
+            ofsAdapter.testDiag("put 2 fail");
+            
+            // write part 2            
+            source = new ByteArrayInputStream(data);
+            StorageMetadata meta3 = adapter.put(newArtifact, source, transactionID);
+            Assert.assertNotNull(meta3);
+            Assert.assertEquals("length", expectedLength, meta3.getContentLength().longValue());
+            ofsAdapter.testDiag("put 2");
+            
+            // check txn status
+            txnMeta = adapter.getTransactionStatus(transactionID);
+            log.info("after write part 2: " + txnMeta + " in " + transactionID);
+            Assert.assertNotNull(txnMeta);
+            Assert.assertTrue("valid", txnMeta.isValid());
+            Assert.assertNotNull("artifactURI", txnMeta.artifactURI);
+            Assert.assertEquals("length", expectedLength, txnMeta.getContentLength().longValue());
+            
+            StorageMetadata finalMeta = adapter.commitTransaction(transactionID);
+            ofsAdapter.testDiag("commit");
+            
+            try {
+                StorageMetadata oldtxn = adapter.getTransactionStatus(transactionID);
+                Assert.fail("expected ResourceNotFoundException, got: " + oldtxn);
+            } catch (ResourceNotFoundException expected) {
+                log.info("caught expected: " + expected);
+            }
+            
+            // get to verify
+            ByteArrayOutputStream bos = new ByteArrayOutputStream();
+            adapter.get(finalMeta.getStorageLocation(), bos);
+            byte[] actual = bos.toByteArray();
+            md.reset();
+            md.update(actual);
+            URI actualChecksum = URI.create("md5:" + HexUtil.toHex(md.digest()));
+            log.info("testPutTransactionCommit get: " + actual.length + " " + actualChecksum);
+            Assert.assertEquals("length", expectedLength, actual.length);
+            Assert.assertEquals("length", finalMeta.getContentLength().longValue(), actual.length);
+            Assert.assertEquals("checksum", finalMeta.getContentChecksum(), actualChecksum);
+            Assert.assertEquals("checksum", expectedChecksum, actualChecksum);
+
+            // delete
             //adapter.delete(finalMeta.getStorageLocation());
         } catch (Exception unexpected) {
             log.error("unexpected exception", unexpected);
             Assert.fail("unexpected exception: " + unexpected);
         }
     }
+    
+    private InputStream getFailingInput(final int failAfter, final byte[] data) {
+        return new InputStream() {
+            int num = 0;
+            
+            @Override
+            public int read() throws IOException {
+                if (num >= failAfter) {
+                    throw new IOException("failAfter: " + failAfter);
+                }
+                return data[num++];
+            }
+        };
+    }
+    
     // the code currently works correctly if you put files with different storageBucket depths
     // but it is probably a bad idea because you mix bucket directories and files and thus have
     // arbitrary sized directory listings to sort
