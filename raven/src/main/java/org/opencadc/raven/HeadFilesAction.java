@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2020.                            (c) 2020.
+*  (c) 2021.                            (c) 2021.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -65,27 +65,57 @@
 ************************************************************************
 */
 
-package org.opencadc.fenwick;
+package org.opencadc.raven;
 
-import java.util.ArrayList;
+import ca.nrc.cadc.rest.SyncOutput;
+import org.apache.log4j.Logger;
+import org.opencadc.inventory.Artifact;
+import org.opencadc.inventory.InventoryUtil;
 
 /**
- * Selector that does not constrain Artifact selection.
+ * Interface with inventory to get the metadata of an artifact.
  *
- * @author pdowler
+ * @author adriand
  */
-public class AllArtifacts implements ArtifactSelector {
+public class HeadFilesAction extends FilesAction {
+    
+    private static final Logger log = Logger.getLogger(HeadFilesAction.class);
 
-    public AllArtifacts() {
+    /**
+     * Default, no-arg constructor.
+     */
+    public HeadFilesAction() {
+        super();
     }
 
     /**
-     * This implementation returns an empty list: no constraints. 
-     * 
-     * @return empty list
+     * Response to the "files" HEAD with the artifact metadata as response headers.
      */
     @Override
-    public String getConstraint() {
-        return null;
+    public void doAction() throws Exception {
+        initAndAuthorize();
+        log.debug("Starting HEAD action for " + artifactURI.toASCIIString());
+        Artifact artifact = artifactDAO.get(artifactURI);
+        setHeaders(artifact, syncOutput);
     }
+    
+    /**
+     * Set the HTTP response headers for an artifact.
+     * @param artifact The artifact with metadata
+     * @param syncOutput The target response
+     */
+    public static void setHeaders(Artifact artifact, SyncOutput syncOutput) {
+        syncOutput.setHeader("Content-MD5", artifact.getContentChecksum().getSchemeSpecificPart());
+        syncOutput.setHeader("Digest", "md5=" + artifact.getContentChecksum().getSchemeSpecificPart());
+        syncOutput.setHeader("Content-Length", artifact.getContentLength());
+        String filename = InventoryUtil.computeArtifactFilename(artifact.getURI());
+        syncOutput.setHeader("Content-Disposition", "attachment; filename=\"" + filename + "\"");
+        if (artifact.contentEncoding != null) {
+            syncOutput.setHeader("Content-Encoding", artifact.contentEncoding);
+        }
+        if (artifact.contentType != null) {
+            syncOutput.setHeader("Content-Type", artifact.contentType);
+        }
+    }
+
 }

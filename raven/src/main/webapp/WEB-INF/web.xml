@@ -47,6 +47,20 @@
         <load-on-startup>2</load-on-startup>
     </servlet>
 
+  <servlet>
+    <servlet-name>FilesServlet</servlet-name>
+    <servlet-class>ca.nrc.cadc.rest.RestServlet</servlet-class>
+    <init-param>
+      <param-name>get</param-name>
+      <param-value>org.opencadc.raven.GetFilesAction</param-value>
+    </init-param>
+    <init-param>
+      <param-name>head</param-name>
+      <param-value>org.opencadc.raven.HeadFilesAction</param-value>
+    </init-param>
+    <load-on-startup>3</load-on-startup>
+  </servlet>
+
   <!-- VOSI availability -->
   <servlet>
     <servlet-name>AvailabilityServlet</servlet-name>
@@ -73,6 +87,11 @@
   <servlet-mapping>
     <servlet-name>LocateServlet</servlet-name>
     <url-pattern>/locate/*</url-pattern>
+  </servlet-mapping>
+
+  <servlet-mapping>
+    <servlet-name>FilesServlet</servlet-name>
+    <url-pattern>/files/*</url-pattern>
   </servlet-mapping>
   
   <!-- Availability servlet endpoint -->

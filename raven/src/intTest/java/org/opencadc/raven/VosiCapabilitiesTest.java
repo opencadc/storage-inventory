@@ -69,10 +69,8 @@
 
 package org.opencadc.raven;
 
-import ca.nrc.cadc.auth.AuthMethod;
 import ca.nrc.cadc.reg.Capabilities;
 import ca.nrc.cadc.reg.Capability;
-import ca.nrc.cadc.reg.Interface;
 import ca.nrc.cadc.reg.Standards;
 import ca.nrc.cadc.util.Log4jInit;
 import ca.nrc.cadc.vosi.CapabilitiesTest;
@@ -99,11 +97,16 @@ public class VosiCapabilitiesTest extends CapabilitiesTest {
 
     @Override
     protected void validateContent(Capabilities caps) throws Exception {
-        super.validateContent(caps);        
-        // TODO: add checking for the minoc capabilities as per the example below
-//        Capability stu = caps.findCapability(Standards.PROTO_TABLE_LOAD_SYNC);
-//        Assert.assertNotNull("table-load-sync", stu);
-//        Assert.assertNotNull("cert table-load-sync", stu.findInterface(Standards.SECURITY_METHOD_CERT, Standards.INTERFACE_PARAM_HTTP));
-//        Assert.assertNotNull("cookie table-load-sync", stu.findInterface(Standards.SECURITY_METHOD_COOKIE, Standards.INTERFACE_PARAM_HTTP));
+        super.validateContent(caps);
+
+        Capability siLocate = caps.findCapability(Standards.SI_LOCATE);
+        Assert.assertNotNull("files", siLocate);
+        Assert.assertNotNull("cert files", siLocate.findInterface(Standards.SECURITY_METHOD_CERT, Standards.INTERFACE_PARAM_HTTP));
+        Assert.assertNotNull("cookie files", siLocate.findInterface(Standards.SECURITY_METHOD_COOKIE, Standards.INTERFACE_PARAM_HTTP));
+
+        Capability siFiles = caps.findCapability(Standards.SI_FILES);
+        Assert.assertNotNull("files", siFiles);
+        Assert.assertNotNull("cert files", siFiles.findInterface(Standards.SECURITY_METHOD_CERT, Standards.INTERFACE_PARAM_HTTP));
+        Assert.assertNotNull("cookie files", siFiles.findInterface(Standards.SECURITY_METHOD_COOKIE, Standards.INTERFACE_PARAM_HTTP));
     }
 }
