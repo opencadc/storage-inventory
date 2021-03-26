@@ -81,7 +81,7 @@ public class InventoryValidatorTest {
     public void testOrderArtifacts() throws Exception {
 
         InventoryValidator testSubject = new InventoryValidator(null, null, null,
-                                                                null, false, null);
+                                                                null, null, null);
 
         // Artifact A orders before Artifact B
         URI contentCheckSum = URI.create("md5:d41d8cd98f00b204e9800998ecf8427e");

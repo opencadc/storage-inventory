@@ -87,10 +87,11 @@ import org.opencadc.inventory.StorageSite;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.DeletedArtifactEventDAO;
 import org.opencadc.inventory.db.DeletedStorageLocationEventDAO;
-import org.opencadc.inventory.query.ArtifactQuery;
-import org.opencadc.inventory.query.DeletedArtifactEventQuery;
-import org.opencadc.inventory.query.DeletedStorageLocationEventQuery;
-import org.opencadc.inventory.query.StorageSiteQuery;
+import org.opencadc.inventory.db.EntityNotFoundException;
+import org.opencadc.inventory.query.ArtifactRowMapper;
+import org.opencadc.inventory.query.DeletedArtifactEventRowMapper;
+import org.opencadc.inventory.query.DeletedStorageLocationEventRowMapper;
+import org.opencadc.tap.TapClient;
 
 /**
  * Class that compares and validates two Artifacts, repairing the local Artifact to
@@ -101,7 +102,7 @@ public class ArtifactValidator {
 
     private final ArtifactDAO artifactDAO;
     private final URI resourceID;
-    private final boolean trackSiteLocations;
+    private final StorageSite remoteSite;
 
     private final DeletedArtifactEventDAO deletedArtifactEventDAO;
     private final DeletedStorageLocationEventDAO deletedStorageLocationEventDAO;
@@ -111,14 +112,14 @@ public class ArtifactValidator {
     /**
      * Constructor
      *
-     * @param artifactDAO local inventory database.
-     * @param resourceID remote service resourceID.
-     * @param trackSiteLocations true if the local service is a global site, false otherwise.
+     * @param artifactDAO   local inventory database.
+     * @param resourceID    identifier for the remote query service
+     * @param remoteSite    identifier for remote file service, null when local is a storage site
      */
-    public ArtifactValidator(ArtifactDAO artifactDAO, URI resourceID, boolean trackSiteLocations) {
+    public ArtifactValidator(ArtifactDAO artifactDAO, URI resourceID, StorageSite remoteSite) {
         this.artifactDAO = artifactDAO;
         this.resourceID = resourceID;
-        this.trackSiteLocations = trackSiteLocations;
+        this.remoteSite = remoteSite;
 
         this.transactionManager = this.artifactDAO.getTransactionManager();
         this.deletedArtifactEventDAO = new DeletedArtifactEventDAO(this.artifactDAO);
@@ -167,9 +168,7 @@ public class ArtifactValidator {
         log.debug("checking explanation 0");
         Artifact remote = getRemoteArtifact(local.getURI());
         if (remote != null) {
-            log.info(String.format("Artifact in L && not in R - Explanation0: Artifact in R without filter\n"
-                                       + "action: delete Artifact, if (L==storage) create DeletedStorageLocationEvent\n"
-                                       + " local - %s\nremote - %s", local, remote));
+            log.info(String.format("delete: %s %s reason: local filter policy change", local.getID(), local.getURI()));
             //TODO do action
             return;
         }
@@ -180,41 +179,44 @@ public class ArtifactValidator {
         log.debug("checking explanation 1");
         DeletedArtifactEvent remoteDeletedArtifactEvent = getRemoteDeletedArtifactEvent(local.getID());
         if (remoteDeletedArtifactEvent != null) {
-            log.info(String.format("Artifact in L && not in R - Explanation1: DeletedArtifactEvent in R\n"
-                                       + "action: put DeletedArtifactEvent, delete Artifact\n"
-                                       + " local Artifact: %s\nremote DeletedArtifactEvent: %s",
-                                   local, remoteDeletedArtifactEvent));
+            log.info(String.format("delete: %s %s reason: found remote DeletedArtifactEvent",
+                                   local.getID(), local.getURI()));
             //TODO do action
             return;
         }
 
-        // 2. DeletedStorageLocationEvent in R
-        // remove siteID from Artifact.storageLocations
+        // explanation2: L==global, deleted from R, pending/missed DeletedStorageLocationEvent in L
+        // evidence: DeletedStorageLocationEvent in R
+        // action: remove siteID from Artifact.storageLocations
         log.debug("checking explanation 2");
-        if (this.trackSiteLocations) {
+        if (this.remoteSite != null) {
             DeletedStorageLocationEvent remoteDeletedStorageLocationEvent =
                 getRemoteDeletedStorageLocationEvent(local.getID());
             if (remoteDeletedStorageLocationEvent != null) {
-                log.info(String.format("Artifact in L && not in R - Explanation2: DeletedStorageLocationEvent in R\n"
-                                           + "action: remove siteID from Artifact.storageLocations\n"
-                                           + " local Artifact: %s\nremote DeletedStorageLocationEvent: %s",
-                                       local, remoteDeletedStorageLocationEvent));
+                SiteLocation remoteSiteLocation = new SiteLocation(this.remoteSite.getID());
+                log.info(String.format("remove %s for %s %s reason: found remote %s",
+                                       remoteSiteLocation, local.getID(), local.getURI(),
+                                       remoteDeletedStorageLocationEvent));
                 //TODO do action
                 return;
             }
         }
 
-        // explanation3: L==global, new Artifact in L, pending/missed Artifact or sync in R
-        // also
-        // explanation4: L==storage, new Artifact in L, pending/missed new Artifact event in R
-        // explanation6: deleted from R, lost DeletedArtifactEvent
-        // explanation7: L==global, lost DeletedStorageLocationEvent
-        // evidence: ?
-        // action: remove siteID from Artifact.storageLocations
-        log.debug("explanation 3");
-        log.info(String.format("Artifact in L && not in R - Explanation3,4,6,7\n"
-                                   + "remove siteID from Artifact.storageLocations\nlocal Artifact: %s", local));
-        //TODO do action
+        if (this.remoteSite != null) {
+            // explanation3: L==global, new Artifact in L, pending/missed Artifact or sync in R
+            // also
+            // explanation6: deleted from R, lost DeletedArtifactEvent
+            // explanation7: L==global, lost DeletedStorageLocationEvent
+            // evidence: ?
+            // action: remove siteID from Artifact.storageLocations
+            log.debug("explanation 3");
+            log.info(String.format("remove SiteLocation: %s %s reason: multiple", local.getID(), local.getURI()));
+        } else {
+            // explanation4: L==storage, new Artifact in L, pending/missed new Artifact event in R
+            // action: none
+            log.debug("explanation 4");
+            logNoAction(local,"pending/missed new Artifact event in remote");
+        }
     }
 
     /**
@@ -234,10 +236,7 @@ public class ArtifactValidator {
         log.debug("checking explanation 1");
         DeletedArtifactEvent localDeletedArtifactEvent = this.deletedArtifactEventDAO.get(remote.getID());
         if (localDeletedArtifactEvent != null) {
-            log.info(String.format("Artifact not in L && in R - Explanation1: DeletedArtifactEvent in L\n"
-                                       + "action: no action necessary\n"
-                                       + "remote - %s\nlocal DeletedArtifactEvent - %s",
-                                   remote, localDeletedArtifactEvent));
+            logNoAction(remote, "found local DeletedArtifactEvent");
             return;
         }
 
@@ -245,13 +244,10 @@ public class ArtifactValidator {
         // evidence: DeletedStorageLocationEvent in L
         // action: none
         log.debug("checking explanation 2");
-        if (!this.trackSiteLocations) {
+        if (this.remoteSite == null) {
             DeletedStorageLocationEvent localDeletedStorageLocationEvent = this.deletedStorageLocationEventDAO.get(remote.getID());
             if (localDeletedStorageLocationEvent != null) {
-                log.info(String.format("Artifact not in L && in R - Explanation2: DeletedStorageLocationEvent in L\n"
-                                           + "action: no action necessary"
-                                           + "\nremote - %s\nlocal DeletedStorageLocationEvent - %s",
-                                       remote, localDeletedStorageLocationEvent));
+                logNoAction(remote, "found local DeletedStorageLocationEvent");
                 return;
             }
         }
@@ -264,12 +260,10 @@ public class ArtifactValidator {
         // evidence: ?
         // action: insert Artifact
         log.debug("checking explanation 3");
-        if (!this.trackSiteLocations) {
+        if (this.remoteSite == null) {
             Artifact local = this.artifactDAO.get(remote.getID());
             if (local == null) {
-                log.info(String.format("Artifact not in L && in R - Explanation0,3,6,7\naction: insert Artifact\n"
-                                            + "remote - %s",
-                                        remote));
+                log.info(String.format("put: %s %s reason: multiple", remote.getID(), remote.getURI()));
                 //TODO do action
                 return;
             }
@@ -279,18 +273,14 @@ public class ArtifactValidator {
         // evidence: Artifact in local db but siteLocations does not include remote siteID
         // action: add siteID to Artifact.siteLocations
         log.debug("checking explanation 4");
-        if (this.trackSiteLocations) {
+        if (this.remoteSite != null) {
             Artifact local = this.artifactDAO.get(remote.getID());
             if (local != null) {
-                StorageSite remoteStorageSite = getRemoteStorageSite();
-                SiteLocation remoteSiteLocation = new SiteLocation(remoteStorageSite.getID());
+                SiteLocation remoteSiteLocation = new SiteLocation(this.remoteSite.getID());
                 if (!local.siteLocations.contains(remoteSiteLocation)) {
-                    log.info(String.format("Artifact not in L && in R - Explanation4: Artifact in local db but "
-                                               + "siteLocations does not include remote siteID\n"
-                                               + "action: add siteID to Artifact.siteLocations\n"
-                                               + "remote - %s\nremote StorageSite - %s", remote, remoteStorageSite));
+                    log.info(String.format("add: %s to %s %s reason: remote SiteLocation missing",
+                                           remoteSiteLocation, remote.getID(), remote.getURI()));
                     //TODO do action
-                    return;
                 }
             }
         }
@@ -307,14 +297,13 @@ public class ArtifactValidator {
         // discrepancy: artifact.uri in both && artifact.id mismatch (collision)
         // explanation1: same ID collision due to race condition that metadata-sync has to handle
         // evidence: no more evidence needed
-        // action: pick winner, create DeletedArtifactEvent for loser, delete loser if it is in L, insert winner if winner was in R
+        // action: pick winner, create DeletedArtifactEvent for loser, delete loser if it is in L,
+        //         insert winner if winner was in R
         log.debug("checking artifact.id mismatch");
         if (!local.getID().equals(remote.getID())) {
-            log.info(String.format("ID mismatch:\npick winner\nuri - %s\n local - %s %s\nremote - %s %s",
-                                   local.getURI(),
-                                   local.getID(), dateFormat.format(local.getLastModified()),
-                                   remote.getID(), dateFormat.format(remote.getLastModified())));
             if (local.getContentLastModified().before(remote.getContentLastModified())) {
+                log.info(String.format("delete local: %s %s reason: remote is newer",
+                                       local.getID(), local.getURI()));
                 //TODO do action
             }
             return;
@@ -323,10 +312,8 @@ public class ArtifactValidator {
         // discrepancy: artifact in both && valid metaChecksum mismatch
         log.debug("checking valid metaChecksum mismatch");
         if (!local.getMetaChecksum().equals(remote.getMetaChecksum())) {
-            log.info(String.format("MetaChecksum mismatch:\n uri - %s %s\n local - %s %s\nremote - %s %s",
-                                   local.getURI(), local.getID(), local.getMetaChecksum(),
-                                   dateFormat.format(local.getLastModified()), remote.getMetaChecksum(),
-                                   dateFormat.format(remote.getLastModified())));
+            log.info(String.format("MetaChecksum mismatch: uri %s\nlocal %s\nremote %s",
+                                   local.getURI(), local.getMetaChecksum(), remote.getMetaChecksum()));
             // explanation1: pending/missed artifact update in L
             // evidence: ??
             // action: put Artifact
@@ -336,13 +323,8 @@ public class ArtifactValidator {
             // evidence: ??
             // action: do nothing
             //TODO determine action
-            return;
         }
 
-        // Local & remote Artifact's have the same ID.
-        if (local.getID().equals(remote.getID())) {
-            log.info(String.format("Valid: - %s", local));
-        }
     }
 
     /**
@@ -350,9 +332,11 @@ public class ArtifactValidator {
      */
     Artifact getRemoteArtifact(URI uri)
         throws InterruptedException, IOException, ResourceNotFoundException, TransientException {
-        final String where = String.format("WHERE uri = '%s'", uri.toASCIIString());
-        ArtifactQuery artifactQuery = new ArtifactQuery();
-        ResourceIterator<Artifact> results = artifactQuery.execute(where, this.resourceID);
+
+        final TapClient<Artifact> tapClient = new TapClient<>(this.resourceID);
+        final String query = String.format("%s WHERE uri = '%s'", ArtifactRowMapper.BASE_QUERY, uri.toASCIIString());
+        log.debug("\nExecuting query '" + query + "'\n");
+        ResourceIterator<Artifact> results = tapClient.execute(query, new ArtifactRowMapper());
         if (results.hasNext()) {
             return results.next();
         }
@@ -364,9 +348,11 @@ public class ArtifactValidator {
      */
     DeletedArtifactEvent getRemoteDeletedArtifactEvent(UUID id)
         throws InterruptedException, IOException, ResourceNotFoundException, TransientException {
-        final String where = String.format("WHERE id = '%s'", id);
-        DeletedArtifactEventQuery deletedArtifactEventQuery = new DeletedArtifactEventQuery();
-        ResourceIterator<DeletedArtifactEvent> results = deletedArtifactEventQuery.execute(where, this.resourceID);
+
+        final TapClient<DeletedArtifactEvent> tapClient = new TapClient<>(this.resourceID);
+        final String query = String.format("%s WHERE id = '%s'", DeletedArtifactEventRowMapper.BASE_QUERY, id);
+        log.debug("\nExecuting query '" + query + "'\n");
+        ResourceIterator<DeletedArtifactEvent> results = tapClient.execute(query, new DeletedArtifactEventRowMapper());
         if (results.hasNext()) {
             return results.next();
         }
@@ -378,28 +364,20 @@ public class ArtifactValidator {
      */
     DeletedStorageLocationEvent getRemoteDeletedStorageLocationEvent(UUID id)
         throws InterruptedException, IOException, ResourceNotFoundException, TransientException {
-        final String where = String.format("WHERE id = '%s'", id);
-        DeletedStorageLocationEventQuery deletedStorageLocationEventQuery = new DeletedStorageLocationEventQuery();
+
+        final TapClient<DeletedStorageLocationEvent> tapClient = new TapClient<>(this.resourceID);
+        final String query = String.format("%s WHERE id = '%s'", DeletedStorageLocationEventRowMapper.BASE_QUERY, id);
+        log.debug("\nExecuting query '" + query + "'\n");
         ResourceIterator<DeletedStorageLocationEvent> results =
-            deletedStorageLocationEventQuery.execute(where, this.resourceID);
+            tapClient.execute(query, new DeletedStorageLocationEventRowMapper());
         if (results.hasNext()) {
             return results.next();
         }
         return null;
     }
 
-    /**
-     * Get the StorageSite for the remote instance resourceID;
-     */
-    StorageSite getRemoteStorageSite()
-        throws InterruptedException, IOException, ResourceNotFoundException, TransientException {
-        final String where = String.format("WHERE resourceID = '%s'", this.resourceID);
-        StorageSiteQuery storageSiteQuery = new StorageSiteQuery();
-        ResourceIterator<StorageSite> results = storageSiteQuery.execute(where, this.resourceID);
-        if (results.hasNext()) {
-            return results.next();
-        }
-        return null;
+    private void logNoAction(Artifact artifact, String message) {
+        log.info(String.format("no action %s %s, reason: %s", artifact.getID(), artifact.getURI(), message));
     }
 
 }

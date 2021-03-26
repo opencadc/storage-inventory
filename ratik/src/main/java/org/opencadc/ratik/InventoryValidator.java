@@ -91,11 +91,13 @@ import javax.sql.DataSource;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.InventoryUtil;
+import org.opencadc.inventory.StorageSite;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.version.InitDatabase;
-import org.opencadc.inventory.query.ArtifactQuery;
+import org.opencadc.inventory.query.ArtifactRowMapper;
 import org.opencadc.inventory.util.ArtifactSelector;
 import org.opencadc.inventory.util.BucketSelector;
+import org.opencadc.tap.TapClient;
 
 /**
  * Validate local inventory.
@@ -107,9 +109,9 @@ public class InventoryValidator implements Runnable {
 
     private final ArtifactDAO artifactDAO;
     private final URI resourceID;
+    private final StorageSite remoteSite;
     private final ArtifactSelector artifactSelector;
     private final BucketSelector bucketSelector;
-    private final boolean trackSiteLocations;
     private final ArtifactValidator artifactValidator;
 
     /**
@@ -117,24 +119,23 @@ public class InventoryValidator implements Runnable {
      *
      * @param daoConfig          config map to pass to cadc-inventory-db DAO classes
      * @param resourceID         identifier for the remote query service
+     * @param remoteSite         identifier for remote file service
      * @param artifactSelector   artifact selector implementation
      * @param bucketSelector     uri buckets
-     * @param trackSiteLocations local site type
      */
-    public InventoryValidator(Map<String, Object> daoConfig, URI resourceID, ArtifactSelector artifactSelector,
-                              BucketSelector bucketSelector, boolean trackSiteLocations) {
+    public InventoryValidator(Map<String, Object> daoConfig, URI resourceID, StorageSite remoteSite,
+                              ArtifactSelector artifactSelector, BucketSelector bucketSelector) {
         InventoryUtil.assertNotNull(InventoryValidator.class, "daoConfig", daoConfig);
         InventoryUtil.assertNotNull(InventoryValidator.class, "resourceID", resourceID);
         InventoryUtil.assertNotNull(InventoryValidator.class, "artifactSelector", artifactSelector);
-        InventoryUtil.assertNotNull(InventoryValidator.class, "bucketSelector", bucketSelector);
 
         this.artifactDAO = new ArtifactDAO(false);
         this.artifactDAO.setConfig(daoConfig);
         this.resourceID = resourceID;
+        this.remoteSite = remoteSite;
         this.artifactSelector = artifactSelector;
         this.bucketSelector = bucketSelector;
-        this.trackSiteLocations = trackSiteLocations;
-        this.artifactValidator = new ArtifactValidator(this.artifactDAO, this.resourceID, this.trackSiteLocations);
+        this.artifactValidator = new ArtifactValidator(this.artifactDAO, this.resourceID, this.remoteSite);
 
         try {
             String jndiDataSourceName = (String) daoConfig.get("jndiDataSourceName");
@@ -165,12 +166,13 @@ public class InventoryValidator implements Runnable {
     }
 
     // Package access constructor for testing.
-    InventoryValidator(ArtifactDAO artifactDAO, URI resourceID, ArtifactSelector artifactSelector,
-                       BucketSelector bucketSelector, boolean trackSiteLocations, ArtifactValidator artifactValidator) {
+    InventoryValidator(ArtifactDAO artifactDAO, URI resourceID, StorageSite remoteSite,
+                       ArtifactSelector artifactSelector, BucketSelector bucketSelector,
+                       ArtifactValidator artifactValidator) {
         this.artifactDAO = artifactDAO;
         this.resourceID = resourceID;
+        this.remoteSite = remoteSite;
         this.artifactSelector = artifactSelector;
-        this.trackSiteLocations = trackSiteLocations;
         this.bucketSelector = bucketSelector;
         this.artifactValidator = artifactValidator;
     }
@@ -357,40 +359,44 @@ public class InventoryValidator implements Runnable {
      */
     ResourceIterator<Artifact> getRemoteIterator(final String bucket)
         throws ResourceNotFoundException, IOException, IllegalStateException, TransientException, InterruptedException {
-        final String where = buildWhereClause(bucket);
-        ArtifactQuery artifactQuery = new ArtifactQuery();
-        return artifactQuery.execute(where, this.resourceID);
+        final TapClient<Artifact> tapClient = new TapClient<>(this.resourceID);
+        final String query = buildRemoteQuery(bucket);
+        log.debug("\nExecuting query '" + query + "'\n");
+        return tapClient.execute(query, new ArtifactRowMapper());
     }
 
     /**
-     * Assemble the WHERE clause.  Very useful for testing separately.
+     * Assemble the WHERE clause and return the full query.  Very useful for testing separately.
      *
      * @param bucket The current bucket.
      * @return  String where clause. Never null.
      */
-    String buildWhereClause(final String bucket)
+    String buildRemoteQuery(final String bucket)
         throws ResourceNotFoundException, IOException {
-        final StringBuilder where = new StringBuilder();
+        final StringBuilder query = new StringBuilder();
+        query.append(ArtifactRowMapper.BASE_QUERY);
 
         if (StringUtil.hasText(this.artifactSelector.getConstraint())) {
-            if (where.indexOf("WHERE") < 0) {
-                where.append(" WHERE ");
+            if (query.indexOf("WHERE") < 0) {
+                query.append(" WHERE ");
             } else {
-                where.append(" AND ");
+                query.append(" AND ");
             }
-            where.append("(").append(this.artifactSelector.getConstraint().trim()).append(")");
+            query.append("(").append(this.artifactSelector.getConstraint().trim()).append(")");
         }
 
         if (StringUtil.hasText(bucket)) {
-            if (where.indexOf("WHERE") < 0) {
-                where.append(" WHERE ");
+            if (query.indexOf("WHERE") < 0) {
+                query.append(" WHERE ");
             } else {
-                where.append(" AND ");
+                query.append(" AND ");
             }
-            where.append("(uribucket LIKE '").append(bucket.trim()).append("%')");
-            log.debug("where clause: " + where.toString());
+            query.append("(uribucket LIKE '").append(bucket.trim()).append("%')");
+            log.debug("where clause: " + query.toString());
         }
-        return where.toString();
+
+        query.append(" ORDER BY uri ASC");
+        return query.toString();
     }
 
 }
