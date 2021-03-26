@@ -102,7 +102,7 @@ import org.opencadc.tantar.policy.StorageIsAlwaysRight;
 public class BucketValidatorTest {
 
     static {
-        Log4jInit.setLevel("org.opencadc.tantar", Level.DEBUG);
+        Log4jInit.setLevel("org.opencadc.tantar", Level.INFO);
     }
 
     /**
@@ -159,9 +159,9 @@ public class BucketValidatorTest {
         final BucketValidator testSubject =
                 new BucketValidator(Arrays.asList("a", "b", "c"), null,
                                     new Subject(), true, new InventoryIsAlwaysRight(testEventListener, reporter),
-                                    null, null) {
+                                    null, null, null) {
                     @Override
-                    Iterator<StorageMetadata> iterateStorage() {
+                    Iterator<StorageMetadata> getStorageMetadataIterator() {
                         return testStorageMetadataList.iterator();
                     }
 
@@ -169,6 +169,12 @@ public class BucketValidatorTest {
                     Iterator<Artifact> iterateInventory() {
                         return testArtifactList.iterator();
                     }
+
+                    @Override
+                    boolean isObsoleteStorageLocation(StorageMetadata storageMetadata) {
+                        return false;
+                    }
+
                 };
 
         testSubject.validate();
@@ -228,15 +234,20 @@ public class BucketValidatorTest {
         final BucketValidator testSubject =
                 new BucketValidator(Arrays.asList("a", "b", "c"), null,
                                     new Subject(), true, new InventoryIsAlwaysRight(testEventListener, reporter),
-                                    null, null) {
+                                    null, null, null) {
                     @Override
-                    Iterator<StorageMetadata> iterateStorage() {
+                    Iterator<StorageMetadata> getStorageMetadataIterator() {
                         return Collections.emptyIterator();
                     }
 
                     @Override
                     Iterator<Artifact> iterateInventory() {
                         return testArtifactList.iterator();
+                    }
+
+                    @Override
+                    boolean isObsoleteStorageLocation(StorageMetadata storageMetadata) {
+                        return false;
                     }
                 };
 
@@ -307,15 +318,20 @@ public class BucketValidatorTest {
         final BucketValidator testSubject =
                 new BucketValidator(Arrays.asList("a", "b", "c"), null,
                                     new Subject(), true, new StorageIsAlwaysRight(testEventListener, reporter),
-                                    null, null) {
+                                    null, null, null) {
                     @Override
-                    Iterator<StorageMetadata> iterateStorage() {
+                    Iterator<StorageMetadata> getStorageMetadataIterator() {
                         return testStorageMetadataList.iterator();
                     }
 
                     @Override
                     Iterator<Artifact> iterateInventory() {
                         return testArtifactList.iterator();
+                    }
+
+                    @Override
+                    boolean isObsoleteStorageLocation(StorageMetadata storageMetadata) {
+                        return false;
                     }
                 };
 
@@ -369,15 +385,20 @@ public class BucketValidatorTest {
         final BucketValidator testSubject =
                 new BucketValidator(Arrays.asList("a", "b", "c"), null,
                                     new Subject(), true, new StorageIsAlwaysRight(testEventListener, reporter),
-                                    null, null) {
+                                    null, null, null) {
                     @Override
-                    Iterator<StorageMetadata> iterateStorage() {
+                    Iterator<StorageMetadata> getStorageMetadataIterator() {
                         return testStorageMetadataList.iterator();
                     }
 
                     @Override
                     Iterator<Artifact> iterateInventory() {
                         return Collections.emptyIterator();
+                    }
+
+                    @Override
+                    boolean isObsoleteStorageLocation(StorageMetadata storageMetadata) {
+                        return false;
                     }
                 };
 
@@ -425,15 +446,20 @@ public class BucketValidatorTest {
         final BucketValidator testSubject =
                 new BucketValidator(Arrays.asList("a", "b", "c"), null,
                                     new Subject(), true, new RecoverFromStorage(testEventListener, reporter),
-                                    null, null) {
+                                    null, null, null) {
                     @Override
-                    Iterator<StorageMetadata> iterateStorage() {
+                    Iterator<StorageMetadata> getStorageMetadataIterator() {
                         return testStorageMetadataList.iterator();
                     }
 
                     @Override
                     Iterator<Artifact> iterateInventory() {
                         return Collections.emptyIterator();
+                    }
+
+                    @Override
+                    boolean isObsoleteStorageLocation(StorageMetadata storageMetadata) {
+                        return false;
                     }
                 };
 

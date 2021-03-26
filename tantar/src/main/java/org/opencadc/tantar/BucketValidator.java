@@ -73,7 +73,6 @@ import ca.nrc.cadc.db.ConnectionConfig;
 import ca.nrc.cadc.db.DBUtil;
 import ca.nrc.cadc.db.TransactionManager;
 import ca.nrc.cadc.io.ResourceIterator;
-import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.profiler.Profiler;
 import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.util.StringUtil;
@@ -103,7 +102,6 @@ import org.opencadc.inventory.db.ObsoleteStorageLocationDAO;
 import org.opencadc.inventory.db.SQLGenerator;
 import org.opencadc.inventory.db.version.InitDatabase;
 import org.opencadc.inventory.storage.StorageAdapter;
-import org.opencadc.inventory.storage.StorageEngageException;
 import org.opencadc.inventory.storage.StorageMetadata;
 import org.opencadc.inventory.util.BucketSelector;
 import org.opencadc.tantar.policy.ResolutionPolicy;
@@ -135,6 +133,7 @@ public class BucketValidator implements ValidateEventListener {
     // Cached ArtifactDAO used for transactional access.
     private final ArtifactDAO artifactDAO;
     private final ArtifactDAO iteratorDAO;
+    private final ObsoleteStorageLocationDAO obsoleteStorageLocationDAO;
 
 
     /**
@@ -230,6 +229,7 @@ public class BucketValidator implements ValidateEventListener {
         config.put("jndiDataSourceName", "jdbc/inventory");
         this.iteratorDAO = new ArtifactDAO();
         this.iteratorDAO.setConfig(config);
+        this.obsoleteStorageLocationDAO = new ObsoleteStorageLocationDAO(this.artifactDAO);
         
         try {
             String database = (String) config.get("database");
@@ -253,10 +253,12 @@ public class BucketValidator implements ValidateEventListener {
      * @param resolutionPolicy The policy that dictates handling conflicts.
      * @param artifactDAO      The Transactional artifact DAO for CRUD operations.
      * @param iteratorDAO      The bare artifact DAO for iterating.
+     * @param obsoleteStorageLocationDAO ObsoleteStorageLocation DAO.
      */
     BucketValidator(final List<String> bucketPrefixes, final StorageAdapter storageAdapter, final Subject runUser,
                     final boolean reportOnlyFlag, final ResolutionPolicy resolutionPolicy,
-                    final ArtifactDAO artifactDAO, final ArtifactDAO iteratorDAO) {
+                    final ArtifactDAO artifactDAO, final ArtifactDAO iteratorDAO,
+                    final ObsoleteStorageLocationDAO obsoleteStorageLocationDAO) {
         this.bucketPrefixes.addAll(bucketPrefixes);
         this.storageAdapter = storageAdapter;
         this.runUser = runUser;
@@ -264,6 +266,7 @@ public class BucketValidator implements ValidateEventListener {
         this.resolutionPolicy = resolutionPolicy;
         this.artifactDAO = artifactDAO;
         this.iteratorDAO = iteratorDAO;
+        this.obsoleteStorageLocationDAO = obsoleteStorageLocationDAO;
     }
 
     /**
@@ -275,7 +278,7 @@ public class BucketValidator implements ValidateEventListener {
     public void validate() throws Exception {
         final Profiler profiler = new Profiler(BucketValidator.class);
         LOGGER.debug("Acquiring iterators.");
-        final Iterator<StorageMetadata> storageMetadataIterator = iterateStorage();
+        final Iterator<StorageMetadata> storageMetadataIterator = getStorageMetadataIterator();
         final Iterator<Artifact> inventoryIterator = iterateInventory();
         profiler.checkpoint("iterators: ok");
         LOGGER.debug(String.format("Acquired iterators: \nHas Artifacts (%b)\nHas Storage Metadata (%b).",
@@ -588,52 +591,6 @@ public class BucketValidator implements ValidateEventListener {
     }
 
     /**
-     * Iterate over the StorageMetadata instances from the Storage Adapter.  The consumer of this Iterator will assume
-     * that the StorageLocation is never null.
-     * <p/>
-     * Tests can override this for convenience.
-     *
-     * @return Iterator instance of StorageMetadata objects
-     *
-     * @throws StorageEngageException If the adapter failed to interact with storage.
-     * @throws TransientException     If an unexpected, temporary exception occurred.
-     */
-    Iterator<StorageMetadata> iterateStorage() throws Exception {
-        LOGGER.debug(String.format("Getting iterator for %s running as %s", this.bucketPrefixes, this.runUser.getPrincipals()));
-        return new Iterator<StorageMetadata>() {
-            final Iterator<String> bucketPrefixIterator = bucketPrefixes.iterator();
-
-            // The bucket range should have at least one value, so calling next() should be safe here.
-            Iterator<StorageMetadata> storageMetadataIterator =
-                    Subject.doAs(runUser, (PrivilegedExceptionAction<Iterator<StorageMetadata>>) () ->
-                                                      storageAdapter.iterator(bucketPrefixIterator.next()));
-
-            @Override
-            public boolean hasNext() {
-                if (storageMetadataIterator.hasNext()) {
-                    return true;
-                } else if (bucketPrefixIterator.hasNext()) {
-                    try {
-                        storageMetadataIterator =
-                                Subject.doAs(runUser, (PrivilegedExceptionAction<Iterator<StorageMetadata>>) () ->
-                                                                  storageAdapter.iterator(bucketPrefixIterator.next()));
-                    } catch (PrivilegedActionException exception) {
-                        throw new IllegalStateException(exception);
-                    }
-                    return hasNext();
-                } else {
-                    return false;
-                }
-            }
-
-            @Override
-            public StorageMetadata next() {
-                return storageMetadataIterator.next();
-            }
-        };
-    }
-
-    /**
      * Iterate over the Artifact instances from the Storage Inventory database.  The consumer of this Iterator will
      * assume that the StorageLocation is never null in the Artifact.
      * <p/>
@@ -666,4 +623,105 @@ public class BucketValidator implements ValidateEventListener {
             }
         };
     }
+
+    /**
+     * Check the StorageMetadata for a matching ObsoleteStorageLocation and if found
+     * delete the file from storage and delete the ObsoleteStorageLocation.
+     */
+    boolean isObsoleteStorageLocation(StorageMetadata storageMetadata) {
+        ObsoleteStorageLocation obsoleteStorageLocation;
+        try {
+            obsoleteStorageLocation = this.obsoleteStorageLocationDAO.get(storageMetadata.getStorageLocation());
+        } catch (Exception e) {
+            throw new IllegalStateException(
+                String.format("query failed for ObsoleteStorageLocation %s for file %s",
+                              storageMetadata.getStorageLocation().getStorageID().toASCIIString(),
+                              storageMetadata.artifactURI.toASCIIString()), e);
+        }
+        if (obsoleteStorageLocation != null) {
+            LOGGER.info(String.format("delete obsolete object: %s (was: %s)", obsoleteStorageLocation,
+                                      storageMetadata.artifactURI.toASCIIString()));
+            if (canTakeAction()) {
+                try {
+                    delete(storageMetadata);
+                    this.obsoleteStorageLocationDAO.delete(obsoleteStorageLocation.getID());
+                } catch (Exception e) {
+                    throw new IllegalStateException("failed to cleanup obsolete " + obsoleteStorageLocation, e);
+                }
+            }
+        }
+        return obsoleteStorageLocation != null;
+    }
+
+    /**
+     * Overrideable method to return a StorageMetadataIterator instance. Useful in unit tests.
+     *
+     * @return StorageMetadataIterator instance.
+     */
+    Iterator<StorageMetadata> getStorageMetadataIterator() {
+        return new StorageMetadataIterator();
+    }
+
+    /**
+     * Class to iterate over the StorageMetadata instances from the Storage Adapter.
+     * The consumer of this Iterator will assume that the StorageLocation is never null.
+     */
+    private class StorageMetadataIterator implements Iterator<StorageMetadata> {
+
+        final Iterator<String> bucketPrefixIterator;
+        Iterator<StorageMetadata> storageMetadataIterator;
+        StorageMetadata storageMetadata;
+
+        /**
+         * Constructor
+         */
+        StorageMetadataIterator() {
+            LOGGER.debug(String.format("Getting iterator for %s running as %s",
+                                       bucketPrefixes, runUser.getPrincipals()));
+            this.bucketPrefixIterator = bucketPrefixes.iterator();
+
+            // The bucket range should have at least one value, so calling next() should be safe here.
+            try {
+                this.storageMetadataIterator =
+                    Subject.doAs(runUser, (PrivilegedExceptionAction<Iterator<StorageMetadata>>) () ->
+                        storageAdapter.iterator(bucketPrefixIterator.next()));
+            } catch (PrivilegedActionException exception) {
+                throw new IllegalStateException(exception);
+            }
+            advance();
+        }
+
+        private void advance() {
+            if (this.storageMetadataIterator.hasNext()) {
+                this.storageMetadata = this.storageMetadataIterator.next();
+                if (isObsoleteStorageLocation(this.storageMetadata)) {
+                    advance();
+                }
+            } else if (this.bucketPrefixIterator.hasNext()) {
+                try {
+                    this.storageMetadataIterator =
+                        Subject.doAs(runUser, (PrivilegedExceptionAction<Iterator<StorageMetadata>>) () ->
+                            storageAdapter.iterator(this.bucketPrefixIterator.next()));
+                } catch (PrivilegedActionException exception) {
+                    throw new IllegalStateException(exception);
+                }
+                advance();
+            } else {
+                this.storageMetadata = null;
+            }
+        }
+
+        @Override
+        public boolean hasNext() {
+            return storageMetadata != null;
+        }
+
+        @Override
+        public StorageMetadata next() {
+            StorageMetadata ret = this.storageMetadata;
+            advance();
+            return ret;
+        }
+    }
+
 }
