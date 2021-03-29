@@ -71,7 +71,6 @@ import ca.nrc.cadc.util.Log4jInit;
 import java.util.Iterator;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
-import org.javaswift.joss.model.Container;
 import org.junit.Before;
 import org.junit.Test;
 import org.opencadc.inventory.StorageLocation;
@@ -89,16 +88,14 @@ public class MultiBucketSwiftStorageAdapterTest extends StorageAdapterBasicTest 
         Log4jInit.setLevel("org.opencadc.inventory", Level.INFO);
         Log4jInit.setLevel("org.javaswift.joss", Level.INFO);
         
-        Log4jInit.setLevel("org.opencadc.inventory.storage.swift", Level.DEBUG);
+        Log4jInit.setLevel("org.opencadc.inventory.storage.swift", Level.INFO);
     }
     
     final SwiftStorageAdapter swiftAdapter;
     
     public MultiBucketSwiftStorageAdapterTest() throws Exception {
-        super(new SwiftStorageAdapter());
-        
+        super(new SwiftStorageAdapter(true, System.getProperty("user.name") + "-MultiBucketSwiftStorageAdapterTest", 1, true));
         this.swiftAdapter = (SwiftStorageAdapter) super.adapter;
-        swiftAdapter.multiBucket = true; // override config
     }
     
     @Before
@@ -111,14 +108,6 @@ public class MultiBucketSwiftStorageAdapterTest extends StorageAdapterBasicTest 
             //log.info("found object: " + loc);
             swiftAdapter.delete(loc);
             log.info("\tdeleted: " + loc);
-        }
-        log.info("cleanupBefore: containers...");  
-        Iterator<Container> bi = swiftAdapter.bucketIterator();
-        while (bi.hasNext()) {
-            Container c = bi.next();
-            //log.info("found bucket: " + c.getName());
-            swiftAdapter.deleteBucket(c);
-            log.info("\tdeleted bucket: " + c.getName());
         }
         log.info("cleanupBefore: DONE");        
     }

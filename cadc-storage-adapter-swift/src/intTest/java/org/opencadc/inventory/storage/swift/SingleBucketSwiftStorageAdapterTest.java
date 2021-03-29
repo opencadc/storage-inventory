@@ -74,7 +74,6 @@ import java.net.URI;
 import java.util.Iterator;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
-import org.javaswift.joss.model.Container;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
@@ -99,9 +98,8 @@ public class SingleBucketSwiftStorageAdapterTest extends StorageAdapterBasicTest
     final SwiftStorageAdapter swiftAdapter;
     
     public SingleBucketSwiftStorageAdapterTest() throws Exception {
-        super(new SwiftStorageAdapter());
+        super(new SwiftStorageAdapter(true, System.getProperty("user.name") + "-SingleBucketSwiftStorageAdapterTest", 3, false));
         this.swiftAdapter = (SwiftStorageAdapter) super.adapter;
-        swiftAdapter.multiBucket = false; // override config
     }
     
     @Before
