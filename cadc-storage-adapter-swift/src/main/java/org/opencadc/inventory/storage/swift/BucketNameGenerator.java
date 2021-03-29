@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2020.                            (c) 2020.
+*  (c) 2021.                            (c) 2021.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -67,51 +67,61 @@
 
 package org.opencadc.inventory.storage.swift;
 
-import ca.nrc.cadc.util.Log4jInit;
 import java.util.Iterator;
-import org.apache.log4j.Level;
+import java.util.SortedSet;
+import java.util.TreeSet;
 import org.apache.log4j.Logger;
-import org.junit.Before;
-import org.junit.Test;
-import org.opencadc.inventory.StorageLocation;
-import org.opencadc.inventory.storage.StorageMetadata;
-import org.opencadc.inventory.storage.test.StorageAdapterByteRangeTest;
+import org.opencadc.inventory.InventoryUtil;
 
 /**
- * Integration tests that interact with the file system. These tests require a file system
- * that supports posix extended attributes.
+ * Computes all possible bucket combinations from the hex alphabet and length.
  * 
  * @author pdowler
  */
-public class SwiftByteRangeTest extends StorageAdapterByteRangeTest {
-    private static final Logger log = Logger.getLogger(SwiftByteRangeTest.class);
+public class BucketNameGenerator {
+    private static final Logger log = Logger.getLogger(BucketNameGenerator.class);
 
-    static {
-        Log4jInit.setLevel("org.opencadc.inventory", Level.INFO);
-        //Log4jInit.setLevel("org.javaswift.joss", Level.INFO);
+    private final String baseName;
+    private final int bucketLength;
+    
+    private final SortedSet<String> names = new TreeSet<>();
+    private final char[] alphabet = InventoryUtil.BUCKET_CHARS.toCharArray();
+    
+    public BucketNameGenerator(String baseName, int bucketLength) {
+        this.baseName = baseName;
+        this.bucketLength = bucketLength;
+        init();
     }
     
-    final SwiftStorageAdapter swiftAdapter;
-    
-    public SwiftByteRangeTest() throws Exception {
-        super(new SwiftStorageAdapter(true, System.getProperty("user.name") + "-SwiftByteRangeTest", 3, false)); // single-bucket adapter for this
-        this.swiftAdapter = (SwiftStorageAdapter) super.adapter;
+    public int getCount() {
+        return names.size();
     }
     
-    @Before
-    public void cleanupBefore() throws Exception {
-        log.info("cleanupBefore: START");
-        Iterator<StorageMetadata> sbi = swiftAdapter.iterator();
-        while (sbi.hasNext()) {
-            StorageLocation loc = sbi.next().getStorageLocation();
-            swiftAdapter.delete(loc);
-            log.info("\tdeleted: " + loc);
+    public String getFirst() {
+        return names.first();
+    }
+    
+    public Iterator<String> iterator() {
+        return names.iterator();
+    }
+    
+    private void init() {
+        char[] buf = new char[bucketLength];
+        doit(buf, 0);
+    }
+    
+    private void doit(char[] buf, int len) {
+        if (len == bucketLength) {
+            StringBuilder sb = new StringBuilder(baseName).append("-");
+            for (char c : buf) {
+                sb.append(c);
+            }
+            names.add(sb.toString());
+            return;
         }
-        log.info("cleanupBefore: DONE");        
+        for (char c : alphabet) {
+            buf[len] = c;
+            doit(buf, len + 1);
+        }
     }
-    
-    @Test
-    public void testCleanupOnly() {
-        log.info("testCleanupOnly: no-op");
-    }
-}    
+}

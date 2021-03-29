@@ -88,6 +88,8 @@ import org.apache.log4j.Logger;
 public abstract class InventoryUtil {
     private static final Logger log = Logger.getLogger(InventoryUtil.class);
 
+    public static final String BUCKET_CHARS = "0123456789abcdef";
+    
     private InventoryUtil() {
     }
 
