@@ -285,7 +285,9 @@ public class SwiftStorageAdapter  implements StorageAdapter {
             this.client = new AccountFactory(ac).createAccount();
             checkConnectivity();
             init();
-        } catch (Exception ex) {
+        } catch (InvalidConfigException | StorageEngageException ex) {
+            throw ex;
+        } catch (RuntimeException ex) {
             throw new StorageEngageException("connectiviy check failed", ex);
         }
     }
@@ -295,58 +297,59 @@ public class SwiftStorageAdapter  implements StorageAdapter {
         client.getServerTime();
     }
     
-    private void init() throws InvalidConfigException {
+    private void init() throws InvalidConfigException, StorageEngageException {
         // base-name bucket to store transient content and config attributes
         Container c = client.getContainer(storageBucket);
         if (!c.exists()) {
+            log.warn("creating: " + c.getName());
             c.create();
-            Map<String,Object> meta = new TreeMap<>();
-            meta.put(VERSION_ATTR, "0.5.0");
-            meta.put(BUCKETLENGTH_ATTR, Integer.toString(storageBucketLength));
-            meta.put(MULTIBUCKET_ATTR, Boolean.toString(multiBucket));
-            c.setMetadata(meta);
-            log.warn("created: " + c.getName() + " for: bucketLength=" + storageBucketLength + " multiBucket=" + multiBucket);
+            log.warn("created: " + c.getName());
         }
         
         // check vs config
-        Map<String,Object> meta = c.getMetadata();
-        log.warn("meta: " + meta.size() + " entries");
-        for (Map.Entry<String,Object> me : meta.entrySet()) {
-            log.warn("meta: " + me.getKey() + " = " + me.getValue());
-        }
-        String mbstr = (String) meta.get(MULTIBUCKET_ATTR);
-        String sblstr = (String) meta.get(BUCKETLENGTH_ATTR);
-        boolean mbok = (mbstr != null && multiBucket == Boolean.parseBoolean(mbstr));
-        boolean sblok = (sblstr != null || Integer.parseInt(sblstr) == storageBucketLength);
-        if (!mbok || !sblok) {
-            throw new InvalidConfigException("found bucket: " + storageBucket + "[bucketLength=" + sblstr + ",multiBucket=" + mbstr + "]"
-                + " -- incompatible with config: " + storageBucket + "[bucketLength=" + storageBucketLength + ",multiBucket=" + multiBucket + "]");
+        Map<String,Object> curmeta = c.getMetadata();
+        String version = (String) curmeta.get(VERSION_ATTR);
+        if (version != null) {
+            String mbstr = (String) curmeta.get(MULTIBUCKET_ATTR);
+            String sblstr = (String) curmeta.get(BUCKETLENGTH_ATTR);
+            boolean mbok = (mbstr != null && multiBucket == Boolean.parseBoolean(mbstr));
+            boolean sblok = (sblstr != null || Integer.parseInt(sblstr) == storageBucketLength);
+            if (!mbok || !sblok) {
+                throw new InvalidConfigException("found bucket: " + storageBucket + "/" + sblstr + "/" + mbstr
+                    + " -- incompatible with config: " + storageBucket + "/" + storageBucketLength + "/" + multiBucket + "]");
+            }
+            // previous init OK
+            log.warn("init looks OK: " + storageBucket + "/" + storageBucketLength + "/" + multiBucket);
+            return;
         }
 
         if (multiBucket) {
-            int numBuckets = client.getCount();
-            log.warn("account: " + numBuckets + " buckets");
             BucketNameGenerator gen = new BucketNameGenerator(storageBucket, storageBucketLength);
-            int expNum = 1 + gen.getCount();
-            StringBuilder sb = new StringBuilder();
-            sb.append("expected buckets: ").append(expNum).append(" found: ").append(numBuckets);
-            if (numBuckets == expNum) {
-                sb.append(" -- assuming correct");
-                log.warn(sb.toString());
-            } else {
-                sb.append(" -- performing multi-bucket init");
-                log.warn(sb.toString());
-                log.warn("config: " + gen.getCount() + " buckets");
-                Iterator<String> iter = gen.iterator();
-                while (iter.hasNext()) {
-                    String bucketName = iter.next();
-                    Container mb = client.getContainer(bucketName);
-                    if (!mb.exists()) {
+            log.warn("config: " + gen.getCount() + " buckets");
+            Iterator<String> iter = gen.iterator();
+            while (iter.hasNext()) {
+                String bucketName = iter.next();
+                Container mb = client.getContainer(bucketName);
+                if (!mb.exists()) {
+                    try {
+                        log.info("creating: " + bucketName);
                         mb.create();
+                    } catch (CommandException ex) {
+                        throw new StorageEngageException("failed to create container: " + bucketName, ex);
                     }
+                } else {
+                    log.info("exists: " + bucketName);
                 }
             }
         }
+        
+        // init succeeeded: commit
+        Map<String,Object> meta = new TreeMap<>();
+        meta.put(VERSION_ATTR, "0.5.0");
+        meta.put(BUCKETLENGTH_ATTR, Integer.toString(storageBucketLength));
+        meta.put(MULTIBUCKET_ATTR, Boolean.toString(multiBucket));
+        c.setMetadata(meta);
+        log.info("init complete: " + storageBucket + "/" + storageBucketLength + "/" + multiBucket);
     }
     
     static class InternalBucket {
