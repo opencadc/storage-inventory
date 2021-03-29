@@ -84,8 +84,11 @@ import java.io.IOException;
 import java.net.URI;
 import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
+import java.util.Date;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import javax.security.auth.Subject;
 import javax.sql.DataSource;
 import org.apache.log4j.Logger;
@@ -98,6 +101,7 @@ import org.opencadc.inventory.query.ArtifactRowMapper;
 import org.opencadc.inventory.util.ArtifactSelector;
 import org.opencadc.inventory.util.BucketSelector;
 import org.opencadc.tap.TapClient;
+import org.opencadc.tap.TapRowMapper;
 
 /**
  * Validate local inventory.
@@ -119,12 +123,12 @@ public class InventoryValidator implements Runnable {
      *
      * @param daoConfig          config map to pass to cadc-inventory-db DAO classes
      * @param resourceID         identifier for the remote query service
-     * @param remoteSite         identifier for remote file service
      * @param artifactSelector   artifact selector implementation
      * @param bucketSelector     uri buckets
+     * @param trackSiteLocations local site type
      */
-    public InventoryValidator(Map<String, Object> daoConfig, URI resourceID, StorageSite remoteSite,
-                              ArtifactSelector artifactSelector, BucketSelector bucketSelector) {
+    public InventoryValidator(Map<String, Object> daoConfig, URI resourceID, ArtifactSelector artifactSelector,
+                              BucketSelector bucketSelector, boolean trackSiteLocations) {
         InventoryUtil.assertNotNull(InventoryValidator.class, "daoConfig", daoConfig);
         InventoryUtil.assertNotNull(InventoryValidator.class, "resourceID", resourceID);
         InventoryUtil.assertNotNull(InventoryValidator.class, "artifactSelector", artifactSelector);
@@ -132,10 +136,8 @@ public class InventoryValidator implements Runnable {
         this.artifactDAO = new ArtifactDAO(false);
         this.artifactDAO.setConfig(daoConfig);
         this.resourceID = resourceID;
-        this.remoteSite = remoteSite;
         this.artifactSelector = artifactSelector;
         this.bucketSelector = bucketSelector;
-        this.artifactValidator = new ArtifactValidator(this.artifactDAO, this.resourceID, this.remoteSite);
 
         try {
             String jndiDataSourceName = (String) daoConfig.get("jndiDataSourceName");
@@ -163,6 +165,19 @@ public class InventoryValidator implements Runnable {
         } catch (IOException ex) {
             throw new IllegalArgumentException("invalid config", ex);
         }
+
+        if (trackSiteLocations) {
+            try {
+                this.remoteSite = getRemoteStorageSite(resourceID);
+            } catch (ResourceNotFoundException ex) {
+                throw new IllegalArgumentException("query service not found: " + resourceID, ex);
+            } catch (Exception ex) {
+                throw new IllegalArgumentException("remote StorageSite query failed", ex);
+            }
+        } else {
+            this.remoteSite = null;
+        }
+        this.artifactValidator = new ArtifactValidator(this.artifactDAO, resourceID, remoteSite);
     }
 
     // Package access constructor for testing.
@@ -397,6 +412,44 @@ public class InventoryValidator implements Runnable {
 
         query.append(" ORDER BY uri ASC");
         return query.toString();
+    }
+
+    /**
+     * Get the StorageSite for the remote instance resourceID;
+     */
+    private StorageSite getRemoteStorageSite(URI resourceID)
+        throws InterruptedException, IOException, ResourceNotFoundException, TransientException {
+        final TapClient<StorageSite> tapClient = new TapClient<>(resourceID);
+        final String query = String.format("SELECT id, resourceID, name, allowRead, allowWrite, lastModified, "
+                                               + "metaChecksum FROM inventory.StorageSite where resourceID = %s",
+                                           resourceID);
+        log.debug("\nExecuting query '" + query + "'\n");
+        StorageSite returned = null;
+        ResourceIterator<StorageSite> results = tapClient.execute(query, new StorageSiteRowMapper());
+        if (results.hasNext()) {
+            returned = results.next();
+        }
+        return returned;
+    }
+
+    /**
+     * Class to map the query results to a StorageSite.
+     */
+    class StorageSiteRowMapper implements TapRowMapper<StorageSite> {
+        @Override
+        public StorageSite mapRow(List<Object> row) {
+            int index = 0;
+            final UUID id = (UUID) row.get(index++);
+            final URI resourceID = (URI) row.get(index++);
+            final String name = (String) row.get(index++);
+            final boolean allowRead = (Boolean) row.get(index++);
+            final boolean allowWrite = (Boolean) row.get(index);
+
+            final StorageSite storageSite = new StorageSite(id, resourceID, name, allowRead, allowWrite);
+            InventoryUtil.assignLastModified(storageSite, (Date) row.get(index++));
+            InventoryUtil.assignMetaChecksum(storageSite, (URI) row.get(index));
+            return storageSite;
+        }
     }
 
 }
