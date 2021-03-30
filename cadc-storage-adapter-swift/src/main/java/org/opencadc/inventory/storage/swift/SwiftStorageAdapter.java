@@ -141,7 +141,7 @@ public class SwiftStorageAdapter  implements StorageAdapter {
     static final String CONF_BUCKET = SwiftStorageAdapter.class.getName() + ".bucketName";
     static final String CONF_ENABLE_MULTI = SwiftStorageAdapter.class.getName() + ".multiBucket";
 
-    private static final String KEY_SCHEME = "sb";
+    private static final String KEY_SCHEME = "id";
 
     private static final String DEFAULT_CHECKSUM_ALGORITHM = "md5";
     
