@@ -65,114 +65,57 @@
 ************************************************************************
 */
 
-package org.opencadc.raven;
+package org.opencadc.inventory.xml;
 
-import ca.nrc.cadc.rest.InitAction;
-import ca.nrc.cadc.util.MultiValuedProperties;
-import ca.nrc.cadc.util.PropertiesReader;
+import ca.nrc.cadc.util.Log4jInit;
+import java.io.ByteArrayOutputStream;
 import java.net.URI;
-import java.util.Map;
-import java.util.TreeMap;
+import java.util.Date;
+import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
-import org.opencadc.inventory.db.SQLGenerator;
+import org.junit.Assert;
+import org.junit.Test;
+import org.opencadc.inventory.Artifact;
 
 /**
  *
  * @author adriand
  */
-public class RavenInitAction extends InitAction {
-    private static final Logger log = Logger.getLogger(RavenInitAction.class);
+public class ArtifactReaderWriterTest {
+    private static final Logger log = Logger.getLogger(ArtifactReaderWriterTest.class);
 
-    // config keys
-    private static final String RAVEN_KEY = "org.opencadc.raven";
-
-    static final String JNDI_DATASOURCE = "jdbc/inventory"; // context.xml
-
-    static final String SCHEMA_KEY = RAVEN_KEY + ".inventory.schema";
-
-    static final String PUBKEYFILE_KEY = RAVEN_KEY + ".publicKeyFile";
-    static final String PRIVKEYFILE_KEY = RAVEN_KEY + ".privateKeyFile";
-    static final String READ_GRANTS_KEY = RAVEN_KEY + ".readGrantProvider";
-    static final String WRITE_GRANTS_KEY = RAVEN_KEY + ".writeGrantProvider";
-
-    static final String RESOLVER_ENTRY = RAVEN_KEY + ".storageResolver.entry";
-
-    static final String DEV_AUTH_ONLY_KEY = RAVEN_KEY + ".authenticateOnly";
-
-    // set init initConfig, used by subsequent init methods
-
-    MultiValuedProperties props;
-    private URI resourceID;
-    private Map<String,Object> daoConfig;
-
-    public RavenInitAction() {
-        super();
+    static {
+        Log4jInit.setLevel("org.opencadc.inventory", Level.INFO);
     }
 
-    @Override
-    public void doInit() {
+    public ArtifactReaderWriterTest() {
     }
 
-    /**
-     * Read config file and verify that all required entries are present.
-     *
-     * @return MultiValuedProperties containing the application config
-     */
-    static MultiValuedProperties getConfig() {
-        PropertiesReader r = new PropertiesReader("raven.properties");
-        MultiValuedProperties mvp = r.getAllProperties();
+    @Test
+    public void testRoundTrip() throws Exception{
+        URI artifactURI = URI.create("cadc:ARCHIVE/foo");
+        URI contentChecksum = URI.create("md5:d41d8cd98f00b204e9800998ecf8427e");
+        Date contentLastModified = new Date(System.currentTimeMillis());
+        Long contentLength = new Long(333);
+        Artifact expected = new Artifact(artifactURI, contentChecksum, contentLastModified, contentLength);
+        expected.contentType = "application/fits";
+        expected.contentEncoding = "gzip";
 
-        StringBuilder sb = new StringBuilder();
-        sb.append("incomplete config: ");
-        boolean ok = true;
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        ArtifactWriter aw = new ArtifactWriter();
+        aw.write(expected, bos);
 
-        // validate required config here
-        String schema = mvp.getFirstPropertyValue(RavenInitAction.SCHEMA_KEY);
-        sb.append("\n\t").append(RavenInitAction.SCHEMA_KEY).append(": ");
-        if (schema == null) {
-            sb.append("MISSING");
-            ok = false;
-        } else {
-            sb.append("OK");
-        }
+        String xml = bos.toString();
+        log.info("xml:\n" + xml);
 
-        String pub = mvp.getFirstPropertyValue(RavenInitAction.PUBKEYFILE_KEY);
-        sb.append("\n\t").append(RavenInitAction.PUBKEYFILE_KEY).append(": ");
-        if (pub == null) {
-            sb.append("MISSING");
-            ok = false;
-        } else {
-            sb.append("OK");
-        }
+        ArtifactReader ar = new ArtifactReader();
+        Artifact actual = ar.read(xml);
 
-        String priv = mvp.getFirstPropertyValue(RavenInitAction.PRIVKEYFILE_KEY);
-        sb.append("\n\t").append(RavenInitAction.PRIVKEYFILE_KEY).append(": ");
-        if (priv == null) {
-            sb.append("MISSING");
-            ok = false;
-        } else {
-            sb.append("OK");
-        }
-
-        if (!ok) {
-            throw new IllegalStateException(sb.toString());
-        }
-
-        return mvp;
-    }
-
-    static Map<String,Object> getDaoConfig(MultiValuedProperties props) {
-        String cname = props.getFirstPropertyValue(SQLGenerator.class.getName());
-        try {
-            Map<String,Object> ret = new TreeMap<>();
-            Class clz = Class.forName(cname);
-            ret.put(SQLGenerator.class.getName(), clz);
-            ret.put("jndiDataSourceName", RavenInitAction.JNDI_DATASOURCE);
-            ret.put("schema", props.getFirstPropertyValue(RavenInitAction.SCHEMA_KEY));
-            //config.put("database", null);
-            return ret;
-        } catch (ClassNotFoundException ex) {
-            throw new IllegalStateException("invalid config: failed to load SQLGenerator: " + cname);
-        }
+        Assert.assertEquals(expected.getURI(), actual.getURI());
+        Assert.assertEquals(expected.getContentChecksum(), actual.getContentChecksum());
+        Assert.assertEquals(expected.getContentLastModified(), actual.getContentLastModified());
+        Assert.assertEquals(expected.getContentLength(), actual.getContentLength());
+        Assert.assertEquals(expected.contentType, actual.contentType);
+        Assert.assertEquals(expected.contentEncoding, actual.contentEncoding);
     }
 }

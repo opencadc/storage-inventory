@@ -65,114 +65,54 @@
 ************************************************************************
 */
 
-package org.opencadc.raven;
+package org.opencadc.inventory.xml;
 
-import ca.nrc.cadc.rest.InitAction;
-import ca.nrc.cadc.util.MultiValuedProperties;
-import ca.nrc.cadc.util.PropertiesReader;
-import java.net.URI;
-import java.util.Map;
-import java.util.TreeMap;
+import ca.nrc.cadc.date.DateUtil;
+import java.io.IOException;
+import java.io.OutputStream;
+import java.io.OutputStreamWriter;
+import java.io.Writer;
+import java.text.DateFormat;
 import org.apache.log4j.Logger;
-import org.opencadc.inventory.db.SQLGenerator;
+import org.jdom2.Document;
+import org.jdom2.Element;
+import org.jdom2.output.Format;
+import org.jdom2.output.XMLOutputter;
+import org.opencadc.inventory.Artifact;
 
 /**
  *
  * @author adriand
  */
-public class RavenInitAction extends InitAction {
-    private static final Logger log = Logger.getLogger(RavenInitAction.class);
+public class ArtifactWriter {
+    private static final Logger log = Logger.getLogger(ArtifactWriter.class);
 
-    // config keys
-    private static final String RAVEN_KEY = "org.opencadc.raven";
-
-    static final String JNDI_DATASOURCE = "jdbc/inventory"; // context.xml
-
-    static final String SCHEMA_KEY = RAVEN_KEY + ".inventory.schema";
-
-    static final String PUBKEYFILE_KEY = RAVEN_KEY + ".publicKeyFile";
-    static final String PRIVKEYFILE_KEY = RAVEN_KEY + ".privateKeyFile";
-    static final String READ_GRANTS_KEY = RAVEN_KEY + ".readGrantProvider";
-    static final String WRITE_GRANTS_KEY = RAVEN_KEY + ".writeGrantProvider";
-
-    static final String RESOLVER_ENTRY = RAVEN_KEY + ".storageResolver.entry";
-
-    static final String DEV_AUTH_ONLY_KEY = RAVEN_KEY + ".authenticateOnly";
-
-    // set init initConfig, used by subsequent init methods
-
-    MultiValuedProperties props;
-    private URI resourceID;
-    private Map<String,Object> daoConfig;
-
-    public RavenInitAction() {
-        super();
+    public ArtifactWriter() { }
+    
+    public void write(Artifact artifact, OutputStream ostream) throws IOException {
+        write(artifact, new OutputStreamWriter(ostream));
+    }
+    
+    public void write(Artifact artifact, Writer writer) throws IOException {
+        Element root = new Element(ArtifactReader.ENAMES.artifact.name());
+        addChild(root, ArtifactReader.ENAMES.uri.name(), artifact.getURI().toASCIIString());
+        addChild(root, ArtifactReader.ENAMES.contentChecksum.name(), artifact.getContentChecksum().toASCIIString());
+        Element rd = new Element(ArtifactReader.ENAMES.contentLastModified.name());
+        DateFormat df = DateUtil.getDateFormat(DateUtil.IVOA_DATE_FORMAT, DateUtil.UTC);
+        rd.setText(df.format(artifact.getContentLastModified()));
+        root.addContent(rd);
+        addChild(root, ArtifactReader.ENAMES.contentLength.name(), artifact.getContentLength().toString());
+        addChild(root, ArtifactReader.ENAMES.contentType.name(), artifact.contentType);
+        addChild(root, ArtifactReader.ENAMES.contentEncoding.name(), artifact.contentEncoding);
+        Document doc = new Document(root);
+        XMLOutputter outputter = new XMLOutputter();
+        outputter.setFormat(Format.getPrettyFormat());
+        outputter.output(doc, writer);
     }
 
-    @Override
-    public void doInit() {
-    }
-
-    /**
-     * Read config file and verify that all required entries are present.
-     *
-     * @return MultiValuedProperties containing the application config
-     */
-    static MultiValuedProperties getConfig() {
-        PropertiesReader r = new PropertiesReader("raven.properties");
-        MultiValuedProperties mvp = r.getAllProperties();
-
-        StringBuilder sb = new StringBuilder();
-        sb.append("incomplete config: ");
-        boolean ok = true;
-
-        // validate required config here
-        String schema = mvp.getFirstPropertyValue(RavenInitAction.SCHEMA_KEY);
-        sb.append("\n\t").append(RavenInitAction.SCHEMA_KEY).append(": ");
-        if (schema == null) {
-            sb.append("MISSING");
-            ok = false;
-        } else {
-            sb.append("OK");
-        }
-
-        String pub = mvp.getFirstPropertyValue(RavenInitAction.PUBKEYFILE_KEY);
-        sb.append("\n\t").append(RavenInitAction.PUBKEYFILE_KEY).append(": ");
-        if (pub == null) {
-            sb.append("MISSING");
-            ok = false;
-        } else {
-            sb.append("OK");
-        }
-
-        String priv = mvp.getFirstPropertyValue(RavenInitAction.PRIVKEYFILE_KEY);
-        sb.append("\n\t").append(RavenInitAction.PRIVKEYFILE_KEY).append(": ");
-        if (priv == null) {
-            sb.append("MISSING");
-            ok = false;
-        } else {
-            sb.append("OK");
-        }
-
-        if (!ok) {
-            throw new IllegalStateException(sb.toString());
-        }
-
-        return mvp;
-    }
-
-    static Map<String,Object> getDaoConfig(MultiValuedProperties props) {
-        String cname = props.getFirstPropertyValue(SQLGenerator.class.getName());
-        try {
-            Map<String,Object> ret = new TreeMap<>();
-            Class clz = Class.forName(cname);
-            ret.put(SQLGenerator.class.getName(), clz);
-            ret.put("jndiDataSourceName", RavenInitAction.JNDI_DATASOURCE);
-            ret.put("schema", props.getFirstPropertyValue(RavenInitAction.SCHEMA_KEY));
-            //config.put("database", null);
-            return ret;
-        } catch (ClassNotFoundException ex) {
-            throw new IllegalStateException("invalid config: failed to load SQLGenerator: " + cname);
-        }
+    private void addChild(Element parent, String ename, String eval) {
+        Element uri = new Element(ename);
+        uri.setText(eval);
+        parent.addContent(uri);
     }
 }

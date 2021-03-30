@@ -69,6 +69,7 @@ package org.opencadc.raven;
 
 import ca.nrc.cadc.auth.AuthMethod;
 import ca.nrc.cadc.auth.AuthenticationUtil;
+import ca.nrc.cadc.net.StorageResolver;
 import ca.nrc.cadc.rest.RestAction;
 import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.vos.Direction;
@@ -77,6 +78,7 @@ import java.io.File;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -108,6 +110,7 @@ public abstract class ArtifactAction extends RestAction {
     protected final File privateKeyFile;
     protected final List<URI> readGrantServices = new ArrayList<>();
     protected final List<URI> writeGrantServices = new ArrayList<>();
+    protected final Map<String, StorageResolver> storageResolvers = new HashMap<>();
 
     protected final boolean authenticateOnly;
 
@@ -160,6 +163,8 @@ public abstract class ArtifactAction extends RestAction {
             authenticateOnly = false;
         }
 
+        initResolvers();
+
         // technically, raven only needs the private key to generate pre-auth tokens
         // but both are requied here for clarity
         // - in principle, raven could export it's public key and minoc(s) could retrieve it
@@ -184,6 +189,27 @@ public abstract class ArtifactAction extends RestAction {
             Set<String> userids = AuthenticationUtil.getUseridsFromSubject();
             if (userids.size() > 0) {
                 user = userids.iterator().next();
+            }
+        }
+    }
+
+    protected void initResolvers() {
+        MultiValuedProperties props = RavenInitAction.getConfig();
+        storageResolvers.clear();
+        List<String> stResolvers = props.getProperty(RavenInitAction.RESOLVER_ENTRY);
+        if (stResolvers != null) {
+            for (String sr : stResolvers) {
+                String[] comp = sr.split(" ");
+                if (comp.length != 2) {
+                    throw new IllegalStateException("invalid config: " + RavenInitAction.RESOLVER_ENTRY + "=" + sr + " must be of form <scheme> <handling class> or not set");
+                }
+                try {
+                    log.debug("Setting storage resolver " + comp[1] + " for scheme " + comp[0]);
+                    StorageResolver resolver = (StorageResolver) Class.forName(comp[1]).newInstance();
+                    this.storageResolvers.put(comp[0], resolver);
+                } catch (ClassNotFoundException | IllegalAccessException | InstantiationException ex) {
+                    throw new IllegalStateException("invalid config: failed to load storage resolver: " + comp[1], ex);
+                }
             }
         }
     }
