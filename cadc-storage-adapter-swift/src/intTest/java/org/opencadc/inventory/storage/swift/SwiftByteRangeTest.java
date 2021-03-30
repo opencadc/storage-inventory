@@ -94,7 +94,7 @@ public class SwiftByteRangeTest extends StorageAdapterByteRangeTest {
     final SwiftStorageAdapter swiftAdapter;
     
     public SwiftByteRangeTest() throws Exception {
-        super(new SwiftStorageAdapter(true, System.getProperty("user.name") + "-SwiftByteRangeTest", 3, false)); // single-bucket adapter for this
+        super(new SwiftStorageAdapter(true, System.getProperty("user.name") + "-single-test", 3, false)); // single-bucket adapter for this
         this.swiftAdapter = (SwiftStorageAdapter) super.adapter;
     }
     
