@@ -78,7 +78,6 @@ import ca.nrc.cadc.reg.client.RegistryClient;
 import ca.nrc.cadc.util.FileUtil;
 import ca.nrc.cadc.util.Log4jInit;
 import java.io.File;
-import java.net.URI;
 import java.net.URL;
 import java.security.AccessControlException;
 import java.security.PrivilegedExceptionAction;
@@ -88,10 +87,9 @@ import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.Test;
 
-public class QueryRunnerImplTest {
-    private static final Logger log = Logger.getLogger(QueryRunnerImplTest.class);
+public class AuthQueryTest {
+    private static final Logger log = Logger.getLogger(AuthQueryTest.class);
 
-    public static final URI LUSKAN_URI = URI.create("ivo://cadc.nrc.ca/luskan");
     protected URL luskanURL;
     protected Subject anonymousSubject;
     protected Subject authorizedSubject;
@@ -101,18 +99,18 @@ public class QueryRunnerImplTest {
         Log4jInit.setLevel("org.opencadc.luskan", Level.INFO);
     }
 
-    public QueryRunnerImplTest() {
+    public AuthQueryTest() {
         RegistryClient regClient = new RegistryClient();
-        luskanURL = regClient.getServiceURL(LUSKAN_URI, Standards.TAP_10, AuthMethod.CERT);
+        luskanURL = regClient.getServiceURL(Constants.RESOURCE_ID, Standards.TAP_10, AuthMethod.CERT);
         log.debug("luskan URL: " + luskanURL);
 
         anonymousSubject = AuthenticationUtil.getAnonSubject();
 
-        File cert = FileUtil.getFileFromResource("luskan-test-noauth.pem", QueryRunnerImplTest.class);
+        File cert = FileUtil.getFileFromResource("luskan-test-noauth.pem", AuthQueryTest.class);
         notAuthorizedSubject = SSLUtil.createSubject(cert);
         log.debug("not authorized Subject: " + notAuthorizedSubject);
 
-        cert = FileUtil.getFileFromResource("luskan-test-auth.pem", QueryRunnerImplTest.class);
+        cert = FileUtil.getFileFromResource("luskan-test-auth.pem", AuthQueryTest.class);
         authorizedSubject = SSLUtil.createSubject(cert);
         log.debug("authorized Subject: " + authorizedSubject);
     }

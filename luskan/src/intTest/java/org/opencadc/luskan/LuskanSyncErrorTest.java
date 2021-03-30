@@ -96,7 +96,7 @@ public class LuskanSyncErrorTest extends TapSyncErrorTest
     public LuskanSyncErrorTest()
     { 
         super(Constants.RESOURCE_ID);
-        File testCertFile = FileUtil.getFileFromResource("x509_CADCAuthtest1.pem", LuskanSyncQueryTest.class);
+        File testCertFile = FileUtil.getFileFromResource("luskan-test-auth.pem", LuskanSyncQueryTest.class);
         setSubject(SSLUtil.createSubject(testCertFile));
         // re-use SyncResultTest files
         File testFile = FileUtil.getFileFromResource("SyncErrorTest-ATTEMPT-DELETE.properties", LuskanSyncErrorTest.class);

@@ -69,24 +69,12 @@
 
 package org.opencadc.luskan;
 
-import ca.nrc.cadc.cred.client.CredUtil;
 import ca.nrc.cadc.db.DBUtil;
-import ca.nrc.cadc.reg.Standards;
-import ca.nrc.cadc.reg.client.LocalAuthority;
 import ca.nrc.cadc.tap.QueryRunner;
-import ca.nrc.cadc.util.MultiValuedProperties;
 
-import java.net.URI;
-import java.security.AccessControlException;
-import java.security.cert.CertificateException;
-import java.util.ArrayList;
-import java.util.List;
 import javax.sql.DataSource;
 
 import org.apache.log4j.Logger;
-import org.opencadc.gms.GroupClient;
-import org.opencadc.gms.GroupURI;
-import org.opencadc.gms.GroupUtil;
 
 /**
  *
@@ -98,64 +86,17 @@ public class QueryRunnerImpl extends QueryRunner {
     public QueryRunnerImpl() {
     }
 
-    @Override
-    protected DataSource getUploadDataSource()
-            throws Exception {
+    @Override protected DataSource getUploadDataSource() throws Exception {
         return getQueryDataSource();
     }
 
-    @Override
-    protected DataSource getTapSchemaDataSource() throws Exception {
+    @Override protected DataSource getTapSchemaDataSource() throws Exception {
         return getQueryDataSource();
     }
 
-    @Override
-    protected DataSource getQueryDataSource() throws Exception {
+    @Override protected DataSource getQueryDataSource() throws Exception {
         log.debug("Data Source name: jdbc/tapuser");
         return DBUtil.findJNDIDataSource("jdbc/tapuser");
-    }
-
-    /**
-     *
-     */
-    @Override
-    public void run() {
-        checkPermission();
-        super.run();
-    }
-
-    /**
-     *
-     */
-    private void checkPermission() {
-        try {
-            if (CredUtil.checkCredentials()) {
-                // better to get all the groups for the caller which could be a long list,
-                // or call isMember for each configured allowed group, which should be a short list.
-                // Or make it configurable.
-                LocalAuthority loc = new LocalAuthority();
-                URI resourceID = loc.getServiceURI(Standards.GMS_SEARCH_01.toString());
-                GroupClient client = GroupUtil.getGroupClient(resourceID);
-                List<GroupURI> memberships = client.getMemberships();
-
-                MultiValuedProperties props = LuskanConfig.getConfig();
-                List<String> configGroups = props.getProperty(LuskanConfig.ALLOWED_GROUP);
-                List<GroupURI> allowedGroups = new ArrayList<>();
-                configGroups.forEach(group -> allowedGroups.add(new GroupURI(URI.create(group))));
-
-                for (GroupURI memberGroup : memberships) {
-                    for (GroupURI allowedGroup : allowedGroups) {
-                        if (memberGroup.equals(allowedGroup)) {
-                            log.debug("Allowed group: " + allowedGroup);
-                            return;
-                        }
-                    }
-                }
-            }
-        } catch (CertificateException e) {
-            throw new AccessControlException("read permission denied (invalid delegated client certificate)");
-        }
-        throw new AccessControlException("permission denied");
     }
 
 }
