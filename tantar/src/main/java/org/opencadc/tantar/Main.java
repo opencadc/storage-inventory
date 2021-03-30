@@ -89,7 +89,7 @@ import org.opencadc.tantar.policy.ResolutionPolicy;
  * Main application entry.  This class expects a tantar.properties file to be available and readable.
  */
 public class Main {
-    private final static Logger log = Logger.getLogger(Main.class);
+    private static final Logger log = Logger.getLogger(Main.class);
     
     private static final String CONFIG_BASE = Main.class.getPackage().getName();
     private static final String LOGGING_KEY = CONFIG_BASE + ".logging";
