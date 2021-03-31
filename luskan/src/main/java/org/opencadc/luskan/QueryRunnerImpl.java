@@ -86,15 +86,18 @@ public class QueryRunnerImpl extends QueryRunner {
     public QueryRunnerImpl() {
     }
 
-    @Override protected DataSource getUploadDataSource() throws Exception {
+    @Override
+    protected DataSource getUploadDataSource() throws Exception {
         return getQueryDataSource();
     }
 
-    @Override protected DataSource getTapSchemaDataSource() throws Exception {
+    @Override
+    protected DataSource getTapSchemaDataSource() throws Exception {
         return getQueryDataSource();
     }
 
-    @Override protected DataSource getQueryDataSource() throws Exception {
+    @Override
+    protected DataSource getQueryDataSource() throws Exception {
         log.debug("Data Source name: jdbc/tapuser");
         return DBUtil.findJNDIDataSource("jdbc/tapuser");
     }
