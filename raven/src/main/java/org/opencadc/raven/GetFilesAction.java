@@ -108,7 +108,7 @@ public class GetFilesAction extends FilesAction {
 
         StringBuilder sb = new StringBuilder();
         for (String param : syncInput.getParameterNames()) {
-            Iterator<String> values= syncInput.getParameters(param).iterator();
+            Iterator<String> values = syncInput.getParameters(param).iterator();
             while (values.hasNext()) {
                 if (sb.length() > 0) {
                     sb.append("&");
