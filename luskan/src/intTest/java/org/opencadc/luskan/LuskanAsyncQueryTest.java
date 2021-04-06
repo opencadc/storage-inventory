@@ -96,7 +96,7 @@ public class LuskanAsyncQueryTest extends TapAsyncQueryTest
     public LuskanAsyncQueryTest()
     { 
         super(Constants.RESOURCE_ID);
-        File testCertFile = FileUtil.getFileFromResource("x509_CADCAnontest1.pem", LuskanSyncQueryTest.class);
+        File testCertFile = FileUtil.getFileFromResource("luskan-test-auth.pem", LuskanSyncQueryTest.class);
         setSubject(SSLUtil.createSubject(testCertFile));
         // re-use SyncResultTest files
         File testFile = FileUtil.getFileFromResource("AsyncResultTest-ts-columns.properties", LuskanSyncQueryTest.class);
