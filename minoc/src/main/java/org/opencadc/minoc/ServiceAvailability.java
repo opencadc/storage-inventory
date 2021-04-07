@@ -72,6 +72,7 @@ import ca.nrc.cadc.db.DBUtil;
 import ca.nrc.cadc.reg.Standards;
 import ca.nrc.cadc.reg.client.LocalAuthority;
 import ca.nrc.cadc.reg.client.RegistryClient;
+import ca.nrc.cadc.rest.RestAction;
 import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.vosi.AvailabilityPlugin;
 import ca.nrc.cadc.vosi.AvailabilityStatus;
@@ -100,6 +101,8 @@ public class ServiceAvailability implements AvailabilityPlugin {
 
     private static final Logger log = Logger.getLogger(ServiceAvailability.class);
     private static final File SERVOPS_PEM_FILE = new File(System.getProperty("user.home") + "/.ssl/cadcproxy.pem");
+    
+    private String appName;
 
     /**
      * Default, no-arg constructor.
@@ -111,8 +114,8 @@ public class ServiceAvailability implements AvailabilityPlugin {
      * Sets the name of the application.
      */
     @Override
-    public void setAppName(String string) {
-        //no-op
+    public void setAppName(String name) {
+        this.appName = name;
     }
 
     /**
@@ -138,6 +141,14 @@ public class ServiceAvailability implements AvailabilityPlugin {
             Map<String,Object> config = MinocInitAction.getDaoConfig(props);
             ArtifactDAO dao = new ArtifactDAO();
             dao.setConfig(config); // connectivity tested
+
+            String state = getState();
+            if (RestAction.STATE_OFFLINE.equals(state)) {
+                return new AvailabilityStatus(false, null, null, null, RestAction.STATE_OFFLINE_MSG);
+            }
+            if (RestAction.STATE_READ_ONLY.equals(state)) {
+                return new AvailabilityStatus(false, null, null, null, RestAction.STATE_READ_ONLY_MSG);
+            }
             
             // check for a certficate needed to perform network ops
             CheckCertificate checkCert = new CheckCertificate(SERVOPS_PEM_FILE);
@@ -185,7 +196,27 @@ public class ServiceAvailability implements AvailabilityPlugin {
      */
     @Override
     public void setState(String state) {
-        // ignore
+        String key = appName + RestAction.STATE_MODE_KEY;
+        if (RestAction.STATE_OFFLINE.equalsIgnoreCase(state)) {
+            System.setProperty(key, RestAction.STATE_OFFLINE);
+        } else if (RestAction.STATE_READ_ONLY.equalsIgnoreCase(state)) {
+            System.setProperty(key, RestAction.STATE_READ_ONLY);
+        } else if (RestAction.STATE_READ_WRITE.equalsIgnoreCase(state)) {
+            System.setProperty(key, RestAction.STATE_READ_WRITE);
+        } else {
+            throw new IllegalArgumentException("invalid state: " + state
+                + " expected: " + RestAction.STATE_READ_WRITE + "|" + RestAction.STATE_OFFLINE);
+        }
+        log.info("WebService state changed: " + key + "=" + state + " [OK]");
+    }
+
+    public String getState() {
+        String key = appName + RestAction.STATE_MODE_KEY;
+        String ret = System.getProperty(key);
+        if (ret == null) {
+            return RestAction.STATE_READ_WRITE;
+        }
+        return ret;
     }
 
 }
