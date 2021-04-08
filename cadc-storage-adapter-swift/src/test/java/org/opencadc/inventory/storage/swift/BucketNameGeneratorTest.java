@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2020.                            (c) 2020.
+*  (c) 2021.                            (c) 2021.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -71,47 +71,76 @@ import ca.nrc.cadc.util.Log4jInit;
 import java.util.Iterator;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
-import org.junit.Before;
+import org.junit.Assert;
 import org.junit.Test;
-import org.opencadc.inventory.StorageLocation;
-import org.opencadc.inventory.storage.StorageMetadata;
-import org.opencadc.inventory.storage.test.StorageAdapterByteRangeTest;
 
 /**
- * Integration tests that interact with the file system. These tests require a file system
- * that supports posix extended attributes.
- * 
+ *
  * @author pdowler
  */
-public class SwiftByteRangeTest extends StorageAdapterByteRangeTest {
-    private static final Logger log = Logger.getLogger(SwiftByteRangeTest.class);
+public class BucketNameGeneratorTest {
+    private static final Logger log = Logger.getLogger(BucketNameGeneratorTest.class);
 
     static {
         Log4jInit.setLevel("org.opencadc.inventory", Level.INFO);
-        //Log4jInit.setLevel("org.javaswift.joss", Level.INFO);
     }
     
-    final SwiftStorageAdapter swiftAdapter;
-    
-    public SwiftByteRangeTest() throws Exception {
-        super(new SwiftStorageAdapter(true, System.getProperty("user.name") + "-single-test", 3, false)); // single-bucket adapter for this
-        this.swiftAdapter = (SwiftStorageAdapter) super.adapter;
-    }
-    
-    @Before
-    public void cleanupBefore() throws Exception {
-        log.info("cleanupBefore: START");
-        Iterator<StorageMetadata> sbi = swiftAdapter.iterator();
-        while (sbi.hasNext()) {
-            StorageLocation loc = sbi.next().getStorageLocation();
-            swiftAdapter.delete(loc);
-            log.info("\tdeleted: " + loc);
-        }
-        log.info("cleanupBefore: DONE");        
+    public BucketNameGeneratorTest() { 
     }
     
     @Test
-    public void testCleanupOnly() {
-        log.info("testCleanupOnly: no-op");
+    public void testLength1() throws Exception {
+        log.info("testLength1: START");
+        BucketNameGenerator gen = new BucketNameGenerator("bucket", 1);
+        log.info("testLength1: iterating...");
+        Iterator<String> i = gen.iterator();
+        String first = null;
+        String last = null;
+        int num = 0;
+        while (i.hasNext()) {
+            String s = i.next();
+            if (first == null) {
+                first = s;
+            }
+            last = s;
+            log.info("found: " + s);
+            num++;
+        }
+        log.info("testLength1: iterating... DONE");
+        Assert.assertEquals(16, num);
+        
+        Assert.assertNotNull(first);
+        Assert.assertEquals("bucket-0", first);
+        
+        Assert.assertNotNull(last);
+        Assert.assertEquals("bucket-f", last);
     }
-}    
+    
+    @Test
+    public void testLength2() throws Exception {
+        log.info("testLength1: START");
+        BucketNameGenerator gen = new BucketNameGenerator("bucket", 2);
+        log.info("testLength1: iterating...");
+        Iterator<String> i = gen.iterator();
+        String first = null;
+        String last = null;
+        int num = 0;
+        while (i.hasNext()) {
+            String s = i.next();
+            if (first == null) {
+                first = s;
+            }
+            last = s;
+            log.info("found: " + s);
+            num++;
+        }
+        log.info("testLength1: iterating... DONE");
+        Assert.assertEquals(16*16, num);
+        
+        Assert.assertNotNull(first);
+        Assert.assertEquals("bucket-00", first);
+        
+        Assert.assertNotNull(last);
+        Assert.assertEquals("bucket-ff", last);
+    }
+}
