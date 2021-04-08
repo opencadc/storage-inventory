@@ -3,7 +3,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2019.                            (c) 2019.
+ *  (c) 2021.                            (c) 2021.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -62,45 +62,80 @@
  *  <http://www.gnu.org/licenses/>.      pas le cas, consultez :
  *                                       <http://www.gnu.org/licenses/>.
  *
+ *  : 5 $
+ *
  ************************************************************************
  */
 
 package org.opencadc.luskan.ws;
 
-import ca.nrc.cadc.auth.X500IdentityManager;
-import ca.nrc.cadc.uws.server.JobExecutor;
-import ca.nrc.cadc.uws.server.JobPersistence;
-import ca.nrc.cadc.uws.server.SimpleJobManager;
-import ca.nrc.cadc.uws.server.ThreadPoolExecutor;
-
+import ca.nrc.cadc.auth.IdentityManager;
+import ca.nrc.cadc.cred.client.CredUtil;
+import ca.nrc.cadc.net.TransientException;
+import ca.nrc.cadc.reg.Standards;
+import ca.nrc.cadc.reg.client.LocalAuthority;
+import ca.nrc.cadc.util.MultiValuedProperties;
+import ca.nrc.cadc.uws.Job;
+import ca.nrc.cadc.uws.server.JobPersistenceException;
+import ca.nrc.cadc.uws.server.impl.PostgresJobPersistence;
+import java.net.URI;
+import java.security.AccessControlException;
+import java.security.cert.CertificateException;
+import java.util.ArrayList;
+import java.util.List;
 import org.apache.log4j.Logger;
-import org.opencadc.luskan.QueryRunnerImpl;
+import org.opencadc.gms.GroupClient;
+import org.opencadc.gms.GroupURI;
+import org.opencadc.gms.GroupUtil;
+import org.opencadc.luskan.LuskanConfig;
 
+public class AuthJobPersistence extends PostgresJobPersistence {
 
-/**
- * @author pdowler
- */
-public class QueryJobManager extends SimpleJobManager {
+    private static final Logger log = Logger.getLogger(AuthJobPersistence.class);
 
-    private static final Logger log = Logger.getLogger(QueryJobManager.class);
-
-    private static final Long MAX_EXEC_DURATION = 4 * 3600L;    // 4 hours to dump a catalog to vpsace
-    public static final Long MAX_DESTRUCTION = 7 * 24 * 60 * 60L; // 1 week
-    private static final Long MAX_QUOTE = 24 * 3600L; // 24 hours since we have a threadpool with queued jobs
-
-    public QueryJobManager() {
-        super();
-        // persist UWS jobs to PostgreSQL.
-        JobPersistence jobPersist = new AuthJobPersistence(new X500IdentityManager());
-
-        // max threads: 6 == number of simultaneously running async queries (per
-        // web server), plus sync queries, plus VOSI-tables queries
-        JobExecutor jobExec = new ThreadPoolExecutor(jobPersist, QueryRunnerImpl.class, 6);
-
-        super.setJobPersistence(jobPersist);
-        super.setJobExecutor(jobExec);
-        super.setMaxExecDuration(MAX_EXEC_DURATION);
-        super.setMaxDestruction(MAX_DESTRUCTION);
-        super.setMaxQuote(MAX_QUOTE);
+    public AuthJobPersistence(IdentityManager im) {
+        super(im);
     }
+
+    @Override
+    public Job put(Job job)
+        throws JobPersistenceException, TransientException {
+        checkPermission();
+        return super.put(job);
+    }
+
+    /**
+     *
+     */
+    private void checkPermission() {
+        try {
+            if (CredUtil.checkCredentials()) {
+                // better to get all the groups for the caller which could be a long list,
+                // or call isMember for each configured allowed group, which should be a short list.
+                // Or make it configurable.
+                LocalAuthority loc = new LocalAuthority();
+                URI resourceID = loc.getServiceURI(Standards.GMS_SEARCH_01.toString());
+                GroupClient client = GroupUtil.getGroupClient(resourceID);
+                List<GroupURI> memberships = client.getMemberships();
+
+                MultiValuedProperties props = LuskanConfig.getConfig();
+                List<String> configGroups = props.getProperty(LuskanConfig.ALLOWED_GROUP);
+                List<GroupURI> allowedGroups = new ArrayList<>();
+                configGroups.forEach(group -> allowedGroups.add(new GroupURI(URI.create(group))));
+
+                for (GroupURI memberGroup : memberships) {
+                    for (GroupURI allowedGroup : allowedGroups) {
+                        if (memberGroup.equals(allowedGroup)) {
+                            log.debug("Allowed group: " + allowedGroup);
+                            return;
+                        }
+                    }
+                }
+            }
+        } catch (CertificateException e) {
+            throw new AccessControlException("read permission denied (invalid delegated client certificate)");
+        }
+        throw new AccessControlException("permission denied");
+    }
+
 }

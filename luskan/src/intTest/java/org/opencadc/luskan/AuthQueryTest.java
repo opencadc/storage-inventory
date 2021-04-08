@@ -3,7 +3,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2019.                            (c) 2019.
+ *  (c) 2021.                            (c) 2021.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -62,45 +62,111 @@
  *  <http://www.gnu.org/licenses/>.      pas le cas, consultez :
  *                                       <http://www.gnu.org/licenses/>.
  *
+ *  : 5 $
+ *
  ************************************************************************
  */
 
-package org.opencadc.luskan.ws;
+package org.opencadc.luskan;
 
-import ca.nrc.cadc.auth.X500IdentityManager;
-import ca.nrc.cadc.uws.server.JobExecutor;
-import ca.nrc.cadc.uws.server.JobPersistence;
-import ca.nrc.cadc.uws.server.SimpleJobManager;
-import ca.nrc.cadc.uws.server.ThreadPoolExecutor;
-
+import ca.nrc.cadc.auth.AuthMethod;
+import ca.nrc.cadc.auth.AuthenticationUtil;
+import ca.nrc.cadc.auth.SSLUtil;
+import ca.nrc.cadc.net.HttpGet;
+import ca.nrc.cadc.reg.Standards;
+import ca.nrc.cadc.reg.client.RegistryClient;
+import ca.nrc.cadc.util.FileUtil;
+import ca.nrc.cadc.util.Log4jInit;
+import java.io.File;
+import java.net.URL;
+import java.security.AccessControlException;
+import java.security.PrivilegedExceptionAction;
+import javax.security.auth.Subject;
+import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
-import org.opencadc.luskan.QueryRunnerImpl;
+import org.junit.Assert;
+import org.junit.Test;
 
+public class AuthQueryTest {
+    private static final Logger log = Logger.getLogger(AuthQueryTest.class);
 
-/**
- * @author pdowler
- */
-public class QueryJobManager extends SimpleJobManager {
+    protected URL luskanURL;
+    protected Subject anonymousSubject;
+    protected Subject authorizedSubject;
+    protected Subject notAuthorizedSubject;
 
-    private static final Logger log = Logger.getLogger(QueryJobManager.class);
-
-    private static final Long MAX_EXEC_DURATION = 4 * 3600L;    // 4 hours to dump a catalog to vpsace
-    public static final Long MAX_DESTRUCTION = 7 * 24 * 60 * 60L; // 1 week
-    private static final Long MAX_QUOTE = 24 * 3600L; // 24 hours since we have a threadpool with queued jobs
-
-    public QueryJobManager() {
-        super();
-        // persist UWS jobs to PostgreSQL.
-        JobPersistence jobPersist = new AuthJobPersistence(new X500IdentityManager());
-
-        // max threads: 6 == number of simultaneously running async queries (per
-        // web server), plus sync queries, plus VOSI-tables queries
-        JobExecutor jobExec = new ThreadPoolExecutor(jobPersist, QueryRunnerImpl.class, 6);
-
-        super.setJobPersistence(jobPersist);
-        super.setJobExecutor(jobExec);
-        super.setMaxExecDuration(MAX_EXEC_DURATION);
-        super.setMaxDestruction(MAX_DESTRUCTION);
-        super.setMaxQuote(MAX_QUOTE);
+    static {
+        Log4jInit.setLevel("org.opencadc.luskan", Level.INFO);
     }
+
+    public AuthQueryTest() {
+        RegistryClient regClient = new RegistryClient();
+        luskanURL = regClient.getServiceURL(Constants.RESOURCE_ID, Standards.TAP_10, AuthMethod.CERT);
+        log.debug("luskan URL: " + luskanURL);
+
+        anonymousSubject = AuthenticationUtil.getAnonSubject();
+
+        File cert = FileUtil.getFileFromResource("luskan-test-noauth.pem", AuthQueryTest.class);
+        notAuthorizedSubject = SSLUtil.createSubject(cert);
+        log.debug("not authorized Subject: " + notAuthorizedSubject);
+
+        cert = FileUtil.getFileFromResource("luskan-test-auth.pem", AuthQueryTest.class);
+        authorizedSubject = SSLUtil.createSubject(cert);
+        log.debug("authorized Subject: " + authorizedSubject);
+    }
+
+    @Test
+    public void anonymousTest() throws Exception {
+        String query = luskanURL.toExternalForm() + "/sync?LANG=ADQL&QUERY=SELECT+TOP+1+*+FROM+inventory.Artifact";
+        log.debug("query: " + query);
+        HttpGet httpGet = new HttpGet(new URL(query), true);
+        Subject.doAs(anonymousSubject, new PrivilegedExceptionAction<Object>() {
+            public Object run() throws Exception {
+                try {
+                    httpGet.prepare();
+                    Assert.fail("anonymous access should throw exception");
+                } catch (AccessControlException expected) {
+                    Assert.assertEquals(403, httpGet.getResponseCode());
+                }
+                return null;
+            }
+        });
+    }
+
+    @Test
+    public void notAuthorizedTest() throws Exception {
+        String query = luskanURL.toExternalForm() + "/sync?LANG=ADQL&QUERY=SELECT+TOP+1+*+FROM+inventory.Artifact";
+        log.debug("query: " + query);
+        HttpGet httpGet = new HttpGet(new URL(query), true);
+        Subject.doAs(notAuthorizedSubject, new PrivilegedExceptionAction<Object>() {
+            public Object run() throws Exception {
+                try {
+                    httpGet.prepare();
+                    Assert.fail("unauthorized access should throw exception");
+                } catch (AccessControlException expected) {
+                    Assert.assertEquals(403, httpGet.getResponseCode());
+                }
+                return null;
+            }
+        });
+    }
+
+    @Test
+    public void authorizedTest() throws Exception {
+        String query = luskanURL.toExternalForm() + "/sync?LANG=ADQL&QUERY=SELECT+TOP+1+*+FROM+inventory.Artifact";
+        log.debug("query: " + query);
+        HttpGet httpGet = new HttpGet(new URL(query), true);
+        Subject.doAs(authorizedSubject, new PrivilegedExceptionAction<Object>() {
+            public Object run() throws Exception {
+                try {
+                    httpGet.prepare();
+                    Assert.assertEquals(httpGet.getResponseCode(), 200);
+                } catch (Exception e) {
+                    Assert.fail("authorized access should not throw exception");
+                }
+                return null;
+            }
+        });
+    }
+
 }
