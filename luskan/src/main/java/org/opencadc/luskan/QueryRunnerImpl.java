@@ -76,7 +76,6 @@ import javax.sql.DataSource;
 
 import org.apache.log4j.Logger;
 
-
 /**
  *
  * @author pdowler
@@ -88,8 +87,7 @@ public class QueryRunnerImpl extends QueryRunner {
     }
 
     @Override
-    protected DataSource getUploadDataSource()
-            throws Exception {
+    protected DataSource getUploadDataSource() throws Exception {
         return getQueryDataSource();
     }
 
@@ -103,4 +101,5 @@ public class QueryRunnerImpl extends QueryRunner {
         log.debug("Data Source name: jdbc/tapuser");
         return DBUtil.findJNDIDataSource("jdbc/tapuser");
     }
+
 }

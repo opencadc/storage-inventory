@@ -43,8 +43,8 @@ jobs:
     - name: build and test cadc-storage-adapter-ad
       run: cd cadc-storage-adapter-ad && gradle --info clean build javadoc checkstyleMain install
 
-    - name: build and test cadc-storage-adapter-s3
-      run: cd cadc-storage-adapter-s3 && gradle --info clean build javadoc checkstyleMain install
+#    - name: build and test cadc-storage-adapter-s3
+#      run: cd cadc-storage-adapter-s3 && gradle --info clean build javadoc checkstyleMain install
       
     - name: build and test cadc-storage-adapter-swift
       run: cd cadc-storage-adapter-swift && gradle --info clean build javadoc checkstyleMain install
