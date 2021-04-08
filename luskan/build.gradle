@@ -6,8 +6,10 @@ plugins {
 }
 
 repositories {
-    jcenter()
+    mavenCentral()
     mavenLocal()
+    //tmp to resolve uk.ac.starlink
+    jcenter()
 }
 
 apply from: '../opencadc.gradle'

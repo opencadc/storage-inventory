@@ -117,7 +117,7 @@ public class SwiftStorageAdapterTest {
     
     @Test
     public void testBucketeeringSingle() throws Exception {
-        SwiftStorageAdapter swiftAdapter = new SwiftStorageAdapter("test-bucket", 3, false);
+        SwiftStorageAdapter swiftAdapter = new SwiftStorageAdapter("test-bucket", 0, false);
         StorageLocation loc = swiftAdapter.generateStorageLocation();
         log.info("testBucketeering created: " + loc);
         
@@ -128,7 +128,7 @@ public class SwiftStorageAdapterTest {
         Assert.assertEquals(loc, actual);
     }
     
-     @Test
+    @Test
     public void testBucketeeringMulti() throws Exception {
         SwiftStorageAdapter swiftAdapter = new SwiftStorageAdapter("test-bucket", 3, true);
         StorageLocation loc = swiftAdapter.generateStorageLocation();
