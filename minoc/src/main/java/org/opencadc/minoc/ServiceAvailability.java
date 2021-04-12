@@ -205,7 +205,8 @@ public class ServiceAvailability implements AvailabilityPlugin {
             System.setProperty(key, RestAction.STATE_READ_WRITE);
         } else {
             throw new IllegalArgumentException("invalid state: " + state
-                + " expected: " + RestAction.STATE_READ_WRITE + "|" + RestAction.STATE_OFFLINE);
+                + " expected: " + RestAction.STATE_READ_WRITE + "|" 
+                + RestAction.STATE_OFFLINE + "|" + RestAction.STATE_READ_ONLY);
         }
         log.info("WebService state changed: " + key + "=" + state + " [OK]");
     }
