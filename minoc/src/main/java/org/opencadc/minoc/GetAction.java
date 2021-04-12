@@ -67,6 +67,7 @@
 
 package org.opencadc.minoc;
 
+import ca.nrc.cadc.io.ByteCountOutputStream;
 import ca.nrc.cadc.io.WriteException;
 import ca.nrc.cadc.net.HttpTransfer;
 
@@ -119,10 +120,13 @@ public class GetAction extends ArtifactAction {
         StorageLocation storageLocation = new StorageLocation(artifact.storageLocation.getStorageID());
         storageLocation.storageBucket = artifact.storageLocation.storageBucket;
         log.debug("retrieving artifact from storage...");
+        ByteCountOutputStream bcos = null;
         try {
+            
             if (requestedSubs == null || requestedSubs.isEmpty()) {
                 HeadAction.setHeaders(artifact, syncOutput);
-                storageAdapter.get(storageLocation, syncOutput.getOutputStream());
+                bcos = new ByteCountOutputStream(syncOutput.getOutputStream());
+                storageAdapter.get(storageLocation, bcos);
             } else {
                 // If any cutouts were requested
                 final Map<String, List<String>> subMap = new HashMap<>();
@@ -137,7 +141,8 @@ public class GetAction extends ArtifactAction {
                 final FitsOperations fitsOperations =
                         new FitsOperations(new ProxyRandomAccessFits(this.storageAdapter, artifact.storageLocation,
                                                                      artifact.getContentLength()));
-                fitsOperations.cutoutToStream(slices, syncOutput.getOutputStream());
+                bcos = new ByteCountOutputStream(syncOutput.getOutputStream());
+                fitsOperations.cutoutToStream(slices, bcos);
             }
         } catch (WriteException e) {
             // error on client write
@@ -147,6 +152,10 @@ public class GetAction extends ArtifactAction {
                 msg += ": " + e.getMessage();
             }
             throw new IllegalArgumentException(msg, e);
+        } finally {
+            if (bcos != null) {
+                super.logInfo.setBytes(bcos.getByteCount());
+            }
         }
         log.debug("retrieved artifact from storage");
 
