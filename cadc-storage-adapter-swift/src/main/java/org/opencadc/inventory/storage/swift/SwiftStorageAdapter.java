@@ -141,7 +141,7 @@ public class SwiftStorageAdapter  implements StorageAdapter {
     static final String CONF_BUCKET = SwiftStorageAdapter.class.getName() + ".bucketName";
     static final String CONF_ENABLE_MULTI = SwiftStorageAdapter.class.getName() + ".multiBucket";
 
-    private static final String KEY_SCHEME = "sb";
+    private static final String KEY_SCHEME = "id";
 
     private static final String DEFAULT_CHECKSUM_ALGORITHM = "md5";
     
@@ -150,13 +150,17 @@ public class SwiftStorageAdapter  implements StorageAdapter {
     private static final String ARTIFACT_ID_ATTR = "org.opencadc.artifactid";
     private static final String CONTENT_CHECKSUM_ATTR = "org.opencadc.contentchecksum";
     
+    private static final String VERSION_ATTR = "org.opencadc.swift.version";
+    private static final String BUCKETLENGTH_ATTR = "org.opencadc.swift.storagebucketlength";
+    private static final String MULTIBUCKET_ATTR = "org.opencadc.swift.multibucket";
+    
     private static final int CIRC_BUFFERS = 3;
     private static final int CIRC_BUFFERSIZE = 64 * 1024;
 
     // test code checks these
     final int storageBucketLength;
     final String storageBucket;
-    boolean multiBucket; // not final: intTest need to set this so both modes can be tested with one config file 
+    final boolean multiBucket;
     private final Account client;
     
     // ctor for unit tests that do not connect
@@ -168,6 +172,12 @@ public class SwiftStorageAdapter  implements StorageAdapter {
     }
     
     public SwiftStorageAdapter() throws InvalidConfigException, StorageEngageException {
+        this(true, null, null, null);
+    }
+    
+    // ctor for intTest to override configured multiBucket flag
+    SwiftStorageAdapter(boolean connect, String storageBucketOverride, Integer storageBucketLengthOverride, Boolean multiBucketOverride) 
+            throws InvalidConfigException, StorageEngageException {
         final AccountConfig ac = new AccountConfig();
         try {
             File config = new File(System.getProperty("user.home") + "/config/" + CONFIG_FILENAME);
@@ -236,10 +246,25 @@ public class SwiftStorageAdapter  implements StorageAdapter {
                 throw new InvalidConfigException(sb.toString());
             }
            
-            this.storageBucket = bn;
-            this.storageBucketLength = Integer.parseInt(sbl.trim());
-            this.multiBucket = Boolean.parseBoolean(emb);
-
+            // intTest sode provides overrides of these
+            if (storageBucketOverride != null) {
+                this.storageBucket = storageBucketOverride;
+            } else {
+                this.storageBucket = bn;
+            }
+            
+            if (storageBucketLengthOverride != null) {
+                this.storageBucketLength = storageBucketLengthOverride; // unbox
+            } else {
+                this.storageBucketLength = Integer.parseInt(sbl.trim());
+            }
+            
+            if (multiBucketOverride != null) {
+                this.multiBucket = multiBucketOverride; // unbox
+            } else {
+                this.multiBucket = Boolean.parseBoolean(emb);
+            }
+            
             // work around because uvic ceph auth returns wrong storage url
             //URL authURL = new URL(suri);
             //ac.setAccessProvider(new AccessProviderImpl(authURL, user, key));
@@ -259,23 +284,72 @@ public class SwiftStorageAdapter  implements StorageAdapter {
         try {
             this.client = new AccountFactory(ac).createAccount();
             checkConnectivity();
-        } catch (Exception ex) {
+            init();
+        } catch (InvalidConfigException | StorageEngageException ex) {
+            throw ex;
+        } catch (RuntimeException ex) {
             throw new StorageEngageException("connectiviy check failed", ex);
         }
     }
 
     private void checkConnectivity() {
+        // check connectivity
         client.getServerTime();
+    }
+    
+    private void init() throws InvalidConfigException, StorageEngageException {
+        // base-name bucket to store transient content and config attributes
+        Container c = client.getContainer(storageBucket);
+        if (!c.exists()) {
+            log.warn("creating: " + c.getName());
+            c.create();
+            log.warn("created: " + c.getName());
+        }
+        
+        // check vs config
+        Map<String,Object> curmeta = c.getMetadata();
+        String version = (String) curmeta.get(VERSION_ATTR);
+        if (version != null) {
+            String mbstr = (String) curmeta.get(MULTIBUCKET_ATTR);
+            String sblstr = (String) curmeta.get(BUCKETLENGTH_ATTR);
+            boolean mbok = (mbstr != null && multiBucket == Boolean.parseBoolean(mbstr));
+            boolean sblok = (sblstr != null || Integer.parseInt(sblstr) == storageBucketLength);
+            if (!mbok || !sblok) {
+                throw new InvalidConfigException("found bucket: " + storageBucket + "/" + sblstr + "/" + mbstr
+                    + " -- incompatible with config: " + storageBucket + "/" + storageBucketLength + "/" + multiBucket + "]");
+            }
+            // previous init OK
+            log.warn("init looks OK: " + storageBucket + "/" + storageBucketLength + "/" + multiBucket);
+            return;
+        }
+
         if (multiBucket) {
-            // TODO: create/check meta bucket
-            // - store config and check that nothing changed in the bucket/data layout
-            // - meta bucket has to not get picked up by the BucketIterator
-        } else {
-            Container c = client.getContainer(storageBucket);
-            if (!c.exists()) {
-                c.create();
+            BucketNameGenerator gen = new BucketNameGenerator(storageBucket, storageBucketLength);
+            log.warn("config: " + gen.getCount() + " buckets");
+            Iterator<String> iter = gen.iterator();
+            while (iter.hasNext()) {
+                String bucketName = iter.next();
+                Container mb = client.getContainer(bucketName);
+                if (!mb.exists()) {
+                    try {
+                        log.info("creating: " + bucketName);
+                        mb.create();
+                    } catch (CommandException ex) {
+                        throw new StorageEngageException("failed to create container: " + bucketName, ex);
+                    }
+                } else {
+                    log.info("exists: " + bucketName);
+                }
             }
         }
+        
+        // init succeeeded: commit
+        Map<String,Object> meta = new TreeMap<>();
+        meta.put(VERSION_ATTR, "0.5.0");
+        meta.put(BUCKETLENGTH_ATTR, Integer.toString(storageBucketLength));
+        meta.put(MULTIBUCKET_ATTR, Boolean.toString(multiBucket));
+        c.setMetadata(meta);
+        log.info("init complete: " + storageBucket + "/" + storageBucketLength + "/" + multiBucket);
     }
     
     static class InternalBucket {
