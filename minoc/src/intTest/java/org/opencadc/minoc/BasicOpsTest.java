@@ -276,4 +276,52 @@ public class BasicOpsTest extends MinocTest {
         }
     }
     
+    @Test
+    public void testWrongContentLength() {
+        try {
+            URI artifactURI = URI.create("cadc:TEST/testContentLengthHeader_LT_DataLength.txt");
+            URL artifactURL = new URL(filesURL + "/" + artifactURI.toString());
+
+            String content = "abcdefghijklmnopqrstuvwxyz";
+            byte[] data = content.getBytes();
+
+            // put: contentLength < data.length
+            InputStream in = new ByteArrayInputStream(data);
+            HttpUpload put = new HttpUpload(in, artifactURL);
+            put.setRequestProperty(HttpTransfer.CONTENT_LENGTH, "10");
+
+            Subject.doAs(userSubject, new RunnableAction(put));
+            log.info("contentLength < data.length - put exception: " + put.getThrowable());
+            log.info("contentLength < data.length - put response code: " + put.getResponseCode());
+            
+            //Assert.assertNotNull(put.getThrowable());
+            //Assert.assertEquals(400, put.getResponseCode());
+        } catch (Exception t) {
+            log.error("unexpected throwable", t);
+            Assert.fail("unexpected throwable: " + t);
+        }
+        
+        try {
+            URI artifactURI = URI.create("cadc:TEST/testDataLength_LT_ContentLengthHeader.txt");
+            URL artifactURL = new URL(filesURL + "/" + artifactURI.toString());
+
+            String content = "abcdefghijklmnopqrstuvwxyz";
+            byte[] data = content.getBytes();
+
+            // put: contentLength < data.length
+            InputStream in = new ByteArrayInputStream(data);
+            HttpUpload put = new HttpUpload(in, artifactURL);
+            put.setRequestProperty(HttpTransfer.CONTENT_LENGTH, "10000");
+
+            Subject.doAs(userSubject, new RunnableAction(put));
+            log.info("data.length < contentLength - put exception: " + put.getThrowable());
+            log.info("data.length < contentLength - put response code: " + put.getResponseCode());
+            
+            //Assert.assertNotNull(put.getThrowable());
+            //Assert.assertEquals(400, put.getResponseCode());
+        } catch (Exception t) {
+            log.error("unexpected throwable", t);
+            Assert.fail("unexpected throwable: " + t);
+        }
+    }
 }
