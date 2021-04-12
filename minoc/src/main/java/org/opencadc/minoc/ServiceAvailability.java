@@ -210,7 +210,7 @@ public class ServiceAvailability implements AvailabilityPlugin {
         log.info("WebService state changed: " + key + "=" + state + " [OK]");
     }
 
-    public String getState() {
+    private String getState() {
         String key = appName + RestAction.STATE_MODE_KEY;
         String ret = System.getProperty(key);
         if (ret == null) {
