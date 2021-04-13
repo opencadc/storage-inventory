@@ -27,6 +27,10 @@ org.opencadc.fenwick.queryService={resourceID of remote TAP service with invento
 
 # selectivity
 org.opencadc.fenwick.artifactSelector={all|filter}
+
+# time in seconds to retry processing after encountering an error.
+org.opencadc.fenwick.retriesTimeout={retries timout in seconds}
+
 ```
 The `inventory` account owns and manages (create, alter, drop) inventory database objects and manages
 all the content (insert, update, delete) in the inventory schema. The database is specified in the JDBC URL. 
@@ -43,7 +47,12 @@ instance of fenwick is needed for each storage site.
 Supported ArtifactSelector implementations: `org.opencadc.fenwick.AllArtifacts` (harvest all artifacts from
 remote) and `org.opencadc.fenwick.IncludeArtifacts` (harvest seelcted artifacts from remote: see artifact-filter.sql 
 below). A global inventory and a storage site that should get all Artitacts (files) would run with the AllArtifacts 
-selector. Specialised instances that want to select a subset of all files would use the explicit filtering. 
+selector. Specialised instances that want to select a subset of all files would use the explicit filtering.
+
+`retriesTimeout` is the number of seconds fenwick will attempt to retry processing after encountering an error.
+If fenwick encounters a non-fatal error, it will sleep for an initial timeout value, and run again. 
+If a subsequent run encounters an error, it will double the previous timeout value, and sleep again before 
+trying another run. When the total timeouts exceed `retriesTimeout` fenwick will stop processing and exit.
 
 ### cadcproxy.pem
 Querying the remote query service (luskan) requires permission. `fenwick` uses this certificate file located

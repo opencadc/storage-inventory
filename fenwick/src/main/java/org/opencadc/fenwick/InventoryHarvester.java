@@ -68,21 +68,26 @@
 package org.opencadc.fenwick;
 
 import ca.nrc.cadc.auth.AuthenticationUtil;
+import ca.nrc.cadc.auth.NotAuthenticatedException;
 import ca.nrc.cadc.auth.SSLUtil;
 import ca.nrc.cadc.date.DateUtil;
 import ca.nrc.cadc.db.DBUtil;
 import ca.nrc.cadc.db.TransactionManager;
+import ca.nrc.cadc.io.ByteLimitExceededException;
 import ca.nrc.cadc.io.ResourceIterator;
+import ca.nrc.cadc.net.ExpectationFailedException;
+import ca.nrc.cadc.net.PreconditionFailedException;
+import ca.nrc.cadc.net.ResourceAlreadyExistsException;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.reg.Capabilities;
 import ca.nrc.cadc.reg.Capability;
 import ca.nrc.cadc.reg.Standards;
 import ca.nrc.cadc.reg.client.RegistryClient;
-import ca.nrc.cadc.util.UUIDComparator;
 import java.io.File;
 import java.io.IOException;
 import java.net.URI;
+import java.security.AccessControlException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.PrivilegedActionException;
@@ -117,6 +122,7 @@ public class InventoryHarvester implements Runnable {
 
     private static final Logger log = Logger.getLogger(InventoryHarvester.class);
     public static final String CERTIFICATE_FILE_LOCATION = System.getProperty("user.home") + "/.ssl/cadcproxy.pem";
+    public static final int INITIAL_SLEEP_TIMEOUT = 20;
 
     private final ArtifactDAO artifactDAO;
     private final URI resourceID;
@@ -124,6 +130,7 @@ public class InventoryHarvester implements Runnable {
     private final ArtifactSelector selector;
     private final boolean trackSiteLocations;
     private final HarvestStateDAO harvestStateDAO;
+    private final int retriesTimeout;
     private int errorCount = 0;
 
     /**
@@ -133,9 +140,10 @@ public class InventoryHarvester implements Runnable {
      * @param resourceID         identifier for the remote query service
      * @param selector           selector implementation
      * @param trackSiteLocations Whether to track the remote storage site and add it to the Artifact being processed.
+     * @param retriesTimeout     time in seconds to keep retrying after an error during processing.
      */
     public InventoryHarvester(Map<String, Object> daoConfig, URI resourceID, ArtifactSelector selector,
-                              boolean trackSiteLocations) {
+                              boolean trackSiteLocations, int retriesTimeout) {
         InventoryUtil.assertNotNull(InventoryHarvester.class, "daoConfig", daoConfig);
         InventoryUtil.assertNotNull(InventoryHarvester.class, "resourceID", resourceID);
         InventoryUtil.assertNotNull(InventoryHarvester.class, "selector", selector);
@@ -144,6 +152,7 @@ public class InventoryHarvester implements Runnable {
         this.resourceID = resourceID;
         this.selector = selector;
         this.trackSiteLocations = trackSiteLocations;
+        this.retriesTimeout = retriesTimeout;
         this.harvestStateDAO = new HarvestStateDAO(artifactDAO);
         
         try {
@@ -185,7 +194,25 @@ public class InventoryHarvester implements Runnable {
      */
     @Override
     public void run() {
+        boolean retry = false;
+        int retryCount = 1;
+        int sleepSeconds = INITIAL_SLEEP_TIMEOUT;
+
         while (true) {
+            if (retry) {
+                if (sleepSeconds > this.retriesTimeout) {
+                    throw new RuntimeException(String.format("Exiting, retries timeout of %s seconds exceeded",
+                                                             this.retriesTimeout));
+                }
+                try {
+                    Thread.sleep(sleepSeconds * 1000L);
+                } catch (InterruptedException ex) {
+                    throw new RuntimeException("thread sleep interrupted");
+                }
+                retryCount++;
+                sleepSeconds += sleepSeconds;
+            }
+
             try {
                 final Subject subject = SSLUtil.createSubject(new File(CERTIFICATE_FILE_LOCATION));
                 Subject.doAs(subject, (PrivilegedExceptionAction<Void>) () -> {
@@ -197,9 +224,35 @@ public class InventoryHarvester implements Runnable {
                 // ... this value and the reprocess-last-N-seconds should be related
                 long dt = 60 * 1000L;
                 Thread.sleep(dt);
+
+                // successful run, reset retry values
+                retry = false;
+                retryCount = 1;
+                sleepSeconds = INITIAL_SLEEP_TIMEOUT;
             } catch (PrivilegedActionException privilegedActionException) {
-                final Exception exception = privilegedActionException.getException();
-                throw new IllegalStateException(exception.getMessage(), exception);
+                // Get the check exceptions in PrivilegedActionException thrown by doit()
+                final Exception cause = privilegedActionException.getException();
+                if (cause instanceof NoSuchAlgorithmException) {
+                    // Artifact checksum algorithm not found, bug, fail.
+                    logExit("checksum algorithm not found", cause.getMessage());
+                    throw new RuntimeException(cause.getMessage(), cause);
+                } else if (cause instanceof ResourceAlreadyExistsException) {
+                    // 409 conflict, should not occur, retry.
+                    logRetry(retryCount, sleepSeconds, "409 resource exists", cause.getMessage());
+                } else if (cause instanceof ByteLimitExceededException) {
+                    // 413 entity too large, retry.
+                    logRetry(retryCount, sleepSeconds, "413 byte limit exceeded", cause.getMessage());
+                } else if (cause instanceof ResourceNotFoundException) {
+                    // 404 service not found by TapClient, retry.
+                    logRetry(retryCount, sleepSeconds, "404 resource not found", cause.getMessage());
+                } else if (cause instanceof TransientException) {
+                    //  503 transient, retry.
+                    logRetry(retryCount, sleepSeconds, "503 transient", cause.getMessage());
+                } else if (cause instanceof IOException) {
+                    // IO error talking to service, retry.
+                    logRetry(retryCount, sleepSeconds, "IO error", cause.getMessage());
+                }
+                retry = true;
             } catch (IllegalArgumentException ex) {
                 // Be careful here.  This IllegalArgumentException is being caught to work around a mysterious
                 // case where TCP connections are simply dropped and the incoming stream of data is invalid.
@@ -218,10 +271,34 @@ public class InventoryHarvester implements Runnable {
                     log.error("CAUTION! - This could actually be a bad MD5 checksum! Logging this to provide an audit.");
                     log.error("\n*******\n");
                 } else {
-                    throw ex;
+                    // Service 400 error, retry.
+                    retry = true;
+                    logRetry(retryCount, sleepSeconds, "400 bad request", ex.getMessage());
                 }
+            } catch (NotAuthenticatedException ex) {
+                // 401 not authorized, cert error on host or service, fail.
+                logExit("401 not authorized", ex.getMessage());
+                throw new RuntimeException(ex.getMessage(), ex);
+            } catch (AccessControlException ex) {
+                // 403 forbidden, cert error on host or service, fail.
+                logExit("403 forbidden", ex.getMessage());
+                throw new RuntimeException(ex.getMessage(), ex);
             } catch (InterruptedException ex) {
-                throw new RuntimeException("interrupted", ex);
+                // Thread interrupted during sleep, retry.
+                logExit("thread sleep interrupted", ex.getMessage());
+                throw new RuntimeException(ex.getMessage(), ex);
+            } catch (PreconditionFailedException ex) {
+                // 412 precondition failed, retry.
+                retry = true;
+                logRetry(retryCount, sleepSeconds, "412 precondition failed", ex.getMessage());
+            } catch (ExpectationFailedException ex) {
+                // 417 expectation failed, retry
+                retry = true;
+                logRetry(retryCount, sleepSeconds, "417 expectation failed", ex.getMessage());
+            } catch (RuntimeException ex) {
+                // 500 internal service error, retry.
+                retry = true;
+                logRetry(retryCount, sleepSeconds, "500 runtime error", ex.getMessage());
             }
         }
     }
@@ -598,5 +675,13 @@ public class InventoryHarvester implements Runnable {
                 }
             }
         }
+    }
+
+    private void logRetry(int retries, int timeout, String reason, String message) {
+        log.error(String.format("retry[%s] timeout %ss - reason: %s, %s", retries, timeout, reason, message));
+    }
+
+    private void logExit(String reason, String message) {
+        log.error(String.format("Exiting, reason - %s, %s", reason, message));
     }
 }
