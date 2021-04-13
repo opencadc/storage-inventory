@@ -173,6 +173,7 @@ public class LuskanConfig {
         sb.append("\n");
 
         List<String> allowedGroups = props.getProperty(ALLOWED_GROUP);
+        sb.append("\n\t").append(ALLOWED_GROUP).append(" - ");
         if (allowedGroups.isEmpty()) {
             sb.append("MISSING");
             ok = false;

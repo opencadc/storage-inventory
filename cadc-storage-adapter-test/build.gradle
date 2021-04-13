@@ -2,12 +2,11 @@ plugins {
     id 'java'
     id 'maven'
     id 'maven-publish'
-    id 'com.jfrog.bintray' version '1.8.4'
     id 'checkstyle'
 }
 
 repositories {
-    jcenter()
+    mavenCentral()
     mavenLocal()
 }
 
@@ -16,6 +15,9 @@ sourceCompatibility = 1.8
 group = 'org.opencadc'
 
 version = '0.1'
+
+description = 'OpenCADC Storage Inventory StorageAdapter test library'
+def git_url = 'https://github.com/opencadc/storage-inventory'
 
 dependencies {
     compile 'log4j:log4j:[1.2,)'

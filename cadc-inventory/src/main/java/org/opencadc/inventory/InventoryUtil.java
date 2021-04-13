@@ -88,6 +88,8 @@ import org.apache.log4j.Logger;
 public abstract class InventoryUtil {
     private static final Logger log = Logger.getLogger(InventoryUtil.class);
 
+    public static final String BUCKET_CHARS = "0123456789abcdef";
+    
     private InventoryUtil() {
     }
 
@@ -320,7 +322,7 @@ public abstract class InventoryUtil {
 
     /**
      * A valid path component cannot have: space ( ), slash (/), escape (\), percent (%),
-     * semi-colon (;), ampersand (&amp;), or dollar ($) characters.
+     * semi-colon (;), ampersand (&amp;), dollar ($), or question (?) characters.
      *
      * @param caller class doing test
      * @param name field name being checked

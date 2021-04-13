@@ -44,10 +44,10 @@ The `queryService` is the remote TAP service from which Artifacts are harvested.
 query service at the (a) global inventory. For a global inventory, this is the query service at a storage site; one
 instance of fenwick is needed for each storage site.
 
-Supported ArtifactSelector implementations: `org.opencadc.fenwick.AllArtifacts` (harvest all artifacts from
-remote) and `org.opencadc.fenwick.IncludeArtifacts` (harvest seelcted artifacts from remote: see artifact-filter.sql 
-below). A global inventory and a storage site that should get all Artitacts (files) would run with the AllArtifacts 
-selector. Specialised instances that want to select a subset of all files would use the explicit filtering.
+If `artifactSelector` is `all` (was: `org.opencadc.fenwick.AllArtifacts`) then fenwick harvests all artifacts from
+remote. If it is `filter` (was: `org.opencadc.fenwick.IncludeArtifacts`) then fenwick harvests selected artifacts 
+from remote (see artifact-filter.sql below). A global inventory and a storage site that should get all Artitacts 
+(files) would run with `all`. Specialised instances that want to select a subset of all files would use the explicit filtering. 
 
 `retriesTimeout` is the number of seconds fenwick will attempt to retry processing after encountering an error.
 If fenwick encounters a non-fatal error, it will sleep for an initial timeout value, and run again. 

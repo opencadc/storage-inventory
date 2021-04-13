@@ -41,6 +41,10 @@
     <servlet-name>LocateServlet</servlet-name>
         <servlet-class>ca.nrc.cadc.rest.RestServlet</servlet-class>
         <init-param>
+            <param-name>init</param-name>
+            <param-value>org.opencadc.raven.RavenInitAction</param-value>
+        </init-param>
+        <init-param>
             <param-name>post</param-name>
             <param-value>org.opencadc.raven.PostAction</param-value>
         </init-param>
