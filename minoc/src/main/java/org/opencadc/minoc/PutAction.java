@@ -269,6 +269,8 @@ public class PutAction extends ArtifactAction {
             profiler.checkpoint("transaction.commit.ok");
             log.debug("commit txn: OK");
             
+            super.logInfo.setBytes(artifact.getContentLength());
+            
             // this block could be passed off to a thread so request completes??
             if (newOSL != null) {
                 log.debug("deleting from storage...");

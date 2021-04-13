@@ -275,5 +275,4 @@ public class BasicOpsTest extends MinocTest {
             Assert.fail("unexpected throwable: " + t);
         }
     }
-    
 }
