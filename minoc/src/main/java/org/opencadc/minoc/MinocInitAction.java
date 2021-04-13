@@ -79,6 +79,7 @@ import java.util.Set;
 import java.util.TreeMap;
 import javax.sql.DataSource;
 import org.apache.log4j.Logger;
+import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.StorageSite;
 import org.opencadc.inventory.db.SQLGenerator;
 import org.opencadc.inventory.db.StorageSiteDAO;
@@ -125,6 +126,7 @@ public class MinocInitAction extends InitAction {
         initConfig();
         initDatabase();
         initStorageSite();
+        initStorageAdapter();
     }
     
     /**
@@ -283,5 +285,11 @@ public class MinocInitAction extends InitAction {
             throw new IllegalStateException("BUG: found " + curlist.size() + " StorageSite entries");
         }
         log.info("initStorageSite: " + resourceID + " OK");
+    }
+    
+    private void initStorageAdapter() {
+        log.info("initStorageAdapter: START");
+        StorageAdapter storageAdapter = InventoryUtil.loadPlugin(props.getFirstPropertyValue(MinocInitAction.SA_KEY));
+        log.info("initStorageAdapter: " + storageAdapter.getClass().getName() + " OK");
     }
 }

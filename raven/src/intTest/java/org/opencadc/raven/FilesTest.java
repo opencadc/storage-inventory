@@ -137,7 +137,7 @@ public class FilesTest extends RavenTest {
         }
     }
 
-    public void runGET() throws Exception {
+    public void runGET(String queryString) throws Exception {
         StorageSite site1 = new StorageSite(RESOURCE_ID1, "site1", true, true);
         StorageSite site2 = new StorageSite(RESOURCE_ID2, "site2", true, true);
 
@@ -165,17 +165,21 @@ public class FilesTest extends RavenTest {
             log.info("add: " + location1);
             artifactDAO.addSiteLocation(artifact, location1);
             artifact = artifactDAO.get(artifact.getID());
+            String qs = "";
+            if (queryString != null) {
+                qs += "?" + queryString;
+            }
 
             // also test prototype convenience suuport for default scheme
             //for (String au : new String[]{artifactURI.toASCIIString(), artifactURI.getSchemeSpecificPart()}) {
             {
                 String au = artifactURI.toASCIIString();
-                HttpGet filesGet = new HttpGet(new URL(ravenURL.toString() + "/" + au), false);
+                HttpGet filesGet = new HttpGet(new URL(ravenURL.toString() + "/" + au + qs), false);
                 filesGet.run();
                 Assert.assertEquals("files response", 303, filesGet.getResponseCode());
                 // URL should be of form anonMinocURL1/token/artifactURI
                 Assert.assertTrue("redirect URL start", filesGet.getRedirectURL().toString().startsWith(minocURL1.toString()));
-                Assert.assertTrue("redirec URL end", filesGet.getRedirectURL().toString().endsWith(artifactURI.toASCIIString()));
+                Assert.assertTrue("redirect URL end", filesGet.getRedirectURL().toString().endsWith(artifactURI.toASCIIString() + qs));
             }
 
             log.info("add: " + location2);
@@ -195,10 +199,10 @@ public class FilesTest extends RavenTest {
 
             // should work for artifact uri with or without the scheme part
             for (String au : new String[]{artifactURI.toASCIIString(), artifactURI.getSchemeSpecificPart()}) {
-                HttpGet filesGet = new HttpGet(new URL(ravenURL.toString() + "/" + artifactURI.toASCIIString()), false);
+                HttpGet filesGet = new HttpGet(new URL(ravenURL.toString() + "/" + artifactURI.toASCIIString() + qs), false);
                 filesGet.run();
                 Assert.assertEquals("files response", 303, filesGet.getResponseCode());
-                Assert.assertEquals("files URL", expectedEndPoint, filesGet.getRedirectURL().toString());
+                Assert.assertEquals("files URL", expectedEndPoint + qs, filesGet.getRedirectURL().toString());
             }
         } finally {
             // cleanup sites
@@ -212,7 +216,7 @@ public class FilesTest extends RavenTest {
     public void testAnonGET() throws Exception {
         Subject.doAs(anonSubject, new PrivilegedExceptionAction<Object>() {
             public Object run() throws Exception {
-                runGET();
+                runGET(null);
                 return null;
             }
         });
@@ -222,7 +226,22 @@ public class FilesTest extends RavenTest {
     public void testCertGET() throws Exception {
         Subject.doAs(userSubject, new PrivilegedExceptionAction<Object>() {
             public Object run() throws Exception {
-                runGET();
+                runGET(null);
+                return null;
+            }
+        });
+    }
+
+    @Test
+    public void testParamsGET() throws Exception {
+        Subject.doAs(userSubject, new PrivilegedExceptionAction<Object>() {
+            public Object run() throws Exception {
+                runGET("SUB=val1");
+                runGET("SUB=val1&SUB=val2");
+                // query string params map in ca.nrc.cadc.rest.SyncInput is ordered alphabetically by
+                // keys (case insensitive) so the order below is maintained and can be tested in the redirect
+                // to minoc URL
+                runGET("RUNID=1234&SUB=val1&SUB=val2");
                 return null;
             }
         });

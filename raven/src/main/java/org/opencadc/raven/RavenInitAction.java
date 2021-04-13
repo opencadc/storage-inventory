@@ -70,10 +70,14 @@ package org.opencadc.raven;
 import ca.nrc.cadc.rest.InitAction;
 import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.util.PropertiesReader;
+import java.io.File;
 import java.net.URI;
+import java.net.URISyntaxException;
+import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import org.apache.log4j.Logger;
+import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.SQLGenerator;
 
 /**
@@ -100,8 +104,8 @@ public class RavenInitAction extends InitAction {
     // set init initConfig, used by subsequent init methods
 
     MultiValuedProperties props;
-    private URI resourceID;
-    private Map<String,Object> daoConfig;
+    File pubKey;
+    File privKey;
 
     public RavenInitAction() {
         super();
@@ -109,6 +113,64 @@ public class RavenInitAction extends InitAction {
 
     @Override
     public void doInit() {
+        initConfig();
+        initDAO();
+        initGrantProviders();
+        initKeys();
+    }
+    
+    private void initConfig() {
+        log.info("initConfig: START");
+        this.props = getConfig();
+        log.info("initConfig: OK");
+    }
+    
+    private void initDAO() {
+        log.info("initDAO: START");
+        Map<String,Object> dc = getDaoConfig(props);
+        ArtifactDAO artifactDAO = new ArtifactDAO();
+        artifactDAO.setConfig(dc); // connectivity tested
+        log.info("initDAO: OK");
+    }
+    
+    private void initGrantProviders() {
+        log.info("initGrantProviders: START");
+        List<String> readGrants = props.getProperty(RavenInitAction.READ_GRANTS_KEY);
+        if (readGrants != null) {
+            for (String s : readGrants) {
+                try {
+                    URI u = new URI(s);
+                    log.debug(RavenInitAction.READ_GRANTS_KEY + ": " + u);
+                } catch (URISyntaxException ex) {
+                    throw new IllegalStateException("invalid config: " + RavenInitAction.READ_GRANTS_KEY + "=" + s + " must be a valid URI");
+                }
+            }
+        }
+
+        List<String> writeGrants = props.getProperty(RavenInitAction.WRITE_GRANTS_KEY);
+        if (writeGrants != null) {
+            for (String s : writeGrants) {
+                try {
+                    URI u = new URI(s);
+                    log.debug(RavenInitAction.WRITE_GRANTS_KEY + ": " + u);
+                } catch (URISyntaxException ex) {
+                    throw new IllegalStateException("invalid config: " + RavenInitAction.WRITE_GRANTS_KEY + "=" + s + " must be a valid URI");
+                }
+            }
+        }
+        log.info("initGrantProviders: OK");
+    }
+    
+    private void initKeys() {
+        log.info("initKeys: START");
+        String pubkeyFileName = props.getFirstPropertyValue(RavenInitAction.PUBKEYFILE_KEY);
+        String privkeyFileName = props.getFirstPropertyValue(RavenInitAction.PRIVKEYFILE_KEY);
+        File publicKeyFile = new File(System.getProperty("user.home") + "/config/" + pubkeyFileName);
+        File privateKeyFile = new File(System.getProperty("user.home") + "/config/" + privkeyFileName);
+        if (!publicKeyFile.exists() || !privateKeyFile.exists()) {
+            throw new IllegalStateException("invalid config: missing public/private key pair files -- " + publicKeyFile + " | " + privateKeyFile);
+        }
+        log.info("initKeys: OK");
     }
 
     /**
