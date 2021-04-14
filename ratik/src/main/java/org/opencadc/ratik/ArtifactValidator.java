@@ -260,12 +260,9 @@ public class ArtifactValidator {
         // action: insert Artifact
         log.debug("checking explanation 3");
         if (this.remoteSite == null) {
-            Artifact local = this.artifactDAO.get(remote.getID());
-            if (local == null) {
-                log.info(String.format("put: %s %s reason: multiple", remote.getID(), remote.getURI()));
-                //TODO do action
-                return;
-            }
+            log.info(String.format("put: %s %s reason: pending/missed Artifact", remote.getID(), remote.getURI()));
+            //TODO do action
+            return;
         }
 
         // explanation4: L==global, new Artifact in R, pending/missed changed Artifact event in L
@@ -298,12 +295,21 @@ public class ArtifactValidator {
         // evidence: no more evidence needed
         // action: pick winner, create DeletedArtifactEvent for loser, delete loser if it is in L,
         //         insert winner if winner was in R
+        //         winner in local:  DeletedArtifactEvent for remote
+        //         winner in remote: DeletedArtifactEvent for local, delete local, insert remote
         log.debug("checking artifact.id mismatch");
         if (!local.getID().equals(remote.getID())) {
             if (local.getContentLastModified().before(remote.getContentLastModified())) {
-                log.info(String.format("delete local: %s %s reason: remote is newer",
+                log.info(String.format("resolve Artifact.id collision: put DeletedArtifactEvent for local %s %s "
+                                           + "reason: local contentLastModified older than remote",
                                        local.getID(), local.getURI()));
-                //TODO do action
+                log.info(String.format("resolve Artifact.id collision: delete local %s %s put remote "
+                                           + "%s %s reason: local contentLastModified older than remote",
+                                       local.getID(), local.getURI(), remote.getID(), remote.getURI()));
+            } else {
+                log.info(String.format("resolve Artifact.id collision: put DeletedArtifactEvent for remote %s %s "
+                                           + "reason: remote contentLastModified older than local",
+                                       remote.getID(), remote.getURI()));
             }
             return;
         }
@@ -311,17 +317,21 @@ public class ArtifactValidator {
         // discrepancy: artifact in both && valid metaChecksum mismatch
         log.debug("checking valid metaChecksum mismatch");
         if (!local.getMetaChecksum().equals(remote.getMetaChecksum())) {
-            log.info(String.format("MetaChecksum mismatch: uri %s\nlocal %s\nremote %s",
-                                   local.getURI(), local.getMetaChecksum(), remote.getMetaChecksum()));
-            // explanation1: pending/missed artifact update in L
-            // evidence: ??
-            // action: put Artifact
-            //TODO determine action
-
-            // explanation2: pending/missed artifact update in R
-            // evidence: ??
-            // action: do nothing
-            //TODO determine action
+            if (local.getLastModified().before(remote.getLastModified())) {
+                // explanation1: pending/missed artifact update in L
+                // evidence: local artifact has older Entity.lastModified indicating an update to
+                //           optional metadata at remote
+                // action: put Artifact
+                log.info(String.format("resolve Artifact.metaChecksum mismatch: put remote %s %s "
+                                           + "reason: remote lastModified newer than local",
+                                       remote.getID(), remote.getURI()));
+            } else {
+                // explanation2: pending/missed artifact update in R
+                // evidence: local artifact has newer Entity.lastModified indicating the update happened locally
+                // action: do nothing
+                log.info("resolve Artifact.metaChecksum mismatch: no action, "
+                             + "reason: local lastModified newer than remote");
+            }
         }
 
     }

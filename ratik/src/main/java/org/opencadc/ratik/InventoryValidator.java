@@ -82,6 +82,8 @@ import ca.nrc.cadc.util.StringUtil;
 import java.io.File;
 import java.io.IOException;
 import java.net.URI;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
 import java.util.Date;
@@ -117,6 +119,7 @@ public class InventoryValidator implements Runnable {
     private final ArtifactSelector artifactSelector;
     private final BucketSelector bucketSelector;
     private final ArtifactValidator artifactValidator;
+    private final MessageDigest messageDigest;
 
     /**
      * Constructor.
@@ -178,18 +181,25 @@ public class InventoryValidator implements Runnable {
             this.remoteSite = null;
         }
         this.artifactValidator = new ArtifactValidator(this.artifactDAO, resourceID, remoteSite);
+
+        try {
+            this.messageDigest = MessageDigest.getInstance("MD5");
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("error creating MessageDigest with MD5 algorithm", e);
+        }
     }
 
     // Package access constructor for testing.
     InventoryValidator(ArtifactDAO artifactDAO, URI resourceID, StorageSite remoteSite,
                        ArtifactSelector artifactSelector, BucketSelector bucketSelector,
-                       ArtifactValidator artifactValidator) {
+                       ArtifactValidator artifactValidator, MessageDigest messageDigest) {
         this.artifactDAO = artifactDAO;
         this.resourceID = resourceID;
         this.remoteSite = remoteSite;
         this.artifactSelector = artifactSelector;
         this.bucketSelector = bucketSelector;
         this.artifactValidator = artifactValidator;
+        this.messageDigest = messageDigest;
     }
 
     @Override public void run() {
@@ -259,8 +269,16 @@ public class InventoryValidator implements Runnable {
                     artifactsToValidate = false;
                     continue;
                 }
-                log.debug(String.format("comparing Artifacts:\n local - %s\nremote - %s",
-                                        local, remote));
+
+                if (remote != null) {
+                    final URI computedChecksum = remote.computeMetaChecksum(this.messageDigest);
+                    if (!remote.getMetaChecksum().equals(computedChecksum)) {
+                        throw new IllegalStateException(
+                            "remote checksum mismatch: " + remote.getID() + " " + remote.getURI() + " provided="
+                                + remote.getMetaChecksum() + " actual=" + computedChecksum);
+                    }
+                }
+                log.debug(String.format("comparing Artifacts:\n local - %s\nremote - %s", local, remote));
 
                 // check if Artifacts are the same, or if the local Artifact
                 // precedes or follows the remote Artifact.
