@@ -134,6 +134,7 @@ public class PutAction extends ArtifactAction {
     @Override
     public void doAction() throws Exception {
         
+        checkWritable();
         initAndAuthorize(WriteGrant.class);
 
         URI digest = syncInput.getDigest();

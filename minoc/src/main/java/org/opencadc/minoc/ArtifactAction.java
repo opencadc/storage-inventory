@@ -214,10 +214,8 @@ public abstract class ArtifactAction extends RestAction {
             PermissionsCheck permissionsCheck = new PermissionsCheck(this.artifactURI, this.authenticateOnly,
                                                                      this.logInfo);
             if (ReadGrant.class.isAssignableFrom(grantClass)) {
-	        checkReadable();
                 permissionsCheck.checkReadPermission(this.readGrantServices);
             } else if (WriteGrant.class.isAssignableFrom(grantClass)) {
-	        checkWritable();
                 permissionsCheck.checkWritePermission(this.writeGrantServices);
             } else {
                 throw new IllegalStateException("Unsupported grant class: " + grantClass);

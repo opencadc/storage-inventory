@@ -96,6 +96,7 @@ public class HeadAction extends ArtifactAction {
     @Override
     public void doAction() throws Exception {
         
+        checkReadable();
         initAndAuthorize(ReadGrant.class);
         
         Artifact artifact = getArtifact(artifactURI);
