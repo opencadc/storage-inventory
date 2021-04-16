@@ -74,6 +74,8 @@ import ca.nrc.cadc.util.PropertiesReader;
 import java.io.File;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
@@ -144,7 +146,7 @@ public class MinocInitAction extends InitAction {
         boolean ok = true;
 
         String rid = mvp.getFirstPropertyValue(RESOURCE_ID_KEY);
-        sb.append("\n\t" + MinocInitAction.RESOURCE_ID_KEY + ": ");
+        sb.append("\n\t" + RESOURCE_ID_KEY + ": ");
         if (rid == null) {
             sb.append("MISSING");
             ok = false;
@@ -153,7 +155,7 @@ public class MinocInitAction extends InitAction {
         }
 
         String sac = mvp.getFirstPropertyValue(SA_KEY);
-        sb.append("\n\t").append(MinocInitAction.SA_KEY).append(": ");
+        sb.append("\n\t").append(SA_KEY).append(": ");
         if (sac == null) {
             sb.append("MISSING");
             ok = false;
@@ -162,14 +164,13 @@ public class MinocInitAction extends InitAction {
         }
 
         String sqlgen = mvp.getFirstPropertyValue(SQLGEN_KEY);
-        Class sqlGenClass = null;
-        sb.append("\n\t").append(MinocInitAction.SQLGEN_KEY).append(": ");
+        sb.append("\n\t").append(SQLGEN_KEY).append(": ");
         if (sqlgen == null) {
             sb.append("MISSING");
             ok = false;
         } else {
             try {
-                sqlGenClass = Class.forName(sqlgen);
+                Class c = Class.forName(sqlgen);
                 sb.append("OK");
             } catch (ClassNotFoundException ex) {
                 sb.append("class not found: " + sqlgen);
@@ -178,7 +179,7 @@ public class MinocInitAction extends InitAction {
         }
 
         String schema = mvp.getFirstPropertyValue(SCHEMA_KEY);
-        sb.append("\n\t").append(MinocInitAction.SCHEMA_KEY).append(": ");
+        sb.append("\n\t").append(SCHEMA_KEY).append(": ");
         if (schema == null) {
             sb.append("MISSING");
             ok = false;
@@ -187,17 +188,47 @@ public class MinocInitAction extends InitAction {
         }
         
         String pubkeyFileName = mvp.getFirstPropertyValue(PUBKEYFILE_KEY);
-        sb.append("\n\t").append(MinocInitAction.PUBKEYFILE_KEY).append(": ");
+        sb.append("\n\t").append(PUBKEYFILE_KEY).append(": ");
         if (pubkeyFileName == null) {
             sb.append("MISSING");
             ok = false;
         } else {
             File pk = new File(System.getProperty("user.home") + "/config/" + pubkeyFileName);
             if (!pk.exists()) {
-                sb.append(" NOT FOUND " + pk.getAbsolutePath());
+                sb.append(" NOT FOUND ").append(pk.getAbsolutePath());
                 ok = false;
             } else {
                 sb.append("OK");
+            }
+        }
+        
+        // optional
+        List<String> readGrants = mvp.getProperty(READ_GRANTS_KEY);
+        if (readGrants != null) {
+            for (String s : readGrants) {
+                sb.append("\n\t").append(READ_GRANTS_KEY + "=").append(s);
+                try {
+                    URI u = new URI(s);
+                    sb.append(" OK");
+                } catch (URISyntaxException ex) {
+                    sb.append(" INVALID");
+                    ok = false;
+                }
+            }
+        }
+
+        // optional
+        List<String> writeGrants = mvp.getProperty(WRITE_GRANTS_KEY);
+        if (writeGrants != null) {
+            for (String s : writeGrants) {
+                sb.append("\n\t").append(WRITE_GRANTS_KEY + "=").append(s);
+                try {
+                    URI u = new URI(s);
+                    sb.append(" OK");
+                } catch (URISyntaxException ex) {
+                    sb.append(" INVALID");
+                    ok = false;
+                }
             }
         }
 
@@ -257,34 +288,34 @@ public class MinocInitAction extends InitAction {
         ssdao.setConfig(daoConfig);
         
         Set<StorageSite> curlist = ssdao.list();
-        if (curlist.size() > 1) {
-            throw new IllegalStateException("found: " + curlist.size() + " StorageSite(s) in database; expected 0 or 1");
-        }
+
         // TODO: get display name from config
         // use path from resourceID as default
         String name = resourceID.getPath();
         if (name.charAt(0) == '/') {
             name = name.substring(1);
         }
-
+        
+        boolean allowRead = !props.getProperty(READ_GRANTS_KEY).isEmpty();
+        boolean allowWrite = !props.getProperty(WRITE_GRANTS_KEY).isEmpty();
+            
+        StorageSite self = null;
         if (curlist.isEmpty()) {
-            boolean allowRead = !props.getProperty(READ_GRANTS_KEY).isEmpty();
-            boolean allowWrite = !props.getProperty(WRITE_GRANTS_KEY).isEmpty();
-            StorageSite self = new StorageSite(resourceID, name, allowRead, allowWrite);
+            self = new StorageSite(resourceID, name, allowRead, allowWrite);
             ssdao.put(self);
         } else if (curlist.size() == 1) {
-            StorageSite cur = curlist.iterator().next();
-            boolean allowRead = !props.getProperty(READ_GRANTS_KEY).isEmpty();
-            boolean allowWrite = !props.getProperty(WRITE_GRANTS_KEY).isEmpty();
-            cur.setResourceID(resourceID);
-            cur.setName(name);
-            cur.setAllowRead(allowRead);
-            cur.setAllowWrite(allowWrite);
-            ssdao.put(cur);
+            self = curlist.iterator().next();
+            self.setResourceID(resourceID);
+            self.setName(name);
+            self.setAllowRead(allowRead);
+            self.setAllowWrite(allowWrite);
+            
         } else {
-            throw new IllegalStateException("BUG: found " + curlist.size() + " StorageSite entries");
+            throw new IllegalStateException("BUG: found " + curlist.size() + " StorageSite entries; expected 0 or 1");
         }
-        log.info("initStorageSite: " + resourceID + " OK");
+        
+        ssdao.put(self);
+        log.info("initStorageSite: " + self + " OK");
     }
     
     private void initStorageAdapter() {
