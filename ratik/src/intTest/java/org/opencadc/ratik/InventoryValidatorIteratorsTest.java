@@ -443,8 +443,8 @@ public class InventoryValidatorIteratorsTest {
         try {
             System.setProperty("user.home", TMP_DIR);
             InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.artifactDAO,
-                                                                    TestUtil.LUSKAN_URI, new IncludeArtifacts(),
-                                                                    bucketSelector, false, null) {
+                                                                    TestUtil.LUSKAN_URI, null, new IncludeArtifacts(),
+                                                                    bucketSelector, null) {
                 @Override
                 void validate(Artifact local, Artifact remoteArtifact) {
                     ordered.add(local);
