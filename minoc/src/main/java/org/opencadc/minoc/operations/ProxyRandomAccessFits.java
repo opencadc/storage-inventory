@@ -158,6 +158,9 @@ public class ProxyRandomAccessFits implements RandomAccessDataObject {
             curpos += ret;
             log.debug("ProxyRandomAccess.read(" + off + "," + len + " read " + ret + " (new curpos:" + curpos + ")");
             return ret;
+        } catch (UnsupportedOperationException ex) {
+            // storage adapter doesn't support byte ranges
+            throw ex;
         } catch (Exception ex) {
             throw new IOException("read failed", ex);
         }

@@ -67,55 +67,39 @@
  ************************************************************************
  */
 
-package org.opencadc.ratik;
+package org.opencadc.inventory.query;
 
 import java.net.URI;
 import java.util.Date;
-import org.junit.Assert;
-import org.junit.Test;
+import java.util.List;
+import java.util.UUID;
 import org.opencadc.inventory.Artifact;
+import org.opencadc.inventory.InventoryUtil;
+import org.opencadc.tap.TapRowMapper;
 
-public class InventoryValidatorTest {
+/**
+ * Class to map the query results to an Artifact.
+ */
+public class ArtifactRowMapper implements TapRowMapper<Artifact>  {
 
-    @Test
-    public void testOrderArtifacts() throws Exception {
+    public static final String BASE_QUERY = "SELECT id, uri, contentChecksum, contentLastModified, contentLength, "
+        + "contentType, contentEncoding, lastModified, metaChecksum FROM inventory.Artifact";
 
-        InventoryValidator testSubject = new InventoryValidator(null,null,null,null,null,null,null);
+    @Override
+    public Artifact mapRow(final List<Object> row) {
+        int index = 0;
+        final UUID id = (UUID) row.get(index++);
+        final URI uri = (URI) row.get(index++);
+        final URI contentChecksum = (URI) row.get(index++);
+        final Date contentLastModified = (Date) row.get(index++);
+        final Long contentLength = (Long) row.get(index++);
 
-        // Artifact A orders before Artifact B
-        URI contentCheckSum = URI.create("md5:d41d8cd98f00b204e9800998ecf8427e");
-        Artifact A = new Artifact(URI.create("cadc:TEST/1.ext"), contentCheckSum, new Date(), 1024L);
-        Artifact B = new Artifact(URI.create("cadc:TEST/1.extx"), contentCheckSum, new Date(), 1024L);
-
-        // local = A
-        // remote = null
-        int order = testSubject.orderArtifacts(A, null);
-        Assert.assertEquals("local orders before remote, expect -1", -1, order);
-
-        // local = null
-        // remote = A
-        order = testSubject.orderArtifacts(null, A);
-        Assert.assertEquals("local orders after remote, expect 1", 1, order);
-
-        // local = null
-        // remote = null
-        order = testSubject.orderArtifacts(null, null);
-        Assert.assertEquals("local equals remote, expect 0", 0, order);
-
-        // local = A
-        // remote = A
-        order = testSubject.orderArtifacts(A, A);
-        Assert.assertEquals("local equals remote, expect 0", 0, order);
-
-        // local = A
-        // remote = B
-        order = testSubject.orderArtifacts(A, B);
-        Assert.assertEquals("local orders before remote, expect -1", -1, order);
-
-        // local = B
-        // remote = A
-        order = testSubject.orderArtifacts(B, A);
-        Assert.assertEquals("local orders after remote, expect 1", 1, order);
+        final Artifact artifact = new Artifact(id, uri, contentChecksum, contentLastModified, contentLength);
+        artifact.contentType = (String) row.get(index++);
+        artifact.contentEncoding = (String) row.get(index++);
+        InventoryUtil.assignLastModified(artifact, (Date) row.get(index++));
+        InventoryUtil.assignMetaChecksum(artifact, (URI) row.get(index));
+        return artifact;
     }
 
 }
