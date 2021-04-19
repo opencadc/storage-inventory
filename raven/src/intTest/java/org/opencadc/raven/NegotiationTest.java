@@ -189,27 +189,53 @@ public class NegotiationTest extends RavenTest {
                             artifactDAO.addSiteLocation(artifact, location1);
                             artifact = artifactDAO.get(artifact.getID());
 
-                            // test that there's one copy
+                            // test that there's one copy * 2 URLs per copy
                             Transfer response = negotiate(transfer);
-                            Assert.assertEquals(1, response.getProtocols().size());
-                            Protocol actual = response.getProtocols().get(0);
-                            log.info("actual: " + actual);
-                            
-                            Assert.assertNotNull(actual.getEndpoint());
-                            Assert.assertEquals(p.getUri(), actual.getUri());
-                            Assert.assertEquals(p.getSecurityMethod(), actual.getSecurityMethod());
+                            log.info("transfer: " + response);
                             if (p.getSecurityMethod() == null || p.getSecurityMethod().equals(Standards.SECURITY_METHOD_ANON)) {
-                                // verify that pre-auth is present in URL, sort of
+                                // anon: pre-auth URL and plain
+                                Assert.assertEquals(2, response.getProtocols().size());
+                            } else {
+                                // cert: one URL
+                                Assert.assertEquals(1, response.getProtocols().size());
+                            }
+                            
+                            Protocol actual = response.getProtocols().get(0);
+                            log.info("first: " + actual);
+                            
+                            
+                            if (p.getSecurityMethod() == null || p.getSecurityMethod().equals(Standards.SECURITY_METHOD_ANON)) {
+                                Assert.assertNotNull(actual.getEndpoint());
+                                Assert.assertEquals(p.getUri(), actual.getUri());
+                                Assert.assertEquals(p.getSecurityMethod(), actual.getSecurityMethod());
+                            
+                                // path: minoc/endpoint/{pre-auth}/cadc:TEST/{uuid}.fits == 5
+                                // verify that pre-auth chunk is present in URL
                                 String surl = actual.getEndpoint();
                                 URL url = new URL(surl);
                                 String path = url.getPath().substring(1);
                                 log.debug("path: " + path);
 
                                 String[] elems = path.split("/");
-                                // path: minoc/endpoint/{pre-auth}/cadc:TEST/{uuid}.fits == 5
+                                
                                 Assert.assertEquals(5, elems.length);
                                 Assert.assertEquals("cadc:TEST", elems[3]);
+                                
+                                // path: minoc/endpoint/cadc:TEST/{uuid}.fits == 4
+                                // verify that pre-auth is NOT present in the second anon URL
+                                actual = response.getProtocols().get(1);
+                                log.info("second: " + actual);
+                                surl = actual.getEndpoint();
+                                url = new URL(surl);
+                                path = url.getPath().substring(1);
+                                log.debug("path: " + path);
+
+                                elems = path.split("/");
+                                Assert.assertEquals(4, elems.length);
+                                Assert.assertEquals("cadc:TEST", elems[2]);
+                                
                             } else {
+                                // path: minoc/endpoint/cadc:TEST/{uuid}.fits == 4
                                 // verify that pre-auth is NOT present in URL
                                 String surl = actual.getEndpoint();
                                 URL url = new URL(surl);
@@ -217,7 +243,7 @@ public class NegotiationTest extends RavenTest {
                                 log.debug("path: " + path);
 
                                 String[] elems = path.split("/");
-                                // path: minoc/endpoint/cadc:TEST/{uuid}.fits == 5
+                                
                                 Assert.assertEquals(4, elems.length);
                                 Assert.assertEquals("cadc:TEST", elems[2]);
                             }
@@ -228,7 +254,11 @@ public class NegotiationTest extends RavenTest {
 
                             // test that there are now two copies
                             response = negotiate(transfer);
-                            Assert.assertEquals(2, response.getAllEndpoints().size());
+                            if (p.getSecurityMethod() == null || p.getSecurityMethod().equals(Standards.SECURITY_METHOD_ANON)) {
+                                Assert.assertEquals(4, response.getAllEndpoints().size());
+                            } else {
+                                Assert.assertEquals(2, response.getAllEndpoints().size());
+                            }
 
                             return null;
 
@@ -396,9 +426,11 @@ public class NegotiationTest extends RavenTest {
 
                         Transfer response = negotiate(transfer);
                         
-                        // expect: 3 https supported, no http
-                        Assert.assertEquals("protos supported", 3, response.getAllEndpoints().size());
+                        // expect: 4 https supported, no http
+                        Assert.assertEquals("protos supported", 4, response.getAllEndpoints().size());
                         
+                        boolean foundPreAuthAnon = false;
+                        boolean foundPlainAnon = false;
                         for (Protocol ap : response.getProtocols()) {
                             String surl = ap.getEndpoint();
                             log.info("endpoint: " + surl + " " + ap.getSecurityMethod());
@@ -417,14 +449,23 @@ public class NegotiationTest extends RavenTest {
                             // path: minoc/endpoint/{pre-auth}/cadc:TEST/{uuid}.fits == 5
                             
                             if (ap.getSecurityMethod() == null) {
-                                Assert.assertEquals("pre-auth required", 5, elems.length); // pre-auth required
-                                Assert.assertEquals("cadc:TEST", elems[3]);
+                                if (elems.length == 5) {
+                                    foundPreAuthAnon = true;
+                                    Assert.assertEquals("cadc:TEST", elems[3]);
+                                } else if (elems.length == 4) {
+                                    foundPlainAnon = true;
+                                    Assert.assertEquals("cadc:TEST", elems[2]);
+                                } else {
+                                    Assert.fail("wrong number of path elements: " + elems.length);
+                                }
                             } else {
                                 Assert.assertEquals("pre-auth absent", 4, elems.length); // pre-auth absent: caller authenticates to files service
                                 Assert.assertEquals("cadc:TEST", elems[2]);
                             }
                         }
-
+                        Assert.assertTrue("pre-auth+anon found", foundPreAuthAnon);
+                        Assert.assertTrue("plain+anon found", foundPlainAnon);
+                        
                         return null;
 
                     } finally {
