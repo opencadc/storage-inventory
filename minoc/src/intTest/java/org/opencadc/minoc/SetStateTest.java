@@ -102,8 +102,12 @@ import org.junit.Test;
 
 /**
  * Test PUT, GET, DELETE, POST, HEAD and common errors
+ * Note: This test the minoc-test.pem cert and requires minoc-availability.properties 
+ *       to be in minoc/config/. The following entry needs to be in the 
+ *       minoc-availability.properties file.
+ *       users=CN=cadcauthtest1_24c, OU=cadc, O=hia, C=ca
  * 
- * @author majorb
+ * @author yeunga
  */
 public class SetStateTest extends MinocTest {
     
