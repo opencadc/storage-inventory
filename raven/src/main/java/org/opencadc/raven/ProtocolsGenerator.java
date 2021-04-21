@@ -167,7 +167,9 @@ public class ProtocolsGenerator {
                     log.warn("service: " + storageSite.getResourceID() + " does not provide " + Standards.SI_FILES);
                 }
             } catch (ResourceNotFoundException ex) {
-                log.warn("failed to find service: " + storageSite.getResourceID());
+                log.warn("storage site not found: " + storageSite.getResourceID());
+            } catch (Exception ex) {
+                log.warn("storage site not responding (capabilities): " + storageSite.getResourceID(), ex);
             }
             if (filesCap != null) {
                 for (Protocol proto : transfer.getProtocols()) {
@@ -183,7 +185,7 @@ public class ProtocolsGenerator {
                             if (protocolCompat(proto, baseURL)) {
                                 StringBuilder sb = new StringBuilder();
                                 sb.append(baseURL.toExternalForm()).append("/");
-                                if (proto.getSecurityMethod() == null || Standards.SECURITY_METHOD_ANON.equals(proto.getSecurityMethod())) {
+                                if (authToken != null && Standards.SECURITY_METHOD_ANON.equals(sec)) {
                                     sb.append(authToken).append("/");
                                 }
                                 sb.append(artifactURI.toASCIIString());
@@ -202,6 +204,17 @@ public class ProtocolsGenerator {
                                     protos.add(0, p);
                                 }
                                 log.debug("added: " + p);
+                                
+                                // add a plain anon URL
+                                if (authToken != null && Standards.SECURITY_METHOD_ANON.equals(sec)) {
+                                    sb = new StringBuilder();
+                                    sb.append(baseURL.toExternalForm()).append("/");
+                                    sb.append(artifactURI.toASCIIString());
+                                    p = new Protocol(proto.getUri());
+                                    p.setEndpoint(sb.toString());
+                                    protos.add(p);
+                                    log.debug("added: " + p);
+                                }
                             } else {
                                 log.debug("reject protocol: " + proto
                                         + " reason: no compatible URL protocol");
@@ -263,6 +276,8 @@ public class ProtocolsGenerator {
                                 p.setEndpoint(sb.toString());
                                 protos.add(p);
                                 log.debug("added: " + p);
+                                
+                                // no plain anon URL for put
                             } else {
                                 log.debug("PUT: " + storageSite + "PUT: reject protocol: " + proto
                                         + " reason: no compatible URL protocol");
