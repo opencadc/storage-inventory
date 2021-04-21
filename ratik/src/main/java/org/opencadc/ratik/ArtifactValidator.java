@@ -76,7 +76,6 @@ import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
 import java.io.IOException;
 import java.net.URI;
-import java.text.DateFormat;
 import java.util.UUID;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
@@ -87,6 +86,7 @@ import org.opencadc.inventory.StorageSite;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.DeletedArtifactEventDAO;
 import org.opencadc.inventory.db.DeletedStorageLocationEventDAO;
+import org.opencadc.inventory.db.EntityNotFoundException;
 import org.opencadc.inventory.query.ArtifactRowMapper;
 import org.opencadc.inventory.query.DeletedArtifactEventRowMapper;
 import org.opencadc.inventory.query.DeletedStorageLocationEventRowMapper;
@@ -106,7 +106,6 @@ public class ArtifactValidator {
     private final DeletedArtifactEventDAO deletedArtifactEventDAO;
     private final DeletedStorageLocationEventDAO deletedStorageLocationEventDAO;
     private final TransactionManager transactionManager;
-    private final DateFormat dateFormat;
 
     /**
      * Constructor
@@ -123,7 +122,6 @@ public class ArtifactValidator {
         this.transactionManager = this.artifactDAO.getTransactionManager();
         this.deletedArtifactEventDAO = new DeletedArtifactEventDAO(this.artifactDAO);
         this.deletedStorageLocationEventDAO = new DeletedStorageLocationEventDAO(this.artifactDAO);
-        this.dateFormat = DateUtil.getDateFormat(DateUtil.IVOA_DATE_FORMAT, DateUtil.UTC);
     }
 
     /**
@@ -168,7 +166,31 @@ public class ArtifactValidator {
         Artifact remote = getRemoteArtifact(local.getURI());
         if (remote != null) {
             log.info(String.format("delete: %s %s reason: local filter policy change", local.getID(), local.getURI()));
-            //TODO do action
+            try {
+                this.transactionManager.startTransaction();
+                this.artifactDAO.lock(local);
+                local = this.artifactDAO.get(local.getID());
+                if (local != null) {
+                    this.artifactDAO.delete(local.getID());
+                    if (this.remoteSite == null) {
+                        DeletedStorageLocationEvent deletedStorageLocationEvent =
+                            new DeletedStorageLocationEvent(local.getID());
+                        this.deletedStorageLocationEventDAO.put(deletedStorageLocationEvent);
+                        log.info(String.format("put %s reason: filter policy change excludes remote",
+                                               deletedStorageLocationEvent));
+                    }
+                    this.transactionManager.commitTransaction();
+                } else {
+                    this.transactionManager.rollbackTransaction();
+                }
+            } catch (EntityNotFoundException e) {
+                DeletedArtifactEvent event = this.deletedArtifactEventDAO.get(local.getID());
+                if (event != null) {
+                    log.info(String.format("skip: %s %s reason: stale local Artifact",
+                                           local.getID(), local.getURI()));
+                }
+                this.transactionManager.rollbackTransaction();
+            }
             return;
         }
 
@@ -180,7 +202,26 @@ public class ArtifactValidator {
         if (remoteDeletedArtifactEvent != null) {
             log.info(String.format("delete: %s %s reason: found remote DeletedArtifactEvent",
                                    local.getID(), local.getURI()));
-            //TODO do action
+            try {
+                DeletedArtifactEvent event = new DeletedArtifactEvent(local.getID());
+                this.transactionManager.startTransaction();
+                this.artifactDAO.lock(local);
+                local = this.artifactDAO.get(local.getID());
+                if (local != null) {
+                    this.deletedArtifactEventDAO.put(event);
+                    this.artifactDAO.delete(local.getID());
+                    this.transactionManager.commitTransaction();
+                } else {
+                    this.transactionManager.rollbackTransaction();
+                }
+            } catch (EntityNotFoundException e) {
+                DeletedArtifactEvent event = this.deletedArtifactEventDAO.get(local.getID());
+                if (event != null) {
+                    log.info(String.format("skip: %s %s reason: stale local Artifact",
+                                           local.getID(), local.getURI()));
+                }
+                this.transactionManager.rollbackTransaction();
+            }
             return;
         }
 
@@ -196,7 +237,32 @@ public class ArtifactValidator {
                 log.info(String.format("remove %s for %s %s reason: found remote %s",
                                        remoteSiteLocation, local.getID(), local.getURI(),
                                        remoteDeletedStorageLocationEvent));
-                //TODO do action
+                try {
+                    this.transactionManager.startTransaction();
+                    this.artifactDAO.lock(local);
+                    local = this.artifactDAO.get(local.getID());
+                    if (local != null && local.siteLocations.contains(remoteSiteLocation)) {
+                        log.info("siteLocations contains remoteSiteLocation"); // ***********************remove
+                        // if siteLocation's becomes empty removing the siteLocation, the artifact should be deleted
+                        if (local.siteLocations.size() == 1) {
+                            this.artifactDAO.delete(local.getID());
+                            log.info(String.format("delete: %s %s reason: empty SiteLocations",
+                                                   local.getID(),local.getURI()));
+                        } else {
+                            this.artifactDAO.removeSiteLocation(local, remoteSiteLocation);
+                        }
+                        this.transactionManager.commitTransaction();
+                    } else {
+                        this.transactionManager.rollbackTransaction();
+                    }
+                } catch (EntityNotFoundException e) {
+                    DeletedArtifactEvent event = this.deletedArtifactEventDAO.get(local.getID());
+                    if (event != null) {
+                        log.info(String.format("skip: %s %s reason: stale local Artifact",
+                                               local.getID(), local.getURI()));
+                    }
+                    this.transactionManager.rollbackTransaction();
+                }
                 return;
             }
         }
@@ -210,6 +276,32 @@ public class ArtifactValidator {
             // action: remove siteID from Artifact.storageLocations
             log.debug("explanation 3");
             log.info(String.format("remove SiteLocation: %s %s reason: multiple", local.getID(), local.getURI()));
+            SiteLocation remoteSiteLocation = new SiteLocation(this.remoteSite.getID());
+            try {
+                this.transactionManager.startTransaction();
+                this.artifactDAO.lock(local);
+                local = this.artifactDAO.get(local.getID());
+                // if siteLocation's becomes empty removing the siteLocation, the artifact should be deleted
+                if (local != null && local.siteLocations.contains(remoteSiteLocation)) {
+                    if (local.siteLocations.size() == 1) {
+                        this.artifactDAO.delete(local.getID());
+                        log.info(String.format("delete: %s %s reason: empty SiteLocations",
+                                               local.getID(),local.getURI()));
+                    } else {
+                        this.artifactDAO.removeSiteLocation(local, remoteSiteLocation);
+                    }
+                    this.transactionManager.commitTransaction();
+                } else {
+                    this.transactionManager.rollbackTransaction();
+                }
+            } catch (EntityNotFoundException e) {
+                DeletedArtifactEvent event = this.deletedArtifactEventDAO.get(local.getID());
+                if (event != null) {
+                    log.info(String.format("skip: %s %s reason: stale local Artifact",
+                                           local.getID(), local.getURI()));
+                }
+                this.transactionManager.rollbackTransaction();
+            }
         } else {
             // explanation4: L==storage, new Artifact in L, pending/missed new Artifact event in R
             // action: none
@@ -261,7 +353,9 @@ public class ArtifactValidator {
         log.debug("checking explanation 3");
         if (this.remoteSite == null) {
             log.info(String.format("put: %s %s reason: pending/missed Artifact", remote.getID(), remote.getURI()));
-            //TODO do action
+            this.transactionManager.startTransaction();
+            this.artifactDAO.put(remote);
+            this.transactionManager.commitTransaction();
             return;
         }
 
@@ -276,7 +370,24 @@ public class ArtifactValidator {
                 if (!local.siteLocations.contains(remoteSiteLocation)) {
                     log.info(String.format("add: %s to %s %s reason: remote SiteLocation missing",
                                            remoteSiteLocation, remote.getID(), remote.getURI()));
-                    //TODO do action
+                    try {
+                        this.transactionManager.startTransaction();
+                        this.artifactDAO.lock(local);
+                        local = this.artifactDAO.get(local.getID());
+                        if (local != null && !local.siteLocations.contains(remoteSiteLocation)) {
+                            this.artifactDAO.addSiteLocation(local, remoteSiteLocation);
+                            this.transactionManager.commitTransaction();
+                        } else {
+                            this.transactionManager.rollbackTransaction();
+                        }
+                    } catch (EntityNotFoundException e) {
+                        DeletedArtifactEvent event = this.deletedArtifactEventDAO.get(local.getID());
+                        if (event != null) {
+                            log.info(String.format("skip: %s %s reason: stale local Artifact",
+                                                   local.getID(), local.getURI()));
+                        }
+                        this.transactionManager.rollbackTransaction();
+                    }
                 }
             }
         }
@@ -299,17 +410,41 @@ public class ArtifactValidator {
         //         winner in remote: DeletedArtifactEvent for local, delete local, insert remote
         log.debug("checking artifact.id mismatch");
         if (!local.getID().equals(remote.getID())) {
-            if (local.getContentLastModified().before(remote.getContentLastModified())) {
-                log.info(String.format("resolve Artifact.id collision: put DeletedArtifactEvent for local %s %s "
-                                           + "reason: local contentLastModified older than remote",
-                                       local.getID(), local.getURI()));
-                log.info(String.format("resolve Artifact.id collision: delete local %s %s put remote "
-                                           + "%s %s reason: local contentLastModified older than remote",
-                                       local.getID(), local.getURI(), remote.getID(), remote.getURI()));
-            } else {
-                log.info(String.format("resolve Artifact.id collision: put DeletedArtifactEvent for remote %s %s "
-                                           + "reason: remote contentLastModified older than local",
-                                       remote.getID(), remote.getURI()));
+            try {
+                this.transactionManager.startTransaction();
+                this.artifactDAO.lock(local);
+                local = this.artifactDAO.get(local.getID());
+                if (local != null) {
+                    if (local.getContentLastModified().before(remote.getContentLastModified())) {
+                        DeletedArtifactEvent deletedArtifactEvent = new DeletedArtifactEvent(local.getID());
+                        this.deletedArtifactEventDAO.put(deletedArtifactEvent);
+                        this.artifactDAO.delete(local.getID());
+                        this.artifactDAO.put(remote);
+                        this.transactionManager.commitTransaction();
+                        log.info(String.format(
+                            "resolve Artifact.id collision: put DeletedArtifactEvent for local %s %s "
+                                + "reason: local contentLastModified older than remote",
+                            local.getID(), local.getURI()));
+                        log.info(String.format("resolve Artifact.id collision: delete local %s %s put remote "
+                                                   + "%s %s reason: local contentLastModified older than remote",
+                                               local.getID(), local.getURI(), remote.getID(), remote.getURI()));
+                    } else {
+                        DeletedArtifactEvent deletedArtifactEvent = new DeletedArtifactEvent(remote.getID());
+                        this.deletedArtifactEventDAO.put(deletedArtifactEvent);
+                        this.transactionManager.commitTransaction();
+                        log.info(String.format(
+                            "resolve Artifact.id collision: put DeletedArtifactEvent for remote %s %s "
+                                + "reason: remote contentLastModified older than local",
+                            remote.getID(), remote.getURI()));
+                    }
+                }
+            } catch (EntityNotFoundException e) {
+                DeletedArtifactEvent event = this.deletedArtifactEventDAO.get(local.getID());
+                if (event != null) {
+                    log.info(String.format("skip: %s %s reason: stale local Artifact",
+                                           local.getID(), local.getURI()));
+                }
+                this.transactionManager.rollbackTransaction();
             }
             return;
         }
@@ -322,9 +457,25 @@ public class ArtifactValidator {
                 // evidence: local artifact has older Entity.lastModified indicating an update to
                 //           optional metadata at remote
                 // action: put Artifact
-                log.info(String.format("resolve Artifact.metaChecksum mismatch: put remote %s %s "
-                                           + "reason: remote lastModified newer than local",
-                                       remote.getID(), remote.getURI()));
+                try {
+                    this.transactionManager.startTransaction();
+                    this.artifactDAO.lock(local);
+                    local = this.artifactDAO.get(local.getID());
+                    if (local != null) {
+                        this.artifactDAO.put(remote);
+                        this.transactionManager.commitTransaction();
+                        log.info(String.format("resolve Artifact.metaChecksum mismatch: put remote %s %s "
+                                                   + "reason: remote lastModified newer than local",
+                                               remote.getID(), remote.getURI()));
+                    }
+                } catch (EntityNotFoundException e) {
+                    DeletedArtifactEvent event = this.deletedArtifactEventDAO.get(local.getID());
+                    if (event != null) {
+                        log.info(String.format("skip: %s %s reason: stale local Artifact",
+                                               local.getID(), local.getURI()));
+                    }
+                    this.transactionManager.rollbackTransaction();
+                }
             } else {
                 // explanation2: pending/missed artifact update in R
                 // evidence: local artifact has newer Entity.lastModified indicating the update happened locally

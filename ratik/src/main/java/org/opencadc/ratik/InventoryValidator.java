@@ -280,6 +280,9 @@ public class InventoryValidator implements Runnable {
                 }
                 log.debug(String.format("comparing Artifacts:\n local - %s\nremote - %s", local, remote));
 
+                // overridable method for int-tests
+                testAction();
+
                 // check if Artifacts are the same, or if the local Artifact
                 // precedes or follows the remote Artifact.
                 int order = orderArtifacts(local, remote);
@@ -433,21 +436,38 @@ public class InventoryValidator implements Runnable {
     }
 
     /**
+     * Method that can be overridden in tests to insert Artifact's after the iterator queries.
+     */
+    void testAction() { }
+
+    /**
      * Get the StorageSite for the remote instance resourceID;
      */
     private StorageSite getRemoteStorageSite(URI resourceID)
         throws InterruptedException, IOException, ResourceNotFoundException, TransientException {
-        final TapClient<StorageSite> tapClient = new TapClient<>(resourceID);
-        final String query = String.format("SELECT id, resourceID, name, allowRead, allowWrite, lastModified, "
-                                               + "metaChecksum FROM inventory.StorageSite where resourceID = %s",
-                                           resourceID);
-        log.debug("\nExecuting query '" + query + "'\n");
-        StorageSite returned = null;
-        ResourceIterator<StorageSite> results = tapClient.execute(query, new StorageSiteRowMapper());
-        if (results.hasNext()) {
-            returned = results.next();
+        final StorageSite[] remoteStorageSite = new StorageSite[1];
+        try {
+            final Subject subject = SSLUtil.createSubject(new File(CERTIFICATE_FILE_LOCATION));
+            Subject.doAs(subject, (PrivilegedExceptionAction<Void>) () -> {
+                final TapClient<StorageSite> tapClient = new TapClient<>(resourceID);
+                final String query = "SELECT id, resourceID, name, allowRead, allowWrite, lastModified, metaChecksum "
+                    + "FROM inventory.StorageSite";
+                log.debug("\nExecuting query '" + query + "'\n");
+                ResourceIterator<StorageSite> results = tapClient.execute(query, new StorageSiteRowMapper());
+                if (results.hasNext()) {
+                    remoteStorageSite[0] = results.next();
+                    if (results.hasNext()) {
+                        throw new IllegalStateException(String.format("Multiple StorageSite's found for site %s",
+                                                                      resourceID.toASCIIString()));
+                    }
+                }
+                return null;
+            });
+        } catch (PrivilegedActionException privilegedActionException) {
+            final Exception exception = privilegedActionException.getException();
+            throw new IllegalStateException(exception.getMessage(), exception);
         }
-        return returned;
+        return remoteStorageSite[0];
     }
 
     /**
@@ -461,7 +481,7 @@ public class InventoryValidator implements Runnable {
             final URI resourceID = (URI) row.get(index++);
             final String name = (String) row.get(index++);
             final boolean allowRead = (Boolean) row.get(index++);
-            final boolean allowWrite = (Boolean) row.get(index);
+            final boolean allowWrite = (Boolean) row.get(index++);
 
             final StorageSite storageSite = new StorageSite(id, resourceID, name, allowRead, allowWrite);
             InventoryUtil.assignLastModified(storageSite, (Date) row.get(index++));

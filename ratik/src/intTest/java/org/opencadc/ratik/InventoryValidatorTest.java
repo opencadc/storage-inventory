@@ -69,6 +69,7 @@
 
 package org.opencadc.ratik;
 
+import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.util.FileUtil;
 import ca.nrc.cadc.util.Log4jInit;
 import java.io.File;
@@ -79,6 +80,8 @@ import java.io.IOException;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.util.Date;
 import java.util.MissingResourceException;
 import java.util.Properties;
@@ -87,11 +90,13 @@ import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.Before;
+import org.junit.BeforeClass;
 import org.junit.Test;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.DeletedArtifactEvent;
 import org.opencadc.inventory.DeletedStorageLocationEvent;
 import org.opencadc.inventory.SiteLocation;
+import org.opencadc.inventory.query.ArtifactRowMapper;
 import org.opencadc.inventory.util.IncludeArtifacts;
 
 public class InventoryValidatorTest {
@@ -101,7 +106,9 @@ public class InventoryValidatorTest {
         Log4jInit.setLevel("org.opencadc.ratik", Level.INFO);
         Log4jInit.setLevel("org.opencadc.inventory", Level.INFO);
         Log4jInit.setLevel("org.opencadc.inventory.db", Level.INFO);
+        Log4jInit.setLevel("org.opencadc.inventory.query", Level.INFO);
         Log4jInit.setLevel("ca.nrc.cadc.db", Level.INFO);
+        Log4jInit.setLevel("ca.nrc.cadc.tap", Level.INFO);
     }
 
     static String INVENTORY_SERVER = "RATIK_TEST";
@@ -144,15 +151,26 @@ public class InventoryValidatorTest {
 
     }
 
+    @BeforeClass
+    public static void setup() throws Exception {
+        Path dest = Paths.get(TMP_DIR + "/.ssl");
+        if (!Files.exists(dest)) {
+            Files.createDirectories(dest);
+        }
+        Path src = Paths.get(InventoryValidator.CERTIFICATE_FILE_LOCATION);
+        Files.copy(src, dest.resolve(src.getFileName()), StandardCopyOption.REPLACE_EXISTING);
+    }
+
     @Before
     public void beforeTest() throws Exception {
         writeConfig();
         this.localEnvironment.cleanTestEnvironment();
         this.remoteEnvironment.cleanTestEnvironment();
+        this.remoteEnvironment.initStorageSite(REMOTE_STORAGE_SITE);
     }
 
     private void writeConfig() throws IOException {
-        final Path includePath = new File(TMP_DIR + "/config").toPath();
+        final Path includePath = Paths.get(TMP_DIR + "/config");
         Files.createDirectories(includePath);
         final File includeFile = new File(includePath.toFile(), "artifact-filter.sql");
 
@@ -218,7 +236,7 @@ public class InventoryValidatorTest {
     }
 
     public void explanation0_ArtifactInLocal(boolean trackSiteLocations) throws Exception {
-        Artifact artifact = new Artifact(URI.create("cadc:TEST/one.ext"), TestUtil.getRandomMD5(),
+        Artifact artifact = new Artifact(URI.create("cadc:INTTEST/one.ext"), TestUtil.getRandomMD5(),
                                          new Date(), 1024L);
         this.localEnvironment.artifactDAO.put(artifact);
         this.remoteEnvironment.artifactDAO.put(artifact);
@@ -227,7 +245,13 @@ public class InventoryValidatorTest {
             System.setProperty("user.home", TMP_DIR);
             InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
                                                                     new IncludeArtifacts(),null,
-                                                                    trackSiteLocations);
+                                                                    trackSiteLocations) {
+                // Override the remote query to not return the Artifact.
+                @Override
+                String buildRemoteQuery(final String bucket) throws ResourceNotFoundException, IOException {
+                    return ArtifactRowMapper.BASE_QUERY + " WHERE uri LIKE 'cadc:FOO/%'";
+                }
+            };
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
@@ -310,8 +334,6 @@ public class InventoryValidatorTest {
      */
     @Test
     public void explanation2_ArtifactInLocal_LocalIsGlobal() throws Exception {
-        this.remoteEnvironment.initStorageSite(REMOTE_STORAGE_SITE);
-
         // case 1
         UUID remoteSiteID = this.remoteEnvironment.storageSiteDAO.list().iterator().next().getID();
         UUID randomSiteID = UUID.randomUUID();
@@ -393,8 +415,6 @@ public class InventoryValidatorTest {
      */
     @Test
     public void explanation3_ArtifactInLocal_LocalIsGlobal() throws Exception {
-        this.remoteEnvironment.initStorageSite(REMOTE_STORAGE_SITE);
-
         // case 1
         UUID remoteSiteID = this.remoteEnvironment.storageSiteDAO.list().iterator().next().getID();
         UUID randomSiteID = UUID.randomUUID();
@@ -476,7 +496,7 @@ public class InventoryValidatorTest {
         }
 
         Artifact localArtifact = this.localEnvironment.artifactDAO.get(artifact.getID());
-        Assert.assertNull("local artifact found", localArtifact);
+        Assert.assertNotNull("local artifact not found", localArtifact);
     }
 
     /** discrepancy: artifact in L && artifact not in R
@@ -498,7 +518,7 @@ public class InventoryValidatorTest {
      */
 
     /**
-     * explantion0: filter policy at L changed to include artifact in R
+     * explanation0: filter policy at L changed to include artifact in R
      * evidence: ?
      * action: equivalent to missed Artifact event (explanation3 below)
      *
@@ -546,7 +566,7 @@ public class InventoryValidatorTest {
         Assert.assertNull("local artifact found", localArtifact);
 
         DeletedArtifactEvent localDeletedArtifactEvent = this.localEnvironment.deletedArtifactEventDAO.get(artifact.getID());
-        Assert.assertNull("found DeletedArtifactEvent", localDeletedArtifactEvent);
+        Assert.assertNotNull("DeletedArtifactEvent not found", localDeletedArtifactEvent);
     }
 
     /** discrepancy: artifact not in L && artifact in R
@@ -623,23 +643,27 @@ public class InventoryValidatorTest {
      * before: Artifact in L & R, R siteID not in L Artifact.siteLocations
      * after:  Artifact in L and R siteID in Artifact.siteLocations
      */
+    //@Ignore // explanation4 to be updated
     @Test
     public void explanation4_ArtifactNotInL_LocalIsGlobal() throws Exception {
-        this.remoteEnvironment.initStorageSite(REMOTE_STORAGE_SITE);
         UUID remoteSiteID = this.remoteEnvironment.storageSiteDAO.list().iterator().next().getID();
         UUID randomSiteID = UUID.randomUUID();
 
         Artifact artifact = new Artifact(URI.create("cadc:INTTEST/one.ext"), TestUtil.getRandomMD5(),
                                          new Date(), 1024L);
         this.remoteEnvironment.artifactDAO.put(artifact);
-        this.localEnvironment.artifactDAO.put(artifact);
-        this.localEnvironment.artifactDAO.addSiteLocation(artifact, new SiteLocation(randomSiteID));
 
         try {
             System.setProperty("user.home", TMP_DIR);
             InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
                                                                     new IncludeArtifacts(),null,
-                                                                    true);
+                                                                    true) {
+                @Override
+                void testAction() {
+                    artifact.siteLocations.add(new SiteLocation(randomSiteID));
+                    localEnvironment.artifactDAO.put(artifact);
+                }
+            };
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
@@ -671,7 +695,8 @@ public class InventoryValidatorTest {
      *
      * explanation1: same ID collision due to race condition that metadata-sync has to handle
      * evidence: no more evidence needed
-     * action: pick winner, create DeletedArtifactEvent for loser, delete loser if it is in L
+     * action: pick winner, create DeletedArtifactEvent for loser, delete loser if it is in L,
+     *         insert winner if winner was in R
      *
      * case 1:
      * local Artifact contentModifiedDate before remote Artifact contentModifiedDate, delete local Artifact.
@@ -718,12 +743,15 @@ public class InventoryValidatorTest {
             System.setProperty("user.home", USER_HOME);
         }
 
-        localArtifact = this.localEnvironment.artifactDAO.get(localArtifact.getID());
-        Assert.assertNotNull("local artifact not found", localArtifact);
-        Assert.assertEquals("local artifact id != remote artifact id", remoteArtifact.getID(), localArtifact.getID());
-
         DeletedArtifactEvent deletedArtifactEvent = this.localEnvironment.deletedArtifactEventDAO.get(localArtifact.getID());
         Assert.assertNotNull("DeletedArtifactEvent not found", deletedArtifactEvent);
+
+        localArtifact = this.localEnvironment.artifactDAO.get(localArtifact.getID());
+        Assert.assertNull("local artifact found", localArtifact);
+
+        // cleanup between tests
+        this.localEnvironment.cleanTestEnvironment();
+        this.remoteEnvironment.cleanTestEnvironment();
 
         // case 2: local contentModifiedDate after remote contentModifiedDate
         remoteArtifact = new Artifact(artifactURI, contentCheckSum, olderDate, 1024L);
@@ -753,14 +781,15 @@ public class InventoryValidatorTest {
      * discrepancy: artifact in both && valid metaChecksum mismatch
      *
      * explanation1: pending/missed artifact update in L
-     * evidence: ??
+     * evidence: local artifact has older Entity.lastModified
+     *           indicating an update to optional metadata at remote
      * action: put Artifact
      *
      * before: Artifact in L & R, update Artifact in R
      * after: R Artifact in L
      *
      * explanation2: pending/missed artifact update in R
-     * evidence: ??
+     * evidence: local artifact has newer Entity.lastModified indicating the update happened locally
      * action: do nothing
      *
      * before: Artifact in L & R, update Artifact in L
