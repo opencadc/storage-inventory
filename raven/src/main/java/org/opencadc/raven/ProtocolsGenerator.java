@@ -209,7 +209,12 @@ public class ProtocolsGenerator {
                                     sb.append(artifactURI.toASCIIString());
                                     p = new Protocol(proto.getUri());
                                     p.setEndpoint(sb.toString());
-                                    protos.add(p);
+                                    if (storageSite.getAllowWrite()) {
+                                        // high priority for full read/write sites
+                                        protos.add(0, p);
+                                    } else {
+                                        protos.add(p);
+                                    }
                                     log.debug("added: " + p);
                                 }
                             } else {
