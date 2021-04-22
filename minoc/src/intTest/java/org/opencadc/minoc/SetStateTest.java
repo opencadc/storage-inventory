@@ -76,9 +76,13 @@ import ca.nrc.cadc.net.HttpTransfer;
 import ca.nrc.cadc.net.HttpUpload;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.reg.Standards;
+import ca.nrc.cadc.reg.XMLConstants;
 import ca.nrc.cadc.reg.client.RegistryClient;
 import ca.nrc.cadc.rest.RestAction;
 import ca.nrc.cadc.util.Log4jInit;
+import ca.nrc.cadc.vosi.Availability;
+import ca.nrc.cadc.vosi.VOSI;
+import ca.nrc.cadc.xml.XmlUtil;
 
 import static org.junit.Assert.fail;
 
@@ -97,6 +101,7 @@ import javax.security.auth.Subject;
 
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
+import org.jdom2.Document;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -112,9 +117,13 @@ import org.junit.Test;
 public class SetStateTest extends MinocTest {
     
     private static final Logger log = Logger.getLogger(SetStateTest.class);
+    private static final Map<String, String> AVAIL_SCHEMA_MAP = new TreeMap<>();
     
     static {
         Log4jInit.setLevel("org.opencadc.minoc", Level.INFO);
+        AVAIL_SCHEMA_MAP.putAll(XMLConstants.SCHEMA_MAP);
+	String localURL = XmlUtil.getResourceUrlString(VOSI.AVAILABILITY_SCHEMA, XMLConstants.class);
+        AVAIL_SCHEMA_MAP.put(VOSI.AVAILABILITY_NS_URI.toString(), localURL);
     }
     
     public SetStateTest() {
@@ -123,13 +132,19 @@ public class SetStateTest extends MinocTest {
     
     @Test
     public void testSetOffline() throws Exception {
+        String testState = RestAction.STATE_OFFLINE;
+        String originalState = null;
+
         try {
-            // set minoc state to 'Offline'
-            String state = RestAction.STATE_OFFLINE;
-	    setState(state);
+            originalState = getState();
+            if (!originalState.equals(testState)) {
+                // set minoc state to 'Offline'
+                setState(testState);
+                Assert.assertEquals("Failed to set state to " + testState, testState, getState());
+            }
 
             // test put, post, get, head, delete actions
-            URI artifactURI = URI.create("cadc:TEST/file.txt");
+            URI artifactURI = URI.create("cadc:TEST/testSetOffline.txt");
             URL artifactURL = new URL(filesURL + "/" + artifactURI.toString());
 
             String content = "abcdefghijklmnopqrstuvwxyz";
@@ -189,21 +204,34 @@ public class SetStateTest extends MinocTest {
             log.error("unexpected throwable", t);
             Assert.fail("unexpected throwable: " + t);
         } finally {
-	    // restore minoc to working state
-            String state = RestAction.STATE_READ_WRITE;
-	    setState(state);
+	    if (!originalState.equals(testState)) {
+	        // restore minoc to its original state
+	        setState(originalState);
+                Assert.assertEquals("Failed to set state to " + originalState, originalState, getState());
+	    }
 	}
     }
             
     @Test
     public void testSetReadOnly() throws Exception {
+        String testState = RestAction.STATE_READ_ONLY;
+        String originalState = null;
+
         try {
-            // set minoc state to 'ReadWrite'
+            originalState = getState();
+            if (!originalState.equals(testState)) {
+                // set minoc state to 'ReadOnly'
+                setState(testState);
+                Assert.assertEquals("Failed to set state to " + testState, testState, getState());
+            }
+
+            // set minoc state to 'ReadWrite' so that we can write a test file 
+	    // to test the subsequent get action
             String state = RestAction.STATE_READ_WRITE;
 	    setState(state);
 
             // test get action
-            URI artifactURI = URI.create("cadc:TEST/file.txt");
+            URI artifactURI = URI.create("cadc:TEST/testSetReadOnly.txt");
             URL artifactURL = new URL(filesURL + "/" + artifactURI.toString());
 
             String content = "abcdefghijklmnopqrstuvwxyz";
@@ -225,14 +253,6 @@ public class SetStateTest extends MinocTest {
             HttpGet get = new HttpGet(artifactURL, out);
             Subject.doAs(userSubject, new RunnableAction(get));
             Assert.assertNull(get.getThrowable());
-            URI checksumURI = get.getDigest();
-            long contentLength = get.getContentLength();
-            String contentType = get.getContentType();
-            String contentEncoding = get.getContentEncoding();
-            Assert.assertEquals(computeChecksumURI(data), checksumURI);
-            Assert.assertEquals(data.length, contentLength);
-            Assert.assertEquals(type, contentType);
-            Assert.assertEquals(encoding, contentEncoding);
 
             // set minoc state to 'ReadOnly'
             state = RestAction.STATE_READ_ONLY;
@@ -271,14 +291,6 @@ public class SetStateTest extends MinocTest {
             Subject.doAs(userSubject, new RunnableAction(head));
             log.warn("head output: " + bos.toString());
             Assert.assertNull(head.getThrowable());
-            checksumURI = head.getDigest();
-            contentLength = head.getContentLength();
-            contentType = head.getContentType();
-            contentEncoding = head.getContentEncoding();
-            Assert.assertEquals(computeChecksumURI(data), checksumURI);
-            Assert.assertEquals(data.length, contentLength);
-            Assert.assertEquals(type, contentType);
-            Assert.assertEquals(encoding, contentEncoding);
 
             // delete
             HttpDelete delete = new HttpDelete(artifactURL, false);
@@ -290,20 +302,28 @@ public class SetStateTest extends MinocTest {
             log.error("unexpected throwable", t);
             Assert.fail("unexpected throwable: " + t);
         } finally {
-	    // restore minoc to working state
-            String state = RestAction.STATE_READ_WRITE;
-	    setState(state);
+	    if (!originalState.equals(testState)) {
+	        // restore minoc to its original state
+	        setState(originalState);
+                Assert.assertEquals("Failed to set state to " + originalState, originalState, getState());
+	    }
 	}
     }
             
     @Test
     public void testSetReadWrite() throws Exception {
-        try {
-            // set minoc state to 'ReadWrite'
-            String state = RestAction.STATE_READ_WRITE;
-	    setState(state);
+        String testState = RestAction.STATE_READ_WRITE;
+        String originalState = null;
 
-            URI artifactURI = URI.create("cadc:TEST/file.txt");
+        try {
+            originalState = getState();
+            if (!originalState.equals(testState)) {
+                // set minoc state to 'ReadWrite'
+                setState(testState);
+                Assert.assertEquals("Failed to set state to " + testState, testState, getState());
+            }
+
+            URI artifactURI = URI.create("cadc:TEST/testSetReadWrite.txt");
             URL artifactURL = new URL(filesURL + "/" + artifactURI.toString());
 
             String content = "abcdefghijklmnopqrstuvwxyz";
@@ -326,22 +346,12 @@ public class SetStateTest extends MinocTest {
             HttpGet get = new HttpGet(artifactURL, out);
             Subject.doAs(userSubject, new RunnableAction(get));
             Assert.assertNull(get.getThrowable());
-            URI checksumURI = get.getDigest();
-            long contentLength = get.getContentLength();
-            String contentType = get.getContentType();
-            String contentEncoding = get.getContentEncoding();
-            Assert.assertEquals(computeChecksumURI(data), checksumURI);
-            Assert.assertEquals(data.length, contentLength);
-            Assert.assertEquals(type, contentType);
-            Assert.assertEquals(encoding, contentEncoding);
 
             // update
             // TODO: add update to artifactURI when functionality available
             String newEncoding = "test-encoding-2";
-            String newType = "application/x-text-message";
             Map<String,Object> postParams = new HashMap<String,Object>(2);
             postParams.put("contentEncoding", newEncoding);
-            postParams.put("contentType", newType);
             HttpPost post = new HttpPost(artifactURL, postParams, false);
             post.setDigest(computeChecksumURI(data));
             Subject.doAs(userSubject, new RunnableAction(post));
@@ -354,14 +364,6 @@ public class SetStateTest extends MinocTest {
             Subject.doAs(userSubject, new RunnableAction(head));
             log.warn("head output: " + bos.toString());
             Assert.assertNull(head.getThrowable());
-            checksumURI = head.getDigest();
-            contentLength = head.getContentLength();
-            contentType = head.getContentType();
-            contentEncoding = head.getContentEncoding();
-            Assert.assertEquals(computeChecksumURI(data), checksumURI);
-            Assert.assertEquals(data.length, contentLength);
-            Assert.assertEquals(newType, contentType);
-            Assert.assertEquals(newEncoding, contentEncoding);
 
             // delete
             HttpDelete delete = new HttpDelete(artifactURL, false);
@@ -378,10 +380,34 @@ public class SetStateTest extends MinocTest {
             log.error("unexpected throwable", t);
             Assert.fail("unexpected throwable: " + t);
         } finally {
-	    // restore minoc to working state
-            String state = RestAction.STATE_READ_WRITE;
-	    setState(state);
+	    if (!originalState.equals(testState)) {
+	        // restore minoc to its original state
+	        setState(originalState);
+                Assert.assertEquals("Failed to set state to " + originalState, originalState, getState());
+	    }
 	}
+    }
+            
+    private String getState() throws Exception {
+        // get minoc state 
+        RegistryClient regClient = new RegistryClient();
+        URL availabilityURL = regClient.getServiceURL(MINOC_SERVICE_ID, Standards.VOSI_AVAILABILITY, AuthMethod.CERT);
+        HttpGet getState = new HttpGet(availabilityURL, true);
+        getState.prepare();
+
+        Document xml = XmlUtil.buildDocument(getState.getInputStream(), AVAIL_SCHEMA_MAP);
+        Availability availability = new Availability(xml);
+	String note = availability.note;
+        String state = RestAction.STATE_READ_WRITE;
+        if (note.contains("offline")) {
+            state = RestAction.STATE_OFFLINE;
+        } else if (note.contains("read-only")) {
+            state = RestAction.STATE_READ_ONLY;
+        } else {
+            Assert.assertTrue("unknown state: " + note, note.contains("accepting requests")); 
+        }
+
+	return state;
     }
             
     private void setState(String state) throws Exception {
