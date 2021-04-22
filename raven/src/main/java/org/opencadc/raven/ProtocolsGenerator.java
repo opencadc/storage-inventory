@@ -194,13 +194,11 @@ public class ProtocolsGenerator {
                                     p.setSecurityMethod(proto.getSecurityMethod());
                                 }
                                 p.setEndpoint(sb.toString());
-                                if (storageSite.getAllowRead() && !storageSite.getAllowWrite()) {
-                                    // TODO Read only sites are considered backups/low priority
-                                    // sites and are added at the end of the list. This is likely
-                                    // to change in the future.
-                                    protos.add(protos.size() - 1, p);
-                                } else {
+                                if (storageSite.getAllowWrite()) {
+                                    // high priority for full read/write sites
                                     protos.add(0, p);
+                                } else {
+                                    protos.add(p);
                                 }
                                 log.debug("added: " + p);
                                 
