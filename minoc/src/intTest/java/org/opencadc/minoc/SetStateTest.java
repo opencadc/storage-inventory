@@ -118,6 +118,7 @@ public class SetStateTest extends MinocTest {
     
     private static final Logger log = Logger.getLogger(SetStateTest.class);
     private static final Map<String, String> AVAIL_SCHEMA_MAP = new TreeMap<>();
+    private static final String INITIAL_STATE = RestAction.STATE_READ_WRITE;
     
     static {
         Log4jInit.setLevel("org.opencadc.minoc", Level.INFO);
@@ -132,16 +133,17 @@ public class SetStateTest extends MinocTest {
     
     @Test
     public void testSetOffline() throws Exception {
+        String testMethod = "testSetOffline()";
         String testState = RestAction.STATE_OFFLINE;
-        String originalState = null;
 
         try {
-            originalState = getState();
-            if (!originalState.equals(testState)) {
-                // set minoc state to 'Offline'
-                setState(testState);
-                Assert.assertEquals("Failed to set state to " + testState, testState, getState());
-            }
+            // start test with 'ReadWrite' state
+            setState(INITIAL_STATE);
+            Assert.assertEquals("Failed to set state to " + INITIAL_STATE, INITIAL_STATE, getState());
+
+            // set minoc state to 'Offline'
+            setState(testState);
+            Assert.assertEquals("Failed to set state to " + testState, testState, getState());
 
             // test put, post, get, head, delete actions
             URI artifactURI = URI.create("cadc:TEST/testSetOffline.txt");
@@ -149,86 +151,89 @@ public class SetStateTest extends MinocTest {
 
             String content = "abcdefghijklmnopqrstuvwxyz";
             String encoding = "test-encoding";
-            String type = "text/plain";
             byte[] data = content.getBytes();
 
             // put: no length or checksum
             InputStream in = new ByteArrayInputStream(data);
             HttpUpload put = new HttpUpload(in, artifactURL);
-            put.setRequestProperty(HttpTransfer.CONTENT_TYPE, type);
-            put.setRequestProperty(HttpTransfer.CONTENT_ENCODING, encoding);
-            put.setDigest(computeChecksumURI(data));
+            put.setRequestProperty(HttpTransfer.CONTENT_LENGTH, String.valueOf(content.length()));
 
             Subject.doAs(userSubject, new RunnableAction(put));
+            int responseCode = put.getResponseCode();
+            log.info(testMethod + " put response code is " + responseCode);
+            Assert.assertEquals("incorrect response code", 500, responseCode);
             Assert.assertNotNull("put to minoc in offline state should have failed", put.getThrowable());
             String exMsg = put.getThrowable().getMessage();
+            log.info(testMethod +" put response throwable message is '" + exMsg + "'");
             Assert.assertTrue("incorrect exception message from put", exMsg.contains("System is offline"));
 
             // get
             OutputStream out = new ByteArrayOutputStream();
             HttpGet get = new HttpGet(artifactURL, out);
             Subject.doAs(userSubject, new RunnableAction(get));
+            responseCode = get.getResponseCode();
+            log.info(testMethod + " get response code is " + responseCode);
+            Assert.assertEquals("incorrect response code", 500, responseCode);
             Assert.assertNotNull("get from minoc in offline state should have failed", get.getThrowable());
-            exMsg = put.getThrowable().getMessage();
+            exMsg = get.getThrowable().getMessage();
+            log.info(testMethod + " get response throwable message is '" + exMsg + "'");
             Assert.assertTrue("incorrect exception message from get", exMsg.contains("System is offline"));
 
             // update
-            // TODO: add update to artifactURI when functionality available
             String newEncoding = "test-encoding-2";
-            String newType = "application/x-text-message";
             Map<String,Object> postParams = new HashMap<String,Object>(2);
             postParams.put("contentEncoding", newEncoding);
-            postParams.put("contentType", newType);
             HttpPost post = new HttpPost(artifactURL, postParams, false);
-            post.setDigest(computeChecksumURI(data));
             Subject.doAs(userSubject, new RunnableAction(post));
+            responseCode = post.getResponseCode();
+            log.info(testMethod + " post response code is " + responseCode);
+            Assert.assertEquals("incorrect response code", 500, responseCode);
             Assert.assertNotNull("post to minoc in offline state should have failed", post.getThrowable());
             exMsg = post.getThrowable().getMessage();
+            log.info(testMethod + " post response throwable message is '" + exMsg + "'");
             Assert.assertTrue("incorrect exception message from post", exMsg.contains("System is offline"));
 
             // head
             ByteArrayOutputStream bos = new ByteArrayOutputStream();
             HttpGet head = new HttpGet(artifactURL, bos);
             Subject.doAs(userSubject, new RunnableAction(head));
+            responseCode = head.getResponseCode();
+            log.info(testMethod + " head response code is " + responseCode);
+            Assert.assertEquals("incorrect response code", 500, responseCode);
             Assert.assertNotNull("head from minoc in offline state should have failed", head.getThrowable());
             exMsg = head.getThrowable().getMessage();
+            log.info(testMethod + " head response throwable message is '" + exMsg + "'");
             Assert.assertTrue("incorrect exception message from head", exMsg.contains("System is offline"));
 
             // delete
             HttpDelete delete = new HttpDelete(artifactURL, false);
             Subject.doAs(userSubject, new RunnableAction(delete));
+            responseCode = head.getResponseCode();
+            log.info(testMethod + " delete response code is " + responseCode);
+            Assert.assertEquals("incorrect response code", 500, responseCode);
             Assert.assertNotNull("delete from minoc in offline state should have failed", delete.getThrowable());
             exMsg = delete.getThrowable().getMessage();
+            log.info(testMethod + " delete response throwable message is '" + exMsg + "'");
             Assert.assertTrue("incorrect exception message from delete", exMsg.contains("System is offline"));
         } catch (Exception t) {
             log.error("unexpected throwable", t);
             Assert.fail("unexpected throwable: " + t);
         } finally {
-	    if (!originalState.equals(testState)) {
-	        // restore minoc to its original state
-	        setState(originalState);
-                Assert.assertEquals("Failed to set state to " + originalState, originalState, getState());
-	    }
+            // restore minoc to its intial state
+            setState(INITIAL_STATE);
+            Assert.assertEquals("Failed to set state to " + INITIAL_STATE, INITIAL_STATE, getState());
 	}
     }
             
     @Test
     public void testSetReadOnly() throws Exception {
+        String testMethod = "testSetReadOnly()";
         String testState = RestAction.STATE_READ_ONLY;
-        String originalState = null;
 
         try {
-            originalState = getState();
-            if (!originalState.equals(testState)) {
-                // set minoc state to 'ReadOnly'
-                setState(testState);
-                Assert.assertEquals("Failed to set state to " + testState, testState, getState());
-            }
-
-            // set minoc state to 'ReadWrite' so that we can write a test file 
-	    // to test the subsequent get action
-            String state = RestAction.STATE_READ_WRITE;
-	    setState(state);
+            // start test with 'ReadWrite' state
+            setState(INITIAL_STATE);
+            Assert.assertEquals("Failed to set state to " + INITIAL_STATE, INITIAL_STATE, getState());
 
             // test get action
             URI artifactURI = URI.create("cadc:TEST/testSetReadOnly.txt");
@@ -236,52 +241,63 @@ public class SetStateTest extends MinocTest {
 
             String content = "abcdefghijklmnopqrstuvwxyz";
             String encoding = "test-encoding";
-            String type = "text/plain";
             byte[] data = content.getBytes();
 
-            // put a file so that we can test get: no length or checksum
+            // put a file so that we can test get
             InputStream in = new ByteArrayInputStream(data);
             HttpUpload put = new HttpUpload(in, artifactURL);
-            put.setRequestProperty(HttpTransfer.CONTENT_TYPE, type);
-            put.setRequestProperty(HttpTransfer.CONTENT_ENCODING, encoding);
-            put.setDigest(computeChecksumURI(data));
+            put.setRequestProperty(HttpTransfer.CONTENT_LENGTH, String.valueOf(content.length()));
             Subject.doAs(userSubject, new RunnableAction(put));
+            int responseCode = put.getResponseCode();
+            log.info(testMethod + " put response code is " + responseCode);
+            Assert.assertEquals("incorrect response code", 200, responseCode);
+            if (put.getThrowable() != null) {
+                log.info(testMethod + " put response throwable message is '" + put.getThrowable().getMessage() + "'");
+            }
             Assert.assertNull(put.getThrowable());
+
+            // set minoc state to 'ReadOnly'
+            setState(testState);
+            Assert.assertEquals("Failed to set state to " + testState, testState, getState());
 
             // get should be successful
             OutputStream out = new ByteArrayOutputStream();
             HttpGet get = new HttpGet(artifactURL, out);
             Subject.doAs(userSubject, new RunnableAction(get));
+            responseCode = get.getResponseCode();
+            log.info(testMethod + " get response code is " + responseCode);
+            Assert.assertEquals("incorrect response code", 200, responseCode);
+            if (get.getThrowable() != null) {
+                log.info(testMethod + " get response throwable message is '" + get.getThrowable().getMessage() + "'");
+            }
             Assert.assertNull(get.getThrowable());
-
-            // set minoc state to 'ReadOnly'
-            state = RestAction.STATE_READ_ONLY;
-	    setState(state);
 
             // test put, post, head, delete actions
             // put: no length or checksum
             in = new ByteArrayInputStream(data);
             put = new HttpUpload(in, artifactURL);
-            put.setRequestProperty(HttpTransfer.CONTENT_TYPE, type);
-            put.setRequestProperty(HttpTransfer.CONTENT_ENCODING, encoding);
-            put.setDigest(computeChecksumURI(data));
+            put.setRequestProperty(HttpTransfer.CONTENT_LENGTH, String.valueOf(content.length()));
             Subject.doAs(userSubject, new RunnableAction(put));
+            responseCode = put.getResponseCode();
+            log.info(testMethod + " put response code is " + responseCode);
+            Assert.assertEquals("incorrect response code", 500, responseCode);
             Assert.assertNotNull("put to minoc in read-only state should have failed", put.getThrowable());
             String exMsg = put.getThrowable().getMessage();
+            log.info(testMethod + " put response throwable message is '" + exMsg + "'");
             Assert.assertTrue("incorrect exception message from put", exMsg.contains("System is in read-only"));
 
             // update
-            // TODO: add update to artifactURI when functionality available
             String newEncoding = "test-encoding-2";
-            String newType = "application/x-text-message";
             Map<String,Object> postParams = new HashMap<String,Object>(2);
             postParams.put("contentEncoding", newEncoding);
-            postParams.put("contentType", newType);
             HttpPost post = new HttpPost(artifactURL, postParams, false);
-            post.setDigest(computeChecksumURI(data));
             Subject.doAs(userSubject, new RunnableAction(post));
+            responseCode = post.getResponseCode();
+            log.info(testMethod + " post response code is " + responseCode);
+            Assert.assertEquals("incorrect response code", 500, responseCode);
             Assert.assertNotNull("post to minoc in read-only state should have failed", post.getThrowable());
             exMsg = post.getThrowable().getMessage();
+            log.info(testMethod + " post response throwable message is '" + exMsg + "'");
             Assert.assertTrue("incorrect exception message from post", exMsg.contains("System is in read-only"));
 
             // head
@@ -289,105 +305,72 @@ public class SetStateTest extends MinocTest {
             HttpGet head = new HttpGet(artifactURL, bos);
             head.setHeadOnly(true);
             Subject.doAs(userSubject, new RunnableAction(head));
-            log.warn("head output: " + bos.toString());
+            responseCode = head.getResponseCode();
+            log.info(testMethod + " head response code is " + responseCode);
+            Assert.assertEquals("incorrect response code", 200, responseCode);
+            if (head.getThrowable() != null) {
+                log.info(testMethod + " head response throwable message is '" + head.getThrowable().getMessage() + "'");
+            }
             Assert.assertNull(head.getThrowable());
 
             // delete
             HttpDelete delete = new HttpDelete(artifactURL, false);
             Subject.doAs(userSubject, new RunnableAction(delete));
+            responseCode = delete.getResponseCode();
+            log.info(testMethod + " delete response code is " + responseCode);
+            Assert.assertEquals("incorrect response code", 500, responseCode);
             Assert.assertNotNull("delete from minoc in read-only state should have failed", delete.getThrowable());
             exMsg = delete.getThrowable().getMessage();
+            log.info(testMethod + " delete response throwable message is '" + exMsg + "'");
             Assert.assertTrue("incorrect exception message from delete", exMsg.contains("System is in read-only"));
         } catch (Exception t) {
             log.error("unexpected throwable", t);
             Assert.fail("unexpected throwable: " + t);
         } finally {
-	    if (!originalState.equals(testState)) {
-	        // restore minoc to its original state
-	        setState(originalState);
-                Assert.assertEquals("Failed to set state to " + originalState, originalState, getState());
-	    }
-	}
+            // restore minoc to its intial state
+            setState(INITIAL_STATE);
+            Assert.assertEquals("Failed to set state to " + INITIAL_STATE, INITIAL_STATE, getState());
+        }
     }
-            
+    
     @Test
-    public void testSetReadWrite() throws Exception {
-        String testState = RestAction.STATE_READ_WRITE;
-        String originalState = null;
-
+    public void testStateSwitch() {
         try {
-            originalState = getState();
-            if (!originalState.equals(testState)) {
-                // set minoc state to 'ReadWrite'
-                setState(testState);
-                Assert.assertEquals("Failed to set state to " + testState, testState, getState());
-            }
+            String msg = "Test switching from read-write to itself and to other states";
+            log.info(msg);
+            switchState(RestAction.STATE_READ_WRITE, RestAction.STATE_READ_WRITE);
+            switchState(RestAction.STATE_READ_WRITE, RestAction.STATE_READ_ONLY);
+            switchState(RestAction.STATE_READ_WRITE, RestAction.STATE_OFFLINE);
 
-            URI artifactURI = URI.create("cadc:TEST/testSetReadWrite.txt");
-            URL artifactURL = new URL(filesURL + "/" + artifactURI.toString());
+            msg = "Test switch from read-only to itself and to other states";
+            log.info(msg);
+            switchState(RestAction.STATE_READ_ONLY, RestAction.STATE_READ_ONLY);
+            switchState(RestAction.STATE_READ_ONLY, RestAction.STATE_READ_WRITE);
+            switchState(RestAction.STATE_READ_ONLY, RestAction.STATE_OFFLINE);
 
-            String content = "abcdefghijklmnopqrstuvwxyz";
-            String encoding = "test-encoding";
-            String type = "text/plain";
-            byte[] data = content.getBytes();
-
-            // put: no length or checksum
-            InputStream in = new ByteArrayInputStream(data);
-            HttpUpload put = new HttpUpload(in, artifactURL);
-            put.setRequestProperty(HttpTransfer.CONTENT_TYPE, type);
-            put.setRequestProperty(HttpTransfer.CONTENT_ENCODING, encoding);
-            put.setDigest(computeChecksumURI(data));
-
-            Subject.doAs(userSubject, new RunnableAction(put));
-            Assert.assertNull(put.getThrowable());
-
-            // get
-            OutputStream out = new ByteArrayOutputStream();
-            HttpGet get = new HttpGet(artifactURL, out);
-            Subject.doAs(userSubject, new RunnableAction(get));
-            Assert.assertNull(get.getThrowable());
-
-            // update
-            // TODO: add update to artifactURI when functionality available
-            String newEncoding = "test-encoding-2";
-            Map<String,Object> postParams = new HashMap<String,Object>(2);
-            postParams.put("contentEncoding", newEncoding);
-            HttpPost post = new HttpPost(artifactURL, postParams, false);
-            post.setDigest(computeChecksumURI(data));
-            Subject.doAs(userSubject, new RunnableAction(post));
-            Assert.assertNull(post.getThrowable());
-
-            // head
-            ByteArrayOutputStream bos = new ByteArrayOutputStream();
-            HttpGet head = new HttpGet(artifactURL, bos);
-            head.setHeadOnly(true);
-            Subject.doAs(userSubject, new RunnableAction(head));
-            log.warn("head output: " + bos.toString());
-            Assert.assertNull(head.getThrowable());
-
-            // delete
-            HttpDelete delete = new HttpDelete(artifactURL, false);
-            Subject.doAs(userSubject, new RunnableAction(delete));
-            Assert.assertNull(delete.getThrowable());
-
-            // get
-            get = new HttpGet(artifactURL, out);
-            Subject.doAs(userSubject, new RunnableAction(get));
-            Throwable throwable = get.getThrowable();
-            Assert.assertNotNull(throwable);
-            Assert.assertTrue(throwable instanceof ResourceNotFoundException);
+            msg = "Test switch from offline to itself and to other states";
+            log.info(msg);
+            switchState(RestAction.STATE_OFFLINE, RestAction.STATE_OFFLINE);
+            switchState(RestAction.STATE_OFFLINE, RestAction.STATE_READ_WRITE);
+            switchState(RestAction.STATE_OFFLINE, RestAction.STATE_READ_ONLY);
         } catch (Exception t) {
             log.error("unexpected throwable", t);
             Assert.fail("unexpected throwable: " + t);
-        } finally {
-	    if (!originalState.equals(testState)) {
-	        // restore minoc to its original state
-	        setState(originalState);
-                Assert.assertEquals("Failed to set state to " + originalState, originalState, getState());
-	    }
-	}
+            
+        }
     }
             
+    private void switchState(String fromState, String toState) throws Exception {
+        String testMethod = "switchState";
+        // start with the fromState
+        setState(fromState);
+        Assert.assertEquals(testMethod + " failed to set state to " + fromState, fromState, getState());
+ 
+        // switch from fromState to toState
+        setState(toState);
+        Assert.assertEquals(testMethod + " failed to switch from " + fromState + " to " + toState, toState, getState());
+    }
+    
     private String getState() throws Exception {
         // get minoc state 
         RegistryClient regClient = new RegistryClient();
@@ -395,9 +378,15 @@ public class SetStateTest extends MinocTest {
         HttpGet getState = new HttpGet(availabilityURL, true);
         getState.prepare();
 
+        int responseCode = getState.getResponseCode();
+        Assert.assertEquals("incorrect response code", 200, responseCode);
+        if (getState.getThrowable() != null) {
+            log.info("getState() response throwable message is '" + getState.getThrowable().getMessage() + "'");
+        }
+
         Document xml = XmlUtil.buildDocument(getState.getInputStream(), AVAIL_SCHEMA_MAP);
         Availability availability = new Availability(xml);
-	String note = availability.note;
+        String note = availability.note;
         String state = RestAction.STATE_READ_WRITE;
         if (note.contains("offline")) {
             state = RestAction.STATE_OFFLINE;
@@ -407,7 +396,8 @@ public class SetStateTest extends MinocTest {
             Assert.assertTrue("unknown state: " + note, note.contains("accepting requests")); 
         }
 
-	return state;
+        log.info("getState response code is " + responseCode + " and returns state " + state);
+        return state;
     }
             
     private void setState(String state) throws Exception {
@@ -419,5 +409,12 @@ public class SetStateTest extends MinocTest {
         params.put("state", state);
         HttpPost setState = new HttpPost(availabilityURL, params, false);
         Subject.doAs(userSubject, new RunnableAction(setState));
+
+        int responseCode = setState.getResponseCode();
+        log.info("setState() " + state + " response code is " + responseCode);
+        Assert.assertEquals("incorrect response code", 302, responseCode);
+        if (setState.getThrowable() != null) {
+            log.info("setState() " + state + " response throwable message is '" + setState.getThrowable().getMessage() + "'");
+        }
     }
 }
