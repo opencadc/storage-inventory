@@ -221,13 +221,14 @@ public class FileSync implements Runnable {
 
         scheduleSubjectUpdates(subject);
 
-        Subject.doAs(subject, (PrivilegedAction<Void>) () -> {
+        Subject.doAs(subject, (PrivilegedAction<Object>) () -> {
             doit();
             return null;
         });
     }
 
-    public void doit() {
+    // package access for test code
+    void doit() {
         // poll time while watching job queue to empty
         long poll = 30 * 1000L; // 30 sec
         if (testRunLoops > 0) {
@@ -316,6 +317,9 @@ public class FileSync implements Runnable {
                     ok = false;
                 }
             }
+        }
+        if (testRunLoops > 0) {
+            log.warn("TEST MODE: testRunLoops=" + testRunLoops + " ... threadPool.terminate");
         }
         this.threadPool.terminate();
     }
