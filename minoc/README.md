@@ -89,14 +89,15 @@ ivo://ivoa.net/std/CDP#delegate-1.0 = ivo://cadc.nrc.ca/cred
 ivo://ivoa.net/std/CDP#proxy-1.0 = ivo://cadc.nrc.ca/cred
 ```
 
-### minoc-availability.properties
+### minoc-availability.properties (optional)
 The minoc-availability.properties file specifies which users have the authority to change the availability state of the minoc service. Each entry consists of a key=value pair. The key is always "users". The value is the x500 canonical user name.
 
 Example:
 ```
-users=CN=cadcauthtest1_24c, OU=cadc, O=hia, C=ca
-users=CN=cadcregtest1_b5d, OU=cadc, O=hia, C=ca
+users = {user identity}
 ```
+`users` specifies the user(s) who are authorized to make calls to the service. The value is a list of user identities (X500 distingushed name), one line per user. Optional: if the `minoc-availability.properties` is not found or does not list any `users`, the service will function in the default mode (ReadWrite) and the state will not be changeable.
+
 
 ## building it
 ```
