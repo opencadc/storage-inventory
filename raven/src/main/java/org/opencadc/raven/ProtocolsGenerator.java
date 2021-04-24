@@ -139,6 +139,12 @@ public class ProtocolsGenerator {
         return protos;
     }
 
+    static void prioritizePullFromSites(List<StorageSite> storageSites) {
+        // contains the algorithm for prioritizing storage sites to pull from. Currently
+        // read/write sites have higher priority
+        storageSites.sort((site1, site2) -> Boolean.compare(!site1.getAllowWrite(), !site2.getAllowWrite()));
+    }
+
     List<Protocol> doPullFrom(URI artifactURI, Transfer transfer, String authToken) throws ResourceNotFoundException, IOException {
         RegistryClient regClient = new RegistryClient();
         StorageSiteDAO storageSiteDAO = new StorageSiteDAO(artifactDAO);
@@ -157,8 +163,13 @@ public class ProtocolsGenerator {
         }
 
         // produce URLs to each of the copies for each of the protocols
+        List<StorageSite> storageSites = new ArrayList<>();
         for (SiteLocation site : artifact.siteLocations) {
             StorageSite storageSite = getSite(sites, site.getSiteID());
+            storageSites.add(storageSite);
+        }
+        prioritizePullFromSites(storageSites);
+        for (StorageSite storageSite : storageSites) {
             Capability filesCap = null;
             try {
                 Capabilities caps = regClient.getCapabilities(storageSite.getResourceID());
@@ -196,7 +207,7 @@ public class ProtocolsGenerator {
                                 p.setEndpoint(sb.toString());
                                 protos.add(p);
                                 log.debug("added: " + p);
-                                
+
                                 // add a plain anon URL
                                 if (authToken != null && Standards.SECURITY_METHOD_ANON.equals(sec)) {
                                     sb = new StringBuilder();
@@ -268,7 +279,7 @@ public class ProtocolsGenerator {
                                 p.setEndpoint(sb.toString());
                                 protos.add(p);
                                 log.debug("added: " + p);
-                                
+
                                 // no plain anon URL for put
                             } else {
                                 log.debug("PUT: " + storageSite + "PUT: reject protocol: " + proto
