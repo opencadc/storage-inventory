@@ -158,63 +158,68 @@ public class SetStateTest extends MinocTest {
             HttpUpload put = new HttpUpload(in, artifactURL);
             put.setRequestProperty(HttpTransfer.CONTENT_LENGTH, String.valueOf(content.length()));
 
+	    put.setRetry(1, 0, HttpTransfer.RetryReason.TRANSIENT);
             Subject.doAs(userSubject, new RunnableAction(put));
             int responseCode = put.getResponseCode();
             log.info(testMethod + " put response code is " + responseCode);
-            Assert.assertEquals("incorrect response code", 500, responseCode);
+            Assert.assertEquals("incorrect response code", 503, responseCode);
             Assert.assertNotNull("put to minoc in offline state should have failed", put.getThrowable());
             String exMsg = put.getThrowable().getMessage();
             log.info(testMethod +" put response throwable message is '" + exMsg + "'");
-            Assert.assertTrue("incorrect exception message from put", exMsg.contains("System is offline"));
+            Assert.assertTrue("incorrect exception message from put", exMsg.contains("server busy"));
 
             // get
             OutputStream out = new ByteArrayOutputStream();
             HttpGet get = new HttpGet(artifactURL, out);
+	    get.setRetry(1, 0, HttpTransfer.RetryReason.TRANSIENT);
             Subject.doAs(userSubject, new RunnableAction(get));
             responseCode = get.getResponseCode();
             log.info(testMethod + " get response code is " + responseCode);
-            Assert.assertEquals("incorrect response code", 500, responseCode);
+            Assert.assertEquals("incorrect response code", 503, responseCode);
             Assert.assertNotNull("get from minoc in offline state should have failed", get.getThrowable());
             exMsg = get.getThrowable().getMessage();
             log.info(testMethod + " get response throwable message is '" + exMsg + "'");
-            Assert.assertTrue("incorrect exception message from get", exMsg.contains("System is offline"));
+            Assert.assertTrue("incorrect exception message from get", exMsg.contains("server busy"));
 
             // update
             String newEncoding = "test-encoding-2";
             Map<String,Object> postParams = new HashMap<String,Object>(2);
             postParams.put("contentEncoding", newEncoding);
             HttpPost post = new HttpPost(artifactURL, postParams, false);
+	    post.setRetry(1, 0, HttpTransfer.RetryReason.TRANSIENT);
             Subject.doAs(userSubject, new RunnableAction(post));
             responseCode = post.getResponseCode();
             log.info(testMethod + " post response code is " + responseCode);
-            Assert.assertEquals("incorrect response code", 500, responseCode);
+            Assert.assertEquals("incorrect response code", 503, responseCode);
             Assert.assertNotNull("post to minoc in offline state should have failed", post.getThrowable());
             exMsg = post.getThrowable().getMessage();
             log.info(testMethod + " post response throwable message is '" + exMsg + "'");
-            Assert.assertTrue("incorrect exception message from post", exMsg.contains("System is offline"));
+            Assert.assertTrue("incorrect exception message from post", exMsg.contains("server busy"));
 
             // head
             ByteArrayOutputStream bos = new ByteArrayOutputStream();
             HttpGet head = new HttpGet(artifactURL, bos);
+	    head.setRetry(1, 0, HttpTransfer.RetryReason.TRANSIENT);
             Subject.doAs(userSubject, new RunnableAction(head));
             responseCode = head.getResponseCode();
             log.info(testMethod + " head response code is " + responseCode);
-            Assert.assertEquals("incorrect response code", 500, responseCode);
+            Assert.assertEquals("incorrect response code", 503, responseCode);
             Assert.assertNotNull("head from minoc in offline state should have failed", head.getThrowable());
             exMsg = head.getThrowable().getMessage();
             log.info(testMethod + " head response throwable message is '" + exMsg + "'");
-            Assert.assertTrue("incorrect exception message from head", exMsg.contains("System is offline"));
+            Assert.assertTrue("incorrect exception message from head", exMsg.contains("server busy"));
 
             // delete
             HttpDelete delete = new HttpDelete(artifactURL, false);
+	    delete.setRetry(1, 0, HttpTransfer.RetryReason.TRANSIENT);
             Subject.doAs(userSubject, new RunnableAction(delete));
             responseCode = head.getResponseCode();
             log.info(testMethod + " delete response code is " + responseCode);
-            Assert.assertEquals("incorrect response code", 500, responseCode);
+            Assert.assertEquals("incorrect response code", 503, responseCode);
             Assert.assertNotNull("delete from minoc in offline state should have failed", delete.getThrowable());
             exMsg = delete.getThrowable().getMessage();
             log.info(testMethod + " delete response throwable message is '" + exMsg + "'");
-            Assert.assertTrue("incorrect exception message from delete", exMsg.contains("System is offline"));
+            Assert.assertTrue("incorrect exception message from delete", exMsg.contains("server busy"));
         } catch (Exception t) {
             log.error("unexpected throwable", t);
             Assert.fail("unexpected throwable: " + t);
@@ -277,28 +282,30 @@ public class SetStateTest extends MinocTest {
             in = new ByteArrayInputStream(data);
             put = new HttpUpload(in, artifactURL);
             put.setRequestProperty(HttpTransfer.CONTENT_LENGTH, String.valueOf(content.length()));
+	    put.setRetry(1, 0, HttpTransfer.RetryReason.TRANSIENT);
             Subject.doAs(userSubject, new RunnableAction(put));
             responseCode = put.getResponseCode();
             log.info(testMethod + " put response code is " + responseCode);
-            Assert.assertEquals("incorrect response code", 500, responseCode);
+            Assert.assertEquals("incorrect response code", 503, responseCode);
             Assert.assertNotNull("put to minoc in read-only state should have failed", put.getThrowable());
             String exMsg = put.getThrowable().getMessage();
             log.info(testMethod + " put response throwable message is '" + exMsg + "'");
-            Assert.assertTrue("incorrect exception message from put", exMsg.contains("System is in read-only"));
+            Assert.assertTrue("incorrect exception message from put", exMsg.contains("server busy"));
 
             // update
             String newEncoding = "test-encoding-2";
             Map<String,Object> postParams = new HashMap<String,Object>(2);
             postParams.put("contentEncoding", newEncoding);
             HttpPost post = new HttpPost(artifactURL, postParams, false);
+	    post.setRetry(1, 0, HttpTransfer.RetryReason.TRANSIENT);
             Subject.doAs(userSubject, new RunnableAction(post));
             responseCode = post.getResponseCode();
             log.info(testMethod + " post response code is " + responseCode);
-            Assert.assertEquals("incorrect response code", 500, responseCode);
+            Assert.assertEquals("incorrect response code", 503, responseCode);
             Assert.assertNotNull("post to minoc in read-only state should have failed", post.getThrowable());
             exMsg = post.getThrowable().getMessage();
             log.info(testMethod + " post response throwable message is '" + exMsg + "'");
-            Assert.assertTrue("incorrect exception message from post", exMsg.contains("System is in read-only"));
+            Assert.assertTrue("incorrect exception message from post", exMsg.contains("server busy"));
 
             // head
             ByteArrayOutputStream bos = new ByteArrayOutputStream();
@@ -315,14 +322,15 @@ public class SetStateTest extends MinocTest {
 
             // delete
             HttpDelete delete = new HttpDelete(artifactURL, false);
+	    delete.setRetry(1, 0, HttpTransfer.RetryReason.TRANSIENT);
             Subject.doAs(userSubject, new RunnableAction(delete));
             responseCode = delete.getResponseCode();
             log.info(testMethod + " delete response code is " + responseCode);
-            Assert.assertEquals("incorrect response code", 500, responseCode);
+            Assert.assertEquals("incorrect response code", 503, responseCode);
             Assert.assertNotNull("delete from minoc in read-only state should have failed", delete.getThrowable());
             exMsg = delete.getThrowable().getMessage();
             log.info(testMethod + " delete response throwable message is '" + exMsg + "'");
-            Assert.assertTrue("incorrect exception message from delete", exMsg.contains("System is in read-only"));
+            Assert.assertTrue("incorrect exception message from delete", exMsg.contains("server busy"));
         } catch (Exception t) {
             log.error("unexpected throwable", t);
             Assert.fail("unexpected throwable: " + t);
