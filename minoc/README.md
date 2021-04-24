@@ -89,6 +89,15 @@ ivo://ivoa.net/std/CDP#delegate-1.0 = ivo://cadc.nrc.ca/cred
 ivo://ivoa.net/std/CDP#proxy-1.0 = ivo://cadc.nrc.ca/cred
 ```
 
+### minoc-availability.properties
+The minoc-availability.properties file specifies which users have the authority to change the availability state of the minoc service. Each entry consists of a key=value pair. The key is always "users". The value is the x500 canonical user name.
+
+Example:
+```
+users=CN=cadcauthtest1_24c, OU=cadc, O=hia, C=ca
+users=CN=cadcregtest1_b5d, OU=cadc, O=hia, C=ca
+```
+
 ## building it
 ```
 gradle clean build

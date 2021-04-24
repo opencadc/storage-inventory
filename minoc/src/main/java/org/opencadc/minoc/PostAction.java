@@ -96,6 +96,7 @@ public class PostAction extends ArtifactAction {
     @Override
     public void doAction() throws Exception {
         
+        checkWritable();
         initAndAuthorize(WriteGrant.class);
         
         String newURI = syncInput.getParameter("uri");
