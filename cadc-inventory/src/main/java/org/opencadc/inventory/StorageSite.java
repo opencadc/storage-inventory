@@ -225,7 +225,9 @@ public class StorageSite extends Entity implements Comparable<StorageSite> {
         StringBuilder sb = new StringBuilder(super.toString());
         sb.append("[");
         sb.append(resourceID).append(",");
-        sb.append(name);
+        sb.append(name).append(",");
+        sb.append(allowRead).append(",");
+        sb.append(allowWrite);
         sb.append("]");
         return sb.toString();
     }
