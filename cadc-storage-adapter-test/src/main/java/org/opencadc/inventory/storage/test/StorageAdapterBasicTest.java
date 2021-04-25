@@ -344,10 +344,11 @@ public abstract class StorageAdapterBasicTest {
                 StorageMetadata am = ai.next();
                 log.debug("compare: " + em.getStorageLocation() + " vs " + am.getStorageLocation());
                 Assert.assertEquals("order", em, am);
+                Assert.assertTrue("valid", am.isValid());
                 Assert.assertEquals("length", em.getContentLength(), am.getContentLength());
                 Assert.assertEquals("checksum", em.getContentChecksum(), am.getContentChecksum());
                 
-                Assert.assertNotNull("artifactUIRI", am.artifactURI);
+                Assert.assertNotNull("artifactURI", am.artifactURI);
                 Assert.assertEquals("artifactURI", em.artifactURI, am.artifactURI);
                 
                 Assert.assertNotNull("contentLastModified", am.contentLastModified);
