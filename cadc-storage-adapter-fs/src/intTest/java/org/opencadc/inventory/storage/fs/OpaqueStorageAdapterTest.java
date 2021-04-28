@@ -103,8 +103,8 @@ import org.opencadc.inventory.storage.test.StorageAdapterBasicTest;
  * 
  * @author pdowler
  */
-public class OpaqueBasicTest extends StorageAdapterBasicTest {
-    private static final Logger log = Logger.getLogger(OpaqueBasicTest.class);
+public class OpaqueStorageAdapterTest extends StorageAdapterBasicTest {
+    private static final Logger log = Logger.getLogger(OpaqueStorageAdapterTest.class);
 
     static final int BUCKET_LEN = 2;
     static final File ROOT_DIR;
@@ -117,7 +117,7 @@ public class OpaqueBasicTest extends StorageAdapterBasicTest {
     
     final OpaqueFileSystemStorageAdapter ofsAdapter;
             
-    public OpaqueBasicTest() { 
+    public OpaqueStorageAdapterTest() { 
         super(new OpaqueFileSystemStorageAdapter(ROOT_DIR, BUCKET_LEN));
         this.ofsAdapter = (OpaqueFileSystemStorageAdapter) super.adapter;
 
