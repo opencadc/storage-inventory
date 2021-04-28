@@ -307,6 +307,11 @@ public class SwiftStorageAdapter  implements StorageAdapter {
         
         // check vs config
         Map<String,Object> curmeta = c.getMetadata();
+        log.warn("metadata items: " + curmeta.size());
+        for (Map.Entry<String,Object> me : curmeta.entrySet()) {
+            log.warn(me.getKey() + " = " + me.getValue());
+        }
+        
         String version = (String) curmeta.get(VERSION_ATTR);
         if (version != null) {
             String mbstr = (String) curmeta.get(MULTIBUCKET_ATTR);

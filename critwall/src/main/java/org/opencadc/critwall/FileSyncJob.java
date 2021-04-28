@@ -338,7 +338,7 @@ public class FileSyncJob implements Runnable {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         writer.write(transfer, out);
         FileContent content = new FileContent(out.toByteArray(), "text/xml");
-        log.debug("xml file content to be posted: " + transfer);
+        log.warn("xml file content to be posted: " + transfer);
 
         log.debug("artifact path: " + artifact.getPath());
         HttpPost post = new HttpPost(transferURL, content, true);
@@ -374,11 +374,13 @@ public class FileSyncJob implements Runnable {
             URL u = urlIterator.next();
             log.debug("trying " + u);
 
+            boolean postPrepare = false;
             try {
                 ByteArrayOutputStream dest = new ByteArrayOutputStream();
                 HttpGet get = new HttpGet(u, dest);
                 get.prepare();
-
+                postPrepare = true;
+                
                 // Note: the storage adapter 'put' below does checksum and content length
                 // checks, but only after downloading the entire file.
                 // Making the checks here is more efficient.
@@ -415,6 +417,16 @@ public class FileSyncJob implements Runnable {
             } catch (ResourceNotFoundException | ResourceAlreadyExistsException | PreconditionFailedException ex) {
                 log.error("FileSyncJob.FAIL remove " + u + " reason: " + ex);
                 urlIterator.remove();
+            } catch (RuntimeException ex) {
+                if (!postPrepare) {
+                    // remote server 5xx response: discard
+                    log.error("FileSyncJob.FAIL remove " + u + " reason: " + ex);
+                    urlIterator.remove();
+                } else {
+                    // StorageAdapter internal fail: abort
+                    log.error("FileSyncJob.FAIL fatal: " + ex);
+                    throw ex;
+                }
             }
         }
         

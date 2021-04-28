@@ -100,6 +100,7 @@ public class DeleteAction extends ArtifactAction {
     @Override
     public void doAction() throws Exception {
         
+        checkWritable();
         initAndAuthorize(WriteGrant.class);
         
         String txnID = syncInput.getHeader(PUT_TXN);

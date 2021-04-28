@@ -134,6 +134,7 @@ public class PutAction extends ArtifactAction {
     @Override
     public void doAction() throws Exception {
         
+        checkWritable();
         initAndAuthorize(WriteGrant.class);
 
         URI digest = syncInput.getDigest();
@@ -290,6 +291,7 @@ public class PutAction extends ArtifactAction {
             
             syncOutput.setCode(201); // created
             HeadAction.setHeaders(artifact, syncOutput);
+            super.logInfo.setBytes(artifact.getContentLength());
             
             // this block could be passed off to a thread so request completes??
             if (newOSL != null) {

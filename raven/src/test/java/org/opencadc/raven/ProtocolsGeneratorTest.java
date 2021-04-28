@@ -62,60 +62,43 @@
  *  <http://www.gnu.org/licenses/>.      pas le cas, consultez :
  *                                       <http://www.gnu.org/licenses/>.
  *
- *  : 5 $
- *
  ************************************************************************
  */
 
-package org.opencadc.ratik;
 
+package org.opencadc.raven;
+
+import ca.nrc.cadc.util.Log4jInit;
 import java.net.URI;
-import java.util.Date;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Random;
+import org.apache.log4j.Level;
+import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.Test;
-import org.opencadc.inventory.Artifact;
+import org.opencadc.inventory.StorageSite;
 
-public class InventoryValidatorTest {
+public class ProtocolsGeneratorTest {
+    private static final Logger log = Logger.getLogger(ProtocolsGeneratorTest.class);
 
-    @Test
-    public void testOrderArtifacts() throws Exception {
-
-        InventoryValidator testSubject = new InventoryValidator(null,null,null,null,null,null,null);
-
-        // Artifact A orders before Artifact B
-        URI contentCheckSum = URI.create("md5:d41d8cd98f00b204e9800998ecf8427e");
-        Artifact A = new Artifact(URI.create("cadc:TEST/1.ext"), contentCheckSum, new Date(), 1024L);
-        Artifact B = new Artifact(URI.create("cadc:TEST/1.extx"), contentCheckSum, new Date(), 1024L);
-
-        // local = A
-        // remote = null
-        int order = testSubject.orderArtifacts(A, null);
-        Assert.assertEquals("local orders before remote, expect -1", -1, order);
-
-        // local = null
-        // remote = A
-        order = testSubject.orderArtifacts(null, A);
-        Assert.assertEquals("local orders after remote, expect 1", 1, order);
-
-        // local = null
-        // remote = null
-        order = testSubject.orderArtifacts(null, null);
-        Assert.assertEquals("local equals remote, expect 0", 0, order);
-
-        // local = A
-        // remote = A
-        order = testSubject.orderArtifacts(A, A);
-        Assert.assertEquals("local equals remote, expect 0", 0, order);
-
-        // local = A
-        // remote = B
-        order = testSubject.orderArtifacts(A, B);
-        Assert.assertEquals("local orders before remote, expect -1", -1, order);
-
-        // local = B
-        // remote = A
-        order = testSubject.orderArtifacts(B, A);
-        Assert.assertEquals("local orders after remote, expect 1", 1, order);
+    static {
+        Log4jInit.setLevel("org.opencadc.raven", Level.DEBUG);
     }
 
+
+    @Test
+    public void testPrioritizePullFromSites() throws Exception {
+        List<StorageSite> sites = new ArrayList<>();
+        Random rd = new Random();
+        for (int i = 0; i < 10; i++ ) {
+            sites.add(new StorageSite(URI.create("ivo://site" + i), "site1" + i, true, rd.nextBoolean()));
+        }
+        ProtocolsGenerator.prioritizePullFromSites(sites);
+        // all the read/write sites should be in front
+        for (int i = 1; i < sites.size() - 1; i++) {
+            Assert.assertFalse(!sites.get(i - 1).getAllowWrite() && sites.get(i).getAllowWrite());
+        }
+    }
 }
+

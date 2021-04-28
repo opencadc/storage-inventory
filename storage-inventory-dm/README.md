@@ -301,11 +301,11 @@ the explanation #s match -- they are the same explanation seen from both sides.
 *discrepancy*: artifact in both && valid metaChecksum mismatch
 
     explanation1: pending/missed artifact update in L
-    evidence: ??
+    evidence: local artifact has older Entity.lastModified indicating an update to optional metadata at remote
     action: put Artifact
     
     explanation2: pending/missed artifact update in R
-    evidence: ??
+    evidence: local artifact has newer Entity.lastModified indicating the update happened locally
     action: do nothing
 
 ## file-validate

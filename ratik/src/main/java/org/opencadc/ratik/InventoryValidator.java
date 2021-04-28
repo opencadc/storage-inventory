@@ -82,6 +82,8 @@ import ca.nrc.cadc.util.StringUtil;
 import java.io.File;
 import java.io.IOException;
 import java.net.URI;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
 import java.util.Date;
@@ -94,8 +96,10 @@ import javax.sql.DataSource;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.InventoryUtil;
+import org.opencadc.inventory.StorageSite;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.version.InitDatabase;
+import org.opencadc.inventory.query.ArtifactRowMapper;
 import org.opencadc.inventory.util.ArtifactSelector;
 import org.opencadc.inventory.util.BucketSelector;
 import org.opencadc.tap.TapClient;
@@ -111,10 +115,11 @@ public class InventoryValidator implements Runnable {
 
     private final ArtifactDAO artifactDAO;
     private final URI resourceID;
+    private final StorageSite remoteSite;
     private final ArtifactSelector artifactSelector;
     private final BucketSelector bucketSelector;
-    private final boolean trackSiteLocations;
     private final ArtifactValidator artifactValidator;
+    private final MessageDigest messageDigest;
 
     /**
      * Constructor.
@@ -130,15 +135,12 @@ public class InventoryValidator implements Runnable {
         InventoryUtil.assertNotNull(InventoryValidator.class, "daoConfig", daoConfig);
         InventoryUtil.assertNotNull(InventoryValidator.class, "resourceID", resourceID);
         InventoryUtil.assertNotNull(InventoryValidator.class, "artifactSelector", artifactSelector);
-        InventoryUtil.assertNotNull(InventoryValidator.class, "bucketSelector", bucketSelector);
 
         this.artifactDAO = new ArtifactDAO(false);
         this.artifactDAO.setConfig(daoConfig);
         this.resourceID = resourceID;
         this.artifactSelector = artifactSelector;
         this.bucketSelector = bucketSelector;
-        this.trackSiteLocations = trackSiteLocations;
-        this.artifactValidator = new ArtifactValidator(this.artifactDAO, this.resourceID, this.trackSiteLocations);
 
         try {
             String jndiDataSourceName = (String) daoConfig.get("jndiDataSourceName");
@@ -166,17 +168,38 @@ public class InventoryValidator implements Runnable {
         } catch (IOException ex) {
             throw new IllegalArgumentException("invalid config", ex);
         }
+
+        if (trackSiteLocations) {
+            try {
+                this.remoteSite = getRemoteStorageSite(resourceID);
+            } catch (ResourceNotFoundException ex) {
+                throw new IllegalArgumentException("query service not found: " + resourceID, ex);
+            } catch (Exception ex) {
+                throw new IllegalArgumentException("remote StorageSite query failed", ex);
+            }
+        } else {
+            this.remoteSite = null;
+        }
+        this.artifactValidator = new ArtifactValidator(this.artifactDAO, resourceID, remoteSite);
+
+        try {
+            this.messageDigest = MessageDigest.getInstance("MD5");
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("error creating MessageDigest with MD5 algorithm", e);
+        }
     }
 
     // Package access constructor for testing.
-    InventoryValidator(ArtifactDAO artifactDAO, URI resourceID, ArtifactSelector artifactSelector,
-                       BucketSelector bucketSelector, boolean trackSiteLocations, ArtifactValidator artifactValidator) {
+    InventoryValidator(ArtifactDAO artifactDAO, URI resourceID, StorageSite remoteSite,
+                       ArtifactSelector artifactSelector, BucketSelector bucketSelector,
+                       ArtifactValidator artifactValidator, MessageDigest messageDigest) {
         this.artifactDAO = artifactDAO;
         this.resourceID = resourceID;
+        this.remoteSite = remoteSite;
         this.artifactSelector = artifactSelector;
-        this.trackSiteLocations = trackSiteLocations;
         this.bucketSelector = bucketSelector;
         this.artifactValidator = artifactValidator;
+        this.messageDigest = messageDigest;
     }
 
     @Override public void run() {
@@ -246,8 +269,16 @@ public class InventoryValidator implements Runnable {
                     artifactsToValidate = false;
                     continue;
                 }
-                log.debug(String.format("comparing Artifacts:\n local - %s\nremote - %s",
-                                        local, remote));
+
+                if (remote != null) {
+                    final URI computedChecksum = remote.computeMetaChecksum(this.messageDigest);
+                    if (!remote.getMetaChecksum().equals(computedChecksum)) {
+                        throw new IllegalStateException(
+                            "remote checksum mismatch: " + remote.getID() + " " + remote.getURI() + " provided="
+                                + remote.getMetaChecksum() + " actual=" + computedChecksum);
+                    }
+                }
+                log.debug(String.format("comparing Artifacts:\n local - %s\nremote - %s", local, remote));
 
                 // check if Artifacts are the same, or if the local Artifact
                 // precedes or follows the remote Artifact.
@@ -283,7 +314,8 @@ public class InventoryValidator implements Runnable {
      * @param local the local Artifact.
      * @param remote the remote Artifact.
      */
-    void validate(Artifact local, Artifact remote) {
+    void validate(Artifact local, Artifact remote)
+        throws InterruptedException, ResourceNotFoundException, TransientException, IOException {
         log.debug(String.format("validating:\n local - %s\nremote - %s", local, remote));
         artifactValidator.validate(local, remote);
     }
@@ -362,7 +394,7 @@ public class InventoryValidator implements Runnable {
         throws ResourceNotFoundException, IOException, IllegalStateException, TransientException, InterruptedException {
         final TapClient<Artifact> tapClient = new TapClient<>(this.resourceID);
         final String query = buildRemoteQuery(bucket);
-        log.debug(String.format("\nExecuting query '%s'\n", query));
+        log.debug("\nExecuting query '" + query + "'\n");
         return tapClient.execute(query, new ArtifactRowMapper());
     }
 
@@ -370,13 +402,12 @@ public class InventoryValidator implements Runnable {
      * Assemble the WHERE clause and return the full query.  Very useful for testing separately.
      *
      * @param bucket The current bucket.
-     * @return  String query.  Never null.
+     * @return  String where clause. Never null.
      */
     String buildRemoteQuery(final String bucket)
         throws ResourceNotFoundException, IOException {
         final StringBuilder query = new StringBuilder();
-        query.append("SELECT id, uri, contentChecksum, contentLastModified, contentLength, contentType, ")
-            .append("contentEncoding, lastModified, metaChecksum FROM inventory.Artifact ");
+        query.append(ArtifactRowMapper.BASE_QUERY);
 
         if (StringUtil.hasText(this.artifactSelector.getConstraint())) {
             if (query.indexOf("WHERE") < 0) {
@@ -394,30 +425,48 @@ public class InventoryValidator implements Runnable {
                 query.append(" AND ");
             }
             query.append("(uribucket LIKE '").append(bucket.trim()).append("%')");
-            log.debug("************query: " + query.toString());
+            log.debug("where clause: " + query.toString());
         }
+
         query.append(" ORDER BY uri ASC");
         return query.toString();
     }
 
-    static class ArtifactRowMapper implements TapRowMapper<Artifact> {
+    /**
+     * Get the StorageSite for the remote instance resourceID;
+     */
+    private StorageSite getRemoteStorageSite(URI resourceID)
+        throws InterruptedException, IOException, ResourceNotFoundException, TransientException {
+        final TapClient<StorageSite> tapClient = new TapClient<>(resourceID);
+        final String query = String.format("SELECT id, resourceID, name, allowRead, allowWrite, lastModified, "
+                                               + "metaChecksum FROM inventory.StorageSite where resourceID = %s",
+                                           resourceID);
+        log.debug("\nExecuting query '" + query + "'\n");
+        StorageSite returned = null;
+        ResourceIterator<StorageSite> results = tapClient.execute(query, new StorageSiteRowMapper());
+        if (results.hasNext()) {
+            returned = results.next();
+        }
+        return returned;
+    }
 
+    /**
+     * Class to map the query results to a StorageSite.
+     */
+    class StorageSiteRowMapper implements TapRowMapper<StorageSite> {
         @Override
-        public Artifact mapRow(final List<Object> row) {
+        public StorageSite mapRow(List<Object> row) {
             int index = 0;
-            final Artifact artifact = new Artifact((UUID) row.get(index++),
-                                                   (URI) row.get(index++),
-                                                   (URI) row.get(index++),
-                                                   (Date) row.get(index++),
-                                                   (Long) row.get(index++));
+            final UUID id = (UUID) row.get(index++);
+            final URI resourceID = (URI) row.get(index++);
+            final String name = (String) row.get(index++);
+            final boolean allowRead = (Boolean) row.get(index++);
+            final boolean allowWrite = (Boolean) row.get(index);
 
-            artifact.contentType = (String) row.get(index++);
-            artifact.contentEncoding = (String) row.get(index++);
-
-            InventoryUtil.assignLastModified(artifact, (Date) row.get(index++));
-            InventoryUtil.assignMetaChecksum(artifact, (URI) row.get(index));
-
-            return artifact;
+            final StorageSite storageSite = new StorageSite(id, resourceID, name, allowRead, allowWrite);
+            InventoryUtil.assignLastModified(storageSite, (Date) row.get(index++));
+            InventoryUtil.assignMetaChecksum(storageSite, (URI) row.get(index));
+            return storageSite;
         }
     }
 

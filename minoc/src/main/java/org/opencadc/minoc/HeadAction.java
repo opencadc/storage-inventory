@@ -98,6 +98,7 @@ public class HeadAction extends ArtifactAction {
     @Override
     public void doAction() throws Exception {
         
+        checkReadable();
         initAndAuthorize(ReadGrant.class);
         
         String txnID = syncInput.getHeader(PUT_TXN);
