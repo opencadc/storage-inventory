@@ -67,19 +67,35 @@
 
 package org.opencadc.inventory.storage.fs;
 
+import ca.nrc.cadc.io.ReadException;
+import ca.nrc.cadc.net.ResourceNotFoundException;
+import ca.nrc.cadc.util.HexUtil;
 import ca.nrc.cadc.util.Log4jInit;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
+import java.net.URI;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.security.MessageDigest;
+import java.util.Iterator;
+import java.util.SortedSet;
+import java.util.TreeSet;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.Before;
-import org.opencadc.inventory.storage.test.StorageAdapterByteRangeTest;
+import org.junit.Test;
+import org.opencadc.inventory.Artifact;
+import org.opencadc.inventory.storage.NewArtifact;
+import org.opencadc.inventory.storage.StorageAdapter;
+import org.opencadc.inventory.storage.StorageMetadata;
+import org.opencadc.inventory.storage.test.StorageAdapterBasicTest;
 
 /**
  * Integration tests that interact with the file system. These tests require a file system
@@ -87,8 +103,8 @@ import org.opencadc.inventory.storage.test.StorageAdapterByteRangeTest;
  * 
  * @author pdowler
  */
-public class OpaqueByteRangeTest extends StorageAdapterByteRangeTest {
-    private static final Logger log = Logger.getLogger(OpaqueByteRangeTest.class);
+public class OpaqueBasicTest extends StorageAdapterBasicTest {
+    private static final Logger log = Logger.getLogger(OpaqueBasicTest.class);
 
     static final int BUCKET_LEN = 2;
     static final File ROOT_DIR;
@@ -100,8 +116,8 @@ public class OpaqueByteRangeTest extends StorageAdapterByteRangeTest {
     }
     
     final OpaqueFileSystemStorageAdapter ofsAdapter;
-    
-    public OpaqueByteRangeTest() { 
+            
+    public OpaqueBasicTest() { 
         super(new OpaqueFileSystemStorageAdapter(ROOT_DIR, BUCKET_LEN));
         this.ofsAdapter = (OpaqueFileSystemStorageAdapter) super.adapter;
 
@@ -113,7 +129,7 @@ public class OpaqueByteRangeTest extends StorageAdapterByteRangeTest {
     
     @Before
     public void cleanupBefore() throws IOException {
-        log.info("cleanupBefore: delete all content from " + ofsAdapter.contentPath);
+        log.info("cleanupBefore: " + ofsAdapter.contentPath.getParent());
         if (Files.exists(ofsAdapter.contentPath)) {
             Files.walkFileTree(ofsAdapter.contentPath, new SimpleFileVisitor<Path>() {
                 @Override
@@ -124,11 +140,22 @@ public class OpaqueByteRangeTest extends StorageAdapterByteRangeTest {
 
                 @Override
                 public FileVisitResult postVisitDirectory(Path dir, IOException exc) throws IOException {
-                    Files.delete(dir);
+                    if (!ofsAdapter.contentPath.equals(dir)) {
+                        Files.delete(dir);
+                    }
                     return FileVisitResult.CONTINUE;
                 }
             });
         }
-        log.info("cleanupBefore: delete all content from " + ofsAdapter.contentPath + " DONE");
+        if (Files.exists(ofsAdapter.txnPath)) {
+            Files.walkFileTree(ofsAdapter.txnPath, new SimpleFileVisitor<Path>() {
+                @Override
+                public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+                    Files.delete(file);
+                    return FileVisitResult.CONTINUE;
+                }
+            });
+        }
+        log.info("cleanupBefore: " + ofsAdapter.contentPath.getParent() + " DONE");
     }
 }
