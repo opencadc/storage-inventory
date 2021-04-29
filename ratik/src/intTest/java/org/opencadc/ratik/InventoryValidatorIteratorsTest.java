@@ -85,6 +85,7 @@ import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.Before;
+import org.junit.BeforeClass;
 import org.junit.Test;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.util.BucketSelector;
@@ -108,7 +109,7 @@ public class InventoryValidatorIteratorsTest {
 
     public InventoryValidatorIteratorsTest() throws Exception {}
 
-    //@BeforeClass
+    @BeforeClass
     public static void setup() throws Exception {
         Path dest = Paths.get(TMP_DIR + "/.ssl");
         if (!Files.exists(dest)) {
@@ -135,13 +136,6 @@ public class InventoryValidatorIteratorsTest {
         fileWriter.write("WHERE uri LIKE 'cadc:INTTEST/%'");
         fileWriter.flush();
         fileWriter.close();
-
-        // copy proxy cert to tmp dir
-        //final Path tmpCertDir = Paths.get(TMP_DIR + "/.ssl");
-        //Files.createDirectories(tmpCertDir);
-        //Path sourcePath = Paths.get(InventoryValidator.CERTIFICATE_FILE_LOCATION);
-        //Path destPath = Paths.get(tmpCertDir + "/cadcproxy.pem");
-        //Files.copy(sourcePath, destPath, REPLACE_EXISTING);
     }
 
     @Test

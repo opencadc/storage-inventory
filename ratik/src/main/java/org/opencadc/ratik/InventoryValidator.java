@@ -445,29 +445,28 @@ public class InventoryValidator implements Runnable {
      */
     private StorageSite getRemoteStorageSite(URI resourceID)
         throws InterruptedException, IOException, ResourceNotFoundException, TransientException {
-        final StorageSite[] remoteStorageSite = new StorageSite[1];
         try {
             final Subject subject = SSLUtil.createSubject(new File(CERTIFICATE_FILE_LOCATION));
-            Subject.doAs(subject, (PrivilegedExceptionAction<Void>) () -> {
+            return Subject.doAs(subject, (PrivilegedExceptionAction<StorageSite>) () -> {
                 final TapClient<StorageSite> tapClient = new TapClient<>(resourceID);
                 final String query = "SELECT id, resourceID, name, allowRead, allowWrite, lastModified, metaChecksum "
                     + "FROM inventory.StorageSite";
                 log.debug("\nExecuting query '" + query + "'\n");
+                StorageSite storageSite = null;
                 ResourceIterator<StorageSite> results = tapClient.execute(query, new StorageSiteRowMapper());
                 if (results.hasNext()) {
-                    remoteStorageSite[0] = results.next();
+                    storageSite = results.next();
                     if (results.hasNext()) {
                         throw new IllegalStateException(String.format("Multiple StorageSite's found for site %s",
                                                                       resourceID.toASCIIString()));
                     }
                 }
-                return null;
+                return storageSite;
             });
         } catch (PrivilegedActionException privilegedActionException) {
             final Exception exception = privilegedActionException.getException();
             throw new IllegalStateException(exception.getMessage(), exception);
         }
-        return remoteStorageSite[0];
     }
 
     /**
