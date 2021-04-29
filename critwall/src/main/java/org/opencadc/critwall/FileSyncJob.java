@@ -69,10 +69,12 @@ package org.opencadc.critwall;
 
 import ca.nrc.cadc.auth.AuthMethod;
 import ca.nrc.cadc.auth.AuthenticationUtil;
+import ca.nrc.cadc.auth.NotAuthenticatedException;
 import ca.nrc.cadc.auth.RunnableAction;
 import ca.nrc.cadc.db.TransactionManager;
 import ca.nrc.cadc.io.ByteLimitExceededException;
 import ca.nrc.cadc.io.WriteException;
+import ca.nrc.cadc.net.ExpectationFailedException;
 import ca.nrc.cadc.net.FileContent;
 import ca.nrc.cadc.net.HttpGet;
 import ca.nrc.cadc.net.HttpPost;
@@ -94,6 +96,10 @@ import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URL;
+import java.security.AccessControlException;
+import java.security.PrivilegedAction;
+import java.security.PrivilegedActionException;
+import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -146,6 +152,7 @@ public class FileSyncJob implements Runnable {
         this.subject = subject;
     }
 
+    /*
     @Override
     public void run() {
         Subject currentSubject = new Subject();
@@ -157,13 +164,15 @@ public class FileSyncJob implements Runnable {
         }
         Subject.doAs(currentSubject, new RunnableAction(this::doSync));
     }
+    */
 
     // approach here is conservative: if the input artifact changed|deleted in the database, 
     // the job will abort
     // in cases where the artifact changed, it will be picked up again and syn'ed later
     // - note: we only have to worry about changes in Artifact.uri because it may be made mutable in future
     //         Artifact.contentChecksum and Artifact.contentLength are immutable      
-    private void doSync() {
+    @Override
+    public void run() {
         
         log.info("FileSyncJob.START " + artifactID);
         long start = System.currentTimeMillis();
@@ -309,102 +318,115 @@ public class FileSyncJob implements Runnable {
     private List<URL> getDownloadURLs(URI resource, URI artifact)
         throws IOException, InterruptedException,
         ResourceAlreadyExistsException, ResourceNotFoundException,
-        TransientException, TransferParsingException {
+        TransientException, TransferParsingException, PrivilegedActionException {
+        Subject currentSubject = new Subject();
 
-        RegistryClient regClient = new RegistryClient();
-        Subject subject = AuthenticationUtil.getCurrentSubject();
-        AuthMethod am = AuthenticationUtil.getAuthMethodFromCredentials(subject);
-        log.debug("resource id: " + resource);
-        URL transferURL = regClient.getServiceURL(resource, Standards.SI_LOCATE, am);
-        if (transferURL == null) {
-            transferURL = regClient.getServiceURL(resource, Standards.VOSPACE_SYNC_21, am);
-        }
-        log.debug("certURL: " + transferURL);
-
-        // request all protocols that can be used
-        List<Protocol> protocolList = new ArrayList<>();
-        protocolList.add(new Protocol(VOS.PROTOCOL_HTTPS_GET));
-        protocolList.add(new Protocol(VOS.PROTOCOL_HTTP_GET));
-        if (!AuthMethod.ANON.equals(am)) {
-            Protocol httpsAuth = new Protocol(VOS.PROTOCOL_HTTPS_GET);
-            httpsAuth.setSecurityMethod(Standards.getSecurityMethod(am));
-            protocolList.add(httpsAuth);
+        // Also synchronized in FileSync.run()
+        synchronized (subject) {
+            currentSubject.getPrincipals().addAll(subject.getPrincipals());
+            currentSubject.getPublicCredentials().addAll(subject.getPublicCredentials());
         }
 
-        Transfer transfer = new Transfer(artifact, Direction.pullFromVoSpace, protocolList);
-        transfer.version = VOS.VOSPACE_21;
+        return Subject.doAs(currentSubject, new TransferNegotiation(resource, artifact));
+    }
 
-        TransferWriter writer = new TransferWriter();
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        writer.write(transfer, out);
-        FileContent content = new FileContent(out.toByteArray(), "text/xml");
-        log.warn("xml file content to be posted: " + transfer);
-
-        log.debug("artifact path: " + artifact.getPath());
-        HttpPost post = new HttpPost(transferURL, content, true);
-        post.prepare();
-        log.debug("post prepare done");
-
-        TransferReader reader = new TransferReader();
-        Transfer t = reader.read(post.getInputStream(), null);
-        List<String> urlStrList = t.getAllEndpoints();
-        log.debug("endpoints returned: " + urlStrList);
-
-        List<URL> urlList = new ArrayList<>();
-
-        // Create URL list to return
-        for (final String s : urlStrList) {
-            try {
-                urlList.add(new URL(s));
-            } catch (MalformedURLException mue) {
-                log.info("malformed URL returned from transfer negotiation: " + s + " skipping... ");
+    private class TransferNegotiation implements PrivilegedExceptionAction<List<URL>> {
+        private URI resource;
+        private URI artifact;
+        
+        TransferNegotiation(URI resource, URI artifact) {
+            this.resource = resource;
+            this.artifact = artifact;
+        }
+        
+        @Override
+        public List<URL> run() throws IOException, InterruptedException,
+            ResourceAlreadyExistsException, ResourceNotFoundException,
+            TransientException, TransferParsingException { 
+            RegistryClient regClient = new RegistryClient();
+            Subject subject = AuthenticationUtil.getCurrentSubject();
+            AuthMethod am = AuthenticationUtil.getAuthMethodFromCredentials(subject);
+            log.debug("resource id: " + resource);
+            URL transferURL = regClient.getServiceURL(resource, Standards.SI_LOCATE, am);
+            if (transferURL == null) {
+                transferURL = regClient.getServiceURL(resource, Standards.VOSPACE_SYNC_21, am);
             }
+            log.debug("certURL: " + transferURL);
+    
+            // request all protocols that can be used
+            List<Protocol> protocolList = new ArrayList<>();
+            protocolList.add(new Protocol(VOS.PROTOCOL_HTTPS_GET));
+            protocolList.add(new Protocol(VOS.PROTOCOL_HTTP_GET));
+            if (!AuthMethod.ANON.equals(am)) {
+                Protocol httpsAuth = new Protocol(VOS.PROTOCOL_HTTPS_GET);
+                httpsAuth.setSecurityMethod(Standards.getSecurityMethod(am));
+                protocolList.add(httpsAuth);
+            }
+    
+            Transfer transfer = new Transfer(artifact, Direction.pullFromVoSpace, protocolList);
+            transfer.version = VOS.VOSPACE_21;
+    
+            TransferWriter writer = new TransferWriter();
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            writer.write(transfer, out);
+            FileContent content = new FileContent(out.toByteArray(), "text/xml");
+            log.warn("xml file content to be posted: " + transfer);
+    
+            log.debug("artifact path: " + artifact.getPath());
+            HttpPost post = new HttpPost(transferURL, content, true);
+            post.prepare();
+            log.debug("post prepare done");
+    
+            TransferReader reader = new TransferReader();
+            Transfer t = reader.read(post.getInputStream(), null);
+            List<String> urlStrList = t.getAllEndpoints();
+            log.debug("endpoints returned: " + urlStrList);
+    
+            List<URL> urlList = new ArrayList<>();
+    
+            // Create URL list to return
+            for (final String s : urlStrList) {
+                try {
+                    urlList.add(new URL(s));
+                } catch (MalformedURLException mue) {
+                    log.info("malformed URL returned from transfer negotiation: " + s + " skipping... ");
+                }
+            }
+    
+            return urlList;
         }
-
-        return urlList;
     }
 
     private StorageMetadata syncArtifact(Artifact a, List<URL> urls)
-        throws ByteLimitExceededException, StorageEngageException, InterruptedException, WriteException, IllegalArgumentException {
+        throws ByteLimitExceededException, StorageEngageException, InterruptedException, 
+            WriteException, IllegalArgumentException, PrivilegedActionException {
+        Subject currentSubject = new Subject();
+
+        // Also synchronized in FileSync.run()
+        synchronized (subject) {
+            currentSubject.getPrincipals().addAll(subject.getPrincipals());
+            currentSubject.getPublicCredentials().addAll(subject.getPublicCredentials());
+        }
+
+        Subject subj = AuthenticationUtil.getAnonSubject();
+        AuthMethod am = AuthenticationUtil.getAuthMethodFromCredentials(currentSubject);
+        if (am != null && Standards.SECURITY_METHOD_CERT.equals(Standards.getSecurityMethod(am))) {
+            subj = new Subject();
+            subj.getPublicCredentials().addAll(subject.getPublicCredentials());
+        }
 
         StorageMetadata storageMeta = null;
         Iterator<URL> urlIterator = urls.iterator();
-
         while (urlIterator.hasNext()) {
             URL u = urlIterator.next();
             log.debug("trying " + u);
-
             boolean postPrepare = false;
             try {
                 ByteArrayOutputStream dest = new ByteArrayOutputStream();
                 HttpGet get = new HttpGet(u, dest);
                 get.prepare();
                 postPrepare = true;
-                
-                // Note: the storage adapter 'put' below does checksum and content length
-                // checks, but only after downloading the entire file.
-                // Making the checks here is more efficient.
-                String getContentMD5 = get.getContentMD5();
-                if (getContentMD5 != null
-                    && !getContentMD5.equals(a.getContentChecksum().getSchemeSpecificPart())) {
-                    throw new PreconditionFailedException("contentChecksum mismatch: " + a.getURI());
-                }
-
-                long getContentLen = get.getContentLength();
-                if (getContentLen != -1
-                    && getContentLen != a.getContentLength()) {
-                    throw new PreconditionFailedException("contentLength mismatch: " + a.getURI()
-                        + " artifact: " + a.getContentLength() + " header: " + getContentLen);
-                }
-
-                NewArtifact na = new NewArtifact(a.getURI());
-                na.contentChecksum = a.getContentChecksum();
-                na.contentLength = a.getContentLength();
-
-                storageMeta = this.storageAdapter.put(na, get.getInputStream());
-                log.debug("storage meta returned: " + storageMeta.getStorageLocation());
-                return storageMeta;
-
+                return Subject.doAs(subj, new SyncArtifact(get, a));
             } catch (ByteLimitExceededException | WriteException ex) {
                 // IOException will capture this if not explicitly caught and rethrown
                 log.error("FileSyncJob.FAIL fatal: " + ex);
@@ -431,6 +453,46 @@ public class FileSyncJob implements Runnable {
         }
         
         return null;
+    }
+        
+    private class SyncArtifact implements PrivilegedExceptionAction<StorageMetadata> {
+        private HttpGet get;
+        private Artifact a;
+        
+        SyncArtifact(HttpGet httpGet, Artifact artifact) {
+            this.get = httpGet;
+            this.a = artifact;
+        }
+        
+        @Override
+        public StorageMetadata run () throws ByteLimitExceededException, StorageEngageException, 
+            InterruptedException, WriteException, IllegalArgumentException, TransientException,
+            IOException {
+            
+            // Note: the storage adapter 'put' below does checksum and content length
+            // checks, but only after downloading the entire file.
+            // Making the checks here is more efficient.
+            String getContentMD5 = get.getContentMD5();
+            if (getContentMD5 != null
+                && !getContentMD5.equals(a.getContentChecksum().getSchemeSpecificPart())) {
+                throw new PreconditionFailedException("contentChecksum mismatch: " + a.getURI());
+            }
+
+            long getContentLen = get.getContentLength();
+            if (getContentLen != -1
+                && getContentLen != a.getContentLength()) {
+                throw new PreconditionFailedException("contentLength mismatch: " + a.getURI()
+                    + " artifact: " + a.getContentLength() + " header: " + getContentLen);
+            }
+
+            NewArtifact na = new NewArtifact(a.getURI());
+            na.contentChecksum = a.getContentChecksum();
+            na.contentLength = a.getContentLength();
+
+            StorageMetadata storageMeta = storageAdapter.put(na, get.getInputStream());
+            log.debug("storage meta returned: " + storageMeta.getStorageLocation());
+            return storageMeta;
+        }
     }
 
 }

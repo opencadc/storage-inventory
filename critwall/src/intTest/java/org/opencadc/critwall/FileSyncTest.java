@@ -346,10 +346,7 @@ public class FileSyncTest {
         log.info("FileSync: START");
         FileSync fs = new FileSync(daoConfig, cc, localStorage, locatorResourceID, bucketSel, nthreads);
         fs.testRunLoops = 1;
-        Subject.doAs(anonSubject, (PrivilegedAction<Object>) () -> {
-            fs.doit();
-            return null;
-        });
+        fs.doit(anonSubject);
         log.info("FileSync: DONE");
         
         // Check the storage locations, as these should get updated within a reasonable
@@ -447,10 +444,7 @@ public class FileSyncTest {
             // make sure FileSyncJob actually fails to update
             final FileSync fs = new FileSync(daoConfig, cc, localStorage, locatorResourceID, bucketSel, 1);
             fs.testRunLoops = 1;
-            Subject.doAs(anonSubject, (PrivilegedAction<Object>) () -> {
-                fs.doit();
-                return null;
-            });
+            fs.doit(anonSubject);
             
             boolean found = false;
             int num = 0;
@@ -469,11 +463,7 @@ public class FileSyncTest {
             // now with loops
             final FileSync fs2 = new FileSync(daoConfig, cc, localStorage, locatorResourceID, bucketSel, 1);
             fs2.testRunLoops = 4; 
-            Subject.doAs(anonSubject, (PrivilegedAction<Object>) () -> {
-                fs2.doit();
-                return null;
-            });
-            
+            fs2.doit(anonSubject);
         } catch (Exception unexpected) {
             log.info("unexpected exception", unexpected);
             Assert.fail("unexpected exception: " + unexpected);
