@@ -152,20 +152,6 @@ public class FileSyncJob implements Runnable {
         this.subject = subject;
     }
 
-    /*
-    @Override
-    public void run() {
-        Subject currentSubject = new Subject();
-
-        // Also synchronized in FileSync.run()
-        synchronized (subject) {
-            currentSubject.getPrincipals().addAll(subject.getPrincipals());
-            currentSubject.getPublicCredentials().addAll(subject.getPublicCredentials());
-        }
-        Subject.doAs(currentSubject, new RunnableAction(this::doSync));
-    }
-    */
-
     // approach here is conservative: if the input artifact changed|deleted in the database, 
     // the job will abort
     // in cases where the artifact changed, it will be picked up again and syn'ed later
