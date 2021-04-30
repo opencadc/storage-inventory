@@ -78,6 +78,7 @@ import ca.nrc.cadc.net.PreconditionFailedException;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.util.HexUtil;
+import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
@@ -87,6 +88,9 @@ import java.io.OutputStream;
 import java.net.SocketException;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -159,12 +163,18 @@ public class SwiftStorageAdapter  implements StorageAdapter {
     // test code checks these
     final int storageBucketLength;
     final String storageBucket;
+    final String txnBucket;
     final boolean multiBucket;
     private final Account client;
+    private Container txnContainer;
+    
+    // temporary hack to store intermediate digest state: cannot work across multiple JVMs aka with load balanced deployment
+    private static final Map<String,MessageDigest> txnDigestStore = new TreeMap<>();
     
     // ctor for unit tests that do not connect
     SwiftStorageAdapter(String storageBucket, int storageBucketLength, boolean multiBucket) {
         this.storageBucket = storageBucket;
+        this.txnBucket = storageBucket + "txn";
         this.storageBucketLength = storageBucketLength;
         this.multiBucket = multiBucket;
         this.client = null;
@@ -251,6 +261,7 @@ public class SwiftStorageAdapter  implements StorageAdapter {
             } else {
                 this.storageBucket = bn;
             }
+            this.txnBucket = storageBucket + "txn";
             
             if (storageBucketLengthOverride != null) {
                 this.storageBucketLength = storageBucketLengthOverride; // unbox
@@ -303,6 +314,12 @@ public class SwiftStorageAdapter  implements StorageAdapter {
             log.warn("creating: " + c.getName());
             c.create();
             log.warn("created: " + c.getName());
+        }
+        this.txnContainer = client.getContainer(txnBucket);
+        if (!txnContainer.exists()) {
+            log.warn("creating: " + txnContainer.getName());
+            txnContainer.create();
+            log.warn("created: " + txnContainer.getName());
         }
         
         // check vs config
@@ -370,12 +387,15 @@ public class SwiftStorageAdapter  implements StorageAdapter {
     }
     
     // internal storage model for multiBucket=true: 
+    //      {baseStorageBucket} is created and reserved for future use
+    //      {baseStorageBucket}txn is created and used to store temporary transaction status in objects
     //      {baseStorageBucket}-{StorageLocation.storageBucket}/{StorageLocation.storageID}
-    //      storageID is so:{uuid}
+    //      storageID is id:{uuid}
     //      storageBucket is {hex}
-    // internal storage model for multiBucket=false (compat): 
+    // internal storage model for multiBucket=false (compat):
+    //      {baseStorageBucket}txn is created and used to store temporary transaction status in objects
     //      {baseStorageBucket}/{StorageLocation.storageID}
-    //      storageID is sb:{hex}:{uuid}
+    //      storageID is id:{hex}:{uuid}
     //      storageBucket is {hex}
     StorageLocation generateStorageLocation() {
         String id = UUID.randomUUID().toString();
@@ -673,23 +693,70 @@ public class SwiftStorageAdapter  implements StorageAdapter {
     }
 
     @Override
-    public String startTransaction(URI uri) throws StorageEngageException, TransientException {
+    public String startTransaction(URI artifactURI) throws StorageEngageException, TransientException {
+        InventoryUtil.assertNotNull(SwiftStorageAdapter.class, "artifactURI", artifactURI);
+        try {
+            final String transactionID = UUID.randomUUID().toString();
+            
+            // init digest
+            MessageDigest md = MessageDigest.getInstance("MD5");
+            MessageDigest curMD = (MessageDigest) md.clone();
+            byte[] dig = curMD.digest();
+            String md5Val = HexUtil.toHex(dig);
+            URI checksum = URI.create("md5:" + md5Val);
+            
+            // create object to track txn status
+            StoredObject obj = txnContainer.getObject("txn:" + transactionID);
+            obj.uploadObject(dig); // need some bytes in getTransactionStatus
+
+            Map<String,Object> metadata = new TreeMap<>();
+            metadata.put(CONTENT_CHECKSUM_ATTR, checksum.toASCIIString());
+            metadata.put(ARTIFACT_ID_ATTR, artifactURI.toASCIIString());
+            obj.setMetadata(metadata);
+
+            // TODO: could serialise the md object and store it in the txn status object
+            txnDigestStore.put(transactionID, md);
+            
+            return transactionID;
+        } catch (CloneNotSupportedException | NoSuchAlgorithmException ex) {
+            throw new RuntimeException("BUG", ex);
+        } catch (Exception ex) {
+            throw new StorageEngageException("failed to create transaction", ex);
+        } 
+    }
+
+    @Override
+    public StorageMetadata commitTransaction(String transactionID) throws ResourceNotFoundException, StorageEngageException, TransientException {
+        InventoryUtil.assertNotNull(SwiftStorageAdapter.class, "transactionID", transactionID);
         throw new UnsupportedOperationException();
     }
 
     @Override
-    public StorageMetadata commitTransaction(String string) throws ResourceNotFoundException, StorageEngageException, TransientException {
+    public void abortTransaction(String transactionID) throws ResourceNotFoundException, StorageEngageException, TransientException {
+        InventoryUtil.assertNotNull(SwiftStorageAdapter.class, "transactionID", transactionID);
         throw new UnsupportedOperationException();
     }
 
     @Override
-    public void abortTransaction(String string) throws ResourceNotFoundException, StorageEngageException, TransientException {
-        throw new UnsupportedOperationException();
-    }
+    public StorageMetadata getTransactionStatus(String transactionID) throws ResourceNotFoundException, StorageEngageException, TransientException {
+        InventoryUtil.assertNotNull(SwiftStorageAdapter.class, "transactionID", transactionID);
+        try {
+            StoredObject obj = txnContainer.getObject("txn:" + transactionID);
+            if (obj.exists()) {
+                Map<String,Object> meta = obj.getMetadata();
+                String scs = (String) meta.get(CONTENT_CHECKSUM_ATTR);
+                String auri = (String) meta.get(ARTIFACT_ID_ATTR);
 
-    @Override
-    public StorageMetadata getTransactionStatus(String string) throws ResourceNotFoundException, StorageEngageException, TransientException {
-        throw new UnsupportedOperationException();
+                URI md5 = new URI(scs);
+                URI artifactURI = new URI(auri);
+                StorageLocation loc = new StorageLocation(URI.create(obj.getName()));
+                return toStorageMetadata(loc, md5, obj.getContentLength(), artifactURI, obj.getLastModifiedAsDate());
+            }
+        } catch (IllegalArgumentException | IllegalStateException | URISyntaxException ex) {
+            throw new RuntimeException("BUG: invalid object: " + transactionID, ex);
+        }
+        
+        throw new ResourceNotFoundException("unknown transaction: " + transactionID);
     }
     
     // main use: iterator
