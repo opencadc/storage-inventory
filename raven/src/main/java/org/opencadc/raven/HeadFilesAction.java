@@ -105,8 +105,7 @@ public class HeadFilesAction extends FilesAction {
      * @param syncOutput The target response
      */
     public static void setHeaders(Artifact artifact, SyncOutput syncOutput) {
-        syncOutput.setHeader("Content-MD5", artifact.getContentChecksum().getSchemeSpecificPart());
-        syncOutput.setHeader("Digest", "md5=" + artifact.getContentChecksum().getSchemeSpecificPart());
+        syncOutput.setDigest(artifact.getContentChecksum());
         syncOutput.setHeader("Content-Length", artifact.getContentLength());
         String filename = InventoryUtil.computeArtifactFilename(artifact.getURI());
         syncOutput.setHeader("Content-Disposition", "attachment; filename=\"" + filename + "\"");
