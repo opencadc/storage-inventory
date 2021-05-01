@@ -443,15 +443,15 @@ public class FileSyncJob implements Runnable {
         
     private class SyncArtifact implements PrivilegedExceptionAction<StorageMetadata> {
         private HttpGet get;
-        private Artifact a;
+        private Artifact artifact;
         
-        SyncArtifact(HttpGet httpGet, Artifact artifact) {
+        SyncArtifact(HttpGet httpGet, Artifact a) {
             this.get = httpGet;
-            this.a = artifact;
+            this.artifact = a;
         }
         
         @Override
-        public StorageMetadata run () throws ByteLimitExceededException, StorageEngageException, 
+        public StorageMetadata run() throws ByteLimitExceededException, StorageEngageException, 
             InterruptedException, WriteException, IllegalArgumentException, TransientException,
             IOException {
             
@@ -460,20 +460,20 @@ public class FileSyncJob implements Runnable {
             // Making the checks here is more efficient.
             String getContentMD5 = get.getContentMD5();
             if (getContentMD5 != null
-                && !getContentMD5.equals(a.getContentChecksum().getSchemeSpecificPart())) {
-                throw new PreconditionFailedException("contentChecksum mismatch: " + a.getURI());
+                && !getContentMD5.equals(artifact.getContentChecksum().getSchemeSpecificPart())) {
+                throw new PreconditionFailedException("contentChecksum mismatch: " + artifact.getURI());
             }
 
             long getContentLen = get.getContentLength();
             if (getContentLen != -1
-                && getContentLen != a.getContentLength()) {
-                throw new PreconditionFailedException("contentLength mismatch: " + a.getURI()
-                    + " artifact: " + a.getContentLength() + " header: " + getContentLen);
+                && getContentLen != artifact.getContentLength()) {
+                throw new PreconditionFailedException("contentLength mismatch: " + artifact.getURI()
+                    + " artifact: " + artifact.getContentLength() + " header: " + getContentLen);
             }
 
-            NewArtifact na = new NewArtifact(a.getURI());
-            na.contentChecksum = a.getContentChecksum();
-            na.contentLength = a.getContentLength();
+            NewArtifact na = new NewArtifact(artifact.getURI());
+            na.contentChecksum = artifact.getContentChecksum();
+            na.contentLength = artifact.getContentLength();
 
             StorageMetadata storageMeta = storageAdapter.put(na, get.getInputStream());
             log.debug("storage meta returned: " + storageMeta.getStorageLocation());
