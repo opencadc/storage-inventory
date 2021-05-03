@@ -178,9 +178,9 @@ public class ArtifactValidator {
                 if (this.remoteSite == null) {
                     DeletedStorageLocationEvent deletedStorageLocationEvent =
                         new DeletedStorageLocationEvent(local.getID());
-                    this.deletedStorageLocationEventDAO.put(deletedStorageLocationEvent);
                     log.info(String.format("put %s reason: filter policy change excludes remote",
                                            deletedStorageLocationEvent));
+                    this.deletedStorageLocationEventDAO.put(deletedStorageLocationEvent);
                 }
 
                 log.debug("committing transaction");
@@ -258,7 +258,7 @@ public class ArtifactValidator {
                         log.debug("start txn: OK");
 
                         this.artifactDAO.lock(local);
-                        // if siteLocation's becomes empty removing the siteLocation, the artifact should be deleted
+                        // if siteLocation's becomes empty removing the siteLocation, delete the artifact
                         if (local.siteLocations.size() == 1) {
                             log.info(String.format("delete: %s %s reason: empty SiteLocations",
                                                    local.getID(), local.getURI()));
@@ -310,7 +310,7 @@ public class ArtifactValidator {
                     log.debug("start txn: OK");
 
                     this.artifactDAO.lock(local);
-                    // if siteLocation's becomes empty removing the siteLocation, the artifact should be deleted
+                    // if siteLocation's becomes empty removing the siteLocation, delete the artifact
                     if (local.siteLocations.size() == 1) {
                         log.info(String.format("delete: %s %s reason: empty SiteLocations",
                                                local.getID(), local.getURI()));
@@ -507,7 +507,7 @@ public class ArtifactValidator {
                                         local.getID(), local.getURI()));
                 this.transactionManager.rollbackTransaction();
             } catch (Exception e) {
-                log.error(String.format("failed to resolve Artifact.id collision  for local %s %s, remote %s %s",
+                log.error(String.format("failed to resolve Artifact.id collision for local %s %s, remote %s %s",
                                         local.getID(), local.getURI(), remote.getID(), remote.getURI()), e);
                 this.transactionManager.rollbackTransaction();
                 log.debug("rollback txn: OK");
