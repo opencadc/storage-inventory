@@ -77,7 +77,7 @@ import ca.nrc.cadc.io.ByteLimitExceededException;
 import ca.nrc.cadc.io.ResourceIterator;
 import ca.nrc.cadc.net.ExpectationFailedException;
 import ca.nrc.cadc.net.PreconditionFailedException;
-import ca.nrc.cadc.net.ResourceAlreadyExistsException;
+import ca.nrc.cadc.net.RemoteServiceException;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.reg.Capabilities;
@@ -90,8 +90,7 @@ import java.net.URI;
 import java.security.AccessControlException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.security.PrivilegedActionException;
-import java.security.PrivilegedExceptionAction;
+import java.security.PrivilegedAction;
 import java.text.DateFormat;
 import java.util.Date;
 import java.util.Map;
@@ -123,6 +122,7 @@ public class InventoryHarvester implements Runnable {
     private static final Logger log = Logger.getLogger(InventoryHarvester.class);
     public static final String CERTIFICATE_FILE_LOCATION = System.getProperty("user.home") + "/.ssl/cadcproxy.pem";
     public static final int INITIAL_SLEEP_TIMEOUT = 20;
+    public static final int DEFAULT_SLEEP_TIMEOUT = 60;
 
     private final ArtifactDAO artifactDAO;
     private final URI resourceID;
@@ -130,7 +130,7 @@ public class InventoryHarvester implements Runnable {
     private final ArtifactSelector selector;
     private final boolean trackSiteLocations;
     private final HarvestStateDAO harvestStateDAO;
-    private final int retriesTimeout;
+    private final int maxRetryInterval;
     private int errorCount = 0;
 
     /**
@@ -140,10 +140,10 @@ public class InventoryHarvester implements Runnable {
      * @param resourceID         identifier for the remote query service
      * @param selector           selector implementation
      * @param trackSiteLocations Whether to track the remote storage site and add it to the Artifact being processed.
-     * @param retriesTimeout     time in seconds to keep retrying after an error during processing.
+     * @param maxRetryInterval   max interval in seconds to sleep after an error during processing.
      */
     public InventoryHarvester(Map<String, Object> daoConfig, URI resourceID, ArtifactSelector selector,
-                              boolean trackSiteLocations, int retriesTimeout) {
+                              boolean trackSiteLocations, int maxRetryInterval) {
         InventoryUtil.assertNotNull(InventoryHarvester.class, "daoConfig", daoConfig);
         InventoryUtil.assertNotNull(InventoryHarvester.class, "resourceID", resourceID);
         InventoryUtil.assertNotNull(InventoryHarvester.class, "selector", selector);
@@ -152,7 +152,7 @@ public class InventoryHarvester implements Runnable {
         this.resourceID = resourceID;
         this.selector = selector;
         this.trackSiteLocations = trackSiteLocations;
-        this.retriesTimeout = retriesTimeout;
+        this.maxRetryInterval = maxRetryInterval;
         this.harvestStateDAO = new HarvestStateDAO(artifactDAO);
         
         try {
@@ -194,111 +194,108 @@ public class InventoryHarvester implements Runnable {
      */
     @Override
     public void run() {
-        boolean retry = false;
+        boolean retry;
         int retryCount = 1;
         int sleepSeconds = INITIAL_SLEEP_TIMEOUT;
 
         while (true) {
-            if (retry) {
-                if (sleepSeconds > this.retriesTimeout) {
-                    throw new RuntimeException(String.format("Exiting, retries timeout of %s seconds exceeded",
-                                                             this.retriesTimeout));
-                }
-                try {
-                    Thread.sleep(sleepSeconds * 1000L);
-                } catch (InterruptedException ex) {
-                    throw new RuntimeException("thread sleep interrupted");
-                }
-                retryCount++;
-                sleepSeconds += sleepSeconds;
-            }
-
             try {
                 final Subject subject = SSLUtil.createSubject(new File(CERTIFICATE_FILE_LOCATION));
-                Subject.doAs(subject, (PrivilegedExceptionAction<Void>) () -> {
-                    doit();
-                    return null;
+                int retries = retryCount;
+                int timeout = sleepSeconds;
+
+                retry = Subject.doAs(subject, (PrivilegedAction<Boolean>) () -> {
+                    boolean isRetry = true;
+                    try {
+                        doit();
+                        isRetry = false;
+                        // catch exceptions resulting in a retry
+                    } catch (ResourceNotFoundException ex) {
+                        // 404 service not found by TapClient, retry.
+                        logRetry(retries, timeout, "HTTP 404 resource not found", ex.getMessage());
+                    } catch (PreconditionFailedException ex) {
+                        // 412 precondition failed, retry.
+                        logRetry(retries, timeout, "HTTP 412 precondition failed", ex.getMessage());
+                    } catch (ByteLimitExceededException ex) {
+                        // 413 entity too large, retry.
+                        logRetry(retries, timeout, "HTTP 413 byte limit exceeded", ex.getMessage());
+                    } catch (ExpectationFailedException ex) {
+                        // 417 expectation failed, retry
+                        logRetry(retries, timeout, "HTTP 417 expectation failed", ex.getMessage());
+                    } catch (RemoteServiceException ex) {
+                        // 500 internal service error, retry.
+                        logRetry(retries, timeout, "HTTP 500 runtime error", ex.getMessage());
+                    } catch (TransientException ex) {
+                        //  503 transient, retry.
+                        logRetry(retries, timeout, "HTTP 503 transient", ex.getMessage());
+                    } catch (IOException ex) {
+                        // IO error talking to service, retry.
+                        logRetry(retries, timeout, "IO error", ex.getMessage());
+                    } catch (IllegalArgumentException ex) {
+                        // Be careful here.  This IllegalArgumentException is being caught to work around a mysterious
+                        // case where TCP connections are simply dropped and the incoming stream of data is invalid.
+                        // This catch will allow Fenwick to restart its processing.
+                        // jenkinsd 2020.09.25
+                        StringBuilder cause = new StringBuilder();
+                        final String message = ex.getMessage().trim();
+                        if (message.startsWith("wrong number of columns")) {
+                            cause.append("\n\n*******\n");
+                            cause.append("Caught IllegalArgumentException - ").append(message).append(" (");
+                            cause.append(++errorCount).append(")");
+                            cause.append("Ignoring error as presumed to be a dropped connection before fully reading the stream.");
+                            cause.append("\n*******\n");
+                        } else if (message.startsWith("invalid checksum URI:")) {
+                            cause.append("\n\n*******\n");
+                            cause.append("Caught IllegalArgumentException - ").append(message).append(" (");
+                            cause.append(++errorCount).append(")");
+                            cause.append("Ignoring error as presumed to be a dropped connection before fully reading the stream.");
+                            cause.append("CAUTION! - This could actually be a bad MD5 checksum! Logging this to provide an audit.");
+                            cause.append("\n*******\n");
+                        } else {
+                            // Service 400 error, retry.
+                            cause.append(message);
+                        }
+                        logRetry(retries, timeout, "HTTP 400 bad request", cause.toString());
+                    } catch (InterruptedException ex) {
+                        // Thread interrupted, fail.
+                        throw new RuntimeException(ex.getMessage(), ex);
+                    }
+                    return isRetry;
                 });
 
-                // TODO: dynamic depending on how rapidly the remote content is changing
-                // ... this value and the reprocess-last-N-seconds should be related
-                long dt = 60 * 1000L;
-                Thread.sleep(dt);
-
-                // successful run, reset retry values
-                retry = false;
-                retryCount = 1;
-                sleepSeconds = INITIAL_SLEEP_TIMEOUT;
-            } catch (PrivilegedActionException privilegedActionException) {
-                // Get the check exceptions in PrivilegedActionException thrown by doit()
-                final Exception cause = privilegedActionException.getException();
-                if (cause instanceof NoSuchAlgorithmException) {
-                    // Artifact checksum algorithm not found, bug, fail.
-                    logExit("checksum algorithm not found", cause.getMessage());
-                    throw new RuntimeException(cause.getMessage(), cause);
-                } else if (cause instanceof ResourceAlreadyExistsException) {
-                    // 409 conflict, should not occur, retry.
-                    logRetry(retryCount, sleepSeconds, "409 resource exists", cause.getMessage());
-                } else if (cause instanceof ByteLimitExceededException) {
-                    // 413 entity too large, retry.
-                    logRetry(retryCount, sleepSeconds, "413 byte limit exceeded", cause.getMessage());
-                } else if (cause instanceof ResourceNotFoundException) {
-                    // 404 service not found by TapClient, retry.
-                    logRetry(retryCount, sleepSeconds, "404 resource not found", cause.getMessage());
-                } else if (cause instanceof TransientException) {
-                    //  503 transient, retry.
-                    logRetry(retryCount, sleepSeconds, "503 transient", cause.getMessage());
-                } else if (cause instanceof IOException) {
-                    // IO error talking to service, retry.
-                    logRetry(retryCount, sleepSeconds, "IO error", cause.getMessage());
-                }
-                retry = true;
-            } catch (IllegalArgumentException ex) {
-                // Be careful here.  This IllegalArgumentException is being caught to work around a mysterious
-                // case where TCP connections are simply dropped and the incoming stream of data is invalid.
-                // This catch will allow Fenwick to restart its processing.
-                // jenkinsd 2020.09.25
-                final String message = ex.getMessage().trim();
-                if (message.startsWith("wrong number of columns")) {
-                    log.error("\n\n*******\n");
-                    log.error("Caught IllegalArgumentException - " + message + " (" + ++errorCount + ")");
-                    log.error("Ignoring error as presumed to be a dropped connection before fully reading the stream.");
-                    log.error("\n*******\n");
-                } else if (message.startsWith("invalid checksum URI:")) {
-                    log.error("\n\n*******\n");
-                    log.error("Caught IllegalArgumentException - " + message + " (" + ++errorCount + ")");
-                    log.error("Ignoring error as presumed to be a dropped connection before fully reading the stream.");
-                    log.error("CAUTION! - This could actually be a bad MD5 checksum! Logging this to provide an audit.");
-                    log.error("\n*******\n");
+                if (retry) {
+                    Thread.sleep(sleepSeconds * 1000L);
+                    retryCount++;
+                    if (sleepSeconds * 2 < this.maxRetryInterval) {
+                        sleepSeconds *= 2;
+                        if (sleepSeconds > this.maxRetryInterval) {
+                            sleepSeconds = this.maxRetryInterval;
+                        }
+                    }
                 } else {
-                    // Service 400 error, retry.
-                    retry = true;
-                    logRetry(retryCount, sleepSeconds, "400 bad request", ex.getMessage());
+                    // successful run, reset retry values
+                    retryCount = 1;
+                    sleepSeconds = INITIAL_SLEEP_TIMEOUT;
+                    // TODO: dynamic depending on how rapidly the remote content is changing
+                    // ... this value and the reprocess-last-N-seconds should be related
+                    Thread.sleep(DEFAULT_SLEEP_TIMEOUT * 1000L);
                 }
+            } catch (InterruptedException ex) {
+                // Thread interrupted, fail.
+                logExit("Thread interrupted", ex.getMessage());
+                throw new RuntimeException(ex.getMessage(), ex);
             } catch (NotAuthenticatedException ex) {
                 // 401 not authorized, cert error on host or service, fail.
-                logExit("401 not authorized", ex.getMessage());
-                throw new RuntimeException(ex.getMessage(), ex);
+                logExit("HTTP 401 not authorized", ex.getMessage());
+                throw ex;
             } catch (AccessControlException ex) {
                 // 403 forbidden, cert error on host or service, fail.
-                logExit("403 forbidden", ex.getMessage());
-                throw new RuntimeException(ex.getMessage(), ex);
-            } catch (InterruptedException ex) {
-                // Thread interrupted during sleep, retry.
-                logExit("thread sleep interrupted", ex.getMessage());
-                throw new RuntimeException(ex.getMessage(), ex);
-            } catch (PreconditionFailedException ex) {
-                // 412 precondition failed, retry.
-                retry = true;
-                logRetry(retryCount, sleepSeconds, "412 precondition failed", ex.getMessage());
-            } catch (ExpectationFailedException ex) {
-                // 417 expectation failed, retry
-                retry = true;
-                logRetry(retryCount, sleepSeconds, "417 expectation failed", ex.getMessage());
-            } catch (RuntimeException ex) {
-                // 500 internal service error, retry.
-                retry = true;
-                logRetry(retryCount, sleepSeconds, "500 runtime error", ex.getMessage());
+                logExit("HTTP 403 forbidden", ex.getMessage());
+                throw ex;
+            } catch (IllegalStateException ex) {
+                // Configuration error, fail.
+                logExit("Illegal state", ex.getMessage());
+                throw ex;
             }
         }
     }
@@ -327,10 +324,9 @@ public class InventoryHarvester implements Runnable {
      * @throws IllegalStateException     For any invalid configuration.
      * @throws TransientException        temporary failure of TAP service: same call could work in future
      * @throws InterruptedException      thread interrupted
-     * @throws NoSuchAlgorithmException  If the MessageDigest for synchronizing Artifacts cannot be used.
      */
     void doit() throws ResourceNotFoundException, IOException, IllegalStateException, TransientException,
-                       InterruptedException, NoSuchAlgorithmException {
+                       InterruptedException {
         final TapClient tapClient = new TapClient<>(this.resourceID);
         final Date end = new Date();
         
@@ -530,14 +526,18 @@ public class InventoryHarvester implements Runnable {
      * @throws ResourceNotFoundException For any missing required configuration that is missing.
      * @throws IOException               For unreadable configuration files.
      * @throws IllegalStateException     For any invalid configuration.
-     * @throws NoSuchAlgorithmException  If the MessageDigest for synchronizing Artifacts cannot be used.
      * @throws TransientException        temporary failure of TAP service: same call could work in future
      * @throws InterruptedException      thread interrupted
      */
     private void syncArtifacts(final TapClient tapClient, final Date endDate, final StorageSite storageSite)
-            throws ResourceNotFoundException, IOException, IllegalStateException, NoSuchAlgorithmException,
-                   InterruptedException, TransientException {
-        final MessageDigest messageDigest = MessageDigest.getInstance("MD5");
+            throws ResourceNotFoundException, IOException, IllegalStateException, InterruptedException,
+                   TransientException {
+        final MessageDigest messageDigest;
+        try {
+            messageDigest = MessageDigest.getInstance("MD5");
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException("BUG: failed to get instance of MD5", e);
+        }
         DateFormat df = DateUtil.getDateFormat(DateUtil.IVOA_DATE_FORMAT, DateUtil.UTC);
 
         SSLUtil.renewSubject(AuthenticationUtil.getCurrentSubject(), new File(CERTIFICATE_FILE_LOCATION));
