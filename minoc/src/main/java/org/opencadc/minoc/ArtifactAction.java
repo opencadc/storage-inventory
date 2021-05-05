@@ -144,7 +144,7 @@ public abstract class ArtifactAction extends RestAction {
                     URI u = new URI(s);
                     readGrantServices.add(u);
                 } catch (URISyntaxException ex) {
-                    throw new IllegalStateException("invalid config: " + MinocInitAction.READ_GRANTS_KEY + "=" + s + " must be a valid URI");
+                    throw new IllegalStateException("invalid config: " + MinocInitAction.READ_GRANTS_KEY + "=" + s + " INVALID", ex);
                 }
             }
         }
@@ -156,7 +156,7 @@ public abstract class ArtifactAction extends RestAction {
                     URI u = new URI(s);
                     writeGrantServices.add(u);
                 } catch (URISyntaxException ex) {
-                    throw new IllegalStateException("invalid config: " + MinocInitAction.WRITE_GRANTS_KEY + "=" + s + " must be a valid URI");
+                    throw new IllegalStateException("invalid config: " + MinocInitAction.WRITE_GRANTS_KEY + "=" + s + " INVALID", ex);
                 }
             }
         }

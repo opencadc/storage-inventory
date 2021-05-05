@@ -84,6 +84,7 @@ import java.nio.file.Paths;
 import java.nio.file.attribute.FileAttribute;
 import java.nio.file.attribute.PosixFilePermission;
 import java.nio.file.attribute.PosixFilePermissions;
+import java.security.PrivilegedAction;
 import java.util.Date;
 import java.util.Iterator;
 import java.util.Map;
@@ -328,7 +329,7 @@ public class FileSyncTest {
     public void fileSyncTestBody(int nthreads, String testDir, TreeMap<Integer,Artifact> artMap) throws Exception {
 
         createTestMetadata(artMap);
-        log.debug("test metadata put to database");
+        log.info("test metadata put to database");
 
         OpaqueFileSystemStorageAdapter localStorage = new OpaqueFileSystemStorageAdapter(new File(testDir), 1);
         log.debug("created storage adapter for test dir.");
@@ -342,10 +343,15 @@ public class FileSyncTest {
 
         URI locatorResourceID = new URI(TEST_RESOURCE_ID);
 
-        FileSync doit = new FileSync(daoConfig, cc, localStorage, locatorResourceID, bucketSel, nthreads);
-        doit.testRunLoops = 1;
-        Subject.doAs(anonSubject, new RunnableAction(doit));
-
+        log.info("FileSync: START");
+        FileSync fs = new FileSync(daoConfig, cc, localStorage, locatorResourceID, bucketSel, nthreads);
+        fs.testRunLoops = 1;
+        Subject.doAs(anonSubject, (PrivilegedAction<Object>) () -> {
+            fs.doit();
+            return null;
+        });
+        log.info("FileSync: DONE");
+        
         // Check the storage locations, as these should get updated within a reasonable
         // amount of timeA
         Iterator artIter = dao.unstoredIterator(null);
@@ -360,7 +366,7 @@ public class FileSyncTest {
         // the artifacts from the map are not nullA
         // for one or two of the artifacts
 
-        for(Artifact arti : artMap.values()) {
+        for (Artifact arti : artMap.values()) {
             Artifact thirdStoredArtifact = dao.get(arti.getURI());
             log.debug("stored artifact: " + thirdStoredArtifact);
             log.debug("stored artifact: " + thirdStoredArtifact.storageLocation);
@@ -439,9 +445,12 @@ public class FileSyncTest {
             URI locatorResourceID = new URI(TEST_RESOURCE_ID);
 
             // make sure FileSyncJob actually fails to update
-            FileSync doit = new FileSync(daoConfig, cc, localStorage, locatorResourceID, bucketSel, 1);
-            doit.testRunLoops = 1;
-            Subject.doAs(anonSubject, new RunnableAction(doit));
+            final FileSync fs = new FileSync(daoConfig, cc, localStorage, locatorResourceID, bucketSel, 1);
+            fs.testRunLoops = 1;
+            Subject.doAs(anonSubject, (PrivilegedAction<Object>) () -> {
+                fs.doit();
+                return null;
+            });
             
             boolean found = false;
             int num = 0;
@@ -458,9 +467,12 @@ public class FileSyncTest {
             Assert.assertEquals(1, num);
             
             // now with loops
-            doit = new FileSync(daoConfig, cc, localStorage, locatorResourceID, bucketSel, 1);
-            doit.testRunLoops = 4; 
-            Subject.doAs(anonSubject, new RunnableAction(doit));
+            final FileSync fs2 = new FileSync(daoConfig, cc, localStorage, locatorResourceID, bucketSel, 1);
+            fs2.testRunLoops = 4; 
+            Subject.doAs(anonSubject, (PrivilegedAction<Object>) () -> {
+                fs2.doit();
+                return null;
+            });
             
         } catch (Exception unexpected) {
             log.info("unexpected exception", unexpected);

@@ -117,8 +117,8 @@ public class Main {
         LOGGING_KEY,
         QUERY_SERVICE_CONFIG_KEY,
         SQLGENERATOR_CONFIG_KEY,
-        URI_BUCKETS_CONFIG_KEY,
-        TRACK_SITE_LOCATIONS_CONFIG_KEY
+        TRACK_SITE_LOCATIONS_CONFIG_KEY,
+        URI_BUCKETS_CONFIG_KEY
     };
 
     public static void main(final String[] args) {

@@ -100,6 +100,7 @@ public class DeleteAction extends ArtifactAction {
     @Override
     public void doAction() throws Exception {
         
+        checkWritable();
         initAndAuthorize(WriteGrant.class);
         
         Artifact existing = artifactDAO.get(artifactURI);
