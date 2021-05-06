@@ -67,6 +67,7 @@
 
 package org.opencadc.raven;
 
+import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.rest.SyncOutput;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
@@ -96,6 +97,10 @@ public class HeadFilesAction extends FilesAction {
         initAndAuthorize();
         log.debug("Starting HEAD action for " + artifactURI.toASCIIString());
         Artifact artifact = artifactDAO.get(artifactURI);
+        if (artifact == null) {
+            // message not actually output for a head request
+            throw new ResourceNotFoundException(artifactURI.toASCIIString());
+        }
         setHeaders(artifact, syncOutput);
     }
     
