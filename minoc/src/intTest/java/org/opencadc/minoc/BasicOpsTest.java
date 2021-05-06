@@ -83,6 +83,7 @@ import java.io.OutputStream;
 import java.net.URI;
 import java.net.URL;
 import java.security.PrivilegedExceptionAction;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -144,6 +145,8 @@ public class BasicOpsTest extends MinocTest {
             Assert.assertEquals(data.length, contentLength);
             Assert.assertEquals(type, contentType);
             Assert.assertEquals(encoding, contentEncoding);
+            Date lastModified = get.getLastModified(); 
+            Assert.assertNotNull(lastModified);
 
             // update
             // TODO: add update to artifactURI when functionality available
@@ -172,6 +175,8 @@ public class BasicOpsTest extends MinocTest {
             Assert.assertEquals(data.length, contentLength);
             Assert.assertEquals(newType, contentType);
             Assert.assertEquals(newEncoding, contentEncoding);
+            lastModified = head.getLastModified(); 
+            Assert.assertNotNull(lastModified);
 
             // delete
             HttpDelete delete = new HttpDelete(artifactURL, false);
