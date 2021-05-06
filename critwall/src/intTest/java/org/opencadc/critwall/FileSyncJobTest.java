@@ -67,7 +67,9 @@
 
 package org.opencadc.critwall;
 
+import ca.nrc.cadc.auth.AuthMethod;
 import ca.nrc.cadc.auth.AuthenticationUtil;
+import ca.nrc.cadc.auth.SSLUtil;
 import ca.nrc.cadc.db.ConnectionConfig;
 import ca.nrc.cadc.db.DBConfig;
 import ca.nrc.cadc.db.DBUtil;
@@ -103,7 +105,8 @@ public class FileSyncJobTest {
     private static final Logger log = Logger.getLogger(FileSyncJobTest.class);
     private static final String TEST_ROOT = "build/tmp/fsroot/critwallTests";
     private static final String TEST_ARTIFACT_URI = "ad:IRIS/I212B2H0.fits";
-    private static final String TEST_RESOURCE_ID = "ivo://cadc.nrc.ca/data";
+    private static final String TEST_RESOURCE_ID = "ivo://cadc.nrc.ca/global/raven";
+    private static final String CERTIFICATE_FILE_LOCATION = System.getProperty("user.home") + "/.ssl/cadcproxy.pem";
 
     private OpaqueFileSystemStorageAdapter oa = null;
 
@@ -117,9 +120,16 @@ public class FileSyncJobTest {
 
     private ArtifactDAO dao = new ArtifactDAO();
     private Subject anonSubject = AuthenticationUtil.getAnonSubject();
+    private Subject certSubject = null;
 
     public FileSyncJobTest() throws Exception {
         try {
+            final File certificateFile = new File(CERTIFICATE_FILE_LOCATION);
+            this.certSubject = certificateFile.exists()
+                                    ? SSLUtil.createSubject(new File(CERTIFICATE_FILE_LOCATION))
+                                    : AuthenticationUtil.getAnonSubject();
+            AuthMethod am = AuthenticationUtil.getAuthMethodFromCredentials(this.certSubject);
+            
             DBConfig dbrc = new DBConfig();
             ConnectionConfig cc = dbrc.getConnectionConfig(TestUtil.SERVER, TestUtil.DATABASE);
             DBUtil.createJNDIDataSource("jdbc/FileSyncJobTest", cc);
@@ -196,9 +206,18 @@ public class FileSyncJobTest {
     }
 
     @Test
-    public void testValidJob() {
-        String testDir = TEST_ROOT + File.separator + "testValidJob";
-
+    public void testValidJobWithAnonSubject() {
+        String testDir = TEST_ROOT + File.separator + "testValidJobWithAnonSubject";
+        testValidJob(testDir, anonSubject);
+    }
+    
+    @Test
+    public void testValidJobWithCertSubject() {
+        String testDir = TEST_ROOT + File.separator + "testValidJobWithCertSubject";
+        testValidJob(testDir, certSubject);
+    }
+    
+    public void testValidJob(String testDir, Subject testSubject) {
         try {
             createTestDirectory(testDir);
 
@@ -215,7 +234,7 @@ public class FileSyncJobTest {
             log.debug("putting test artifact to database");
             dao.put(artifactToUpdate);
 
-            FileSyncJob fsj = new FileSyncJob(artifactToUpdate.getID(), resourceID, sa, dao, anonSubject);
+            FileSyncJob fsj = new FileSyncJob(artifactToUpdate.getID(), resourceID, sa, dao, testSubject);
             fsj.run();
 
             // check job succeeded by trying to get artifact by location
