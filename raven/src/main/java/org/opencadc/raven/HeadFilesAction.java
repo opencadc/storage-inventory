@@ -106,6 +106,7 @@ public class HeadFilesAction extends FilesAction {
      */
     public static void setHeaders(Artifact artifact, SyncOutput syncOutput) {
         syncOutput.setDigest(artifact.getContentChecksum());
+        //syncOutput.setLastModified(artifact.getContentLastModified());
         syncOutput.setHeader("Content-Length", artifact.getContentLength());
         String filename = InventoryUtil.computeArtifactFilename(artifact.getURI());
         syncOutput.setHeader("Content-Disposition", "attachment; filename=\"" + filename + "\"");
