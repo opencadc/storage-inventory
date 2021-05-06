@@ -74,6 +74,7 @@ import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.SiteLocation;
 import org.opencadc.inventory.StorageLocation;
+import org.springframework.jdbc.BadSqlGrammarException;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
@@ -114,10 +115,13 @@ public class ArtifactDAO extends AbstractDAO<Artifact> {
             get.setURI(uri);
             Artifact a = get.execute(jdbc);
             return a;
+        } catch (BadSqlGrammarException ex) {
+            handleInternalFail(ex);
         } finally {
             long dt = System.currentTimeMillis() - t;
             log.debug("get: " + uri + " " + dt + "ms");
         }
+        throw new RuntimeException("BUG: should be unreachable");
     }
 
     // delete an artifact, all SiteLocation(s), and StorageLocation
@@ -175,10 +179,13 @@ public class ArtifactDAO extends AbstractDAO<Artifact> {
             iter.setOrderedOutput(true);
             iter.setPrefix(storageBucketPrefix);
             return iter.query(dataSource);
+        } catch (BadSqlGrammarException ex) {
+            handleInternalFail(ex);
         } finally {
             long dt = System.currentTimeMillis() - t;
             log.debug("iterator: " + storageBucketPrefix + " " + dt + "ms");
         }
+        throw new RuntimeException("BUG: should be unreachable");
     }
     
     /**
@@ -200,10 +207,13 @@ public class ArtifactDAO extends AbstractDAO<Artifact> {
             iter.setOrderedOutput(true);
             iter.setPrefix(uriBucketPrefix);
             return iter.query(dataSource);
+        } catch (BadSqlGrammarException ex) {
+            handleInternalFail(ex);
         } finally {
             long dt = System.currentTimeMillis() - t;
             log.debug("iterator: " + dt + "ms");
         }
+        throw new RuntimeException("BUG: should be unreachable");
     }
     
     /**
@@ -229,9 +239,12 @@ public class ArtifactDAO extends AbstractDAO<Artifact> {
             iter.setCriteria(criteria);
             iter.setOrderedOutput(ordered);
             return iter.query(dataSource);
+        } catch (BadSqlGrammarException ex) {
+            handleInternalFail(ex);
         } finally {
             long dt = System.currentTimeMillis() - t;
             log.debug("iterator: " + dt + "ms");
         }
+        throw new RuntimeException("BUG: should be unreachable");
     }
 }
