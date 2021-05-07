@@ -71,6 +71,7 @@ import java.util.Set;
 import java.util.UUID;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.StorageSite;
+import org.springframework.jdbc.BadSqlGrammarException;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
@@ -106,10 +107,13 @@ public class StorageSiteDAO extends AbstractDAO<StorageSite> {
             EntityList get = gen.getEntityList(StorageSite.class);
             Set<StorageSite> result = get.query(jdbc);
             return result;
+        } catch (BadSqlGrammarException ex) {
+            handleInternalFail(ex);
         } finally {
             long dt = System.currentTimeMillis() - t;
             log.debug("LIST: " + dt + "ms");
         }
+        throw new RuntimeException("BUG: should be unreachable");
     }
     
     public void delete(UUID id) {

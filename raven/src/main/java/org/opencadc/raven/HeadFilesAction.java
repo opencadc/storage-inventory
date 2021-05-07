@@ -67,6 +67,7 @@
 
 package org.opencadc.raven;
 
+import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.rest.SyncOutput;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
@@ -96,6 +97,10 @@ public class HeadFilesAction extends FilesAction {
         initAndAuthorize();
         log.debug("Starting HEAD action for " + artifactURI.toASCIIString());
         Artifact artifact = artifactDAO.get(artifactURI);
+        if (artifact == null) {
+            // message not actually output for a head request
+            throw new ResourceNotFoundException(artifactURI.toASCIIString());
+        }
         setHeaders(artifact, syncOutput);
     }
     
@@ -106,6 +111,7 @@ public class HeadFilesAction extends FilesAction {
      */
     public static void setHeaders(Artifact artifact, SyncOutput syncOutput) {
         syncOutput.setDigest(artifact.getContentChecksum());
+        syncOutput.setLastModified(artifact.getContentLastModified());
         syncOutput.setHeader("Content-Length", artifact.getContentLength());
         String filename = InventoryUtil.computeArtifactFilename(artifact.getURI());
         syncOutput.setHeader("Content-Disposition", "attachment; filename=\"" + filename + "\"");
