@@ -104,7 +104,7 @@ import org.opencadc.inventory.storage.fs.OpaqueFileSystemStorageAdapter;
 public class FileSyncJobTest {
     private static final Logger log = Logger.getLogger(FileSyncJobTest.class);
     private static final String TEST_ROOT = "build/tmp/fsroot/critwallTests";
-    private static final String TEST_ARTIFACT_URI = "ad:IRIS/I212B2H0.fits";
+    private static final String TEST_ARTIFACT_URI = "cadc:IRIS/I212B2H0.fits";
     private static final String TEST_RESOURCE_ID = "ivo://cadc.nrc.ca/global/raven";
     private static final String CERTIFICATE_FILE_LOCATION = System.getProperty("user.home") + "/.ssl/cadcproxy.pem";
 
