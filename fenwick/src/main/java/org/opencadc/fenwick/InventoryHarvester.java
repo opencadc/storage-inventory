@@ -210,92 +210,41 @@ public class InventoryHarvester implements Runnable {
                         doit();
                         isRetry = false;
                         // catch exceptions resulting in a retry
-                    } catch (ResourceNotFoundException ex) {
-                        // 404 service not found by TapClient, retry.
-                        logRetry(retries, timeout, "HTTP 404 resource not found", ex.getMessage());
-                    } catch (PreconditionFailedException ex) {
-                        // 412 precondition failed, retry.
-                        logRetry(retries, timeout, "HTTP 412 precondition failed", ex.getMessage());
-                    } catch (ByteLimitExceededException ex) {
-                        // 413 entity too large, retry.
-                        logRetry(retries, timeout, "HTTP 413 byte limit exceeded", ex.getMessage());
-                    } catch (ExpectationFailedException ex) {
-                        // 417 expectation failed, retry
-                        logRetry(retries, timeout, "HTTP 417 expectation failed", ex.getMessage());
-                    } catch (RemoteServiceException ex) {
-                        // 500 internal service error, retry.
-                        logRetry(retries, timeout, "HTTP 500 runtime error", ex.getMessage());
-                    } catch (TransientException ex) {
-                        //  503 transient, retry.
-                        logRetry(retries, timeout, "HTTP 503 transient", ex.getMessage());
-                    } catch (IOException ex) {
-                        // IO error talking to service, retry.
-                        logRetry(retries, timeout, "IO error", ex.getMessage());
-                    } catch (IllegalArgumentException ex) {
-                        // Be careful here.  This IllegalArgumentException is being caught to work around a mysterious
-                        // case where TCP connections are simply dropped and the incoming stream of data is invalid.
-                        // This catch will allow Fenwick to restart its processing.
-                        // jenkinsd 2020.09.25
-                        StringBuilder cause = new StringBuilder();
-                        final String message = ex.getMessage().trim();
-                        if (message.startsWith("wrong number of columns")) {
-                            cause.append("\n\n*******\n");
-                            cause.append("Caught IllegalArgumentException - ").append(message).append(" (");
-                            cause.append(++errorCount).append(")");
-                            cause.append("Ignoring error as presumed to be a dropped connection before fully reading the stream.");
-                            cause.append("\n*******\n");
-                        } else if (message.startsWith("invalid checksum URI:")) {
-                            cause.append("\n\n*******\n");
-                            cause.append("Caught IllegalArgumentException - ").append(message).append(" (");
-                            cause.append(++errorCount).append(")");
-                            cause.append("Ignoring error as presumed to be a dropped connection before fully reading the stream.");
-                            cause.append("CAUTION! - This could actually be a bad MD5 checksum! Logging this to provide an audit.");
-                            cause.append("\n*******\n");
-                        } else {
-                            // Service 400 error, retry.
-                            cause.append(message);
-                        }
-                        logRetry(retries, timeout, "HTTP 400 bad request", cause.toString());
+                    } catch (ResourceNotFoundException | PreconditionFailedException | ExpectationFailedException
+                             | RemoteServiceException | TransientException | IOException | NotAuthenticatedException
+                             | AccessControlException | IllegalArgumentException | IllegalStateException
+                             | IndexOutOfBoundsException ex) {
+                        logRetry(retries, timeout, ex.getMessage());
                     } catch (InterruptedException ex) {
                         // Thread interrupted, fail.
                         throw new RuntimeException(ex.getMessage(), ex);
                     }
                     return isRetry;
                 });
+            } catch (RuntimeException ex) {
+                logExit(ex.getMessage());
+                throw ex;
+            }
 
-                if (retry) {
-                    Thread.sleep(sleepSeconds * 1000L);
-                    retryCount++;
-                    if (sleepSeconds * 2 < this.maxRetryInterval) {
-                        sleepSeconds *= 2;
-                        if (sleepSeconds > this.maxRetryInterval) {
-                            sleepSeconds = this.maxRetryInterval;
-                        }
-                    }
-                } else {
-                    // successful run, reset retry values
-                    retryCount = 1;
-                    sleepSeconds = INITIAL_SLEEP_TIMEOUT;
-                    // TODO: dynamic depending on how rapidly the remote content is changing
-                    // ... this value and the reprocess-last-N-seconds should be related
-                    Thread.sleep(DEFAULT_SLEEP_TIMEOUT * 1000L);
+            // TODO: dynamic depending on how rapidly the remote content is changing
+            // ... this value and the reprocess-last-N-seconds should be related
+            if (retry) {
+                retryCount++;
+                sleepSeconds *= 2;
+                if (sleepSeconds > this.maxRetryInterval) {
+                    sleepSeconds = this.maxRetryInterval;
                 }
+            } else {
+                // successful run, reset retry values
+                retryCount = 1;
+                sleepSeconds = INITIAL_SLEEP_TIMEOUT;
+            }
+
+            try {
+                Thread.sleep(sleepSeconds * 1000L);
             } catch (InterruptedException ex) {
-                // Thread interrupted, fail.
-                logExit("Thread interrupted", ex.getMessage());
+                logExit(ex.getMessage());
                 throw new RuntimeException(ex.getMessage(), ex);
-            } catch (NotAuthenticatedException ex) {
-                // 401 not authorized, cert error on host or service, fail.
-                logExit("HTTP 401 not authorized", ex.getMessage());
-                throw ex;
-            } catch (AccessControlException ex) {
-                // 403 forbidden, cert error on host or service, fail.
-                logExit("HTTP 403 forbidden", ex.getMessage());
-                throw ex;
-            } catch (IllegalStateException ex) {
-                // Configuration error, fail.
-                logExit("Illegal state", ex.getMessage());
-                throw ex;
             }
         }
     }
@@ -677,11 +626,11 @@ public class InventoryHarvester implements Runnable {
         }
     }
 
-    private void logRetry(int retries, int timeout, String reason, String message) {
-        log.error(String.format("retry[%s] timeout %ss - reason: %s, %s", retries, timeout, reason, message));
+    private void logRetry(int retries, int timeout, String message) {
+        log.error(String.format("retry[%s] timeout %ss - reason: %s", retries, timeout, message));
     }
 
-    private void logExit(String reason, String message) {
-        log.error(String.format("Exiting, reason - %s, %s", reason, message));
+    private void logExit(String message) {
+        log.error(String.format("Exiting, reason - %s", message));
     }
 }
