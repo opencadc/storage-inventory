@@ -73,6 +73,7 @@ import ca.nrc.cadc.auth.SSLUtil;
 import ca.nrc.cadc.db.ConnectionConfig;
 import ca.nrc.cadc.db.DBConfig;
 import ca.nrc.cadc.db.DBUtil;
+import ca.nrc.cadc.util.FileUtil;
 import ca.nrc.cadc.util.Log4jInit;
 import java.io.File;
 import java.io.FileOutputStream;
@@ -106,7 +107,7 @@ public class FileSyncJobTest {
     private static final String TEST_ROOT = "build/tmp/fsroot/critwallTests";
     private static final String TEST_ARTIFACT_URI = "cadc:IRIS/I212B2H0.fits";
     private static final String TEST_RESOURCE_ID = "ivo://cadc.nrc.ca/global/raven";
-    private static final String CERTIFICATE_FILE_LOCATION = System.getProperty("user.home") + "/.ssl/cadcproxy.pem";
+    private static final String CERTIFICATE_FILE = "critwall-test.pem";
 
     private OpaqueFileSystemStorageAdapter oa = null;
 
@@ -120,16 +121,9 @@ public class FileSyncJobTest {
 
     private ArtifactDAO dao = new ArtifactDAO();
     private Subject anonSubject = AuthenticationUtil.getAnonSubject();
-    private Subject certSubject = null;
 
     public FileSyncJobTest() throws Exception {
         try {
-            final File certificateFile = new File(CERTIFICATE_FILE_LOCATION);
-            this.certSubject = certificateFile.exists()
-                                    ? SSLUtil.createSubject(new File(CERTIFICATE_FILE_LOCATION))
-                                    : AuthenticationUtil.getAnonSubject();
-            AuthMethod am = AuthenticationUtil.getAuthMethodFromCredentials(this.certSubject);
-            
             DBConfig dbrc = new DBConfig();
             ConnectionConfig cc = dbrc.getConnectionConfig(TestUtil.SERVER, TestUtil.DATABASE);
             DBUtil.createJNDIDataSource("jdbc/FileSyncJobTest", cc);
@@ -214,7 +208,8 @@ public class FileSyncJobTest {
     @Test
     public void testValidJobWithCertSubject() {
         String testDir = TEST_ROOT + File.separator + "testValidJobWithCertSubject";
-        testValidJob(testDir, certSubject);
+        final File certificateFile = FileUtil.getFileFromResource(CERTIFICATE_FILE, FileSyncJobTest.class);
+        testValidJob(testDir, SSLUtil.createSubject(certificateFile));
     }
     
     public void testValidJob(String testDir, Subject testSubject) {

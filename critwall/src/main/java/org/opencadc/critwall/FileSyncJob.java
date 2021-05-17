@@ -176,7 +176,7 @@ public class FileSyncJob implements Runnable {
             // from here on we care about URI change since that's the only potentially mutable metadata 
             // that could get persisted in the back end
             String artifactLabel = artifact.getID().toString() + "|" + artifact.getURI().toASCIIString();
-            List<URL> urlList;
+            List<Protocol> urlList;
             
             try {
                 urlList = getDownloadURLs(this.locatorService, artifact.getURI());
@@ -301,7 +301,7 @@ public class FileSyncJob implements Runnable {
     }
 
     // Use transfer negotiation at resource URI to get list of download URLs for the artifact.
-    private List<URL> getDownloadURLs(URI resource, URI artifact)
+    private List<Protocol> getDownloadURLs(URI resource, URI artifact)
         throws IOException, InterruptedException,
         ResourceAlreadyExistsException, ResourceNotFoundException,
         TransientException, TransferParsingException, PrivilegedActionException {
@@ -316,7 +316,7 @@ public class FileSyncJob implements Runnable {
         return Subject.doAs(currentSubject, new TransferNegotiation(resource, artifact));
     }
 
-    private class TransferNegotiation implements PrivilegedExceptionAction<List<URL>> {
+    private class TransferNegotiation implements PrivilegedExceptionAction<List<Protocol>> {
         private URI resource;
         private URI artifact;
         
@@ -326,7 +326,7 @@ public class FileSyncJob implements Runnable {
         }
         
         @Override
-        public List<URL> run() throws IOException, InterruptedException,
+        public List<Protocol> run() throws IOException, InterruptedException,
             ResourceAlreadyExistsException, ResourceNotFoundException,
             TransientException, TransferParsingException { 
             RegistryClient regClient = new RegistryClient();
@@ -365,74 +365,32 @@ public class FileSyncJob implements Runnable {
     
             TransferReader reader = new TransferReader();
             Transfer t = reader.read(post.getInputStream(), null);
-            List<String> urlStrList = t.getAllEndpoints();
-            log.debug("endpoints returned: " + urlStrList);
-    
-            List<URL> urlList = new ArrayList<>();
-    
-            // Create URL list to return
-            for (final String s : urlStrList) {
-                try {
-                    urlList.add(new URL(s));
-                } catch (MalformedURLException mue) {
-                    log.info("malformed URL returned from transfer negotiation: " + s + " skipping... ");
-                }
-            }
-    
-            return urlList;
+            return t.getProtocols();
         }
     }
 
-    private StorageMetadata syncArtifact(Artifact a, List<URL> urls)
+    private StorageMetadata syncArtifact(Artifact a, List<Protocol> protocols)
         throws ByteLimitExceededException, StorageEngageException, InterruptedException, 
-            WriteException, IllegalArgumentException, PrivilegedActionException {
-        Subject currentSubject = new Subject();
-
-        // Also synchronized in FileSync.run()
-        synchronized (subject) {
-            currentSubject.getPrincipals().addAll(subject.getPrincipals());
-            currentSubject.getPublicCredentials().addAll(subject.getPublicCredentials());
-        }
-
-        Subject subj = AuthenticationUtil.getAnonSubject();
-        AuthMethod am = AuthenticationUtil.getAuthMethodFromCredentials(currentSubject);
-        if (am != null && Standards.SECURITY_METHOD_CERT.equals(Standards.getSecurityMethod(am))) {
-            subj = new Subject();
-            subj.getPublicCredentials().addAll(subject.getPublicCredentials());
-        }
-
-        StorageMetadata storageMeta = null;
-        Iterator<URL> urlIterator = urls.iterator();
+            WriteException, IllegalArgumentException, PrivilegedActionException, MalformedURLException {
+        URI anonSM = Standards.getSecurityMethod(AuthMethod.ANON);
+        Iterator<Protocol> urlIterator = protocols.iterator();
         while (urlIterator.hasNext()) {
-            URL u = urlIterator.next();
+            Protocol p = urlIterator.next();
+            URL u = new URL(p.getEndpoint());
             log.debug("trying " + u);
-            boolean postPrepare = false;
+            Subject subj = subject;
+            if (p.getSecurityMethod().equals(anonSM)) {
+                subj = AuthenticationUtil.getAnonSubject();
+            }
+
             try {
-                ByteArrayOutputStream dest = new ByteArrayOutputStream();
-                HttpGet get = new HttpGet(u, dest);
-                get.prepare();
-                postPrepare = true;
-                return Subject.doAs(subj, new SyncArtifact(get, a));
-            } catch (ByteLimitExceededException | WriteException ex) {
-                // IOException will capture this if not explicitly caught and rethrown
-                log.error("FileSyncJob.FAIL fatal: " + ex);
-                throw ex;
-            } catch (IOException | TransientException ex) {
-                // includes ReadException
-                // - prepare or put throwing this error
-                // - will move to next url
-                log.error("FileSyncJob.FAIL transient: " + ex);
-            } catch (ResourceNotFoundException | ResourceAlreadyExistsException | PreconditionFailedException ex) {
-                log.error("FileSyncJob.FAIL remove " + u + " reason: " + ex);
-                urlIterator.remove();
+                return Subject.doAs(subj, new SyncArtifact(u, a));
             } catch (RuntimeException ex) {
-                if (!postPrepare) {
-                    // remote server 5xx response: discard
-                    log.error("FileSyncJob.FAIL remove " + u + " reason: " + ex);
-                    urlIterator.remove();
+                if (ex.getMessage().contains("next endpoint")) {
+                    if (ex.getMessage().contains("remove iterator item")) {
+                        urlIterator.remove();
+                    }
                 } else {
-                    // StorageAdapter internal fail: abort
-                    log.error("FileSyncJob.FAIL fatal: " + ex);
                     throw ex;
                 }
             }
@@ -442,11 +400,11 @@ public class FileSyncJob implements Runnable {
     }
         
     private class SyncArtifact implements PrivilegedExceptionAction<StorageMetadata> {
-        private HttpGet get;
+        private URL endpoint;
         private Artifact artifact;
         
-        SyncArtifact(HttpGet httpGet, Artifact a) {
-            this.get = httpGet;
+        SyncArtifact(URL u, Artifact a) {
+            this.endpoint = u;
             this.artifact = a;
         }
         
@@ -454,31 +412,60 @@ public class FileSyncJob implements Runnable {
         public StorageMetadata run() throws ByteLimitExceededException, StorageEngageException, 
             InterruptedException, WriteException, IllegalArgumentException, TransientException,
             IOException {
-            
-            // Note: the storage adapter 'put' below does checksum and content length
-            // checks, but only after downloading the entire file.
-            // Making the checks here is more efficient.
-            String getContentMD5 = get.getContentMD5();
-            if (getContentMD5 != null
-                && !getContentMD5.equals(artifact.getContentChecksum().getSchemeSpecificPart())) {
-                throw new PreconditionFailedException("contentChecksum mismatch: " + artifact.getURI());
+            boolean postPrepare = false;
+            try {
+                ByteArrayOutputStream dest = new ByteArrayOutputStream();
+                HttpGet get = new HttpGet(endpoint, dest);
+                get.prepare();
+                postPrepare = true;
+
+                // Note: the storage adapter 'put' below does checksum and content length
+                // checks, but only after downloading the entire file.
+                // Making the checks here is more efficient.
+                String getContentMD5 = get.getContentMD5();
+                if (getContentMD5 != null
+                    && !getContentMD5.equals(artifact.getContentChecksum().getSchemeSpecificPart())) {
+                    throw new PreconditionFailedException("contentChecksum mismatch: " + artifact.getURI());
+                }
+    
+                long getContentLen = get.getContentLength();
+                if (getContentLen != -1
+                    && getContentLen != artifact.getContentLength()) {
+                    throw new PreconditionFailedException("contentLength mismatch: " + artifact.getURI()
+                        + " artifact: " + artifact.getContentLength() + " header: " + getContentLen);
+                }
+    
+                NewArtifact na = new NewArtifact(artifact.getURI());
+                na.contentChecksum = artifact.getContentChecksum();
+                na.contentLength = artifact.getContentLength();
+    
+                StorageMetadata storageMeta = storageAdapter.put(na, get.getInputStream());
+                log.debug("storage meta returned: " + storageMeta.getStorageLocation());
+                return storageMeta;
+            } catch (ByteLimitExceededException | WriteException ex) {
+                // IOException will capture this if not explicitly caught and rethrown
+                log.error("FileSyncJob.FAIL fatal: " + ex);
+                throw ex;
+            } catch (IOException | TransientException ex) {
+                // includes ReadException
+                // - prepare or put throwing this error
+                // - will move to next url
+                log.error("FileSyncJob.FAIL transient: " + ex);
+                throw new RuntimeException("next endpoint");
+            } catch (ResourceNotFoundException | ResourceAlreadyExistsException | PreconditionFailedException ex) {
+                log.error("FileSyncJob.FAIL for endpoint " + endpoint + " reason: " + ex);
+                throw new RuntimeException("next endpoint, remove iterator item");
+            } catch (RuntimeException ex) {
+                if (!postPrepare) {
+                    // remote server 5xx response: discard
+                    log.error("FileSyncJob.FAIL for endpoint " + endpoint + " reason: " + ex);
+                    throw new RuntimeException("next endpoint, remove iterator item");
+                } else {
+                    // StorageAdapter internal fail: abort
+                    log.error("FileSyncJob.FAIL fatal: " + ex);
+                    throw ex;
+                }
             }
-
-            long getContentLen = get.getContentLength();
-            if (getContentLen != -1
-                && getContentLen != artifact.getContentLength()) {
-                throw new PreconditionFailedException("contentLength mismatch: " + artifact.getURI()
-                    + " artifact: " + artifact.getContentLength() + " header: " + getContentLen);
-            }
-
-            NewArtifact na = new NewArtifact(artifact.getURI());
-            na.contentChecksum = artifact.getContentChecksum();
-            na.contentLength = artifact.getContentLength();
-
-            StorageMetadata storageMeta = storageAdapter.put(na, get.getInputStream());
-            log.debug("storage meta returned: " + storageMeta.getStorageLocation());
-            return storageMeta;
         }
     }
-
 }
