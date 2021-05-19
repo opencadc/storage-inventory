@@ -71,6 +71,7 @@ package org.opencadc.inventory.storage.ad;
 
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
@@ -83,21 +84,22 @@ import org.opencadc.tap.TapRowMapper;
 
 /**
  * Provide query and RowMapper instance for grabbing data from ad.
- * RowMapper maps from ad's archive_files table to a StorageMetadata object.
+ * RowMapper maps from the AD archive_files table to a StorageMetadata object.
  */
 public class AdStorageQuery {
     private static final Logger log = Logger.getLogger(AdStorageQuery.class);
-    // Query to use that will pull data in the order required by the mapRow function
-    private String queryTemplate = "select archiveName, inventoryURI, contentMD5, fileSize,"
-            + " uri, contentEncoding, contentType, ingestDate"
-            + " from archive_files where archiveName='%s' order by uri asc, ingestDate desc";
-    private String query = "";
 
+    private static final String QTMPL = "SELECT archiveName, fileName, uri, inventoryURI, contentMD5, fileSize,"
+            + " contentEncoding, contentType, ingestDate"
+            + " FROM archive_files WHERE archiveName = '%s' ORDER BY fileName ASC, ingestDate DESC";
+
+    private String query;
+    
     private static String MD5_ENCODING_SCHEME = "md5:";
 
     AdStorageQuery(String storageBucket) {
         InventoryUtil.assertNotNull(AdStorageQuery.class, "storageBucket", storageBucket);
-        setQuery(storageBucket);
+        this.query = String.format(this.QTMPL, storageBucket);
     }
 
     public TapRowMapper<StorageMetadata> getRowMapper() {
@@ -112,50 +114,48 @@ public class AdStorageQuery {
         public StorageMetadata mapRow(List<Object> row) {
             Iterator i = row.iterator();
 
-            // archive_files.archiveName
             String storageBucket = (String) i.next();
-
-            // archive_files.inventoryURI
-            URI artifactID = (URI) i.next();
-
-            // check for null uri(storageID) and log error
-            if (artifactID == null) {
-                String sb = "ERROR: uri=null in ad.archive_files for archiveName=" + storageBucket;
-                log.error(sb);
-                return null;
-            }
-
+            String fname = (String) i.next();
+            URI uri = (URI) i.next();
+            URI artifactURI = (URI) i.next();
+            
             // archive_files.contentMD5 is just the hex value
             URI contentChecksum = null;
             try {
                 contentChecksum = new URI(MD5_ENCODING_SCHEME + i.next());
             } catch (URISyntaxException u) {
-                log.debug("checksum error: " + artifactID.toString() + ": " + u.getMessage());
+                log.debug("checksum error: " + artifactURI.toString() + ": " + u.getMessage());
             }
-
             // archive_files.fileSize
             Long contentLength = (Long) i.next();
             if (contentLength == null) {
-                log.debug("content length error (null): " + artifactID.toString());
+                log.debug("content length error (null): " + artifactURI.toString());
+            }
+            
+            URI storageID = URI.create("ad:" + storageBucket + "/" + fname);
+            if ("mast".equals(uri.getScheme())) {
+                storageID = uri;
+            }
+            
+            if (artifactURI == null) {
+                String sb = "ERROR: found null inventoryURI archive_files for archiveName=" + storageBucket;
+                log.error(sb);
+                return null;
             }
 
-            // archive_files.uri
-            URI storageID = (URI) i.next();
-
-            // Set up StorageLocation object first
             StorageLocation storageLocation = new StorageLocation(storageID);
             storageLocation.storageBucket = storageBucket;
 
-            // Build StorageMetadata object
             StorageMetadata storageMetadata;
             if (contentChecksum == null || (contentLength == null || contentLength == 0)) {
+                // invalid
                 storageMetadata = new StorageMetadata(storageLocation);
             } else {
                 storageMetadata = new StorageMetadata(storageLocation, contentChecksum, contentLength);
             }
-            storageMetadata.artifactURI = artifactID;
+            storageMetadata.artifactURI = artifactURI;
 
-            // Set optional values into ret at this point - allowed to be null
+            // optional values
             storageMetadata.contentEncoding = (String) i.next();
             storageMetadata.contentType = (String) i.next();
             storageMetadata.contentLastModified = (Date) i.next();
@@ -169,13 +169,6 @@ public class AdStorageQuery {
 
     public String getQuery() {
         return this.query;
-    }
-
-    public void setQuery(String storageBucket) {
-        if (storageBucket == null || storageBucket.length() == 0) {
-            throw new IllegalArgumentException("Storage bucket (archive) an not be null.");
-        }
-        this.query = String.format(this.queryTemplate, storageBucket);
     }
 }
 

@@ -90,78 +90,84 @@ public class AdStorageQueryTest {
     }
 
     @Test
-    public void testStorageURI() throws Exception {
-        // Gemini cadc scheme
-        AdStorageQuery query = new AdStorageQuery("Gemini");
+    public void testQuery() throws Exception {
+        AdStorageQuery asq = new AdStorageQuery("FOO");
+        String query = asq.getQuery();
+        Assert.assertNotNull(query);
+        Assert.assertTrue(query.contains("archiveName = 'FOO'"));
+    }
+    
+    @Test
+    public void testQueryHST() throws Exception {
+        AdStorageQuery asq = new AdStorageQuery("HST");
+        String query = asq.getQuery();
+        Assert.assertNotNull(query);
+        Assert.assertTrue(query.contains("archiveName = 'HST'"));
+    }
+    
+    @Test
+    public void testQueryJWST() throws Exception {
+        AdStorageQuery asq = new AdStorageQuery("JWST");
+        String query = asq.getQuery();
+        Assert.assertNotNull(query);
+        Assert.assertTrue(query.contains("archiveName = 'JWST'"));
+    }
+    
+    @Test
+    public void testRowMapper() throws Exception {
+        AdStorageQuery query = new AdStorageQuery("GEM");
         TapRowMapper mapper = query.getRowMapper();
+        
         ArrayList<Object> row = new ArrayList<>(7);
-        row.add("Gemini");
-        row.add(new URI("cadc:Gemini/foo_th.jpg"));
-        row.add(new URI("abc"));
+        row.add("GEM");
+        row.add("foo.fits.gz");
+        row.add(new URI("do:not-use"));
+        row.add(new URI("cadc:GEMINI/foo.fits.gz"));
+        row.add(new URI("e687e2ecea45e78822eb68294566e6a1"));
         row.add(new Long(33));
-        row.add(new URI("ad:GEM/foo_th.jpg"));
-        row.add("");
+        row.add("gzip");
         row.add("application/fits");
         Date now = new Date(System.currentTimeMillis());
         row.add(now);
         StorageMetadata metadata = (StorageMetadata) mapper.mapRow(row);
-        Assert.assertTrue("cadc:Gemini/foo_th.jpg".equals(metadata.artifactURI.toString()));
-        Assert.assertTrue("ad:GEM/foo_th.jpg".equals(metadata.getStorageLocation().getStorageID().toString()));
-        Assert.assertTrue(metadata.getStorageLocation().storageBucket.equals("Gemini"));
-        Assert.assertTrue(metadata.getContentChecksum().toString().equals("md5:abc"));
+        Assert.assertTrue("cadc:GEMINI/foo.fits.gz".equals(metadata.artifactURI.toString()));
+        Assert.assertTrue("ad:GEM/foo.fits.gz".equals(metadata.getStorageLocation().getStorageID().toString()));
+        Assert.assertTrue(metadata.getStorageLocation().storageBucket.equals("GEM"));
+        Assert.assertTrue(metadata.getContentChecksum().toString().equals("md5:e687e2ecea45e78822eb68294566e6a1"));
         Assert.assertEquals(33, metadata.getContentLength().longValue());
-        Assert.assertTrue(metadata.contentEncoding.equals(""));
+        Assert.assertTrue(metadata.contentEncoding.equals("gzip"));
         Assert.assertTrue(metadata.contentType.equals("application/fits"));
         Assert.assertEquals(now, metadata.contentLastModified);
-        Assert.assertTrue(metadata.artifactURI.toString().equals("cadc:Gemini/foo_th.jpg"));
-
-        // Gemini gemini scheme
-        query = new AdStorageQuery("Gemini");
-        mapper = query.getRowMapper();
-        row = new ArrayList<>(7);
-        row.add("Gemini");
-        row.add(new URI("gemini:Gemini/foo.fits"));
-        row.add(new URI("md5:abc"));
-        row.add(new Long(33));
-        row.add(new URI("gemini:GEM/foo.fits"));
-        row.add("");
-        row.add("application/fits");
-        row.add(new Date(System.currentTimeMillis()));
-        metadata = (StorageMetadata) mapper.mapRow(row);
-        Assert.assertTrue("gemini:Gemini/foo.fits".equals(metadata.artifactURI.toString()));
-        Assert.assertTrue("gemini:GEM/foo.fits".equals(metadata.getStorageLocation().getStorageID().toString()));
-
-        // MAST
-        query = new AdStorageQuery("HST");
-        mapper = query.getRowMapper();
-        row = new ArrayList<>(7);
-        row.add("HST");
-        row.add(new URI("mast:HST/foo.fits"));
-        row.add(new URI("md5:abc"));
-        row.add(new Long(33));
-        row.add(new URI("mast:HST/foo.fits"));
-        row.add("");
-        row.add("application/fits");
-        row.add(new Date(System.currentTimeMillis()));
-        metadata = (StorageMetadata) mapper.mapRow(row);
-        Assert.assertTrue("mast:HST/foo.fits".equals(metadata.artifactURI.toString()));
-        Assert.assertTrue("mast:HST/foo.fits".equals(metadata.getStorageLocation().getStorageID().toString()));
-
-        // CFHT
-        query = new AdStorageQuery("CFHT");
-        mapper = query.getRowMapper();
-        row = new ArrayList<>(7);
-        row.add("CFHT");
-        row.add(new URI("cadc:CFHT/foo.fits"));
-        row.add(new URI("md5:abc"));
-        row.add(new Long(33));
-        row.add(new URI("ad:CFHT/foo.fits"));
-        row.add("");
-        row.add("application/fits");
-        row.add(new Date(System.currentTimeMillis()));
-        metadata = (StorageMetadata) mapper.mapRow(row);
-        Assert.assertTrue("cadc:CFHT/foo.fits".equals(metadata.artifactURI.toString()));
-        Assert.assertTrue("ad:CFHT/foo.fits".equals(metadata.getStorageLocation().getStorageID().toString()));
     }
+    
+    @Test
+    public void testRowMapperMAST() throws Exception {
+        AdStorageQuery query = new AdStorageQuery("HST");
+        TapRowMapper mapper = query.getRowMapper();
+        
+        ArrayList<Object> row = new ArrayList<>(7);
+        row.add("HST");
+        row.add("foo.fits.gz-SOME-ENCODED-STUFF");
+        row.add(new URI("mast:HST/product/foo.fits.gz"));
+        row.add(new URI("mast:HST/product/foo.fits.gz"));
+        row.add(new URI("e687e2ecea45e78822eb68294566e6a1"));
+        row.add(new Long(33));
+        row.add("gzip");
+        row.add("application/fits");
+        Date now = new Date(System.currentTimeMillis());
+        row.add(now);
+        StorageMetadata metadata = (StorageMetadata) mapper.mapRow(row);
+        Assert.assertTrue("mast:HST/product/foo.fits.gz".equals(metadata.artifactURI.toString()));
+        Assert.assertTrue("mast:HST/product/foo.fits.gz".equals(metadata.getStorageLocation().getStorageID().toString()));
+        Assert.assertTrue(metadata.getStorageLocation().storageBucket.equals("HST"));
+        Assert.assertTrue(metadata.getContentChecksum().toString().equals("md5:e687e2ecea45e78822eb68294566e6a1"));
+        Assert.assertEquals(33, metadata.getContentLength().longValue());
+        Assert.assertTrue(metadata.contentEncoding.equals("gzip"));
+        Assert.assertTrue(metadata.contentType.equals("application/fits"));
+        Assert.assertEquals(now, metadata.contentLastModified);
+
+        
+    }
+    
 
 }
