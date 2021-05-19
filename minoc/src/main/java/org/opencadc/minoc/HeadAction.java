@@ -122,6 +122,7 @@ public class HeadAction extends ArtifactAction {
      */
     public static void setHeaders(Artifact artifact, SyncOutput syncOutput) {
         syncOutput.setDigest(artifact.getContentChecksum());
+        syncOutput.setLastModified(artifact.getContentLastModified());
         syncOutput.setHeader("Content-Length", artifact.getContentLength());
         
         DateFormat df = DateUtil.getDateFormat(DateUtil.HTTP_DATE_FORMAT, DateUtil.GMT);

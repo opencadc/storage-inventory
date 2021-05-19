@@ -299,10 +299,10 @@ public class FilesTest extends RavenTest {
     public void checkHeadResult(HttpGet request, URI artifactURI, URI checksum, String contentType) {
         Assert.assertEquals("HEAD response code", 200, request.getResponseCode());
         Assert.assertEquals("File length", 1L, Long.valueOf(request.getResponseHeader("Content-Length")).longValue());
+        Assert.assertNotNull("File last-modified", request.getResponseHeader("Last-Modified"));
         Assert.assertEquals("File name", "attachment; filename=\"" + InventoryUtil.computeArtifactFilename(artifactURI) + "\"",
                 request.getResponseHeader("Content-Disposition"));
-        Assert.assertEquals("File checksum", "md5=" + checksum.getSchemeSpecificPart(), request.getResponseHeader("Digest"));
-        Assert.assertEquals("File MD5", checksum.getSchemeSpecificPart(), request.getResponseHeader("Content-MD5"));
+        Assert.assertEquals("File digest", checksum, request.getDigest());
         Assert.assertEquals("File type", contentType, request.getResponseHeader("Content-Type"));
         Assert.assertNull("No file encoding", request.getResponseHeader("Content-Encoding"));
 
