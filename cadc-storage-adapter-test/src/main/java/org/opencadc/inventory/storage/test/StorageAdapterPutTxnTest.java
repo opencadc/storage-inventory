@@ -131,6 +131,7 @@ public class StorageAdapterPutTxnTest {
             Assert.assertTrue("valid", meta2.isValid());
             Assert.assertNotNull("artifactURI", meta2.artifactURI);
             
+            log.info("commit: " + transactionID);
             StorageMetadata meta3 = adapter.commitTransaction(transactionID);
             Assert.assertNotNull(meta3);
             log.info("commit");
@@ -432,6 +433,8 @@ public class StorageAdapterPutTxnTest {
             Assert.fail("unexpected exception: " + unexpected);
         }
     }
+    
+    
     
     private InputStream getFailingInput(final int failAfter, final byte[] data) {
         return new InputStream() {

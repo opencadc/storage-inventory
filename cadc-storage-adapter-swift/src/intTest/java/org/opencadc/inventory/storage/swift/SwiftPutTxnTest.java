@@ -67,13 +67,11 @@
 
 package org.opencadc.inventory.storage.swift;
 
-import ca.nrc.cadc.net.ResourceNotFoundException;
-import ca.nrc.cadc.util.HexUtil;
+import ca.nrc.cadc.util.Log4jInit;
 import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.net.URI;
-import java.security.MessageDigest;
 import java.util.Iterator;
+import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.Before;
@@ -90,10 +88,14 @@ import org.opencadc.inventory.storage.test.StorageAdapterPutTxnTest;
 public class SwiftPutTxnTest extends StorageAdapterPutTxnTest {
     private static final Logger log = Logger.getLogger(SwiftPutTxnTest.class);
 
+    static {
+        Log4jInit.setLevel("org.opencadc.inventory.storage.swift", Level.INFO);
+    }
+    
     final SwiftStorageAdapter swiftAdapter;
     
     public SwiftPutTxnTest() throws Exception {
-        super(new SwiftStorageAdapter(true, System.getProperty("user.name") + "-txn-test", 3, false)); // single-bucket adapter for this
+        super(new SwiftStorageAdapter(true, System.getProperty("user.name") + "-txn-test", 1, true)); // single-bucket adapter for this
         this.swiftAdapter = (SwiftStorageAdapter) super.adapter;
     }
     
@@ -114,25 +116,40 @@ public class SwiftPutTxnTest extends StorageAdapterPutTxnTest {
         log.info("testCleanupOnly: no-op");
     }
     
-     @Test
-    public void testTxn() {
+    @Test
+    public void testPutTransactionIterator() {
+        int numArtifacts = 20;
+        int numCommitted = 0;
         try {
-            URI uri = URI.create("cadc:TEST/testTxn");
+            String dataString = "abcdefghijklmnopqrstuvwxyz\n";
+            byte[] data = dataString.getBytes();
             
-            log.info("init");
+            for (int i = 0; i < numArtifacts; i++) {
+                boolean commit = (i % 2 == 0);
+                URI uri = URI.create("cadc:TEST/testPutTransactionIterator-" + i + "-" + commit);
+                final NewArtifact newArtifact = new NewArtifact(uri);
+                final ByteArrayInputStream source = new ByteArrayInputStream(data);
+
+                String transactionID = adapter.startTransaction(uri);
+                StorageMetadata meta = adapter.put(newArtifact, source, transactionID);
+                Assert.assertNotNull(meta);
+                log.info("put: " + meta);
+                if (i % 2 == 0) {
+                    log.info("commit: " + uri);
+                    adapter.commitTransaction(transactionID);
+                    numCommitted++;
+                }
+            }
             
-            String transactionID = adapter.startTransaction(uri);
-            log.info("start");
-            
-            StorageMetadata meta = adapter.getTransactionStatus(transactionID);
-            log.info("testTxn: " + meta + " in " + transactionID);
-            Assert.assertNotNull(meta);
-            Assert.assertTrue("valid", meta.isValid());
-            Assert.assertNotNull("artifactURI", meta.artifactURI);
-            Assert.assertEquals("size", 16L, meta.getContentLength().longValue()); // object currently stores 16 byte MD5
-            
-            adapter.abortTransaction(transactionID);
-            log.info("abort");
+            int numFound = 0;
+            Iterator<StorageMetadata> iter = adapter.iterator();
+            while (iter.hasNext()) {
+                StorageMetadata sm = iter.next();
+                log.info("found: " + sm);
+                Assert.assertTrue(sm.artifactURI.toASCIIString().endsWith("true"));
+                numFound++;
+            }
+            Assert.assertEquals(numCommitted, numFound);
             
         } catch (Exception unexpected) {
             log.error("unexpected exception", unexpected);

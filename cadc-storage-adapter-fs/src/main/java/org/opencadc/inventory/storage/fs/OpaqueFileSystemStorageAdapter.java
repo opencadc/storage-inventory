@@ -409,7 +409,7 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
         } catch (InvalidPathException e) {
             throw new RuntimeException("BUG: invalid path: " + txnPath, e);
         } catch (NoSuchAlgorithmException ex) {
-            throw new RuntimeException("Unexpected error", ex);
+            throw new RuntimeException("failed to create MessageDigest: MD5");
         }
         log.warn("transaction: " + txnTarget + " transactionID: " + transactionID);
         
