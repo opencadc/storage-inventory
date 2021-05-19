@@ -123,7 +123,7 @@ public class AdStorageQueryTest {
         row.add("foo.fits.gz");
         row.add(new URI("do:not-use"));
         row.add(new URI("cadc:GEMINI/foo.fits.gz"));
-        row.add(new URI("e687e2ecea45e78822eb68294566e6a1"));
+        row.add("e687e2ecea45e78822eb68294566e6a1");
         row.add(new Long(33));
         row.add("gzip");
         row.add("application/fits");
@@ -150,7 +150,7 @@ public class AdStorageQueryTest {
         row.add("foo.fits.gz-SOME-ENCODED-STUFF");
         row.add(new URI("mast:HST/product/foo.fits.gz"));
         row.add(new URI("mast:HST/product/foo.fits.gz"));
-        row.add(new URI("e687e2ecea45e78822eb68294566e6a1"));
+        row.add("e687e2ecea45e78822eb68294566e6a1");
         row.add(new Long(33));
         row.add("gzip");
         row.add("application/fits");

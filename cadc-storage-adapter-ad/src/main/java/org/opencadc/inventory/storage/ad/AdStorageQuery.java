@@ -117,42 +117,41 @@ public class AdStorageQuery {
             String storageBucket = (String) i.next();
             String fname = (String) i.next();
             URI uri = (URI) i.next();
+            // chose best storageID
+            URI sid = URI.create("ad:" + storageBucket + "/" + fname);
+            if ("mast".equals(uri.getScheme())) {
+                sid = uri;
+            }
+            final URI storageID = sid;
+            
             URI artifactURI = (URI) i.next();
+            if (artifactURI == null) {
+                log.warn(storageID + " has null inventoryURI: SKIP");
+                return null;
+            }
             
             // archive_files.contentMD5 is just the hex value
             URI contentChecksum = null;
+            String hex = (String) i.next();
             try {
-                contentChecksum = new URI(MD5_ENCODING_SCHEME + i.next());
-            } catch (URISyntaxException u) {
-                log.debug("checksum error: " + artifactURI.toString() + ": " + u.getMessage());
+                contentChecksum = new URI(MD5_ENCODING_SCHEME + hex);
+                InventoryUtil.assertValidChecksumURI(AdStorageQuery.class, "contentChecksum", contentChecksum);
+            } catch (IllegalArgumentException | URISyntaxException u) {
+                log.warn(storageID + " has invalid HEX md5sum - " + hex + ": SKIP");
+                return null;
             }
+            
             // archive_files.fileSize
             Long contentLength = (Long) i.next();
             if (contentLength == null) {
-                log.debug("content length error (null): " + artifactURI.toString());
-            }
-            
-            URI storageID = URI.create("ad:" + storageBucket + "/" + fname);
-            if ("mast".equals(uri.getScheme())) {
-                storageID = uri;
-            }
-            
-            if (artifactURI == null) {
-                String sb = "ERROR: found null inventoryURI archive_files for archiveName=" + storageBucket;
-                log.error(sb);
+                log.warn(storageID + " has null fileSize: SKIP");
                 return null;
             }
 
             StorageLocation storageLocation = new StorageLocation(storageID);
             storageLocation.storageBucket = storageBucket;
 
-            StorageMetadata storageMetadata;
-            if (contentChecksum == null || (contentLength == null || contentLength == 0)) {
-                // invalid
-                storageMetadata = new StorageMetadata(storageLocation);
-            } else {
-                storageMetadata = new StorageMetadata(storageLocation, contentChecksum, contentLength);
-            }
+            StorageMetadata storageMetadata = new StorageMetadata(storageLocation, contentChecksum, contentLength);
             storageMetadata.artifactURI = artifactURI;
 
             // optional values
@@ -160,12 +159,9 @@ public class AdStorageQuery {
             storageMetadata.contentType = (String) i.next();
             storageMetadata.contentLastModified = (Date) i.next();
 
-            log.debug("StorageMetadata: " + storageMetadata);
             return storageMetadata;
         }
     }
-
-    // Getters & Setters
 
     public String getQuery() {
         return this.query;
