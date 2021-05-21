@@ -240,11 +240,11 @@ the explanation #s match -- they are the same explanation seen from both sides.
     
     explanation2: L==global, deleted from R, pending/missed DeletedStorageLocationEvent in L
     evidence: DeletedStorageLocationEvent in R 
-    action: remove siteID from Artifact.storageLocations (see below)
+    action: remove siteID from Artifact.siteLocations (see below)
 
     explanation3: L==global, new Artifact in L, pending/missed Artifact or sync in R
     evidence: ?
-    action: remove siteID from Artifact.storageLocations (see below)
+    action: remove siteID from Artifact.siteLocations (see below)
     
     explanation4: L==storage, new Artifact in L, pending/missed new Artifact event in R
     evidence: ?
@@ -260,7 +260,7 @@ the explanation #s match -- they are the same explanation seen from both sides.
     
     note: when removing siteID from Artifact.storageLocations in global, if the Artifact.siteLocations becomes empty
         the artifact should be deleted (metadata-sync needs to also do this in response to a DeletedStorageLocationEvent)
-        TBD: must this also create a DeletedArtifactEvent?
+        Deletion when siteLocations becomes empty due to DeletedStorageLocationEvent must not generate a DeletedArtifactEvent.
 
 *discrepancy*: artifact not in L && artifact in R
 
