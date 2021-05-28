@@ -3,7 +3,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2020.                            (c) 2020.
+ *  (c) 2021.                            (c) 2021.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -372,14 +372,14 @@ public class FileSyncJob implements Runnable {
     private StorageMetadata syncArtifact(Artifact a, List<Protocol> protocols)
         throws ByteLimitExceededException, StorageEngageException, InterruptedException, 
             WriteException, IllegalArgumentException, PrivilegedActionException, MalformedURLException {
-        URI anonSM = Standards.getSecurityMethod(AuthMethod.ANON);
         Iterator<Protocol> urlIterator = protocols.iterator();
         while (urlIterator.hasNext()) {
             Protocol p = urlIterator.next();
             URL u = new URL(p.getEndpoint());
             log.debug("trying " + u);
             Subject subj = subject;
-            if (p.getSecurityMethod().equals(anonSM)) {
+
+            if (p.getSecurityMethod() == null || p.getSecurityMethod().equals(Standards.getSecurityMethod(AuthMethod.ANON))) {
                 subj = AuthenticationUtil.getAnonSubject();
             }
 
