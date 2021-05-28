@@ -157,7 +157,7 @@ public class AdStorageAdapterIteratorTest {
                 SortedSet<StorageMetadata> sortedMeta = new TreeSet();
                 try {
                     Iterator<StorageMetadata>  storageMetaIterator = adStorageAdapter.iterator(archiveName);
-                    Assert.assertTrue("iterator is empty.", storageMetaIterator.hasNext() == true);
+                    Assert.assertTrue("iterator has records", storageMetaIterator.hasNext());
 
                     // Create SortedSet for comparison
                     while (storageMetaIterator.hasNext()) {
@@ -174,12 +174,14 @@ public class AdStorageAdapterIteratorTest {
                     log.error("unexpected exception", unexpected);
                     Assert.fail("unexpected exception: " + unexpected.getMessage());
                 }
+                
+                log.info("found: " + sortedMeta.size() + " in " + archiveName);
 
                 // Get second version of iterator
                 Iterator<StorageMetadata> storageMeta = null;
                 try {
                     storageMeta = adStorageAdapter.iterator(archiveName);
-                    Assert.assertTrue("iterator is empty.", storageMeta.hasNext() == true);
+                    Assert.assertTrue("iterator has records", storageMeta.hasNext());
                 } catch (Exception unexpected) {
                     log.error("unexpected exception getting iterator", unexpected);
                     Assert.fail("unexpected exception getting iterator: " + unexpected.getMessage());
@@ -188,7 +190,6 @@ public class AdStorageAdapterIteratorTest {
                 // Compare relative ordering of StorageMetadata objects
                 Iterator<StorageMetadata> sortedSetMeta = sortedMeta.iterator();
 
-                int count = 0;
                 while (sortedSetMeta.hasNext()) {
                     StorageMetadata expected = sortedSetMeta.next();
                     StorageMetadata actual = storageMeta.next();
@@ -197,6 +198,8 @@ public class AdStorageAdapterIteratorTest {
                         Assert.fail("ordering not correct.");
                     }
                 }
+                Assert.assertFalse("AdStorageAdapter.iterator now empty", storageMeta.hasNext());
+                
                 return null;
             }
         });
