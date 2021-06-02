@@ -178,7 +178,6 @@ public abstract class ArtifactAction extends RestAction {
         artifactDAO.setConfig(config); // connectivity tested
 
         // set the user for logging
-        user = AuthMethod.ANON.toString();
         AuthMethod authMethod = AuthenticationUtil.getAuthMethod(AuthenticationUtil.getCurrentSubject());
         if (authMethod != null && !authMethod.equals(AuthMethod.ANON)) {
             Set<String> userids = AuthenticationUtil.getUseridsFromSubject();
