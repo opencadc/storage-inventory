@@ -124,7 +124,12 @@ public class ServiceAvailability implements AvailabilityPlugin {
      */
     @Override
     public boolean heartbeat() {
-        return true;
+        String state = getState();
+        if (RestAction.STATE_READ_ONLY.equals(state) || RestAction.STATE_READ_WRITE.equals(state)) {
+            return true;
+        }
+
+        return false;
     }
 
     /**
