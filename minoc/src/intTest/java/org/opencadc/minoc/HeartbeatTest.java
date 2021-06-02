@@ -69,11 +69,8 @@ package org.opencadc.minoc;
 
 import ca.nrc.cadc.auth.AuthMethod;
 import ca.nrc.cadc.auth.RunnableAction;
-import ca.nrc.cadc.net.HttpDelete;
 import ca.nrc.cadc.net.HttpGet;
 import ca.nrc.cadc.net.HttpPost;
-import ca.nrc.cadc.net.HttpTransfer;
-import ca.nrc.cadc.net.HttpUpload;
 import ca.nrc.cadc.reg.Standards;
 import ca.nrc.cadc.reg.XMLConstants;
 import ca.nrc.cadc.reg.client.RegistryClient;
@@ -82,13 +79,7 @@ import ca.nrc.cadc.util.Log4jInit;
 import ca.nrc.cadc.vosi.Availability;
 import ca.nrc.cadc.vosi.VOSI;
 import ca.nrc.cadc.xml.XmlUtil;
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.net.URI;
 import java.net.URL;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.TreeMap;
 import javax.security.auth.Subject;
@@ -108,6 +99,7 @@ public class HeartbeatTest extends MinocTest {
     private static final Logger log = Logger.getLogger(HeartbeatTest.class);
     private static final Map<String, String> AVAIL_SCHEMA_MAP = new TreeMap<>();
     private static final String OFFLINE_STATE = RestAction.STATE_OFFLINE;
+    private static final String READ_ONLY_STATE = RestAction.STATE_READ_ONLY;
     private static final String READ_WRITE_STATE = RestAction.STATE_READ_WRITE;
     
     static {
@@ -128,10 +120,9 @@ public class HeartbeatTest extends MinocTest {
     
     @Test
     public void testHeartbeat() throws Exception {
-        String testMethod = "testSetOffline()";
-        String testState = RestAction.STATE_OFFLINE;
-        String expectedMsg = RestAction.STATE_OFFLINE_MSG;
         int offlineCode = 503;
+        int readOnlyCode = 200;
+        int readWriteCode = 200;
 
         try {
             // set minoc state to 'Offline'
@@ -139,8 +130,20 @@ public class HeartbeatTest extends MinocTest {
             Assert.assertEquals("Failed to set state to " + OFFLINE_STATE, OFFLINE_STATE, getState());
             boolean heartbeat = getHeartbeat(offlineCode);
             Assert.assertEquals("Incorrect heartbeat " + heartbeat, false, heartbeat);
+
+            // set minoc state to 'readOnly'
+            setState(READ_ONLY_STATE);
+            Assert.assertEquals("Failed to set state to " + READ_ONLY_STATE, READ_ONLY_STATE, getState());
+            heartbeat = getHeartbeat(readOnlyCode);
+            Assert.assertEquals("Incorrect heartbeat " + heartbeat, true, heartbeat);
+
+            // set minoc state to 'readWrite'
+            setState(READ_WRITE_STATE);
+            Assert.assertEquals("Failed to set state to " + READ_WRITE_STATE, READ_WRITE_STATE, getState());
+            heartbeat = getHeartbeat(readWriteCode);
+            Assert.assertEquals("Incorrect heartbeat " + heartbeat, true, heartbeat);
         } finally {
-            // restore minoc to its intial state
+            // restore minoc to its readWrite state
             setState(RestAction.STATE_READ_WRITE);
             Assert.assertEquals("Failed to set state to " + RestAction.STATE_READ_WRITE, RestAction.STATE_READ_WRITE, getState());
         }
