@@ -69,7 +69,6 @@
 package org.opencadc.inventory.storage.ad.integration;
 
 import ca.nrc.cadc.io.ByteCountOutputStream;
-import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.util.Log4jInit;
 import java.io.ByteArrayOutputStream;
 import java.io.OutputStream;
@@ -113,30 +112,6 @@ public class AdStorageAdapterGetTest {
             testSubject.get(storageLocation, byteCountOutputStream);
 
             Assert.assertEquals("Wrong checksum.", expectedIrisChecksum,
-                URI.create(String.format("%s:%s", messageDigest.getAlgorithm().toLowerCase(),
-                    new BigInteger(1, messageDigest.digest()).toString(16))));
-
-        } catch (Exception unexpected) {
-            log.error("unexpected exception", unexpected);
-            Assert.fail("Unexpected exception");
-        }
-
-        // GEMINI
-        final URI testGeminiUri = URI.create("gemini:GEM/S20191208S0019.jpg");
-        final URI expectedGeminiChecksum = URI.create("md5:160e3957f7b4b48be1f19a4a9a036179");
-        try {
-            final OutputStream outputStream = new ByteArrayOutputStream();
-            final DigestOutputStream digestOutputStream = new DigestOutputStream(outputStream, MessageDigest
-                .getInstance(AdStorageAdapterGetTest.DIGEST_ALGORITHM));
-            final ByteCountOutputStream byteCountOutputStream = new ByteCountOutputStream(digestOutputStream);
-            final MessageDigest messageDigest = digestOutputStream.getMessageDigest();
-
-            final StorageLocation storageLocation = new StorageLocation(testGeminiUri);
-            storageLocation.storageBucket = "GEM";
-
-            testSubject.get(storageLocation, byteCountOutputStream);
-
-            Assert.assertEquals("Wrong checksum.", expectedGeminiChecksum,
                 URI.create(String.format("%s:%s", messageDigest.getAlgorithm().toLowerCase(),
                     new BigInteger(1, messageDigest.digest()).toString(16))));
 

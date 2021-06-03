@@ -205,7 +205,9 @@ public abstract class ArtifactAction extends RestAction {
             TokenTool tk = new TokenTool(publicKey);
             String tokenUser = tk.validateToken(authToken, artifactURI, grantClass);
             subject.getPrincipals().clear();
-            subject.getPrincipals().add(new HttpPrincipal(tokenUser));
+            if (tokenUser != null) {
+                subject.getPrincipals().add(new HttpPrincipal(tokenUser));
+            }
             logInfo.setSubject(subject);
         } else {
             // augment subject (minoc is configured so augment
