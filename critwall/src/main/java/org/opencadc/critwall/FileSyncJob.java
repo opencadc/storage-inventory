@@ -195,6 +195,7 @@ public class FileSyncJob implements Runnable {
                 return;
             }
             
+            int numAttempts = 0;
             int retryCount = 0;
             try {
                 while (!success && !urlList.isEmpty() && retryCount < RETRY_DELAY.length) {
@@ -207,9 +208,10 @@ public class FileSyncJob implements Runnable {
                     }
                     
                     // attempt to sync file
-                    log.info("FileSyncJob.SYNC " + artifactLabel + " urls=" + urlList.size() + " attempts=" + retryCount);
+                    log.debug("FileSyncJob.SYNC " + artifactLabel + " urls=" + urlList.size() + " attempts=" + retryCount);
                     StorageMetadata storageMeta = syncArtifact(curArtifact, urlList);
-
+                    numAttempts++;
+                    
                     // sync succeeded: update inventory
                     if (storageMeta != null) {
                         ObsoleteStorageLocationDAO locDAO = new ObsoleteStorageLocationDAO(artifactDAO);
@@ -243,12 +245,15 @@ public class FileSyncJob implements Runnable {
                                     }
                                 }
                                 artifactDAO.setStorageLocation(curArtifact, storageMeta.getStorageLocation());
+                                msg = "bytes=" + storageMeta.getContentLength() 
+                                        + " uri=" + artifact.getURI()
+                                        + " download-attempts=" + numAttempts;
                                 success = true;
-                                msg = "uri=" + artifact.getURI();
                             }
 
                             txnMgr.commitTransaction();
                             log.debug("commit txn: OK");
+                            
                             
                             if (obsLoc != null) {
                                 try {
@@ -277,12 +282,12 @@ public class FileSyncJob implements Runnable {
                     }
                     
                     if (!success) {
-                        log.info("FileSyncJob.SLEEP dt=" + RETRY_DELAY[retryCount]);
+                        log.info("FileSyncJob.SLEEP " + artifactID + " dt=" + RETRY_DELAY[retryCount]);
                         Thread.sleep(RETRY_DELAY[retryCount++]);
                     }
                 }
                 if (!success) {
-                    msg = " all URLs tried, retryCount=" + retryCount;
+                    msg = " retryCount=" + retryCount + " download-attempts=" + numAttempts;
                 }
             } catch (IllegalStateException | EntityNotFoundException ex) {
                 log.debug("artifact sync aborted: " + artifactLabel, ex);
@@ -338,7 +343,7 @@ public class FileSyncJob implements Runnable {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         writer.write(transfer, out);
         FileContent content = new FileContent(out.toByteArray(), "text/xml");
-        log.warn("xml file content to be posted: " + transfer);
+        log.debug("transfer request to be posted: " + transfer);
 
         log.debug("artifact path: " + artifact.getPath());
         HttpPost post = new HttpPost(transferURL, content, true);
