@@ -326,13 +326,15 @@ public class InventoryHarvester implements Runnable {
                 if (first) {
                     long dt = System.currentTimeMillis() - t1;
                     log.info("DeletedStorageLocationEvent.QUERY start=" + start + " end=" + end + " dt=" + dt);
-                }
-                if (first
-                        && deletedStorageLocationEvent.getID().equals(harvestState.curID)
-                        && deletedStorageLocationEvent.getLastModified().equals(harvestState.curLastModified)) {
-                    log.debug("SKIP: previously processed: " + deletedStorageLocationEvent.getID());
                     first = false;
-                    continue; // ugh
+                    
+                    if (deletedStorageLocationEvent.getID().equals(harvestState.curID)
+                        && deletedStorageLocationEvent.getLastModified().equals(harvestState.curLastModified)) {
+                        log.debug("SKIP: previously processed: " + deletedStorageLocationEvent.getID());
+                        // ugh but the skip is comprehensible: have to do this inside the loop when using
+                        // try-with-resources
+                        continue;
+                    }
                 }
 
                 Artifact artifact = this.artifactDAO.get(deletedStorageLocationEvent.getID());
@@ -427,13 +429,14 @@ public class InventoryHarvester implements Runnable {
                 if (first) {
                     long dt = System.currentTimeMillis() - t1;
                     log.info("DeletedArtifactEvent.QUERY start=" + start + " end=" + end + " dt=" + dt);
-                }
-                if (first 
-                        && deletedArtifactEvent.getID().equals(harvestState.curID)
-                        && deletedArtifactEvent.getLastModified().equals(harvestState.curLastModified)) {
-                    log.debug("SKIP: previously processed: " + deletedArtifactEvent.getID());
                     first = false;
-                    continue; // ugh
+                    if (deletedArtifactEvent.getID().equals(harvestState.curID)
+                        && deletedArtifactEvent.getLastModified().equals(harvestState.curLastModified)) {
+                        log.debug("SKIP: previously processed: " + deletedArtifactEvent.getID());
+                        // ugh but the skip is comprehensible: have to do this inside the loop when using
+                        // try-with-resources
+                        continue;
+                    }
                 }
                 
                 try {
@@ -514,16 +517,16 @@ public class InventoryHarvester implements Runnable {
                 if (first) {
                     long dt = System.currentTimeMillis() - t1;
                     log.info("Artifact.QUERY start=" + start + " end=" + end + " dt=" + dt);
-                }
-                if (first
-                        && artifact.getID().equals(harvestState.curID)
-                        && artifact.getLastModified().equals(harvestState.curLastModified)) {
-                    log.debug("SKIP: previously processed: " + artifact.getID() + " " + artifact.getURI());
                     first = false;
-                    // ugh but the skip is comprehensible: have to do this inside the loop when using
-                    // try-with-resources
-                    continue;
+                    if (artifact.getID().equals(harvestState.curID)
+                        && artifact.getLastModified().equals(harvestState.curLastModified)) {
+                        log.debug("SKIP: previously processed: " + artifact.getID() + " " + artifact.getURI());
+                        // ugh but the skip is comprehensible: have to do this inside the loop when using
+                        // try-with-resources
+                        continue;
+                    }
                 }
+                
 
                 log.debug("START: Process Artifact " + artifact.getID() + " " + artifact.getURI());
 
