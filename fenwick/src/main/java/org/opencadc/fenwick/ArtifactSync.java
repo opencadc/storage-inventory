@@ -108,8 +108,7 @@ public class ArtifactSync {
     /**
      * Complete constructor.
      *
-     * @param tapClient        The TapClient to interface with a site's TAP (Luskan) service.
-     * @param currLastModified The last modified date to start the query at.  First run this will be null.
+     * @param tapClient        The TapClient to interface with a site's TAP (luskan) service.
      */
     public ArtifactSync(final TapClient<Artifact> tapClient) {
         this.tapClient = tapClient;
