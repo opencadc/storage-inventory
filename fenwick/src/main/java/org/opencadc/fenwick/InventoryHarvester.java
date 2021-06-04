@@ -196,6 +196,7 @@ public class InventoryHarvester implements Runnable {
                 // TODO: dynamic depending on how rapidly the remote content is changing
                 // ... this value and the reprocess-last-N-seconds should be related
                 long dt = 60 * 1000L;
+                log.info("InventoryHarvester.IDLE dt=" + dt);
                 Thread.sleep(dt);
             } catch (PrivilegedActionException privilegedActionException) {
                 final Exception exception = privilegedActionException.getException();
@@ -322,13 +323,15 @@ public class InventoryHarvester implements Runnable {
             while (deletedStorageLocationEventResourceIterator.hasNext()) {
                 final DeletedStorageLocationEvent deletedStorageLocationEvent =
                         deletedStorageLocationEventResourceIterator.next();
+                if (first) {
+                    long dt = System.currentTimeMillis() - t1;
+                    log.info("DeletedStorageLocationEvent.QUERY start=" + start + " end=" + end + " dt=" + dt);
+                }
                 if (first
                         && deletedStorageLocationEvent.getID().equals(harvestState.curID)
                         && deletedStorageLocationEvent.getLastModified().equals(harvestState.curLastModified)) {
                     log.debug("SKIP: previously processed: " + deletedStorageLocationEvent.getID());
                     first = false;
-                    long dt = System.currentTimeMillis() - t1;
-                    log.info("DeletedStorageLocationEvent.QUERY start=" + start + " end=" + end + " dt=" + dt);
                     continue; // ugh
                 }
 
@@ -421,12 +424,14 @@ public class InventoryHarvester implements Runnable {
 
             while (deletedArtifactEventResourceIterator.hasNext()) {
                 final DeletedArtifactEvent deletedArtifactEvent = deletedArtifactEventResourceIterator.next();
+                if (first) {
+                    long dt = System.currentTimeMillis() - t1;
+                    log.info("DeletedArtifactEvent.QUERY start=" + start + " end=" + end + " dt=" + dt);
+                }
                 if (first 
                         && deletedArtifactEvent.getID().equals(harvestState.curID)
                         && deletedArtifactEvent.getLastModified().equals(harvestState.curLastModified)) {
                     log.debug("SKIP: previously processed: " + deletedArtifactEvent.getID());
-                    long dt = System.currentTimeMillis() - t1;
-                    log.info("DeletedArtifactEvent.QUERY start=" + start + " end=" + end + " dt=" + dt);
                     first = false;
                     continue; // ugh
                 }
@@ -506,13 +511,14 @@ public class InventoryHarvester implements Runnable {
         try (final ResourceIterator<Artifact> artifactResourceIterator = artifactSync.iterator()) {
             while (artifactResourceIterator.hasNext()) {
                 final Artifact artifact = artifactResourceIterator.next();
-
+                if (first) {
+                    long dt = System.currentTimeMillis() - t1;
+                    log.info("Artifact.QUERY start=" + start + " end=" + end + " dt=" + dt);
+                }
                 if (first
                         && artifact.getID().equals(harvestState.curID)
                         && artifact.getLastModified().equals(harvestState.curLastModified)) {
                     log.debug("SKIP: previously processed: " + artifact.getID() + " " + artifact.getURI());
-                    long dt = System.currentTimeMillis() - t1;
-                    log.info("Artifact.QUERY start=" + start + " end=" + end);
                     first = false;
                     // ugh but the skip is comprehensible: have to do this inside the loop when using
                     // try-with-resources
