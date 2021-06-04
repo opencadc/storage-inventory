@@ -69,11 +69,12 @@
 package org.opencadc.fenwick;
 
 import ca.nrc.cadc.date.DateUtil;
-import org.junit.Assert;
-import org.junit.Test;
-
+import ca.nrc.cadc.util.Log4jInit;
 import java.util.Calendar;
 import java.util.Date;
+import org.apache.log4j.Level;
+import org.junit.Assert;
+import org.junit.Test;
 
 
 public class ArtifactSyncTest {
@@ -88,6 +89,10 @@ public class ArtifactSyncTest {
                             + "contentEncoding, lastModified, metaChecksum FROM inventory.Artifact "
                             + "ORDER BY lastModified", resultOne);
     }
+    
+    static {
+        Log4jInit.setLevel("org.opencadc.fenwick", Level.INFO);
+    }
 
     @Test
     public void testBuildQueryWithLastModifiedDate() throws Exception {
@@ -96,7 +101,7 @@ public class ArtifactSyncTest {
         calendar.set(Calendar.MILLISECOND, 0);
 
         final ArtifactSync artifactSync = new ArtifactSync(null);
-        artifactSync.startTime = new Date();
+        artifactSync.startTime = calendar.getTime();
         final String resultOne = artifactSync.buildQuery();
 
         Assert.assertEquals("Wrong query.",
@@ -113,7 +118,7 @@ public class ArtifactSyncTest {
         calendar.set(Calendar.MILLISECOND, 0);
 
         final ArtifactSync artifactSync = new ArtifactSync(null);
-        artifactSync.startTime = new Date();
+        artifactSync.startTime = calendar.getTime();
         artifactSync.includeClause = "uri LIKE 'ad:CFHT%'";
 
         final String resultOne = artifactSync.buildQuery();
