@@ -73,13 +73,14 @@ import org.junit.Assert;
 import org.junit.Test;
 
 import java.util.Calendar;
+import java.util.Date;
 
 
 public class ArtifactSyncTest {
 
     @Test
     public void testBuildQueryNoLastModifiedDate() throws Exception {
-        final ArtifactSync artifactSync = new ArtifactSync(null, null);
+        final ArtifactSync artifactSync = new ArtifactSync(null);
         final String resultOne = artifactSync.buildQuery();
 
         Assert.assertEquals("Wrong query.",
@@ -94,7 +95,8 @@ public class ArtifactSyncTest {
         calendar.set(1977, Calendar.NOVEMBER, 25, 3, 12, 0);
         calendar.set(Calendar.MILLISECOND, 0);
 
-        final ArtifactSync artifactSync = new ArtifactSync(null, calendar.getTime());
+        final ArtifactSync artifactSync = new ArtifactSync(null);
+        artifactSync.startTime = new Date();
         final String resultOne = artifactSync.buildQuery();
 
         Assert.assertEquals("Wrong query.",
@@ -110,7 +112,8 @@ public class ArtifactSyncTest {
         calendar.set(1977, Calendar.NOVEMBER, 25, 3, 12, 0);
         calendar.set(Calendar.MILLISECOND, 0);
 
-        final ArtifactSync artifactSync = new ArtifactSync(null, calendar.getTime());
+        final ArtifactSync artifactSync = new ArtifactSync(null);
+        artifactSync.startTime = new Date();
         artifactSync.includeClause = "uri LIKE 'ad:CFHT%'";
 
         final String resultOne = artifactSync.buildQuery();
@@ -125,7 +128,7 @@ public class ArtifactSyncTest {
 
     @Test
     public void testBuildQueryWithNoLastModifiedAndInclude() throws Exception {
-        final ArtifactSync artifactSync = new ArtifactSync(null, null);
+        final ArtifactSync artifactSync = new ArtifactSync(null);
         artifactSync.includeClause = "uri LIKE 'ad:CFHT%' OR uri LIKE 'ad:MEGA%'";
 
         final String resultOne = artifactSync.buildQuery();
