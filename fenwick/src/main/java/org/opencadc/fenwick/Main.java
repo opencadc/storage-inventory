@@ -106,6 +106,8 @@ public class Main {
     private static final String QUERY_SERVICE_CONFIG_KEY = CONFIG_PREFIX + ".queryService";
     private static final String TRACK_SITE_LOCATIONS_CONFIG_KEY = CONFIG_PREFIX + ".trackSiteLocations";
     private static final String ARTIFACT_SELECTOR_CONFIG_KEY = CONFIG_PREFIX + ".artifactSelector";
+    private static final String MAX_RETRY_INTERVAL_CONFIG_KEY = CONFIG_PREFIX + ".maxRetryInterval";
+
 
     // Used to verify configuration items.  See the README for descriptions.
     private static final String[] MANDATORY_PROPERTY_KEYS = {
@@ -117,7 +119,8 @@ public class Main {
         LOGGING_CONFIG_KEY,
         QUERY_SERVICE_CONFIG_KEY,
         SQLGENERATOR_CONFIG_KEY,
-        TRACK_SITE_LOCATIONS_CONFIG_KEY
+        TRACK_SITE_LOCATIONS_CONFIG_KEY,
+        MAX_RETRY_INTERVAL_CONFIG_KEY
     };
 
     private static final Map<String, String> selectorMap;
@@ -187,7 +190,12 @@ public class Main {
             final String configuredTrackSiteLocations = props.getFirstPropertyValue(TRACK_SITE_LOCATIONS_CONFIG_KEY);
             final boolean trackSiteLocations = Boolean.parseBoolean(configuredTrackSiteLocations);
 
-            final InventoryHarvester doit = new InventoryHarvester(daoConfig, resourceID, selector, trackSiteLocations);
+            final String configuredMaxRetryInterval = props.getFirstPropertyValue(MAX_RETRY_INTERVAL_CONFIG_KEY);
+            final int maxRetryInterval = Integer.parseInt(configuredMaxRetryInterval);
+
+
+            final InventoryHarvester doit = new InventoryHarvester(daoConfig, resourceID, selector, trackSiteLocations,
+                                                                   maxRetryInterval);
             doit.run();
         } catch (Throwable unexpected) {
             log.fatal("Unexpected failure", unexpected);

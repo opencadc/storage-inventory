@@ -68,25 +68,29 @@
 package org.opencadc.fenwick;
 
 import ca.nrc.cadc.auth.AuthenticationUtil;
+import ca.nrc.cadc.auth.NotAuthenticatedException;
 import ca.nrc.cadc.auth.SSLUtil;
 import ca.nrc.cadc.date.DateUtil;
 import ca.nrc.cadc.db.DBUtil;
 import ca.nrc.cadc.db.TransactionManager;
+import ca.nrc.cadc.io.ByteLimitExceededException;
 import ca.nrc.cadc.io.ResourceIterator;
+import ca.nrc.cadc.net.ExpectationFailedException;
+import ca.nrc.cadc.net.PreconditionFailedException;
+import ca.nrc.cadc.net.RemoteServiceException;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.reg.Capabilities;
 import ca.nrc.cadc.reg.Capability;
 import ca.nrc.cadc.reg.Standards;
 import ca.nrc.cadc.reg.client.RegistryClient;
-import ca.nrc.cadc.util.UUIDComparator;
 import java.io.File;
 import java.io.IOException;
 import java.net.URI;
+import java.security.AccessControlException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.security.PrivilegedActionException;
-import java.security.PrivilegedExceptionAction;
+import java.security.PrivilegedAction;
 import java.text.DateFormat;
 import java.util.Date;
 import java.util.Map;
@@ -117,6 +121,8 @@ public class InventoryHarvester implements Runnable {
 
     private static final Logger log = Logger.getLogger(InventoryHarvester.class);
     public static final String CERTIFICATE_FILE_LOCATION = System.getProperty("user.home") + "/.ssl/cadcproxy.pem";
+    public static final int INITIAL_SLEEP_TIMEOUT = 20;
+    public static final int DEFAULT_SLEEP_TIMEOUT = 60;
 
     private final ArtifactDAO artifactDAO;
     private final URI resourceID;
@@ -124,6 +130,7 @@ public class InventoryHarvester implements Runnable {
     private final ArtifactSelector selector;
     private final boolean trackSiteLocations;
     private final HarvestStateDAO harvestStateDAO;
+    private final int maxRetryInterval;
     private int errorCount = 0;
 
     /**
@@ -133,9 +140,10 @@ public class InventoryHarvester implements Runnable {
      * @param resourceID         identifier for the remote query service
      * @param selector           selector implementation
      * @param trackSiteLocations Whether to track the remote storage site and add it to the Artifact being processed.
+     * @param maxRetryInterval   max interval in seconds to sleep after an error during processing.
      */
     public InventoryHarvester(Map<String, Object> daoConfig, URI resourceID, ArtifactSelector selector,
-                              boolean trackSiteLocations) {
+                              boolean trackSiteLocations, int maxRetryInterval) {
         InventoryUtil.assertNotNull(InventoryHarvester.class, "daoConfig", daoConfig);
         InventoryUtil.assertNotNull(InventoryHarvester.class, "resourceID", resourceID);
         InventoryUtil.assertNotNull(InventoryHarvester.class, "selector", selector);
@@ -144,6 +152,7 @@ public class InventoryHarvester implements Runnable {
         this.resourceID = resourceID;
         this.selector = selector;
         this.trackSiteLocations = trackSiteLocations;
+        this.maxRetryInterval = maxRetryInterval;
         this.harvestStateDAO = new HarvestStateDAO(artifactDAO);
         
         try {
@@ -185,44 +194,57 @@ public class InventoryHarvester implements Runnable {
      */
     @Override
     public void run() {
+        boolean retry;
+        int retryCount = 1;
+        int sleepSeconds = INITIAL_SLEEP_TIMEOUT;
+
         while (true) {
             try {
                 final Subject subject = SSLUtil.createSubject(new File(CERTIFICATE_FILE_LOCATION));
-                Subject.doAs(subject, (PrivilegedExceptionAction<Void>) () -> {
-                    doit();
-                    return null;
-                });
+                int retries = retryCount;
+                int timeout = sleepSeconds;
 
-                // TODO: dynamic depending on how rapidly the remote content is changing
-                // ... this value and the reprocess-last-N-seconds should be related
-                long dt = 60 * 1000L;
-                log.info("InventoryHarvester.IDLE dt=" + dt);
-                Thread.sleep(dt);
-            } catch (PrivilegedActionException privilegedActionException) {
-                final Exception exception = privilegedActionException.getException();
-                throw new IllegalStateException(exception.getMessage(), exception);
-            } catch (IllegalArgumentException ex) {
-                // Be careful here.  This IllegalArgumentException is being caught to work around a mysterious
-                // case where TCP connections are simply dropped and the incoming stream of data is invalid.
-                // This catch will allow Fenwick to restart its processing.
-                // jenkinsd 2020.09.25
-                final String message = ex.getMessage().trim();
-                if (message.startsWith("wrong number of columns")) {
-                    log.error("\n\n*******\n");
-                    log.error("Caught IllegalArgumentException - " + message + " (" + ++errorCount + ")");
-                    log.error("Ignoring error as presumed to be a dropped connection before fully reading the stream.");
-                    log.error("\n*******\n");
-                } else if (message.startsWith("invalid checksum URI:")) {
-                    log.error("\n\n*******\n");
-                    log.error("Caught IllegalArgumentException - " + message + " (" + ++errorCount + ")");
-                    log.error("Ignoring error as presumed to be a dropped connection before fully reading the stream.");
-                    log.error("CAUTION! - This could actually be a bad MD5 checksum! Logging this to provide an audit.");
-                    log.error("\n*******\n");
-                } else {
-                    throw ex;
+                retry = Subject.doAs(subject, (PrivilegedAction<Boolean>) () -> {
+                    boolean isRetry = true;
+                    try {
+                        doit();
+                        isRetry = false;
+                        // catch exceptions resulting in a retry
+                    } catch (ResourceNotFoundException | PreconditionFailedException | ExpectationFailedException
+                             | RemoteServiceException | TransientException | IOException | NotAuthenticatedException
+                             | AccessControlException | IllegalArgumentException | IllegalStateException
+                             | IndexOutOfBoundsException ex) {
+                        logRetry(retries, timeout, ex.getMessage());
+                    } catch (InterruptedException ex) {
+                        // Thread interrupted, fail.
+                        throw new RuntimeException(ex.getMessage(), ex);
+                    }
+                    return isRetry;
+                });
+            } catch (RuntimeException ex) {
+                logExit(ex.getMessage());
+                throw ex;
+            }
+
+            // TODO: dynamic depending on how rapidly the remote content is changing
+            // ... this value and the reprocess-last-N-seconds should be related
+            if (retry) {
+                retryCount++;
+                sleepSeconds *= 2;
+                if (sleepSeconds > this.maxRetryInterval) {
+                    sleepSeconds = this.maxRetryInterval;
                 }
+            } else {
+                // successful run, reset retry values
+                retryCount = 1;
+                sleepSeconds = INITIAL_SLEEP_TIMEOUT;
+            }
+
+            try {
+                Thread.sleep(sleepSeconds * 1000L);
             } catch (InterruptedException ex) {
-                throw new RuntimeException("interrupted", ex);
+                logExit(ex.getMessage());
+                throw new RuntimeException(ex.getMessage(), ex);
             }
         }
     }
@@ -251,10 +273,9 @@ public class InventoryHarvester implements Runnable {
      * @throws IllegalStateException     For any invalid configuration.
      * @throws TransientException        temporary failure of TAP service: same call could work in future
      * @throws InterruptedException      thread interrupted
-     * @throws NoSuchAlgorithmException  If the MessageDigest for synchronizing Artifacts cannot be used.
      */
     void doit() throws ResourceNotFoundException, IOException, IllegalStateException, TransientException,
-                       InterruptedException, NoSuchAlgorithmException {
+                       InterruptedException {
         final TapClient tapClient = new TapClient<>(this.resourceID);
         final Date end = new Date();
         
@@ -314,7 +335,7 @@ public class InventoryHarvester implements Runnable {
             end = df.format(deletedStorageLocationEventSync.endTime);
         }
         log.info("DeletedStorageLocationEvent.QUERY start=" + start + " end=" + end);
-        
+
         boolean first = true;
         long t1 = System.currentTimeMillis();
         try (final ResourceIterator<DeletedStorageLocationEvent> deletedStorageLocationEventResourceIterator =
@@ -477,14 +498,18 @@ public class InventoryHarvester implements Runnable {
      * @throws ResourceNotFoundException For any missing required configuration that is missing.
      * @throws IOException               For unreadable configuration files.
      * @throws IllegalStateException     For any invalid configuration.
-     * @throws NoSuchAlgorithmException  If the MessageDigest for synchronizing Artifacts cannot be used.
      * @throws TransientException        temporary failure of TAP service: same call could work in future
      * @throws InterruptedException      thread interrupted
      */
     private void syncArtifacts(final TapClient tapClient, final Date endDate, final StorageSite storageSite)
-            throws ResourceNotFoundException, IOException, IllegalStateException, NoSuchAlgorithmException,
-                   InterruptedException, TransientException {
-        final MessageDigest messageDigest = MessageDigest.getInstance("MD5");
+            throws ResourceNotFoundException, IOException, IllegalStateException, InterruptedException,
+                   TransientException {
+        final MessageDigest messageDigest;
+        try {
+            messageDigest = MessageDigest.getInstance("MD5");
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException("BUG: failed to get instance of MD5", e);
+        }
         DateFormat df = DateUtil.getDateFormat(DateUtil.IVOA_DATE_FORMAT, DateUtil.UTC);
 
         SSLUtil.renewSubject(AuthenticationUtil.getCurrentSubject(), new File(CERTIFICATE_FILE_LOCATION));
@@ -564,7 +589,7 @@ public class InventoryHarvester implements Runnable {
                         // check if it was already deleted (sync from stale site)
                         DeletedArtifactEvent ev = daeDAO.get(artifact.getID());
                         if (ev != null) {
-                            log.info("Artifact.SKIP reason=stale " 
+                            log.info("Artifact.SKIP reason=stale "
                                     + artifact.getID() + "|" + artifact.getURI() + "|" + df.format(artifact.getLastModified()));
                             transactionManager.rollbackTransaction();
                             continue;
@@ -574,13 +599,13 @@ public class InventoryHarvester implements Runnable {
                     if (collidingArtifact != null && currentArtifact != null) {
                         // resolve collision using Artifact.contentLastModified
                         if (currentArtifact.getContentLastModified().before(artifact.getContentLastModified())) {
-                            log.info("Artifact.REPLACE reason=uri-collision " 
+                            log.info("Artifact.REPLACE reason=uri-collision "
                                     + currentArtifact.getID() + "|" + currentArtifact.getURI() + "|" + df.format(currentArtifact.getContentLastModified())
                                     + " with " + artifact.getID() + "|" + artifact.getURI() + "|" + df.format(artifact.getContentLastModified()));
                             daeDAO.put(new DeletedArtifactEvent(currentArtifact.getID()));
                             artifactDAO.delete(currentArtifact.getID());
                         } else {
-                            log.info("Artifact.SKIP reason=uri-collision " 
+                            log.info("Artifact.SKIP reason=uri-collision "
                                     + artifact.getID() + " " + artifact.getURI() + " " + df.format(artifact.getLastModified()));
                             transactionManager.rollbackTransaction();
                             continue;
@@ -631,5 +656,13 @@ public class InventoryHarvester implements Runnable {
                 }
             }
         }
+    }
+
+    private void logRetry(int retries, int timeout, String message) {
+        log.error(String.format("retry[%s] timeout %ss - reason: %s", retries, timeout, message));
+    }
+
+    private void logExit(String message) {
+        log.error(String.format("Exiting, reason - %s", message));
     }
 }
