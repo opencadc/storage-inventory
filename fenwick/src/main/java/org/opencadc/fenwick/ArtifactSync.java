@@ -98,21 +98,20 @@ public class ArtifactSync {
     private static final Logger LOGGER = Logger.getLogger(ArtifactSync.class);
 
     private final TapClient<Artifact> tapClient;
-    private final Date currLastModified;
+    
 
     // Mutable field to use in the query.  Will be AND'd to the query but isolated in parentheses.
     public String includeClause;
+    public Date startTime;
     public Date endTime;
 
     /**
      * Complete constructor.
      *
-     * @param tapClient        The TapClient to interface with a site's TAP (Luskan) service.
-     * @param currLastModified The last modified date to start the query at.  First run this will be null.
+     * @param tapClient        The TapClient to interface with a site's TAP (luskan) service.
      */
-    public ArtifactSync(final TapClient<Artifact> tapClient, final Date currLastModified) {
+    public ArtifactSync(final TapClient<Artifact> tapClient) {
         this.tapClient = tapClient;
-        this.currLastModified = currLastModified;
     }
 
     /**
@@ -143,9 +142,9 @@ public class ArtifactSync {
         query.append("SELECT id, uri, contentChecksum, contentLastModified, contentLength, contentType, ")
                    .append("contentEncoding, lastModified, metaChecksum FROM inventory.Artifact");
 
-        if (this.currLastModified != null) {
-            LOGGER.debug("\nInjecting lastModified date compare '" + this.currLastModified + "'\n");
-            query.append(" WHERE lastModified >= '").append(getDateFormat().format(this.currLastModified)).append("'");
+        if (this.startTime != null) {
+            LOGGER.debug("\nInjecting lastModified date compare '" + this.startTime + "'\n");
+            query.append(" WHERE lastModified >= '").append(getDateFormat().format(this.startTime)).append("'");
 
             if (this.endTime != null) {
                 query.append(" AND ").append("lastModified < '").append(
