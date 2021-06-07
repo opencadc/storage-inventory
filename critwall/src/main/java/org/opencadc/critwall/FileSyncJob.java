@@ -347,6 +347,8 @@ public class FileSyncJob implements Runnable {
 
         log.debug("artifact path: " + artifact.getPath());
         HttpPost post = new HttpPost(transferURL, content, true);
+        post.setConnectionTimeout(6000); // ms
+        post.setReadTimeout(60000);      // ms
         post.prepare();
         log.debug("post prepare done");
 
@@ -383,6 +385,8 @@ public class FileSyncJob implements Runnable {
             try {
                 ByteArrayOutputStream dest = new ByteArrayOutputStream();
                 HttpGet get = new HttpGet(u, dest);
+                get.setConnectionTimeout(6000); // ms
+                get.setReadTimeout(60000);      // ms
                 get.prepare();
                 postPrepare = true;
                 
