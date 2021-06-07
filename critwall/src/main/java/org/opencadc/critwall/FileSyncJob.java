@@ -444,7 +444,9 @@ public class FileSyncJob implements Runnable {
     private class SyncArtifact implements PrivilegedExceptionAction<HttpGet> {
         private URL endpoint;
         
-        SyncArtifact(URL u) {
+        // Hack: throw the exceptions so that Java compiler won't complain when the caller 
+        //       tries to catch these exceptions.
+        SyncArtifact(URL u) throws ResourceNotFoundException, ResourceAlreadyExistsException {
             this.endpoint = u;
         }
         @Override
