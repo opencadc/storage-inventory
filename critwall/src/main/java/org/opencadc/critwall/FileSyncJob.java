@@ -3,7 +3,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2020.                            (c) 2020.
+ *  (c) 2021.                            (c) 2021.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -127,7 +127,9 @@ public class FileSyncJob implements Runnable {
     private final UUID artifactID;
     private final URI locatorService;
     private final StorageAdapter storageAdapter;
-    private final Subject subject;
+    private final Subject sharedSubject;
+    private Subject anonSubject = AuthenticationUtil.getAnonSubject();
+    private Subject localSubject;
     
     /**
      * Construct a job to sync the specified artifact.
@@ -149,7 +151,7 @@ public class FileSyncJob implements Runnable {
         this.storageAdapter = storageAdapter;
 
         this.artifactDAO = artifactDAO;
-        this.subject = subject;
+        this.sharedSubject = subject;
     }
 
     // approach here is conservative: if the input artifact changed|deleted in the database, 
@@ -167,6 +169,9 @@ public class FileSyncJob implements Runnable {
         
         
         try {
+            // decouple local use of subject from the shared subject
+            this.localSubject = copy(sharedSubject);
+
             // get current artifact to sync
             final Artifact artifact = artifactDAO.get(artifactID);
             if (artifact == null || artifact.storageLocation != null) {
@@ -179,7 +184,7 @@ public class FileSyncJob implements Runnable {
             List<Protocol> urlList;
             
             try {
-                urlList = getDownloadURLs(this.locatorService, artifact.getURI());
+                urlList = Subject.doAs(localSubject, new TransferNegotiation(locatorService, artifact.getURI()));
                 if (urlList.isEmpty()) {
                     msg = " locator returned 0 URLs";
                     return;
@@ -300,22 +305,19 @@ public class FileSyncJob implements Runnable {
         }
     }
 
-    // Use transfer negotiation at resource URI to get list of download URLs for the artifact.
-    private List<Protocol> getDownloadURLs(URI resource, URI artifact)
-        throws IOException, InterruptedException,
-        ResourceAlreadyExistsException, ResourceNotFoundException,
-        TransientException, TransferParsingException, PrivilegedActionException {
-        Subject currentSubject = new Subject();
+    // Make a local copy of the shared subject
+    private Subject copy(Subject subject) {
+        Subject copy = new Subject();
 
         // Also synchronized in FileSync.run()
-        synchronized (subject) {
-            currentSubject.getPrincipals().addAll(subject.getPrincipals());
-            currentSubject.getPublicCredentials().addAll(subject.getPublicCredentials());
+        synchronized (sharedSubject) {
+            copy.getPrincipals().addAll(sharedSubject.getPrincipals());
+            copy.getPublicCredentials().addAll(sharedSubject.getPublicCredentials());
         }
-
-        return Subject.doAs(currentSubject, new TransferNegotiation(resource, artifact));
+        
+        return copy;
     }
-
+    
     private class TransferNegotiation implements PrivilegedExceptionAction<List<Protocol>> {
         private URI resource;
         private URI artifact;
@@ -372,76 +374,45 @@ public class FileSyncJob implements Runnable {
     private StorageMetadata syncArtifact(Artifact a, List<Protocol> protocols)
         throws ByteLimitExceededException, StorageEngageException, InterruptedException, 
             WriteException, IllegalArgumentException, PrivilegedActionException, MalformedURLException {
-        URI anonSM = Standards.getSecurityMethod(AuthMethod.ANON);
+        StorageMetadata storageMeta = null;
         Iterator<Protocol> urlIterator = protocols.iterator();
         while (urlIterator.hasNext()) {
             Protocol p = urlIterator.next();
             URL u = new URL(p.getEndpoint());
             log.debug("trying " + u);
-            Subject subj = subject;
-            if (p.getSecurityMethod().equals(anonSM)) {
-                subj = AuthenticationUtil.getAnonSubject();
+            Subject subj = localSubject;
+            if (p.getSecurityMethod() == null || p.getSecurityMethod().equals(Standards.getSecurityMethod(AuthMethod.ANON))) {
+                subj = anonSubject;
             }
 
-            try {
-                return Subject.doAs(subj, new SyncArtifact(u, a));
-            } catch (RuntimeException ex) {
-                if (ex.getMessage().contains("next endpoint")) {
-                    if (ex.getMessage().contains("remove iterator item")) {
-                        urlIterator.remove();
-                    }
-                } else {
-                    throw ex;
-                }
-            }
-        }
-        
-        return null;
-    }
-        
-    private class SyncArtifact implements PrivilegedExceptionAction<StorageMetadata> {
-        private URL endpoint;
-        private Artifact artifact;
-        
-        SyncArtifact(URL u, Artifact a) {
-            this.endpoint = u;
-            this.artifact = a;
-        }
-        
-        @Override
-        public StorageMetadata run() throws ByteLimitExceededException, StorageEngageException, 
-            InterruptedException, WriteException, IllegalArgumentException, TransientException,
-            IOException {
             boolean postPrepare = false;
             try {
-                ByteArrayOutputStream dest = new ByteArrayOutputStream();
-                HttpGet get = new HttpGet(endpoint, dest);
-                get.prepare();
+                HttpGet get = Subject.doAs(subj, new SyncArtifact(u));
                 postPrepare = true;
-
                 // Note: the storage adapter 'put' below does checksum and content length
                 // checks, but only after downloading the entire file.
                 // Making the checks here is more efficient.
                 String getContentMD5 = get.getContentMD5();
                 if (getContentMD5 != null
-                    && !getContentMD5.equals(artifact.getContentChecksum().getSchemeSpecificPart())) {
-                    throw new PreconditionFailedException("contentChecksum mismatch: " + artifact.getURI());
+                    && !getContentMD5.equals(a.getContentChecksum().getSchemeSpecificPart())) {
+                    throw new PreconditionFailedException("contentChecksum mismatch: " + a.getURI());
                 }
-    
+
                 long getContentLen = get.getContentLength();
                 if (getContentLen != -1
-                    && getContentLen != artifact.getContentLength()) {
-                    throw new PreconditionFailedException("contentLength mismatch: " + artifact.getURI()
-                        + " artifact: " + artifact.getContentLength() + " header: " + getContentLen);
+                    && getContentLen != a.getContentLength()) {
+                    throw new PreconditionFailedException("contentLength mismatch: " + a.getURI()
+                        + " artifact: " + a.getContentLength() + " header: " + getContentLen);
                 }
-    
-                NewArtifact na = new NewArtifact(artifact.getURI());
-                na.contentChecksum = artifact.getContentChecksum();
-                na.contentLength = artifact.getContentLength();
-    
-                StorageMetadata storageMeta = storageAdapter.put(na, get.getInputStream());
+
+                NewArtifact na = new NewArtifact(a.getURI());
+                na.contentChecksum = a.getContentChecksum();
+                na.contentLength = a.getContentLength();
+
+                storageMeta = this.storageAdapter.put(na, get.getInputStream());
                 log.debug("storage meta returned: " + storageMeta.getStorageLocation());
                 return storageMeta;
+
             } catch (ByteLimitExceededException | WriteException ex) {
                 // IOException will capture this if not explicitly caught and rethrown
                 log.error("FileSyncJob.FAIL fatal: " + ex);
@@ -451,21 +422,40 @@ public class FileSyncJob implements Runnable {
                 // - prepare or put throwing this error
                 // - will move to next url
                 log.error("FileSyncJob.FAIL transient: " + ex);
-                throw new RuntimeException("next endpoint");
             } catch (ResourceNotFoundException | ResourceAlreadyExistsException | PreconditionFailedException ex) {
-                log.error("FileSyncJob.FAIL for endpoint " + endpoint + " reason: " + ex);
-                throw new RuntimeException("next endpoint, remove iterator item");
+                log.error("FileSyncJob.FAIL remove " + u + " reason: " + ex);
+                urlIterator.remove();
             } catch (RuntimeException ex) {
                 if (!postPrepare) {
                     // remote server 5xx response: discard
-                    log.error("FileSyncJob.FAIL for endpoint " + endpoint + " reason: " + ex);
-                    throw new RuntimeException("next endpoint, remove iterator item");
+                    log.error("FileSyncJob.FAIL remove " + u + " reason: " + ex);
+                    urlIterator.remove();
                 } else {
                     // StorageAdapter internal fail: abort
                     log.error("FileSyncJob.FAIL fatal: " + ex);
                     throw ex;
                 }
             }
+        }
+        
+        return null;
+    }
+        
+    private class SyncArtifact implements PrivilegedExceptionAction<HttpGet> {
+        private URL endpoint;
+        
+        SyncArtifact(URL u) {
+            this.endpoint = u;
+        }
+        @Override
+        public HttpGet run() throws AccessControlException, NotAuthenticatedException,
+            ByteLimitExceededException, ExpectationFailedException, IllegalArgumentException, 
+            PreconditionFailedException, ResourceAlreadyExistsException, ResourceNotFoundException,
+            TransientException, IOException, InterruptedException {
+            ByteArrayOutputStream dest = new ByteArrayOutputStream();
+            HttpGet get = new HttpGet(endpoint, dest);
+            get.prepare();
+            return get;
         }
     }
 }
