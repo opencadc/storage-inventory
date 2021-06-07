@@ -449,6 +449,7 @@ public class FileSyncJob implements Runnable {
         SyncArtifact(URL u) throws ResourceNotFoundException, ResourceAlreadyExistsException {
             this.endpoint = u;
         }
+
         @Override
         public HttpGet run() throws AccessControlException, NotAuthenticatedException,
             ByteLimitExceededException, ExpectationFailedException, IllegalArgumentException, 
