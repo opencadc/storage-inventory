@@ -108,7 +108,7 @@ public class InventoryHarvesterTest {
         Log4jInit.setLevel("org.opencadc.inventory", Level.INFO);
         Log4jInit.setLevel("org.opencadc.inventory.db", Level.INFO);
         Log4jInit.setLevel("ca.nrc.cadc.db", Level.INFO);
-        Log4jInit.setLevel("org.opencadc.fenwick", Level.DEBUG);
+        Log4jInit.setLevel("org.opencadc.fenwick", Level.INFO);
     }
 
     private final InventoryEnvironment inventoryEnvironment = new InventoryEnvironment();
@@ -131,7 +131,7 @@ public class InventoryHarvesterTest {
     public void testMissingStorageSiteSync() throws Exception {
         final InventoryHarvester testSubject = new InventoryHarvester(inventoryEnvironment.daoConfig,
                                                                       TestUtil.LUSKAN_URI, new AllArtifacts(),
-                                                                      true);
+                                                                      true, 999);
         try {
             Subject.doAs(this.testUser, (PrivilegedExceptionAction<Object>) () -> {
                 testSubject.doit();
@@ -240,7 +240,7 @@ public class InventoryHarvesterTest {
         
         // Run it.
 
-        final InventoryHarvester testSubject = new InventoryHarvester(inventoryEnvironment.daoConfig, TestUtil.LUSKAN_URI, new AllArtifacts(), track);
+        final InventoryHarvester testSubject = new InventoryHarvester(inventoryEnvironment.daoConfig, TestUtil.LUSKAN_URI, new AllArtifacts(), track, 999);
         Subject.doAs(this.testUser, (PrivilegedExceptionAction<Object>) () -> {
             testSubject.doit();
             return null;
@@ -409,7 +409,7 @@ public class InventoryHarvesterTest {
 
         final InventoryHarvester testSubject = new InventoryHarvester(inventoryEnvironment.daoConfig,
                                                                       TestUtil.LUSKAN_URI, new IncludeArtifacts(),
-                                                                      false);
+                                                                      false, 999);
         Subject.doAs(this.testUser, (PrivilegedExceptionAction<Object>) () -> {
             testSubject.doit();
             return null;
@@ -448,7 +448,7 @@ public class InventoryHarvesterTest {
         inventoryEnvironment.artifactDAO.put(artifactCollision2);
         Thread.sleep(20L);
         
-        final InventoryHarvester testSubject = new InventoryHarvester(inventoryEnvironment.daoConfig, TestUtil.LUSKAN_URI, new AllArtifacts(), true);
+        final InventoryHarvester testSubject = new InventoryHarvester(inventoryEnvironment.daoConfig, TestUtil.LUSKAN_URI, new AllArtifacts(), true, 999);
         Subject.doAs(this.testUser, (PrivilegedExceptionAction<Object>) () -> {
             testSubject.doit();
             return null;
