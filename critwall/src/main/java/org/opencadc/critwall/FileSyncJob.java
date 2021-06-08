@@ -210,7 +210,7 @@ public class FileSyncJob implements Runnable {
                     }
                     
                     // attempt to sync file
-                    log.info("FileSyncJob.SYNC " + artifactLabel + " urls=" + urlList.size() + " attempts=" + retryCount);
+                    log.debug("FileSyncJob.SYNC " + artifactLabel + " urls=" + urlList.size() + " attempts=" + retryCount);
                     StorageMetadata storageMeta = syncArtifact(curArtifact, urlList);
                     
                     // sync succeeded: update inventory
@@ -283,9 +283,6 @@ public class FileSyncJob implements Runnable {
                         log.info("FileSyncJob.SLEEP dt=" + RETRY_DELAY[retryCount]);
                         Thread.sleep(RETRY_DELAY[retryCount++]);
                     }
-                }
-                if (!success) {
-                    msg = " all URLs tried, retryCount=" + retryCount;
                 }
             } catch (IllegalStateException | EntityNotFoundException ex) {
                 log.debug("artifact sync aborted: " + artifactLabel, ex);
