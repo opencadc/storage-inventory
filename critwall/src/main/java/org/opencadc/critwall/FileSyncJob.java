@@ -371,15 +371,14 @@ public class FileSyncJob implements Runnable {
             try {
                 ByteArrayOutputStream dest = new ByteArrayOutputStream();
                 HttpGet get = new HttpGet(u, dest);
+                get.setConnectionTimeout(6000); // ms
+                get.setReadTimeout(60000);      // ms
                 if (p.getSecurityMethod() == null || p.getSecurityMethod().equals(Standards.getSecurityMethod(AuthMethod.ANON))) {
-                    get = Subject.doAs(anonSubject, new NestedAction(u));
+                    get = Subject.doAs(anonSubject, new NestedAction(get));
                 } else {
                     get.prepare();
                 }
                 
-                get.setConnectionTimeout(6000); // ms
-                get.setReadTimeout(60000);      // ms
-                get.prepare();
                 postPrepare = true;
                 
                 // Note: the storage adapter 'put' below does checksum and content length
@@ -435,20 +434,18 @@ public class FileSyncJob implements Runnable {
     }
 
     private class NestedAction implements PrivilegedExceptionAction<HttpGet> {
-        private URL endpoint;
+        private HttpGet get;
 
         // Hack: throw the exceptions so that Java compiler won't complain when the caller
         //       tries to catch these exceptions.
-        NestedAction(URL u) {
-            this.endpoint = u;
+        NestedAction(HttpGet g) {
+            this.get = g;
         }
 
         @Override
         public HttpGet run() throws ByteLimitExceededException, IllegalArgumentException,
             PreconditionFailedException, ResourceAlreadyExistsException, ResourceNotFoundException,
             TransientException, IOException, InterruptedException {
-            ByteArrayOutputStream dest = new ByteArrayOutputStream();
-            HttpGet get = new HttpGet(endpoint, dest);
             get.prepare();
             return get;
         }
