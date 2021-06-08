@@ -345,6 +345,8 @@ public class FileSyncJob implements Runnable {
 
         log.debug("artifact path: " + artifact.getPath());
         HttpPost post = new HttpPost(transferURL, content, true);
+        post.setConnectionTimeout(6000); // ms
+        post.setReadTimeout(60000);      // ms
         post.prepare();
         log.debug("post prepare done");
 
@@ -375,6 +377,9 @@ public class FileSyncJob implements Runnable {
                     get.prepare();
                 }
                 
+                get.setConnectionTimeout(6000); // ms
+                get.setReadTimeout(60000);      // ms
+                get.prepare();
                 postPrepare = true;
                 
                 // Note: the storage adapter 'put' below does checksum and content length
