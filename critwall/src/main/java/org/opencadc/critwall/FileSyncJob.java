@@ -69,12 +69,10 @@ package org.opencadc.critwall;
 
 import ca.nrc.cadc.auth.AuthMethod;
 import ca.nrc.cadc.auth.AuthenticationUtil;
-import ca.nrc.cadc.auth.NotAuthenticatedException;
 import ca.nrc.cadc.auth.RunnableAction;
 import ca.nrc.cadc.db.TransactionManager;
 import ca.nrc.cadc.io.ByteLimitExceededException;
 import ca.nrc.cadc.io.WriteException;
-import ca.nrc.cadc.net.ExpectationFailedException;
 import ca.nrc.cadc.net.FileContent;
 import ca.nrc.cadc.net.HttpGet;
 import ca.nrc.cadc.net.HttpPost;
@@ -96,8 +94,6 @@ import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URL;
-import java.security.AccessControlException;
-import java.security.PrivilegedAction;
 import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
@@ -127,9 +123,8 @@ public class FileSyncJob implements Runnable {
     private final UUID artifactID;
     private final URI locatorService;
     private final StorageAdapter storageAdapter;
-    private final Subject sharedSubject;
+    private final Subject subject;
     private Subject anonSubject = AuthenticationUtil.getAnonSubject();
-    private Subject localSubject;
     
     /**
      * Construct a job to sync the specified artifact.
@@ -151,7 +146,19 @@ public class FileSyncJob implements Runnable {
         this.storageAdapter = storageAdapter;
 
         this.artifactDAO = artifactDAO;
-        this.sharedSubject = subject;
+        this.subject = subject;
+    }
+
+    @Override
+    public void run() {
+        Subject currentSubject = new Subject();
+
+        // Also synchronized in FileSync.run()
+        synchronized (subject) {
+            currentSubject.getPrincipals().addAll(subject.getPrincipals());
+            currentSubject.getPublicCredentials().addAll(subject.getPublicCredentials());
+        }
+        Subject.doAs(currentSubject, new RunnableAction(this::doSync));
     }
 
     // approach here is conservative: if the input artifact changed|deleted in the database, 
@@ -159,8 +166,7 @@ public class FileSyncJob implements Runnable {
     // in cases where the artifact changed, it will be picked up again and syn'ed later
     // - note: we only have to worry about changes in Artifact.uri because it may be made mutable in future
     //         Artifact.contentChecksum and Artifact.contentLength are immutable      
-    @Override
-    public void run() {
+    private void doSync() {
         
         log.info("FileSyncJob.START " + artifactID);
         long start = System.currentTimeMillis();
@@ -169,9 +175,6 @@ public class FileSyncJob implements Runnable {
         
         
         try {
-            // decouple local use of subject from the shared subject
-            this.localSubject = copy(sharedSubject);
-
             // get current artifact to sync
             final Artifact artifact = artifactDAO.get(artifactID);
             if (artifact == null || artifact.storageLocation != null) {
@@ -184,7 +187,7 @@ public class FileSyncJob implements Runnable {
             List<Protocol> urlList;
             
             try {
-                urlList = Subject.doAs(localSubject, new TransferNegotiation(locatorService, artifact.getURI()));
+                urlList = getDownloadURLs(this.locatorService, artifact.getURI());
                 if (urlList.isEmpty()) {
                     msg = " locator returned 0 URLs";
                     return;
@@ -209,7 +212,7 @@ public class FileSyncJob implements Runnable {
                     // attempt to sync file
                     log.info("FileSyncJob.SYNC " + artifactLabel + " urls=" + urlList.size() + " attempts=" + retryCount);
                     StorageMetadata storageMeta = syncArtifact(curArtifact, urlList);
-
+                    
                     // sync succeeded: update inventory
                     if (storageMeta != null) {
                         ObsoleteStorageLocationDAO locDAO = new ObsoleteStorageLocationDAO(artifactDAO);
@@ -305,90 +308,75 @@ public class FileSyncJob implements Runnable {
         }
     }
 
-    // Make a local copy of the shared subject
-    private Subject copy(Subject subject) {
-        Subject copy = new Subject();
+    // Use transfer negotiation at resource URI to get list of download URLs for the artifact.
+    private List<Protocol> getDownloadURLs(URI resource, URI artifact)
+        throws IOException, InterruptedException,
+        ResourceAlreadyExistsException, ResourceNotFoundException,
+        TransientException, TransferParsingException {
 
-        // Also synchronized in FileSync.run()
-        synchronized (sharedSubject) {
-            copy.getPrincipals().addAll(sharedSubject.getPrincipals());
-            copy.getPublicCredentials().addAll(sharedSubject.getPublicCredentials());
+        RegistryClient regClient = new RegistryClient();
+        Subject subject = AuthenticationUtil.getCurrentSubject();
+        AuthMethod am = AuthenticationUtil.getAuthMethodFromCredentials(subject);
+        log.debug("resource id: " + resource);
+        URL transferURL = regClient.getServiceURL(resource, Standards.SI_LOCATE, am);
+        if (transferURL == null) {
+            transferURL = regClient.getServiceURL(resource, Standards.VOSPACE_SYNC_21, am);
         }
-        
-        return copy;
-    }
-    
-    private class TransferNegotiation implements PrivilegedExceptionAction<List<Protocol>> {
-        private URI resource;
-        private URI artifact;
-        
-        TransferNegotiation(URI resource, URI artifact) {
-            this.resource = resource;
-            this.artifact = artifact;
+        log.debug("certURL: " + transferURL);
+
+        // request all protocols that can be used
+        List<Protocol> protocolList = new ArrayList<>();
+        protocolList.add(new Protocol(VOS.PROTOCOL_HTTPS_GET));
+        protocolList.add(new Protocol(VOS.PROTOCOL_HTTP_GET));
+        if (!AuthMethod.ANON.equals(am)) {
+            Protocol httpsAuth = new Protocol(VOS.PROTOCOL_HTTPS_GET);
+            httpsAuth.setSecurityMethod(Standards.getSecurityMethod(am));
+            protocolList.add(httpsAuth);
         }
-        
-        @Override
-        public List<Protocol> run() throws IOException, InterruptedException,
-            ResourceAlreadyExistsException, ResourceNotFoundException,
-            TransientException, TransferParsingException { 
-            RegistryClient regClient = new RegistryClient();
-            Subject subject = AuthenticationUtil.getCurrentSubject();
-            AuthMethod am = AuthenticationUtil.getAuthMethodFromCredentials(subject);
-            log.debug("resource id: " + resource);
-            URL transferURL = regClient.getServiceURL(resource, Standards.SI_LOCATE, am);
-            if (transferURL == null) {
-                transferURL = regClient.getServiceURL(resource, Standards.VOSPACE_SYNC_21, am);
-            }
-            log.debug("certURL: " + transferURL);
-    
-            // request all protocols that can be used
-            List<Protocol> protocolList = new ArrayList<>();
-            protocolList.add(new Protocol(VOS.PROTOCOL_HTTPS_GET));
-            protocolList.add(new Protocol(VOS.PROTOCOL_HTTP_GET));
-            if (!AuthMethod.ANON.equals(am)) {
-                Protocol httpsAuth = new Protocol(VOS.PROTOCOL_HTTPS_GET);
-                httpsAuth.setSecurityMethod(Standards.getSecurityMethod(am));
-                protocolList.add(httpsAuth);
-            }
-    
-            Transfer transfer = new Transfer(artifact, Direction.pullFromVoSpace, protocolList);
-            transfer.version = VOS.VOSPACE_21;
-    
-            TransferWriter writer = new TransferWriter();
-            ByteArrayOutputStream out = new ByteArrayOutputStream();
-            writer.write(transfer, out);
-            FileContent content = new FileContent(out.toByteArray(), "text/xml");
-            log.warn("xml file content to be posted: " + transfer);
-    
-            log.debug("artifact path: " + artifact.getPath());
-            HttpPost post = new HttpPost(transferURL, content, true);
-            post.prepare();
-            log.debug("post prepare done");
-    
-            TransferReader reader = new TransferReader();
-            Transfer t = reader.read(post.getInputStream(), null);
-            return t.getProtocols();
-        }
+
+        Transfer transfer = new Transfer(artifact, Direction.pullFromVoSpace, protocolList);
+        transfer.version = VOS.VOSPACE_21;
+
+        TransferWriter writer = new TransferWriter();
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        writer.write(transfer, out);
+        FileContent content = new FileContent(out.toByteArray(), "text/xml");
+        log.debug("transfer request to be posted: " + transfer);
+
+        log.debug("artifact path: " + artifact.getPath());
+        HttpPost post = new HttpPost(transferURL, content, true);
+        post.prepare();
+        log.debug("post prepare done");
+
+        TransferReader reader = new TransferReader();
+        Transfer t = reader.read(post.getInputStream(), null);
+        return t.getProtocols();
     }
 
-    private StorageMetadata syncArtifact(Artifact a, List<Protocol> protocols)
+    private StorageMetadata syncArtifact(Artifact a, List<Protocol> urls)
         throws ByteLimitExceededException, StorageEngageException, InterruptedException, 
-            WriteException, IllegalArgumentException, PrivilegedActionException, MalformedURLException {
+        WriteException, IllegalArgumentException, MalformedURLException, PrivilegedActionException {
+
         StorageMetadata storageMeta = null;
-        Iterator<Protocol> urlIterator = protocols.iterator();
+        Iterator<Protocol> urlIterator = urls.iterator();
+
         while (urlIterator.hasNext()) {
             Protocol p = urlIterator.next();
             URL u = new URL(p.getEndpoint());
             log.debug("trying " + u);
-            Subject subj = localSubject;
-            if (p.getSecurityMethod() == null || p.getSecurityMethod().equals(Standards.getSecurityMethod(AuthMethod.ANON))) {
-                subj = anonSubject;
-            }
 
             boolean postPrepare = false;
             try {
-                HttpGet get = Subject.doAs(subj, new SyncArtifact(u));
+                ByteArrayOutputStream dest = new ByteArrayOutputStream();
+                HttpGet get = new HttpGet(u, dest);
+                if (p.getSecurityMethod() == null || p.getSecurityMethod().equals(Standards.getSecurityMethod(AuthMethod.ANON))) {
+                    get = Subject.doAs(anonSubject, new NestedAction(u));
+                } else {
+                    get.prepare();
+                }
+                
                 postPrepare = true;
+                
                 // Note: the storage adapter 'put' below does checksum and content length
                 // checks, but only after downloading the entire file.
                 // Making the checks here is more efficient.
@@ -440,19 +428,18 @@ public class FileSyncJob implements Runnable {
         
         return null;
     }
-        
-    private class SyncArtifact implements PrivilegedExceptionAction<HttpGet> {
+
+    private class NestedAction implements PrivilegedExceptionAction<HttpGet> {
         private URL endpoint;
-        
-        // Hack: throw the exceptions so that Java compiler won't complain when the caller 
+
+        // Hack: throw the exceptions so that Java compiler won't complain when the caller
         //       tries to catch these exceptions.
-        SyncArtifact(URL u) throws ResourceNotFoundException, ResourceAlreadyExistsException {
+        NestedAction(URL u) {
             this.endpoint = u;
         }
 
         @Override
-        public HttpGet run() throws AccessControlException, NotAuthenticatedException,
-            ByteLimitExceededException, ExpectationFailedException, IllegalArgumentException, 
+        public HttpGet run() throws ByteLimitExceededException, IllegalArgumentException,
             PreconditionFailedException, ResourceAlreadyExistsException, ResourceNotFoundException,
             TransientException, IOException, InterruptedException {
             ByteArrayOutputStream dest = new ByteArrayOutputStream();
@@ -461,4 +448,5 @@ public class FileSyncJob implements Runnable {
             return get;
         }
     }
+
 }
