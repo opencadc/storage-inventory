@@ -29,7 +29,7 @@ org.opencadc.fenwick.queryService={resourceID of remote TAP service with invento
 org.opencadc.fenwick.artifactSelector={all|filter}
 
 # time in seconds to retry processing after encountering an error.
-org.opencadc.fenwick.maxRetryInterval={max retry timout in seconds}
+org.opencadc.fenwick.maxRetryInterval={max sleep before retry}
 
 ```
 The `inventory` account owns and manages (create, alter, drop) inventory database objects and manages
