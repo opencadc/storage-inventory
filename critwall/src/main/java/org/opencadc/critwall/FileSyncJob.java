@@ -371,7 +371,10 @@ public class FileSyncJob implements Runnable {
                 get.setConnectionTimeout(6000); // ms
                 get.setReadTimeout(60000);      // ms
                 if (p.getSecurityMethod() == null || p.getSecurityMethod().equals(Standards.getSecurityMethod(AuthMethod.ANON))) {
-                    get = Subject.doAs(anonSubject, new NestedAction(get));
+                    Subject.doAs(anonSubject, (PrivilegedExceptionAction<Void>) () -> {
+                        get.prepare();
+                        return null;
+                    });
                 } else {
                     get.prepare();
                 }
@@ -429,23 +432,4 @@ public class FileSyncJob implements Runnable {
         
         return null;
     }
-
-    private class NestedAction implements PrivilegedExceptionAction<HttpGet> {
-        private HttpGet get;
-
-        // Hack: throw the exceptions so that Java compiler won't complain when the caller
-        //       tries to catch these exceptions.
-        NestedAction(HttpGet g) {
-            this.get = g;
-        }
-
-        @Override
-        public HttpGet run() throws ByteLimitExceededException, IllegalArgumentException,
-            PreconditionFailedException, ResourceAlreadyExistsException, ResourceNotFoundException,
-            TransientException, IOException, InterruptedException {
-            get.prepare();
-            return get;
-        }
-    }
-
 }
