@@ -113,6 +113,8 @@ public class GetAction extends ArtifactAction {
         
         checkReadable();
         initAndAuthorize(ReadGrant.class);
+        initDAO();
+        initStorageAdapter();
         
         Artifact artifact = getArtifact(artifactURI);
 
@@ -120,7 +122,9 @@ public class GetAction extends ArtifactAction {
 
         StorageLocation storageLocation = new StorageLocation(artifact.storageLocation.getStorageID());
         storageLocation.storageBucket = artifact.storageLocation.storageBucket;
-        log.debug("retrieving artifact from storage...");
+        
+        log.debug("retrieving artifact from storage: " + storageLocation);
+        
         ByteCountOutputStream bcos = null;
         try {
             
