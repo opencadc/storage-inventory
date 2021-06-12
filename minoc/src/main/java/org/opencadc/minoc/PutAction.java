@@ -136,7 +136,9 @@ public class PutAction extends ArtifactAction {
         
         checkWritable();
         initAndAuthorize(WriteGrant.class);
-
+        initDAO();
+        initStorageAdapter();
+        
         URI digest = syncInput.getDigest();
         String lengthHeader = syncInput.getHeader("Content-Length");
         String encodingHeader = syncInput.getHeader("Content-Encoding");

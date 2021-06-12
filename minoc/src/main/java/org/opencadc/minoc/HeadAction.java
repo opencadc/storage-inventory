@@ -98,6 +98,7 @@ public class HeadAction extends ArtifactAction {
         
         checkReadable();
         initAndAuthorize(ReadGrant.class);
+        initDAO();
         
         Artifact artifact = getArtifact(artifactURI);
         setHeaders(artifact, syncOutput);

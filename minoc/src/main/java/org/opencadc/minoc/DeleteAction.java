@@ -102,6 +102,8 @@ public class DeleteAction extends ArtifactAction {
         
         checkWritable();
         initAndAuthorize(WriteGrant.class);
+        initDAO();
+        initStorageAdapter();
         
         Artifact existing = artifactDAO.get(artifactURI);
         if (existing == null) {

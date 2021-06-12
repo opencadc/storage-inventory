@@ -362,7 +362,6 @@ public class FileSyncJob implements Runnable {
         while (urlIterator.hasNext()) {
             Protocol p = urlIterator.next();
             URL u = new URL(p.getEndpoint());
-            log.debug("trying " + u);
 
             boolean postPrepare = false;
             try {
@@ -371,11 +370,13 @@ public class FileSyncJob implements Runnable {
                 get.setConnectionTimeout(6000); // ms
                 get.setReadTimeout(60000);      // ms
                 if (p.getSecurityMethod() == null || p.getSecurityMethod().equals(Standards.getSecurityMethod(AuthMethod.ANON))) {
+                    log.debug("download: " + u + " as " + anonSubject);
                     Subject.doAs(anonSubject, (PrivilegedExceptionAction<Void>) () -> {
                         get.prepare();
                         return null;
                     });
                 } else {
+                    log.debug("download: " + u + " as " + AuthenticationUtil.getCurrentSubject());
                     get.prepare();
                 }
                 

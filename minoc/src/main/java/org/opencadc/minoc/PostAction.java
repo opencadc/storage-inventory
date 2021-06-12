@@ -98,6 +98,7 @@ public class PostAction extends ArtifactAction {
         
         checkWritable();
         initAndAuthorize(WriteGrant.class);
+        initDAO();
         
         String newURI = syncInput.getParameter("uri");
         String newContentType = syncInput.getParameter("contentType");
@@ -107,7 +108,6 @@ public class PostAction extends ArtifactAction {
         log.debug("new contentEncoding: " + newContentEncoding);
         
         final Profiler profiler = new Profiler(PostAction.class);
-        
         Artifact existing = getArtifact(artifactURI);
         profiler.checkpoint("artifactDAO.get.ok");
         
