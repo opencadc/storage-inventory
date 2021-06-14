@@ -408,24 +408,24 @@ public class FileSyncJob implements Runnable {
 
             } catch (ByteLimitExceededException | WriteException ex) {
                 // IOException will capture this if not explicitly caught and rethrown
-                log.error("FileSyncJob.FAIL fatal: " + ex);
+                log.debug("FileSyncJob.FAIL fatal=" + ex);
                 throw ex;
             } catch (IOException | TransientException ex) {
                 // includes ReadException
                 // - prepare or put throwing this error
                 // - will move to next url
-                log.error("FileSyncJob.FAIL transient: " + ex);
+                log.debug("FileSyncJob.FAIL keep: " + u + " reason: " + ex);
             } catch (ResourceNotFoundException | ResourceAlreadyExistsException | PreconditionFailedException ex) {
-                log.error("FileSyncJob.FAIL remove " + u + " reason: " + ex);
+                log.debug("FileSyncJob.FAIL remove: " + u + " reason: " + ex);
                 urlIterator.remove();
             } catch (RuntimeException ex) {
                 if (!postPrepare) {
                     // remote server 5xx response: discard
-                    log.error("FileSyncJob.FAIL remove " + u + " reason: " + ex);
+                    log.debug("FileSyncJob.FAIL remove " + u + " reason: " + ex);
                     urlIterator.remove();
                 } else {
                     // StorageAdapter internal fail: abort
-                    log.error("FileSyncJob.FAIL fatal: " + ex);
+                    log.debug("FileSyncJob.FAIL fatal: " + ex);
                     throw ex;
                 }
             }
