@@ -88,6 +88,7 @@ import javax.sql.DataSource;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Entity;
 import org.opencadc.inventory.InventoryUtil;
+import org.springframework.jdbc.BadSqlGrammarException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 
@@ -127,6 +128,19 @@ public abstract class AbstractDAO<T extends Entity> {
         } catch (NoSuchAlgorithmException ex) {
             throw new RuntimeException("FATAL: no MD5 digest algorithm available", ex);
         }
+    }
+    
+    // try to unwrap spring jdbc exception consistently and throw a RuntimeException with
+    // a decent message
+    protected void handleInternalFail(BadSqlGrammarException ex) throws RuntimeException {
+        Throwable cause = ex.getCause();
+        if (cause != null) {
+            if (cause.getMessage().contains("permission")) {
+                throw new RuntimeException("CONFIG: " + cause.getMessage(), cause);
+            }
+            throw new RuntimeException("BUG: " + cause.getMessage(), cause);
+        }
+        throw new RuntimeException("BUG: " + ex.getMessage(), ex);
     }
     
     /**
@@ -244,10 +258,13 @@ public abstract class AbstractDAO<T extends Entity> {
             get.setID(id);
             T e = (T) get.execute(jdbc);
             return e;
+        } catch (BadSqlGrammarException ex) {
+            handleInternalFail(ex);
         } finally {
             long dt = System.currentTimeMillis() - t;
             log.debug("GET: " + id + " " + dt + "ms");
         }
+        throw new RuntimeException("BUG: should be unreachable");
     }
     
     /**
@@ -269,6 +286,8 @@ public abstract class AbstractDAO<T extends Entity> {
             EntityLock lock = gen.getEntityLock(val.getClass());
             lock.setID(val.getID());
             lock.execute(jdbc);
+        } catch (BadSqlGrammarException ex) {
+            handleInternalFail(ex);
         } finally {
             long dt = System.currentTimeMillis() - t;
             log.debug("PUT: " + val.getID() + " " + dt + "ms");
@@ -302,6 +321,8 @@ public abstract class AbstractDAO<T extends Entity> {
             } else {
                 log.debug("no change: " + cur);
             }
+        } catch (BadSqlGrammarException ex) {
+            handleInternalFail(ex);
         } finally {
             long dt = System.currentTimeMillis() - t;
             log.debug("PUT: " + val.getID() + " " + dt + "ms");
@@ -321,6 +342,8 @@ public abstract class AbstractDAO<T extends Entity> {
             EntityDelete del = gen.getEntityDelete(entityClass);
             del.setID(id);
             del.execute(jdbc);
+        } catch (BadSqlGrammarException ex) {
+            handleInternalFail(ex);
         } finally {
             long dt = System.currentTimeMillis() - t;
             log.debug("DELETE: " + id + " " + dt + "ms");

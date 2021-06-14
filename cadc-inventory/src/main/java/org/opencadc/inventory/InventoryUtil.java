@@ -148,12 +148,16 @@ public abstract class InventoryUtil {
         try {
             Class<?> c = Class.forName(cname);
             return (T) c.getDeclaredConstructor().newInstance();
-        } catch (InvocationTargetException ex) {
-            throw new IllegalStateException("CONFIG: " + cnameProp + " implementation crashed during creation.", ex);
         } catch (ClassNotFoundException ex) {
             throw new IllegalStateException("CONFIG: " + cnameProp + " implementation not found in classpath: " + cname, ex);
         } catch (InstantiationException | NoSuchMethodException ex) {
             throw new IllegalStateException("CONFIG: " + cnameProp + " implementation " + cname + " does not have a no-arg constructor", ex);
+        } catch (InvocationTargetException ex) {
+            Throwable cause = ex.getCause();
+            if (cause != null) { // it has to be, but just to be safe
+                throw new IllegalStateException("CONFIG: " + cnameProp + " init failed: " + cause.getMessage(), cause);
+            }
+            throw new IllegalStateException("CONFIG: " + cnameProp + " init failed: " + ex.getMessage(), ex);
         } catch (IllegalAccessException ex) {
             throw new IllegalStateException("CONFIG: failed to instantiate " + cname, ex);
         }
@@ -186,16 +190,19 @@ public abstract class InventoryUtil {
                     return (T) constructor.newInstance(constructorArgs);
                 }
             }
-
             throw new IllegalStateException("No matching constructor found.");
-        } catch (InvocationTargetException ex) {
-            throw new IllegalStateException("CONFIG: " + implementationClassName + " implementation crashed during creation.", ex);
         } catch (ClassNotFoundException ex) {
             throw new IllegalStateException("CONFIG: " + implementationClassName + " implementation not found in classpath: " + implementationClassName,
                                             ex);
         } catch (InstantiationException ex) {
             throw new IllegalStateException(
                     "CONFIG: " + implementationClassName + " implementation " + implementationClassName + " does not have a matching constructor", ex);
+        } catch (InvocationTargetException ex) {
+            Throwable cause = ex.getCause();
+            if (cause != null) { // it has to be, but just to be safe
+                throw new IllegalStateException("CONFIG: " + implementationClassName + " init failed: " + cause.getMessage(), cause);
+            }
+            throw new IllegalStateException("CONFIG: " + implementationClassName + " init failed: " + ex.getMessage(), ex);
         } catch (IllegalAccessException ex) {
             throw new IllegalStateException("CONFIG: failed to instantiate " + implementationClassName, ex);
         }

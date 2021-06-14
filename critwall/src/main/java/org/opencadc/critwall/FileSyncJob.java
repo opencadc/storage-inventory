@@ -3,7 +3,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2020.                            (c) 2020.
+ *  (c) 2021.                            (c) 2021.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -94,6 +94,8 @@ import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URL;
+import java.security.PrivilegedActionException;
+import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -122,6 +124,7 @@ public class FileSyncJob implements Runnable {
     private final URI locatorService;
     private final StorageAdapter storageAdapter;
     private final Subject subject;
+    private Subject anonSubject = AuthenticationUtil.getAnonSubject();
     
     /**
      * Construct a job to sync the specified artifact.
@@ -181,7 +184,7 @@ public class FileSyncJob implements Runnable {
             // from here on we care about URI change since that's the only potentially mutable metadata 
             // that could get persisted in the back end
             String artifactLabel = artifact.getID().toString() + "|" + artifact.getURI().toASCIIString();
-            List<URL> urlList;
+            List<Protocol> urlList;
             
             try {
                 urlList = getDownloadURLs(this.locatorService, artifact.getURI());
@@ -207,9 +210,9 @@ public class FileSyncJob implements Runnable {
                     }
                     
                     // attempt to sync file
-                    log.info("FileSyncJob.SYNC " + artifactLabel + " urls=" + urlList.size() + " attempts=" + retryCount);
+                    log.debug("FileSyncJob.SYNC " + artifactLabel + " urls=" + urlList.size() + " attempts=" + retryCount);
                     StorageMetadata storageMeta = syncArtifact(curArtifact, urlList);
-
+                    
                     // sync succeeded: update inventory
                     if (storageMeta != null) {
                         ObsoleteStorageLocationDAO locDAO = new ObsoleteStorageLocationDAO(artifactDAO);
@@ -281,9 +284,6 @@ public class FileSyncJob implements Runnable {
                         Thread.sleep(RETRY_DELAY[retryCount++]);
                     }
                 }
-                if (!success) {
-                    msg = " all URLs tried, retryCount=" + retryCount;
-                }
             } catch (IllegalStateException | EntityNotFoundException ex) {
                 log.debug("artifact sync aborted: " + artifactLabel, ex);
                 msg = " artifact sync aborted: " + artifactLabel + " (" + ex + ")";
@@ -306,7 +306,7 @@ public class FileSyncJob implements Runnable {
     }
 
     // Use transfer negotiation at resource URI to get list of download URLs for the artifact.
-    private List<URL> getDownloadURLs(URI resource, URI artifact)
+    private List<Protocol> getDownloadURLs(URI resource, URI artifact)
         throws IOException, InterruptedException,
         ResourceAlreadyExistsException, ResourceNotFoundException,
         TransientException, TransferParsingException {
@@ -338,47 +338,48 @@ public class FileSyncJob implements Runnable {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         writer.write(transfer, out);
         FileContent content = new FileContent(out.toByteArray(), "text/xml");
-        log.warn("xml file content to be posted: " + transfer);
+        log.debug("transfer request to be posted: " + transfer);
 
         log.debug("artifact path: " + artifact.getPath());
         HttpPost post = new HttpPost(transferURL, content, true);
+        post.setConnectionTimeout(6000); // ms
+        post.setReadTimeout(60000);      // ms
         post.prepare();
         log.debug("post prepare done");
 
         TransferReader reader = new TransferReader();
         Transfer t = reader.read(post.getInputStream(), null);
-        List<String> urlStrList = t.getAllEndpoints();
-        log.debug("endpoints returned: " + urlStrList);
-
-        List<URL> urlList = new ArrayList<>();
-
-        // Create URL list to return
-        for (final String s : urlStrList) {
-            try {
-                urlList.add(new URL(s));
-            } catch (MalformedURLException mue) {
-                log.info("malformed URL returned from transfer negotiation: " + s + " skipping... ");
-            }
-        }
-
-        return urlList;
+        return t.getProtocols();
     }
 
-    private StorageMetadata syncArtifact(Artifact a, List<URL> urls)
-        throws ByteLimitExceededException, StorageEngageException, InterruptedException, WriteException, IllegalArgumentException {
+    private StorageMetadata syncArtifact(Artifact a, List<Protocol> urls)
+        throws ByteLimitExceededException, StorageEngageException, InterruptedException, 
+        WriteException, IllegalArgumentException, MalformedURLException, PrivilegedActionException {
 
         StorageMetadata storageMeta = null;
-        Iterator<URL> urlIterator = urls.iterator();
+        Iterator<Protocol> urlIterator = urls.iterator();
 
         while (urlIterator.hasNext()) {
-            URL u = urlIterator.next();
-            log.debug("trying " + u);
+            Protocol p = urlIterator.next();
+            URL u = new URL(p.getEndpoint());
 
             boolean postPrepare = false;
             try {
                 ByteArrayOutputStream dest = new ByteArrayOutputStream();
                 HttpGet get = new HttpGet(u, dest);
-                get.prepare();
+                get.setConnectionTimeout(6000); // ms
+                get.setReadTimeout(60000);      // ms
+                if (p.getSecurityMethod() == null || p.getSecurityMethod().equals(Standards.getSecurityMethod(AuthMethod.ANON))) {
+                    log.debug("download: " + u + " as " + anonSubject);
+                    Subject.doAs(anonSubject, (PrivilegedExceptionAction<Void>) () -> {
+                        get.prepare();
+                        return null;
+                    });
+                } else {
+                    log.debug("download: " + u + " as " + AuthenticationUtil.getCurrentSubject());
+                    get.prepare();
+                }
+                
                 postPrepare = true;
                 
                 // Note: the storage adapter 'put' below does checksum and content length
@@ -407,24 +408,24 @@ public class FileSyncJob implements Runnable {
 
             } catch (ByteLimitExceededException | WriteException ex) {
                 // IOException will capture this if not explicitly caught and rethrown
-                log.error("FileSyncJob.FAIL fatal: " + ex);
+                log.debug("FileSyncJob.FAIL fatal=" + ex);
                 throw ex;
             } catch (IOException | TransientException ex) {
                 // includes ReadException
                 // - prepare or put throwing this error
                 // - will move to next url
-                log.error("FileSyncJob.FAIL transient: " + ex);
+                log.debug("FileSyncJob.FAIL keep: " + u + " reason: " + ex);
             } catch (ResourceNotFoundException | ResourceAlreadyExistsException | PreconditionFailedException ex) {
-                log.error("FileSyncJob.FAIL remove " + u + " reason: " + ex);
+                log.debug("FileSyncJob.FAIL remove: " + u + " reason: " + ex);
                 urlIterator.remove();
             } catch (RuntimeException ex) {
                 if (!postPrepare) {
                     // remote server 5xx response: discard
-                    log.error("FileSyncJob.FAIL remove " + u + " reason: " + ex);
+                    log.debug("FileSyncJob.FAIL remove " + u + " reason: " + ex);
                     urlIterator.remove();
                 } else {
                     // StorageAdapter internal fail: abort
-                    log.error("FileSyncJob.FAIL fatal: " + ex);
+                    log.debug("FileSyncJob.FAIL fatal: " + ex);
                     throw ex;
                 }
             }
@@ -432,5 +433,4 @@ public class FileSyncJob implements Runnable {
         
         return null;
     }
-
 }

@@ -301,16 +301,16 @@ public class SwiftStorageAdapter  implements StorageAdapter {
         // base-name bucket to store transient content and config attributes
         Container c = client.getContainer(storageBucket);
         if (!c.exists()) {
-            log.warn("creating: " + c.getName());
+            log.debug("creating: " + c.getName());
             c.create();
-            log.warn("created: " + c.getName());
+            log.debug("created: " + c.getName());
         }
         
         // check vs config
         Map<String,Object> curmeta = c.getMetadata();
-        log.warn("metadata items: " + curmeta.size());
+        log.debug("metadata items: " + curmeta.size());
         for (Map.Entry<String,Object> me : curmeta.entrySet()) {
-            log.warn(me.getKey() + " = " + me.getValue());
+            log.debug(me.getKey() + " = " + me.getValue());
         }
         
         String version = (String) curmeta.get(VERSION_ATTR);
@@ -324,13 +324,13 @@ public class SwiftStorageAdapter  implements StorageAdapter {
                     + " -- incompatible with config: " + storageBucket + "/" + storageBucketLength + "/" + multiBucket + "]");
             }
             // previous init OK
-            log.warn("init looks OK: " + storageBucket + "/" + storageBucketLength + "/" + multiBucket);
+            log.debug("init looks OK: " + storageBucket + "/" + storageBucketLength + "/" + multiBucket);
             return;
         }
 
         if (multiBucket) {
             BucketNameGenerator gen = new BucketNameGenerator(storageBucket, storageBucketLength);
-            log.warn("config: " + gen.getCount() + " buckets");
+            log.info("config: " + gen.getCount() + " buckets");
             Iterator<String> iter = gen.iterator();
             while (iter.hasNext()) {
                 String bucketName = iter.next();
@@ -354,7 +354,7 @@ public class SwiftStorageAdapter  implements StorageAdapter {
         meta.put(BUCKETLENGTH_ATTR, Integer.toString(storageBucketLength));
         meta.put(MULTIBUCKET_ATTR, Boolean.toString(multiBucket));
         c.setMetadata(meta);
-        log.info("init complete: " + storageBucket + "/" + storageBucketLength + "/" + multiBucket);
+        log.info("bucket init complete: " + storageBucket + "/" + storageBucketLength + "/" + multiBucket);
     }
     
     static class InternalBucket {

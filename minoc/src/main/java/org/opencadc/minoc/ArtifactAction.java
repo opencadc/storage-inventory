@@ -116,28 +116,33 @@ public abstract class ArtifactAction extends RestAction {
     String authToken;
     
     // immutable state set in constructor
-    protected final ArtifactDAO artifactDAO;
-    protected final StorageAdapter storageAdapter;
+    protected final MultiValuedProperties config;
     protected final File publicKey;
     protected final List<URI> readGrantServices = new ArrayList<>();
     protected final List<URI> writeGrantServices = new ArrayList<>();
+    
+    // laxy init
+    protected ArtifactDAO artifactDAO;
+    protected StorageAdapter storageAdapter;
     
     private final boolean authenticateOnly;
 
     // constructor for unit tests with no config/init
     ArtifactAction(boolean init) {
         super();
+        this.config = null;
         this.artifactDAO = null;
         this.storageAdapter = null;
         this.authenticateOnly = false;
         this.publicKey = null;
+        
     }
 
     protected ArtifactAction() {
         super();
-        MultiValuedProperties props = MinocInitAction.getConfig();
+        this.config = MinocInitAction.getConfig();
 
-        List<String> readGrants = props.getProperty(MinocInitAction.READ_GRANTS_KEY);
+        List<String> readGrants = config.getProperty(MinocInitAction.READ_GRANTS_KEY);
         if (readGrants != null) {
             for (String s : readGrants) {
                 try {
@@ -149,7 +154,7 @@ public abstract class ArtifactAction extends RestAction {
             }
         }
 
-        List<String> writeGrants = props.getProperty(MinocInitAction.WRITE_GRANTS_KEY);
+        List<String> writeGrants = config.getProperty(MinocInitAction.WRITE_GRANTS_KEY);
         if (writeGrants != null) {
             for (String s : writeGrants) {
                 try {
@@ -161,7 +166,7 @@ public abstract class ArtifactAction extends RestAction {
             }
         }
         
-        String ao = props.getFirstPropertyValue(MinocInitAction.DEV_AUTH_ONLY_KEY);
+        String ao = config.getFirstPropertyValue(MinocInitAction.DEV_AUTH_ONLY_KEY);
         if (ao != null) {
             try {
                 this.authenticateOnly = Boolean.valueOf(ao);
@@ -174,13 +179,9 @@ public abstract class ArtifactAction extends RestAction {
         }
         
         
-        Map<String, Object> config = MinocInitAction.getDaoConfig(props);
-        this.artifactDAO = new ArtifactDAO();
-        artifactDAO.setConfig(config); // connectivity tested
-
-        this.storageAdapter = InventoryUtil.loadPlugin(props.getFirstPropertyValue(MinocInitAction.SA_KEY));
         
-        String pubkeyFileName = props.getFirstPropertyValue(MinocInitAction.PUBKEYFILE_KEY);
+        
+        String pubkeyFileName = config.getFirstPropertyValue(MinocInitAction.PUBKEYFILE_KEY);
         this.publicKey = new File(System.getProperty("user.home") + "/config/" + pubkeyFileName);
     }
 
@@ -205,7 +206,9 @@ public abstract class ArtifactAction extends RestAction {
             TokenTool tk = new TokenTool(publicKey);
             String tokenUser = tk.validateToken(authToken, artifactURI, grantClass);
             subject.getPrincipals().clear();
-            subject.getPrincipals().add(new HttpPrincipal(tokenUser));
+            if (tokenUser != null) {
+                subject.getPrincipals().add(new HttpPrincipal(tokenUser));
+            }
             logInfo.setSubject(subject);
         } else {
             // augment subject (minoc is configured so augment
@@ -225,6 +228,20 @@ public abstract class ArtifactAction extends RestAction {
     
     void init() {
         parsePath();
+    }
+    
+    protected void initDAO() {
+        if (artifactDAO == null) {
+            Map<String, Object> configMap = MinocInitAction.getDaoConfig(config);
+            this.artifactDAO = new ArtifactDAO();
+            artifactDAO.setConfig(configMap); // connectivity tested
+        }
+    }
+    
+    protected void initStorageAdapter() {
+        if (storageAdapter == null) {
+            this.storageAdapter = InventoryUtil.loadPlugin(config.getFirstPropertyValue(MinocInitAction.SA_KEY));
+        }
     }
 
     /**
@@ -288,27 +305,6 @@ public abstract class ArtifactAction extends RestAction {
             String message = "illegal artifact URI: " + uri;
             log.debug(message, e);
             throw new IllegalArgumentException(message);
-        }
-    }
-
-    static StorageAdapter getStorageAdapter(MultiValuedProperties config) {
-        // lazy init
-        String adapterKey = StorageAdapter.class.getName();
-        List<String> adapterList = config.getProperty(adapterKey);
-        String adapterClass = null;
-        if (adapterList != null && adapterList.size() > 0) {
-            adapterClass = adapterList.get(0);
-        } else {
-            throw new IllegalStateException("no storage adapter specified in minoc.properties");
-        }
-        try {
-            Class c = Class.forName(adapterClass);
-            Object o = c.newInstance();
-            StorageAdapter sa = (StorageAdapter) o;
-            log.debug("StorageAdapter: " + sa);
-            return sa;
-        } catch (Throwable t) {
-            throw new IllegalStateException("failed to load storage adapter: " + adapterClass, t);
         }
     }
 

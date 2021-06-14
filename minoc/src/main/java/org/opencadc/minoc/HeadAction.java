@@ -98,6 +98,7 @@ public class HeadAction extends ArtifactAction {
         
         checkReadable();
         initAndAuthorize(ReadGrant.class);
+        initDAO();
         
         Artifact artifact = getArtifact(artifactURI);
         setHeaders(artifact, syncOutput);
@@ -110,6 +111,7 @@ public class HeadAction extends ArtifactAction {
      */
     public static void setHeaders(Artifact artifact, SyncOutput syncOutput) {
         syncOutput.setDigest(artifact.getContentChecksum());
+        syncOutput.setLastModified(artifact.getContentLastModified());
         syncOutput.setHeader("Content-Length", artifact.getContentLength());
         String filename = InventoryUtil.computeArtifactFilename(artifact.getURI());
         syncOutput.setHeader("Content-Disposition", "attachment; filename=\"" + filename + "\"");
