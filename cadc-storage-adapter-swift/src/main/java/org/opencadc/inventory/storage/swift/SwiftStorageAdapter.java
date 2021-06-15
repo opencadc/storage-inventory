@@ -282,9 +282,14 @@ public class SwiftStorageAdapter  implements StorageAdapter {
         }
         
         try {
+            log.debug("creating client...");
             this.client = new AccountFactory(ac).createAccount();
+            log.debug("creating client... OK");
+            client.setAllowContainerCaching(true);
+            client.setAllowReauthenticate(true);
             checkConnectivity();
             init();
+            
         } catch (InvalidConfigException | StorageEngageException ex) {
             throw ex;
         } catch (RuntimeException ex) {
@@ -293,18 +298,21 @@ public class SwiftStorageAdapter  implements StorageAdapter {
     }
 
     private void checkConnectivity() {
-        // check connectivity
+        log.debug("check connectivity...");
         client.getServerTime();
+        log.debug("check connectivity... OK");
     }
     
     private void init() throws InvalidConfigException, StorageEngageException {
         // base-name bucket to store transient content and config attributes
+        log.debug("get base storageBucket...");
         Container c = client.getContainer(storageBucket);
         if (!c.exists()) {
             log.debug("creating: " + c.getName());
             c.create();
             log.debug("created: " + c.getName());
         }
+        log.debug("get base storageBucket... OK");
         
         // check vs config
         Map<String,Object> curmeta = c.getMetadata();
