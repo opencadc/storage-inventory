@@ -282,13 +282,25 @@ public class SwiftStorageAdapter  implements StorageAdapter {
         }
         
         try {
-            log.debug("creating client...");
+            long t1;
+            
+            log.info("creating client...");
+            t1 = System.currentTimeMillis();
             this.client = new AccountFactory(ac).createAccount();
-            log.debug("creating client... OK");
             client.setAllowContainerCaching(true);
             client.setAllowReauthenticate(true);
-            checkConnectivity();
-            init();
+            final long authTime = System.currentTimeMillis() - t1;
+            log.info("creating client: " + authTime);
+            
+            // base-name bucket to store transient content and config attributes
+            log.info("get base storageBucket...");
+            t1 = System.currentTimeMillis();
+            Container c = client.getContainer(storageBucket);
+            final long bucketTime = System.currentTimeMillis() - t1;
+            log.info("get base storageBucket: " + bucketTime);
+            
+            log.info("SwiftStorageAdapter.INIT authTime=" + authTime + " bucketTime=" + bucketTime);
+            init(c);
             
         } catch (InvalidConfigException | StorageEngageException ex) {
             throw ex;
@@ -297,22 +309,15 @@ public class SwiftStorageAdapter  implements StorageAdapter {
         }
     }
 
-    private void checkConnectivity() {
-        log.debug("check connectivity...");
-        client.getServerTime();
-        log.debug("check connectivity... OK");
-    }
     
-    private void init() throws InvalidConfigException, StorageEngageException {
-        // base-name bucket to store transient content and config attributes
-        log.debug("get base storageBucket...");
-        Container c = client.getContainer(storageBucket);
+    private void init(Container c) throws InvalidConfigException, StorageEngageException {
+        
         if (!c.exists()) {
             log.debug("creating: " + c.getName());
             c.create();
             log.debug("created: " + c.getName());
         }
-        log.debug("get base storageBucket... OK");
+        
         
         // check vs config
         Map<String,Object> curmeta = c.getMetadata();
