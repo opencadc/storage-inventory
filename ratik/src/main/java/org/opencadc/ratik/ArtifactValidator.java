@@ -536,7 +536,13 @@ public class ArtifactValidator {
                     log.debug("starting transaction");
                     this.transactionManager.startTransaction();
                     log.debug("start txn: OK");
-
+                    //Probably the final thing here:
+                    // the put(remote) has do more than just make the state equal to the remote state.
+                    // If this is a global db, it has to "merge" remote changes in without losing any siteLocations
+                    // and if it is a storage site it has to update metadata without losing the storageLocation.
+                    //
+                    //See lines 615-634 in fenwick InventoryHarvester:
+                    // since the scenario here is mismatched checksums you are doing more or less the else part of that.
                     this.artifactDAO.lock(local);
                     Artifact current = this.artifactDAO.get(local.getID());
                     if (!current.getMetaChecksum().equals(remote.getMetaChecksum())) {
@@ -544,6 +550,14 @@ public class ArtifactValidator {
                             log.info(String.format("resolve Artifact.metaChecksum mismatch: put remote %s %s "
                                                        + "reason: remote lastModified newer than local",
                                                    remote.getID(), remote.getURI()));
+                            if (this.remoteSite == null) {
+                                // storage site: keep StorageLocation
+                                remote.storageLocation = local.storageLocation;
+                            } else {
+                                // global site: merge SiteLocation(s)
+                                remote.siteLocations.add(new SiteLocation(this.remoteSite.getID()));
+                                remote.siteLocations.addAll(local.siteLocations);
+                            }
                             this.artifactDAO.put(remote);
                         } else {
                             // same as explanation2 below

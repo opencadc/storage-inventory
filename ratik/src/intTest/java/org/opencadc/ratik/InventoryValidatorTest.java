@@ -806,16 +806,22 @@ public class InventoryValidatorTest {
     }
 
     public void artifactChecksumMismatch_Explanation1(boolean trackSiteLocations) throws Exception {
+        UUID remoteSiteID = this.remoteEnvironment.storageSiteDAO.list().iterator().next().getID();
+        UUID randomSiteID = UUID.randomUUID();
+
         UUID artifactID = UUID.randomUUID();
         URI artifactURI = URI.create("cadc:INTTEST/one.ext");
 
-        Artifact artifact = new Artifact(artifactID, artifactURI, TestUtil.getRandomMD5(),
-                                              new Date(), 1024L);
+        Artifact artifact = new Artifact(artifactID, artifactURI, TestUtil.getRandomMD5(), new Date(), 1024L);
+        if (trackSiteLocations) {
+            artifact.siteLocations.add(new SiteLocation(remoteSiteID));
+            artifact.siteLocations.add(new SiteLocation(randomSiteID));
+        }
         this.localEnvironment.artifactDAO.put(artifact);
-        Thread.sleep(50);   // increase entity lastModified delta
-        this.remoteEnvironment.artifactDAO.put(artifact);
 
+        Thread.sleep(50);   // increase entity lastModified delta
         artifact.contentType = "image/fits";
+        artifact.siteLocations.clear();
         this.remoteEnvironment.artifactDAO.put(artifact);
 
         try {
@@ -832,6 +838,15 @@ public class InventoryValidatorTest {
         Assert.assertNotNull("local artifact not found", localArtifact);
         Assert.assertEquals("local artifact is right and remote is wrong so discrepancy not be fixed",
                             artifact.getMetaChecksum(), localArtifact.getMetaChecksum());
+        if (trackSiteLocations) {
+            Assert.assertTrue("artifact does not contains remote site location",
+                              localArtifact.siteLocations.contains(new SiteLocation(remoteSiteID)));
+            Assert.assertTrue("artifact does not contains remote random site location",
+                              localArtifact.siteLocations.contains(new SiteLocation(randomSiteID)));
+        } else {
+            Assert.assertEquals("artifact does not contain the StorageLocation",
+                                localArtifact.storageLocation, artifact.storageLocation);
+        }
     }
 
     @Test
