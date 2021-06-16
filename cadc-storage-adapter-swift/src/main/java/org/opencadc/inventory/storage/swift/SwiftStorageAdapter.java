@@ -282,9 +282,26 @@ public class SwiftStorageAdapter  implements StorageAdapter {
         }
         
         try {
+            long t1;
+            
+            log.debug("creating client/authenticate...");
+            t1 = System.currentTimeMillis();
             this.client = new AccountFactory(ac).createAccount();
-            checkConnectivity();
-            init();
+            client.setAllowContainerCaching(true);
+            client.setAllowReauthenticate(true);
+            final long authTime = System.currentTimeMillis() - t1;
+            log.debug("creating client/authenticate: " + authTime);
+            
+            // base-name bucket to store transient content and config attributes
+            log.debug("get base storageBucket...");
+            t1 = System.currentTimeMillis();
+            Container c = client.getContainer(storageBucket);
+            final long bucketTime = System.currentTimeMillis() - t1;
+            log.debug("get base storageBucket: " + bucketTime);
+            
+            log.info("SwiftStorageAdapter.INIT authTime=" + authTime + " bucketTime=" + bucketTime);
+            init(c);
+            
         } catch (InvalidConfigException | StorageEngageException ex) {
             throw ex;
         } catch (RuntimeException ex) {
@@ -292,14 +309,8 @@ public class SwiftStorageAdapter  implements StorageAdapter {
         }
     }
 
-    private void checkConnectivity() {
-        // check connectivity
-        client.getServerTime();
-    }
     
-    private void init() throws InvalidConfigException, StorageEngageException {
-        // base-name bucket to store transient content and config attributes
-        Container c = client.getContainer(storageBucket);
+    private void init(Container c) throws InvalidConfigException, StorageEngageException {
         if (!c.exists()) {
             log.debug("creating: " + c.getName());
             c.create();
