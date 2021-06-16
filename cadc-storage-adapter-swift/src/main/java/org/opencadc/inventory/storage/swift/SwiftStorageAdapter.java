@@ -292,7 +292,7 @@ public class SwiftStorageAdapter  implements StorageAdapter {
             ac.setAllowReauthenticate(true);
             this.client = new AccountFactory(ac).createAccount();
             final long authTime = System.currentTimeMillis() - t1;
-            log.info("creating client/authenticate: " + authTime + " client: " + client.getClass().getName());
+            log.debug("creating client/authenticate: " + authTime + " client: " + client.getClass().getName());
             
             // base-name bucket to store transient content and config attributes
             log.debug("get base storageBucket...");
