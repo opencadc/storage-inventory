@@ -352,7 +352,7 @@ public abstract class StorageAdapterBasicTest {
                 Assert.assertEquals("artifactURI", em.artifactURI, am.artifactURI);
                 
                 Assert.assertNotNull("contentLastModified", am.contentLastModified);
-                //Assert.assertEquals("contentLastModified", em.contentLastModified, am.contentLastModified);
+                Assert.assertEquals("contentLastModified", em.contentLastModified, am.contentLastModified);
             }
             
             // rely on cleanup()
