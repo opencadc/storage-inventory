@@ -286,11 +286,13 @@ public class SwiftStorageAdapter  implements StorageAdapter {
             
             log.debug("creating client/authenticate...");
             t1 = System.currentTimeMillis();
+            ac.setAllowContainerCaching(true);
+            ac.setAllowCaching(true);
+            ac.setAllowSynchronizeWithServer(false);
+            ac.setAllowReauthenticate(true);
             this.client = new AccountFactory(ac).createAccount();
-            client.setAllowContainerCaching(true);
-            client.setAllowReauthenticate(true);
             final long authTime = System.currentTimeMillis() - t1;
-            log.debug("creating client/authenticate: " + authTime);
+            log.info("creating client/authenticate: " + authTime + " client: " + client.getClass().getName());
             
             // base-name bucket to store transient content and config attributes
             log.debug("get base storageBucket...");
@@ -642,6 +644,8 @@ public class SwiftStorageAdapter  implements StorageAdapter {
                 throw new PreconditionFailedException("length mismatch: " + newArtifact.contentLength + " != " + contentLength);
             }
            
+            // force getting object last modified from server for consistency with iterator
+            obj.reload();
             final Date lastModified = obj.getLastModifiedAsDate();
             
             Map<String,Object> metadata = new TreeMap<>();
