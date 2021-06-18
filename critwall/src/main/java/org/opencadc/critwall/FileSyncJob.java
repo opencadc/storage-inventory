@@ -119,6 +119,8 @@ public class FileSyncJob implements Runnable {
 
     private static final long[] RETRY_DELAY = new long[] { 6000L, 12000L };
 
+    private int syncArtifactAttempts = 0; // total count of attempted download
+    
     private final ArtifactDAO artifactDAO;
     private final UUID artifactID;
     private final URI locatorService;
@@ -247,7 +249,7 @@ public class FileSyncJob implements Runnable {
                                 }
                                 artifactDAO.setStorageLocation(curArtifact, storageMeta.getStorageLocation());
                                 success = true;
-                                msg = "uri=" + artifact.getURI();
+                                msg = "uri=" + artifact.getURI() + " bytes=" + storageMeta.getContentLength();
                             }
 
                             txnMgr.commitTransaction();
@@ -297,10 +299,11 @@ public class FileSyncJob implements Runnable {
         } finally {
             long dt = System.currentTimeMillis() - start;
             StringBuilder sb = new StringBuilder();
-            sb.append("FileSyncJob.END ").append(artifactID);
-            sb.append(" dt=").append(dt);
+            sb.append("FileSyncJob.END Artifact.id=").append(artifactID);
             sb.append(" success=").append(success);
             sb.append(" ").append(msg);
+            sb.append(" duration=").append(dt);
+            sb.append(" attempts=").append(syncArtifactAttempts);
             log.info(sb.toString());
         }
     }
@@ -365,6 +368,7 @@ public class FileSyncJob implements Runnable {
 
             boolean postPrepare = false;
             try {
+                syncArtifactAttempts++;
                 ByteArrayOutputStream dest = new ByteArrayOutputStream();
                 HttpGet get = new HttpGet(u, dest);
                 get.setConnectionTimeout(6000); // ms
