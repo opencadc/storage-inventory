@@ -73,7 +73,6 @@ import ca.nrc.cadc.auth.SSLUtil;
 import ca.nrc.cadc.date.DateUtil;
 import ca.nrc.cadc.db.DBUtil;
 import ca.nrc.cadc.db.TransactionManager;
-import ca.nrc.cadc.io.ByteLimitExceededException;
 import ca.nrc.cadc.io.ResourceIterator;
 import ca.nrc.cadc.net.ExpectationFailedException;
 import ca.nrc.cadc.net.PreconditionFailedException;
@@ -346,7 +345,7 @@ public class InventoryHarvester implements Runnable {
                         deletedStorageLocationEventResourceIterator.next();
                 if (first) {
                     long dt = System.currentTimeMillis() - t1;
-                    log.info("DeletedStorageLocationEvent.QUERY start=" + start + " end=" + end + " dt=" + dt);
+                    log.info("DeletedStorageLocationEvent.QUERY start=" + start + " end=" + end + " duration=" + dt);
                     first = false;
                     
                     if (deletedStorageLocationEvent.getID().equals(harvestState.curID)
@@ -449,7 +448,7 @@ public class InventoryHarvester implements Runnable {
                 final DeletedArtifactEvent deletedArtifactEvent = deletedArtifactEventResourceIterator.next();
                 if (first) {
                     long dt = System.currentTimeMillis() - t1;
-                    log.info("DeletedArtifactEvent.QUERY start=" + start + " end=" + end + " dt=" + dt);
+                    log.info("DeletedArtifactEvent.QUERY start=" + start + " end=" + end + " duration=" + dt);
                     first = false;
                     if (deletedArtifactEvent.getID().equals(harvestState.curID)
                         && deletedArtifactEvent.getLastModified().equals(harvestState.curLastModified)) {
@@ -541,7 +540,7 @@ public class InventoryHarvester implements Runnable {
                 final Artifact artifact = artifactResourceIterator.next();
                 if (first) {
                     long dt = System.currentTimeMillis() - t1;
-                    log.info("Artifact.QUERY start=" + start + " end=" + end + " dt=" + dt);
+                    log.info("Artifact.QUERY start=" + start + " end=" + end + " duration=" + dt);
                     first = false;
                     if (artifact.getID().equals(harvestState.curID)
                         && artifact.getLastModified().equals(harvestState.curLastModified)) {

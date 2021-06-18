@@ -128,6 +128,7 @@ public class BucketValidator implements ValidateEventListener {
     private final StorageAdapter storageAdapter;
     private final Subject runUser;
     private final boolean reportOnlyFlag;
+    private final Reporter reporter;
     private final ResolutionPolicy resolutionPolicy;
 
     // Cached ArtifactDAO used for transactional access.
@@ -145,6 +146,7 @@ public class BucketValidator implements ValidateEventListener {
      * @param runUser    The user to run as.
      */
     BucketValidator(final MultiValuedProperties properties, final Reporter reporter, final Subject runUser) {
+        this.reporter = reporter;
         this.runUser = runUser;
 
         final String configuredReportOnly = properties.getFirstPropertyValue(REPORT_ONLY_KEY);
@@ -256,11 +258,12 @@ public class BucketValidator implements ValidateEventListener {
      * @param obsoleteStorageLocationDAO ObsoleteStorageLocation DAO.
      */
     BucketValidator(final List<String> bucketPrefixes, final StorageAdapter storageAdapter, final Subject runUser,
-                    final boolean reportOnlyFlag, final ResolutionPolicy resolutionPolicy,
+                    final boolean reportOnlyFlag, final Reporter reporter, final ResolutionPolicy resolutionPolicy,
                     final ArtifactDAO artifactDAO, final ArtifactDAO iteratorDAO,
                     final ObsoleteStorageLocationDAO obsoleteStorageLocationDAO) {
         this.bucketPrefixes.addAll(bucketPrefixes);
         this.storageAdapter = storageAdapter;
+        this.reporter = reporter;
         this.runUser = runUser;
         this.reportOnlyFlag = reportOnlyFlag;
         this.resolutionPolicy = resolutionPolicy;
@@ -629,6 +632,11 @@ public class BucketValidator implements ValidateEventListener {
      * delete the file from storage and delete the ObsoleteStorageLocation.
      */
     boolean isObsoleteStorageLocation(StorageMetadata storageMetadata) {
+        
+        // TODO: since there are typically very few ObsoleteStorageLocation sitting around: 
+        //    query for the whole list and keep in memory??
+        // otherwise, this query occurs once per stored object (many small fast queries, but still...)
+        
         ObsoleteStorageLocation obsoleteStorageLocation;
         try {
             obsoleteStorageLocation = this.obsoleteStorageLocationDAO.get(storageMetadata.getStorageLocation());
@@ -639,8 +647,16 @@ public class BucketValidator implements ValidateEventListener {
                               storageMetadata.artifactURI.toASCIIString()), e);
         }
         if (obsoleteStorageLocation != null) {
-            LOGGER.info(String.format("delete obsolete object: %s (was: %s)", obsoleteStorageLocation,
-                                      storageMetadata.artifactURI.toASCIIString()));
+            StringBuilder sb = new StringBuilder();
+            sb.append(this.getClass().getSimpleName());
+            sb.append(".deleteStorageLocation");
+            sb.append(" Artifact.uri=").append(storageMetadata.artifactURI);
+            sb.append(" loc=").append(storageMetadata.getStorageLocation());
+            sb.append(" reason=obsolete");
+            //LOGGER.info(String.format("delete obsolete object: %s (was: %s)", obsoleteStorageLocation,
+            //                          storageMetadata.artifactURI.toASCIIString()));
+            reporter.report(sb.toString());
+            
             if (canTakeAction()) {
                 try {
                     delete(storageMetadata);

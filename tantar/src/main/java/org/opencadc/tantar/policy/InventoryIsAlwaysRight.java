@@ -69,6 +69,7 @@
 
 package org.opencadc.tantar.policy;
 
+import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.storage.StorageMetadata;
 import org.opencadc.tantar.Reporter;
@@ -76,6 +77,7 @@ import org.opencadc.tantar.ValidateEventListener;
 
 
 public class InventoryIsAlwaysRight extends ResolutionPolicy {
+    private static final Logger log = Logger.getLogger(InventoryIsAlwaysRight.class);
 
     public InventoryIsAlwaysRight(final ValidateEventListener validateEventListener, final Reporter reporter) {
         super(validateEventListener, reporter);
@@ -94,34 +96,66 @@ public class InventoryIsAlwaysRight extends ResolutionPolicy {
             throw new RuntimeException("BUG: both args to resolve are null");
         }
         
-        if (storageMetadata == null) {
+        StringBuilder sb = new StringBuilder();
+        sb.append(this.getClass().getSimpleName());
+        
+        if (storageMetadata == null || !storageMetadata.isValid()) {
             // Scenario when an Entity exists in the inventory database but the file is not in Storage.  This can
             // happen in the case where all files are managed by the inventory but an intervention outside of the
             // Storage Inventory caused a file to disappear.  The file may not have been fully uploaded to begin with
             // either.
-            reporter.report("Resetting Artifact " + artifact.storageLocation + " as per policy.");
-
+            sb.append(".clearStorageLocation");
+            sb.append(" Artifact.id=").append(artifact.getID());
+            sb.append(" loc=").append(artifact.storageLocation);
+            sb.append(" reason=");
+            if (storageMetadata == null) {
+                sb.append("no-matching-storageLocation");
+            } else {
+                sb.append("invalid-storageLocation");
+                StringBuilder sb2 = new StringBuilder();
+                sb2.append(this.getClass().getSimpleName());
+                sb2.append(".deleteStorageLocation");
+                sb2.append(" loc=").append(storageMetadata.getStorageLocation());
+                sb2.append(" reason=invalid");
+                //reporter.report("Invalid Storage Metadata (" + storageMetadata.getStorageLocation() + "). Replacing as per policy.");
+                reporter.report(sb2.toString());
+                validateEventListener.delete(storageMetadata);
+            }
+            //reporter.report("Resetting Artifact " + artifact.storageLocation + " as per policy.");
+            reporter.report(sb.toString());
             validateEventListener.clearStorageLocation(artifact);
         } else if (artifact == null) {
-            reporter.report("Removing Unknown File " + storageMetadata.getStorageLocation() + " as per policy.");
-
+            sb.append(".deleteStorageLocation");
+            sb.append(" loc=").append(storageMetadata.getStorageLocation());
+            sb.append(" reason=no-matching-artifact");
+            //reporter.report("Removing Unknown File " + storageMetadata.getStorageLocation() + " as per policy.");
+            reporter.report(sb.toString());
             validateEventListener.delete(storageMetadata);
-        } else if (!storageMetadata.isValid()) {
-            reporter.report("Invalid Storage Metadata (" + storageMetadata.getStorageLocation() + ").  "
-                            + "Replacing as per policy.");
-
-            validateEventListener.delete(storageMetadata);
-            validateEventListener.clearStorageLocation(artifact);
-        } else {
+        } else { // artifact != null && storageMetadata != null && storageMetadata.isValid()
             // Check metadata for discrepancies.
             if (haveDifferentStructure(artifact, storageMetadata)) {
-                // Prefer the Artifact if it differs from the Storage Metadata.
-                reporter.report("Replacing File " + storageMetadata.getStorageLocation() + " as per policy.");
-
-                validateEventListener.delete(storageMetadata);
+                sb.append(".clearStorageLocation");
+                sb.append(" Artifact.id=").append(artifact.getID());
+                sb.append(" loc=").append(artifact.storageLocation);
+                sb.append(" reason=metadata");
+                //reporter.report("Replacing File " + storageMetadata.getStorageLocation() + " as per policy.");
+                reporter.report(sb.toString());
                 validateEventListener.clearStorageLocation(artifact);
+                
+                StringBuilder sb2 = new StringBuilder();
+                sb2.append(this.getClass().getSimpleName());
+                sb2.append(".deleteStorageLocation");
+                sb2.append(" loc=").append(storageMetadata.getStorageLocation());
+                sb2.append(" reason=metadata");
+                reporter.report(sb2.toString());
+                validateEventListener.delete(storageMetadata);
             } else {
-                reporter.report("Artifact " + artifact.storageLocation + " is valid as per policy.");
+                sb.append(".valid");
+                sb.append(" Artifact.id=").append(artifact.getID());
+                sb.append(" Artifact.uri=").append(artifact.getURI());
+                sb.append(" loc=").append(artifact.storageLocation);
+                //reporter.report("Artifact " + artifact.storageLocation + " is valid as per policy.");
+                reporter.report(sb.toString());
             }
         }
     }

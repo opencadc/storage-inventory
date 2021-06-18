@@ -101,7 +101,7 @@ public class AbstractResolutionPolicyTest<T extends ResolutionPolicy> {
     }
 
     Logger getTestLogger(final OutputStream outputStream) {
-        final Logger logger = Logger.getLogger(BucketValidatorTest.class);
+        final Logger logger = Logger.getLogger(AbstractResolutionPolicyTest.class);
         final WriterAppender testAppender = new WriterAppender(new SimpleLayout(), outputStream);
         testAppender.setName(String.format("%s appender", StorageIsAlwaysRightTest.class));
 
@@ -117,16 +117,16 @@ public class AbstractResolutionPolicyTest<T extends ResolutionPolicy> {
 
     protected static final class TestEventListener implements ValidateEventListener {
 
-        protected boolean addArtifactCalled = false;
+        protected boolean createArtifactCalled = false;
         protected boolean deleteStorageMetadataCalled = false;
         protected boolean deleteArtifactCalled = false;
-        protected boolean resetArtifactCalled = false;
+        protected boolean clearStorageLocationCalled = false;
         protected boolean replaceArtifactCalled = false;
         protected boolean updateArtifactCalled = false;
 
         @Override
         public void createArtifact(StorageMetadata storageMetadata) throws Exception {
-            addArtifactCalled = true;
+            createArtifactCalled = true;
         }
 
         @Override
@@ -141,7 +141,7 @@ public class AbstractResolutionPolicyTest<T extends ResolutionPolicy> {
 
         @Override
         public void clearStorageLocation(Artifact artifact) throws Exception {
-            resetArtifactCalled = true;
+            clearStorageLocationCalled = true;
         }
 
         @Override
