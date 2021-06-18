@@ -27,7 +27,6 @@ dependencies {
     compile 'org.opencadc:cadc-inventory:[0.7,1.0)'
     compile 'org.opencadc:cadc-util:[1.2,)'
     compile 'org.opencadc:cadc-tap:[1.0.1,1.2)'
-    //compile 'org.opencadc:cadc-gms:[1.0.0,)'
     
     testCompile 'junit:junit:[4.0,)'
     

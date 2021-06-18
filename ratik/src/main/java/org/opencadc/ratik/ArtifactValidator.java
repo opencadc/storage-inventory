@@ -69,14 +69,12 @@
 
 package org.opencadc.ratik;
 
-import ca.nrc.cadc.date.DateUtil;
 import ca.nrc.cadc.db.TransactionManager;
 import ca.nrc.cadc.io.ResourceIterator;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
 import java.io.IOException;
 import java.net.URI;
-import java.text.DateFormat;
 import java.util.UUID;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
@@ -87,6 +85,7 @@ import org.opencadc.inventory.StorageSite;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.DeletedArtifactEventDAO;
 import org.opencadc.inventory.db.DeletedStorageLocationEventDAO;
+import org.opencadc.inventory.db.EntityNotFoundException;
 import org.opencadc.inventory.query.ArtifactRowMapper;
 import org.opencadc.inventory.query.DeletedArtifactEventRowMapper;
 import org.opencadc.inventory.query.DeletedStorageLocationEventRowMapper;
@@ -106,7 +105,6 @@ public class ArtifactValidator {
     private final DeletedArtifactEventDAO deletedArtifactEventDAO;
     private final DeletedStorageLocationEventDAO deletedStorageLocationEventDAO;
     private final TransactionManager transactionManager;
-    private final DateFormat dateFormat;
 
     /**
      * Constructor
@@ -123,7 +121,6 @@ public class ArtifactValidator {
         this.transactionManager = this.artifactDAO.getTransactionManager();
         this.deletedArtifactEventDAO = new DeletedArtifactEventDAO(this.artifactDAO);
         this.deletedStorageLocationEventDAO = new DeletedStorageLocationEventDAO(this.artifactDAO);
-        this.dateFormat = DateUtil.getDateFormat(DateUtil.IVOA_DATE_FORMAT, DateUtil.UTC);
     }
 
     /**
@@ -167,8 +164,42 @@ public class ArtifactValidator {
         log.debug("checking explanation 0");
         Artifact remote = getRemoteArtifact(local.getURI());
         if (remote != null) {
-            log.info(String.format("delete: %s %s reason: local filter policy change", local.getID(), local.getURI()));
-            //TODO do action
+            try {
+                log.debug("starting transaction");
+                this.transactionManager.startTransaction();
+                log.debug("start txn: OK");
+
+                this.artifactDAO.lock(local);
+                log.info(String.format("delete: %s %s reason: local filter policy change",
+                                       local.getID(), local.getURI()));
+                this.artifactDAO.delete(local.getID());
+
+                if (this.remoteSite == null) {
+                    DeletedStorageLocationEvent deletedStorageLocationEvent =
+                        new DeletedStorageLocationEvent(local.getID());
+                    log.info(String.format("put %s reason: filter policy change excludes remote",
+                                           deletedStorageLocationEvent));
+                    this.deletedStorageLocationEventDAO.put(deletedStorageLocationEvent);
+                }
+
+                log.debug("committing transaction");
+                this.transactionManager.commitTransaction();
+                log.debug("commit txn: OK");
+            } catch (EntityNotFoundException e) {
+                log.debug(String.format("skip: %s %s reason: stale local Artifact",
+                                           local.getID(), local.getURI()));
+                this.transactionManager.rollbackTransaction();
+            } catch (Exception e) {
+                log.error(String.format("failed to delete %s %s", local.getID(), local.getURI()), e);
+                this.transactionManager.rollbackTransaction();
+                log.debug("rollback txn: OK");
+            } finally {
+                if (this.transactionManager.isOpen()) {
+                    log.error("BUG - open transaction in finally");
+                    this.transactionManager.rollbackTransaction();
+                    log.error("rollback txn: OK");
+                }
+            }
             return;
         }
 
@@ -178,9 +209,35 @@ public class ArtifactValidator {
         log.debug("checking explanation 1");
         DeletedArtifactEvent remoteDeletedArtifactEvent = getRemoteDeletedArtifactEvent(local.getID());
         if (remoteDeletedArtifactEvent != null) {
-            log.info(String.format("delete: %s %s reason: found remote DeletedArtifactEvent",
-                                   local.getID(), local.getURI()));
-            //TODO do action
+            try {
+                log.debug("starting transaction");
+                this.transactionManager.startTransaction();
+                log.debug("start txn: OK");
+
+                this.artifactDAO.lock(local);
+                log.info(String.format("delete: %s %s reason: found remote DeletedArtifactEvent",
+                                       local.getID(), local.getURI()));
+                this.deletedArtifactEventDAO.put(remoteDeletedArtifactEvent);
+                this.artifactDAO.delete(local.getID());
+
+                log.debug("committing transaction");
+                this.transactionManager.commitTransaction();
+                log.debug("commit txn: OK");
+            } catch (EntityNotFoundException e) {
+                log.debug(String.format("skip: %s %s reason: stale local Artifact",
+                                        local.getID(), local.getURI()));
+                this.transactionManager.rollbackTransaction();
+            } catch (Exception e) {
+                log.error(String.format("failed to delete %s %s", local.getID(), local.getURI()), e);
+                this.transactionManager.rollbackTransaction();
+                log.debug("rollback txn: OK");
+            } finally {
+                if (this.transactionManager.isOpen()) {
+                    log.error("BUG - open transaction in finally");
+                    this.transactionManager.rollbackTransaction();
+                    log.error("rollback txn: OK");
+                }
+            }
             return;
         }
 
@@ -193,10 +250,46 @@ public class ArtifactValidator {
                 getRemoteDeletedStorageLocationEvent(local.getID());
             if (remoteDeletedStorageLocationEvent != null) {
                 SiteLocation remoteSiteLocation = new SiteLocation(this.remoteSite.getID());
-                log.info(String.format("remove %s for %s %s reason: found remote %s",
-                                       remoteSiteLocation, local.getID(), local.getURI(),
-                                       remoteDeletedStorageLocationEvent));
-                //TODO do action
+                try {
+                    log.debug("starting transaction");
+                    this.transactionManager.startTransaction();
+                    log.debug("start txn: OK");
+
+                    this.artifactDAO.lock(local);
+                    Artifact current = this.artifactDAO.get(local.getID());
+                    if (current.siteLocations.contains(remoteSiteLocation)) {
+                        // if siteLocations becomes empty removing the remote siteLocation, delete the artifact
+                        if (current.siteLocations.size() == 1) {
+                            log.info(String.format("delete: %s %s reason: empty SiteLocations",
+                                                   current.getID(), current.getURI()));
+                            this.artifactDAO.delete(current.getID());
+                        } else {
+                            log.info(String.format("remove %s for %s %s reason: found remote %s",
+                                                   remoteSiteLocation, current.getID(), current.getURI(),
+                                                   remoteDeletedStorageLocationEvent));
+                            this.artifactDAO.removeSiteLocation(current, remoteSiteLocation);
+                        }
+                    }
+
+                    log.debug("committing transaction");
+                    this.transactionManager.commitTransaction();
+                    log.debug("commit txn: OK");
+                } catch (EntityNotFoundException e) {
+                    log.debug(String.format("skip: %s %s reason: stale local Artifact",
+                                            local.getID(), local.getURI()));
+                    this.transactionManager.rollbackTransaction();
+                } catch (Exception e) {
+                    log.error(String.format("failed to delete %s in Artifact %s %s",
+                                            remoteSiteLocation, local.getID(), local.getURI()), e);
+                    this.transactionManager.rollbackTransaction();
+                    log.debug("rollback txn: OK");
+                } finally {
+                    if (this.transactionManager.isOpen()) {
+                        log.error("BUG - open transaction in finally");
+                        this.transactionManager.rollbackTransaction();
+                        log.error("rollback txn: OK");
+                    }
+                }
                 return;
             }
         }
@@ -209,7 +302,46 @@ public class ArtifactValidator {
             // evidence: ?
             // action: remove siteID from Artifact.storageLocations
             log.debug("explanation 3");
-            log.info(String.format("remove SiteLocation: %s %s reason: multiple", local.getID(), local.getURI()));
+            SiteLocation remoteSiteLocation = new SiteLocation(this.remoteSite.getID());
+            try {
+                log.debug("starting transaction");
+                this.transactionManager.startTransaction();
+                log.debug("start txn: OK");
+
+                this.artifactDAO.lock(local);
+                Artifact current = this.artifactDAO.get(local.getID());
+                if (current.siteLocations.contains(remoteSiteLocation)) {
+                    // if siteLocation's becomes empty removing the siteLocation, delete the artifact
+                    if (current.siteLocations.size() == 1) {
+                        log.info(String.format("delete: %s %s reason: empty SiteLocations",
+                                               current.getID(), current.getURI()));
+                        this.artifactDAO.delete(current.getID());
+                    } else {
+                        log.info(String.format("remove SiteLocation: %s %s reason: multiple",
+                                               current.getID(), current.getURI()));
+                        this.artifactDAO.removeSiteLocation(current, remoteSiteLocation);
+                    }
+                }
+
+                log.debug("committing transaction");
+                this.transactionManager.commitTransaction();
+                log.debug("commit txn: OK");
+            } catch (EntityNotFoundException e) {
+                log.debug(String.format("skip: %s %s reason: stale local Artifact",
+                                        local.getID(), local.getURI()));
+                this.transactionManager.rollbackTransaction();
+            } catch (Exception e) {
+                log.error(String.format("failed to delete %s in Artifact %s %s",
+                                        remoteSiteLocation, local.getID(), local.getURI()), e);
+                this.transactionManager.rollbackTransaction();
+                log.debug("rollback txn: OK");
+            } finally {
+                if (this.transactionManager.isOpen()) {
+                    log.error("BUG - open transaction in finally");
+                    this.transactionManager.rollbackTransaction();
+                    log.error("rollback txn: OK");
+                }
+            }
         } else {
             // explanation4: L==storage, new Artifact in L, pending/missed new Artifact event in R
             // action: none
@@ -244,7 +376,8 @@ public class ArtifactValidator {
         // action: none
         log.debug("checking explanation 2");
         if (this.remoteSite == null) {
-            DeletedStorageLocationEvent localDeletedStorageLocationEvent = this.deletedStorageLocationEventDAO.get(remote.getID());
+            DeletedStorageLocationEvent localDeletedStorageLocationEvent
+                = this.deletedStorageLocationEventDAO.get(remote.getID());
             if (localDeletedStorageLocationEvent != null) {
                 logNoAction(remote, "found local DeletedStorageLocationEvent");
                 return;
@@ -260,8 +393,28 @@ public class ArtifactValidator {
         // action: insert Artifact
         log.debug("checking explanation 3");
         if (this.remoteSite == null) {
-            log.info(String.format("put: %s %s reason: pending/missed Artifact", remote.getID(), remote.getURI()));
-            //TODO do action
+            try {
+                log.debug("starting transaction");
+                this.transactionManager.startTransaction();
+                log.debug("start txn: OK");
+
+                log.info(String.format("put: %s %s reason: pending/missed Artifact", remote.getID(), remote.getURI()));
+                this.artifactDAO.put(remote);
+
+                log.debug("committing transaction");
+                this.transactionManager.commitTransaction();
+                log.debug("commit txn: OK");
+            } catch (Exception e) {
+                log.error(String.format("failed to put %s %s", remote.getID(), remote.getURI()), e);
+                this.transactionManager.rollbackTransaction();
+                log.debug("rollback txn: OK");
+            } finally {
+                if (this.transactionManager.isOpen()) {
+                    log.error("BUG - open transaction in finally");
+                    this.transactionManager.rollbackTransaction();
+                    log.error("rollback txn: OK");
+                }
+            }
             return;
         }
 
@@ -273,10 +426,36 @@ public class ArtifactValidator {
             Artifact local = this.artifactDAO.get(remote.getID());
             if (local != null) {
                 SiteLocation remoteSiteLocation = new SiteLocation(this.remoteSite.getID());
-                if (!local.siteLocations.contains(remoteSiteLocation)) {
-                    log.info(String.format("add: %s to %s %s reason: remote SiteLocation missing",
-                                           remoteSiteLocation, remote.getID(), remote.getURI()));
-                    //TODO do action
+                try {
+                    log.debug("starting transaction");
+                    this.transactionManager.startTransaction();
+                    log.debug("start txn: OK");
+
+                    this.artifactDAO.lock(local);
+                    Artifact current = this.artifactDAO.get(local.getID());
+                    if (!current.siteLocations.contains(remoteSiteLocation)) {
+                        log.info(String.format("add: %s to %s %s reason: remote SiteLocation missing",
+                                               remoteSiteLocation, current.getID(), current.getURI()));
+                        this.artifactDAO.addSiteLocation(current, remoteSiteLocation);
+                    }
+
+                    log.debug("committing transaction");
+                    this.transactionManager.commitTransaction();
+                    log.debug("commit txn: OK");
+                } catch (EntityNotFoundException e) {
+                    log.debug(String.format("skip: %s %s reason: stale local Artifact",
+                                            local.getID(), local.getURI()));
+                    this.transactionManager.rollbackTransaction();
+                } catch (Exception e) {
+                    log.error(String.format("failed to put %s %s", local.getID(), local.getURI()), e);
+                    this.transactionManager.rollbackTransaction();
+                    log.debug("rollback txn: OK");
+                } finally {
+                    if (this.transactionManager.isOpen()) {
+                        log.error("BUG - open transaction in finally");
+                        this.transactionManager.rollbackTransaction();
+                        log.error("rollback txn: OK");
+                    }
                 }
             }
         }
@@ -299,17 +478,48 @@ public class ArtifactValidator {
         //         winner in remote: DeletedArtifactEvent for local, delete local, insert remote
         log.debug("checking artifact.id mismatch");
         if (!local.getID().equals(remote.getID())) {
-            if (local.getContentLastModified().before(remote.getContentLastModified())) {
-                log.info(String.format("resolve Artifact.id collision: put DeletedArtifactEvent for local %s %s "
-                                           + "reason: local contentLastModified older than remote",
-                                       local.getID(), local.getURI()));
-                log.info(String.format("resolve Artifact.id collision: delete local %s %s put remote "
-                                           + "%s %s reason: local contentLastModified older than remote",
-                                       local.getID(), local.getURI(), remote.getID(), remote.getURI()));
-            } else {
-                log.info(String.format("resolve Artifact.id collision: put DeletedArtifactEvent for remote %s %s "
-                                           + "reason: remote contentLastModified older than local",
-                                       remote.getID(), remote.getURI()));
+            try {
+                log.debug("starting transaction");
+                this.transactionManager.startTransaction();
+                log.debug("start txn: OK");
+
+                this.artifactDAO.lock(local);
+                if (local.getContentLastModified().before(remote.getContentLastModified())) {
+                    DeletedArtifactEvent deletedArtifactEvent = new DeletedArtifactEvent(local.getID());
+                    log.info(String.format(
+                        "resolve Artifact.id collision: delete local %s %s, put deletedArtifactEvent, put remote %s %s "
+                            + "reason: local contentLastModified older than remote",
+                        local.getID(), local.getURI(), remote.getID(), remote.getURI()));
+                    this.deletedArtifactEventDAO.put(deletedArtifactEvent);
+                    this.artifactDAO.delete(local.getID());
+                    this.artifactDAO.put(remote);
+                } else {
+                    log.info(String.format(
+                        "resolve Artifact.id collision: put DeletedArtifactEvent for remote %s %s "
+                            + "reason: local contentLastModified newer than remote",
+                        remote.getID(), remote.getURI()));
+                    DeletedArtifactEvent deletedArtifactEvent = new DeletedArtifactEvent(remote.getID());
+                    this.deletedArtifactEventDAO.put(deletedArtifactEvent);
+                }
+
+                log.debug("committing transaction");
+                this.transactionManager.commitTransaction();
+                log.debug("commit txn: OK");
+            } catch (EntityNotFoundException e) {
+                log.debug(String.format("skip: %s %s reason: stale local Artifact",
+                                        local.getID(), local.getURI()));
+                this.transactionManager.rollbackTransaction();
+            } catch (Exception e) {
+                log.error(String.format("failed to resolve Artifact.id collision for local %s %s, remote %s %s",
+                                        local.getID(), local.getURI(), remote.getID(), remote.getURI()), e);
+                this.transactionManager.rollbackTransaction();
+                log.debug("rollback txn: OK");
+            } finally {
+                if (this.transactionManager.isOpen()) {
+                    log.error("BUG - open transaction in finally");
+                    this.transactionManager.rollbackTransaction();
+                    log.error("rollback txn: OK");
+                }
             }
             return;
         }
@@ -322,9 +532,51 @@ public class ArtifactValidator {
                 // evidence: local artifact has older Entity.lastModified indicating an update to
                 //           optional metadata at remote
                 // action: put Artifact
-                log.info(String.format("resolve Artifact.metaChecksum mismatch: put remote %s %s "
-                                           + "reason: remote lastModified newer than local",
-                                       remote.getID(), remote.getURI()));
+                try {
+                    log.debug("starting transaction");
+                    this.transactionManager.startTransaction();
+                    log.debug("start txn: OK");
+                    this.artifactDAO.lock(local);
+                    Artifact current = this.artifactDAO.get(local.getID());
+                    if (!current.getMetaChecksum().equals(remote.getMetaChecksum())) {
+                        if (current.getLastModified().before(remote.getLastModified())) {
+                            log.info(String.format("resolve Artifact.metaChecksum mismatch: put remote %s %s "
+                                                       + "reason: remote lastModified newer than local",
+                                                   remote.getID(), remote.getURI()));
+                            if (this.remoteSite == null) {
+                                // storage site: keep StorageLocation
+                                remote.storageLocation = local.storageLocation;
+                            } else {
+                                // global site: merge SiteLocation(s)
+                                remote.siteLocations.add(new SiteLocation(this.remoteSite.getID()));
+                                remote.siteLocations.addAll(local.siteLocations);
+                            }
+                            this.artifactDAO.put(remote);
+                        } else {
+                            // same as explanation2 below
+                            log.info("resolve Artifact.metaChecksum mismatch: no action, "
+                                         + "reason: local lastModified newer than remote");
+                        }
+                    }
+
+                    log.debug("committing transaction");
+                    this.transactionManager.commitTransaction();
+                    log.debug("commit txn: OK");
+                } catch (EntityNotFoundException e) {
+                    log.debug(String.format("skip: %s %s reason: stale local Artifact",
+                                            local.getID(), local.getURI()));
+                    this.transactionManager.rollbackTransaction();
+                } catch (Exception e) {
+                    log.error(String.format("failed to put Artifact %s %s", local.getID(), local.getURI()), e);
+                    this.transactionManager.rollbackTransaction();
+                    log.debug("rollback txn: OK");
+                } finally {
+                    if (this.transactionManager.isOpen()) {
+                        log.error("BUG - open transaction in finally");
+                        this.transactionManager.rollbackTransaction();
+                        log.error("rollback txn: OK");
+                    }
+                }
             } else {
                 // explanation2: pending/missed artifact update in R
                 // evidence: local artifact has newer Entity.lastModified indicating the update happened locally
