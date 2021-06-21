@@ -96,24 +96,31 @@ public class StorageIsAlwaysRight extends ResolutionPolicy {
         
         StringBuilder sb = new StringBuilder();
         sb.append(this.getClass().getSimpleName());
-        if (storageMetadata != null && !storageMetadata.isValid()) {
-            // If storage is always right, but it has no metadata, then leave it for someone to manually fix.
-            sb.append(".noAction");
-            sb.append(" loc=").append(storageMetadata.getStorageLocation());
-            sb.append(" reason=invalid");
-            //reporter.report("Corrupt or invalid Storage Metadata (" + storageMetadata.getStorageLocation() + ").  Skipping as per policy.");
-            reporter.report(sb.toString());
-        } else if (storageMetadata == null) {
-            sb.append(".deleteArtifact");
-            sb.append(" Artifact.id=").append(artifact.getID());
-            sb.append(" Artifact.uri=").append(artifact.getURI());
-            sb.append(" reason=no-matching-storageLocation");
+        
+        if (storageMetadata == null || !storageMetadata.isValid()) {
+            if (artifact != null) {
+                sb.append(".deleteArtifact");
+                sb.append(" Artifact.id=").append(artifact.getID());
+                sb.append(" Artifact.uri=").append(artifact.getURI());
+            } else {
+                sb.append(".noAction");
+            }
+            if (storageMetadata == null) {
+                sb.append(" reason=no-matching-storageLocation");
+            } else {
+                sb.append(" loc=").append(storageMetadata.getStorageLocation());
+                sb.append(" reason=invalid-storageLocation");
+            }
             //reporter.report("Removing Unknown Artifact " + artifact.storageLocation + " as per policy.");
             reporter.report(sb.toString());
-            validateEventListener.delete(artifact);
-        } else if (artifact == null) {
-            // storageMetadata.isValid()
-            // The Inventory has a file that does not exist in storage.  This is most unusual.
+            if (artifact != null) {
+                validateEventListener.delete(artifact);
+            }
+            return;
+        }
+        
+        //storageMetadata != null && storageMetadata.isValid()
+        if (artifact == null) {
             sb.append(".createArtifact");
             sb.append(" Artifact.uri=").append(storageMetadata.artifactURI);
             sb.append(" loc=").append(storageMetadata.getStorageLocation());
@@ -121,25 +128,27 @@ public class StorageIsAlwaysRight extends ResolutionPolicy {
             //reporter.report("Adding Artifact " + storageMetadata.getStorageLocation() + " as per policy.");
             reporter.report(sb.toString());
             validateEventListener.createArtifact(storageMetadata);
-        } else {
-            // Check metadata for discrepancies.
-            if (haveDifferentStructure(artifact, storageMetadata)) {
-                // Then prefer the Storage Metadata.
-                sb.append(".replaceArtifact");
-                sb.append(" Artifact.id=").append(artifact.getID());
-                sb.append(" Artifact.uri=").append(artifact.getURI());
-                sb.append(" loc=").append(storageMetadata.getStorageLocation());
-                //reporter.report("Replacing Artifact " + artifact.storageLocation + " as per policy.");
-                reporter.report(sb.toString());
-                validateEventListener.replaceArtifact(artifact, storageMetadata);
-            } else {
-                sb.append(".valid");
-                sb.append(" Artifact.id=").append(artifact.getID());
-                sb.append(" Artifact.uri=").append(artifact.getURI());
-                sb.append(" loc=").append(storageMetadata.getStorageLocation());
-                //reporter.report("Storage Metadata " + storageMetadata.getStorageLocation() + " is valid as per policy.");
-                reporter.report(sb.toString());
-            }
+            return;
         }
+
+        // artifact != null && storageMetadata != null && storageMetadata.isValid()
+        if (haveDifferentStructure(artifact, storageMetadata)) {
+            // Then prefer the Storage Metadata.
+            sb.append(".replaceArtifact");
+            sb.append(" Artifact.id=").append(artifact.getID());
+            sb.append(" Artifact.uri=").append(artifact.getURI());
+            sb.append(" loc=").append(storageMetadata.getStorageLocation());
+            //reporter.report("Replacing Artifact " + artifact.storageLocation + " as per policy.");
+            reporter.report(sb.toString());
+            validateEventListener.replaceArtifact(artifact, storageMetadata);
+            return;
+        }
+        
+        sb.append(".valid");
+        sb.append(" Artifact.id=").append(artifact.getID());
+        sb.append(" Artifact.uri=").append(artifact.getURI());
+        sb.append(" loc=").append(storageMetadata.getStorageLocation());
+        //reporter.report("Storage Metadata " + storageMetadata.getStorageLocation() + " is valid as per policy.");
+        reporter.report(sb.toString());
     }
 }

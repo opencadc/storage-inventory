@@ -83,6 +83,7 @@ public class RecoverFromStorage extends ResolutionPolicy {
 
     public RecoverFromStorage(ValidateEventListener validateEventListener, Reporter reporter) {
         super(validateEventListener, reporter);
+        throw new UnsupportedOperationException("** incomplete implementation **");
     }
 
     /**
@@ -103,16 +104,19 @@ public class RecoverFromStorage extends ResolutionPolicy {
         sb.append(this.getClass().getSimpleName());
         if (storageMetadata == null || !storageMetadata.isValid()) {
             sb.append(".noAction");
-            sb.append(" Artifact.id=").append(artifact.getID());
-            sb.append(" Artifact.uri=").append(artifact.getURI());
-            if (storageMetadata == null) {
+            if (artifact != null) {
+                sb.append(" Artifact.id=").append(artifact.getID());
+                sb.append(" Artifact.uri=").append(artifact.getURI());
                 sb.append(" reason=no-matching-storageLocation");
             } else {
-                sb.append(" reason=invalid");
+                sb.append(" reason=invalid-storageLocation");
             }
             //reporter.report("RecoverFromStorage: artifact " + artifact.getID() + " vs StorageMetadata null");
             reporter.report(sb.toString());
-        } else if (artifact == null) {
+            return;
+        }
+        
+        if (artifact == null) {
             sb.append(".createArtifact");
             sb.append(" Artifact.uri=").append(storageMetadata.artifactURI);
             sb.append(" loc=").append(storageMetadata.getStorageLocation());
