@@ -355,10 +355,7 @@ public class FileSyncJob implements Runnable {
         return t.getProtocols();
     }
 
-    private StorageMetadata syncArtifact(Artifact a, List<Protocol> urls)
-        throws ByteLimitExceededException, StorageEngageException, InterruptedException, 
-        WriteException, IllegalArgumentException, MalformedURLException, PrivilegedActionException {
-
+    private StorageMetadata syncArtifact(Artifact a, List<Protocol> urls) throws Exception {
         StorageMetadata storageMeta = null;
         Iterator<Protocol> urlIterator = urls.iterator();
 
@@ -375,10 +372,14 @@ public class FileSyncJob implements Runnable {
                 get.setReadTimeout(60000);      // ms
                 if (p.getSecurityMethod() == null || p.getSecurityMethod().equals(Standards.getSecurityMethod(AuthMethod.ANON))) {
                     log.debug("download: " + u + " as " + anonSubject);
-                    Subject.doAs(anonSubject, (PrivilegedExceptionAction<Void>) () -> {
-                        get.prepare();
-                        return null;
-                    });
+                    try {
+                        Subject.doAs(anonSubject, (PrivilegedExceptionAction<Void>) () -> {
+                            get.prepare();
+                            return null;
+                        });
+                    } catch (PrivilegedActionException pex) {
+                        throw pex.getException();
+                    }
                 } else {
                     log.debug("download: " + u + " as " + AuthenticationUtil.getCurrentSubject());
                     get.prepare();
@@ -410,19 +411,19 @@ public class FileSyncJob implements Runnable {
                 log.debug("storage meta returned: " + storageMeta.getStorageLocation());
                 return storageMeta;
 
-            } catch (ByteLimitExceededException | WriteException ex) {
+            } catch (ByteLimitExceededException | StorageEngageException | WriteException ex) {
                 // IOException will capture this if not explicitly caught and rethrown
                 log.debug("FileSyncJob.FAIL fatal=" + ex);
                 throw ex;
+            } catch (MalformedURLException | ResourceNotFoundException | ResourceAlreadyExistsException | PreconditionFailedException ex) {
+                log.debug("FileSyncJob.FAIL remove: " + u + " reason: " + ex);
+                urlIterator.remove();
             } catch (IOException | TransientException ex) {
                 // includes ReadException
                 // - prepare or put throwing this error
                 // - will move to next url
                 log.debug("FileSyncJob.FAIL keep: " + u + " reason: " + ex);
-            } catch (ResourceNotFoundException | ResourceAlreadyExistsException | PreconditionFailedException ex) {
-                log.debug("FileSyncJob.FAIL remove: " + u + " reason: " + ex);
-                urlIterator.remove();
-            } catch (RuntimeException ex) {
+            } catch (Exception ex) {
                 if (!postPrepare) {
                     // remote server 5xx response: discard
                     log.debug("FileSyncJob.FAIL remove " + u + " reason: " + ex);
