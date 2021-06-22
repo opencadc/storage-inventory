@@ -170,7 +170,7 @@ public class FileSyncJob implements Runnable {
     //         Artifact.contentChecksum and Artifact.contentLength are immutable      
     private void doSync() {
         
-        log.info("FileSyncJob.START " + artifactID);
+        log.info("FileSyncJob.START Artifact.id=" + artifactID);
         long start = System.currentTimeMillis();
         boolean success = false;
         String msg = "";
