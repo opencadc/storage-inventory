@@ -69,6 +69,7 @@
 
 package org.opencadc.tantar.policy;
 
+import java.util.Date;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.storage.StorageMetadata;
@@ -79,10 +80,17 @@ import org.opencadc.tantar.ValidateEventListener;
 public class InventoryIsAlwaysRight extends ResolutionPolicy {
     private static final Logger log = Logger.getLogger(InventoryIsAlwaysRight.class);
 
+    private final Date now = new Date();
+    
     public InventoryIsAlwaysRight(final ValidateEventListener validateEventListener, final Reporter reporter) {
         super(validateEventListener, reporter);
     }
 
+    
+    private boolean delayAction(Date d) {
+        return (d != null && now.before(d));
+    }
+    
     /**
      * Use the logic of this Policy to correct a conflict caused by the two given items.  One of the arguments can
      * be null, but not both.
@@ -99,12 +107,21 @@ public class InventoryIsAlwaysRight extends ResolutionPolicy {
         StringBuilder sb = new StringBuilder();
         sb.append(this.getClass().getSimpleName());
         if (artifact == null) {
-            sb.append(".deleteStorageLocation");
-            sb.append(" loc=").append(storageMetadata.getStorageLocation());
-            sb.append(" reason=no-matching-artifact");
-            //reporter.report("Removing Unknown File " + storageMetadata.getStorageLocation() + " as per policy.");
-            reporter.report(sb.toString());
-            validateEventListener.delete(storageMetadata);
+            if (delayAction(storageMetadata.contentLastModified)) {
+                // delay cleanup in case the object was stored since we started validating
+                sb.append(".delayAction");
+                sb.append(" loc=").append(storageMetadata.getStorageLocation());
+                sb.append(" reason=no-matching-artifact");
+                //reporter.report("Removing Unknown File " + storageMetadata.getStorageLocation() + " as per policy.");
+                reporter.report(sb.toString());
+            } else {
+                sb.append(".deleteStorageLocation");
+                sb.append(" loc=").append(storageMetadata.getStorageLocation());
+                sb.append(" reason=no-matching-artifact");
+                //reporter.report("Removing Unknown File " + storageMetadata.getStorageLocation() + " as per policy.");
+                reporter.report(sb.toString());
+                validateEventListener.delete(storageMetadata);
+            }
             return;
         }
         
