@@ -420,7 +420,7 @@ public class BucketValidatorTest {
      *
      * @throws Exception For anything unexpected.
      */
-    @Test
+    //@Test
     public void validateRecoverFromStoragePolicyEmptyInventory() throws Exception {
         final ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
 

@@ -118,16 +118,10 @@ public class StorageIsAlwaysRightTest extends AbstractResolutionPolicyTest<Stora
         // StorageMetadata nas no other metadata than the StorageLocation.
         final StorageMetadata storageMetadata = new StorageMetadata(new StorageLocation(URI.create("s3:989877")));
 
-        final Artifact artifact = new Artifact(URI.create("cadc:bucket/file.fits"),
-                                               URI.create("md5:" + random16Bytes()), new Date(),
-                                               88L);
-
-        artifact.storageLocation = new StorageLocation(URI.create("s3:989877"));
-
         final TestEventListener testEventListener = new TestEventListener();
 
         testSubject = new StorageIsAlwaysRight(testEventListener, reporter);
-        testSubject.resolve(artifact, storageMetadata);
+        testSubject.resolve(null, storageMetadata);
 
         final List<String> outputLines = Arrays.asList(new String(output.toByteArray()).split("\n"));
         System.out.println(String.format("Message lines are \n\n%s\n\n", outputLines));
@@ -168,6 +162,40 @@ public class StorageIsAlwaysRightTest extends AbstractResolutionPolicyTest<Stora
                                                                 && !testEventListener.replaceArtifactCalled);
     }
 
+    @Test
+    public void resolveArtifactAndInvalidStorageMetadata() throws Exception {
+        final ByteArrayOutputStream output = new ByteArrayOutputStream();
+        final Reporter reporter = new Reporter(getTestLogger(output));
+
+        // StorageMetadata nas no other metadata than the StorageLocation.
+        final StorageMetadata storageMetadata = new StorageMetadata(new StorageLocation(URI.create("s3:989877")));
+
+        final Artifact artifact = new Artifact(URI.create("cadc:bucket/file.fits"),
+                                               URI.create("md5:" + random16Bytes()), new Date(),
+                                               88L);
+
+        artifact.storageLocation = new StorageLocation(URI.create("s3:989877"));
+
+        final TestEventListener testEventListener = new TestEventListener();
+
+        testSubject = new StorageIsAlwaysRight(testEventListener, reporter);
+        testSubject.resolve(artifact, storageMetadata);
+
+        final List<String> outputLines = Arrays.asList(new String(output.toByteArray()).split("\n"));
+        System.out.println(String.format("Message lines are \n\n%s\n\n", outputLines));
+
+        //assertListContainsMessage(outputLines,
+        //                          "Invalid Storage Metadata (StorageLocation[s3:989877]).  "
+        //                          + "Skipping as per policy.");
+
+        Assert.assertTrue("Should have called deleteArtifact.",
+                          testEventListener.deleteArtifactCalled
+                          && !testEventListener.createArtifactCalled
+                          && !testEventListener.clearStorageLocationCalled
+                          && !testEventListener.deleteStorageMetadataCalled
+                          && !testEventListener.replaceArtifactCalled);
+    }
+    
     @Test
     public void resolveNullAndStorageMetadata() throws Exception {
         final ByteArrayOutputStream output = new ByteArrayOutputStream();

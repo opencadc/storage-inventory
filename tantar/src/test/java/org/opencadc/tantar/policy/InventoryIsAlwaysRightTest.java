@@ -134,6 +134,36 @@ public class InventoryIsAlwaysRightTest extends AbstractResolutionPolicyTest<Inv
                           && testEventListener.deleteStorageMetadataCalled
                           && !testEventListener.replaceArtifactCalled);
     }
+    
+    @Test
+    public void resolveNullAndStorageMetadataDelayed() throws Exception {
+        final ByteArrayOutputStream output = new ByteArrayOutputStream();
+        final Reporter reporter = new Reporter(getTestLogger(output));
+        final TestEventListener testEventListener = new TestEventListener();
+        
+        // simulate new stored object after validation started
+        
+        testSubject = new InventoryIsAlwaysRight(testEventListener, reporter);
+        Thread.sleep(100L);
+        
+        final StorageMetadata storageMetadata = new StorageMetadata(new StorageLocation(URI.create("s3:989877")),
+                                                                    URI.create("md5:" + random16Bytes()), 1001L);
+        storageMetadata.contentLastModified = new Date();
+
+        
+        testSubject.resolve(null, storageMetadata);
+
+        final List<String> outputLines = Arrays.asList(new String(output.toByteArray()).split("\n"));
+        System.out.println(String.format("Message lines are \n\n%s\n\n", outputLines));
+
+        //assertListContainsMessage(outputLines, "Removing Unknown File StorageLocation[s3:989877] as per policy.");
+        Assert.assertTrue("Should have delayed/skipped deleteStorageMetadata.",
+                          !testEventListener.deleteArtifactCalled
+                          && !testEventListener.createArtifactCalled
+                          && !testEventListener.clearStorageLocationCalled
+                          && !testEventListener.deleteStorageMetadataCalled
+                          && !testEventListener.replaceArtifactCalled);
+    }
 
     @Test
     public void resolveNullAndInvalidStorageMetadata() throws Exception {
