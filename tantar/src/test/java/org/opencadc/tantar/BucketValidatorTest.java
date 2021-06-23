@@ -347,7 +347,7 @@ public class BucketValidatorTest {
                                   ".*deleteArtifact.*uri=cadc:a/myfile99.fits.*");
         assertListContainsMessage(outputLines,
                                   ".*replaceArtifact.*uri=cadc:b/myfile100.fits.*s3:CDEF00.*");
-        assertListContainsMessage(outputLines, ".*valid.*ad:123456.*");
+        //assertListContainsMessage(outputLines, ".*valid.*ad:123456.*");
     }
 
     /**
