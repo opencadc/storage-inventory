@@ -80,6 +80,7 @@ import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.storage.StorageMetadata;
 import org.opencadc.tantar.Reporter;
+import org.opencadc.tantar.TestEventListener;
 
 public class StorageIsAlwaysRightTest extends AbstractResolutionPolicyTest<StorageIsAlwaysRight> {
 

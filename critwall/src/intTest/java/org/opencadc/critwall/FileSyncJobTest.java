@@ -229,7 +229,7 @@ public class FileSyncJobTest {
             log.debug("putting test artifact to database");
             dao.put(artifactToUpdate);
 
-            FileSyncJob fsj = new FileSyncJob(artifactToUpdate.getID(), resourceID, sa, dao, testSubject);
+            FileSyncJob fsj = new FileSyncJob(artifactToUpdate, resourceID, sa, dao, testSubject);
             fsj.run();
 
             // check job succeeded by trying to get artifact by location
@@ -270,7 +270,7 @@ public class FileSyncJobTest {
             log.debug("putting test artifact to database");
             dao.put(artifactToUpdate);
 
-            FileSyncJob fsj = new FileSyncJob(artifactToUpdate.getID(), resourceID, sa, dao, anonSubject);
+            FileSyncJob fsj = new FileSyncJob(artifactToUpdate, resourceID, sa, dao, anonSubject);
             fsj.run();
 
             log.debug("finished run in failure test.");
@@ -309,7 +309,7 @@ public class FileSyncJobTest {
             log.debug("putting test artifact to database");
             dao.put(artifactToUpdate);
 
-            FileSyncJob fsj = new FileSyncJob(artifactToUpdate.getID(), resourceID, sa, dao, anonSubject);
+            FileSyncJob fsj = new FileSyncJob(artifactToUpdate, resourceID, sa, dao, anonSubject);
             fsj.run();
 
             log.debug("finished run in failure test.");
@@ -345,7 +345,7 @@ public class FileSyncJobTest {
             log.debug("putting test artifact to database");
             dao.put(artifactToUpdate);
 
-            FileSyncJob fsj = new FileSyncJob(artifactToUpdate.getID(), resourceID, sa, dao, anonSubject);
+            FileSyncJob fsj = new FileSyncJob(artifactToUpdate, resourceID, sa, dao, anonSubject);
             fsj.run();
 
             log.debug("finished run in failure test.");
@@ -386,7 +386,7 @@ public class FileSyncJobTest {
             dao.put(artifactToUpdate);
             
 
-            FileSyncJob fsj = new FileSyncJob(artifactToUpdate.getID(), resourceID, sa, dao, anonSubject);
+            FileSyncJob fsj = new FileSyncJob(artifactToUpdate, resourceID, sa, dao, anonSubject);
             fsj.run();
 
             log.debug("successfully finished FileSyncJob run in test.");
