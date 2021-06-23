@@ -74,16 +74,16 @@ import org.opencadc.inventory.storage.StorageMetadata;
 
 
 public class TestEventListener implements ValidateEventListener {
-    protected boolean addArtifactCalled = false;
-    protected boolean deleteStorageMetadataCalled = false;
-    protected boolean deleteArtifactCalled = false;
-    protected boolean resetArtifactCalled = false;
-    protected boolean replaceArtifactCalled = false;
-    protected boolean updateeArtifactCalled = false;
+    public boolean createArtifactCalled = false;
+    public boolean deleteStorageMetadataCalled = false;
+    public boolean deleteArtifactCalled = false;
+    public boolean clearStorageLocationCalled = false;
+    public boolean replaceArtifactCalled = false;
+    public boolean updateArtifactCalled = false;
 
     @Override
     public void createArtifact(StorageMetadata storageMetadata) throws Exception {
-        addArtifactCalled = true;
+        createArtifactCalled = true;
     }
 
     @Override
@@ -98,7 +98,7 @@ public class TestEventListener implements ValidateEventListener {
 
     @Override
     public void clearStorageLocation(Artifact artifact) throws Exception {
-        resetArtifactCalled = true;
+        clearStorageLocationCalled = true;
     }
 
     @Override
@@ -108,6 +108,13 @@ public class TestEventListener implements ValidateEventListener {
 
     @Override
     public void updateArtifact(Artifact artifact, StorageMetadata storageMetadata) throws Exception {
-        updateeArtifactCalled = true;
+        updateArtifactCalled = true;
     }
+
+    @Override
+    public void delayAction() {
+        // noop
+    }
+    
+    
 }

@@ -127,4 +127,9 @@ public interface ValidateEventListener extends EventListener {
      * @throws Exception    Any unexpected error.
      */
     void updateArtifact(final Artifact artifact, final StorageMetadata storageMetadata) throws Exception;
+    
+    /**
+     * Delay validation but increment count.
+     */
+    void delayAction();
 }

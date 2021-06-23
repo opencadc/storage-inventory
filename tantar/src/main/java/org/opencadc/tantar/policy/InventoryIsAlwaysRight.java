@@ -103,7 +103,7 @@ public class InventoryIsAlwaysRight extends ResolutionPolicy {
         if (artifact == null && storageMetadata == null) {
             throw new RuntimeException("BUG: both args to resolve are null");
         }
-        
+
         StringBuilder sb = new StringBuilder();
         sb.append(this.getClass().getSimpleName());
         if (artifact == null) {
@@ -114,6 +114,7 @@ public class InventoryIsAlwaysRight extends ResolutionPolicy {
                 sb.append(" reason=no-matching-artifact");
                 //reporter.report("Removing Unknown File " + storageMetadata.getStorageLocation() + " as per policy.");
                 reporter.report(sb.toString());
+                validateEventListener.delayAction();
             } else {
                 sb.append(".deleteStorageLocation");
                 sb.append(" loc=").append(storageMetadata.getStorageLocation());
@@ -124,11 +125,12 @@ public class InventoryIsAlwaysRight extends ResolutionPolicy {
             }
             return;
         }
-        
+
         // artifact != null
         if (storageMetadata == null || !storageMetadata.isValid()) {
             sb.append(".clearStorageLocation");
             sb.append(" Artifact.id=").append(artifact.getID());
+            sb.append(" Artifact.uri=").append(artifact.getURI());
             sb.append(" loc=").append(artifact.storageLocation);
             sb.append(" reason=");
             if (storageMetadata == null) {
@@ -138,6 +140,8 @@ public class InventoryIsAlwaysRight extends ResolutionPolicy {
                 StringBuilder sb2 = new StringBuilder();
                 sb2.append(this.getClass().getSimpleName());
                 sb2.append(".deleteStorageLocation");
+                sb.append(" Artifact.id=").append(artifact.getID());
+                sb.append(" Artifact.uri=").append(artifact.getURI());
                 sb2.append(" loc=").append(storageMetadata.getStorageLocation());
                 sb2.append(" reason=invalid-storageLocation");
                 //reporter.report("Invalid Storage Metadata (" + storageMetadata.getStorageLocation() + "). Replacing as per policy.");
@@ -154,6 +158,7 @@ public class InventoryIsAlwaysRight extends ResolutionPolicy {
         if (haveDifferentStructure(artifact, storageMetadata)) {
             sb.append(".clearStorageLocation");
             sb.append(" Artifact.id=").append(artifact.getID());
+            sb.append(" Artifact.uri=").append(artifact.getURI());
             sb.append(" loc=").append(artifact.storageLocation);
             sb.append(" reason=metadata");
             //reporter.report("Replacing File " + storageMetadata.getStorageLocation() + " as per policy.");
@@ -163,6 +168,8 @@ public class InventoryIsAlwaysRight extends ResolutionPolicy {
             StringBuilder sb2 = new StringBuilder();
             sb2.append(this.getClass().getSimpleName());
             sb2.append(".deleteStorageLocation");
+            sb.append(" Artifact.id=").append(artifact.getID());
+            sb.append(" Artifact.uri=").append(artifact.getURI());
             sb2.append(" loc=").append(storageMetadata.getStorageLocation());
             sb2.append(" reason=metadata");
             reporter.report(sb2.toString());
@@ -175,6 +182,6 @@ public class InventoryIsAlwaysRight extends ResolutionPolicy {
         sb.append(" Artifact.uri=").append(artifact.getURI());
         sb.append(" loc=").append(artifact.storageLocation);
         //reporter.report("Artifact " + artifact.storageLocation + " is valid as per policy.");
-        reporter.report(sb.toString());
+        log.debug(sb.toString());
     }
 }

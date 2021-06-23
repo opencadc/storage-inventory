@@ -135,6 +135,20 @@ public class BucketValidator implements ValidateEventListener {
     private final ArtifactDAO artifactDAO;
     private final ArtifactDAO iteratorDAO;
     private final ObsoleteStorageLocationDAO obsoleteStorageLocationDAO;
+    
+    // occasional summary logging
+    private final long summaryLogInterval = 5 * 60L; // 5 minutes
+    private long lastSummary = 0L;
+    private long numValidated = 0L;
+    private long numValid = 0L;
+    private long numDelay = 0L;
+    private long numClearStorageLocation = 0L;
+    private long numDeleteStorageLocation = 0L;
+    private long numDeleteObsoleteStorageLocation = 0L;
+    private long numCreateArtifact = 0L;
+    private long numDeleteArtifact = 0L;
+    private long numReplaceArtifact = 0L;
+    private long numUpdateArtifact = 0L;
 
 
     /**
@@ -291,7 +305,7 @@ public class BucketValidator implements ValidateEventListener {
 
         Artifact unresolvedArtifact = null;
         StorageMetadata unresolvedStorageMetadata = null;
-
+        logSummary(false);
         while ((inventoryIterator.hasNext() || unresolvedArtifact != null)
                && (storageMetadataIterator.hasNext() || unresolvedStorageMetadata != null)) {
             final Artifact artifact = (unresolvedArtifact == null) ? inventoryIterator.next() : unresolvedArtifact;
@@ -319,6 +333,8 @@ public class BucketValidator implements ValidateEventListener {
                 unresolvedStorageMetadata = storageMetadata;
                 resolutionPolicy.resolve(artifact, null);
             }
+            
+            logSummary(true);
         }
 
         // *** Perform some mop up.  These loops will take effect when one of the iterators is empty but the other is
@@ -327,6 +343,7 @@ public class BucketValidator implements ValidateEventListener {
             final Artifact artifact = inventoryIterator.next();
             LOGGER.debug(String.format("Artifact %s exists with no Storage Metadata.", artifact.storageLocation));
             resolutionPolicy.resolve(artifact, null);
+            logSummary(true);
         }
 
         while (storageMetadataIterator.hasNext()) {
@@ -334,13 +351,67 @@ public class BucketValidator implements ValidateEventListener {
             LOGGER.debug(String.format("Storage Metadata %s exists with no Artifact.",
                                        storageMetadata.getStorageLocation()));
             resolutionPolicy.resolve(null, storageMetadata);
+            logSummary(true);
         }
 
         LOGGER.debug("END validating iterators.");
     }
 
+    private void logSummary(boolean countValidated) {
+        long sec = System.currentTimeMillis() / 1000L;
+        long dt = (sec - lastSummary);
+        LOGGER.warn("logSummary: " + countValidated + " " + lastSummary + " " + sec + " dt=" + dt);
+        if (dt < summaryLogInterval) {
+            return;
+        }
+        lastSummary = sec;
+        if (countValidated) {
+            numValidated++;
+        }
+        
+        StringBuilder sb = new StringBuilder();
+        sb.append(resolutionPolicy.getClass().getSimpleName()).append(".summary");
+        if (numValidated > 0) {
+            sb.append(" numValidated=").append(numValidated);
+        }
+        if (numValid > 0) {
+            sb.append(" numValid=").append(numValid);
+        }
+        if (numDelay > 0) {
+            sb.append(" numDelay=").append(numDelay);
+        }
+        if (numClearStorageLocation > 0) {
+            sb.append(" numClearStorageLocation=").append(numClearStorageLocation);
+        }
+        if (numDeleteStorageLocation > 0) {
+            sb.append(" numDeleteStorageLocation=").append(numDeleteStorageLocation);
+        }
+        if (numDeleteObsoleteStorageLocation > 0) {
+            sb.append(" numDeleteObsoleteStorageLocation=").append(numDeleteObsoleteStorageLocation);
+        }
+        if (numCreateArtifact > 0) {
+            sb.append(" numCreateArtifact=").append(numCreateArtifact);
+        }
+        if (numDeleteArtifact > 0) {
+            sb.append(" numDeleteArtifact=").append(numDeleteArtifact);
+        }
+        if (numReplaceArtifact > 0) {
+            sb.append(" numReplaceArtifact=").append(numReplaceArtifact);
+        }
+        if (numUpdateArtifact > 0) {
+            sb.append(" numUpdateArtifact=").append(numUpdateArtifact);
+        }
+        sb.append(" nextSummaryIn=").append(summaryLogInterval).append("sec");
+        LOGGER.info(sb.toString());
+    }
+    
     private boolean canTakeAction() {
         return !reportOnlyFlag;
+    }
+
+    @Override
+    public void delayAction() {
+        numDelay++;
     }
 
     /**
@@ -365,6 +436,7 @@ public class BucketValidator implements ValidateEventListener {
                 artifactDAO.setStorageLocation(curArtifact, null);
                 
                 transactionManager.commitTransaction();
+                numClearStorageLocation++;
             } catch (EntityNotFoundException ex) {
                 // failed to lock: artifact deleted since start of iteration
                 transactionManager.rollbackTransaction();
@@ -393,9 +465,9 @@ public class BucketValidator implements ValidateEventListener {
     public void delete(final StorageMetadata storageMetadata) throws Exception {
         if (canTakeAction()) {
             final StorageLocation storageLocation = storageMetadata.getStorageLocation();
-            LOGGER.debug("Deleting from storage...");
+            LOGGER.debug("Delete from storage: " + storageLocation);
             storageAdapter.delete(storageLocation);
-            LOGGER.debug("Delete from storage: OK");
+            numDeleteStorageLocation++;
         }
     }
 
@@ -424,6 +496,7 @@ public class BucketValidator implements ValidateEventListener {
                 LOGGER.debug("commit transaction...");
                 transactionManager.commitTransaction();
                 LOGGER.debug("commit transaction... OK");
+                numDeleteArtifact++;
             } catch (EntityNotFoundException ex) {
                 LOGGER.debug("failed to lock Artifact " + artifact.getID() + " : already deleted");
             } catch (Exception e) {
@@ -484,6 +557,7 @@ public class BucketValidator implements ValidateEventListener {
                 transactionManager.startTransaction();
                 artifactDAO.put(artifact);
                 transactionManager.commitTransaction();
+                numCreateArtifact++;
             } catch (Exception e) {
                 LOGGER.error(String.format("Failed to create Artifact %s.", artifact.getURI()), e);
                 transactionManager.rollbackTransaction();
@@ -533,6 +607,7 @@ public class BucketValidator implements ValidateEventListener {
                 artifactDAO.put(replacementArtifact);
 
                 transactionManager.commitTransaction();
+                numReplaceArtifact++;
             } catch (Exception e) {
                 LOGGER.error(String.format("Failed to create Artifact %s.", storageMetadata.artifactURI), e);
                 transactionManager.rollbackTransaction();
@@ -576,6 +651,7 @@ public class BucketValidator implements ValidateEventListener {
                 artifactDAO.put(artifact);
 
                 transactionManager.commitTransaction();
+                numUpdateArtifact++;
             } catch (EntityNotFoundException ex) {
                 LOGGER.debug("failed to lock Artifact " + artifact.getID() + " : already deleted");
             } catch (Exception e) {
@@ -661,6 +737,7 @@ public class BucketValidator implements ValidateEventListener {
                 try {
                     delete(storageMetadata);
                     this.obsoleteStorageLocationDAO.delete(obsoleteStorageLocation.getID());
+                    numDeleteObsoleteStorageLocation++;
                 } catch (Exception e) {
                     throw new IllegalStateException("failed to cleanup obsolete " + obsoleteStorageLocation, e);
                 }
