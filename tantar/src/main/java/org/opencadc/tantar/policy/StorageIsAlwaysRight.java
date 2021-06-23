@@ -69,6 +69,7 @@
 
 package org.opencadc.tantar.policy;
 
+import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.storage.StorageMetadata;
 import org.opencadc.tantar.Reporter;
@@ -76,7 +77,8 @@ import org.opencadc.tantar.ValidateEventListener;
 
 
 public class StorageIsAlwaysRight extends ResolutionPolicy {
-
+    private static final Logger log = Logger.getLogger(StorageIsAlwaysRight.class);
+    
     public StorageIsAlwaysRight(final ValidateEventListener validateEventListener, final Reporter reporter) {
         super(validateEventListener, reporter);
     }
@@ -149,6 +151,6 @@ public class StorageIsAlwaysRight extends ResolutionPolicy {
         sb.append(" Artifact.uri=").append(artifact.getURI());
         sb.append(" loc=").append(storageMetadata.getStorageLocation());
         //reporter.report("Storage Metadata " + storageMetadata.getStorageLocation() + " is valid as per policy.");
-        reporter.report(sb.toString());
+        log.debug(sb.toString());
     }
 }
