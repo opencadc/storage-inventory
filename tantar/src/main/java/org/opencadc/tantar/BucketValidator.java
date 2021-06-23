@@ -305,7 +305,7 @@ public class BucketValidator implements ValidateEventListener {
 
         Artifact unresolvedArtifact = null;
         StorageMetadata unresolvedStorageMetadata = null;
-        logSummary(false);
+        logSummary(true, true);
         while ((inventoryIterator.hasNext() || unresolvedArtifact != null)
                && (storageMetadataIterator.hasNext() || unresolvedStorageMetadata != null)) {
             final Artifact artifact = (unresolvedArtifact == null) ? inventoryIterator.next() : unresolvedArtifact;
@@ -333,8 +333,8 @@ public class BucketValidator implements ValidateEventListener {
                 unresolvedStorageMetadata = storageMetadata;
                 resolutionPolicy.resolve(artifact, null);
             }
-            
-            logSummary(true);
+            numValidated++;
+            logSummary();
         }
 
         // *** Perform some mop up.  These loops will take effect when one of the iterators is empty but the other is
@@ -343,7 +343,8 @@ public class BucketValidator implements ValidateEventListener {
             final Artifact artifact = inventoryIterator.next();
             LOGGER.debug(String.format("Artifact %s exists with no Storage Metadata.", artifact.storageLocation));
             resolutionPolicy.resolve(artifact, null);
-            logSummary(true);
+            numValidated++;
+            logSummary();
         }
 
         while (storageMetadataIterator.hasNext()) {
@@ -351,23 +352,28 @@ public class BucketValidator implements ValidateEventListener {
             LOGGER.debug(String.format("Storage Metadata %s exists with no Artifact.",
                                        storageMetadata.getStorageLocation()));
             resolutionPolicy.resolve(null, storageMetadata);
-            logSummary(true);
+            numValidated++;
+            logSummary();
         }
+        logSummary(true, false);
 
         LOGGER.debug("END validating iterators.");
     }
 
-    private void logSummary(boolean countValidated) {
+    // default per-item invocation
+    private void logSummary() {
+        logSummary(false, true);
+    }
+    
+    // initial: true, true
+    // final:   true, false
+    private void logSummary(boolean force, boolean showNext) {
         long sec = System.currentTimeMillis() / 1000L;
         long dt = (sec - lastSummary);
-        LOGGER.warn("logSummary: " + countValidated + " " + lastSummary + " " + sec + " dt=" + dt);
-        if (dt < summaryLogInterval) {
+        if (!force && dt < summaryLogInterval) {
             return;
         }
         lastSummary = sec;
-        if (countValidated) {
-            numValidated++;
-        }
         
         StringBuilder sb = new StringBuilder();
         sb.append(resolutionPolicy.getClass().getSimpleName()).append(".summary");
@@ -401,7 +407,9 @@ public class BucketValidator implements ValidateEventListener {
         if (numUpdateArtifact > 0) {
             sb.append(" numUpdateArtifact=").append(numUpdateArtifact);
         }
-        sb.append(" nextSummaryIn=").append(summaryLogInterval).append("sec");
+        if (showNext) {
+            sb.append(" nextSummaryIn=").append(summaryLogInterval).append("sec");
+        }
         LOGGER.info(sb.toString());
     }
     
