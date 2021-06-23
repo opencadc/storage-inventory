@@ -128,27 +128,32 @@ public class FileSyncJob implements Runnable {
     private final Subject subject;
     private Subject anonSubject = AuthenticationUtil.getAnonSubject();
     
+    private final String startMsg;
+    
     /**
      * Construct a job to sync the specified artifact.
      * 
-     * @param artifactID entity ID of artifact to sync
+     * @param artifact artifact to sync
      * @param locatorServiceID locator service to use
      * @param storageAdapter back end storage
      * @param artifactDAO database persistence
      * @param subject caller with credentials for downloads
      */
-    public FileSyncJob(UUID artifactID, URI locatorServiceID, StorageAdapter storageAdapter, ArtifactDAO artifactDAO, Subject subject) {
-        InventoryUtil.assertNotNull(FileSyncJob.class, "artifactID", artifactID);
+    public FileSyncJob(Artifact artifact, URI locatorServiceID, StorageAdapter storageAdapter, ArtifactDAO artifactDAO, Subject subject) {
+        InventoryUtil.assertNotNull(FileSyncJob.class, "artifact", artifact);
         InventoryUtil.assertNotNull(FileSyncJob.class, "locatorServiceID", locatorServiceID);
         InventoryUtil.assertNotNull(FileSyncJob.class, "storageAdapter", storageAdapter);
         InventoryUtil.assertNotNull(FileSyncJob.class, "artifactDAO", artifactDAO);
 
-        this.artifactID = artifactID;
+        this.artifactID = artifact.getID();
         this.locatorService = locatorServiceID;
         this.storageAdapter = storageAdapter;
 
         this.artifactDAO = artifactDAO;
         this.subject = subject;
+        
+        this.startMsg = "FileSyncJob.START Artifact.id=" + artifactID
+                + " Artifact.uri=" + artifact.getURI();
     }
 
     @Override
@@ -170,7 +175,7 @@ public class FileSyncJob implements Runnable {
     //         Artifact.contentChecksum and Artifact.contentLength are immutable      
     private void doSync() {
         
-        log.info("FileSyncJob.START Artifact.id=" + artifactID);
+        log.info(startMsg);
         long start = System.currentTimeMillis();
         boolean success = false;
         String msg = "";

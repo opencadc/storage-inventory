@@ -70,7 +70,6 @@
 package org.opencadc.tantar;
 
 import ca.nrc.cadc.util.Log4jInit;
-
 import java.io.ByteArrayOutputStream;
 import java.io.OutputStream;
 import java.net.URI;
@@ -83,17 +82,15 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.UUID;
 import javax.security.auth.Subject;
-
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.apache.log4j.SimpleLayout;
 import org.apache.log4j.WriterAppender;
-import org.junit.Test;
 import org.junit.Assert;
+import org.junit.Test;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.storage.StorageMetadata;
-import org.opencadc.inventory.util.BucketSelector;
 import org.opencadc.tantar.policy.InventoryIsAlwaysRight;
 import org.opencadc.tantar.policy.RecoverFromStorage;
 import org.opencadc.tantar.policy.StorageIsAlwaysRight;
@@ -195,7 +192,7 @@ public class BucketValidatorTest {
         assertListContainsMessage(outputLines, ".*clearStorageLocation.*ceph:7890AB.*");
         assertListContainsMessage(outputLines, ".*clearStorageLocation.*s3:CDEF00.*");
         assertListContainsMessage(outputLines, ".*deleteStorageLocation.*s3:CDEF00.*");
-        assertListContainsMessage(outputLines, ".*valid.*ad:123456.*");
+        //assertListContainsMessage(outputLines, ".*valid.*ad:123456.*");
     }
 
     /**
