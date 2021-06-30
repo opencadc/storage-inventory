@@ -266,7 +266,7 @@ the explanation #s match -- they are the same explanation seen from both sides.
 
     explantion0: filter policy at L changed to include artifact in R
     evidence: ?
-    action: equivalent to missed Artifact event (explanation3 below)
+    action: equivalent to missed Artifact event (explanation3/4 below)
     
     explanation1: deleted from L, pending/missed DeletedArtifactEvent in R
     evidence: DeletedArtifactEvent in L
@@ -281,8 +281,8 @@ the explanation #s match -- they are the same explanation seen from both sides.
     action: insert Artifact
     
     explanation4: L==global, new Artifact in R, pending/missed changed Artifact event in L
-    evidence: Artifact in local db but siteLocations does not include remote siteID
-    action: add siteID to Artifact.siteLocations
+    evidence: 
+    action: insert Artifact with siteLocation or add siteID to Artifact.siteLocations
     
     explanation6: deleted from L, lost DeletedArtifactEvent
     evidence: ?
