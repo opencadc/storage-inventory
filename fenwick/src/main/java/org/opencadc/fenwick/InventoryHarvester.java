@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2020.                            (c) 2020.
+*  (c) 2021.                            (c) 2021.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -110,6 +110,7 @@ import org.opencadc.inventory.db.HarvestStateDAO;
 import org.opencadc.inventory.db.StorageSiteDAO;
 import org.opencadc.inventory.db.version.InitDatabase;
 import org.opencadc.inventory.util.ArtifactSelector;
+import org.opencadc.tap.RowMapException;
 import org.opencadc.tap.TapClient;
 
 
@@ -209,7 +210,7 @@ public class InventoryHarvester implements Runnable {
                         doit();
                         isRetry = false;
                         // catch exceptions resulting in a retry
-                    } catch (ResourceNotFoundException | PreconditionFailedException | ExpectationFailedException
+                    } catch (RowMapException | ResourceNotFoundException | PreconditionFailedException | ExpectationFailedException
                              | RemoteServiceException | TransientException | IOException | NotAuthenticatedException
                              | AccessControlException | IllegalArgumentException | IllegalStateException
                              | IndexOutOfBoundsException ex) {
