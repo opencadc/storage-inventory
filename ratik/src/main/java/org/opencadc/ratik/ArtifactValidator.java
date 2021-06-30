@@ -394,16 +394,16 @@ public class ArtifactValidator {
         log.debug("checking explanation 3");
         if (this.remoteSite == null) {
             try {
-                log.debug("starting transaction");
-                this.transactionManager.startTransaction();
-                log.debug("start txn: OK");
+                //log.debug("starting transaction");
+                //this.transactionManager.startTransaction();
+                //log.debug("start txn: OK");
 
                 log.info(String.format("put: %s %s reason: pending/missed Artifact", remote.getID(), remote.getURI()));
                 this.artifactDAO.put(remote);
 
-                log.debug("committing transaction");
-                this.transactionManager.commitTransaction();
-                log.debug("commit txn: OK");
+                //log.debug("committing transaction");
+                //this.transactionManager.commitTransaction();
+                //log.debug("commit txn: OK");
             } catch (Exception e) {
                 log.error(String.format("failed to put %s %s", remote.getID(), remote.getURI()), e);
                 this.transactionManager.rollbackTransaction();
@@ -419,13 +419,17 @@ public class ArtifactValidator {
         }
 
         // explanation4: L==global, new Artifact in R, pending/missed changed Artifact event in L
-        // evidence: Artifact in local db but siteLocations does not include remote siteID
-        // action: add siteID to Artifact.siteLocations
+        // also
+        // explanation0: filter policy at L changed to include artifact in R
+        // explanation6: deleted from L, lost DeletedArtifactEvent
+        // evidence: ?
+        // action: insert Artifact or add siteID to Artifact.siteLocations
         log.debug("checking explanation 4");
         if (this.remoteSite != null) {
+            SiteLocation remoteSiteLocation = new SiteLocation(this.remoteSite.getID());
             Artifact local = this.artifactDAO.get(remote.getID());
             if (local != null) {
-                SiteLocation remoteSiteLocation = new SiteLocation(this.remoteSite.getID());
+                
                 try {
                     log.debug("starting transaction");
                     this.transactionManager.startTransaction();
@@ -457,6 +461,18 @@ public class ArtifactValidator {
                         log.error("rollback txn: OK");
                     }
                 }
+            } else {
+                //log.debug("starting transaction");
+                //this.transactionManager.startTransaction();
+                //log.debug("start txn: OK");
+
+                log.info(String.format("put: %s %s reason: pending/missed Artifact", remote.getID(), remote.getURI()));
+                remote.siteLocations.add(remoteSiteLocation);
+                this.artifactDAO.put(remote);
+
+                //log.debug("committing transaction");
+                //this.transactionManager.commitTransaction();
+                //log.debug("commit txn: OK");
             }
         }
 

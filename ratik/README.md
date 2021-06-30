@@ -18,6 +18,9 @@ org.opencadc.ratik.inventory.username={dbuser}
 org.opencadc.ratik.inventory.password={dbpassword}
 org.opencadc.ratik.inventory.url=jdbc:postgresql://{server}/{database}
 
+# local site type, true = global site, false = storage site
+org.opencadc.ratik.trackSiteLocations={true|false}
+
 # remote inventory query service (luskan)
 org.opencadc.ratik.queryService={resourceID of remote TAP service with inventory data model}
 
@@ -25,12 +28,20 @@ org.opencadc.ratik.queryService={resourceID of remote TAP service with inventory
 org.opencadc.ratik.buckets={uriBucket prefix or range of prefixes}
 
 # selectivity
-org.opencadc.inventory.util.ArtifactSelector={fully qualified classname of ArtifactSelector implementation}
+org.opencadc.ratik.artifactSelector={all|filter}
 
-# local site type, true = global site, false = storage site
-org.opencadc.ratik.trackSiteLocations={true|false}
+# artifact uri bucket filter
+org.opencadc.ratik.buckets={uriBucket prefix or range of prefixes}
 ```
-The range of uriBucket prefixes is specified with two values separated by a single - (dash) character; whitespace is ignored.
+
+The range of uri bucket prefixes is specified with two values separated by a 
+single - (dash) character; whitespace is ignored. Multiple instances of `ratik` 
+can be run (in parallel) to subdivide the work as long as the range of buckets 
+do not overlap.
+
+The `artifactSelector`, `queryService`, and `trackSiteLocations` settings have the 
+same meaning and effect as in `fenwick` and must be configured the same when `ratik` 
+is used to validate an instacne managed by `fenwick`.
 
 ### cadcproxy.pem
 Remote calls will use this certificate to authenticate.

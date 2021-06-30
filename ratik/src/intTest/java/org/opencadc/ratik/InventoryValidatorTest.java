@@ -665,24 +665,30 @@ public class InventoryValidatorTest {
     /** discrepancy: artifact not in L && artifact in R
      *
      * explanation4: L==global, new Artifact in R, pending/missed changed Artifact event in L
-     * evidence: Artifact in local db but siteLocations does not include remote siteID
-     * action: add siteID to Artifact.siteLocations
+     * evidence: Artifact not in local db or Artifact in local db but siteLocations does not include remote siteID
+     * action: insert Artifact or add siteID to existing Artifact.siteLocations
      *
      * L == global
-     * before: Artifact in L & R, R siteID not in L Artifact.siteLocations
-     * after:  Artifact in L and R siteID in Artifact.siteLocations
+     * before: Artifact1 in L & R, R siteID not in L Artifact.siteLocations
+     *         Artifact2 in R
+     * after:  Artifact1 in L and R siteID in Artifact.siteLocations
+     *         Artifact2 in L and R siteID in Artifact.siteLocations
      */
     //@Ignore // explanation4 to be updated
     @Test
     public void explanation4_ArtifactNotInL_LocalIsGlobal() throws Exception {
         // Put Artifact in remote.
-        UUID remoteSiteID = this.remoteEnvironment.storageSiteDAO.list().iterator().next().getID();
-        UUID randomSiteID = UUID.randomUUID();
+        final UUID remoteSiteID = this.remoteEnvironment.storageSiteDAO.list().iterator().next().getID();
+        final UUID randomSiteID = UUID.randomUUID();
 
-        Artifact artifact = new Artifact(URI.create("cadc:INTTEST/one.ext"), TestUtil.getRandomMD5(),
+        Artifact artifact1 = new Artifact(URI.create("cadc:INTTEST/one.ext"), TestUtil.getRandomMD5(),
                                          new Date(), 1024L);
-        this.remoteEnvironment.artifactDAO.put(artifact);
-
+        this.remoteEnvironment.artifactDAO.put(artifact1);
+        
+        Artifact artifact2 = new Artifact(URI.create("cadc:INTTEST/two.ext"), TestUtil.getRandomMD5(),
+                                         new Date(), 1024L);
+        this.remoteEnvironment.artifactDAO.put(artifact2);
+        
         try {
             System.setProperty("user.home", TMP_DIR);
             InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
@@ -692,8 +698,8 @@ public class InventoryValidatorTest {
                 // after the local and remote iterators have been populated.
                 @Override
                 void testAction() {
-                    artifact.siteLocations.add(new SiteLocation(randomSiteID));
-                    localEnvironment.artifactDAO.put(artifact);
+                    artifact1.siteLocations.add(new SiteLocation(randomSiteID));
+                    localEnvironment.artifactDAO.put(artifact1);
                 }
             };
             testSubject.run();
@@ -703,13 +709,21 @@ public class InventoryValidatorTest {
 
         // Local Artifact should not have been deleted and Artifact.siteLocations should
         // contain the remote and random SiteLocation's.
-        Artifact localArtifact = this.localEnvironment.artifactDAO.get(artifact.getID());
-        Assert.assertNotNull("local artifact not found", localArtifact);
-        Assert.assertEquals("metaChecksum mismatch", artifact.getMetaChecksum(), localArtifact.getMetaChecksum());
-        Assert.assertTrue("artifact does not contains remote site location",
-                          localArtifact.siteLocations.contains(new SiteLocation(remoteSiteID)));
-        Assert.assertTrue("artifact does not contains local site location",
-                          localArtifact.siteLocations.contains(new SiteLocation(randomSiteID)));
+        Artifact localArtifact1 = this.localEnvironment.artifactDAO.get(artifact1.getID());
+        Assert.assertNotNull("local artifact1 not found", localArtifact1);
+        Assert.assertEquals("metaChecksum mismatch", artifact1.getMetaChecksum(), localArtifact1.getMetaChecksum());
+        Assert.assertTrue("artifact1 does not contains remote site location",
+                          localArtifact1.siteLocations.contains(new SiteLocation(remoteSiteID)));
+        Assert.assertTrue("artifact1 does not contains other site location",
+                          localArtifact1.siteLocations.contains(new SiteLocation(randomSiteID)));
+        
+        Artifact localArtifact2 = this.localEnvironment.artifactDAO.get(artifact2.getID());
+        Assert.assertNotNull("local artifact2 not found", localArtifact2);
+        Assert.assertEquals("metaChecksum mismatch", artifact2.getMetaChecksum(), localArtifact2.getMetaChecksum());
+        Assert.assertTrue("artifact2 does not contains remote site location",
+                          localArtifact2.siteLocations.contains(new SiteLocation(remoteSiteID)));
+        Assert.assertFalse("artifact2 contains other site location",
+                          localArtifact2.siteLocations.contains(new SiteLocation(randomSiteID)));
     }
 
     /**
