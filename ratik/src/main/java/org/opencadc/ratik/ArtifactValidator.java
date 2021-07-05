@@ -394,16 +394,16 @@ public class ArtifactValidator {
         log.debug("checking explanation 3");
         if (this.remoteSite == null) {
             try {
-                //log.debug("starting transaction");
-                //this.transactionManager.startTransaction();
-                //log.debug("start txn: OK");
+                log.debug("starting transaction");
+                this.transactionManager.startTransaction();
+                log.debug("start txn: OK");
 
                 log.info(String.format("put: %s %s reason: pending/missed Artifact", remote.getID(), remote.getURI()));
                 this.artifactDAO.put(remote);
 
-                //log.debug("committing transaction");
-                //this.transactionManager.commitTransaction();
-                //log.debug("commit txn: OK");
+                log.debug("committing transaction");
+                this.transactionManager.commitTransaction();
+                log.debug("commit txn: OK");
             } catch (Exception e) {
                 log.error(String.format("failed to put %s %s", remote.getID(), remote.getURI()), e);
                 this.transactionManager.rollbackTransaction();
@@ -462,17 +462,17 @@ public class ArtifactValidator {
                     }
                 }
             } else {
-                //log.debug("starting transaction");
-                //this.transactionManager.startTransaction();
-                //log.debug("start txn: OK");
+                log.debug("starting transaction");
+                this.transactionManager.startTransaction();
+                log.debug("start txn: OK");
 
                 log.info(String.format("put: %s %s reason: pending/missed Artifact", remote.getID(), remote.getURI()));
                 remote.siteLocations.add(remoteSiteLocation);
                 this.artifactDAO.put(remote);
 
-                //log.debug("committing transaction");
-                //this.transactionManager.commitTransaction();
-                //log.debug("commit txn: OK");
+                log.debug("committing transaction");
+                this.transactionManager.commitTransaction();
+                log.debug("commit txn: OK");
             }
         }
 
