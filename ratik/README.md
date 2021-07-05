@@ -18,20 +18,17 @@ org.opencadc.ratik.inventory.username={dbuser}
 org.opencadc.ratik.inventory.password={dbpassword}
 org.opencadc.ratik.inventory.url=jdbc:postgresql://{server}/{database}
 
-# local site type, true = global site, false = storage site
-org.opencadc.ratik.trackSiteLocations={true|false}
-
-# remote inventory query service (luskan)
-org.opencadc.ratik.queryService={resourceID of remote TAP service with inventory data model}
-
 # artifact uri bucket filter
 org.opencadc.ratik.buckets={uriBucket prefix or range of prefixes}
 
 # selectivity
 org.opencadc.ratik.artifactSelector={all|filter}
 
-# artifact uri bucket filter
-org.opencadc.ratik.buckets={uriBucket prefix or range of prefixes}
+# remote inventory query service (luskan)
+org.opencadc.ratik.queryService={resourceID of remote TAP service with inventory data model}
+
+# local site type, true = global site, false = storage site
+org.opencadc.ratik.trackSiteLocations={true|false}
 ```
 
 The range of uri bucket prefixes is specified with two values separated by a 
@@ -41,14 +38,16 @@ do not overlap.
 
 The `artifactSelector`, `queryService`, and `trackSiteLocations` settings have the 
 same meaning and effect as in `fenwick` and must be configured the same when `ratik` 
-is used to validate an instacne managed by `fenwick`.
+is used to validate an instance maintained by `fenwick`.
 
 ### cadcproxy.pem
 Remote calls will use this certificate to authenticate.
 
 ### artifact-filter.sql (optional)
-When the `org.opencadc.inventory.util.ArtifactSelector` ArtifactSelector is specified, this config file specifying the included Artifacts is required.
-The single clause in the SQL file *MUST* begin with the `WHERE` keyword.
+When the `org.opencadc.ratik.artifactSelector = filter` is specified, this config 
+file specifying the included Artifacts is required. The single clause in the SQL 
+file *MUST* begin with the `WHERE` keyword. This should be the same artifact filter
+as used in fenwick.
 
 > `artifact-filter.sql`
 ```sql
