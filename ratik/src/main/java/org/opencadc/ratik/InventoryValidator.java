@@ -120,6 +120,10 @@ public class InventoryValidator implements Runnable {
     private final BucketSelector bucketSelector;
     private final ArtifactValidator artifactValidator;
     private final MessageDigest messageDigest;
+    
+    private long numLocalArtifacts = 0L;
+    private long numRemoteArtifacts = 0L;
+    private long numMatchedArtifacts = 0L;
 
     /**
      * Constructor.
@@ -207,6 +211,8 @@ public class InventoryValidator implements Runnable {
             final Subject subject = SSLUtil.createSubject(new File(CERTIFICATE_FILE_LOCATION));
             Subject.doAs(subject, (PrivilegedExceptionAction<Void>) () -> {
                 doit();
+                log.info(this.getClass().getSimpleName() + ".summary numLocal= " + numLocalArtifacts
+                    + " numRemote=" + numRemoteArtifacts + " numMatched=" + numMatchedArtifacts);
                 return null;
             });
         } catch (PrivilegedActionException privilegedActionException) {
@@ -320,6 +326,15 @@ public class InventoryValidator implements Runnable {
     void validate(Artifact local, Artifact remote)
         throws InterruptedException, ResourceNotFoundException, TransientException, IOException {
         log.debug(String.format("validating:\n local - %s\nremote - %s", local, remote));
+        if (local != null) {
+            numLocalArtifacts++;
+        }
+        if (remote != null) {
+            numRemoteArtifacts++;
+        }
+        if (local != null && remote != null) {
+            numMatchedArtifacts++;
+        }
         artifactValidator.validate(local, remote);
     }
 
@@ -378,7 +393,12 @@ public class InventoryValidator implements Runnable {
         }
         // order query results by Artifact.uri
         boolean ordered = true;
-        return this.artifactDAO.iterator(constraint, bucket, ordered);
+        long t1 = System.currentTimeMillis();
+        log.debug(this.getClass().getSimpleName() + ".localQuery bucket=" + bucket);
+        ResourceIterator<Artifact> ret = this.artifactDAO.iterator(constraint, bucket, ordered);
+        long dt = System.currentTimeMillis() - t1;
+        log.info(this.getClass().getSimpleName() + ".localQuery bucket=" + bucket + " duration=" + dt);
+        return ret;
     }
 
     /**
@@ -398,7 +418,12 @@ public class InventoryValidator implements Runnable {
         final TapClient<Artifact> tapClient = new TapClient<>(this.resourceID);
         final String query = buildRemoteQuery(bucket);
         log.debug("\nExecuting query '" + query + "'\n");
-        return tapClient.execute(query, new ArtifactRowMapper());
+        long t1 = System.currentTimeMillis();
+        log.debug(this.getClass().getSimpleName() + ".remoteQuery bucket=" + bucket);
+        ResourceIterator<Artifact> ret = tapClient.execute(query, new ArtifactRowMapper());
+        long dt = System.currentTimeMillis() - t1;
+        log.info(this.getClass().getSimpleName() + ".remoteQuery bucket=" + bucket + " duration=" + dt);
+        return ret;
     }
 
     /**

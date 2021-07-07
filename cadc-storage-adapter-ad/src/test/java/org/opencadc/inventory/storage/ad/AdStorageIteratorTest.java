@@ -192,7 +192,7 @@ public class AdStorageIteratorTest {
     }
 
     private StorageMetadata getStorageMetadata(int i) throws Exception {
-        String uriStr = "ad:/TEST/fileuri_" + i + ".txt";
+        String uriStr = "ad:TEST/fileuri_" + i + ".txt";
         URI uri = new URI(uriStr);
         StorageLocation storageLocation = new StorageLocation(uri);
         storageLocation.storageBucket = "testBucket";
