@@ -103,7 +103,7 @@ public class AdStorageIterator implements Iterator<StorageMetadata> {
             if (!curMeta.equals(maybeNext)) {
                 this.nextItem = maybeNext;
             } else if (maybeNext != null) {
-                log.warn(AdStorageIterator.class.getSimpleName() + ".SKIP duplicate=" + maybeNext.getStorageLocation());
+                log.warn(AdStorageIterator.class.getSimpleName() + ".SKIP loc=" + maybeNext.getStorageLocation() + " reason=duplicate");
             }
         }
 

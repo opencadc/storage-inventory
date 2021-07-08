@@ -87,7 +87,7 @@ import org.opencadc.tap.TapRowMapper;
  * RowMapper maps from the AD archive_files table to a StorageMetadata object.
  */
 public class AdStorageQuery {
-    private static final Logger log = Logger.getLogger(AdStorageQuery.class);
+    private static final Logger log = Logger.getLogger(AdStorageMetadataRowMapper.class); // intentional: log message are from nested class
 
     private static final String QTMPL = "SELECT archiveName, fileName, uri, inventoryURI, contentMD5, fileSize,"
             + " contentEncoding, contentType, ingestDate"
@@ -107,7 +107,6 @@ public class AdStorageQuery {
     }
 
     class AdStorageMetadataRowMapper implements TapRowMapper<StorageMetadata> {
-
         public AdStorageMetadataRowMapper() { }
 
         @Override
@@ -126,7 +125,7 @@ public class AdStorageQuery {
             
             URI artifactURI = (URI) i.next();
             if (artifactURI == null) {
-                log.warn(storageID + " has null inventoryURI: SKIP");
+                log.warn(AdStorageMetadataRowMapper.class.getSimpleName() + ".SKIP loc=" + storageBucket + "/" + storageID + " reason=null-artifactURI");
                 return null;
             }
             
@@ -137,14 +136,18 @@ public class AdStorageQuery {
                 contentChecksum = new URI(MD5_ENCODING_SCHEME + hex);
                 InventoryUtil.assertValidChecksumURI(AdStorageQuery.class, "contentChecksum", contentChecksum);
             } catch (IllegalArgumentException | URISyntaxException u) {
-                log.warn(storageID + " has invalid HEX md5sum - " + hex + ": SKIP");
+                log.warn(AdStorageMetadataRowMapper.class.getSimpleName() + ".SKIP loc=" + storageBucket + "/" + storageID + " reason=invalid=contentChecksum");
                 return null;
             }
             
             // archive_files.fileSize
             Long contentLength = (Long) i.next();
             if (contentLength == null) {
-                log.warn(storageID + " has null fileSize: SKIP");
+                log.warn(AdStorageMetadataRowMapper.class.getSimpleName() + ".SKIP loc=" + storageBucket + "/" + storageID + " reason=null-contentLength");
+                return null;
+            }
+            if (contentLength == 0L) {
+                log.warn(AdStorageMetadataRowMapper.class.getSimpleName() + ".SKIP loc=" + storageBucket + "/" + storageID + " reason=zero-contentLength");
                 return null;
             }
 
