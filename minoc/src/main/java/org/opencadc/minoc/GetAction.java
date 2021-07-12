@@ -71,13 +71,19 @@ import ca.nrc.cadc.io.ByteCountOutputStream;
 import ca.nrc.cadc.io.WriteException;
 import ca.nrc.cadc.net.HttpTransfer;
 
+import java.io.BufferedWriter;
+import java.io.OutputStreamWriter;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import nom.tam.fits.Header;
+import nom.tam.fits.HeaderCard;
+import nom.tam.util.Cursor;
 import org.apache.log4j.Logger;
 import org.opencadc.fits.FitsOperations;
 import org.opencadc.inventory.Artifact;
+import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.minoc.operations.CutoutFileNameFormat;
 import org.opencadc.minoc.operations.ProxyRandomAccessFits;
@@ -107,6 +113,8 @@ public class GetAction extends ArtifactAction {
     /**
      * Download the artifact or cutouts of the artifact.  In the event that an optional cutout was requested, then
      * mangle the output filename to reflect the requested values.
+     * The META=true keyword can be passed in to print the headers, but only if NO OTHER cutout parameters were
+     * supplied.
      */
     @Override
     public void doAction() throws Exception {
@@ -127,14 +135,35 @@ public class GetAction extends ArtifactAction {
         
         ByteCountOutputStream bcos = null;
         try {
-            
+            final Map<String, List<String>> subMap = new HashMap<>();
+            final FitsOperations fitsOperations =
+                    new FitsOperations(new ProxyRandomAccessFits(this.storageAdapter, artifact.storageLocation,
+                                                                 artifact.getContentLength()));
             if (requestedSubs == null || requestedSubs.isEmpty()) {
-                HeadAction.setHeaders(artifact, syncOutput);
-                bcos = new ByteCountOutputStream(syncOutput.getOutputStream());
-                storageAdapter.get(storageLocation, bcos);
+                subMap.put(SodaParamValidator.META, syncInput.getParameters(SodaParamValidator.META));
+                if (SODA_PARAM_VALIDATOR.getMetaMode(subMap)) {
+                    log.debug("META supplied.");
+                    final String filename = InventoryUtil.computeArtifactFilename(artifact.getURI());
+                    syncOutput.setHeader("content-disposition", "attachment; filename=\"" + filename + ".txt\"");
+                    syncOutput.setHeader("content-type", "text/plain");
+                    final BufferedWriter bufferedWriter =
+                            new BufferedWriter(new OutputStreamWriter(syncOutput.getOutputStream()));
+                    for (final Header header : fitsOperations.getHeaders()) {
+                        for (final Cursor<String, HeaderCard> headerCardCursor = header.iterator();
+                             headerCardCursor.hasNext();) {
+                            final HeaderCard headerCard = headerCardCursor.next();
+                            bufferedWriter.write(headerCard.toString());
+                            bufferedWriter.newLine();
+                        }
+                    }
+                    bufferedWriter.flush();
+                } else {
+                    HeadAction.setHeaders(artifact, syncOutput);
+                    bcos = new ByteCountOutputStream(syncOutput.getOutputStream());
+                    storageAdapter.get(storageLocation, bcos);
+                }
             } else {
                 // If any cutouts were requested
-                final Map<String, List<String>> subMap = new HashMap<>();
                 subMap.put(SodaParamValidator.SUB, requestedSubs);
                 final List<ExtensionSlice> slices = SODA_PARAM_VALIDATOR.validateSUB(subMap);
                 final String schemePath = artifactURI.getSchemeSpecificPart();
@@ -143,9 +172,6 @@ public class GetAction extends ArtifactAction {
                 syncOutput.setHeader(CONTENT_DISPOSITION, "inline; filename=\""
                                                           + cutoutFileNameFormat.format(slices) + "\"");
                 syncOutput.setHeader(HttpTransfer.CONTENT_TYPE, "application/fits");
-                final FitsOperations fitsOperations =
-                        new FitsOperations(new ProxyRandomAccessFits(this.storageAdapter, artifact.storageLocation,
-                                                                     artifact.getContentLength()));
                 bcos = new ByteCountOutputStream(syncOutput.getOutputStream());
                 fitsOperations.cutoutToStream(slices, bcos);
             }
