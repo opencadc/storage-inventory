@@ -70,16 +70,15 @@ package org.opencadc.minoc;
 import ca.nrc.cadc.io.ByteCountOutputStream;
 import ca.nrc.cadc.io.WriteException;
 import ca.nrc.cadc.net.HttpTransfer;
+import ca.nrc.cadc.util.StringUtil;
 
-import java.io.BufferedWriter;
-import java.io.OutputStreamWriter;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
-import nom.tam.fits.Header;
-import nom.tam.fits.HeaderCard;
-import nom.tam.util.Cursor;
 import org.apache.log4j.Logger;
 import org.opencadc.fits.FitsOperations;
 import org.opencadc.inventory.Artifact;
@@ -100,6 +99,10 @@ public class GetAction extends ArtifactAction {
     
     private static final Logger log = Logger.getLogger(GetAction.class);
     private static final String CONTENT_DISPOSITION = "Content-Disposition";
+    private static final String[] FITS_CONTENT_TYPES = new String[] {
+        "text/fits", "application/fits"
+    };
+
     private static final SodaParamValidator SODA_PARAM_VALIDATOR = new SodaParamValidator();
 
 
@@ -125,8 +128,7 @@ public class GetAction extends ArtifactAction {
         initStorageAdapter();
         
         Artifact artifact = getArtifact(artifactURI);
-
-        final List<String> requestedSubs = syncInput.getParameters(SodaParamValidator.SUB);
+        SodaCutout sodaCutout = new SodaCutout();
 
         StorageLocation storageLocation = new StorageLocation(artifact.storageLocation.getStorageID());
         storageLocation.storageBucket = artifact.storageLocation.storageBucket;
@@ -135,45 +137,49 @@ public class GetAction extends ArtifactAction {
         
         ByteCountOutputStream bcos = null;
         try {
-            final Map<String, List<String>> subMap = new HashMap<>();
-            final FitsOperations fitsOperations =
-                    new FitsOperations(new ProxyRandomAccessFits(this.storageAdapter, artifact.storageLocation,
-                                                                 artifact.getContentLength()));
-            if (requestedSubs == null || requestedSubs.isEmpty()) {
-                subMap.put(SodaParamValidator.META, syncInput.getParameters(SodaParamValidator.META));
-                if (SODA_PARAM_VALIDATOR.getMetaMode(subMap)) {
-                    log.debug("META supplied.");
-                    final String filename = InventoryUtil.computeArtifactFilename(artifact.getURI());
-                    syncOutput.setHeader("content-disposition", "attachment; filename=\"" + filename + ".txt\"");
-                    syncOutput.setHeader("content-type", "text/plain");
-                    final BufferedWriter bufferedWriter =
-                            new BufferedWriter(new OutputStreamWriter(syncOutput.getOutputStream()));
-                    for (final Header header : fitsOperations.getHeaders()) {
-                        for (final Cursor<String, HeaderCard> headerCardCursor = header.iterator();
-                             headerCardCursor.hasNext();) {
-                            final HeaderCard headerCard = headerCardCursor.next();
-                            bufferedWriter.write(headerCard.toString());
-                            bufferedWriter.newLine();
+            if (sodaCutout.hasNoParameters()) {
+                log.warn("No parameters specified.");
+                HeadAction.setHeaders(artifact, syncOutput);
+                bcos = new ByteCountOutputStream(syncOutput.getOutputStream());
+                storageAdapter.get(storageLocation, bcos);
+            } else {
+                final List<String> conflicts = sodaCutout.getConflicts();
+                if (!conflicts.isEmpty()) {
+                    throw new IllegalArgumentException("Conflicting SODA parameters found: " + conflicts);
+                } else if (isFITS(artifact)) {
+                    final Map<String, List<String>> parameterMap = new HashMap<>();
+                    final FitsOperations fitsOperations =
+                            new FitsOperations(new ProxyRandomAccessFits(this.storageAdapter, artifact.storageLocation,
+                                                                         artifact.getContentLength()));
+
+                    if (sodaCutout.hasSUB()) {
+                        log.debug("SUB supplied");
+                        // If pixel cutouts were requested
+                        parameterMap.put(SodaParamValidator.SUB, sodaCutout.requestedSubs);
+                        final List<ExtensionSlice> slices = SODA_PARAM_VALIDATOR.validateSUB(parameterMap);
+                        final String schemePath = artifactURI.getSchemeSpecificPart();
+                        final String fileName = schemePath.substring(schemePath.lastIndexOf("/") + 1);
+                        final CutoutFileNameFormat cutoutFileNameFormat = new CutoutFileNameFormat(fileName);
+                        syncOutput.setHeader(CONTENT_DISPOSITION, "inline; filename=\""
+                                                                  + cutoutFileNameFormat.format(slices) + "\"");
+                        syncOutput.setHeader(HttpTransfer.CONTENT_TYPE, "application/fits");
+                        bcos = new ByteCountOutputStream(syncOutput.getOutputStream());
+                        fitsOperations.cutoutToStream(slices, bcos);
+
+                    } else if (sodaCutout.hasMETA()) {
+                        parameterMap.put(SodaParamValidator.META, sodaCutout.requestedMeta);
+                        if (SODA_PARAM_VALIDATOR.getMetaMode(parameterMap)) {
+                            log.debug("META supplied.");
+                            final String filename = InventoryUtil.computeArtifactFilename(artifact.getURI());
+                            syncOutput.setHeader(CONTENT_DISPOSITION,
+                                                 "attachment; filename=\"" + filename + ".txt\"");
+                            syncOutput.setHeader(HttpTransfer.CONTENT_TYPE, "text/plain");
+                            fitsOperations.headersToStream(syncOutput.getOutputStream());
                         }
                     }
-                    bufferedWriter.flush();
                 } else {
-                    HeadAction.setHeaders(artifact, syncOutput);
-                    bcos = new ByteCountOutputStream(syncOutput.getOutputStream());
-                    storageAdapter.get(storageLocation, bcos);
+                    log.warn("Artifact " + artifact.getURI() + " is not a FITS file");
                 }
-            } else {
-                // If any cutouts were requested
-                subMap.put(SodaParamValidator.SUB, requestedSubs);
-                final List<ExtensionSlice> slices = SODA_PARAM_VALIDATOR.validateSUB(subMap);
-                final String schemePath = artifactURI.getSchemeSpecificPart();
-                final String fileName = schemePath.substring(schemePath.lastIndexOf("/") + 1);
-                final CutoutFileNameFormat cutoutFileNameFormat = new CutoutFileNameFormat(fileName);
-                syncOutput.setHeader(CONTENT_DISPOSITION, "inline; filename=\""
-                                                          + cutoutFileNameFormat.format(slices) + "\"");
-                syncOutput.setHeader(HttpTransfer.CONTENT_TYPE, "application/fits");
-                bcos = new ByteCountOutputStream(syncOutput.getOutputStream());
-                fitsOperations.cutoutToStream(slices, bcos);
             }
         } catch (WriteException e) {
             // error on client write
@@ -189,6 +195,54 @@ public class GetAction extends ArtifactAction {
             }
         }
         log.debug("retrieved artifact from storage");
+    }
 
+    private boolean isFITS(final Artifact artifact) {
+        return StringUtil.hasText(artifact.contentType)
+               && Arrays.stream(FITS_CONTENT_TYPES).anyMatch(s -> s.equals(artifact.contentType));
+    }
+
+    /**
+     * Simple encompassing class to handle cutout checks.
+     */
+    private final class SodaCutout {
+        final List<String> requestedSubs = syncInput.getParameters(SodaParamValidator.SUB);
+        final List<String> requestedMeta = syncInput.getParameters(SodaParamValidator.META);
+
+        public SodaCutout() {
+        }
+
+        boolean hasSUB() {
+            if (requestedSubs != null && !requestedSubs.isEmpty()) {
+                // Clear the null values out.
+                requestedSubs.removeIf(Objects::isNull);
+            }
+
+            return false;
+        }
+
+        boolean hasMETA() {
+            return requestedMeta != null && !requestedMeta.isEmpty();
+        }
+
+        boolean hasNoParameters() {
+            return !hasSUB() && !hasMETA();
+        }
+
+        /**
+         * Obtain a list of conflicting parameters, if any.  Conflicting parameters include combining the META parameter
+         * with any cutout, as well as combining the SUB parameter with any WCS (CIRCLE, POLYGON, etc.) cutout.
+         * TODO: Evolve this method with WCS cutouts.
+         * @return  List of SODA Parameter names, or empty List.  Never null.
+         */
+        List<String> getConflicts() {
+            final List<String> conflicts = new ArrayList<>();
+            if (hasMETA() && hasSUB()) {
+                conflicts.add(SodaParamValidator.META);
+                conflicts.add(SodaParamValidator.SUB);
+            }
+
+            return conflicts;
+        }
     }
 }
