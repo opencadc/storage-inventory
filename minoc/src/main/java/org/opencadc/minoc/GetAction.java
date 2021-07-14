@@ -139,7 +139,7 @@ public class GetAction extends ArtifactAction {
         
         ByteCountOutputStream bcos = null;
         try {
-            if (sodaCutout.hasNoParameters()) {
+            if (sodaCutout.hasNoOperations()) {
                 log.debug("No parameters specified.");
                 HeadAction.setHeaders(artifact, syncOutput);
                 bcos = new ByteCountOutputStream(syncOutput.getOutputStream());
@@ -173,7 +173,7 @@ public class GetAction extends ArtifactAction {
                     return;
                 } 
                 
-                if (sodaCutout.hasMETA()) {
+                if (sodaCutout.isMETA()) {
                     log.debug("META supplied");
                     final String filename = InventoryUtil.computeArtifactFilename(artifact.getURI());
                     syncOutput.setHeader(CONTENT_DISPOSITION, "inline; filename=\"" + filename + ".txt\"");
@@ -210,23 +210,23 @@ public class GetAction extends ArtifactAction {
      */
     private final class SodaCutout {
         final List<String> requestedSubs;
-        final List<String> requestedMeta;
+        final boolean requestedMeta;
 
         public SodaCutout() {
             this.requestedSubs = syncInput.getParameters(SodaParamValidator.SUB);
-            this.requestedMeta = syncInput.getParameters(SodaParamValidator.META);
+            this.requestedMeta = "true".equals(syncInput.getParameter(SodaParamValidator.META));
         }
 
         boolean hasSUB() {
             return requestedSubs != null && !requestedSubs.isEmpty();
         }
 
-        boolean hasMETA() {
-            return requestedMeta != null && !requestedMeta.isEmpty();
+        boolean isMETA() {
+            return requestedMeta;
         }
 
-        boolean hasNoParameters() {
-            return !hasSUB() && !hasMETA();
+        boolean hasNoOperations() {
+            return !hasSUB() && !isMETA();
         }
 
         /**
@@ -237,7 +237,7 @@ public class GetAction extends ArtifactAction {
          */
         List<String> getConflicts() {
             final List<String> conflicts = new ArrayList<>();
-            if (hasMETA() && hasSUB()) {
+            if (isMETA() && hasSUB()) {
                 conflicts.add(SodaParamValidator.META);
                 conflicts.add(SodaParamValidator.SUB);
             }
