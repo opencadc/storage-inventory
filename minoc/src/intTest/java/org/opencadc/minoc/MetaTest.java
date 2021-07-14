@@ -68,7 +68,9 @@
 
 package org.opencadc.minoc;
 
+import ca.nrc.cadc.auth.RunnableAction;
 import ca.nrc.cadc.net.HttpGet;
+import ca.nrc.cadc.net.HttpTransfer;
 import ca.nrc.cadc.net.HttpUpload;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.util.FileUtil;
@@ -88,6 +90,7 @@ import java.net.URL;
 import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
 import java.util.List;
+import static org.opencadc.minoc.MinocTest.computeChecksumURI;
 
 public class MetaTest extends MinocTest {
 
@@ -98,7 +101,7 @@ public class MetaTest extends MinocTest {
      * @throws Exception Any unknown errors.
      */
     @Test
-    public void testCheckHeaders() throws Exception {
+    public void testMEFHeaders() throws Exception {
         try {
             final URI artifactURI = URI.create("cadc:TEST/testMEFHeaders");
             final URL artifactURL = new URL(filesURL + "/" + artifactURI);
@@ -115,6 +118,7 @@ public class MetaTest extends MinocTest {
                 try (final InputStream inputStream = new ByteArrayInputStream(buffer)) {
                     final HttpUpload put = new HttpUpload(inputStream, artifactURL);
                     put.setDigest(computeChecksumURI(buffer));
+                    put.setRequestProperty(HttpTransfer.CONTENT_TYPE, "application/fits");
                     put.run();
                     Assert.assertNull(put.getThrowable());
                 }
@@ -143,6 +147,38 @@ public class MetaTest extends MinocTest {
 
                 return null;
             });
+        } catch (Exception t) {
+            LOGGER.error("unexpected throwable", t);
+            Assert.fail("unexpected throwable: " + t);
+            throw t;
+        }
+    }
+    
+    @Test
+    public void testNotFITS() throws Exception {
+        try {
+            URI artifactURI = URI.create("cadc:TEST/testNotFITS");
+            URL artifactURL = new URL(filesURL + "/" + artifactURI.toString());
+
+            String content = "abcdefghijklmnopqrstuvwxyz";
+            byte[] data = content.getBytes();
+
+            // put: no length or checksum
+            InputStream in = new ByteArrayInputStream(data);
+            HttpUpload put = new HttpUpload(in, artifactURL);
+            put.setDigest(computeChecksumURI(data));
+
+            Subject.doAs(userSubject, new RunnableAction(put));
+            Assert.assertNull(put.getThrowable());
+            
+
+            URL artifactHeadersURL = new URL(artifactURL.toExternalForm() + "?META=true");
+            HttpGet headersGet = new HttpGet(artifactHeadersURL, true);
+            headersGet.run();
+
+            LOGGER.info("response: " + headersGet.getResponseCode() + " " + headersGet.getThrowable());
+            Assert.assertEquals(400, headersGet.getResponseCode());
+
         } catch (Exception t) {
             LOGGER.error("unexpected throwable", t);
             Assert.fail("unexpected throwable: " + t);

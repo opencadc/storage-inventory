@@ -204,7 +204,7 @@ public class FitsOperationsTest extends MinocTest {
                 fileOutputStream.flush();
 
                 Assert.assertEquals("Wrong content type.",
-                                    cutoutClient.getResponseHeader(HttpTransfer.CONTENT_TYPE), "application/fits");
+                                    "application/fits", cutoutClient.getResponseHeader(HttpTransfer.CONTENT_TYPE));
                 Assert.assertNotNull("Should include Content-Disposition ("
                                      + cutoutClient.getResponseHeader("Content-Disposition") + ")",
                                      cutoutClient.getResponseHeader("Content-Disposition"));
@@ -276,6 +276,7 @@ public class FitsOperationsTest extends MinocTest {
                 final HttpUpload upload = new HttpUpload(fileInputStream, artifactURL);
                 upload.setRequestProperty("X-Test-Method", fileName);
                 upload.setRequestProperty(HttpTransfer.CONTENT_LENGTH, Long.toString(localFile.length()));
+                upload.setRequestProperty(HttpTransfer.CONTENT_TYPE, "application/fits");
                 upload.run();
                 LOGGER.info("response code: " + upload.getResponseCode() + " " + upload.getThrowable());
                 Assert.assertNull("Upload contains error.", upload.getThrowable());
