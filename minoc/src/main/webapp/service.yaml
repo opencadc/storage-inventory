@@ -28,7 +28,7 @@ paths:
           description: Successful response.
           headers:
             Content-Disposition:
-              description: 'The content-disposition of the file in the form<br/><br/>Content-Disposition\: inline; filename=\"\<name\>\"<br/><br/>where \<name\> is the last path segment of the URI of the artifact.'
+              description: 'The content-disposition with suggested filename (normally last path element in artifact URI)'
               type: string
             Content-Type:
               description: The content type of the file
@@ -52,10 +52,15 @@ paths:
       parameters:
        - name: SUB
          in: query
-         description: 'Sub-region of a FITS file image.  Multiple SUB parameters are allowed and will generate MEF output in file order. Examples: entire extensions (SUB=[1]&SUB=[SCI,2]), or more general purpose (SUB=[SCI,3][400:500]).'
+         description: 'SUB-region of a FITS file image.  Multiple SUB parameters are allowed and will generate MEF output in file order. Examples: entire extensions (SUB=[1]&SUB=[SCI,2]), or more general purpose (SUB=[SCI,3][400:500]).'
          required: false
          type: string
          collectionFormat: multi
+       - name: META
+         in: query
+         description: 'extract METAdata (headers) from a file. A single parameter META=true is supported for FITS files. Output will be a plain text rendition of the headers.'
+         required: false
+         type: boolean
     put:
       description: |
         Upload a file identified by parameter artifact-uri.
