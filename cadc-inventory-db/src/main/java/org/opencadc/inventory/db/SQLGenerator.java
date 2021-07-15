@@ -1087,12 +1087,12 @@ public class SQLGenerator {
         return new ArtifactExtractor();
     }
     
-    private class SkeletonEntityExtractor implements ResultSetExtractor {
+    private class SkeletonEntityExtractor implements ResultSetExtractor<SkeletonEntity> {
 
         final Calendar utc = Calendar.getInstance(DateUtil.UTC);
         
         @Override
-        public Object extractData(ResultSet rs) throws SQLException, DataAccessException {
+        public SkeletonEntity extractData(ResultSet rs) throws SQLException, DataAccessException {
             if (!rs.next()) {
                 return null;
             }
@@ -1101,20 +1101,20 @@ public class SQLGenerator {
             final URI metaChecksum = Util.getURI(rs, col++);
             final UUID id = Util.getUUID(rs, col++);
             
-            Entity ret = new SkeletonEntity(id);
+            SkeletonEntity ret = new SkeletonEntity(id);
             InventoryUtil.assignLastModified(ret, lastModified);
             InventoryUtil.assignMetaChecksum(ret, metaChecksum);
             return ret;
         }
     }
     
-    // conveneience to extract one artifact from single row result set
-    private class ArtifactExtractor implements ResultSetExtractor {
+    // convenience to extract one artifact from single row result set
+    private class ArtifactExtractor implements ResultSetExtractor<Artifact> {
 
         final Calendar utc = Calendar.getInstance(DateUtil.UTC);
         
         @Override
-        public Object extractData(ResultSet rs) throws SQLException {
+        public Artifact extractData(ResultSet rs) throws SQLException {
             if (!rs.next()) {
                 return null;
             }
@@ -1123,7 +1123,7 @@ public class SQLGenerator {
         }
     }
     
-    private class ArtifactResultSetIterator implements ResourceIterator {
+    private class ArtifactResultSetIterator implements ResourceIterator<Artifact> {
         final Calendar utc = Calendar.getInstance(DateUtil.UTC);
         private final Connection con;
         private final ResultSet rs;
@@ -1241,11 +1241,11 @@ public class SQLGenerator {
         }
     }
     
-    private class HarvestStateExtractor implements ResultSetExtractor {
+    private class HarvestStateExtractor implements ResultSetExtractor<HarvestState> {
         final Calendar utc = Calendar.getInstance(DateUtil.UTC);
         
         @Override
-        public Object extractData(ResultSet rs) throws SQLException, DataAccessException {
+        public HarvestState extractData(ResultSet rs) throws SQLException, DataAccessException {
             if (!rs.next()) {
                 return null;
             }
@@ -1268,11 +1268,11 @@ public class SQLGenerator {
         }
     }
     
-    private class StorageSiteRowMapper implements RowMapper {
+    private class StorageSiteRowMapper implements RowMapper<StorageSite> {
         Calendar utc = Calendar.getInstance(DateUtil.UTC);
 
         @Override
-        public Object mapRow(ResultSet rs, int i) throws SQLException {
+        public StorageSite mapRow(ResultSet rs, int i) throws SQLException {
             int col = 1;
             final URI resourceID = Util.getURI(rs, col++);
             final String name = rs.getString(col++);
@@ -1290,11 +1290,11 @@ public class SQLGenerator {
         
     }
     
-    private class StorageSiteExtractor implements ResultSetExtractor {
+    private class StorageSiteExtractor implements ResultSetExtractor<StorageSite> {
         final Calendar utc = Calendar.getInstance(DateUtil.UTC);
         
         @Override
-        public Object extractData(ResultSet rs) throws SQLException, DataAccessException {
+        public StorageSite extractData(ResultSet rs) throws SQLException, DataAccessException {
             if (!rs.next()) {
                 return null;
             }
@@ -1303,12 +1303,12 @@ public class SQLGenerator {
         }
     }
     
-    private class DeletedArtifactEventExtractor implements ResultSetExtractor {
+    private class DeletedArtifactEventExtractor implements ResultSetExtractor<DeletedArtifactEvent> {
 
         final Calendar utc = Calendar.getInstance(DateUtil.UTC);
         
         @Override
-        public Object extractData(ResultSet rs) throws SQLException, DataAccessException {
+        public DeletedArtifactEvent extractData(ResultSet rs) throws SQLException, DataAccessException {
             if (!rs.next()) {
                 return null;
             }
@@ -1317,19 +1317,19 @@ public class SQLGenerator {
             final URI metaChecksum = Util.getURI(rs, col++);
             final UUID id = Util.getUUID(rs, col++);
             
-            Entity ret = new DeletedArtifactEvent(id);
+            DeletedArtifactEvent ret = new DeletedArtifactEvent(id);
             InventoryUtil.assignLastModified(ret, lastModified);
             InventoryUtil.assignMetaChecksum(ret, metaChecksum);
             return ret;
         }
     }
     
-    private class DeletedStorageLocationEventExtractor implements ResultSetExtractor {
+    private class DeletedStorageLocationEventExtractor implements ResultSetExtractor<DeletedStorageLocationEvent> {
 
         final Calendar utc = Calendar.getInstance(DateUtil.UTC);
         
         @Override
-        public Object extractData(ResultSet rs) throws SQLException, DataAccessException {
+        public DeletedStorageLocationEvent extractData(ResultSet rs) throws SQLException, DataAccessException {
             if (!rs.next()) {
                 return null;
             }
@@ -1339,7 +1339,7 @@ public class SQLGenerator {
             final URI metaChecksum = Util.getURI(rs, col++);
             final UUID id = Util.getUUID(rs, col++);
             
-            Entity ret = new DeletedStorageLocationEvent(id);
+            DeletedStorageLocationEvent ret = new DeletedStorageLocationEvent(id);
             InventoryUtil.assignLastModified(ret, lastModified);
             InventoryUtil.assignMetaChecksum(ret, metaChecksum);
             return ret;

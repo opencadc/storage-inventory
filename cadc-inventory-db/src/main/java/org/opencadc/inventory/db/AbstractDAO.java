@@ -237,9 +237,9 @@ public abstract class AbstractDAO<T extends Entity> {
         String tsSQL = gen.getCurrentTimeSQL();
         JdbcTemplate jdbc = new JdbcTemplate(dataSource);
 
-        Date now = (Date) jdbc.queryForObject(tsSQL, new RowMapper() {
+        Date now = jdbc.queryForObject(tsSQL, new RowMapper<Date>() {
             @Override
-            public Object mapRow(ResultSet rs, int i) throws SQLException {
+            public Date mapRow(ResultSet rs, int i) throws SQLException {
                 return Util.getDate(rs, 1, Calendar.getInstance(DateUtil.LOCAL));
             }
         });
