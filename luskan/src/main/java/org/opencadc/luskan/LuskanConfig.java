@@ -106,7 +106,7 @@ public class LuskanConfig {
 
         try {
             new URI(rid);
-            log.info("initConfig: OK");
+            log.debug("initConfig: OK");
         } catch (URISyntaxException ex) {
             throw new IllegalStateException("invalid config: " + URI_KEY + " must be a valid URI");
         }
