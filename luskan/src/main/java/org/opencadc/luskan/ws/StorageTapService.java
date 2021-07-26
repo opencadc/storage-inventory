@@ -133,7 +133,6 @@ public class StorageTapService implements AvailabilityPlugin {
             // check for a certficate needed to perform network ops
             CheckCertificate checkCert = new CheckCertificate(SERVOPS_PEM_FILE);
             checkCert.check();
-            log.info("cert check ok");
 
             // check connection pools
             CheckResource cr = new CheckDataSource("jdbc/tapuser", TAP_TEST);
@@ -150,8 +149,8 @@ public class StorageTapService implements AvailabilityPlugin {
             CheckResource checkResource = new CheckWebService(url);
             //checkResource.check();
 
-            url = getAvailabilityForLocal(Standards.UMS_USERS_01);
-            checkResource = new CheckWebService(url);
+            //url = getAvailabilityForLocal(Standards.UMS_USERS_01);
+            //checkResource = new CheckWebService(url);
             //checkResource.check();
 
             url = getAvailabilityForLocal(Standards.GMS_SEARCH_01);

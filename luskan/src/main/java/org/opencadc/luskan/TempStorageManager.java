@@ -119,7 +119,7 @@ public class TempStorageManager implements ResultStore, UWSInlineContentHandler 
             MultiValuedProperties props = LuskanConfig.getConfig();
 
             String suri = props.getFirstPropertyValue(LuskanConfig.URI_KEY);
-            log.info("system property: " + LuskanConfig.URI_KEY + " = " + suri);
+            log.debug("system property: " + LuskanConfig.URI_KEY + " = " + suri);
             URI luskan = new URI(suri);
             
             RegistryClient regClient = new RegistryClient();
@@ -127,12 +127,12 @@ public class TempStorageManager implements ResultStore, UWSInlineContentHandler 
             
             // NOTE: "results" is used in the servlet mapping in web.xml
             this.baseResultsURL = serviceURL.toExternalForm() + "/results";
-            log.info("resultsURL: " + baseResultsURL);
+            log.debug("resultsURL: " + baseResultsURL);
 
             String srd = props.getFirstPropertyValue(LuskanConfig.TMPDIR_KEY);
             this.resultsDir = new File(srd);
             resultsDir.mkdirs();
-            log.info("resultsDir: " + resultsDir.getCanonicalPath());
+            log.debug("resultsDir: " + resultsDir.getCanonicalPath());
             
         } catch (Exception ex) {
             log.error("CONFIG: failed to load/read config from system properties", ex);

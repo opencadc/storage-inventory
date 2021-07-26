@@ -100,7 +100,7 @@ public class LuskanConfig {
      * Verify the config file is valid and the resourceID value is a valid URI.
      */
     public static void initConfig() {
-        log.info("initConfig: START");
+        log.debug("initConfig: START");
         MultiValuedProperties props = getConfig();
         String rid = props.getFirstPropertyValue(URI_KEY);
 
