@@ -86,8 +86,8 @@ import javax.sql.DataSource;
 public class InitLuskanSchemaContent extends InitDatabase {
 
     public static final String MODEL_NAME = "luskan-schema";
-    public static final String MODEL_VERSION = "0.5.2";
-    public static final String PREV_MODEL_VERSION = "0.5.1";
+    public static final String MODEL_VERSION = "0.5.3";
+    public static final String PREV_MODEL_VERSION = "0.5.2";
 
     // the SQL is tightly coupled to cadc-tap-schema table names (for TAP-1.1)
     static String[] CREATE_SQL = new String[] {
