@@ -80,6 +80,10 @@
             <param-value>ca.nrc.cadc.vosi.CapInitAction</param-value>
         </init-param>
         <init-param>
+            <param-name>head</param-name>
+            <param-value>ca.nrc.cadc.vosi.CapHeadAction</param-value>
+        </init-param>
+        <init-param>
             <param-name>get</param-name>
             <param-value>ca.nrc.cadc.vosi.CapGetAction</param-value>
         </init-param>
