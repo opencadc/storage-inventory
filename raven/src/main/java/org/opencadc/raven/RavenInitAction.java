@@ -70,15 +70,27 @@ package org.opencadc.raven;
 import ca.nrc.cadc.rest.InitAction;
 import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.util.PropertiesReader;
+import ca.nrc.cadc.vosi.Availability;
+import ca.nrc.cadc.vosi.AvailabilityClient;
+
 import java.io.File;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
+
+import javax.naming.Context;
+import javax.naming.InitialContext;
+import javax.naming.NamingException;
+
 import org.apache.log4j.Logger;
+import org.opencadc.inventory.StorageSite;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.SQLGenerator;
+import org.opencadc.inventory.db.StorageSiteDAO;
 
 /**
  *
@@ -91,6 +103,7 @@ public class RavenInitAction extends InitAction {
     private static final String RAVEN_KEY = "org.opencadc.raven";
 
     static final String JNDI_DATASOURCE = "jdbc/inventory"; // context.xml
+    static final String JNDI_AVAILABILITY_KEY = RAVEN_KEY + ".availabilities";
 
     static final String SCHEMA_KEY = RAVEN_KEY + ".inventory.schema";
 
@@ -101,11 +114,14 @@ public class RavenInitAction extends InitAction {
 
     static final String DEV_AUTH_ONLY_KEY = RAVEN_KEY + ".authenticateOnly";
 
-    // set init initConfig, used by subsequent init methods
+    static final int AVAILABILITY_CHECK_TIMEOUT = 30; //secs
+    static final int AVAILABILITY_FULL_CHECK_TIMEOUT = 300; //secs
 
+    // set init initConfig, used by subsequent init methods
     MultiValuedProperties props;
     File pubKey;
     File privKey;
+    private Thread availlabilityCheck;
 
     public RavenInitAction() {
         super();
@@ -117,6 +133,7 @@ public class RavenInitAction extends InitAction {
         initDAO();
         initGrantProviders();
         initKeys();
+        initAvailabilityCheck();
     }
     
     private void initConfig() {
@@ -171,6 +188,36 @@ public class RavenInitAction extends InitAction {
             throw new IllegalStateException("invalid config: missing public/private key pair files -- " + publicKeyFile + " | " + privateKeyFile);
         }
         log.info("initKeys: OK");
+    }
+
+    private void initAvailabilityCheck() {
+        ArtifactDAO artifactDAO = new ArtifactDAO();
+        artifactDAO.setConfig(getDaoConfig(props));
+        StorageSiteDAO storageSiteDAO = new StorageSiteDAO(artifactDAO);
+        Set<StorageSite> sites = storageSiteDAO.list();
+        if (sites.size() == 0) {
+            throw new IllegalStateException("StorageSiteDAO.list() returned 0 StorageSites");
+        }
+
+        terminate();
+        this.availlabilityCheck = new Thread(new AvailabilityCheck(sites));
+        this.availlabilityCheck.setDaemon(true);
+        this.availlabilityCheck.start();
+    }
+
+    private final void terminate() {
+        if (this.availlabilityCheck != null) {
+            try {
+                log.info("terminating AvailabilityCheck Thread...");
+                this.availlabilityCheck.interrupt();
+                this.availlabilityCheck.join();
+                log.info("terminating AvailabilityCheck Thread... [OK]");
+            } catch (Throwable t) {
+                log.error("failed to terminate AvailabilityCheck thread", t);
+            } finally {
+                this.availlabilityCheck = null;
+            }
+        }
     }
 
     /**
@@ -235,4 +282,91 @@ public class RavenInitAction extends InitAction {
             throw new IllegalStateException("invalid config: failed to load SQLGenerator: " + cname);
         }
     }
+
+    private class AvailabilityCheck implements Runnable {
+
+        private Set<StorageSite> sites;
+        private Map<URI, SiteState> siteStaties;
+        private Map<URI, Availability> siteAvailabilities;
+        
+        public AvailabilityCheck(Set<StorageSite> sites) {
+            this.sites = sites;
+            this.siteStaties = new HashMap<>(sites.size());
+            this.siteAvailabilities = new HashMap<>(sites.size());
+            try {
+                Context initialContext = new InitialContext();
+                initialContext.bind(JNDI_AVAILABILITY_KEY, this.siteAvailabilities);
+            } catch (NamingException e) {
+                throw new IllegalStateException(String.format("unable to bind {} to initial context: %s", 
+                                                JNDI_AVAILABILITY_KEY, e.getMessage()), e);
+            }
+        }
+
+        @Override
+        public void run() { 
+            while (true) {
+                for (StorageSite site: this.sites) {
+                    try {
+                        URI resourceID = site.getResourceID();
+                        SiteState siteState = this.siteStaties.get(resourceID);
+                        if (siteState == null) {
+                            siteState = new SiteState(true, 0);
+                        }
+                        boolean minDetail = siteState.isMinDetail();
+                        Availability availability = getAvailability(resourceID, minDetail);
+                        siteState.available = availability.isAvailable();
+                        this.siteStaties.put(resourceID, siteState);
+                        this.siteAvailabilities.put(resourceID, availability);
+                        Context initContext = new InitialContext();
+                        initContext.rebind(JNDI_AVAILABILITY_KEY, this.siteAvailabilities);
+                        log.info(String.format("availability check [%s] for %s [%s]", 
+                                                minDetail ? "MIN" : "FULL", resourceID, 
+                                                siteState.available ? "UP" : "DOWN"));
+                    } catch (NamingException e) {
+                        log.error("Error rebinding to context: " + e.getMessage(), e);
+                        throw new IllegalStateException(String.format("unable to rebind %s to initial context: %s", 
+                                                        JNDI_AVAILABILITY_KEY, e.getMessage()), e);
+                    }
+                }
+
+                try {
+                    log.info(String.format("sleep availability checks for %d secs", 
+                                            AVAILABILITY_CHECK_TIMEOUT));
+                    Thread.sleep(AVAILABILITY_CHECK_TIMEOUT * 1000);
+                } catch (InterruptedException e) {
+                    throw new IllegalStateException("AvailabilityCheck thread interrupted during sleep");
+                }
+            }
+        }
+
+        private Availability getAvailability(URI resourceID, boolean minDetail) {
+            AvailabilityClient client = new AvailabilityClient(resourceID, minDetail);
+            return client.getAvailability();
+        }
+
+        private class SiteState {
+
+            public boolean available;
+            public int lastFullCheckSecs;
+
+            public SiteState(boolean available, int lastFullCheckSecs) {
+                this.available = available;
+                this.lastFullCheckSecs = lastFullCheckSecs;
+            }
+
+            public boolean isMinDetail() {
+                log.info(String.format("isMinDetail() availble=%b, lastFullCheckSecs=%d", 
+                                        available, lastFullCheckSecs));
+                if (this.available && this.lastFullCheckSecs < AVAILABILITY_FULL_CHECK_TIMEOUT) {
+                    this.lastFullCheckSecs += AVAILABILITY_CHECK_TIMEOUT;
+                    return true;
+                }
+                this.lastFullCheckSecs = 0;
+                return false;
+            }
+
+        }
+
+    }
+
 }
