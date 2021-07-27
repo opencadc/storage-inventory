@@ -77,14 +77,22 @@ import ca.nrc.cadc.vos.Direction;
 import ca.nrc.cadc.vos.Protocol;
 import ca.nrc.cadc.vos.Transfer;
 import ca.nrc.cadc.vos.VOS;
+import ca.nrc.cadc.vosi.Availability;
+
 import java.io.File;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+
+import javax.naming.Context;
+import javax.naming.InitialContext;
+import javax.naming.NamingException;
+
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.SiteLocation;
@@ -170,6 +178,12 @@ public class ProtocolsGenerator {
         }
         prioritizePullFromSites(storageSites);
         for (StorageSite storageSite : storageSites) {
+            // check if site is currently offline
+            if (!isSiteOnline(storageSite.getResourceID())) {
+                log.warn("storage site is offline: " + storageSite.getResourceID());
+                continue;
+            }
+            
             Capability filesCap = null;
             try {
                 Capabilities caps = regClient.getCapabilities(storageSite.getResourceID());
@@ -241,6 +255,12 @@ public class ProtocolsGenerator {
         List<Protocol> protos = new ArrayList<>();
         // produce URLs for all writable sites
         for (StorageSite storageSite : sites) {
+            // check if site is currently offline
+            if (!isSiteOnline(storageSite.getResourceID())) {
+                log.warn("storage site is offline: " + storageSite.getResourceID());
+                continue;
+            }
+
             //log.warn("PUT: " + storageSite);
             Capability filesCap = null;
             try {
@@ -313,6 +333,23 @@ public class ProtocolsGenerator {
             return VOS.PROTOCOL_HTTP_GET.equals(p.getUri()) || VOS.PROTOCOL_HTTP_PUT.equals(p.getUri());
         }
         return false;
+    }
+
+    private boolean isSiteOnline(URI resourceID) {
+        boolean online = false;
+        try {
+            Context initContext = new InitialContext();
+            Map<URI, Availability> availabilities = 
+                    (Map<URI, Availability>) initContext.lookup(RavenInitAction.JNDI_AVAILABILITY_KEY);
+            Availability availability = availabilities.get(resourceID);
+            if (availability != null && availability.isAvailable()) {
+                online = true;
+            }
+        } catch (NamingException e) {
+            log.error("JDNI lookup error: " + e.getMessage());
+            throw new IllegalStateException("JNDI lookup error", e);
+        }
+        return online;
     }
 
 }
