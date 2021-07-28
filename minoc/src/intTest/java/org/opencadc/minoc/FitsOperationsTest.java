@@ -86,6 +86,7 @@ import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.Test;
+import org.opencadc.soda.SodaParamValidator;
 
 import javax.security.auth.Subject;
 import java.io.File;
@@ -139,7 +140,7 @@ public class FitsOperationsTest extends MinocTest {
                 "[0][*,100:400]"
         };
 
-        uploadAndCompare(artifactURI, cutoutSpecs, testFilePrefix, testFileExtension);
+        uploadAndCompareCutout(artifactURI, SodaParamValidator.SUB, cutoutSpecs, testFilePrefix, testFileExtension);
     }
 
     @Test
@@ -151,7 +152,7 @@ public class FitsOperationsTest extends MinocTest {
                 "[0][200:350,100:300]"
         };
 
-        uploadAndCompare(artifactURI, cutoutSpecs, testFilePrefix, testFileExtension);
+        uploadAndCompareCutout(artifactURI, SodaParamValidator.SUB, cutoutSpecs, testFilePrefix, testFileExtension);
     }
 
     @Test
@@ -165,7 +166,7 @@ public class FitsOperationsTest extends MinocTest {
                 "[91][*,90:255]"
         };
 
-        uploadAndCompare(artifactURI, cutoutSpecs, testFilePrefix, testFileExtension);
+        uploadAndCompareCutout(artifactURI, SodaParamValidator.SUB, cutoutSpecs, testFilePrefix, testFileExtension);
     }
 
     @Test
@@ -178,19 +179,63 @@ public class FitsOperationsTest extends MinocTest {
                 "[4][50:90,*]"
         };
 
-        uploadAndCompare(artifactURI, cutoutSpecs, testFilePrefix, testFileExtension);
+        uploadAndCompareCutout(artifactURI, SodaParamValidator.SUB, cutoutSpecs, testFilePrefix, testFileExtension);
     }
 
-    private void uploadAndCompare(final URI artifactURI, final String[] cutoutSpecs, final String testFilePrefix,
-                                  final String testFileExtension) throws Exception {
-        ensureFile(artifactURI);
-        final StringBuilder queryStringBuilder = new StringBuilder("?");
+    @Test
+    public void testALMACircleCutout() throws Exception {
+        final String testFilePrefix = "test-alma-cube";
+        final String testFileExtension = "fits";
+        final URI artifactURI = URI.create("cadc:TEST/" + testFilePrefix + "." + testFileExtension);
+        final String[] cutoutSpecs = new String[] {
+                "246.52 -24.33 0.01"
+        };
+
+        uploadAndCompareCutout(artifactURI, SodaParamValidator.CIRCLE, cutoutSpecs, testFilePrefix, testFileExtension);
+    }
+
+    @Test
+    public void testALMABandCutout() throws Exception {
+        final String testFilePrefix = "test-alma-cube-band";
+        final String testFileExtension = "fits";
+        final URI artifactURI = URI.create("cadc:TEST/" + testFilePrefix + "." + testFileExtension);
+        final String[] cutoutSpecs = new String[] {
+                "0.0013606 0.0013616"
+        };
+
+        uploadAndCompareCutout(artifactURI, SodaParamValidator.BAND, cutoutSpecs, testFilePrefix, testFileExtension);
+    }
+
+    @Test
+    public void testALMAPolarizationCutout() throws Exception {
+        final String testFilePrefix = "test-alma-cube-polarization";
+        final String testFileExtension = "fits";
+        final URI artifactURI = URI.create("cadc:TEST/" + testFilePrefix + "." + testFileExtension);
+        final String[] cutoutSpecs = new String[] {
+                "U", "Q"
+        };
+
+        uploadAndCompareCutout(artifactURI, SodaParamValidator.POL, cutoutSpecs, testFilePrefix, testFileExtension);
+    }
+
+    private void uploadAndCompareCutout(final URI artifactURI, final String cutoutKey, final String[] cutoutSpecs,
+                                        final String testFilePrefix, final String testFileExtension)
+            throws Exception {
+        final StringBuilder queryStringBuilder = new StringBuilder();
         Arrays.stream(cutoutSpecs).
-                forEach(cut -> queryStringBuilder.append("SUB=").append(NetUtil.encode(cut)).append("&"));
+                forEach(cut -> queryStringBuilder.append(cutoutKey).append("=").append(NetUtil.encode(cut))
+                                                 .append("&"));
 
         queryStringBuilder.deleteCharAt(queryStringBuilder.lastIndexOf("&"));
 
-        final URL artifactSUBURL = new URL(filesURL + "/" + artifactURI.toString() + queryStringBuilder.toString());
+        uploadAndCompare(artifactURI, queryStringBuilder.toString(), testFilePrefix, testFileExtension);
+    }
+
+    private void uploadAndCompare(final URI artifactURI, final String queryString, final String testFilePrefix,
+                                  final String testFileExtension) throws Exception {
+        ensureFile(artifactURI);
+
+        final URL artifactSUBURL = new URL(filesURL + "/" + artifactURI + "?" + queryString);
         final File outputFile = Files.createTempFile(testFilePrefix + "-", "." + testFileExtension).toFile();
         LOGGER.debug("Writing cutout to " + outputFile);
 
