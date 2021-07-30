@@ -297,7 +297,7 @@ public class FitsOperationsTest extends MinocTest {
                 Assert.assertFalse("Should NOT contain " + HttpTransfer.CONTENT_ENCODING,
                                    StringUtil.hasText(cutoutClient.getContentEncoding()));
 
-                final byte[] buffer = new byte[64 * 1024 * 1024];
+                final byte[] buffer = new byte[64 * 1024];
                 int bytesRead;
                 final InputStream inputStream = cutoutClient.getInputStream();
                 while ((bytesRead = inputStream.read(buffer)) > 0) {
