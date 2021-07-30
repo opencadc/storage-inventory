@@ -19,6 +19,7 @@
       <param-name>logLevelPackages</param-name>
       <param-value>
             org.opencadc.inventory
+            org.opencadc.fits
             org.opencadc.minoc
             ca.nrc.cadc.rest
             ca.nrc.cadc.util

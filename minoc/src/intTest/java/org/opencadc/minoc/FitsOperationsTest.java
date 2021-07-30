@@ -69,11 +69,13 @@
 package org.opencadc.minoc;
 
 import ca.nrc.cadc.auth.AuthMethod;
+import ca.nrc.cadc.io.ReadException;
 import ca.nrc.cadc.net.HttpDelete;
 import ca.nrc.cadc.net.HttpGet;
 import ca.nrc.cadc.net.HttpTransfer;
 import ca.nrc.cadc.net.HttpUpload;
 import ca.nrc.cadc.net.NetUtil;
+import ca.nrc.cadc.net.RemoteServiceException;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.reg.Standards;
 import ca.nrc.cadc.reg.client.RegistryClient;
@@ -92,6 +94,7 @@ import javax.security.auth.Subject;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.InputStream;
 import java.net.URI;
 import java.net.URL;
 import java.nio.file.Files;
@@ -192,6 +195,14 @@ public class FitsOperationsTest extends MinocTest {
         };
 
         uploadAndCompareCutout(artifactURI, SodaParamValidator.CIRCLE, cutoutSpecs, testFilePrefix, testFileExtension);
+
+        try {
+            // Test not found
+            doCutout(artifactURI, "CIRCLE=" + NetUtil.encode("0.3 0.3 0.002"),
+                     "NOOVERLAP", "fits", "text/plain");
+        } catch (RemoteServiceException readException) {
+            Assert.assertTrue("Wrong message.", readException.getMessage().endsWith("No overlap found."));
+        }
     }
 
     @Test
@@ -204,6 +215,14 @@ public class FitsOperationsTest extends MinocTest {
         };
 
         uploadAndCompareCutout(artifactURI, SodaParamValidator.BAND, cutoutSpecs, testFilePrefix, testFileExtension);
+
+        try {
+            // Test not found
+            doCutout(artifactURI, "BAND=" + NetUtil.encode("2.0 3.0"),
+                     "NOOVERLAP", "fits", "text/plain");
+        } catch (RemoteServiceException readException) {
+            Assert.assertTrue("Wrong message.", readException.getMessage().endsWith("No overlap found."));
+        }
     }
 
     @Test
@@ -212,10 +231,86 @@ public class FitsOperationsTest extends MinocTest {
         final String testFileExtension = "fits";
         final URI artifactURI = URI.create("cadc:TEST/" + testFilePrefix + "." + testFileExtension);
         final String[] cutoutSpecs = new String[] {
-                "U", "Q"
+                "I"
         };
 
         uploadAndCompareCutout(artifactURI, SodaParamValidator.POL, cutoutSpecs, testFilePrefix, testFileExtension);
+
+        try {
+            // Test not found
+            doCutout(artifactURI, "POL=RR",
+                     "NOOVERLAP", "fits", "text/plain");
+        } catch (RemoteServiceException readException) {
+            Assert.assertTrue("Wrong message.", readException.getMessage().endsWith("No overlap found."));
+        }
+    }
+
+    @Test
+    public void testCGPSPolarizationCutout() throws Exception {
+        final String testFilePrefix = "test-cgps-polarization";
+        final String testFileExtension = "fits";
+        final URI artifactURI = URI.create("cadc:TEST/" + testFilePrefix + "." + testFileExtension);
+        final String[] cutoutSpecs = new String[] {
+                "U"
+        };
+
+        uploadAndCompareCutout(artifactURI, SodaParamValidator.POL, cutoutSpecs, testFilePrefix, testFileExtension);
+    }
+
+    @Test
+    public void testJCMTPolarizationCutout() throws Exception {
+        final String testFilePrefix = "test-jcmt-polarization";
+        final String testFileExtension = "fits";
+        final URI artifactURI = URI.create("cadc:TEST/" + testFilePrefix + "." + testFileExtension);
+        final String[] cutoutSpecs = new String[] {
+                "I"
+        };
+
+        uploadAndCompareCutout(artifactURI, SodaParamValidator.POL, cutoutSpecs, testFilePrefix, testFileExtension);
+    }
+
+    private File doCutout(final URI artifactURI, final String queryString, final String testFilePrefix,
+                          final String testFileExtension, final String expectedContentType) throws Exception {
+        final URL artifactSUBURL = new URL(filesURL + "/" + artifactURI
+                                           + (queryString == null ? "" : "?" + queryString));
+        final File outputFile = Files.createTempFile(testFilePrefix + "-", "." + testFileExtension).toFile();
+        LOGGER.debug("Writing cutout to " + outputFile);
+
+        // Perform the cutout.
+        Subject.doAs(userSubject, (PrivilegedExceptionAction<Boolean>) () -> {
+            LOGGER.debug("Testing cutout with " + artifactSUBURL);
+            try (final FileOutputStream fileOutputStream = new FileOutputStream(outputFile)) {
+                final HttpGet cutoutClient = new HttpGet(artifactSUBURL, true);
+                cutoutClient.setFollowRedirects(true);
+                cutoutClient.prepare();
+
+                Assert.assertEquals("Wrong content type.",
+                                    expectedContentType, cutoutClient.getResponseHeader(HttpTransfer.CONTENT_TYPE));
+                Assert.assertNotNull("Should include Content-Disposition ("
+                                     + cutoutClient.getResponseHeader("Content-Disposition") + ")",
+                                     cutoutClient.getResponseHeader("Content-Disposition"));
+
+                Assert.assertEquals("Should NOT contain " + HttpTransfer.CONTENT_LENGTH, -1L,
+                                    cutoutClient.getContentLength());
+                Assert.assertFalse("Should NOT contain " + HttpTransfer.CONTENT_MD5,
+                                   StringUtil.hasText(cutoutClient.getContentMD5()));
+                Assert.assertFalse("Should NOT contain " + HttpTransfer.CONTENT_ENCODING,
+                                   StringUtil.hasText(cutoutClient.getContentEncoding()));
+
+                final byte[] buffer = new byte[64 * 1024 * 1024];
+                int bytesRead;
+                final InputStream inputStream = cutoutClient.getInputStream();
+                while ((bytesRead = inputStream.read(buffer)) > 0) {
+                    fileOutputStream.write(buffer, 0, bytesRead);
+                }
+                fileOutputStream.flush();
+            }
+
+            LOGGER.debug("Cutout complete -> " + artifactURI);
+            return Boolean.TRUE;
+        });
+
+        return outputFile;
     }
 
     private void uploadAndCompareCutout(final URI artifactURI, final String cutoutKey, final String[] cutoutSpecs,
@@ -235,36 +330,8 @@ public class FitsOperationsTest extends MinocTest {
                                   final String testFileExtension) throws Exception {
         ensureFile(artifactURI);
 
-        final URL artifactSUBURL = new URL(filesURL + "/" + artifactURI + "?" + queryString);
-        final File outputFile = Files.createTempFile(testFilePrefix + "-", "." + testFileExtension).toFile();
-        LOGGER.debug("Writing cutout to " + outputFile);
-
-        // Perform the cutout.
-        Subject.doAs(userSubject, (PrivilegedExceptionAction<Boolean>) () -> {
-            LOGGER.debug("Testing cutout with " + artifactSUBURL);
-            try (final FileOutputStream fileOutputStream = new FileOutputStream(outputFile)) {
-                final HttpGet cutoutClient = new HttpGet(artifactSUBURL, fileOutputStream);
-                cutoutClient.setFollowRedirects(true);
-                cutoutClient.run();
-                fileOutputStream.flush();
-
-                Assert.assertEquals("Wrong content type.",
-                                    "application/fits", cutoutClient.getResponseHeader(HttpTransfer.CONTENT_TYPE));
-                Assert.assertNotNull("Should include Content-Disposition ("
-                                     + cutoutClient.getResponseHeader("Content-Disposition") + ")",
-                                     cutoutClient.getResponseHeader("Content-Disposition"));
-
-                Assert.assertEquals("Should NOT contain " + HttpTransfer.CONTENT_LENGTH, -1L,
-                                  cutoutClient.getContentLength());
-                Assert.assertFalse("Should NOT contain " + HttpTransfer.CONTENT_MD5,
-                                   StringUtil.hasText(cutoutClient.getContentMD5()));
-                Assert.assertFalse("Should NOT contain " + HttpTransfer.CONTENT_ENCODING,
-                                   StringUtil.hasText(cutoutClient.getContentEncoding()));
-            }
-
-            LOGGER.debug("Cutout complete -> " + artifactURI);
-            return Boolean.TRUE;
-        });
+        final File outputFile = doCutout(artifactURI, queryString, testFilePrefix, testFileExtension,
+                                         "application/fits");
 
         // setup
         final File expectedFile = new File(DEFAULT_DATA_PATH.toFile(), testFilePrefix + "-cutout.fits");
