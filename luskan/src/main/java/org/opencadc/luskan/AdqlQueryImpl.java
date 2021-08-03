@@ -113,8 +113,6 @@ public class AdqlQueryImpl extends AdqlQuery {
         tnc.put("tap_schema.columns", "tap_schema.columns11");
         tnc.put("tap_schema.keys", "tap_schema.keys11");
         tnc.put("tap_schema.key_columns", "tap_schema.key_columns11");
-        // enable unfiltered diagnostics
-        tnc.put("inventory.ArtifactMetadata", "inventory.Artifact");
         TableNameReferenceConverter tnrc = new TableNameReferenceConverter(tnc.map);
         super.navigatorList.add(new SelectNavigator(new ExpressionNavigator(), tnrc, tnc));
 
@@ -124,6 +122,12 @@ public class AdqlQueryImpl extends AdqlQuery {
         if (isStorageSite) {
             super.navigatorList.add(new StorageLocationConverter());
         }
+        
+        // enable unfiltered diagnostics -- must be after StorageLocationConverter
+        TableNameConverter tnc2 = new TableNameConverter(true);
+        tnc2.put("inventory.ArtifactMetadata", "inventory.Artifact");
+        TableNameReferenceConverter tnrc2 = new TableNameReferenceConverter(tnc2.map);
+        super.navigatorList.add(new SelectNavigator(new ExpressionNavigator(), tnrc2, tnc2));
     }
 
     @Override
