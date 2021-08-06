@@ -179,29 +179,28 @@ public class FileSyncJob implements Runnable {
         long start = System.currentTimeMillis();
         boolean success = false;
         String msg = "";
-        
-        
+        String artifactLabel = "Artifact.id=" + artifactID;
         try {
             // get current artifact to sync
             final Artifact artifact = artifactDAO.get(artifactID);
             if (artifact == null || artifact.storageLocation != null) {
-                msg = "artifact " + artifactID + " changed|deleted since job created";
+                msg = "abort reason=change-since-job-created";
                 return;
             }
             // from here on we care about URI change since that's the only potentially mutable metadata 
             // that could get persisted in the back end
-            String artifactLabel = artifact.getID().toString() + "|" + artifact.getURI().toASCIIString();
+            artifactLabel += " Artifact.uri=" + artifact.getURI().toASCIIString();
+
             List<Protocol> urlList;
-            
             try {
                 urlList = getDownloadURLs(this.locatorService, artifact.getURI());
                 if (urlList.isEmpty()) {
-                    msg = " locator returned 0 URLs";
+                    msg = "abort transfer-negotiation-failed reason=no-urls";
                     return;
                 }
             } catch (Exception ex) {
                 log.debug("transfer negotiation failed: " + artifactLabel, ex);
-                msg = " transfer negotiation failed: " + artifactLabel + " (" + ex + ")";
+                msg = "abort transfer-negotiation-failed reason=" + ex;
                 return;
             }
             
@@ -212,7 +211,7 @@ public class FileSyncJob implements Runnable {
                     if (curArtifact == null 
                             || !curArtifact.getURI().equals(artifact.getURI())
                             || curArtifact.storageLocation != null) {
-                        msg = "artifact " + artifactID + " changed|deleted since job started [before sync]";
+                        msg = "abort reason=change-since-job-started";
                         return;
                     }
                     
@@ -241,11 +240,12 @@ public class FileSyncJob implements Runnable {
 
                             ObsoleteStorageLocation obsLoc = null;
                             if (curArtifact == null || !curArtifact.getURI().equals(artifact.getURI())) {
-                                msg = "artifact " + artifactID + " changed|deleted since job started [after sync]";
+                                // newly written object is obsolete
+                                msg = "abort reason=change-since-job-started";
                                 obsLoc = new ObsoleteStorageLocation(storageMeta.getStorageLocation());
                                 locDAO.put(obsLoc);
                             } else {
-                                // just in case someone else assigned a StorageLocation: one is now obsolete
+                                // previous (~simultaneous) written object is obsolete
                                 if (curArtifact.storageLocation != null) {
                                     if (!artifact.storageLocation.equals(curArtifact.storageLocation)) {
                                         obsLoc = new ObsoleteStorageLocation(curArtifact.storageLocation);
@@ -254,7 +254,7 @@ public class FileSyncJob implements Runnable {
                                 }
                                 artifactDAO.setStorageLocation(curArtifact, storageMeta.getStorageLocation());
                                 success = true;
-                                msg = "uri=" + artifact.getURI() + " bytes=" + storageMeta.getContentLength();
+                                msg += " bytes=" + storageMeta.getContentLength();
                             }
 
                             txnMgr.commitTransaction();
@@ -291,7 +291,7 @@ public class FileSyncJob implements Runnable {
                         Thread.sleep(RETRY_DELAY[retryCount++]);
                     }
                 }
-            } catch (IllegalStateException | EntityNotFoundException ex) {
+            } catch (ByteLimitExceededException | IllegalStateException | EntityNotFoundException ex) {
                 log.debug("artifact sync aborted: " + artifactLabel, ex);
                 msg = " artifact sync aborted: " + artifactLabel + " (" + ex + ")";
             } catch (IllegalArgumentException | InterruptedException | StorageEngageException | WriteException ex) {
@@ -304,7 +304,7 @@ public class FileSyncJob implements Runnable {
         } finally {
             long dt = System.currentTimeMillis() - start;
             StringBuilder sb = new StringBuilder();
-            sb.append("FileSyncJob.END Artifact.id=").append(artifactID);
+            sb.append("FileSyncJob.END ").append(artifactLabel);
             sb.append(" success=").append(success);
             sb.append(" ").append(msg);
             sb.append(" duration=").append(dt);
@@ -398,7 +398,8 @@ public class FileSyncJob implements Runnable {
                 String getContentMD5 = get.getContentMD5();
                 if (getContentMD5 != null
                     && !getContentMD5.equals(a.getContentChecksum().getSchemeSpecificPart())) {
-                    throw new PreconditionFailedException("contentChecksum mismatch: " + a.getURI());
+                    throw new PreconditionFailedException("contentChecksum mismatch: " + a.getURI()
+                        + " artifact: " + a.getContentChecksum() + " header: " + getContentMD5);
                 }
 
                 long getContentLen = get.getContentLength();
@@ -418,24 +419,24 @@ public class FileSyncJob implements Runnable {
 
             } catch (ByteLimitExceededException | StorageEngageException | WriteException ex) {
                 // IOException will capture this if not explicitly caught and rethrown
-                log.debug("FileSyncJob.FAIL fatal=" + ex);
+                log.debug("FileSyncJob.FAIL fatal", ex);
                 throw ex;
             } catch (MalformedURLException | ResourceNotFoundException | ResourceAlreadyExistsException | PreconditionFailedException ex) {
-                log.debug("FileSyncJob.FAIL remove: " + u + " reason: " + ex);
+                log.debug("FileSyncJob.FAIL remove: " + u, ex);
                 urlIterator.remove();
             } catch (IOException | TransientException ex) {
                 // includes ReadException
                 // - prepare or put throwing this error
                 // - will move to next url
-                log.debug("FileSyncJob.FAIL keep: " + u + " reason: " + ex);
+                log.debug("FileSyncJob.FAIL keep: " + u , ex);
             } catch (Exception ex) {
                 if (!postPrepare) {
                     // remote server 5xx response: discard
-                    log.debug("FileSyncJob.FAIL remove " + u + " reason: " + ex);
+                    log.debug("FileSyncJob.FAIL remove " + u, ex);
                     urlIterator.remove();
                 } else {
                     // StorageAdapter internal fail: abort
-                    log.debug("FileSyncJob.FAIL fatal: " + ex);
+                    log.debug("FileSyncJob.FAIL fatal", ex);
                     throw ex;
                 }
             }
