@@ -69,7 +69,6 @@
 package org.opencadc.minoc;
 
 import ca.nrc.cadc.auth.AuthMethod;
-import ca.nrc.cadc.io.ReadException;
 import ca.nrc.cadc.net.HttpDelete;
 import ca.nrc.cadc.net.HttpGet;
 import ca.nrc.cadc.net.HttpTransfer;
@@ -200,8 +199,32 @@ public class FitsOperationsTest extends MinocTest {
             // Test not found
             doCutout(artifactURI, "CIRCLE=" + NetUtil.encode("0.3 0.3 0.002"),
                      "NOOVERLAP", "fits", "text/plain");
-        } catch (RemoteServiceException readException) {
-            Assert.assertTrue("Wrong message.", readException.getMessage().endsWith("No overlap found."));
+            Assert.fail("Should throw IllegalArgumentException.");
+        } catch (IllegalArgumentException illegalArgumentException) {
+            Assert.assertEquals("Wrong message.", "No overlap found.\n",
+                              illegalArgumentException.getMessage());
+        }
+    }
+
+    @Test
+    public void testALMAPolygonCutout() throws Exception {
+        final String testFilePrefix = "test-alma-cube-polygon";
+        final String testFileExtension = "fits";
+        final URI artifactURI = URI.create("cadc:TEST/" + testFilePrefix + "." + testFileExtension);
+        final String[] cutoutSpecs = new String[] {
+                "246.509 -24.34 246.53 -24.34 246.53 -24.31 246.50 -24.31"
+        };
+
+        uploadAndCompareCutout(artifactURI, SodaParamValidator.POLYGON, cutoutSpecs, testFilePrefix, testFileExtension);
+
+        try {
+            // Test not found
+            doCutout(artifactURI, "POLYGON=" + NetUtil.encode("122.0 -4.0 124.0 -4.5 123.0 -4.5 129 -4.0"),
+                     "NOOVERLAP", "fits", "text/plain");
+            Assert.fail("Should throw IllegalArgumentException.");
+        } catch (IllegalArgumentException illegalArgumentException) {
+            Assert.assertEquals("Wrong message.", "No overlap found.\n",
+                                illegalArgumentException.getMessage());
         }
     }
 
@@ -220,8 +243,10 @@ public class FitsOperationsTest extends MinocTest {
             // Test not found
             doCutout(artifactURI, "BAND=" + NetUtil.encode("2.0 3.0"),
                      "NOOVERLAP", "fits", "text/plain");
-        } catch (RemoteServiceException readException) {
-            Assert.assertTrue("Wrong message.", readException.getMessage().endsWith("No overlap found."));
+            Assert.fail("Should throw IllegalArgumentException.");
+        } catch (IllegalArgumentException illegalArgumentException) {
+            Assert.assertEquals("Wrong message.", "No overlap found.\n",
+                                illegalArgumentException.getMessage());
         }
     }
 
@@ -240,8 +265,10 @@ public class FitsOperationsTest extends MinocTest {
             // Test not found
             doCutout(artifactURI, "POL=RR",
                      "NOOVERLAP", "fits", "text/plain");
-        } catch (RemoteServiceException readException) {
-            Assert.assertTrue("Wrong message.", readException.getMessage().endsWith("No overlap found."));
+            Assert.fail("Should throw IllegalArgumentException.");
+        } catch (IllegalArgumentException illegalArgumentException) {
+            Assert.assertEquals("Wrong message.", "No overlap found.\n",
+                                illegalArgumentException.getMessage());
         }
     }
 
