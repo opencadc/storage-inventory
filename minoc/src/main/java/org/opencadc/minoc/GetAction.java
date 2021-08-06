@@ -72,7 +72,6 @@ import ca.nrc.cadc.dali.Interval;
 import ca.nrc.cadc.dali.Polygon;
 import ca.nrc.cadc.dali.Shape;
 import ca.nrc.cadc.io.ByteCountOutputStream;
-import ca.nrc.cadc.io.ReadException;
 import ca.nrc.cadc.io.WriteException;
 import ca.nrc.cadc.net.HttpTransfer;
 import ca.nrc.cadc.util.CaseInsensitiveStringComparator;
