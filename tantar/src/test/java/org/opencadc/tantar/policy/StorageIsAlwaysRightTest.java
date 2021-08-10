@@ -69,19 +69,18 @@
 
 package org.opencadc.tantar.policy;
 
+import java.io.ByteArrayOutputStream;
+import java.net.URI;
+import java.util.Arrays;
+import java.util.Date;
+import java.util.List;
 import org.junit.Assert;
 import org.junit.Test;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.storage.StorageMetadata;
 import org.opencadc.tantar.Reporter;
-
-import java.io.ByteArrayOutputStream;
-import java.net.URI;
-import java.util.Arrays;
-import java.util.Date;
-import java.util.List;
-
+import org.opencadc.tantar.TestEventListener;
 
 public class StorageIsAlwaysRightTest extends AbstractResolutionPolicyTest<StorageIsAlwaysRight> {
 
@@ -103,11 +102,11 @@ public class StorageIsAlwaysRightTest extends AbstractResolutionPolicyTest<Stora
         final List<String> outputLines = Arrays.asList(new String(output.toByteArray()).split("\n"));
         System.out.println(String.format("Message lines are \n\n%s\n\n", outputLines));
 
-        assertListContainsMessage(outputLines, "Replacing Artifact StorageLocation[s3:101010] as per policy.");
-        Assert.assertTrue("Should have called deleteArtifact and addArtifact.",
+        //assertListContainsMessage(outputLines, "Replacing Artifact StorageLocation[s3:101010] as per policy.");
+        Assert.assertTrue("Should have called replaceArtifact.",
                           !testEventListener.deleteArtifactCalled
-                          && !testEventListener.addArtifactCalled
-                          && !testEventListener.resetArtifactCalled
+                          && !testEventListener.createArtifactCalled
+                          && !testEventListener.clearStorageLocationCalled
                           && !testEventListener.deleteStorageMetadataCalled
                           && testEventListener.replaceArtifactCalled);
     }
@@ -120,28 +119,22 @@ public class StorageIsAlwaysRightTest extends AbstractResolutionPolicyTest<Stora
         // StorageMetadata nas no other metadata than the StorageLocation.
         final StorageMetadata storageMetadata = new StorageMetadata(new StorageLocation(URI.create("s3:989877")));
 
-        final Artifact artifact = new Artifact(URI.create("cadc:bucket/file.fits"),
-                                               URI.create("md5:" + random16Bytes()), new Date(),
-                                               88L);
-
-        artifact.storageLocation = new StorageLocation(URI.create("s3:989877"));
-
         final TestEventListener testEventListener = new TestEventListener();
 
         testSubject = new StorageIsAlwaysRight(testEventListener, reporter);
-        testSubject.resolve(artifact, storageMetadata);
+        testSubject.resolve(null, storageMetadata);
 
         final List<String> outputLines = Arrays.asList(new String(output.toByteArray()).split("\n"));
         System.out.println(String.format("Message lines are \n\n%s\n\n", outputLines));
 
-        assertListContainsMessage(outputLines,
-                                  "Invalid Storage Metadata (StorageLocation[s3:989877]).  "
-                                  + "Skipping as per policy.");
+        //assertListContainsMessage(outputLines,
+        //                          "Invalid Storage Metadata (StorageLocation[s3:989877]).  "
+        //                          + "Skipping as per policy.");
 
         Assert.assertTrue("Should not have called any operation.",
                           !testEventListener.deleteArtifactCalled
-                          && !testEventListener.addArtifactCalled
-                          && !testEventListener.resetArtifactCalled
+                          && !testEventListener.createArtifactCalled
+                          && !testEventListener.clearStorageLocationCalled
                           && !testEventListener.deleteStorageMetadataCalled
                           && !testEventListener.replaceArtifactCalled);
     }
@@ -162,14 +155,48 @@ public class StorageIsAlwaysRightTest extends AbstractResolutionPolicyTest<Stora
         final List<String> outputLines = Arrays.asList(new String(output.toByteArray()).split("\n"));
         System.out.println(String.format("Message lines are \n\n%s\n\n", outputLines));
 
-        assertListContainsMessage(outputLines, "Removing Unknown Artifact StorageLocation[s3:101010] as per policy.");
+        //assertListContainsMessage(outputLines, "Removing Unknown Artifact StorageLocation[s3:101010] as per policy.");
         Assert.assertTrue("Should have called deleteArtifact.", testEventListener.deleteArtifactCalled
-                                                                && !testEventListener.addArtifactCalled
+                                                                && !testEventListener.createArtifactCalled
                                                                 && !testEventListener.deleteStorageMetadataCalled
-                                                                && !testEventListener.resetArtifactCalled
+                                                                && !testEventListener.clearStorageLocationCalled
                                                                 && !testEventListener.replaceArtifactCalled);
     }
 
+    @Test
+    public void resolveArtifactAndInvalidStorageMetadata() throws Exception {
+        final ByteArrayOutputStream output = new ByteArrayOutputStream();
+        final Reporter reporter = new Reporter(getTestLogger(output));
+
+        // StorageMetadata nas no other metadata than the StorageLocation.
+        final StorageMetadata storageMetadata = new StorageMetadata(new StorageLocation(URI.create("s3:989877")));
+
+        final Artifact artifact = new Artifact(URI.create("cadc:bucket/file.fits"),
+                                               URI.create("md5:" + random16Bytes()), new Date(),
+                                               88L);
+
+        artifact.storageLocation = new StorageLocation(URI.create("s3:989877"));
+
+        final TestEventListener testEventListener = new TestEventListener();
+
+        testSubject = new StorageIsAlwaysRight(testEventListener, reporter);
+        testSubject.resolve(artifact, storageMetadata);
+
+        final List<String> outputLines = Arrays.asList(new String(output.toByteArray()).split("\n"));
+        System.out.println(String.format("Message lines are \n\n%s\n\n", outputLines));
+
+        //assertListContainsMessage(outputLines,
+        //                          "Invalid Storage Metadata (StorageLocation[s3:989877]).  "
+        //                          + "Skipping as per policy.");
+
+        Assert.assertTrue("Should have called deleteArtifact.",
+                          testEventListener.deleteArtifactCalled
+                          && !testEventListener.createArtifactCalled
+                          && !testEventListener.clearStorageLocationCalled
+                          && !testEventListener.deleteStorageMetadataCalled
+                          && !testEventListener.replaceArtifactCalled);
+    }
+    
     @Test
     public void resolveNullAndStorageMetadata() throws Exception {
         final ByteArrayOutputStream output = new ByteArrayOutputStream();
@@ -184,11 +211,11 @@ public class StorageIsAlwaysRightTest extends AbstractResolutionPolicyTest<Stora
         final List<String> outputLines = Arrays.asList(new String(output.toByteArray()).split("\n"));
         System.out.println(String.format("Message lines are \n\n%s\n\n", outputLines));
 
-        assertListContainsMessage(outputLines, "Adding Artifact StorageLocation[s3:101011] as per policy.");
-        Assert.assertTrue("Should have called addArtifact.", !testEventListener.deleteArtifactCalled
-                                                             && testEventListener.addArtifactCalled
+        //assertListContainsMessage(outputLines, "Adding Artifact StorageLocation[s3:101011] as per policy.");
+        Assert.assertTrue("Should have called createArtifact.", !testEventListener.deleteArtifactCalled
+                                                             && testEventListener.createArtifactCalled
                                                              && !testEventListener.deleteStorageMetadataCalled
-                                                             && !testEventListener.resetArtifactCalled
+                                                             && !testEventListener.clearStorageLocationCalled
                                                              && !testEventListener.replaceArtifactCalled);
     }
 }

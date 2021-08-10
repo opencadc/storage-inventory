@@ -75,6 +75,7 @@ import ca.nrc.cadc.util.PropertiesReader;
 
 import java.net.URI;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
@@ -98,15 +99,15 @@ public class Main {
     private static final String CONFIG_FILE_NAME = "ratik.properties";
     private static final String CONFIG_PREFIX = Main.class.getPackage().getName();
     private static final String SQLGENERATOR_CONFIG_KEY = SQLGenerator.class.getName();
-    private static final String DB_SCHEMA_CONFIG_KEY = CONFIG_PREFIX + ".db.schema";
+    private static final String DB_SCHEMA_CONFIG_KEY = CONFIG_PREFIX + ".inventory.schema";
     private static final String LOGGING_KEY = CONFIG_PREFIX + ".logging";
-    private static final String DB_URL_CONFIG_KEY = CONFIG_PREFIX + ".db.url";
-    private static final String DB_USERNAME_CONFIG_KEY = CONFIG_PREFIX + ".db.username";
-    private static final String DB_PASSWORD_CONFIG_KEY = CONFIG_PREFIX + ".db.password";
+    private static final String DB_URL_CONFIG_KEY = CONFIG_PREFIX + ".inventory.url";
+    private static final String DB_USERNAME_CONFIG_KEY = CONFIG_PREFIX + ".inventory.username";
+    private static final String DB_PASSWORD_CONFIG_KEY = CONFIG_PREFIX + ".inventory.password";
     private static final String QUERY_SERVICE_CONFIG_KEY = CONFIG_PREFIX + ".queryService";
     private static final String URI_BUCKETS_CONFIG_KEY = CONFIG_PREFIX + ".buckets";
     private static final String TRACK_SITE_LOCATIONS_CONFIG_KEY = CONFIG_PREFIX + ".trackSiteLocations";
-    private static final String ARTIFACT_SELECTOR_CONFIG_KEY = ArtifactSelector.class.getName();
+    private static final String ARTIFACT_SELECTOR_CONFIG_KEY = CONFIG_PREFIX + ".artifactSelector";
 
     // Used to verify configuration items.  See the README for descriptions.
     private static final String[] MANDATORY_PROPERTY_KEYS = {
@@ -120,6 +121,14 @@ public class Main {
         TRACK_SITE_LOCATIONS_CONFIG_KEY,
         URI_BUCKETS_CONFIG_KEY
     };
+    
+    private static final Map<String, String> selectorMap;
+
+    static {
+        selectorMap = new HashMap<>();
+        selectorMap.put("all", "org.opencadc.inventory.util.AllArtifacts");
+        selectorMap.put("filter", "org.opencadc.inventory.util.IncludeArtifacts");
+    }
 
     public static void main(final String[] args) {
         Log4jInit.setLevel("ca.nrc.cadc", Level.WARN);
@@ -173,7 +182,9 @@ public class Main {
             final BucketSelector bucketSelector = new BucketSelector(configuredUriBuckets);
 
             final String configuredArtifactSelector = props.getFirstPropertyValue(ARTIFACT_SELECTOR_CONFIG_KEY);
-            final ArtifactSelector artifactSelector = InventoryUtil.loadPlugin(configuredArtifactSelector);
+            final String selectorClass = selectorMap.get(configuredArtifactSelector);
+            log.warn("selector: " + configuredArtifactSelector + " -> " + selectorClass);
+            final ArtifactSelector artifactSelector = InventoryUtil.loadPlugin(selectorClass);
 
             final String configuredTrackSiteLocations = props.getFirstPropertyValue(TRACK_SITE_LOCATIONS_CONFIG_KEY);
             final boolean trackSiteLocations = Boolean.parseBoolean(configuredTrackSiteLocations);

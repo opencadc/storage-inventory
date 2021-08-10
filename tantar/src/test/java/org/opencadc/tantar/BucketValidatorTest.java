@@ -70,7 +70,6 @@
 package org.opencadc.tantar;
 
 import ca.nrc.cadc.util.Log4jInit;
-
 import java.io.ByteArrayOutputStream;
 import java.io.OutputStream;
 import java.net.URI;
@@ -83,22 +82,24 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.UUID;
 import javax.security.auth.Subject;
-
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.apache.log4j.SimpleLayout;
 import org.apache.log4j.WriterAppender;
-import org.junit.Test;
 import org.junit.Assert;
+import org.junit.Test;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.storage.StorageMetadata;
-import org.opencadc.inventory.util.BucketSelector;
 import org.opencadc.tantar.policy.InventoryIsAlwaysRight;
 import org.opencadc.tantar.policy.RecoverFromStorage;
 import org.opencadc.tantar.policy.StorageIsAlwaysRight;
 
-
+/**
+ * Test that ResolutionPolicy implementations log the correct events.
+ * 
+ * @author pdowler
+ */
 public class BucketValidatorTest {
 
     static {
@@ -158,7 +159,7 @@ public class BucketValidatorTest {
 
         final BucketValidator testSubject =
                 new BucketValidator(Arrays.asList("a", "b", "c"), null,
-                                    new Subject(), true, new InventoryIsAlwaysRight(testEventListener, reporter),
+                                    new Subject(), true, reporter, new InventoryIsAlwaysRight(testEventListener, reporter),
                                     null, null, null) {
                     @Override
                     Iterator<StorageMetadata> getStorageMetadataIterator() {
@@ -187,13 +188,11 @@ public class BucketValidatorTest {
         final List<String> outputLines =
                 Arrays.asList(new String(byteArrayOutputStream.toByteArray()).split("\n"));
         System.out.printf("Message lines are \n\n%s\n\n%n", outputLines);
-        assertListContainsMessage(outputLines,
-                                  "Removing Unknown File StorageLocation[ceph:78787878] as per policy.");
-        assertListContainsMessage(outputLines,
-                                  "Resetting Artifact StorageLocation[ceph:7890AB] as per policy.");
-        assertListContainsMessage(outputLines,
-                                  "Replacing File StorageLocation[s3:CDEF00] as per policy.");
-        assertListContainsMessage(outputLines, "Artifact StorageLocation[ad:123456] is valid as per policy.");
+        assertListContainsMessage(outputLines, ".*deleteStorageLocation.*ceph:78787878.*");
+        assertListContainsMessage(outputLines, ".*clearStorageLocation.*ceph:7890AB.*");
+        assertListContainsMessage(outputLines, ".*clearStorageLocation.*s3:CDEF00.*");
+        assertListContainsMessage(outputLines, ".*deleteStorageLocation.*s3:CDEF00.*");
+        //assertListContainsMessage(outputLines, ".*valid.*ad:123456.*");
     }
 
     /**
@@ -233,7 +232,7 @@ public class BucketValidatorTest {
 
         final BucketValidator testSubject =
                 new BucketValidator(Arrays.asList("a", "b", "c"), null,
-                                    new Subject(), true, new InventoryIsAlwaysRight(testEventListener, reporter),
+                                    new Subject(), true, reporter, new InventoryIsAlwaysRight(testEventListener, reporter),
                                     null, null, null) {
                     @Override
                     Iterator<StorageMetadata> getStorageMetadataIterator() {
@@ -256,12 +255,9 @@ public class BucketValidatorTest {
         final List<String> outputLines =
                 Arrays.asList(new String(byteArrayOutputStream.toByteArray()).split("\n"));
         System.out.printf("Message lines are \n\n%s\n\n%n", outputLines);
-        assertListContainsMessage(outputLines,
-                                  "Resetting Artifact StorageLocation[ad:123456] as per policy.");
-        assertListContainsMessage(outputLines,
-                                  "Resetting Artifact StorageLocation[ceph:7890AB] as per policy.");
-        assertListContainsMessage(outputLines,
-                                  "Resetting Artifact StorageLocation[s3:CDEF00] as per policy.");
+        assertListContainsMessage(outputLines, ".*clearStorageLocation.*ad:123456.*");
+        assertListContainsMessage(outputLines, ".*clearStorageLocation.*ceph:7890AB.*");
+        assertListContainsMessage(outputLines, ".*clearStorageLocation.*s3:CDEF00.*");
     }
 
     /**
@@ -317,7 +313,7 @@ public class BucketValidatorTest {
 
         final BucketValidator testSubject =
                 new BucketValidator(Arrays.asList("a", "b", "c"), null,
-                                    new Subject(), true, new StorageIsAlwaysRight(testEventListener, reporter),
+                                    new Subject(), true, reporter, new StorageIsAlwaysRight(testEventListener, reporter),
                                     null, null, null) {
                     @Override
                     Iterator<StorageMetadata> getStorageMetadataIterator() {
@@ -346,12 +342,12 @@ public class BucketValidatorTest {
                 Arrays.asList(new String(byteArrayOutputStream.toByteArray()).split("\n"));
         System.out.printf("Message lines are \n\n%s\n\n%n", outputLines);
         assertListContainsMessage(outputLines,
-                                  "Adding Artifact StorageLocation[ceph:78787878] as per policy.");
+                                  ".*createArtifact.*ceph:78787878.*");
         assertListContainsMessage(outputLines,
-                                  "Removing Unknown Artifact StorageLocation[ceph:7890AB] as per policy.");
+                                  ".*deleteArtifact.*uri=cadc:a/myfile99.fits.*");
         assertListContainsMessage(outputLines,
-                                  "Replacing Artifact StorageLocation[s3:CDEF00] as per policy.");
-        assertListContainsMessage(outputLines, "Storage Metadata StorageLocation[ad:123456] is valid as per policy.");
+                                  ".*replaceArtifact.*uri=cadc:b/myfile100.fits.*s3:CDEF00.*");
+        //assertListContainsMessage(outputLines, ".*valid.*ad:123456.*");
     }
 
     /**
@@ -384,7 +380,7 @@ public class BucketValidatorTest {
 
         final BucketValidator testSubject =
                 new BucketValidator(Arrays.asList("a", "b", "c"), null,
-                                    new Subject(), true, new StorageIsAlwaysRight(testEventListener, reporter),
+                                    new Subject(), true, reporter, new StorageIsAlwaysRight(testEventListener, reporter),
                                     null, null, null) {
                     @Override
                     Iterator<StorageMetadata> getStorageMetadataIterator() {
@@ -408,11 +404,11 @@ public class BucketValidatorTest {
                 Arrays.asList(new String(byteArrayOutputStream.toByteArray()).split("\n"));
         System.out.printf("Message lines are \n\n%s\n\n%n", outputLines);
         assertListContainsMessage(outputLines,
-                                  "Adding Artifact StorageLocation[ad:123456] as per policy.");
+                                  ".*createArtifact.*ad:123456.*");
         assertListContainsMessage(outputLines,
-                                  "Adding Artifact StorageLocation[ad:78787878] as per policy.");
+                                  ".*createArtifact.*ad:78787878.*");
         assertListContainsMessage(outputLines,
-                                  "Adding Artifact StorageLocation[ad:CDEF00] as per policy.");
+                                  ".*createArtifact.*ad:CDEF00.*");
     }
 
     /**
@@ -421,7 +417,7 @@ public class BucketValidatorTest {
      *
      * @throws Exception For anything unexpected.
      */
-    @Test
+    //@Test
     public void validateRecoverFromStoragePolicyEmptyInventory() throws Exception {
         final ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
 
@@ -445,7 +441,7 @@ public class BucketValidatorTest {
 
         final BucketValidator testSubject =
                 new BucketValidator(Arrays.asList("a", "b", "c"), null,
-                                    new Subject(), true, new RecoverFromStorage(testEventListener, reporter),
+                                    new Subject(), true, reporter, new RecoverFromStorage(testEventListener, reporter),
                                     null, null, null) {
                     @Override
                     Iterator<StorageMetadata> getStorageMetadataIterator() {
@@ -469,16 +465,16 @@ public class BucketValidatorTest {
                 Arrays.asList(new String(byteArrayOutputStream.toByteArray()).split("\n"));
         System.out.printf("Message lines are \n\n%s\n\n%n", outputLines);
         assertListContainsMessage(outputLines,
-                                  "Adding Artifact StorageLocation[ad:123456] as per policy.");
+                                  ".*createArtifact.*ad:123456.*");
         assertListContainsMessage(outputLines,
-                                  "Adding Artifact StorageLocation[ad:78787878] as per policy.");
+                                  ".*createArtifact.*ad:78787878.*");
         assertListContainsMessage(outputLines,
-                                  "Adding Artifact StorageLocation[ad:CDEF00] as per policy.");
+                                  ".*createArtifact.*ad:CDEF00.*");
     }
 
-    private void assertListContainsMessage(final List<String> outputLines, final String message) {
-        Assert.assertTrue(String.format("Output does not contain %s", message),
-                          outputLines.stream().anyMatch(s -> s.contains(message)));
+    private void assertListContainsMessage(final List<String> outputLines, final String regex) {
+        Assert.assertTrue(String.format("Output does not match %s", regex),
+                          outputLines.stream().anyMatch(s -> s.matches(regex)));
     }
 
     private Logger getTestLogger(final OutputStream outputStream) {

@@ -220,15 +220,11 @@ public class FileSync implements Runnable {
                                 : AuthenticationUtil.getAnonSubject();
 
         scheduleSubjectUpdates(subject);
-
-        Subject.doAs(subject, (PrivilegedAction<Object>) () -> {
-            doit();
-            return null;
-        });
+        doit(subject);
     }
 
     // package access for test code
-    void doit() {
+    void doit(final Subject currentUser) {
         // poll time while watching job queue to empty
         long poll = 30 * 1000L; // 30 sec
         if (testRunLoops > 0) {
@@ -254,7 +250,6 @@ public class FileSync implements Runnable {
                 long startQ = System.currentTimeMillis();
                 long num = 0L;
                 log.info("FileSync.QUERY START");
-                final Subject currentUser = AuthenticationUtil.getCurrentSubject();
                 Iterator<String> bi = selector.getBucketIterator();
                 while (bi.hasNext()) {
                     String bucket = bi.next();
@@ -265,11 +260,12 @@ public class FileSync implements Runnable {
                             // are available from the cadc-inventory-db API
                             Artifact curArtifact = unstoredArtifacts.next();
                             log.debug("create job: " + curArtifact.getURI());
-                            FileSyncJob fsj = new FileSyncJob(curArtifact.getID(), this.locatorService,
+                            FileSyncJob fsj = new FileSyncJob(curArtifact, this.locatorService,
                                                               this.storageAdapter, this.jobArtifactDAO, currentUser);
 
                             jobQueue.put(fsj); // blocks when queue capacity is reached
-                            log.info("FileSync.CREATE: " + curArtifact.getURI());
+                            log.info("FileSync.CREATE: Artifact.id=" + curArtifact.getID()
+                                    + " Artifact.uri=" + curArtifact.getURI());
                             num++;
                         }
                     } catch (Exception qex) {

@@ -69,8 +69,6 @@
 
 package org.opencadc.ratik;
 
-import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
-
 import ca.nrc.cadc.util.Log4jInit;
 import java.io.File;
 import java.io.FileWriter;
@@ -79,6 +77,7 @@ import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
@@ -86,6 +85,7 @@ import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.Before;
+import org.junit.BeforeClass;
 import org.junit.Test;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.util.BucketSelector;
@@ -95,9 +95,9 @@ public class InventoryValidatorIteratorsTest {
     private static final Logger log = Logger.getLogger(InventoryValidatorIteratorsTest.class);
 
     static {
-        Log4jInit.setLevel("org.opencadc.ratik", Level.DEBUG);
+        Log4jInit.setLevel("org.opencadc.ratik", Level.INFO);
         Log4jInit.setLevel("org.opencadc.inventory", Level.INFO);
-        Log4jInit.setLevel("org.opencadc.inventory.db", Level.DEBUG);
+        Log4jInit.setLevel("org.opencadc.inventory.db", Level.INFO);
         Log4jInit.setLevel("ca.nrc.cadc.db", Level.INFO);
     }
 
@@ -108,6 +108,16 @@ public class InventoryValidatorIteratorsTest {
     private final LuskanEnvironment remoteEnvironment = new LuskanEnvironment();
 
     public InventoryValidatorIteratorsTest() throws Exception {}
+
+    @BeforeClass
+    public static void setup() throws Exception {
+        Path dest = Paths.get(TMP_DIR + "/.ssl");
+        if (!Files.exists(dest)) {
+            Files.createDirectories(dest);
+        }
+        Path src = Paths.get(InventoryValidator.CERTIFICATE_FILE_LOCATION);
+        Files.copy(src, dest.resolve(src.getFileName()), StandardCopyOption.REPLACE_EXISTING);
+    }
 
     @Before
     public void beforeTest() throws Exception {
@@ -126,13 +136,6 @@ public class InventoryValidatorIteratorsTest {
         fileWriter.write("WHERE uri LIKE 'cadc:INTTEST/%'");
         fileWriter.flush();
         fileWriter.close();
-
-        // copy proxy cert to tmp dir
-        final Path tmpCertDir = Paths.get(TMP_DIR + "/.ssl");
-        Files.createDirectories(tmpCertDir);
-        Path sourcePath = Paths.get(InventoryValidator.CERTIFICATE_FILE_LOCATION);
-        Path destPath = Paths.get(tmpCertDir + "/cadcproxy.pem");
-        Files.copy(sourcePath, destPath, REPLACE_EXISTING);
     }
 
     @Test
@@ -442,9 +445,9 @@ public class InventoryValidatorIteratorsTest {
         }
         try {
             System.setProperty("user.home", TMP_DIR);
-            InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.artifactDAO,
-                                                                    TestUtil.LUSKAN_URI, null, new IncludeArtifacts(),
-                                                                    bucketSelector, null) {
+            InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.daoConfig,
+                                                                    TestUtil.LUSKAN_URI, new IncludeArtifacts(),
+                                                                    bucketSelector, false) {
                 @Override
                 void validate(Artifact local, Artifact remoteArtifact) {
                     ordered.add(local);

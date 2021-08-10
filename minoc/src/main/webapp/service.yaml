@@ -64,6 +64,11 @@ paths:
          required: false
          type: string
          collectionFormat: multi
+       - name: META
+         in: query
+         description: 'extract METAdata (headers) from a file. A single parameter META=true is supported for FITS files. Output will be a plain text rendition of the headers.'
+         required: false
+         type: boolean
     put:
       description: |
         Upload a file identified by parameter Artifact.uri

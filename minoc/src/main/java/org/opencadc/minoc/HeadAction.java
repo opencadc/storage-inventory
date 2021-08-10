@@ -100,6 +100,7 @@ public class HeadAction extends ArtifactAction {
         
         checkReadable();
         initAndAuthorize(ReadGrant.class);
+        initDAO();
         
         String txnID = syncInput.getHeader(PUT_TXN);
         log.debug("transactionID: " + txnID);

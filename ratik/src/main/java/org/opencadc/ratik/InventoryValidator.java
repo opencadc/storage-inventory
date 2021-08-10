@@ -120,6 +120,10 @@ public class InventoryValidator implements Runnable {
     private final BucketSelector bucketSelector;
     private final ArtifactValidator artifactValidator;
     private final MessageDigest messageDigest;
+    
+    private long numLocalArtifacts = 0L;
+    private long numRemoteArtifacts = 0L;
+    private long numMatchedArtifacts = 0L;
 
     /**
      * Constructor.
@@ -207,6 +211,8 @@ public class InventoryValidator implements Runnable {
             final Subject subject = SSLUtil.createSubject(new File(CERTIFICATE_FILE_LOCATION));
             Subject.doAs(subject, (PrivilegedExceptionAction<Void>) () -> {
                 doit();
+                log.info(this.getClass().getSimpleName() + ".summary numLocal= " + numLocalArtifacts
+                    + " numRemote=" + numRemoteArtifacts + " numMatched=" + numMatchedArtifacts);
                 return null;
             });
         } catch (PrivilegedActionException privilegedActionException) {
@@ -280,6 +286,9 @@ public class InventoryValidator implements Runnable {
                 }
                 log.debug(String.format("comparing Artifacts:\n local - %s\nremote - %s", local, remote));
 
+                // overridable method for int-tests
+                testAction();
+
                 // check if Artifacts are the same, or if the local Artifact
                 // precedes or follows the remote Artifact.
                 int order = orderArtifacts(local, remote);
@@ -317,6 +326,15 @@ public class InventoryValidator implements Runnable {
     void validate(Artifact local, Artifact remote)
         throws InterruptedException, ResourceNotFoundException, TransientException, IOException {
         log.debug(String.format("validating:\n local - %s\nremote - %s", local, remote));
+        if (local != null) {
+            numLocalArtifacts++;
+        }
+        if (remote != null) {
+            numRemoteArtifacts++;
+        }
+        if (local != null && remote != null) {
+            numMatchedArtifacts++;
+        }
         artifactValidator.validate(local, remote);
     }
 
@@ -375,7 +393,12 @@ public class InventoryValidator implements Runnable {
         }
         // order query results by Artifact.uri
         boolean ordered = true;
-        return this.artifactDAO.iterator(constraint, bucket, ordered);
+        long t1 = System.currentTimeMillis();
+        log.debug(this.getClass().getSimpleName() + ".localQuery bucket=" + bucket);
+        ResourceIterator<Artifact> ret = this.artifactDAO.iterator(constraint, bucket, ordered);
+        long dt = System.currentTimeMillis() - t1;
+        log.info(this.getClass().getSimpleName() + ".localQuery bucket=" + bucket + " duration=" + dt);
+        return ret;
     }
 
     /**
@@ -395,7 +418,12 @@ public class InventoryValidator implements Runnable {
         final TapClient<Artifact> tapClient = new TapClient<>(this.resourceID);
         final String query = buildRemoteQuery(bucket);
         log.debug("\nExecuting query '" + query + "'\n");
-        return tapClient.execute(query, new ArtifactRowMapper());
+        long t1 = System.currentTimeMillis();
+        log.debug(this.getClass().getSimpleName() + ".remoteQuery bucket=" + bucket);
+        ResourceIterator<Artifact> ret = tapClient.execute(query, new ArtifactRowMapper());
+        long dt = System.currentTimeMillis() - t1;
+        log.info(this.getClass().getSimpleName() + ".remoteQuery bucket=" + bucket + " duration=" + dt);
+        return ret;
     }
 
     /**
@@ -433,21 +461,37 @@ public class InventoryValidator implements Runnable {
     }
 
     /**
+     * Method that can be overridden in tests to insert Artifact's after the iterator queries.
+     */
+    void testAction() { }
+
+    /**
      * Get the StorageSite for the remote instance resourceID;
      */
     private StorageSite getRemoteStorageSite(URI resourceID)
         throws InterruptedException, IOException, ResourceNotFoundException, TransientException {
-        final TapClient<StorageSite> tapClient = new TapClient<>(resourceID);
-        final String query = String.format("SELECT id, resourceID, name, allowRead, allowWrite, lastModified, "
-                                               + "metaChecksum FROM inventory.StorageSite where resourceID = %s",
-                                           resourceID);
-        log.debug("\nExecuting query '" + query + "'\n");
-        StorageSite returned = null;
-        ResourceIterator<StorageSite> results = tapClient.execute(query, new StorageSiteRowMapper());
-        if (results.hasNext()) {
-            returned = results.next();
+        try {
+            final Subject subject = SSLUtil.createSubject(new File(CERTIFICATE_FILE_LOCATION));
+            return Subject.doAs(subject, (PrivilegedExceptionAction<StorageSite>) () -> {
+                final TapClient<StorageSite> tapClient = new TapClient<>(resourceID);
+                final String query = "SELECT id, resourceID, name, allowRead, allowWrite, lastModified, metaChecksum "
+                    + "FROM inventory.StorageSite";
+                log.debug("\nExecuting query '" + query + "'\n");
+                StorageSite storageSite = null;
+                ResourceIterator<StorageSite> results = tapClient.execute(query, new StorageSiteRowMapper());
+                if (results.hasNext()) {
+                    storageSite = results.next();
+                    if (results.hasNext()) {
+                        throw new IllegalStateException(String.format("Multiple StorageSite's found for site %s",
+                                                                      resourceID.toASCIIString()));
+                    }
+                }
+                return storageSite;
+            });
+        } catch (PrivilegedActionException privilegedActionException) {
+            final Exception exception = privilegedActionException.getException();
+            throw new IllegalStateException(exception.getMessage(), exception);
         }
-        return returned;
     }
 
     /**
@@ -461,7 +505,7 @@ public class InventoryValidator implements Runnable {
             final URI resourceID = (URI) row.get(index++);
             final String name = (String) row.get(index++);
             final boolean allowRead = (Boolean) row.get(index++);
-            final boolean allowWrite = (Boolean) row.get(index);
+            final boolean allowWrite = (Boolean) row.get(index++);
 
             final StorageSite storageSite = new StorageSite(id, resourceID, name, allowRead, allowWrite);
             InventoryUtil.assignLastModified(storageSite, (Date) row.get(index++));

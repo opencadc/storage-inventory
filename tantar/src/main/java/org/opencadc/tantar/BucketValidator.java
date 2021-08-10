@@ -128,12 +128,27 @@ public class BucketValidator implements ValidateEventListener {
     private final StorageAdapter storageAdapter;
     private final Subject runUser;
     private final boolean reportOnlyFlag;
+    private final Reporter reporter;
     private final ResolutionPolicy resolutionPolicy;
 
     // Cached ArtifactDAO used for transactional access.
     private final ArtifactDAO artifactDAO;
     private final ArtifactDAO iteratorDAO;
     private final ObsoleteStorageLocationDAO obsoleteStorageLocationDAO;
+    
+    // occasional summary logging
+    private final long summaryLogInterval = 5 * 60L; // 5 minutes
+    private long lastSummary = 0L;
+    private long numValidated = 0L;
+    private long numValid = 0L;
+    private long numDelay = 0L;
+    private long numClearStorageLocation = 0L;
+    private long numDeleteStorageLocation = 0L;
+    private long numDeleteObsoleteStorageLocation = 0L;
+    private long numCreateArtifact = 0L;
+    private long numDeleteArtifact = 0L;
+    private long numReplaceArtifact = 0L;
+    private long numUpdateArtifact = 0L;
 
 
     /**
@@ -145,6 +160,7 @@ public class BucketValidator implements ValidateEventListener {
      * @param runUser    The user to run as.
      */
     BucketValidator(final MultiValuedProperties properties, final Reporter reporter, final Subject runUser) {
+        this.reporter = reporter;
         this.runUser = runUser;
 
         final String configuredReportOnly = properties.getFirstPropertyValue(REPORT_ONLY_KEY);
@@ -256,11 +272,12 @@ public class BucketValidator implements ValidateEventListener {
      * @param obsoleteStorageLocationDAO ObsoleteStorageLocation DAO.
      */
     BucketValidator(final List<String> bucketPrefixes, final StorageAdapter storageAdapter, final Subject runUser,
-                    final boolean reportOnlyFlag, final ResolutionPolicy resolutionPolicy,
+                    final boolean reportOnlyFlag, final Reporter reporter, final ResolutionPolicy resolutionPolicy,
                     final ArtifactDAO artifactDAO, final ArtifactDAO iteratorDAO,
                     final ObsoleteStorageLocationDAO obsoleteStorageLocationDAO) {
         this.bucketPrefixes.addAll(bucketPrefixes);
         this.storageAdapter = storageAdapter;
+        this.reporter = reporter;
         this.runUser = runUser;
         this.reportOnlyFlag = reportOnlyFlag;
         this.resolutionPolicy = resolutionPolicy;
@@ -288,7 +305,7 @@ public class BucketValidator implements ValidateEventListener {
 
         Artifact unresolvedArtifact = null;
         StorageMetadata unresolvedStorageMetadata = null;
-
+        logSummary(true, true);
         while ((inventoryIterator.hasNext() || unresolvedArtifact != null)
                && (storageMetadataIterator.hasNext() || unresolvedStorageMetadata != null)) {
             final Artifact artifact = (unresolvedArtifact == null) ? inventoryIterator.next() : unresolvedArtifact;
@@ -316,6 +333,8 @@ public class BucketValidator implements ValidateEventListener {
                 unresolvedStorageMetadata = storageMetadata;
                 resolutionPolicy.resolve(artifact, null);
             }
+            numValidated++;
+            logSummary();
         }
 
         // *** Perform some mop up.  These loops will take effect when one of the iterators is empty but the other is
@@ -324,6 +343,8 @@ public class BucketValidator implements ValidateEventListener {
             final Artifact artifact = inventoryIterator.next();
             LOGGER.debug(String.format("Artifact %s exists with no Storage Metadata.", artifact.storageLocation));
             resolutionPolicy.resolve(artifact, null);
+            numValidated++;
+            logSummary();
         }
 
         while (storageMetadataIterator.hasNext()) {
@@ -331,13 +352,74 @@ public class BucketValidator implements ValidateEventListener {
             LOGGER.debug(String.format("Storage Metadata %s exists with no Artifact.",
                                        storageMetadata.getStorageLocation()));
             resolutionPolicy.resolve(null, storageMetadata);
+            numValidated++;
+            logSummary();
         }
+        logSummary(true, false);
 
         LOGGER.debug("END validating iterators.");
     }
 
+    // default per-item invocation
+    private void logSummary() {
+        logSummary(false, true);
+    }
+    
+    // initial: true, true
+    // final:   true, false
+    private void logSummary(boolean force, boolean showNext) {
+        long sec = System.currentTimeMillis() / 1000L;
+        long dt = (sec - lastSummary);
+        if (!force && dt < summaryLogInterval) {
+            return;
+        }
+        lastSummary = sec;
+        
+        StringBuilder sb = new StringBuilder();
+        sb.append(resolutionPolicy.getClass().getSimpleName()).append(".summary");
+        if (numValidated > 0) {
+            sb.append(" numValidated=").append(numValidated);
+        }
+        if (numValid > 0) {
+            sb.append(" numValid=").append(numValid);
+        }
+        if (numDelay > 0) {
+            sb.append(" numDelay=").append(numDelay);
+        }
+        if (numClearStorageLocation > 0) {
+            sb.append(" numClearStorageLocation=").append(numClearStorageLocation);
+        }
+        if (numDeleteStorageLocation > 0) {
+            sb.append(" numDeleteStorageLocation=").append(numDeleteStorageLocation);
+        }
+        if (numDeleteObsoleteStorageLocation > 0) {
+            sb.append(" numDeleteObsoleteStorageLocation=").append(numDeleteObsoleteStorageLocation);
+        }
+        if (numCreateArtifact > 0) {
+            sb.append(" numCreateArtifact=").append(numCreateArtifact);
+        }
+        if (numDeleteArtifact > 0) {
+            sb.append(" numDeleteArtifact=").append(numDeleteArtifact);
+        }
+        if (numReplaceArtifact > 0) {
+            sb.append(" numReplaceArtifact=").append(numReplaceArtifact);
+        }
+        if (numUpdateArtifact > 0) {
+            sb.append(" numUpdateArtifact=").append(numUpdateArtifact);
+        }
+        if (showNext) {
+            sb.append(" nextSummaryIn=").append(summaryLogInterval).append("sec");
+        }
+        LOGGER.info(sb.toString());
+    }
+    
     private boolean canTakeAction() {
         return !reportOnlyFlag;
+    }
+
+    @Override
+    public void delayAction() {
+        numDelay++;
     }
 
     /**
@@ -362,6 +444,7 @@ public class BucketValidator implements ValidateEventListener {
                 artifactDAO.setStorageLocation(curArtifact, null);
                 
                 transactionManager.commitTransaction();
+                numClearStorageLocation++;
             } catch (EntityNotFoundException ex) {
                 // failed to lock: artifact deleted since start of iteration
                 transactionManager.rollbackTransaction();
@@ -390,9 +473,9 @@ public class BucketValidator implements ValidateEventListener {
     public void delete(final StorageMetadata storageMetadata) throws Exception {
         if (canTakeAction()) {
             final StorageLocation storageLocation = storageMetadata.getStorageLocation();
-            LOGGER.debug("Deleting from storage...");
+            LOGGER.debug("Delete from storage: " + storageLocation);
             storageAdapter.delete(storageLocation);
-            LOGGER.debug("Delete from storage: OK");
+            numDeleteStorageLocation++;
         }
     }
 
@@ -421,6 +504,7 @@ public class BucketValidator implements ValidateEventListener {
                 LOGGER.debug("commit transaction...");
                 transactionManager.commitTransaction();
                 LOGGER.debug("commit transaction... OK");
+                numDeleteArtifact++;
             } catch (EntityNotFoundException ex) {
                 LOGGER.debug("failed to lock Artifact " + artifact.getID() + " : already deleted");
             } catch (Exception e) {
@@ -481,6 +565,7 @@ public class BucketValidator implements ValidateEventListener {
                 transactionManager.startTransaction();
                 artifactDAO.put(artifact);
                 transactionManager.commitTransaction();
+                numCreateArtifact++;
             } catch (Exception e) {
                 LOGGER.error(String.format("Failed to create Artifact %s.", artifact.getURI()), e);
                 transactionManager.rollbackTransaction();
@@ -530,6 +615,7 @@ public class BucketValidator implements ValidateEventListener {
                 artifactDAO.put(replacementArtifact);
 
                 transactionManager.commitTransaction();
+                numReplaceArtifact++;
             } catch (Exception e) {
                 LOGGER.error(String.format("Failed to create Artifact %s.", storageMetadata.artifactURI), e);
                 transactionManager.rollbackTransaction();
@@ -573,6 +659,7 @@ public class BucketValidator implements ValidateEventListener {
                 artifactDAO.put(artifact);
 
                 transactionManager.commitTransaction();
+                numUpdateArtifact++;
             } catch (EntityNotFoundException ex) {
                 LOGGER.debug("failed to lock Artifact " + artifact.getID() + " : already deleted");
             } catch (Exception e) {
@@ -629,6 +716,11 @@ public class BucketValidator implements ValidateEventListener {
      * delete the file from storage and delete the ObsoleteStorageLocation.
      */
     boolean isObsoleteStorageLocation(StorageMetadata storageMetadata) {
+        
+        // TODO: since there are typically very few ObsoleteStorageLocation sitting around: 
+        //    query for the whole list and keep in memory??
+        // otherwise, this query occurs once per stored object (many small fast queries, but still...)
+        
         ObsoleteStorageLocation obsoleteStorageLocation;
         try {
             obsoleteStorageLocation = this.obsoleteStorageLocationDAO.get(storageMetadata.getStorageLocation());
@@ -639,12 +731,21 @@ public class BucketValidator implements ValidateEventListener {
                               storageMetadata.artifactURI.toASCIIString()), e);
         }
         if (obsoleteStorageLocation != null) {
-            LOGGER.info(String.format("delete obsolete object: %s (was: %s)", obsoleteStorageLocation,
-                                      storageMetadata.artifactURI.toASCIIString()));
+            StringBuilder sb = new StringBuilder();
+            sb.append(this.getClass().getSimpleName());
+            sb.append(".deleteStorageLocation");
+            sb.append(" Artifact.uri=").append(storageMetadata.artifactURI);
+            sb.append(" loc=").append(storageMetadata.getStorageLocation());
+            sb.append(" reason=obsolete");
+            //LOGGER.info(String.format("delete obsolete object: %s (was: %s)", obsoleteStorageLocation,
+            //                          storageMetadata.artifactURI.toASCIIString()));
+            reporter.report(sb.toString());
+            
             if (canTakeAction()) {
                 try {
                     delete(storageMetadata);
                     this.obsoleteStorageLocationDAO.delete(obsoleteStorageLocation.getID());
+                    numDeleteObsoleteStorageLocation++;
                 } catch (Exception e) {
                     throw new IllegalStateException("failed to cleanup obsolete " + obsoleteStorageLocation, e);
                 }

@@ -293,9 +293,28 @@ public class SwiftStorageAdapter  implements StorageAdapter {
         }
         
         try {
+            long t1;
+            
+            log.debug("creating client/authenticate...");
+            t1 = System.currentTimeMillis();
+            ac.setAllowContainerCaching(true);
+            ac.setAllowCaching(true);
+            ac.setAllowSynchronizeWithServer(false);
+            ac.setAllowReauthenticate(true);
             this.client = new AccountFactory(ac).createAccount();
-            checkConnectivity();
-            init();
+            final long authTime = System.currentTimeMillis() - t1;
+            log.debug("creating client/authenticate: " + authTime + " client: " + client.getClass().getName());
+            
+            // base-name bucket to store transient content and config attributes
+            log.debug("get base storageBucket...");
+            t1 = System.currentTimeMillis();
+            Container c = client.getContainer(storageBucket);
+            final long bucketTime = System.currentTimeMillis() - t1;
+            log.debug("get base storageBucket: " + bucketTime);
+            
+            log.info("SwiftStorageAdapter.INIT authTime=" + authTime + " bucketTime=" + bucketTime);
+            init(c);
+            
         } catch (InvalidConfigException | StorageEngageException ex) {
             throw ex;
         } catch (RuntimeException ex) {
@@ -303,33 +322,19 @@ public class SwiftStorageAdapter  implements StorageAdapter {
         }
     }
 
-    private void checkConnectivity() {
-        // check connectivity
-        client.getServerTime();
-    }
     
-    private void init() throws InvalidConfigException, StorageEngageException {
-        // base-name bucket to store config attributes, transient content (transactions)
-        this.txnContainer = client.getContainer(txnBucket);
-        if (!txnContainer.exists()) {
-            log.warn("creating: " + txnContainer.getName());
-            txnContainer.create();
-            log.warn("created: " + txnContainer.getName());
-        }
-        if (!multiBucket) {
-            Container c = client.getContainer(storageBucket);
-            if (!c.exists()) {
-                log.warn("creating: " + c.getName());
-                c.create();
-                log.warn("created: " + c.getName());
-            }
+    private void init(Container c) throws InvalidConfigException, StorageEngageException {
+        if (!c.exists()) {
+            log.debug("creating: " + c.getName());
+            c.create();
+            log.debug("created: " + c.getName());
         }
         
         // check vs config
-        Map<String,Object> curmeta = txnContainer.getMetadata();
-        log.warn("metadata items: " + curmeta.size());
+        Map<String,Object> curmeta = c.getMetadata();
+        log.debug("metadata items: " + curmeta.size());
         for (Map.Entry<String,Object> me : curmeta.entrySet()) {
-            log.warn(me.getKey() + " = " + me.getValue());
+            log.debug(me.getKey() + " = " + me.getValue());
         }
         
         String version = (String) curmeta.get(VERSION_ATTR);
@@ -343,13 +348,13 @@ public class SwiftStorageAdapter  implements StorageAdapter {
                     + " -- incompatible with config: " + storageBucket + "/" + storageBucketLength + "/" + multiBucket + "]");
             }
             // previous init OK
-            log.warn("init looks OK: " + storageBucket + "/" + storageBucketLength + "/" + multiBucket);
+            log.debug("init looks OK: " + storageBucket + "/" + storageBucketLength + "/" + multiBucket);
             return;
         }
 
         if (multiBucket) {
             BucketNameGenerator gen = new BucketNameGenerator(storageBucket, storageBucketLength);
-            log.warn("config: " + gen.getCount() + " buckets");
+            log.info("config: " + gen.getCount() + " buckets");
             Iterator<String> iter = gen.iterator();
             while (iter.hasNext()) {
                 String bucketName = iter.next();
@@ -372,8 +377,8 @@ public class SwiftStorageAdapter  implements StorageAdapter {
         meta.put(VERSION_ATTR, "0.5.0");
         meta.put(BUCKETLENGTH_ATTR, Integer.toString(storageBucketLength));
         meta.put(MULTIBUCKET_ATTR, Boolean.toString(multiBucket));
-        txnContainer.setMetadata(meta);
-        log.info("init complete: " + storageBucket + "/" + storageBucketLength + "/" + multiBucket);
+        c.setMetadata(meta);
+        log.info("bucket init complete: " + storageBucket + "/" + storageBucketLength + "/" + multiBucket);
     }
     
     static class InternalBucket {
@@ -721,6 +726,10 @@ public class SwiftStorageAdapter  implements StorageAdapter {
                 }
                 return new StorageMetadata(storageLocation, checksum, length);
             }
+
+            // force getting object last modified from server for consistency with iterator
+            obj.reload();
+            final Date lastModified = obj.getLastModifiedAsDate();
             
             // create this before committing the file so constraints applied
             StorageMetadata metadata = new StorageMetadata(storageLocation, checksum, length);

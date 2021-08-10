@@ -128,18 +128,6 @@ public class AdStorageAdapter implements StorageAdapter {
      */
     public AdStorageAdapter(){}
 
-    /**
-     * Get the artifact identified by storageLocation from storage.
-     * 
-     * @param storageLocation The storage location containing storageID and storageBucket.
-     * @param dest The destination stream.
-     * 
-     * @throws ResourceNotFoundException If the artifact could not be found.
-     * @throws ReadException If the storage system failed to stream.
-     * @throws WriteException If the client failed to stream.
-     * @throws StorageEngageException If the adapter failed to interact with storage.
-     * @throws TransientException If an unexpected, temporary exception occurred. 
-     */
     @Override
     public void get(StorageLocation storageLocation, OutputStream dest)
         throws ResourceNotFoundException, ReadException, WriteException, StorageEngageException, TransientException {
@@ -169,43 +157,12 @@ public class AdStorageAdapter implements StorageAdapter {
         }
     }
 
-    /**
-     * Get the artifact identified by storageLocation from storage.
-     * 
-     * @param storageLocation The storage location containing storageID and storageBucket.
-     * @param dest The destination stream.
-     * @param byteRanges set of byte ranges to read
-     * 
-     * @throws ResourceNotFoundException If the artifact could not be found.
-     * @throws ReadException If the storage system failed to stream.
-     * @throws WriteException If the client failed to stream.
-     * @throws StorageEngageException If the adapter failed to interact with storage.
-     * @throws TransientException If an unexpected, temporary exception occurred. 
-     */
     @Override
     public void get(StorageLocation storageLocation, OutputStream dest, SortedSet<ByteRange> byteRanges)
         throws ResourceNotFoundException, ReadException, WriteException, StorageEngageException, TransientException {
         throw new UnsupportedOperationException("not supported");
     }
     
-    /**
-     * Write not supported.
-     * 
-     * @param newArtifact The holds information about the incoming artifact.  If the contentChecksum
-     *     and contentLength are set, they will be used to validate the bytes received.
-     * @param source The stream from which to read.
-     * @param transactionID null for auto-commit or existing transactionID 
-     * @return The storage metadata.
-     * 
-     * @throws IncorrectContentChecksumException If the calculated checksum does not the expected
-     *     checksum as described in newArtifact.
-     * @throws IncorrectContentLengthException If the calculated length does not the expected
-     *     length as described in newArtifact.
-     * @throws ReadException If the client failed to stream.
-     * @throws WriteException If the storage system failed to stream.
-     * @throws StorageEngageException If the adapter failed to interact with storage.
-     * @throws TransientException If an unexpected, temporary exception occurred.
-     */
     @Override
     public StorageMetadata put(NewArtifact newArtifact, InputStream source, String transactionID)
         throws IncorrectContentChecksumException, IncorrectContentLengthException, ReadException,
@@ -213,16 +170,6 @@ public class AdStorageAdapter implements StorageAdapter {
         throw new UnsupportedOperationException("not supported");
     }
         
-    /**
-     * Delete not supported.
-     * 
-     * @param storageLocation Identifies the artifact to delete.
-     * 
-     * @throws ResourceNotFoundException If the artifact could not be found.
-     * @throws IOException If an unrecoverable error occurred.
-     * @throws StorageEngageException If the adapter failed to interact with storage.
-     * @throws TransientException If an unexpected, temporary exception occurred. 
-     */
     @Override
     public void delete(StorageLocation storageLocation)
         throws ResourceNotFoundException, IOException, StorageEngageException, TransientException {
@@ -249,27 +196,12 @@ public class AdStorageAdapter implements StorageAdapter {
         throw new UnsupportedOperationException();
     }
     
-    /**
-     * Complete iterator not supported.
-     * @return An iterator over an ordered list of items in storage.
-     * 
-     * @throws StorageEngageException If the adapter failed to interact with storage.
-     * @throws TransientException If an unexpected, temporary exception occurred. 
-     */
     @Override
     public Iterator<StorageMetadata> iterator()
         throws StorageEngageException, TransientException {
         throw new UnsupportedOperationException("not supported");
     }
     
-    /**
-     * Iterator of items ordered by their storageIDs in the given bucket.
-     * @param storageBucket Only iterate over items in this bucket.
-     * @return An iterator over an ordered list of items in this storage bucket.
-     * 
-     * @throws StorageEngageException If the adapter failed to interact with storage.
-     * @throws TransientException If an unexpected, temporary exception occurred. 
-     */
     @Override
     public Iterator<StorageMetadata> iterator(String storageBucket)
         throws StorageEngageException, TransientException {

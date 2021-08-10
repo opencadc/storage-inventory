@@ -70,15 +70,18 @@
 package org.opencadc.inventory.storage.ad;
 
 import java.util.Iterator;
+import org.apache.log4j.Logger;
 import org.opencadc.inventory.storage.StorageMetadata;
 
 public class AdStorageIterator implements Iterator<StorageMetadata> {
-
+    private static final Logger log = Logger.getLogger(AdStorageIterator.class);
+    
     private StorageMetadata nextItem = null;
     private Iterator<StorageMetadata> sourceIterator;
 
     public AdStorageIterator(Iterator<StorageMetadata> sourceIterator) {
         this.sourceIterator = sourceIterator;
+        // skip nulls
         while (this.nextItem == null && sourceIterator.hasNext()) {
             this.nextItem = sourceIterator.next();
         }
@@ -94,10 +97,13 @@ public class AdStorageIterator implements Iterator<StorageMetadata> {
         final StorageMetadata curMeta = this.nextItem;
         this.nextItem = null;
 
+        // skip nulls and duplicates
         while ((this.nextItem == null) && sourceIterator.hasNext()) {
             StorageMetadata maybeNext = sourceIterator.next();
             if (!curMeta.equals(maybeNext)) {
                 this.nextItem = maybeNext;
+            } else if (maybeNext != null) {
+                log.warn(AdStorageIterator.class.getSimpleName() + ".SKIP loc=" + maybeNext.getStorageLocation() + " reason=duplicate");
             }
         }
 

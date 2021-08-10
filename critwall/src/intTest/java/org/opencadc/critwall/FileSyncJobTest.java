@@ -3,7 +3,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2020.                            (c) 2020.
+ *  (c) 2021.                            (c) 2021.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -68,9 +68,11 @@
 package org.opencadc.critwall;
 
 import ca.nrc.cadc.auth.AuthenticationUtil;
+import ca.nrc.cadc.auth.SSLUtil;
 import ca.nrc.cadc.db.ConnectionConfig;
 import ca.nrc.cadc.db.DBConfig;
 import ca.nrc.cadc.db.DBUtil;
+import ca.nrc.cadc.util.FileUtil;
 import ca.nrc.cadc.util.Log4jInit;
 import java.io.File;
 import java.io.FileOutputStream;
@@ -102,8 +104,10 @@ import org.opencadc.inventory.storage.fs.OpaqueFileSystemStorageAdapter;
 public class FileSyncJobTest {
     private static final Logger log = Logger.getLogger(FileSyncJobTest.class);
     private static final String TEST_ROOT = "build/tmp/fsroot/critwallTests";
-    private static final String TEST_ARTIFACT_URI = "ad:IRIS/I212B2H0.fits";
-    private static final String TEST_RESOURCE_ID = "ivo://cadc.nrc.ca/data";
+    private static final String TEST_ARTIFACT_URI = "cadc:IRIS/I212B2H0.fits";
+    private static final String TEST_ARTIFACT_NOT_FOUND = "cadc:IRIS/NotFound.fits";
+    private static final String TEST_RESOURCE_ID = "ivo://cadc.nrc.ca/global/raven";
+    private static final String CERTIFICATE_FILE = "critwall-test.pem";
 
     private OpaqueFileSystemStorageAdapter oa = null;
 
@@ -111,7 +115,7 @@ public class FileSyncJobTest {
         Log4jInit.setLevel("org.opencadc.inventory", Level.INFO);
         Log4jInit.setLevel("org.opencadc.inventory.db", Level.INFO);
         Log4jInit.setLevel("ca.nrc.cadc.db", Level.INFO);
-        Log4jInit.setLevel("org.opencadc.critwall", Level.INFO);
+        Log4jInit.setLevel("org.opencadc.critwall", Level.DEBUG);
         Log4jInit.setLevel("org.opencadc.inventory.storage.fs", Level.INFO);
     }
 
@@ -196,9 +200,19 @@ public class FileSyncJobTest {
     }
 
     @Test
-    public void testValidJob() {
-        String testDir = TEST_ROOT + File.separator + "testValidJob";
-
+    public void testValidJobWithAnonSubject() {
+        String testDir = TEST_ROOT + File.separator + "testValidJobWithAnonSubject";
+        testValidJob(testDir, anonSubject);
+    }
+    
+    @Test
+    public void testValidJobWithCertSubject() {
+        String testDir = TEST_ROOT + File.separator + "testValidJobWithCertSubject";
+        final File certificateFile = FileUtil.getFileFromResource(CERTIFICATE_FILE, FileSyncJobTest.class);
+        testValidJob(testDir, SSLUtil.createSubject(certificateFile));
+    }
+    
+    public void testValidJob(String testDir, Subject testSubject) {
         try {
             createTestDirectory(testDir);
 
@@ -215,7 +229,7 @@ public class FileSyncJobTest {
             log.debug("putting test artifact to database");
             dao.put(artifactToUpdate);
 
-            FileSyncJob fsj = new FileSyncJob(artifactToUpdate.getID(), resourceID, sa, dao, anonSubject);
+            FileSyncJob fsj = new FileSyncJob(artifactToUpdate, resourceID, sa, dao, testSubject);
             fsj.run();
 
             // check job succeeded by trying to get artifact by location
@@ -234,6 +248,46 @@ public class FileSyncJobTest {
         log.info("testValidJob - DONE");
     }
 
+    @Test
+    public void testResourceNotFoundException() {
+        final String testDir = TEST_ROOT + File.separator + "ResourceNotFoundException";
+
+        try {
+            createTestDirectory(testDir);
+
+            OpaqueFileSystemStorageAdapter sa = new OpaqueFileSystemStorageAdapter(new File(TEST_ROOT), 1);
+
+            // note: this tests that transfer negotiaiton failed with a ResourceNotFoundException
+            URI artifactID = new URI(TEST_ARTIFACT_NOT_FOUND);
+            URI resourceID = new URI(TEST_RESOURCE_ID);
+
+            // Set up an Artifact in the database to start.
+            // Set checksum to the wrong value.
+            Artifact artifactToUpdate = new Artifact(artifactID,
+                new URI("md5:0123456789abcdef0123456789abcdef"), new Date(),
+                1008000L);
+
+            log.debug("putting test artifact to database");
+            dao.put(artifactToUpdate);
+
+            FileSyncJob fsj = new FileSyncJob(artifactToUpdate, resourceID, sa, dao, anonSubject);
+            fsj.run();
+
+            log.debug("finished run in failure test.");
+            // check job failed by verifying that storage location not set
+            Artifact storedArtifact = dao.get(artifactToUpdate.getID());
+            Assert.assertNull(storedArtifact.storageLocation);
+            
+        } catch (Exception unexpected) {
+            log.debug("unexpected exception: " + unexpected);
+            Assert.fail("unexpected exception");
+        }
+        log.info("testResourceNotFoundException - DONE");
+    }
+    
+    // TODO: craft a test that will fail in the anonymous part of syncArtifact so
+    // unwrap PrivilegedActionException isn't removed by accident again
+    
     @Test
     public void testInvalidJobBadChecksum() {
         final String testDir = TEST_ROOT + File.separator + "testValidJobBadChecksum";
@@ -255,7 +309,7 @@ public class FileSyncJobTest {
             log.debug("putting test artifact to database");
             dao.put(artifactToUpdate);
 
-            FileSyncJob fsj = new FileSyncJob(artifactToUpdate.getID(), resourceID, sa, dao, anonSubject);
+            FileSyncJob fsj = new FileSyncJob(artifactToUpdate, resourceID, sa, dao, anonSubject);
             fsj.run();
 
             log.debug("finished run in failure test.");
@@ -291,7 +345,7 @@ public class FileSyncJobTest {
             log.debug("putting test artifact to database");
             dao.put(artifactToUpdate);
 
-            FileSyncJob fsj = new FileSyncJob(artifactToUpdate.getID(), resourceID, sa, dao, anonSubject);
+            FileSyncJob fsj = new FileSyncJob(artifactToUpdate, resourceID, sa, dao, anonSubject);
             fsj.run();
 
             log.debug("finished run in failure test.");
@@ -332,7 +386,7 @@ public class FileSyncJobTest {
             dao.put(artifactToUpdate);
             
 
-            FileSyncJob fsj = new FileSyncJob(artifactToUpdate.getID(), resourceID, sa, dao, anonSubject);
+            FileSyncJob fsj = new FileSyncJob(artifactToUpdate, resourceID, sa, dao, anonSubject);
             fsj.run();
 
             log.debug("successfully finished FileSyncJob run in test.");

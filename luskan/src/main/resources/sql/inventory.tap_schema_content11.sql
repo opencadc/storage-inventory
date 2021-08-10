@@ -36,7 +36,8 @@ insert into tap_schema.tables11 (schema_name,table_name,table_type,description,t
 ( 'inventory', 'inventory.Artifact', 'table', 'Artifact table', 10 ),
 ( 'inventory', 'inventory.StorageSite', 'table', 'Table of storage sites', 11 ),
 ( 'inventory', 'inventory.DeletedArtifactEvent', 'table', 'Table of deleted artifact events', 12 ),
-( 'inventory', 'inventory.DeletedStorageLocationEvent', 'table', 'Table of deleted location events', 13 )
+( 'inventory', 'inventory.DeletedStorageLocationEvent', 'table', 'Table of deleted location events', 13 ),
+( 'inventory', 'inventory.ArtifactMetadata', 'view', 'All Artifact Metadata', 14 )
 ;
 
 insert into tap_schema.columns11 (table_name,column_name,utype,description,unit,datatype,arraysize,xtype,principal,indexed,std,column_index) values
@@ -50,6 +51,19 @@ insert into tap_schema.columns11 (table_name,column_name,utype,description,unit,
 ( 'inventory.Artifact', 'lastModified', 'si:Entity.lastModified', 'timestamp of last modification of the metadata', NULL, 'char','23*','timestamp', 1, 1, 1, 8 ),
 ( 'inventory.Artifact', 'metaChecksum', 'si:Entity.metaChecksum', 'checksum of the file metadata', NULL, 'char','136*','uri', 1, 0, 1, 9 ),
 ( 'inventory.Artifact', 'id', 'si:Entity.id', 'primary key', NULL, 'char','36','uuid', 1, 1, 1, 10 )
+;
+
+insert into tap_schema.columns11 (table_name,column_name,utype,description,unit,datatype,arraysize,xtype,principal,indexed,std,column_index) values
+( 'inventory.ArtifactMetadata', 'uri', 'si:Artifact.uri', 'URI for this file', NULL, 'char','512*', 'uri', 1, 1, 1, 1 ),
+( 'inventory.ArtifactMetadata', 'uriBucket', 'si:Artifact.uriBucket', 'URI for the storage bucket', NULL, 'char','5', NULL, 1, 1, 1, 2 ),
+( 'inventory.ArtifactMetadata', 'contentChecksum', 'si:Artifact.contentChecksum', 'checksum of the file content', NULL, 'char','136*', 'uri', 1, 0, 1, 3 ),
+( 'inventory.ArtifactMetadata', 'contentLastModified', 'si:Artifact.contentLastModified', 'timestamp of last modification of the file', NULL, 'char','23*','timestamp', 1, 0, 1, 4 ),
+( 'inventory.ArtifactMetadata', 'contentLength', 'si:Artifact.contentLength', 'size of the file', 'byte', 'long', NULL, NULL, 1, 0, 1, 5 ),
+( 'inventory.ArtifactMetadata', 'contentType', 'si:Artifact.contentType', 'format of the file', NULL, 'char','128*',NULL, 1, 0, 1, 6 ),
+( 'inventory.ArtifactMetadata', 'contentEncoding', 'si:Artifact.contentEncoding', 'encoding type of the file', NULL, 'char','128*',NULL, 1, 0, 1, 7 ),
+( 'inventory.ArtifactMetadata', 'lastModified', 'si:Entity.lastModified', 'timestamp of last modification of the metadata', NULL, 'char','23*','timestamp', 1, 1, 1, 8 ),
+( 'inventory.ArtifactMetadata', 'metaChecksum', 'si:Entity.metaChecksum', 'checksum of the file metadata', NULL, 'char','136*','uri', 1, 0, 1, 9 ),
+( 'inventory.ArtifactMetadata', 'id', 'si:Entity.id', 'primary key', NULL, 'char','36','uuid', 1, 1, 1, 10 )
 ;
 
 insert into tap_schema.columns11 (table_name,column_name,utype,description,unit,datatype,arraysize,xtype,principal,indexed,std,column_index) values

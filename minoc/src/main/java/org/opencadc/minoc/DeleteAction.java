@@ -102,6 +102,8 @@ public class DeleteAction extends ArtifactAction {
         
         checkWritable();
         initAndAuthorize(WriteGrant.class);
+        initDAO();
+        initStorageAdapter();
         
         String txnID = syncInput.getHeader(PUT_TXN);
         log.debug("transactionID: " + txnID);

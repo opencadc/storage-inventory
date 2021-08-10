@@ -83,6 +83,7 @@ public class RecoverFromStorage extends ResolutionPolicy {
 
     public RecoverFromStorage(ValidateEventListener validateEventListener, Reporter reporter) {
         super(validateEventListener, reporter);
+        throw new UnsupportedOperationException("** incomplete implementation **");
     }
 
     /**
@@ -99,22 +100,38 @@ public class RecoverFromStorage extends ResolutionPolicy {
             throw new RuntimeException("BUG: both args to resolve are null");
         }
         
-        if (storageMetadata == null) {
-            reporter.report("RecoverFromStorage: artifact " + artifact.getID() + " vs StorageMetadata null");
-            // TODO: ???
-            
-        } else if (artifact == null) {
-            reporter.report(String.format("Adding Artifact %s as per policy.", storageMetadata.getStorageLocation()));
-            
+        StringBuilder sb = new StringBuilder();
+        sb.append(this.getClass().getSimpleName());
+        if (storageMetadata == null || !storageMetadata.isValid()) {
+            sb.append(".noAction");
+            if (artifact != null) {
+                sb.append(" Artifact.id=").append(artifact.getID());
+                sb.append(" Artifact.uri=").append(artifact.getURI());
+                sb.append(" reason=no-matching-storageLocation");
+            } else {
+                sb.append(" reason=invalid-storageLocation");
+            }
+            //reporter.report("RecoverFromStorage: artifact " + artifact.getID() + " vs StorageMetadata null");
+            reporter.report(sb.toString());
+            return;
+        }
+        
+        if (artifact == null) {
+            sb.append(".createArtifact");
+            sb.append(" Artifact.uri=").append(storageMetadata.artifactURI);
+            sb.append(" loc=").append(storageMetadata.getStorageLocation());
+            //reporter.report(String.format("Adding Artifact %s as per policy.", storageMetadata.getStorageLocation()));
+            reporter.report(sb.toString());
             validateEventListener.createArtifact(storageMetadata);
-        } else if (!storageMetadata.isValid()) {
-            reporter.report("Invalid Storage Metadata (" + storageMetadata.getStorageLocation()
-                            + ").  Skipping as per policy.");
         } else  {
+            sb.append(".updateArtifact");
+            sb.append(" Artifact.id=").append(artifact.getID());
+            sb.append(" Artifact.uri=").append(artifact.getURI());
+            sb.append(" loc=").append(storageMetadata.getStorageLocation());
             // This scenario is for an incomplete previous run.  Treat the Artifact as corrupt and set it back to the
             // StorageMetadata's values.
-            reporter.report(String.format("Updating Artifact %s as per policy.", storageMetadata.getStorageLocation()));
-            
+            //reporter.report(String.format("Updating Artifact %s as per policy.", storageMetadata.getStorageLocation()));
+            reporter.report(sb.toString());
             validateEventListener.updateArtifact(artifact, storageMetadata);
         }
     }
