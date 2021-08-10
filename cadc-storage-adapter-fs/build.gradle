@@ -29,7 +29,7 @@ dependencies {
 
     testCompile 'junit:junit:[4.0,)'
     
-    intTestCompile 'org.opencadc:cadc-storage-adapter-test:[0.1,)'
+    intTestCompile 'org.opencadc:cadc-storage-adapter-test:[0.3,)'
 }
 
 
