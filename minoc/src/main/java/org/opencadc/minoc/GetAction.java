@@ -86,6 +86,7 @@ import java.util.TreeMap;
 
 import org.apache.log4j.Logger;
 import org.opencadc.fits.FitsOperations;
+import org.opencadc.fits.NoOverlapException;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.StorageLocation;
@@ -278,6 +279,8 @@ public class GetAction extends ArtifactAction {
                 msg += ": " + e.getMessage();
             }
             throw new IllegalArgumentException(msg, e);
+        } catch (NoOverlapException noOverlapException) {
+            throw new IllegalArgumentException(noOverlapException.getMessage());
         } finally {
             if (bcos != null) {
                 super.logInfo.setBytes(bcos.getByteCount());
