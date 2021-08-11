@@ -108,6 +108,12 @@ public class SwiftPutTxnTest extends StorageAdapterPutTxnTest {
             swiftAdapter.delete(loc);
             log.info("\tdeleted: " + loc);
         }
+        Iterator<String> trans = swiftAdapter.listTransactions();
+        while (trans.hasNext()) {
+            String tid = trans.next();
+            swiftAdapter.abortTransaction(tid);
+            log.info("\tdeleted: txn " + tid);
+        }
         log.info("cleanupBefore: DONE");        
     }
     

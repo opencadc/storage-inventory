@@ -99,6 +99,21 @@ public class SwiftStorageAdapterTest {
     }
     
     @Test
+    public void testGetNextPartName() throws Exception {
+        SwiftStorageAdapter swiftAdapter = new SwiftStorageAdapter("test-bucket", 3, false);
+        
+        String prefix = "id:uuid:p:";
+        
+        String e1 = prefix + "0001";
+        String a1 = swiftAdapter.getNextPartName(prefix, null);
+        Assert.assertEquals(e1, a1);
+        
+        String e2 = prefix + "0002";
+        String a2 = swiftAdapter.getNextPartName(prefix, a1);
+        Assert.assertEquals(e2, a2);
+    }
+    
+    @Test
     public void testGenerateID() throws Exception {
         SwiftStorageAdapter swiftAdapter = new SwiftStorageAdapter("test-bucket", 3, false);
         // enough to verify that randomness in the scheme doesn't create invalid URI?

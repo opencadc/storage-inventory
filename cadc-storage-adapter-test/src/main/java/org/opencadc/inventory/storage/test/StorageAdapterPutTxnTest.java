@@ -225,7 +225,7 @@ public class StorageAdapterPutTxnTest {
             URI expectedChecksum = URI.create("md5:" + HexUtil.toHex(md.digest()));
             long expectedLength = data.length;
             
-            URI uri = URI.create("cadc:TEST/testPutTransactionCommit");
+            URI uri = URI.create("cadc:TEST/testPutResumeCommit");
             NewArtifact newArtifact = new NewArtifact(uri);
             newArtifact.contentChecksum = expectedChecksum;
             newArtifact.contentLength = expectedLength;

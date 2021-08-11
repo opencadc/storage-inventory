@@ -78,8 +78,6 @@ import ca.nrc.cadc.net.PreconditionFailedException;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.util.HexUtil;
-import ca.nrc.cadc.util.StringUtil;
-import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
@@ -89,10 +87,6 @@ import java.io.OutputStream;
 import java.net.SocketException;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.nio.file.Files;
-import java.nio.file.InvalidPathException;
-import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
 import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -113,8 +107,10 @@ import org.javaswift.joss.client.factory.AccountFactory;
 import org.javaswift.joss.client.factory.AuthenticationMethod;
 import org.javaswift.joss.exception.CommandException;
 import org.javaswift.joss.exception.Md5ChecksumException;
+import org.javaswift.joss.headers.object.ObjectManifest;
 import org.javaswift.joss.instructions.DownloadInstructions;
 import org.javaswift.joss.instructions.UploadInstructions;
+import org.javaswift.joss.instructions.UploadPayload;
 import org.javaswift.joss.model.Account;
 import org.javaswift.joss.model.Container;
 import org.javaswift.joss.model.StoredObject;
@@ -155,6 +151,7 @@ public class SwiftStorageAdapter  implements StorageAdapter {
     private static final String ARTIFACT_ID_ATTR = "org.opencadc.artifactid";
     private static final String CONTENT_CHECKSUM_ATTR = "org.opencadc.contentchecksum";
     private static final String TRANSACTION_ATTR = "org.opencadc.transaction";
+    private static final String SEGMENTS_ATTR = "org.opencadc.segments";
     
     private static final String VERSION_ATTR = "org.opencadc.swift.version";
     private static final String BUCKETLENGTH_ATTR = "org.opencadc.swift.storagebucketlength";
@@ -308,12 +305,12 @@ public class SwiftStorageAdapter  implements StorageAdapter {
             // base-name bucket to store transient content and config attributes
             log.debug("get base storageBucket...");
             t1 = System.currentTimeMillis();
-            Container c = client.getContainer(storageBucket);
+            this.txnContainer = client.getContainer(storageBucket);
             final long bucketTime = System.currentTimeMillis() - t1;
             log.debug("get base storageBucket: " + bucketTime);
             
             log.info("SwiftStorageAdapter.INIT authTime=" + authTime + " bucketTime=" + bucketTime);
-            init(c);
+            init(txnContainer);
             
         } catch (InvalidConfigException | StorageEngageException ex) {
             throw ex;
@@ -396,8 +393,9 @@ public class SwiftStorageAdapter  implements StorageAdapter {
     
     // internal storage model for multiBucket=true: 
     //      {baseStorageBucket} is created and used to store config and transactions
-    //      {baseStorageBucket}-{StorageLocation.storageBucket} are created at init and stroe file objects
-    //      {baseStorageBucket}-{StorageLocation.storageBucket}/{StorageLocation.storageID}
+    //      {baseStorageBucket}-{StorageLocation.storageBucket} are created at init and store file objects
+    //      {baseStorageBucket}-{StorageLocation.storageBucket}/{StorageLocation.storageID} is a simple or manifest of segmented object
+    //      {baseStorageBucket}-{StorageLocation.storageBucket}/{StorageLocation.storageID}:p:{sequence} is a part N of a segmented object, N in [1,M]
     //      storageID is id:{uuid}
     //      storageBucket is {hex}
     
@@ -409,10 +407,10 @@ public class SwiftStorageAdapter  implements StorageAdapter {
     //      storageBucket is {hex}
     StorageLocation generateStorageLocation() {
         UUID id = UUID.randomUUID();
-        return generateStorageLocation(id);
+        return toStorageLocation(id);
     }
     
-    StorageLocation generateStorageLocation(UUID uuid) {
+    StorageLocation toStorageLocation(UUID uuid) {
         String id = uuid.toString();
         if (multiBucket) {
             StorageLocation ret = new StorageLocation(URI.create(KEY_SCHEME + ":" + id));
@@ -613,7 +611,7 @@ public class SwiftStorageAdapter  implements StorageAdapter {
         try {
             if (transactionID != null) {
                 // validate
-                storageLocation = getTransactionStorageLocation(transactionID);
+                storageLocation = getNextTransactionStorageLocation(transactionID);
                 txnDigest = txnDigestStore.get(transactionID);
                 if (txnDigest == null) {
                     throw new IllegalArgumentException("unknown transaction: " + transactionID);
@@ -791,7 +789,8 @@ public class SwiftStorageAdapter  implements StorageAdapter {
     public String startTransaction(URI artifactURI) throws StorageEngageException, TransientException {
         InventoryUtil.assertNotNull(SwiftStorageAdapter.class, "artifactURI", artifactURI);
         try {
-            final String transactionID = UUID.randomUUID().toString();
+            UUID id = UUID.randomUUID();
+            final String transactionID = id.toString();
             
             // init digest
             MessageDigest md = MessageDigest.getInstance("MD5");
@@ -812,6 +811,20 @@ public class SwiftStorageAdapter  implements StorageAdapter {
 
             // TODO: serialise the md object and store it in the txn status object
             txnDigestStore.put(transactionID, md);
+            
+            // create large object manifest so that each write (append) is a new object with this prefix
+            StorageLocation mloc = toStorageLocation(id);
+            log.warn("create manifest: " + mloc);
+            Container sub = getContainerImpl(mloc, true);
+            StoredObject mo = sub.getObject(mloc.getStorageID().toASCIIString());
+            ObjectManifest manifest = new ObjectManifest(sub.getName() + "/" + mloc.getStorageID().toASCIIString());
+            UploadInstructions up = new UploadInstructions(new byte[0]);
+            up.setObjectManifest(manifest);
+            mo.uploadObject(up);
+            mo.setAndDoNotSaveMetadata(ARTIFACT_ID_ATTR, artifactURI.toASCIIString());
+            mo.setAndDoNotSaveMetadata(CONTENT_CHECKSUM_ATTR, checksum.toASCIIString());
+            mo.setAndDoNotSaveMetadata(TRANSACTION_ATTR, true);
+            mo.saveMetadata();
             
             return transactionID;
         } catch (CloneNotSupportedException | NoSuchAlgorithmException ex) {
@@ -875,13 +888,15 @@ public class SwiftStorageAdapter  implements StorageAdapter {
             }
             log.warn("delete txn: " + txn.getName());
             txn.delete();
-            try {
-                
-                StoredObject obj = getStoredObject(metadata.getStorageLocation(), true);
-                log.warn("delete obj: " + obj.getName());
-                obj.delete();
-            } catch (ResourceNotFoundException ex) {
-                log.warn("abortTransaction: " + transactionID + " - file object not found", ex);
+            if (metadata.isValid()) { // stored object exists
+                try {
+
+                    StoredObject obj = getStoredObject(metadata.getStorageLocation(), true);
+                    log.warn("delete obj: " + obj.getName());
+                    obj.delete();
+                } catch (ResourceNotFoundException ex) {
+                    log.warn("abortTransaction: " + transactionID + " - file object not found", ex);
+                }
             }
         } catch (CommandException ex) {
             throw new StorageEngageException("failed to abort transaction: " + transactionID, ex);
@@ -896,12 +911,14 @@ public class SwiftStorageAdapter  implements StorageAdapter {
             StoredObject txn = txnContainer.getObject("txn:" + transactionID);
             
             // temp: need to get contentLength from the real object
-            StorageLocation loc = generateStorageLocation(uuid);
+            StorageLocation loc = toStorageLocation(uuid);
             Container sub = getContainerImpl(loc, true);
             StoredObject obj = sub.getObject(loc.getStorageID().toASCIIString());
             long contentLength = 0L;
             if (obj.exists()) {
                 contentLength = obj.getContentLength();
+            } else {
+                return new StorageMetadata(loc);
             }
             
             if (txn.exists()) {
@@ -922,19 +939,73 @@ public class SwiftStorageAdapter  implements StorageAdapter {
         throw new ResourceNotFoundException("unknown transaction: " + transactionID);
     }
     
+    // used by SwiftPutTxnTest.cleanupBefore()
+    Iterator<String> listTransactions() {
+        return new TxnIterator(txnContainer.list().iterator()); // assume it's small
+    }
+    
+    private class TxnIterator implements Iterator<String> {
+
+        private final Iterator<StoredObject> cso;
+
+        public TxnIterator(Iterator<StoredObject> cso) {
+            this.cso = cso;
+        }
+        
+        @Override
+        public boolean hasNext() {
+            return cso.hasNext();
+        }
+
+        @Override
+        public String next() {
+            StoredObject so = cso.next();
+            URI uri = URI.create(so.getName());
+            if (!"txn".equals(uri.getScheme())) {
+                throw new IllegalStateException("unexpected object in txnContainer: " + so);
+            }
+            return uri.getSchemeSpecificPart();
+        }
+        
+    }
+    
     private boolean isInTransaction(StoredObject obj) {
         String val = (String) obj.getMetadata(TRANSACTION_ATTR);
         return ("true".equals(val));
     }
     
-    private StorageLocation getTransactionStorageLocation(String transactionID) throws ResourceNotFoundException, StorageEngageException, TransientException {
+    // get destination to write bytes to
+    private StorageLocation getNextTransactionStorageLocation(String transactionID) 
+            throws ResourceNotFoundException, StorageEngageException, TransientException {
         InventoryUtil.assertNotNull(SwiftStorageAdapter.class, "transactionID", transactionID);
         UUID uuid = UUID.fromString(transactionID);
         StoredObject txn = txnContainer.getObject("txn:" + transactionID);
         if (txn.exists()) {
-            return generateStorageLocation(uuid);
+            StorageLocation manifest = toStorageLocation(uuid);
+            Container sub = getContainerImpl(manifest, true);
+            String prefix = manifest.getStorageID() + ":p:";
+            Iterator<StoredObject> parts = new LargeObjectPartIterator(sub, prefix);
+            String last = null;
+            while (parts.hasNext()) {
+                StoredObject p = parts.next();
+                last = p.getName();
+            }
+            String pname = getNextPartName(prefix, last);
+            
+            
         }
         throw new ResourceNotFoundException("unknown transaction: " + transactionID);
+    }
+    
+    String getNextPartName(String prefix, String prev) {
+        int p = 0;
+        if (prev != null) {
+            String s = prev.substring(prefix.length());
+            p = Integer.parseInt(s);
+        }
+        p++;
+        return String.format(prefix + "%04d", p);
+        
     }
     
     // main use: iterator
@@ -1252,6 +1323,28 @@ public class SwiftStorageAdapter  implements StorageAdapter {
                     }
                 }
             }
+        }
+    }
+    
+    // iterator over all parts of a dynamic large object
+    private class LargeObjectPartIterator implements Iterator<StoredObject> {
+        
+        private final Container sub;
+        private final String prefix;
+
+        public LargeObjectPartIterator(Container sub, String prefix) {
+            this.sub = sub;
+            this.prefix = prefix;
+        }
+
+        @Override
+        public boolean hasNext() {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public StoredObject next() {
+            throw new UnsupportedOperationException();
         }
     }
 }
