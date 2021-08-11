@@ -70,6 +70,7 @@
 package org.opencadc.ratik;
 
 import ca.nrc.cadc.auth.SSLUtil;
+import ca.nrc.cadc.db.ConnectionConfig;
 import ca.nrc.cadc.db.DBUtil;
 import ca.nrc.cadc.io.ResourceIterator;
 import ca.nrc.cadc.net.ResourceNotFoundException;
@@ -90,7 +91,9 @@ import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 import java.util.UUID;
+import javax.naming.NamingException;
 import javax.security.auth.Subject;
 import javax.sql.DataSource;
 import org.apache.log4j.Logger;
@@ -134,17 +137,31 @@ public class InventoryValidator implements Runnable {
      * @param bucketSelector     uri buckets
      * @param trackSiteLocations local site type
      */
-    public InventoryValidator(Map<String, Object> daoConfig, URI resourceID, ArtifactSelector artifactSelector,
+    public InventoryValidator(ConnectionConfig cc, Map<String, Object> daoConfig, URI resourceID, ArtifactSelector artifactSelector,
                               BucketSelector bucketSelector, boolean trackSiteLocations) {
         InventoryUtil.assertNotNull(InventoryValidator.class, "daoConfig", daoConfig);
         InventoryUtil.assertNotNull(InventoryValidator.class, "resourceID", resourceID);
         InventoryUtil.assertNotNull(InventoryValidator.class, "artifactSelector", artifactSelector);
 
-        this.artifactDAO = new ArtifactDAO(false);
-        this.artifactDAO.setConfig(daoConfig);
-        this.resourceID = resourceID;
-        this.artifactSelector = artifactSelector;
-        this.bucketSelector = bucketSelector;
+        // copy config
+        Map<String,Object> txnConfig = new TreeMap<>();
+        txnConfig.putAll(daoConfig);
+        
+        try {
+            DBUtil.createJNDIDataSource("jdbc/inventory", cc);
+        } catch (NamingException ne) {
+            throw new IllegalStateException(String.format("Unable to access database: %s", cc.getURL()), ne);
+        }
+        daoConfig.put("jndiDataSourceName", "jdbc/inventory");
+        
+        try {
+            DBUtil.createJNDIDataSource("jdbc/inventory-txn", cc);
+        } catch (NamingException ne) {
+            throw new IllegalStateException(String.format("Unable to access database: %s", cc.getURL()), ne);
+        }
+        txnConfig.put("jndiDataSourceName", "jdbc/inventory-txn");
+        
+        
 
         try {
             String jndiDataSourceName = (String) daoConfig.get("jndiDataSourceName");
@@ -158,6 +175,12 @@ public class InventoryValidator implements Runnable {
             throw new IllegalStateException("check/init database failed", ex);
         }
 
+        this.artifactDAO = new ArtifactDAO(false);
+        this.artifactDAO.setConfig(daoConfig);
+        this.resourceID = resourceID;
+        this.artifactSelector = artifactSelector;
+        this.bucketSelector = bucketSelector;
+        
         try {
             RegistryClient rc = new RegistryClient();
             Capabilities caps = rc.getCapabilities(resourceID);
@@ -184,7 +207,10 @@ public class InventoryValidator implements Runnable {
         } else {
             this.remoteSite = null;
         }
-        this.artifactValidator = new ArtifactValidator(this.artifactDAO, resourceID, remoteSite);
+        
+        ArtifactDAO txnDAO = new ArtifactDAO(false);
+        txnDAO.setConfig(txnConfig);
+        this.artifactValidator = new ArtifactValidator(txnDAO, resourceID, remoteSite);
 
         try {
             this.messageDigest = MessageDigest.getInstance("MD5");
@@ -193,17 +219,15 @@ public class InventoryValidator implements Runnable {
         }
     }
 
-    // Package access constructor for testing.
-    InventoryValidator(ArtifactDAO artifactDAO, URI resourceID, StorageSite remoteSite,
-                       ArtifactSelector artifactSelector, BucketSelector bucketSelector,
-                       ArtifactValidator artifactValidator, MessageDigest messageDigest) {
-        this.artifactDAO = artifactDAO;
-        this.resourceID = resourceID;
-        this.remoteSite = remoteSite;
-        this.artifactSelector = artifactSelector;
-        this.bucketSelector = bucketSelector;
-        this.artifactValidator = artifactValidator;
-        this.messageDigest = messageDigest;
+    // Package access constructor for unit testing.
+    InventoryValidator() {
+        this.artifactDAO = null;
+        this.resourceID = null;
+        this.remoteSite = null;
+        this.artifactSelector = null;
+        this.bucketSelector = null;
+        this.artifactValidator = null;
+        this.messageDigest = null;
     }
 
     @Override public void run() {

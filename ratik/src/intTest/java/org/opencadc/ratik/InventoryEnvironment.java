@@ -87,19 +87,22 @@ public class InventoryEnvironment {
     final DeletedArtifactEventDAO deletedArtifactEventDAO = new DeletedArtifactEventDAO();
     final DeletedStorageLocationEventDAO deletedStorageLocationEventDAO = new DeletedStorageLocationEventDAO();
     final Map<String, Object> daoConfig = new TreeMap<>();
-    final String jndiPath = "jdbc/InventoryEnvironment";
+    final ConnectionConfig inventoryConnectionConfig;
+    
+    private final String jndiPath = "jdbc/InventoryEnvironment"; // for setup/cleanup
+    
 
     public InventoryEnvironment() throws Exception {
         final DBConfig dbrc = new DBConfig();
-        final ConnectionConfig inventoryConnectionConfig = dbrc.getConnectionConfig(TestUtil.INVENTORY_SERVER,
+        inventoryConnectionConfig = dbrc.getConnectionConfig(TestUtil.INVENTORY_SERVER,
                                                                                     TestUtil.INVENTORY_DATABASE);
         DBUtil.createJNDIDataSource(jndiPath, inventoryConnectionConfig);
 
         daoConfig.put(SQLGenerator.class.getName(), SQLGenerator.class);
-        daoConfig.put("jndiDataSourceName", jndiPath);
         daoConfig.put("database", TestUtil.INVENTORY_DATABASE);
         daoConfig.put("schema", TestUtil.INVENTORY_SCHEMA);
-
+        daoConfig.put("jndiDataSourceName", jndiPath);
+        
         storageSiteDAO.setConfig(daoConfig);
         artifactDAO.setConfig(daoConfig);
         deletedArtifactEventDAO.setConfig(daoConfig);
@@ -108,6 +111,8 @@ public class InventoryEnvironment {
         new InitDatabase(DBUtil.findJNDIDataSource(jndiPath),
                          (String) daoConfig.get("database"),
                          (String) daoConfig.get("schema")).doInit();
+        
+        daoConfig.remove("jndiDataSourceName");
     }
 
     void cleanTestEnvironment() throws Exception {
