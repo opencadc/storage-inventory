@@ -445,7 +445,8 @@ public class InventoryValidatorIteratorsTest {
         }
         try {
             System.setProperty("user.home", TMP_DIR);
-            InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.daoConfig,
+            InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.inventoryConnectionConfig, 
+                                                                    this.localEnvironment.daoConfig,
                                                                     TestUtil.LUSKAN_URI, new IncludeArtifacts(),
                                                                     bucketSelector, false) {
                 @Override
