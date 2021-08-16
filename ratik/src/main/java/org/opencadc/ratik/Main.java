@@ -163,14 +163,6 @@ public class Main {
             final ConnectionConfig cc = new ConnectionConfig(null, null, username, password,
                                                              "org.postgresql.Driver", dbUrl);
 
-            try {
-                DBUtil.createJNDIDataSource("jdbc/inventory", cc);
-            } catch (NamingException ne) {
-                throw new IllegalStateException(String.format("Unable to access database: %s", dbUrl), ne);
-            }
-
-            daoConfig.put("jndiDataSourceName", "jdbc/inventory");
-
             final String configuredSQLGenerator = props.getFirstPropertyValue(SQLGENERATOR_CONFIG_KEY);
             daoConfig.put(SQLGENERATOR_CONFIG_KEY, Class.forName(configuredSQLGenerator));
             // End DAO Configuration
@@ -190,7 +182,7 @@ public class Main {
             final boolean trackSiteLocations = Boolean.parseBoolean(configuredTrackSiteLocations);
 
             final InventoryValidator doit =
-                new InventoryValidator(daoConfig, resourceID, artifactSelector, bucketSelector, trackSiteLocations);
+                new InventoryValidator(cc, daoConfig, resourceID, artifactSelector, bucketSelector, trackSiteLocations);
             doit.run();
         } catch (Throwable unexpected) {
             log.fatal("Unexpected failure", unexpected);

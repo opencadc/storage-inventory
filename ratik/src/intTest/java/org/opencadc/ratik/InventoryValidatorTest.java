@@ -204,7 +204,8 @@ public class InventoryValidatorTest {
 
         try {
             System.setProperty("user.home", TMP_DIR);
-            InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.daoConfig,
+            InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.inventoryConnectionConfig, 
+                                                                    this.localEnvironment.daoConfig,
                                                                     TestUtil.LUSKAN_URI, new IncludeArtifacts(),
                                                                     null, trackSiteLocations);
             testSubject.run();
@@ -246,7 +247,8 @@ public class InventoryValidatorTest {
 
         try {
             System.setProperty("user.home", TMP_DIR);
-            InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
+            InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.inventoryConnectionConfig, 
+                                                                    this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
                                                                     new IncludeArtifacts(),null,
                                                                     trackSiteLocations) {
                 // Override the remote query to not return the remote Artifact.
@@ -303,7 +305,8 @@ public class InventoryValidatorTest {
 
         try {
             System.setProperty("user.home", TMP_DIR);
-            InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
+            InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.inventoryConnectionConfig, 
+                                                                    this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
                                                                     new IncludeArtifacts(),null,
                                                                     trackSiteLocations);
             testSubject.run();
@@ -357,7 +360,8 @@ public class InventoryValidatorTest {
 
         try {
             System.setProperty("user.home", TMP_DIR);
-            InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
+            InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.inventoryConnectionConfig, 
+                                                                    this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
                                                                     new IncludeArtifacts(),null,
                                                                     true);
             testSubject.run();
@@ -394,7 +398,8 @@ public class InventoryValidatorTest {
 
         try {
             System.setProperty("user.home", TMP_DIR);
-            InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
+            InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.inventoryConnectionConfig, 
+                                                                    this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
                                                                     new IncludeArtifacts(),null,
                                                                     true);
             testSubject.run();
@@ -442,7 +447,8 @@ public class InventoryValidatorTest {
 
         try {
             System.setProperty("user.home", TMP_DIR);
-            InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
+            InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.inventoryConnectionConfig, 
+                                                                    this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
                                                                     new IncludeArtifacts(),null,
                                                                     true);
             testSubject.run();
@@ -475,7 +481,8 @@ public class InventoryValidatorTest {
 
         try {
             System.setProperty("user.home", TMP_DIR);
-            InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
+            InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.inventoryConnectionConfig, 
+                                                                    this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
                                                                     new IncludeArtifacts(),null,
                                                                     true);
             testSubject.run();
@@ -508,7 +515,8 @@ public class InventoryValidatorTest {
 
         try {
             System.setProperty("user.home", TMP_DIR);
-            InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
+            InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.inventoryConnectionConfig, 
+                                                                    this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
                                                                     new IncludeArtifacts(),null,
                                                                     false);
             testSubject.run();
@@ -577,7 +585,8 @@ public class InventoryValidatorTest {
 
         try {
             System.setProperty("user.home", TMP_DIR);
-            InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
+            InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.inventoryConnectionConfig, 
+                                                                    this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
                                                                     new IncludeArtifacts(),null,
                                                                     trackSiteLocations);
             testSubject.run();
@@ -616,7 +625,8 @@ public class InventoryValidatorTest {
 
         try {
             System.setProperty("user.home", TMP_DIR);
-            InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
+            InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.inventoryConnectionConfig, 
+                                                                    this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
                                                                     new IncludeArtifacts(),null,
                                                                     false);
             testSubject.run();
@@ -648,7 +658,8 @@ public class InventoryValidatorTest {
 
         try {
             System.setProperty("user.home", TMP_DIR);
-            InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
+            InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.inventoryConnectionConfig, 
+                                                                    this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
                                                                     new IncludeArtifacts(),null,
                                                                     false);
             testSubject.run();
@@ -691,7 +702,8 @@ public class InventoryValidatorTest {
         
         try {
             System.setProperty("user.home", TMP_DIR);
-            InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
+            InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.inventoryConnectionConfig, 
+                                                                    this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
                                                                     new IncludeArtifacts(),null,
                                                                     true) {
                 // Add a local Artifact with a random SiteLocation
@@ -785,7 +797,8 @@ public class InventoryValidatorTest {
 
         try {
             System.setProperty("user.home", TMP_DIR);
-            InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
+            InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.inventoryConnectionConfig, 
+                                                                    this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
                                                                     new IncludeArtifacts(),null,
                                                                     trackSiteLocations);
             testSubject.run();
@@ -816,7 +829,8 @@ public class InventoryValidatorTest {
 
         try {
             System.setProperty("user.home", TMP_DIR);
-            InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
+            InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.inventoryConnectionConfig, 
+                                                                    this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
                                                                     new IncludeArtifacts(),null,
                                                                     trackSiteLocations);
             testSubject.run();
@@ -886,7 +900,8 @@ public class InventoryValidatorTest {
 
         try {
             System.setProperty("user.home", TMP_DIR);
-            InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
+            InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.inventoryConnectionConfig, 
+                                                                    this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
                                                                     new IncludeArtifacts(),null,
                                                                     trackSiteLocations);
             testSubject.run();
@@ -937,7 +952,8 @@ public class InventoryValidatorTest {
 
         try {
             System.setProperty("user.home", TMP_DIR);
-            InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
+            InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.inventoryConnectionConfig, 
+                                                                    this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
                                                                     new IncludeArtifacts(),null,
                                                                     trackSiteLocations);
             testSubject.run();
