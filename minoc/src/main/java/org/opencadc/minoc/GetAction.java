@@ -75,10 +75,8 @@ import ca.nrc.cadc.util.StringUtil;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 
 import java.util.TreeMap;
 import org.apache.log4j.Logger;
@@ -125,7 +123,7 @@ public class GetAction extends ArtifactAction {
     public void doAction() throws Exception {
         
         checkReadable();
-        initAndAuthorize(ReadGrant.class);
+        authorize(ReadGrant.class);
         initDAO();
         initStorageAdapter();
         

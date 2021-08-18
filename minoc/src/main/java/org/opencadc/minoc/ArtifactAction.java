@@ -69,6 +69,7 @@ package org.opencadc.minoc;
 
 import ca.nrc.cadc.auth.AuthenticationUtil;
 import ca.nrc.cadc.auth.HttpPrincipal;
+import ca.nrc.cadc.log.WebServiceLogInfo;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.rest.InlineContentHandler;
@@ -193,13 +194,21 @@ public abstract class ArtifactAction extends RestAction {
     protected InlineContentHandler getInlineContentHandler() {
         return null;
     }
-    
-    protected void initAndAuthorize(Class<? extends Grant> grantClass)
+
+    @Override
+    public void setLogInfo(WebServiceLogInfo logInfo) {
+        this.logInfo = logInfo;
+        parsePath();
+    }
+
+    protected void setLogInfoPath(String path) {
+        this.logInfo.setPath(path);
+    }
+
+    protected void authorize(Class<? extends Grant> grantClass)
         throws AccessControlException, CertificateException, IOException,
                ResourceNotFoundException, TransientException {
-        
-        init();
-        
+
         // do authorization (with token or subject)
         Subject subject = AuthenticationUtil.getCurrentSubject();
         if (authToken != null) {
@@ -226,10 +235,6 @@ public abstract class ArtifactAction extends RestAction {
         }
     }
     
-    void init() {
-        parsePath();
-    }
-    
     protected void initDAO() {
         if (artifactDAO == null) {
             Map<String, Object> configMap = MinocInitAction.getDaoConfig(config);
@@ -248,7 +253,7 @@ public abstract class ArtifactAction extends RestAction {
      * Parse the request path.
      */
     void parsePath() {
-        String path = syncInput.getPath();
+        String path = this.syncInput.getPath();
         log.debug("path: " + path);
         if (path == null) {
             throw new IllegalArgumentException("missing artifact URI");
@@ -269,14 +274,15 @@ public abstract class ArtifactAction extends RestAction {
         
         if (firstSlashIndex < 0 || firstSlashIndex > colonIndex) {
             // no auth token--artifact URI is complete path
-            artifactURI = createArtifactURI(path);
-            return;
+            this.artifactURI = createArtifactURI(path);
+        } else {
+            this.artifactURI = createArtifactURI(path.substring(firstSlashIndex + 1));
+            this.authToken = path.substring(0, firstSlashIndex);
+            log.debug("authToken: " + this.authToken);
         }
-        
-        artifactURI = createArtifactURI(path.substring(firstSlashIndex + 1));
-        
-        authToken = path.substring(0, firstSlashIndex);
-        log.debug("authToken: " + authToken);
+        // Update the logInfo path to servlet-name/artifactURI,
+        // removing the context and auth token (if present).
+        setLogInfoPath(this.syncInput.getComponentPath() + "/" + this.artifactURI.toASCIIString());
     }
     
     Artifact getArtifact(URI artifactURI) throws ResourceNotFoundException {

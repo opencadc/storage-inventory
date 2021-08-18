@@ -98,6 +98,10 @@ public class ArtifactActionTest {
         public String getPath() {
             return path;
         }
+
+        public String getComponentPath() {
+            return "";
+        }
     }
     
     class TestArtifactAction extends ArtifactAction {
@@ -115,6 +119,9 @@ public class ArtifactActionTest {
         public void doAction() throws Exception {
         }
 
+        @Override
+        protected void setLogInfoPath(String path) {
+        }
     }
     
     private void assertCorrectPath(String path, String expURI, String expToken) {

@@ -67,7 +67,6 @@
 
 package org.opencadc.minoc;
 
-import ca.nrc.cadc.net.DigestUtil;
 import ca.nrc.cadc.rest.SyncOutput;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
@@ -97,7 +96,7 @@ public class HeadAction extends ArtifactAction {
     public void doAction() throws Exception {
         
         checkReadable();
-        initAndAuthorize(ReadGrant.class);
+        authorize(ReadGrant.class);
         initDAO();
         
         Artifact artifact = getArtifact(artifactURI);
