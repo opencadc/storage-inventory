@@ -171,6 +171,19 @@ public class FitsOperationsTest extends MinocTest {
     }
 
     @Test
+    public void testMEFStriding() throws Exception {
+        final String testFilePrefix = "test-mef-striding";
+        final String testFileExtension = "fits";
+        final URI artifactURI = URI.create("cadc:TEST/" + testFilePrefix + "." + testFileExtension);
+        final String[] cutoutSpecs = new String[] {
+                "[SCI,14][100:125:4,100:175:3]",
+                "[91][*,90:255:2]"
+        };
+
+        uploadAndCompareCutout(artifactURI, SodaParamValidator.SUB, cutoutSpecs, testFilePrefix, testFileExtension);
+    }
+
+    @Test
     public void testFITSCompliance() throws Exception {
         final String testFilePrefix = "test-fits-compliance";
         final String testFileExtension = "fits";
