@@ -191,7 +191,11 @@ public class GetAction extends ArtifactAction {
             if (e.getMessage() != null) {
                 msg += ": " + e.getMessage();
             }
-            throw new IllegalArgumentException(msg, e);
+            if (bcos != null) {
+                super.logInfo.setBytes(bcos.getByteCount());
+            }
+            super.logInfo.setSuccess(true); // TBD: WriteException is user-termination or WAN failure on the outside
+            super.logInfo.setMessage(msg);
         } finally {
             if (bcos != null) {
                 super.logInfo.setBytes(bcos.getByteCount());
