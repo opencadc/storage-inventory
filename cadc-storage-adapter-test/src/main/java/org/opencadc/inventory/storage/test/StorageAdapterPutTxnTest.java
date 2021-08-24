@@ -110,6 +110,7 @@ public class StorageAdapterPutTxnTest {
             byte[] data = dataString.getBytes();
             URI uri = URI.create("cadc:TEST/testPutTransactionCommit");
             final NewArtifact newArtifact = new NewArtifact(uri);
+            newArtifact.contentLength = (long) data.length;
             final ByteArrayInputStream source = new ByteArrayInputStream(data);
             
             log.info("init");
@@ -138,8 +139,8 @@ public class StorageAdapterPutTxnTest {
             
             try {
                 StorageMetadata oldtxn = adapter.getTransactionStatus(transactionID);
-                Assert.fail("expected ResourceNotFoundException, got: " + oldtxn);
-            } catch (ResourceNotFoundException expected) {
+                Assert.fail("expected IllegalArgumentException, got: " + oldtxn);
+            } catch (IllegalArgumentException expected) {
                 log.info("caught expected: " + expected);
             }
             
@@ -169,6 +170,7 @@ public class StorageAdapterPutTxnTest {
             byte[] data = dataString.getBytes();
             URI uri = URI.create("cadc:TEST/testPutTransactionAbort");
             final NewArtifact newArtifact = new NewArtifact(uri);
+            newArtifact.contentLength = (long) data.length;
             final ByteArrayInputStream source = new ByteArrayInputStream(data);
             
             log.info("init");
@@ -192,11 +194,11 @@ public class StorageAdapterPutTxnTest {
             
             adapter.abortTransaction(transactionID);
             log.info("abort");
-            
+
             try {
                 StorageMetadata oldtxn = adapter.getTransactionStatus(transactionID);
-                Assert.fail("expected ResourceNotFoundException, got: " + oldtxn);
-            } catch (ResourceNotFoundException expected) {
+                Assert.fail("expected IllegalArgumentException, got: " + oldtxn);
+            } catch (IllegalArgumentException expected) {
                 log.info("verify txn gone: caught expected: " + expected);
             }
             
@@ -239,6 +241,7 @@ public class StorageAdapterPutTxnTest {
             data = dataString1.getBytes();
             ByteArrayInputStream source = new ByteArrayInputStream(data);
             StorageMetadata meta1 = adapter.put(newArtifact, source, transactionID);
+            log.info("meta1: " + meta1);
             Assert.assertNotNull(meta1);
             Assert.assertEquals("length", data.length, meta1.getContentLength().longValue());
             log.info("put 1");
@@ -255,6 +258,7 @@ public class StorageAdapterPutTxnTest {
             data = dataString2.getBytes();
             source = new ByteArrayInputStream(data);
             StorageMetadata meta2 = adapter.put(newArtifact, source, transactionID);
+            log.info("meta2: " + meta2);
             Assert.assertNotNull(meta2);
             Assert.assertEquals("length", expectedLength, meta2.getContentLength().longValue());
             log.info("put 2");
@@ -272,8 +276,8 @@ public class StorageAdapterPutTxnTest {
             
             try {
                 StorageMetadata oldtxn = adapter.getTransactionStatus(transactionID);
-                Assert.fail("expected ResourceNotFoundException, got: " + oldtxn);
-            } catch (ResourceNotFoundException expected) {
+                Assert.fail("expected IllegalArgumentException, got: " + oldtxn);
+            } catch (IllegalArgumentException expected) {
                 log.info("caught expected: " + expected);
             }
             
@@ -291,7 +295,7 @@ public class StorageAdapterPutTxnTest {
             Assert.assertEquals("checksum", expectedChecksum, actualChecksum);
 
             // delete
-            adapter.delete(finalMeta.getStorageLocation());
+            //adapter.delete(finalMeta.getStorageLocation());
         } catch (Exception unexpected) {
             log.error("unexpected exception", unexpected);
             Assert.fail("unexpected exception: " + unexpected);
@@ -329,8 +333,8 @@ public class StorageAdapterPutTxnTest {
             
             try {
                 StorageMetadata oldtxn = adapter.getTransactionStatus(transactionID);
-                Assert.fail("expected ResourceNotFoundException, got: " + oldtxn);
-            } catch (ResourceNotFoundException expected) {
+                Assert.fail("expected IllegalArgumentException, got: " + oldtxn);
+            } catch (IllegalArgumentException expected) {
                 log.info("caught expected: " + expected);
             }
             
@@ -352,7 +356,7 @@ public class StorageAdapterPutTxnTest {
             URI expectedChecksum = URI.create("md5:" + HexUtil.toHex(md.digest()));
             long expectedLength = data.length;
             
-            URI uri = URI.create("cadc:TEST/testPutTransactionCommit");
+            URI uri = URI.create("cadc:TEST/testPutFailResumeCommit");
             NewArtifact newArtifact = new NewArtifact(uri);
             newArtifact.contentChecksum = expectedChecksum;
             newArtifact.contentLength = expectedLength;
@@ -408,8 +412,8 @@ public class StorageAdapterPutTxnTest {
             
             try {
                 StorageMetadata oldtxn = adapter.getTransactionStatus(transactionID);
-                Assert.fail("expected ResourceNotFoundException, got: " + oldtxn);
-            } catch (ResourceNotFoundException expected) {
+                Assert.fail("expected IllegalArgumentException, got: " + oldtxn);
+            } catch (IllegalArgumentException expected) {
                 log.info("caught expected: " + expected);
             }
             
@@ -420,7 +424,7 @@ public class StorageAdapterPutTxnTest {
             md.reset();
             md.update(actual);
             URI actualChecksum = URI.create("md5:" + HexUtil.toHex(md.digest()));
-            log.info("testPutTransactionCommit get: " + actual.length + " " + actualChecksum);
+            log.info("testPutFailResumeCommit get: " + actual.length + " " + actualChecksum);
             Assert.assertEquals("length", expectedLength, actual.length);
             Assert.assertEquals("length", finalMeta.getContentLength().longValue(), actual.length);
             Assert.assertEquals("checksum", finalMeta.getContentChecksum(), actualChecksum);

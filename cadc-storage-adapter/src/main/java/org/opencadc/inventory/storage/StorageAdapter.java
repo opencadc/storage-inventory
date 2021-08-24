@@ -145,7 +145,7 @@ public interface StorageAdapter {
      * @return result StorageMetadata
      * 
      * @throws ByteLimitExceededException if content length exceeds internal limit
-     * @throws IllegalArgumentException if the newArtifact.contentLength or length of stream is zero
+     * @throws IllegalArgumentException if the newArtifact is invalid or the transaction does not exist
      * @throws IncorrectContentChecksumException if the calculated checksum does not match the expected
      *     checksum as described in newArtifact.
      * @throws IncorrectContentLengthException if the calculated length does not match the expected
@@ -191,35 +191,35 @@ public interface StorageAdapter {
      * @param transactionID
      * @return final storage metadata
      * 
-     * @throws ResourceNotFoundException if the specified transaction does not exist
+     * @throws IllegalArgumentException if the specified transaction does not exist
      * @throws StorageEngageException if the adapter failed to interact with storage
      * @throws TransientException if an unexpected, temporary exception occurred 
      */
     public StorageMetadata commitTransaction(String transactionID)
-        throws ResourceNotFoundException, StorageEngageException, TransientException;
+        throws IllegalArgumentException, StorageEngageException, TransientException;
     
     /**
      * Abort a transaction.
      * 
      * @param transactionID
-     * @throws ResourceNotFoundException if the specified transaction does not exist
+     * @throws IllegalArgumentException if the specified transaction does not exist
      * @throws StorageEngageException if the adapter failed to interact with storage
      * @throws TransientException if an unexpected, temporary exception occurred 
      */
     public void abortTransaction(String transactionID) 
-        throws ResourceNotFoundException, StorageEngageException, TransientException;
+        throws IllegalArgumentException, StorageEngageException, TransientException;
     
     /**
      * Get current transaction status.
      * 
      * @param transactionID
      * @return metadata for bytes currently received and stored
-     * @throws ResourceNotFoundException if the specified transaction does not exist
+     * @throws IllegalArgumentException if the specified transaction does not exist
      * @throws StorageEngageException if the adapter failed to interact with storage
      * @throws TransientException if an unexpected, temporary exception occurred 
      */
     public StorageMetadata getTransactionStatus(String transactionID)
-        throws ResourceNotFoundException, StorageEngageException, TransientException;
+        throws IllegalArgumentException, StorageEngageException, TransientException;
             
     /**
      * Iterator of items ordered by StorageLocation.

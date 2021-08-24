@@ -550,7 +550,7 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
     }
     
     @Override
-    public void abortTransaction(String transactionID) throws ResourceNotFoundException, StorageEngageException, TransientException {
+    public void abortTransaction(String transactionID) throws IllegalArgumentException, StorageEngageException, TransientException {
         InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "transactionID", transactionID);
         try {
             Path txnTarget = txnPath.resolve(transactionID);
@@ -558,7 +558,7 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
                 Files.delete(txnTarget);
                 txnDigestStore.remove(transactionID);
             } else {
-                throw new ResourceNotFoundException("unknown transaction: " + transactionID);
+                throw new IllegalArgumentException("unknown transaction: " + transactionID);
             }
         } catch (IOException ex) {
             throw new StorageEngageException("failed to create transaction", ex);
@@ -567,7 +567,7 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
     
     @Override
     public StorageMetadata getTransactionStatus(String transactionID)
-        throws ResourceNotFoundException, StorageEngageException, TransientException {
+        throws IllegalArgumentException, StorageEngageException, TransientException {
         InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "transactionID", transactionID);
         try {
             // validate
@@ -582,12 +582,12 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
         } catch (InvalidPathException e) {
             throw new RuntimeException("BUG: invalid path: " + txnPath, e);
         }
-        throw new ResourceNotFoundException("unknown transaction: " + transactionID);
+        throw new IllegalArgumentException("unknown transaction: " + transactionID);
     }
     
     @Override
     public StorageMetadata commitTransaction(String transactionID)
-        throws ResourceNotFoundException, StorageEngageException, TransientException {
+        throws IllegalArgumentException, StorageEngageException, TransientException {
         StorageMetadata metadata = getTransactionStatus(transactionID);
         Path txnTarget = txnPath.resolve(transactionID); // again
         

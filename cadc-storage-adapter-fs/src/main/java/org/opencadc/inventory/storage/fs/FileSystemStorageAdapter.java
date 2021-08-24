@@ -557,17 +557,17 @@ public class FileSystemStorageAdapter implements StorageAdapter {
     }
 
     @Override
-    public StorageMetadata commitTransaction(String string) throws ResourceNotFoundException, StorageEngageException, TransientException {
+    public StorageMetadata commitTransaction(String string) throws IllegalArgumentException, StorageEngageException, TransientException {
         throw new UnsupportedOperationException();
     }
 
     @Override
-    public void abortTransaction(String string) throws ResourceNotFoundException, StorageEngageException, TransientException {
+    public void abortTransaction(String string) throws IllegalArgumentException, StorageEngageException, TransientException {
         throw new UnsupportedOperationException();
     }
 
     @Override
-    public StorageMetadata getTransactionStatus(String string) throws ResourceNotFoundException, StorageEngageException, TransientException {
+    public StorageMetadata getTransactionStatus(String string) throws IllegalArgumentException, StorageEngageException, TransientException {
         throw new UnsupportedOperationException();
     }
     

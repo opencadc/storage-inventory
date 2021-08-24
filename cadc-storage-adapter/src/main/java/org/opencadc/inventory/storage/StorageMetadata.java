@@ -159,6 +159,7 @@ public class StorageMetadata implements Comparable<StorageMetadata> {
 
     @Override
     public String toString() {
-        return "StorageMetadata[" + storageLocation + "," + artifactURI + "]";
+        return "StorageMetadata[" + storageLocation + "," + artifactURI + ","
+                + contentLength + "," + contentChecksum + "]";
     }
 }
