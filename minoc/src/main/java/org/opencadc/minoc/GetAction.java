@@ -278,6 +278,13 @@ public class GetAction extends ArtifactAction {
             if (e.getMessage() != null) {
                 msg += ": " + e.getMessage();
             }
+            
+            if (bcos != null) {
+                super.logInfo.setBytes(bcos.getByteCount());
+            }
+            super.logInfo.setSuccess(true); // TBD: WriteException is user-termination or WAN failure on the outside
+            super.logInfo.setMessage(msg);
+
             throw new IllegalArgumentException(msg, e);
         } catch (NoOverlapException noOverlapException) {
             throw new IllegalArgumentException(noOverlapException.getMessage());
