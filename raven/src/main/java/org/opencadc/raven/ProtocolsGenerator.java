@@ -89,10 +89,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
-import javax.naming.Context;
-import javax.naming.InitialContext;
-import javax.naming.NamingException;
-
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.SiteLocation;
@@ -116,15 +112,18 @@ public class ProtocolsGenerator {
     private String user;
     private final File publicKeyFile;
     private final File privateKeyFile;
+    private final Map<URI, Availability> siteAvailabilities;
 
     /**
      * Ctor
      */
-    public ProtocolsGenerator(ArtifactDAO artifactDAO, File publicKeyFile, File privateKeyFile, String user) {
+    public ProtocolsGenerator(ArtifactDAO artifactDAO, File publicKeyFile, File privateKeyFile, String user,
+                              Map<URI, Availability> siteAvailabilities) {
         this.artifactDAO = artifactDAO;
         this.user = user;
         this.publicKeyFile = publicKeyFile;
         this.privateKeyFile = privateKeyFile;
+        this.siteAvailabilities = siteAvailabilities;
     }
 
     List<Protocol> getProtocols(Transfer transfer) throws ResourceNotFoundException, IOException {
@@ -179,7 +178,7 @@ public class ProtocolsGenerator {
         prioritizePullFromSites(storageSites);
         for (StorageSite storageSite : storageSites) {
             // check if site is currently offline
-            if (!isSiteOnline(storageSite.getResourceID())) {
+            if (!isAvailable(storageSite.getResourceID())) {
                 log.warn("storage site is offline: " + storageSite.getResourceID());
                 continue;
             }
@@ -256,7 +255,7 @@ public class ProtocolsGenerator {
         // produce URLs for all writable sites
         for (StorageSite storageSite : sites) {
             // check if site is currently offline
-            if (!isSiteOnline(storageSite.getResourceID())) {
+            if (!isAvailable(storageSite.getResourceID())) {
                 log.warn("storage site is offline: " + storageSite.getResourceID());
                 continue;
             }
@@ -335,21 +334,12 @@ public class ProtocolsGenerator {
         return false;
     }
 
-    private boolean isSiteOnline(URI resourceID) {
-        boolean online = false;
-        try {
-            Context initContext = new InitialContext();
-            Map<URI, Availability> availabilities = 
-                    (Map<URI, Availability>) initContext.lookup(RavenInitAction.JNDI_AVAILABILITY_KEY);
-            Availability availability = availabilities.get(resourceID);
-            if (availability != null && availability.isAvailable()) {
-                online = true;
-            }
-        } catch (NamingException e) {
-            log.error("JDNI lookup error: " + e.getMessage());
-            throw new IllegalStateException("JNDI lookup error", e);
+    private boolean isAvailable(URI resourceID) {
+        Availability availability = siteAvailabilities.get(resourceID);
+        if (availability != null && !availability.isAvailable()) {
+            return false;
         }
-        return online;
+        return true;
     }
 
 }

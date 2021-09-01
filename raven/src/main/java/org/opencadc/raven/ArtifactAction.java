@@ -73,6 +73,7 @@ import ca.nrc.cadc.rest.RestAction;
 import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.vos.Direction;
 import ca.nrc.cadc.vos.Transfer;
+import ca.nrc.cadc.vosi.Availability;
 import java.io.File;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -80,6 +81,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import javax.naming.Context;
+import javax.naming.InitialContext;
+import javax.naming.NamingException;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.server.PermissionsCheck;
@@ -110,6 +114,7 @@ public abstract class ArtifactAction extends RestAction {
     protected final List<URI> writeGrantServices = new ArrayList<>();
 
     protected final boolean authenticateOnly;
+    protected Map<URI, Availability> siteAvailabilities;
 
     // constructor for unit tests with no config/init
     ArtifactAction(boolean init) {
@@ -215,6 +220,16 @@ public abstract class ArtifactAction extends RestAction {
         parseRequest();
         if (artifactURI == null) {
             throw new IllegalArgumentException("Missing artifact URI from path or request content");
+        }
+
+        String siteAvailabilitiesKey = this.appName + RavenInitAction.JNDI_AVAILABILITY_NAME;
+        log.debug("siteAvailabilitiesKey: " + siteAvailabilitiesKey);
+        try {
+            Context initContext = new InitialContext();
+            this.siteAvailabilities = (Map<URI, Availability>) initContext.lookup(siteAvailabilitiesKey);
+        } catch (NamingException e) {
+            log.error("JNDI lookup error: " + e.getMessage());
+            throw new IllegalStateException("JNDI lookup error", e);
         }
     }
 

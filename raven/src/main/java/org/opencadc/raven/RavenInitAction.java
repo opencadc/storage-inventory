@@ -82,8 +82,11 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 
+import javax.naming.Binding;
 import javax.naming.Context;
 import javax.naming.InitialContext;
+import javax.naming.NameNotFoundException;
+import javax.naming.NamingEnumeration;
 import javax.naming.NamingException;
 
 import org.apache.log4j.Logger;
@@ -103,7 +106,7 @@ public class RavenInitAction extends InitAction {
     private static final String RAVEN_KEY = "org.opencadc.raven";
 
     static final String JNDI_DATASOURCE = "jdbc/inventory"; // context.xml
-    static final String JNDI_AVAILABILITY_KEY = RAVEN_KEY + ".availabilities";
+    static final String JNDI_AVAILABILITY_NAME = ".availabilities";
 
     static final String SCHEMA_KEY = RAVEN_KEY + ".inventory.schema";
 
@@ -119,9 +122,8 @@ public class RavenInitAction extends InitAction {
 
     // set init initConfig, used by subsequent init methods
     MultiValuedProperties props;
-    File pubKey;
-    File privKey;
-    private Thread availlabilityCheck;
+    private String siteAvailabilitiesKey;
+    private Thread availabilityCheck;
 
     public RavenInitAction() {
         super();
@@ -191,32 +193,34 @@ public class RavenInitAction extends InitAction {
     }
 
     private void initAvailabilityCheck() {
-        ArtifactDAO artifactDAO = new ArtifactDAO();
-        artifactDAO.setConfig(getDaoConfig(props));
-        StorageSiteDAO storageSiteDAO = new StorageSiteDAO(artifactDAO);
-        Set<StorageSite> sites = storageSiteDAO.list();
-        if (sites.size() == 0) {
-            throw new IllegalStateException("StorageSiteDAO.list() returned 0 StorageSites");
-        }
+        StorageSiteDAO storageSiteDAO = new StorageSiteDAO();
+        storageSiteDAO.setConfig(getDaoConfig(props));
 
+        this.siteAvailabilitiesKey = this.appName + RavenInitAction.JNDI_AVAILABILITY_NAME;
         terminate();
-        this.availlabilityCheck = new Thread(new AvailabilityCheck(sites));
-        this.availlabilityCheck.setDaemon(true);
-        this.availlabilityCheck.start();
+        this.availabilityCheck = new Thread(new AvailabilityCheck(storageSiteDAO, this.siteAvailabilitiesKey));
+        this.availabilityCheck.setDaemon(true);
+        this.availabilityCheck.start();
     }
 
     private final void terminate() {
-        if (this.availlabilityCheck != null) {
+        if (this.availabilityCheck != null) {
             try {
                 log.info("terminating AvailabilityCheck Thread...");
-                this.availlabilityCheck.interrupt();
-                this.availlabilityCheck.join();
+                this.availabilityCheck.interrupt();
+                this.availabilityCheck.join();
                 log.info("terminating AvailabilityCheck Thread... [OK]");
             } catch (Throwable t) {
-                log.error("failed to terminate AvailabilityCheck thread", t);
+                log.info("failed to terminate AvailabilityCheck thread", t);
             } finally {
-                this.availlabilityCheck = null;
+                this.availabilityCheck = null;
             }
+        }
+        try {
+            InitialContext initialContext = new InitialContext();
+            initialContext.unbind(this.siteAvailabilitiesKey);
+        } catch (NamingException e) {
+            log.debug(String.format("unable to unbind %s - %s", this.siteAvailabilitiesKey, e.getMessage()));
         }
     }
 
@@ -283,55 +287,74 @@ public class RavenInitAction extends InitAction {
         }
     }
 
-    private class AvailabilityCheck implements Runnable {
+    private static class AvailabilityCheck implements Runnable {
+        private final StorageSiteDAO storageSiteDAO;
+        private final Map<URI, SiteState> siteStates;
+        private final Map<URI, Availability> siteAvailabilities;
 
-        private Set<StorageSite> sites;
-        private Map<URI, SiteState> siteStaties;
-        private Map<URI, Availability> siteAvailabilities;
-        
-        public AvailabilityCheck(Set<StorageSite> sites) {
-            this.sites = sites;
-            this.siteStaties = new HashMap<>(sites.size());
-            this.siteAvailabilities = new HashMap<>(sites.size());
+        public AvailabilityCheck(StorageSiteDAO storageSiteDAO, String siteAvailabilitiesKey) {
+            this.storageSiteDAO = storageSiteDAO;
+            this.siteStates = new HashMap<URI, SiteState>();
+            this.siteAvailabilities = new HashMap<URI, Availability>();
+
             try {
                 Context initialContext = new InitialContext();
-                initialContext.bind(JNDI_AVAILABILITY_KEY, this.siteAvailabilities);
+                // check if key already bound, if so unbind
+                try {
+                    NamingEnumeration<Binding> bindings = initialContext.listBindings(siteAvailabilitiesKey);
+                    if (bindings.hasMore()) {
+                        initialContext.unbind(siteAvailabilitiesKey);
+                    }
+                } catch (NameNotFoundException ignore) {
+                    // ignore
+                }
+                initialContext.bind(siteAvailabilitiesKey, this.siteAvailabilities);
             } catch (NamingException e) {
-                throw new IllegalStateException(String.format("unable to bind {} to initial context: %s", 
-                                                JNDI_AVAILABILITY_KEY, e.getMessage()), e);
+                throw new IllegalStateException(String.format("unable to bind %s to initial context: %s",
+                                                              siteAvailabilitiesKey, e.getMessage()), e);
             }
         }
 
         @Override
-        public void run() { 
+        public void run() {
+            int lastSiteQuerySecs = 0;
+            Set<StorageSite> sites = storageSiteDAO.list();
             while (true) {
-                for (StorageSite site: this.sites) {
+                if (lastSiteQuerySecs >= AVAILABILITY_FULL_CHECK_TIMEOUT) {
+                    sites = storageSiteDAO.list();
+                    lastSiteQuerySecs = 0;
+                } else {
+                    lastSiteQuerySecs += AVAILABILITY_CHECK_TIMEOUT;
+                }
+
+                for (StorageSite site: sites) {
+                    URI resourceID = site.getResourceID();
+                    SiteState siteState = this.siteStates.get(resourceID);
+                    if (siteState == null) {
+                        siteState = new SiteState(true, 0);
+                    }
+                    boolean minDetail = siteState.isMinDetail();
+                    Availability availability;
                     try {
-                        URI resourceID = site.getResourceID();
-                        SiteState siteState = this.siteStaties.get(resourceID);
-                        if (siteState == null) {
-                            siteState = new SiteState(true, 0);
-                        }
-                        boolean minDetail = siteState.isMinDetail();
-                        Availability availability = getAvailability(resourceID, minDetail);
-                        siteState.available = availability.isAvailable();
-                        this.siteStaties.put(resourceID, siteState);
-                        this.siteAvailabilities.put(resourceID, availability);
-                        Context initContext = new InitialContext();
-                        initContext.rebind(JNDI_AVAILABILITY_KEY, this.siteAvailabilities);
-                        log.info(String.format("availability check [%s] for %s [%s]", 
-                                                minDetail ? "MIN" : "FULL", resourceID, 
-                                                siteState.available ? "UP" : "DOWN"));
-                    } catch (NamingException e) {
-                        log.error("Error rebinding to context: " + e.getMessage(), e);
-                        throw new IllegalStateException(String.format("unable to rebind %s to initial context: %s", 
-                                                        JNDI_AVAILABILITY_KEY, e.getMessage()), e);
+                        availability = getAvailability(resourceID, minDetail);
+                    } catch (Exception e) {
+                        availability = new Availability(false, e.getMessage());
+                        log.debug(String.format("availability check failed %s - %s", resourceID, e.getMessage()));
+                    }
+                    siteState.available = availability.isAvailable();
+                    this.siteStates.put(resourceID, siteState);
+                    this.siteAvailabilities.put(resourceID, availability);
+                    String message = String.format("availability check %s %s - %s", minDetail ? "MIN" : "FULL",
+                                                   resourceID, siteState.available ? "UP" : "DOWN");
+                    if (siteState.available) {
+                        log.debug(message);
+                    } else {
+                        log.warn(message);
                     }
                 }
 
                 try {
-                    log.info(String.format("sleep availability checks for %d secs", 
-                                            AVAILABILITY_CHECK_TIMEOUT));
+                    log.debug(String.format("sleep availability checks for %d secs", AVAILABILITY_CHECK_TIMEOUT));
                     Thread.sleep(AVAILABILITY_CHECK_TIMEOUT * 1000);
                 } catch (InterruptedException e) {
                     throw new IllegalStateException("AvailabilityCheck thread interrupted during sleep");
@@ -355,7 +378,7 @@ public class RavenInitAction extends InitAction {
             }
 
             public boolean isMinDetail() {
-                log.info(String.format("isMinDetail() availble=%b, lastFullCheckSecs=%d", 
+                log.debug(String.format("isMinDetail() available=%b, lastFullCheckSecs=%d",
                                         available, lastFullCheckSecs));
                 if (this.available && this.lastFullCheckSecs < AVAILABILITY_FULL_CHECK_TIMEOUT) {
                     this.lastFullCheckSecs += AVAILABILITY_CHECK_TIMEOUT;

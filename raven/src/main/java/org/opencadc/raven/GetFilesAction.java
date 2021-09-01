@@ -142,7 +142,8 @@ public class GetFilesAction extends FilesAction {
         plist.add(proto);
         Transfer transfer = new Transfer(artifactURI, Direction.pullFromVoSpace, plist);
 
-        ProtocolsGenerator pg = new ProtocolsGenerator(artifactDAO, publicKeyFile, privateKeyFile, user);
+        ProtocolsGenerator pg = new ProtocolsGenerator(artifactDAO, publicKeyFile, privateKeyFile, user,
+                                                       siteAvailabilities);
         List<Protocol> protos = pg.getProtocols(transfer);
         if (protos.isEmpty()) {
             throw new ResourceNotFoundException("not available: " + artifactURI);
