@@ -101,7 +101,7 @@ public class DeleteAction extends ArtifactAction {
     public void doAction() throws Exception {
         
         checkWritable();
-        authorize(WriteGrant.class);
+        initAndAuthorize(WriteGrant.class);
         initDAO();
         initStorageAdapter();
         
