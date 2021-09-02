@@ -82,11 +82,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 
-import javax.naming.Binding;
 import javax.naming.Context;
 import javax.naming.InitialContext;
-import javax.naming.NameNotFoundException;
-import javax.naming.NamingEnumeration;
 import javax.naming.NamingException;
 
 import org.apache.log4j.Logger;
@@ -136,6 +133,11 @@ public class RavenInitAction extends InitAction {
         initGrantProviders();
         initKeys();
         initAvailabilityCheck();
+    }
+
+    @Override
+    public void doShutdown() {
+        terminate();
     }
     
     private void initConfig() {
@@ -301,11 +303,8 @@ public class RavenInitAction extends InitAction {
                 Context initialContext = new InitialContext();
                 // check if key already bound, if so unbind
                 try {
-                    NamingEnumeration<Binding> bindings = initialContext.listBindings(siteAvailabilitiesKey);
-                    if (bindings.hasMore()) {
-                        initialContext.unbind(siteAvailabilitiesKey);
-                    }
-                } catch (NameNotFoundException ignore) {
+                    initialContext.unbind(siteAvailabilitiesKey);
+                } catch (NamingException ignore) {
                     // ignore
                 }
                 initialContext.bind(siteAvailabilitiesKey, this.siteAvailabilities);
