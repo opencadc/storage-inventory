@@ -108,15 +108,13 @@ public class ProtocolsGenerator {
 
     private static final Logger log = Logger.getLogger(ProtocolsGenerator.class);
 
-    private ArtifactDAO artifactDAO;
-    private String user;
+    private final ArtifactDAO artifactDAO;
+    private final String user;
     private final File publicKeyFile;
     private final File privateKeyFile;
     private final Map<URI, Availability> siteAvailabilities;
 
-    /**
-     * Ctor
-     */
+
     public ProtocolsGenerator(ArtifactDAO artifactDAO, File publicKeyFile, File privateKeyFile, String user,
                               Map<URI, Availability> siteAvailabilities) {
         this.artifactDAO = artifactDAO;
@@ -160,13 +158,13 @@ public class ProtocolsGenerator {
         List<Protocol> protos = new ArrayList<>();
         Artifact artifact = artifactDAO.get(artifactURI);
         if (artifact == null) {
-            throw new ResourceNotFoundException(artifactURI.toString());
+            throw new ResourceNotFoundException("not found: " + artifactURI.toString());
         }
 
         // TODO: this can currently happen but maybe should not:
-        // --- when the last siteLocation is removed, the artifact should be deleted?
+        // --- when the last siteLocation is removed, the artifact should be deleted (fenwick, ratik)
         if (artifact.siteLocations.isEmpty()) {
-            throw new ResourceNotFoundException("TBD: no copies available");
+            throw new ResourceNotFoundException("not found: " + artifactURI.toString());
         }
 
         // produce URLs to each of the copies for each of the protocols

@@ -75,10 +75,8 @@ import ca.nrc.cadc.util.StringUtil;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 
 import java.util.TreeMap;
 import org.apache.log4j.Logger;
@@ -191,7 +189,11 @@ public class GetAction extends ArtifactAction {
             if (e.getMessage() != null) {
                 msg += ": " + e.getMessage();
             }
-            throw new IllegalArgumentException(msg, e);
+            if (bcos != null) {
+                super.logInfo.setBytes(bcos.getByteCount());
+            }
+            super.logInfo.setSuccess(true); // TBD: WriteException is user-termination or WAN failure on the outside
+            super.logInfo.setMessage(msg);
         } finally {
             if (bcos != null) {
                 super.logInfo.setBytes(bcos.getByteCount());
