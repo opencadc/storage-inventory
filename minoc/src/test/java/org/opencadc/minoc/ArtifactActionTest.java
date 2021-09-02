@@ -98,6 +98,10 @@ public class ArtifactActionTest {
         public String getPath() {
             return path;
         }
+
+        public String getComponentPath() {
+            return "";
+        }
     }
     
     class TestArtifactAction extends ArtifactAction {
@@ -118,25 +122,20 @@ public class ArtifactActionTest {
     }
     
     private void assertCorrectPath(String path, String expURI, String expToken) {
-        ArtifactAction a = new TestArtifactAction(path);
-        try {
-            a.parsePath();
-            Assert.assertEquals("artifactURI", URI.create(expURI), a.artifactURI);
-            Assert.assertEquals("authToken", expToken, a.authToken);
-        } catch (IllegalArgumentException e) {
-            log.error(e);
+        ArtifactAction action = new TestArtifactAction(path);
+        action.parsePath();
+        Assert.assertEquals("artifactURI", URI.create(expURI), action.artifactURI);
+        Assert.assertEquals("authToken", expToken, action.authToken);
+        if (action.artifactURI == null) {
             Assert.fail("Failed to parse legal path: " + path);
         }
     }
     
     private void assertIllegalPath(String path) {
-        ArtifactAction a = new TestArtifactAction(path);
-        try {
-            a.parsePath();
+        ArtifactAction action = new TestArtifactAction(path);
+        action.parsePath();
+        if (action.artifactURI != null) {
             Assert.fail("Should have failed to parse path: " + path);
-        } catch (IllegalArgumentException e) {
-            // expected
-            log.info(e);
         }
     }
     
