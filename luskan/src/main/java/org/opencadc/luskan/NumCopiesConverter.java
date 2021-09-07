@@ -3,7 +3,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2020.                            (c) 2020.
+ *  (c) 2021.                            (c) 2021.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -69,75 +69,54 @@
 
 package org.opencadc.luskan;
 
-import ca.nrc.cadc.tap.schema.ColumnDesc;
-import ca.nrc.cadc.tap.schema.FunctionDesc;
-import ca.nrc.cadc.tap.schema.SchemaDesc;
-import ca.nrc.cadc.tap.schema.TableDesc;
-import ca.nrc.cadc.tap.schema.TapDataType;
-import ca.nrc.cadc.tap.schema.TapSchema;
-import ca.nrc.cadc.uws.Job;
+import ca.nrc.cadc.tap.parser.navigator.ExpressionNavigator;
+import net.sf.jsqlparser.expression.Expression;
+import net.sf.jsqlparser.expression.Function;
+import net.sf.jsqlparser.expression.operators.relational.ExpressionList;
 
-public class TestUtil {
+import java.util.ArrayList;
+import java.util.List;
 
-    public static TapSchema mockTapSchema() {
-        TapSchema tapSchema = new TapSchema();
+import net.sf.jsqlparser.schema.Column;
+import net.sf.jsqlparser.schema.Table;
+import org.apache.log4j.Logger;
 
-        // inventory schema
-        String schemaName = "inventory";
-        SchemaDesc schemaDesc = new SchemaDesc(schemaName);
-        tapSchema.getSchemaDescs().add(schemaDesc);
+/**
+ * Class to change a num_copies() function to cardinality(inventory.artifact.sitelocations).
+ */
+public class NumCopiesConverter extends ExpressionNavigator {
+    private static final Logger log = Logger.getLogger(NumCopiesConverter.class);
 
-        String tableName = schemaName + ".Artifact";
-        TableDesc tableDesc = new TableDesc(schemaName, tableName);
-        schemaDesc.getTableDescs().add(tableDesc);
-        tableDesc.getColumnDescs().add(new ColumnDesc(tableName, "id", new TapDataType("char", "36", "uuid")));
-        tableDesc.getColumnDescs().add(new ColumnDesc(tableName, "contentLength", TapDataType.LONG));
+    String tableAlias;
 
-        // inventory.StorageSite
-        tableName = schemaName + ".StorageSite";
-        tableDesc = new TableDesc(schemaName, tableName);
-        schemaDesc.getTableDescs().add(tableDesc);
-        tableDesc.getColumnDescs().add(new ColumnDesc(tableName, "id", new TapDataType("char", "36", "uuid")));
-
-        // inventory.DeletedArtifactEvent
-        tableName = schemaName + ".DeletedArtifactEvent";
-        tableDesc = new TableDesc(schemaName, tableName);
-        schemaDesc.getTableDescs().add(tableDesc);
-        tableDesc.getColumnDescs().add(new ColumnDesc(tableName, "id", new TapDataType("char", "36", "uuid")));
-
-        // inventory.DeletedStorageLocationEvent
-        tableName = schemaName + ".DeletedStorageLocationEvent";
-        tableDesc = new TableDesc(schemaName, tableName);
-        schemaDesc.getTableDescs().add(tableDesc);
-        tableDesc.getColumnDescs().add(new ColumnDesc(tableName, "id", new TapDataType("char", "36", "uuid")));
-
-        // temp schema
-        schemaName = "temp";
-        schemaDesc = new SchemaDesc(schemaName);
-        tapSchema.getSchemaDescs().add(schemaDesc);
-
-        // temp.Artifact
-        tableName = schemaName + ".Artifact";
-        tableDesc = new TableDesc(schemaName, tableName);
-        schemaDesc.getTableDescs().add(tableDesc);
-        tableDesc.getColumnDescs().add(new ColumnDesc(tableName, "id", new TapDataType("char", "36", "uuid")));
-
-        // count()
-        FunctionDesc count = new FunctionDesc("count", TapDataType.INTEGER);
-        tapSchema.getFunctionDescs().add(count);
-
-        // num_copies()
-        FunctionDesc numCopies = new FunctionDesc("num_copies", TapDataType.INTEGER);
-        tapSchema.getFunctionDescs().add(numCopies);
-
-        return tapSchema;
+    public NumCopiesConverter() {
+        super();
     }
 
-    static Job job = new Job() {
-        @Override
-        public String getID() {
-            return "internal-test-jobID";
-        }
-    };
+    public void setTableAlias(String tableAlias) {
+        this.tableAlias = tableAlias;
+        log.debug("setTableAlias: " + tableAlias);
+    }
 
-}
+    @Override
+    public void visit(Function function)
+    {
+        log.debug("visit(function) " + function);
+        if (function.getName().equalsIgnoreCase("num_copies")) {
+            function.setName("cardinality");
+            Table table;
+            if (this.tableAlias == null) {
+                table = new Table("inventory", "artifact");
+            } else {
+                table = new Table(null, tableAlias);
+            }
+            Expression expression = new Column(table, "sitelocations");
+            List<Expression> expressions = new ArrayList<>();
+            expressions.add(expression);
+            ExpressionList parameters = new ExpressionList();
+            parameters.setExpressions(expressions);
+            function.setParameters(parameters);
+        }
+    }
+
+ }

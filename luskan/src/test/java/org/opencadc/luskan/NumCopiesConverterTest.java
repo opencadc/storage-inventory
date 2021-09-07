@@ -3,7 +3,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2020.                            (c) 2020.
+ *  (c) 2021.                            (c) 2021.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -69,75 +69,102 @@
 
 package org.opencadc.luskan;
 
-import ca.nrc.cadc.tap.schema.ColumnDesc;
-import ca.nrc.cadc.tap.schema.FunctionDesc;
-import ca.nrc.cadc.tap.schema.SchemaDesc;
-import ca.nrc.cadc.tap.schema.TableDesc;
-import ca.nrc.cadc.tap.schema.TapDataType;
+import java.util.ArrayList;
+import java.util.List;
+
+import org.apache.log4j.Level;
+import org.apache.log4j.Logger;
+import org.junit.Assert;
+import org.junit.Test;
+
+import ca.nrc.cadc.tap.TapQuery;
 import ca.nrc.cadc.tap.schema.TapSchema;
-import ca.nrc.cadc.uws.Job;
+import ca.nrc.cadc.util.Log4jInit;
+import ca.nrc.cadc.util.MultiValuedProperties;
+import ca.nrc.cadc.uws.Parameter;
 
-public class TestUtil {
+public class NumCopiesConverterTest {
+    private static final Logger log = Logger.getLogger(NumCopiesConverterTest.class);
 
-    public static TapSchema mockTapSchema() {
-        TapSchema tapSchema = new TapSchema();
-
-        // inventory schema
-        String schemaName = "inventory";
-        SchemaDesc schemaDesc = new SchemaDesc(schemaName);
-        tapSchema.getSchemaDescs().add(schemaDesc);
-
-        String tableName = schemaName + ".Artifact";
-        TableDesc tableDesc = new TableDesc(schemaName, tableName);
-        schemaDesc.getTableDescs().add(tableDesc);
-        tableDesc.getColumnDescs().add(new ColumnDesc(tableName, "id", new TapDataType("char", "36", "uuid")));
-        tableDesc.getColumnDescs().add(new ColumnDesc(tableName, "contentLength", TapDataType.LONG));
-
-        // inventory.StorageSite
-        tableName = schemaName + ".StorageSite";
-        tableDesc = new TableDesc(schemaName, tableName);
-        schemaDesc.getTableDescs().add(tableDesc);
-        tableDesc.getColumnDescs().add(new ColumnDesc(tableName, "id", new TapDataType("char", "36", "uuid")));
-
-        // inventory.DeletedArtifactEvent
-        tableName = schemaName + ".DeletedArtifactEvent";
-        tableDesc = new TableDesc(schemaName, tableName);
-        schemaDesc.getTableDescs().add(tableDesc);
-        tableDesc.getColumnDescs().add(new ColumnDesc(tableName, "id", new TapDataType("char", "36", "uuid")));
-
-        // inventory.DeletedStorageLocationEvent
-        tableName = schemaName + ".DeletedStorageLocationEvent";
-        tableDesc = new TableDesc(schemaName, tableName);
-        schemaDesc.getTableDescs().add(tableDesc);
-        tableDesc.getColumnDescs().add(new ColumnDesc(tableName, "id", new TapDataType("char", "36", "uuid")));
-
-        // temp schema
-        schemaName = "temp";
-        schemaDesc = new SchemaDesc(schemaName);
-        tapSchema.getSchemaDescs().add(schemaDesc);
-
-        // temp.Artifact
-        tableName = schemaName + ".Artifact";
-        tableDesc = new TableDesc(schemaName, tableName);
-        schemaDesc.getTableDescs().add(tableDesc);
-        tableDesc.getColumnDescs().add(new ColumnDesc(tableName, "id", new TapDataType("char", "36", "uuid")));
-
-        // count()
-        FunctionDesc count = new FunctionDesc("count", TapDataType.INTEGER);
-        tapSchema.getFunctionDescs().add(count);
-
-        // num_copies()
-        FunctionDesc numCopies = new FunctionDesc("num_copies", TapDataType.INTEGER);
-        tapSchema.getFunctionDescs().add(numCopies);
-
-        return tapSchema;
+    static {
+        Log4jInit.setLevel("org.opencadc.luskan", Level.INFO);
+        Log4jInit.setLevel("net.sf.jsqlparser", Level.INFO);
     }
 
-    static Job job = new Job() {
-        @Override
-        public String getID() {
-            return "internal-test-jobID";
-        }
-    };
+    private static final TapSchema tapSchema = TestUtil.mockTapSchema();
 
+    @Test
+    public void testSelect() {
+        String query = "select *, num_copies() from inventory.Artifact where id = '{some artifact id}'";
+        String expected = "SELECT inventory.Artifact.id, inventory.Artifact.contentLength, cardinality(inventory.artifact.sitelocations) FROM inventory.Artifact WHERE id = '{some artifact id}'";
+        doTest(query, expected);
+    }
+
+    @Test
+    public void testWhere() {
+        String query = "select count(*) from inventory.Artifact where num_copies() = 3";
+        String expected = "select count(*) from inventory.Artifact where cardinality(inventory.artifact.sitelocations) = 3";
+        doTest(query, expected);
+    }
+
+    @Test
+    public void testGroupByAs() {
+        String query = "select count(*), num_copies() as num from inventory.Artifact group by num";
+        String expected = "select count(*), cardinality(inventory.artifact.sitelocations) as num from inventory.Artifact group by num";
+        doTest(query, expected);
+    }
+
+    @Test
+    public void testAlias() {
+        String query = "select count(*), num_copies() from inventory.Artifact as a";
+        String expected = "select count(*), cardinality(a.sitelocations) from inventory.Artifact as a";
+        doTest(query, expected);
+    }
+
+    @Test
+    public void testMultipleArtifactTables() {
+        String query = "select count(*), num_copies() from inventory.Artifact as a, temp.Artifact as b where a.id = b.id";
+        String expected = "select count(*), num_copies() from inventory.Artifact as a, temp.Artifact as b where a.id = b.id";
+        doTest(query, expected);
+    }
+
+    private void doTest(final String query, final String expected) {
+        try {
+            TestUtil.job.getParameterList().clear();
+            List<Parameter> params = new ArrayList<Parameter>();
+            params.add(new Parameter("QUERY", query));
+            log.info("query: " + query);
+            TapQuery tq = new TestQuery();
+            tq.setTapSchema(tapSchema);
+            TestUtil.job.getParameterList().addAll(params);
+            tq.setJob(TestUtil.job);
+            log.info("expected: " + expected);
+            String sql = tq.getSQL();
+            log.info("actual: " + sql);
+
+            sql = sql.toLowerCase();
+            Assert.assertTrue(sql.equalsIgnoreCase(expected));
+        } catch (Exception e) {
+            log.error("unexpected exception", e);
+            Assert.fail();
+        } finally {
+            TestUtil.job.getParameterList().clear();
+        }
+    }
+
+    private static class TestQuery extends AdqlQueryImpl {
+
+        public TestQuery() {}
+
+        @Override
+        protected MultiValuedProperties getProperties() {
+            return new MultiValuedProperties() {
+                @Override
+                public String getFirstPropertyValue(String value) {
+                    return "false";
+                }
+            };
+        }
+    }
+    
 }
