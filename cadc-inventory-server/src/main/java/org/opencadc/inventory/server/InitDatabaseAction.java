@@ -65,7 +65,7 @@
 ************************************************************************
 */
 
-package org.operncadc.inventory.server;
+package org.opencadc.inventory.server;
 
 import ca.nrc.cadc.db.DBUtil;
 import ca.nrc.cadc.rest.InitAction;

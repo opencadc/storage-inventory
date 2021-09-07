@@ -77,14 +77,18 @@ import ca.nrc.cadc.vos.Direction;
 import ca.nrc.cadc.vos.Protocol;
 import ca.nrc.cadc.vos.Transfer;
 import ca.nrc.cadc.vos.VOS;
+import ca.nrc.cadc.vosi.Availability;
+
 import java.io.File;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.SiteLocation;
@@ -104,19 +108,20 @@ public class ProtocolsGenerator {
 
     private static final Logger log = Logger.getLogger(ProtocolsGenerator.class);
 
-    private ArtifactDAO artifactDAO;
-    private String user;
+    private final ArtifactDAO artifactDAO;
+    private final String user;
     private final File publicKeyFile;
     private final File privateKeyFile;
+    private final Map<URI, Availability> siteAvailabilities;
 
-    /**
-     * Ctor
-     */
-    public ProtocolsGenerator(ArtifactDAO artifactDAO, File publicKeyFile, File privateKeyFile, String user) {
+
+    public ProtocolsGenerator(ArtifactDAO artifactDAO, File publicKeyFile, File privateKeyFile, String user,
+                              Map<URI, Availability> siteAvailabilities) {
         this.artifactDAO = artifactDAO;
         this.user = user;
         this.publicKeyFile = publicKeyFile;
         this.privateKeyFile = privateKeyFile;
+        this.siteAvailabilities = siteAvailabilities;
     }
 
     List<Protocol> getProtocols(Transfer transfer) throws ResourceNotFoundException, IOException {
@@ -153,13 +158,13 @@ public class ProtocolsGenerator {
         List<Protocol> protos = new ArrayList<>();
         Artifact artifact = artifactDAO.get(artifactURI);
         if (artifact == null) {
-            throw new ResourceNotFoundException(artifactURI.toString());
+            throw new ResourceNotFoundException("not found: " + artifactURI.toString());
         }
 
         // TODO: this can currently happen but maybe should not:
-        // --- when the last siteLocation is removed, the artifact should be deleted?
+        // --- when the last siteLocation is removed, the artifact should be deleted (fenwick, ratik)
         if (artifact.siteLocations.isEmpty()) {
-            throw new ResourceNotFoundException("TBD: no copies available");
+            throw new ResourceNotFoundException("not found: " + artifactURI.toString());
         }
 
         // produce URLs to each of the copies for each of the protocols
@@ -170,6 +175,12 @@ public class ProtocolsGenerator {
         }
         prioritizePullFromSites(storageSites);
         for (StorageSite storageSite : storageSites) {
+            // check if site is currently offline
+            if (!isAvailable(storageSite.getResourceID())) {
+                log.warn("storage site is offline: " + storageSite.getResourceID());
+                continue;
+            }
+            
             Capability filesCap = null;
             try {
                 Capabilities caps = regClient.getCapabilities(storageSite.getResourceID());
@@ -241,6 +252,12 @@ public class ProtocolsGenerator {
         List<Protocol> protos = new ArrayList<>();
         // produce URLs for all writable sites
         for (StorageSite storageSite : sites) {
+            // check if site is currently offline
+            if (!isAvailable(storageSite.getResourceID())) {
+                log.warn("storage site is offline: " + storageSite.getResourceID());
+                continue;
+            }
+
             //log.warn("PUT: " + storageSite);
             Capability filesCap = null;
             try {
@@ -313,6 +330,14 @@ public class ProtocolsGenerator {
             return VOS.PROTOCOL_HTTP_GET.equals(p.getUri()) || VOS.PROTOCOL_HTTP_PUT.equals(p.getUri());
         }
         return false;
+    }
+
+    private boolean isAvailable(URI resourceID) {
+        Availability availability = siteAvailabilities.get(resourceID);
+        if (availability != null && !availability.isAvailable()) {
+            return false;
+        }
+        return true;
     }
 
 }
