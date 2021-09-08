@@ -102,10 +102,8 @@ public class NumCopiesNavigator extends SelectNavigator {
 
         List<Table> tables = new ArrayList<>();
         List<Table> fromTableList = ParserUtil.getFromTableList(ps);
-        for (Table fromTable : fromTableList)
-        {
-            if (fromTable.getName().equalsIgnoreCase("artifact"))
-            {
+        for (Table fromTable : fromTableList) {
+            if (fromTable.getName().equalsIgnoreCase("artifact")) {
                 tables.add(fromTable);
                 log.debug("found artifact fromTable: " + fromTable.getWholeTableName());
             }

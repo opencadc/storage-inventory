@@ -70,13 +70,11 @@
 package org.opencadc.luskan;
 
 import ca.nrc.cadc.tap.parser.navigator.ExpressionNavigator;
+import java.util.ArrayList;
+import java.util.List;
 import net.sf.jsqlparser.expression.Expression;
 import net.sf.jsqlparser.expression.Function;
 import net.sf.jsqlparser.expression.operators.relational.ExpressionList;
-
-import java.util.ArrayList;
-import java.util.List;
-
 import net.sf.jsqlparser.schema.Column;
 import net.sf.jsqlparser.schema.Table;
 import org.apache.log4j.Logger;
@@ -99,8 +97,7 @@ public class NumCopiesConverter extends ExpressionNavigator {
     }
 
     @Override
-    public void visit(Function function)
-    {
+    public void visit(Function function) {
         log.debug("visit(function) " + function);
         if (function.getName().equalsIgnoreCase("num_copies")) {
             function.setName("cardinality");
@@ -119,4 +116,4 @@ public class NumCopiesConverter extends ExpressionNavigator {
         }
     }
 
- }
+}
