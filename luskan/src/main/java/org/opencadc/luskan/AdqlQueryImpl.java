@@ -108,7 +108,7 @@ public class AdqlQueryImpl extends AdqlQuery {
 
         // convert num_copies() -> cardinality(inventory.artifact.sitelocations)
         super.navigatorList.add(new NumCopiesNavigator(
-            new NumCopiesConverter(), new ReferenceNavigator(), new FromItemNavigator()));
+            new InventoryFunctionConverter(), new ReferenceNavigator(), new FromItemNavigator()));
 
         // TAP-1.1 version of tap_schema
         TableNameConverter tnc = new TableNameConverter(true);

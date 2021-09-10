@@ -69,102 +69,51 @@
 
 package org.opencadc.luskan;
 
+import ca.nrc.cadc.tap.parser.navigator.ExpressionNavigator;
 import java.util.ArrayList;
 import java.util.List;
-
-import org.apache.log4j.Level;
+import net.sf.jsqlparser.expression.Expression;
+import net.sf.jsqlparser.expression.Function;
+import net.sf.jsqlparser.expression.operators.relational.ExpressionList;
+import net.sf.jsqlparser.schema.Column;
+import net.sf.jsqlparser.schema.Table;
 import org.apache.log4j.Logger;
-import org.junit.Assert;
-import org.junit.Test;
 
-import ca.nrc.cadc.tap.TapQuery;
-import ca.nrc.cadc.tap.schema.TapSchema;
-import ca.nrc.cadc.util.Log4jInit;
-import ca.nrc.cadc.util.MultiValuedProperties;
-import ca.nrc.cadc.uws.Parameter;
+/**
+ * Class to change a num_copies() function to cardinality(inventory.Artifact.siteLocations).
+ */
+public class InventoryFunctionConverter extends ExpressionNavigator {
+    private static final Logger log = Logger.getLogger(InventoryFunctionConverter.class);
 
-public class NumCopiesConverterTest {
-    private static final Logger log = Logger.getLogger(NumCopiesConverterTest.class);
+    String tableAlias;
 
-    static {
-        Log4jInit.setLevel("org.opencadc.luskan", Level.INFO);
-        Log4jInit.setLevel("net.sf.jsqlparser", Level.INFO);
+    public InventoryFunctionConverter() {
+        super();
     }
 
-    private static final TapSchema tapSchema = TestUtil.mockTapSchema();
-
-    @Test
-    public void testSelect() {
-        String query = "select *, num_copies() from inventory.Artifact where id = '{some artifact id}'";
-        String expected = "SELECT inventory.Artifact.id, inventory.Artifact.contentLength, cardinality(inventory.artifact.sitelocations) FROM inventory.Artifact WHERE id = '{some artifact id}'";
-        doTest(query, expected);
+    public void setTableAlias(String tableAlias) {
+        this.tableAlias = tableAlias;
+        log.debug("setTableAlias: " + tableAlias);
     }
 
-    @Test
-    public void testWhere() {
-        String query = "select count(*) from inventory.Artifact where num_copies() = 3";
-        String expected = "select count(*) from inventory.Artifact where cardinality(inventory.artifact.sitelocations) = 3";
-        doTest(query, expected);
-    }
-
-    @Test
-    public void testGroupByAs() {
-        String query = "select count(*), num_copies() as num from inventory.Artifact group by num";
-        String expected = "select count(*), cardinality(inventory.artifact.sitelocations) as num from inventory.Artifact group by num";
-        doTest(query, expected);
-    }
-
-    @Test
-    public void testAlias() {
-        String query = "select count(*), num_copies() from inventory.Artifact as a";
-        String expected = "select count(*), cardinality(a.sitelocations) from inventory.Artifact as a";
-        doTest(query, expected);
-    }
-
-    @Test
-    public void testMultipleArtifactTables() {
-        String query = "select count(*), num_copies() from inventory.Artifact as a, temp.Artifact as b where a.id = b.id";
-        String expected = "select count(*), num_copies() from inventory.Artifact as a, temp.Artifact as b where a.id = b.id";
-        doTest(query, expected);
-    }
-
-    private void doTest(final String query, final String expected) {
-        try {
-            TestUtil.job.getParameterList().clear();
-            List<Parameter> params = new ArrayList<Parameter>();
-            params.add(new Parameter("QUERY", query));
-            log.info("query: " + query);
-            TapQuery tq = new TestQuery();
-            tq.setTapSchema(tapSchema);
-            TestUtil.job.getParameterList().addAll(params);
-            tq.setJob(TestUtil.job);
-            log.info("expected: " + expected);
-            String sql = tq.getSQL();
-            log.info("actual: " + sql);
-
-            sql = sql.toLowerCase();
-            Assert.assertTrue(sql.equalsIgnoreCase(expected));
-        } catch (Exception e) {
-            log.error("unexpected exception", e);
-            Assert.fail();
-        } finally {
-            TestUtil.job.getParameterList().clear();
+    @Override
+    public void visit(Function function) {
+        log.debug("visit(function) " + function);
+        if (function.getName().equalsIgnoreCase("num_copies")) {
+            function.setName("cardinality");
+            Table table;
+            if (this.tableAlias == null) {
+                table = new Table("inventory", "Artifact");
+            } else {
+                table = new Table(null, tableAlias);
+            }
+            Expression expression = new Column(table, "siteLocations");
+            List<Expression> expressions = new ArrayList<>();
+            expressions.add(expression);
+            ExpressionList parameters = new ExpressionList();
+            parameters.setExpressions(expressions);
+            function.setParameters(parameters);
         }
     }
 
-    private static class TestQuery extends AdqlQueryImpl {
-
-        public TestQuery() {}
-
-        @Override
-        protected MultiValuedProperties getProperties() {
-            return new MultiValuedProperties() {
-                @Override
-                public String getFirstPropertyValue(String value) {
-                    return "false";
-                }
-            };
-        }
-    }
-    
 }

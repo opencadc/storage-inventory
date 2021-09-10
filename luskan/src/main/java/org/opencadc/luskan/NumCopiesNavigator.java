@@ -82,18 +82,18 @@ import net.sf.jsqlparser.statement.select.SelectItem;
 import org.apache.log4j.Logger;
 
 /**
- * Checks there is a single Artifact table in the from clause,
- * then applies the NumCopiesConverter to the select, where, and group by clauses.
+ * Checks there is a single Artifact table in the FROM clause,
+ * then applies the InventoryFunctionConverter to the SELECT, WHERE, and GROUP BY clauses.
  *
  */
 public class NumCopiesNavigator extends SelectNavigator {
     private static final Logger log = Logger.getLogger(NumCopiesNavigator.class);
 
-    NumCopiesConverter numCopiesConverter;
+    InventoryFunctionConverter inventoryFunctionConverter;
 
-    public NumCopiesNavigator(NumCopiesConverter en, ReferenceNavigator rn, FromItemNavigator fn) {
+    public NumCopiesNavigator(InventoryFunctionConverter en, ReferenceNavigator rn, FromItemNavigator fn) {
         super(en, rn, fn);
-        this.numCopiesConverter = en;
+        this.inventoryFunctionConverter = en;
     }
 
     @Override
@@ -103,38 +103,40 @@ public class NumCopiesNavigator extends SelectNavigator {
         List<Table> tables = new ArrayList<>();
         List<Table> fromTableList = ParserUtil.getFromTableList(ps);
         for (Table fromTable : fromTableList) {
-            if (fromTable.getName().equalsIgnoreCase("artifact")) {
+            if (fromTable.getName().equalsIgnoreCase("Artifact")) {
                 tables.add(fromTable);
-                log.debug("found artifact fromTable: " + fromTable.getWholeTableName());
+                log.debug("found fromTable: " + fromTable.getWholeTableName());
             }
         }
 
-        // if no artifact tables found, return
+        // if no artifact tables found, return.
         // if more than one artifact table found you don't know
-        // which artifact table to use for cardinality, return
-        if (tables.size() != 1) {
+        // which artifact table to use for cardinality, return.
+        // if the table.schema is not inventory.Artifact, return.
+        if (tables.size() != 1
+            || !tables.get(0).getWholeTableName().equalsIgnoreCase("inventory.Artifact")) {
             return;
         }
 
-        this.numCopiesConverter.setTableAlias(tables.get(0).getAlias());
+        this.inventoryFunctionConverter.setTableAlias(tables.get(0).getAlias());
 
         // select list
         List<SelectItem> selectItems = ps.getSelectItems();
         for (SelectItem selectItem : selectItems) {
-            selectItem.accept(numCopiesConverter);
+            selectItem.accept(inventoryFunctionConverter);
         }
 
         // where clause
         Expression where = ps.getWhere();
         if (where != null) {
-            where.accept(numCopiesConverter);
+            where.accept(inventoryFunctionConverter);
         }
 
         // group by clause
         List<Expression> groupBys = ps.getGroupByColumnReferences();
         if (groupBys != null) {
             for (Expression groupBy : groupBys) {
-                groupBy.accept(numCopiesConverter);
+                groupBy.accept(inventoryFunctionConverter);
             }
         }
     }
