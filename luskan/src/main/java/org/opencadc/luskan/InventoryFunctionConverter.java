@@ -85,33 +85,57 @@ import org.apache.log4j.Logger;
 public class InventoryFunctionConverter extends ExpressionNavigator {
     private static final Logger log = Logger.getLogger(InventoryFunctionConverter.class);
 
-    String tableAlias;
+    protected List<Table> fromTables;
 
     public InventoryFunctionConverter() {
         super();
     }
 
-    public void setTableAlias(String tableAlias) {
-        this.tableAlias = tableAlias;
-        log.debug("setTableAlias: " + tableAlias);
+    public void setFromTables(List<Table> tables) {
+        this.fromTables = tables;
     }
 
     @Override
     public void visit(Function function) {
         log.debug("visit(function) " + function);
         if (function.getName().equalsIgnoreCase("num_copies")) {
-            function.setName("cardinality");
-            Table table;
-            if (this.tableAlias == null) {
-                table = new Table("inventory", "Artifact");
-            } else {
-                table = new Table(null, tableAlias);
+
+            if (this.fromTables == null || this.fromTables.size() == 0) {
+                throw new IllegalArgumentException("num_copies() requires inventory.Artifact table in FROM statement, "
+                                                       + "no tables found");
             }
-            Expression expression = new Column(table, "siteLocations");
+
+            List<Table> artifactTables = new ArrayList<>();
+            for (Table fromTable : this.fromTables) {
+                if (fromTable.getWholeTableName().equalsIgnoreCase("inventory.Artifact")) {
+                    artifactTables.add(fromTable);
+                    log.debug("found fromTable: ");
+                }
+            }
+            if (artifactTables.size() == 0) {
+                throw new IllegalArgumentException("num_copies() requires inventory.Artifact table in FROM statement, "
+                                                       + "table not found");
+            }
+            if (artifactTables.size() > 1) {
+                throw new IllegalArgumentException("num_copies() requires single inventory.Artifact table "
+                                                       + "in FROM statement, multiple tables found");
+            }
+
+            Table artifactTable = artifactTables.get(0);
+
+            Column column = new Column();
+            column.setColumnName("siteLocations");
+            if (artifactTable.getAlias() != null) {
+                column.setTable(new Table(null, artifactTable.getAlias()));
+            } else {
+                column.setTable(artifactTable);
+            }
+
             List<Expression> expressions = new ArrayList<>();
-            expressions.add(expression);
+            expressions.add(column);
             ExpressionList parameters = new ExpressionList();
             parameters.setExpressions(expressions);
+            function.setName("cardinality");
             function.setParameters(parameters);
         }
     }

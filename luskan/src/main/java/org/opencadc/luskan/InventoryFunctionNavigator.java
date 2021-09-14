@@ -73,10 +73,8 @@ import ca.nrc.cadc.tap.parser.ParserUtil;
 import ca.nrc.cadc.tap.parser.navigator.FromItemNavigator;
 import ca.nrc.cadc.tap.parser.navigator.ReferenceNavigator;
 import ca.nrc.cadc.tap.parser.navigator.SelectNavigator;
-import java.util.ArrayList;
 import java.util.List;
 import net.sf.jsqlparser.expression.Expression;
-import net.sf.jsqlparser.schema.Table;
 import net.sf.jsqlparser.statement.select.PlainSelect;
 import net.sf.jsqlparser.statement.select.SelectItem;
 import org.apache.log4j.Logger;
@@ -86,39 +84,20 @@ import org.apache.log4j.Logger;
  * then applies the InventoryFunctionConverter to the SELECT, WHERE, and GROUP BY clauses.
  *
  */
-public class NumCopiesNavigator extends SelectNavigator {
-    private static final Logger log = Logger.getLogger(NumCopiesNavigator.class);
+public class InventoryFunctionNavigator extends SelectNavigator {
+    private static final Logger log = Logger.getLogger(InventoryFunctionNavigator.class);
 
     InventoryFunctionConverter inventoryFunctionConverter;
 
-    public NumCopiesNavigator(InventoryFunctionConverter en, ReferenceNavigator rn, FromItemNavigator fn) {
-        super(en, rn, fn);
+    public InventoryFunctionNavigator(InventoryFunctionConverter en) {
+        super(en, new ReferenceNavigator(), new FromItemNavigator());
         this.inventoryFunctionConverter = en;
     }
 
     @Override
     public void visit(PlainSelect ps) {
         log.debug("visit(PlainSelect) " + ps);
-
-        List<Table> tables = new ArrayList<>();
-        List<Table> fromTableList = ParserUtil.getFromTableList(ps);
-        for (Table fromTable : fromTableList) {
-            if (fromTable.getName().equalsIgnoreCase("Artifact")) {
-                tables.add(fromTable);
-                log.debug("found fromTable: " + fromTable.getWholeTableName());
-            }
-        }
-
-        // if no artifact tables found, return.
-        // if more than one artifact table found you don't know
-        // which artifact table to use for cardinality, return.
-        // if the table.schema is not inventory.Artifact, return.
-        if (tables.size() != 1
-            || !tables.get(0).getWholeTableName().equalsIgnoreCase("inventory.Artifact")) {
-            return;
-        }
-
-        this.inventoryFunctionConverter.setTableAlias(tables.get(0).getAlias());
+        this.inventoryFunctionConverter.setFromTables(ParserUtil.getFromTableList(ps));
 
         // select list
         List<SelectItem> selectItems = ps.getSelectItems();

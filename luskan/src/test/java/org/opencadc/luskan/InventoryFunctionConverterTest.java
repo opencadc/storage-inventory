@@ -124,15 +124,38 @@ public class InventoryFunctionConverterTest {
     @Test
     public void testMultipleArtifactTables() {
         String query = "select count(*), num_copies() from inventory.Artifact as a, temp.Artifact as b where a.id = b.id";
-        String expected = "select count(*), num_copies() from inventory.Artifact as a, temp.Artifact as b where a.id = b.id";
+        String expected = "select count(*), cardinality(a.siteLocations) from inventory.Artifact as a, temp.Artifact as b where a.id = b.id";
         doTest(query, expected, null);
+    }
+
+    @Test
+    public void testNoFromTables() {
+        String query = "select num_copies()";
+        doTestFailure(query);
     }
 
     @Test
     public void testNotInventorySchema() {
         String query = "select count(*), num_copies() from temp.Artifact";
-        String expected = "select count(*), num_copies() from temp.Artifact";
-        doTest(query, expected, null);
+        doTestFailure(query);
+    }
+
+    @Test
+    public void testMultipleInventoryArtifactTables() {
+        String query = "select count(*), num_copies() from inventory.Artifact as a, inventory.Artifact as b";
+        doTestFailure(query);
+    }
+
+    @Test
+    public void testNoInventoryArtifactTable() {
+        String query = "select num_copies() from DeletedArtifactEvent";
+        doTestFailure(query);
+    }
+
+    @Test
+    public void test() {
+        String query = "select count(*) from DeletedArtifactEvent group by num_copies()";
+        doTestFailure(query);
     }
 
     private void doTest(final String query, final String expected, String expectedCardinalityFunc) {
@@ -159,6 +182,23 @@ public class InventoryFunctionConverterTest {
             Assert.fail();
         } finally {
             TestUtil.job.getParameterList().clear();
+        }
+    }
+
+    private void doTestFailure(final String query) {
+        try {
+            TestUtil.job.getParameterList().clear();
+            List<Parameter> params = new ArrayList<Parameter>();
+            params.add(new Parameter("QUERY", query));
+            log.info("query: " + query);
+            TapQuery tq = new TestQuery();
+            tq.setTapSchema(tapSchema);
+            TestUtil.job.getParameterList().addAll(params);
+            tq.setJob(TestUtil.job);
+            String sql = tq.getSQL();
+            Assert.fail("Exception expected");
+        } catch (Exception e) {
+            Assert.assertTrue(e instanceof IllegalArgumentException);
         }
     }
 
