@@ -97,35 +97,35 @@ public class InventoryFunctionConverterTest {
     public void testSelect() {
         String query = "select *, num_copies() from inventory.Artifact where id = '{some artifact id}'";
         String expected = "SELECT inventory.Artifact.id, inventory.Artifact.contentLength, cardinality(inventory.Artifact.siteLocations) FROM inventory.Artifact WHERE id = '{some artifact id}'";
-        doTest(query, expected, "inventory.Artifact.siteLocations");
+        doTest(query, expected, "cardinality(inventory.Artifact.siteLocations)");
     }
 
     @Test
     public void testWhere() {
         String query = "select count(*) from inventory.Artifact where num_copies() = 3";
         String expected = "select count(*) from inventory.Artifact where cardinality(inventory.Artifact.siteLocations) = 3";
-        doTest(query, expected, "inventory.Artifact.siteLocations");
+        doTest(query, expected, "cardinality(inventory.Artifact.siteLocations)");
     }
 
     @Test
-    public void testGroupByAs() {
+    public void testGroupByWithAlias() {
         String query = "select count(*), num_copies() as num from inventory.Artifact group by num";
         String expected = "select count(*), cardinality(inventory.Artifact.siteLocations) as num from inventory.Artifact group by num";
-        doTest(query, expected, "inventory.Artifact.siteLocations");
+        doTest(query, expected, "cardinality(inventory.Artifact.siteLocations)");
     }
 
     @Test
     public void testAlias() {
         String query = "select count(*), num_copies() from inventory.Artifact as a";
         String expected = "select count(*), cardinality(a.siteLocations) from inventory.Artifact as a";
-        doTest(query, expected, "a.siteLocations");
+        doTest(query, expected, "cardinality(a.siteLocations)");
     }
 
     @Test
     public void testMultipleArtifactTables() {
         String query = "select count(*), num_copies() from inventory.Artifact as a, temp.Artifact as b where a.id = b.id";
         String expected = "select count(*), cardinality(a.siteLocations) from inventory.Artifact as a, temp.Artifact as b where a.id = b.id";
-        doTest(query, expected, null);
+        doTest(query, expected, "cardinality(a.siteLocations)");
     }
 
     @Test
@@ -149,12 +149,6 @@ public class InventoryFunctionConverterTest {
     @Test
     public void testNoInventoryArtifactTable() {
         String query = "select num_copies() from DeletedArtifactEvent";
-        doTestFailure(query);
-    }
-
-    @Test
-    public void test() {
-        String query = "select count(*) from DeletedArtifactEvent group by num_copies()";
         doTestFailure(query);
     }
 

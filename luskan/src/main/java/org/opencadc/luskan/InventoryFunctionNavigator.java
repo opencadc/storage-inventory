@@ -89,9 +89,9 @@ public class InventoryFunctionNavigator extends SelectNavigator {
 
     InventoryFunctionConverter inventoryFunctionConverter;
 
-    public InventoryFunctionNavigator(InventoryFunctionConverter en) {
-        super(en, new ReferenceNavigator(), new FromItemNavigator());
-        this.inventoryFunctionConverter = en;
+    public InventoryFunctionNavigator() {
+        super(new InventoryFunctionConverter(), new ReferenceNavigator(), new FromItemNavigator());
+        this.inventoryFunctionConverter = (InventoryFunctionConverter) this.expressionNavigator;
     }
 
     @Override
