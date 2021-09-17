@@ -3,7 +3,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2020.                            (c) 2020.
+ *  (c) 2021.                            (c) 2021.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -69,75 +69,75 @@
 
 package org.opencadc.luskan;
 
-import ca.nrc.cadc.tap.schema.ColumnDesc;
-import ca.nrc.cadc.tap.schema.FunctionDesc;
-import ca.nrc.cadc.tap.schema.SchemaDesc;
-import ca.nrc.cadc.tap.schema.TableDesc;
-import ca.nrc.cadc.tap.schema.TapDataType;
-import ca.nrc.cadc.tap.schema.TapSchema;
-import ca.nrc.cadc.uws.Job;
+import ca.nrc.cadc.tap.parser.navigator.ExpressionNavigator;
+import java.util.ArrayList;
+import java.util.List;
+import net.sf.jsqlparser.expression.Expression;
+import net.sf.jsqlparser.expression.Function;
+import net.sf.jsqlparser.expression.operators.relational.ExpressionList;
+import net.sf.jsqlparser.schema.Column;
+import net.sf.jsqlparser.schema.Table;
+import org.apache.log4j.Logger;
 
-public class TestUtil {
+/**
+ * Class to change a num_copies() function to cardinality(inventory.Artifact.siteLocations).
+ */
+public class InventoryFunctionConverter extends ExpressionNavigator {
+    private static final Logger log = Logger.getLogger(InventoryFunctionConverter.class);
 
-    public static TapSchema mockTapSchema() {
-        TapSchema tapSchema = new TapSchema();
+    protected List<Table> fromTables;
 
-        // inventory schema
-        String schemaName = "inventory";
-        SchemaDesc schemaDesc = new SchemaDesc(schemaName);
-        tapSchema.getSchemaDescs().add(schemaDesc);
-
-        String tableName = schemaName + ".Artifact";
-        TableDesc tableDesc = new TableDesc(schemaName, tableName);
-        schemaDesc.getTableDescs().add(tableDesc);
-        tableDesc.getColumnDescs().add(new ColumnDesc(tableName, "id", new TapDataType("char", "36", "uuid")));
-        tableDesc.getColumnDescs().add(new ColumnDesc(tableName, "contentLength", TapDataType.LONG));
-
-        // inventory.StorageSite
-        tableName = schemaName + ".StorageSite";
-        tableDesc = new TableDesc(schemaName, tableName);
-        schemaDesc.getTableDescs().add(tableDesc);
-        tableDesc.getColumnDescs().add(new ColumnDesc(tableName, "id", new TapDataType("char", "36", "uuid")));
-
-        // inventory.DeletedArtifactEvent
-        tableName = schemaName + ".DeletedArtifactEvent";
-        tableDesc = new TableDesc(schemaName, tableName);
-        schemaDesc.getTableDescs().add(tableDesc);
-        tableDesc.getColumnDescs().add(new ColumnDesc(tableName, "id", new TapDataType("char", "36", "uuid")));
-
-        // inventory.DeletedStorageLocationEvent
-        tableName = schemaName + ".DeletedStorageLocationEvent";
-        tableDesc = new TableDesc(schemaName, tableName);
-        schemaDesc.getTableDescs().add(tableDesc);
-        tableDesc.getColumnDescs().add(new ColumnDesc(tableName, "id", new TapDataType("char", "36", "uuid")));
-
-        // temp schema
-        schemaName = "temp";
-        schemaDesc = new SchemaDesc(schemaName);
-        tapSchema.getSchemaDescs().add(schemaDesc);
-
-        // temp.Artifact
-        tableName = schemaName + ".Artifact";
-        tableDesc = new TableDesc(schemaName, tableName);
-        schemaDesc.getTableDescs().add(tableDesc);
-        tableDesc.getColumnDescs().add(new ColumnDesc(tableName, "id", new TapDataType("char", "36", "uuid")));
-
-        // count()
-        FunctionDesc count = new FunctionDesc("count", TapDataType.INTEGER);
-        tapSchema.getFunctionDescs().add(count);
-
-        // num_copies()
-        FunctionDesc numCopies = new FunctionDesc("num_copies", TapDataType.INTEGER);
-        tapSchema.getFunctionDescs().add(numCopies);
-
-        return tapSchema;
+    public InventoryFunctionConverter() {
+        super();
     }
 
-    static Job job = new Job() {
-        @Override
-        public String getID() {
-            return "internal-test-jobID";
+    public void setFromTables(List<Table> tables) {
+        this.fromTables = tables;
+    }
+
+    @Override
+    public void visit(Function function) {
+        log.debug("visit(function) " + function);
+        if (function.getName().equalsIgnoreCase("num_copies")) {
+
+            if (this.fromTables == null || this.fromTables.size() == 0) {
+                throw new IllegalArgumentException("num_copies() requires inventory.Artifact table in FROM statement, "
+                                                       + "no tables found");
+            }
+
+            List<Table> artifactTables = new ArrayList<>();
+            for (Table fromTable : this.fromTables) {
+                if (fromTable.getWholeTableName().equalsIgnoreCase("inventory.Artifact")) {
+                    artifactTables.add(fromTable);
+                    log.debug("found fromTable: ");
+                }
+            }
+            if (artifactTables.size() == 0) {
+                throw new IllegalArgumentException("num_copies() requires inventory.Artifact table in FROM statement, "
+                                                       + "table not found");
+            }
+            if (artifactTables.size() > 1) {
+                throw new IllegalArgumentException("num_copies() requires single inventory.Artifact table "
+                                                       + "in FROM statement, multiple tables found");
+            }
+
+            Table artifactTable = artifactTables.get(0);
+
+            Column column = new Column();
+            column.setColumnName("siteLocations");
+            if (artifactTable.getAlias() != null) {
+                column.setTable(new Table(null, artifactTable.getAlias()));
+            } else {
+                column.setTable(artifactTable);
+            }
+
+            List<Expression> expressions = new ArrayList<>();
+            expressions.add(column);
+            ExpressionList parameters = new ExpressionList();
+            parameters.setExpressions(expressions);
+            function.setName("cardinality");
+            function.setParameters(parameters);
         }
-    };
+    }
 
 }
