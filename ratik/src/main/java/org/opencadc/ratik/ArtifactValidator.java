@@ -75,6 +75,7 @@ import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
 import java.io.IOException;
 import java.net.URI;
+import java.util.List;
 import java.util.UUID;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
@@ -90,6 +91,7 @@ import org.opencadc.inventory.query.ArtifactRowMapper;
 import org.opencadc.inventory.query.DeletedArtifactEventRowMapper;
 import org.opencadc.inventory.query.DeletedStorageLocationEventRowMapper;
 import org.opencadc.tap.TapClient;
+import org.opencadc.tap.TapRowMapper;
 
 /**
  * Class that compares and validates two Artifacts, repairing the local Artifact to
@@ -160,26 +162,49 @@ public class ArtifactValidator {
 
         // explanation0: filter policy at L changed to exclude artifact in R
         // evidence: Artifact in R without filter
-        // action: delete Artifact, if (L==storage) create DeletedStorageLocationEvent
+        // if (L==global) delete Artifact, if (L==storage) delete Artifact only if
+        // remote has multiple copies and create DeletedStorageLocationEvent
         log.debug("checking explanation 0");
         Artifact remote = getRemoteArtifact(local.getURI());
         if (remote != null) {
+            boolean multipleCopies = false;
+            // if L == storage, get the Artifact count from global
+            if (this.remoteSite == null) {
+                Integer count = this.getRemoteArtifactCount(local.getURI());
+                if (count != null && count > 1) {
+                    multipleCopies = true;
+                }
+            }
             try {
                 log.debug("starting transaction");
                 this.transactionManager.startTransaction();
                 log.debug("start txn: OK");
 
                 this.artifactDAO.lock(local);
-                log.info(String.format("ArtifactValidator.deleteArtifact Artifact.id=%s Artifact.uri=%s reason=local-filter-policy-change",
-                                       local.getID(), local.getURI()));
-                this.artifactDAO.delete(local.getID());
+                if (this.remoteSite != null) {
+                    // if L==global, delete Artifact, do not create a DeletedStorageLocationEvent
+                    log.info(String.format(
+                        "ArtifactValidator.deleteArtifact Artifact.id=%s Artifact.uri=%s reason=local-filter-policy-change",
+                        local.getID(), local.getURI()));
+                    this.artifactDAO.delete(local.getID());
+                } else if (multipleCopies) {
+                    // if L==storage, delete Artifact only if multiple copies in global, and create a DeletedStorageLocationEvent
+                    log.info(String.format(
+                        "ArtifactValidator.deleteArtifact Artifact.id=%s Artifact.uri=%s "
+                            + "reason=local-filter-policy-change, multiple copies in global",
+                        local.getID(), local.getURI()));
+                    this.artifactDAO.delete(local.getID());
 
-                if (this.remoteSite == null) {
-                    DeletedStorageLocationEvent deletedStorageLocationEvent =
-                        new DeletedStorageLocationEvent(local.getID());
-                    log.info(String.format("ArtifactValidator.createDeletedStorageLocationEvent event=%s reason=local-filter-policy-change",
-                                           deletedStorageLocationEvent));
+                    DeletedStorageLocationEvent deletedStorageLocationEvent = new DeletedStorageLocationEvent(local.getID());
+                    log.info(String.format(
+                        "ArtifactValidator.createDeletedStorageLocationEvent event=%s reason=local-filter-policy-change",
+                        deletedStorageLocationEvent));
                     this.deletedStorageLocationEventDAO.put(deletedStorageLocationEvent);
+                } else {
+                    log.info(String.format(
+                        "ArtifactValidator.didNotDeleteArtifact Artifact.id=%s Artifact.uri=%s "
+                            + "reason=local-filter-policy-change, but single copy in local storage ",
+                        local.getID(), local.getURI()));
                 }
 
                 log.debug("committing transaction");
@@ -625,6 +650,32 @@ public class ArtifactValidator {
         }
         return null;
     }
+
+    Integer getRemoteArtifactCount(URI uri)
+        throws InterruptedException, IOException, ResourceNotFoundException, TransientException {
+
+        final TapClient<Integer> tapClient = new TapClient<>(this.resourceID);
+        final String query = String.format("SELECT num_copies() FROM inventory.Artifact WHERE uri = '%s'",
+                                           uri.toASCIIString());
+        log.debug(String.format("\nExecuting query '%s'\n", query));
+        ResourceIterator<Integer> results = tapClient.execute(query, new NumCopiesRowMapper());
+        Integer count = 0;
+        if (results.hasNext()) {
+            count = results.next();
+        }
+        log.debug(String.format("Artifact count: %s", count));
+        return count;
+    }
+
+    public class NumCopiesRowMapper implements TapRowMapper<Integer> {
+
+        @Override
+        public Integer mapRow(final List<Object> row) {
+            return (Integer) row.get(0);
+        }
+
+    }
+
 
     /**
      * Get a remote DeletedArtifactEvent
