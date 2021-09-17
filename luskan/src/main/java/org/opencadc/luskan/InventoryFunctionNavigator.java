@@ -3,7 +3,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2020.                            (c) 2020.
+ *  (c) 2021.                            (c) 2021.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -69,75 +69,55 @@
 
 package org.opencadc.luskan;
 
-import ca.nrc.cadc.tap.schema.ColumnDesc;
-import ca.nrc.cadc.tap.schema.FunctionDesc;
-import ca.nrc.cadc.tap.schema.SchemaDesc;
-import ca.nrc.cadc.tap.schema.TableDesc;
-import ca.nrc.cadc.tap.schema.TapDataType;
-import ca.nrc.cadc.tap.schema.TapSchema;
-import ca.nrc.cadc.uws.Job;
+import ca.nrc.cadc.tap.parser.ParserUtil;
+import ca.nrc.cadc.tap.parser.navigator.FromItemNavigator;
+import ca.nrc.cadc.tap.parser.navigator.ReferenceNavigator;
+import ca.nrc.cadc.tap.parser.navigator.SelectNavigator;
+import java.util.List;
+import net.sf.jsqlparser.expression.Expression;
+import net.sf.jsqlparser.statement.select.PlainSelect;
+import net.sf.jsqlparser.statement.select.SelectItem;
+import org.apache.log4j.Logger;
 
-public class TestUtil {
+/**
+ * Checks there is a single Artifact table in the FROM clause,
+ * then applies the InventoryFunctionConverter to the SELECT, WHERE, and GROUP BY clauses.
+ *
+ */
+public class InventoryFunctionNavigator extends SelectNavigator {
+    private static final Logger log = Logger.getLogger(InventoryFunctionNavigator.class);
 
-    public static TapSchema mockTapSchema() {
-        TapSchema tapSchema = new TapSchema();
+    InventoryFunctionConverter inventoryFunctionConverter;
 
-        // inventory schema
-        String schemaName = "inventory";
-        SchemaDesc schemaDesc = new SchemaDesc(schemaName);
-        tapSchema.getSchemaDescs().add(schemaDesc);
-
-        String tableName = schemaName + ".Artifact";
-        TableDesc tableDesc = new TableDesc(schemaName, tableName);
-        schemaDesc.getTableDescs().add(tableDesc);
-        tableDesc.getColumnDescs().add(new ColumnDesc(tableName, "id", new TapDataType("char", "36", "uuid")));
-        tableDesc.getColumnDescs().add(new ColumnDesc(tableName, "contentLength", TapDataType.LONG));
-
-        // inventory.StorageSite
-        tableName = schemaName + ".StorageSite";
-        tableDesc = new TableDesc(schemaName, tableName);
-        schemaDesc.getTableDescs().add(tableDesc);
-        tableDesc.getColumnDescs().add(new ColumnDesc(tableName, "id", new TapDataType("char", "36", "uuid")));
-
-        // inventory.DeletedArtifactEvent
-        tableName = schemaName + ".DeletedArtifactEvent";
-        tableDesc = new TableDesc(schemaName, tableName);
-        schemaDesc.getTableDescs().add(tableDesc);
-        tableDesc.getColumnDescs().add(new ColumnDesc(tableName, "id", new TapDataType("char", "36", "uuid")));
-
-        // inventory.DeletedStorageLocationEvent
-        tableName = schemaName + ".DeletedStorageLocationEvent";
-        tableDesc = new TableDesc(schemaName, tableName);
-        schemaDesc.getTableDescs().add(tableDesc);
-        tableDesc.getColumnDescs().add(new ColumnDesc(tableName, "id", new TapDataType("char", "36", "uuid")));
-
-        // temp schema
-        schemaName = "temp";
-        schemaDesc = new SchemaDesc(schemaName);
-        tapSchema.getSchemaDescs().add(schemaDesc);
-
-        // temp.Artifact
-        tableName = schemaName + ".Artifact";
-        tableDesc = new TableDesc(schemaName, tableName);
-        schemaDesc.getTableDescs().add(tableDesc);
-        tableDesc.getColumnDescs().add(new ColumnDesc(tableName, "id", new TapDataType("char", "36", "uuid")));
-
-        // count()
-        FunctionDesc count = new FunctionDesc("count", TapDataType.INTEGER);
-        tapSchema.getFunctionDescs().add(count);
-
-        // num_copies()
-        FunctionDesc numCopies = new FunctionDesc("num_copies", TapDataType.INTEGER);
-        tapSchema.getFunctionDescs().add(numCopies);
-
-        return tapSchema;
+    public InventoryFunctionNavigator() {
+        super(new InventoryFunctionConverter(), new ReferenceNavigator(), new FromItemNavigator());
+        this.inventoryFunctionConverter = (InventoryFunctionConverter) this.expressionNavigator;
     }
 
-    static Job job = new Job() {
-        @Override
-        public String getID() {
-            return "internal-test-jobID";
+    @Override
+    public void visit(PlainSelect ps) {
+        log.debug("visit(PlainSelect) " + ps);
+        this.inventoryFunctionConverter.setFromTables(ParserUtil.getFromTableList(ps));
+
+        // select list
+        List<SelectItem> selectItems = ps.getSelectItems();
+        for (SelectItem selectItem : selectItems) {
+            selectItem.accept(inventoryFunctionConverter);
         }
-    };
+
+        // where clause
+        Expression where = ps.getWhere();
+        if (where != null) {
+            where.accept(inventoryFunctionConverter);
+        }
+
+        // group by clause
+        List<Expression> groupBys = ps.getGroupByColumnReferences();
+        if (groupBys != null) {
+            for (Expression groupBy : groupBys) {
+                groupBy.accept(inventoryFunctionConverter);
+            }
+        }
+    }
 
 }

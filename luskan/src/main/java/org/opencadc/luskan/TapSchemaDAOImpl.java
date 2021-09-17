@@ -90,6 +90,7 @@ public class TapSchemaDAOImpl  extends TapSchemaDAO {
 
         ret.add(new FunctionDesc("now", TapDataType.TIMESTAMP));
         ret.add(new FunctionDesc("split_part", TapDataType.STRING));
+        ret.add(new FunctionDesc("num_copies", TapDataType.INTEGER));
         
         return ret;
     }
