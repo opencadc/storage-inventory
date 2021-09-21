@@ -70,6 +70,7 @@ package org.opencadc.raven;
 import ca.nrc.cadc.rest.InitAction;
 import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.util.PropertiesReader;
+import ca.nrc.cadc.util.StringUtil;
 import ca.nrc.cadc.vosi.Availability;
 import ca.nrc.cadc.vosi.AvailabilityClient;
 
@@ -132,6 +133,7 @@ public class RavenInitAction extends InitAction {
         initDAO();
         initGrantProviders();
         initKeys();
+        initStorageSiteRules();
         initAvailabilityCheck();
     }
 
@@ -140,13 +142,13 @@ public class RavenInitAction extends InitAction {
         terminate();
     }
     
-    private void initConfig() {
+    void initConfig() {
         log.info("initConfig: START");
         this.props = getConfig();
         log.info("initConfig: OK");
     }
     
-    private void initDAO() {
+    void initDAO() {
         log.info("initDAO: START");
         Map<String,Object> dc = getDaoConfig(props);
         ArtifactDAO artifactDAO = new ArtifactDAO();
@@ -154,7 +156,7 @@ public class RavenInitAction extends InitAction {
         log.info("initDAO: OK");
     }
     
-    private void initGrantProviders() {
+    void initGrantProviders() {
         log.info("initGrantProviders: START");
         List<String> readGrants = props.getProperty(RavenInitAction.READ_GRANTS_KEY);
         if (readGrants != null) {
@@ -182,7 +184,7 @@ public class RavenInitAction extends InitAction {
         log.info("initGrantProviders: OK");
     }
     
-    private void initKeys() {
+    void initKeys() {
         log.info("initKeys: START");
         String pubkeyFileName = props.getFirstPropertyValue(RavenInitAction.PUBKEYFILE_KEY);
         String privkeyFileName = props.getFirstPropertyValue(RavenInitAction.PRIVKEYFILE_KEY);
@@ -194,7 +196,13 @@ public class RavenInitAction extends InitAction {
         log.info("initKeys: OK");
     }
 
-    private void initAvailabilityCheck() {
+    void initStorageSiteRules() {
+        log.info("initStorageSiteRules: START");
+        getStorageSiteRules(getConfig());
+        log.info("initStorageSiteRules: OK");
+    }
+
+    void initAvailabilityCheck() {
         StorageSiteDAO storageSiteDAO = new StorageSiteDAO();
         storageSiteDAO.setConfig(getDaoConfig(props));
 
@@ -287,6 +295,54 @@ public class RavenInitAction extends InitAction {
         } catch (ClassNotFoundException ex) {
             throw new IllegalStateException("invalid config: failed to load SQLGenerator: " + cname);
         }
+    }
+
+    static Map<URI, StorageSiteRule> getStorageSiteRules(MultiValuedProperties props) {
+        StringBuilder sb = new StringBuilder();
+        Map<URI, StorageSiteRule> prefs = new HashMap<>();
+
+        List<String> putPreferences = props.getProperty("org.opencadc.raven.putPreference");
+        for (String putPreference : putPreferences) {
+
+            URI resourceID = null;
+            List<String> resourceIDs = props.getProperty(putPreference + ".resourceID");
+            if (resourceIDs.size() == 0) {
+                sb.append(String.format("%s.resourceID: MISSING\n", putPreference));
+            } else if (resourceIDs.size() > 1) {
+                sb.append(String.format("%s.resourceID: MULTIPLE ENTRIES\n", putPreference));
+            } else if (!StringUtil.hasText(resourceIDs.get(0))) {
+                sb.append(String.format("%s.resourceID: EMPTY VALUE\n", putPreference));
+            } else {
+                try {
+                    resourceID = new URI(resourceIDs.get(0));
+                } catch (URISyntaxException e) {
+                    sb.append(String.format("%s.resourceID: INVALID URI\n", putPreference));
+                }
+            }
+
+            String namespace = null;
+            List<String> namespaces = props.getProperty(putPreference + ".namespaces");
+            if (namespaces.size() == 0) {
+                sb.append(String.format("%s.namespaces: MISSING\n", putPreference));
+            } else if (namespaces.size() > 1) {
+                sb.append(String.format("%s.namespaces: MULTIPLE ENTRIES\n", putPreference));
+            } else {
+                if (StringUtil.hasText(namespaces.get(0))) {
+                    namespace = namespaces.get(0);
+                } else {
+                    sb.append(String.format("%s.namespaces: EMPTY VALUE\n", putPreference));
+                }
+            }
+
+            if (resourceID != null && namespace != null) {
+                StorageSiteRule storageSitePreference = new StorageSiteRule(namespaces);
+                prefs.put(resourceID, storageSitePreference);
+            }
+        }
+        if (sb.length() > 0) {
+            throw new IllegalStateException(String.format("invalid storage site preference rules:\n%s", sb));
+        }
+        return prefs;
     }
 
     private static class AvailabilityCheck implements Runnable {
