@@ -217,11 +217,22 @@ public class ArtifactDAO extends AbstractDAO<Artifact> {
     }
     
     /**
+     * Iterate over Artifacts.
+     * 
+     * @param uriBucketPrefix null, prefix, or complete Artifact.uriBucket string
+     * @param ordered order by Artifact.uri (true) or not ordered (false)
+     * @return iterator over artifacts
+     */
+    public ResourceIterator iterator(String uriBucketPrefix, boolean ordered) {
+        return iterator((String) null, uriBucketPrefix, ordered);
+    }
+    
+    /**
      * Iterate over Artifacts that match criteria. The criteria are expressed as SQL
      * conditions on fields of the Artifact using the field names for column references.
      * Example: <code>uri like 'ad:bar/%'</code>. The result is currently not ordered.
      * 
-     * <p>Use case: to implement metadata-validate (cleanup) after a local filter policy was changed.
+     * <p>Use case: local cleanup by arbitrary criteria
      * 
      * @param criteria conditions for selecting artifacts
      * @param uriBucketPrefix null, prefix, or complete Artifact.uriBucket string
@@ -234,9 +245,39 @@ public class ArtifactDAO extends AbstractDAO<Artifact> {
 
         try {
             SQLGenerator.ArtifactIteratorQuery iter = (SQLGenerator.ArtifactIteratorQuery) gen.getEntityIteratorQuery(Artifact.class);
-            //iter.setStorageLocationRequired(null); // null aka all artifacts
             iter.setPrefix(uriBucketPrefix);
             iter.setCriteria(criteria);
+            iter.setOrderedOutput(ordered);
+            return iter.query(dataSource);
+        } catch (BadSqlGrammarException ex) {
+            handleInternalFail(ex);
+        } finally {
+            long dt = System.currentTimeMillis() - t;
+            log.debug("iterator: " + dt + "ms");
+        }
+        throw new RuntimeException("BUG: should be unreachable");
+    }
+    
+    /**
+     * Iterate over Artifacts from a specific site. If a siteID is specified, only artifacts where 
+     * artifact.siteLocations includes that siteID are returned; this is only applicable in a global
+     * inventory that tracks site locations.
+     * 
+     * <p>Use case: to implement metadata-validate
+     * 
+     * @param siteID null or siteID to select only artifacts from the specified site (validate global vs site)
+     * @param uriBucketPrefix null, prefix, or complete Artifact.uriBucket string
+     * @param ordered order by Artifact.uri (true) or not ordered (false)
+     * @return iterator over artifacts matching criteria
+     */
+    public ResourceIterator iterator(UUID siteID, String uriBucketPrefix, boolean ordered) {
+        checkInit();
+        long t = System.currentTimeMillis();
+
+        try {
+            SQLGenerator.ArtifactIteratorQuery iter = (SQLGenerator.ArtifactIteratorQuery) gen.getEntityIteratorQuery(Artifact.class);
+            iter.setPrefix(uriBucketPrefix);
+            iter.setSiteID(siteID);
             iter.setOrderedOutput(ordered);
             return iter.query(dataSource);
         } catch (BadSqlGrammarException ex) {

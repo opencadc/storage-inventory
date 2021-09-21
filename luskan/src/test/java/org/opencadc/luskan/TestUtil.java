@@ -70,6 +70,7 @@
 package org.opencadc.luskan;
 
 import ca.nrc.cadc.tap.schema.ColumnDesc;
+import ca.nrc.cadc.tap.schema.FunctionDesc;
 import ca.nrc.cadc.tap.schema.SchemaDesc;
 import ca.nrc.cadc.tap.schema.TableDesc;
 import ca.nrc.cadc.tap.schema.TapDataType;
@@ -109,6 +110,25 @@ public class TestUtil {
         tableDesc = new TableDesc(schemaName, tableName);
         schemaDesc.getTableDescs().add(tableDesc);
         tableDesc.getColumnDescs().add(new ColumnDesc(tableName, "id", new TapDataType("char", "36", "uuid")));
+
+        // temp schema
+        schemaName = "temp";
+        schemaDesc = new SchemaDesc(schemaName);
+        tapSchema.getSchemaDescs().add(schemaDesc);
+
+        // temp.Artifact
+        tableName = schemaName + ".Artifact";
+        tableDesc = new TableDesc(schemaName, tableName);
+        schemaDesc.getTableDescs().add(tableDesc);
+        tableDesc.getColumnDescs().add(new ColumnDesc(tableName, "id", new TapDataType("char", "36", "uuid")));
+
+        // count()
+        FunctionDesc count = new FunctionDesc("count", TapDataType.INTEGER);
+        tapSchema.getFunctionDescs().add(count);
+
+        // num_copies()
+        FunctionDesc numCopies = new FunctionDesc("num_copies", TapDataType.INTEGER);
+        tapSchema.getFunctionDescs().add(numCopies);
 
         return tapSchema;
     }

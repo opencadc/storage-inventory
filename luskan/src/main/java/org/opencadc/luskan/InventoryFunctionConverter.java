@@ -67,84 +67,77 @@
  ************************************************************************
  */
 
-package org.opencadc.luskan.ws;
+package org.opencadc.luskan;
 
-import ca.nrc.cadc.auth.AuthMethod;
-import ca.nrc.cadc.auth.AuthenticationUtil;
-import ca.nrc.cadc.auth.IdentityManager;
-import ca.nrc.cadc.auth.NotAuthenticatedException;
-import ca.nrc.cadc.cred.client.CredUtil;
-import ca.nrc.cadc.net.TransientException;
-import ca.nrc.cadc.reg.Standards;
-import ca.nrc.cadc.reg.client.LocalAuthority;
-import ca.nrc.cadc.util.MultiValuedProperties;
-import ca.nrc.cadc.uws.Job;
-import ca.nrc.cadc.uws.server.JobPersistenceException;
-import ca.nrc.cadc.uws.server.impl.PostgresJobPersistence;
-import java.net.URI;
-import java.security.AccessControlException;
-import java.security.cert.CertificateException;
+import ca.nrc.cadc.tap.parser.navigator.ExpressionNavigator;
 import java.util.ArrayList;
 import java.util.List;
-import javax.security.auth.Subject;
+import net.sf.jsqlparser.expression.Expression;
+import net.sf.jsqlparser.expression.Function;
+import net.sf.jsqlparser.expression.operators.relational.ExpressionList;
+import net.sf.jsqlparser.schema.Column;
+import net.sf.jsqlparser.schema.Table;
 import org.apache.log4j.Logger;
-import org.opencadc.gms.GroupClient;
-import org.opencadc.gms.GroupURI;
-import org.opencadc.gms.GroupUtil;
-import org.opencadc.luskan.LuskanConfig;
 
-public class AuthJobPersistence extends PostgresJobPersistence {
+/**
+ * Class to change a num_copies() function to cardinality(inventory.Artifact.siteLocations).
+ */
+public class InventoryFunctionConverter extends ExpressionNavigator {
+    private static final Logger log = Logger.getLogger(InventoryFunctionConverter.class);
 
-    private static final Logger log = Logger.getLogger(AuthJobPersistence.class);
+    protected List<Table> fromTables;
 
-    public AuthJobPersistence(IdentityManager im) {
-        super(im);
+    public InventoryFunctionConverter() {
+        super();
+    }
+
+    public void setFromTables(List<Table> tables) {
+        this.fromTables = tables;
     }
 
     @Override
-    public Job put(Job job)
-        throws JobPersistenceException, TransientException {
-        checkPermission();
-        return super.put(job);
-    }
+    public void visit(Function function) {
+        log.debug("visit(function) " + function);
+        if (function.getName().equalsIgnoreCase("num_copies")) {
 
-    /**
-     *
-     */
-    private void checkPermission() {
-        Subject s = AuthenticationUtil.getCurrentSubject();
-        AuthMethod am = AuthenticationUtil.getAuthMethod(s);
-        if (am == null || AuthMethod.ANON.equals(am)) {
-            throw new NotAuthenticatedException("permission denied");
-        }
-        try {
-            if (CredUtil.checkCredentials()) {
-                // better to get all the groups for the caller which could be a long list,
-                // or call isMember for each configured allowed group, which should be a short list.
-                // Or make it configurable.
-                LocalAuthority loc = new LocalAuthority();
-                URI resourceID = loc.getServiceURI(Standards.GMS_SEARCH_01.toString());
-                GroupClient client = GroupUtil.getGroupClient(resourceID);
-                List<GroupURI> memberships = client.getMemberships();
+            if (this.fromTables == null || this.fromTables.size() == 0) {
+                throw new IllegalArgumentException("num_copies() requires inventory.Artifact table in FROM statement, "
+                                                       + "no tables found");
+            }
 
-                MultiValuedProperties props = LuskanConfig.getConfig();
-                List<String> configGroups = props.getProperty(LuskanConfig.ALLOWED_GROUP);
-                List<GroupURI> allowedGroups = new ArrayList<>();
-                configGroups.forEach(group -> allowedGroups.add(new GroupURI(URI.create(group))));
-
-                for (GroupURI memberGroup : memberships) {
-                    for (GroupURI allowedGroup : allowedGroups) {
-                        if (memberGroup.equals(allowedGroup)) {
-                            log.debug("Allowed group: " + allowedGroup);
-                            return;
-                        }
-                    }
+            List<Table> artifactTables = new ArrayList<>();
+            for (Table fromTable : this.fromTables) {
+                if (fromTable.getWholeTableName().equalsIgnoreCase("inventory.Artifact")) {
+                    artifactTables.add(fromTable);
+                    log.debug("found fromTable: ");
                 }
             }
-        } catch (CertificateException e) {
-            throw new AccessControlException("read permission denied (invalid delegated client certificate)");
+            if (artifactTables.size() == 0) {
+                throw new IllegalArgumentException("num_copies() requires inventory.Artifact table in FROM statement, "
+                                                       + "table not found");
+            }
+            if (artifactTables.size() > 1) {
+                throw new IllegalArgumentException("num_copies() requires single inventory.Artifact table "
+                                                       + "in FROM statement, multiple tables found");
+            }
+
+            Table artifactTable = artifactTables.get(0);
+
+            Column column = new Column();
+            column.setColumnName("siteLocations");
+            if (artifactTable.getAlias() != null) {
+                column.setTable(new Table(null, artifactTable.getAlias()));
+            } else {
+                column.setTable(artifactTable);
+            }
+
+            List<Expression> expressions = new ArrayList<>();
+            expressions.add(column);
+            ExpressionList parameters = new ExpressionList();
+            parameters.setExpressions(expressions);
+            function.setName("cardinality");
+            function.setParameters(parameters);
         }
-        throw new AccessControlException("permission denied");
     }
 
 }
