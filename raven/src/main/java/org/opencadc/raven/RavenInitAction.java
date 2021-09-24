@@ -72,7 +72,6 @@ import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.util.PropertiesReader;
 import ca.nrc.cadc.vosi.Availability;
 import ca.nrc.cadc.vosi.AvailabilityClient;
-
 import java.io.File;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -81,11 +80,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
-
 import javax.naming.Context;
 import javax.naming.InitialContext;
 import javax.naming.NamingException;
-
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.StorageSite;
 import org.opencadc.inventory.db.ArtifactDAO;
@@ -341,7 +338,7 @@ public class RavenInitAction extends InitAction {
                         availability = new Availability(false, e.getMessage());
                         log.debug(String.format("availability check failed %s - %s", resourceID, e.getMessage()));
                     }
-                    boolean prev = siteState.available;
+                    final boolean prev = siteState.available;
                     siteState.available = availability.isAvailable();
                     this.siteStates.put(resourceID, siteState);
                     this.siteAvailabilities.put(resourceID, availability);
