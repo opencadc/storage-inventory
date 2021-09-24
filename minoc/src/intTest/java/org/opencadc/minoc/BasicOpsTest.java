@@ -275,7 +275,7 @@ public class BasicOpsTest extends MinocTest {
             // get last 3 bytes
             out = new ByteArrayOutputStream();
             get = new HttpGet(artifactURL, out);
-            get.setRequestProperty("Range", "bytes=" + (data.length-3) + "-");
+            get.setRequestProperty("Range", "bytes=" + (data.length - 3) + "-");
             Subject.doAs(userSubject, new RunnableAction(get));
             Assert.assertNull(get.getThrowable());
             Assert.assertEquals(206, get.getResponseCode());

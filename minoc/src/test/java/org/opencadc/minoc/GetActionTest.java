@@ -119,7 +119,7 @@ public class GetActionTest {
     }
     
     @Test
-    public void testParseRange() throws Exception{
+    public void testParseRange() throws Exception {
         assertCorrectRange("bytes=3-99", 200, 3, 97);
         assertCorrectRange(" bytes \t= 3 -   99 ", 200, 3, 97);
         assertCorrectRange("bytes=3-99", 50, 3, 47);
@@ -135,8 +135,10 @@ public class GetActionTest {
         assertIgnoredRange("bytes=2:4", 10);
 
         GetAction action = new GetAction(false);
-        Assert.assertThrows(Exception.class, () -> { action.parseRange("bytes=30-40", 20);});
-        Assert.assertThrows(GetAction.NotSatisfiableRangeException.class, () -> { action.parseRange("bytes=30-", 20);});
+        Assert.assertThrows(Exception.class, () -> {
+            action.parseRange("bytes=30-40", 20); });
+        Assert.assertThrows(GetAction.NotSatisfiableRangeException.class, () -> {
+            action.parseRange("bytes=30-", 20); });
     }
     
 }

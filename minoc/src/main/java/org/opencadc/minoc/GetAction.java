@@ -159,8 +159,8 @@ public class GetAction extends ArtifactAction {
                             ByteRange byteRange = rangeSet.first();
                             syncOutput.setCode(206);
                             long lastByte = byteRange.getOffset() + byteRange.getLength() - 1;
-                            syncOutput.setHeader(CONTENT_RANGE, "bytes " + byteRange.getOffset() + "-" +
-                                    lastByte + "/" + artifact.getContentLength());
+                            syncOutput.setHeader(CONTENT_RANGE, "bytes " + byteRange.getOffset() + "-"
+                                    + lastByte + "/" + artifact.getContentLength());
                             // override content length
                             syncOutput.setHeader(CONTENT_LENGTH, byteRange.getLength());
                             storageAdapter.get(storageLocation, bcos, rangeSet);
@@ -291,7 +291,7 @@ public class GetAction extends ArtifactAction {
 
     SortedSet<ByteRange> parseRange(String range, long contentLength) throws NotSatisfiableRangeException {
         String sanitizedRange = range.replaceAll("\\s","");  // remove whitespaces
-        if (!sanitizedRange.startsWith("bytes=")){
+        if (!sanitizedRange.startsWith("bytes=")) {
             log.debug("Ignore Range with invalid unit (only bytes supported): " + range);
             return null;
         }
@@ -301,7 +301,7 @@ public class GetAction extends ArtifactAction {
             return null;
         }
         String[] interval = ranges[0].split("-");
-        if ( (interval.length == 0) || (interval.length > 2)) {
+        if ((interval.length == 0) || (interval.length > 2)) {
             log.debug("Ignore Range with invalid interval: " + range);
             return null;
         }
@@ -318,11 +318,11 @@ public class GetAction extends ArtifactAction {
                 log.debug("Ignore Range with invalid interval: " + range);
                 return null;
             }
-            if (end >= contentLength -1 ) {
+            if (end >= contentLength - 1) {
                 end = contentLength - 1;
             }
             SortedSet<ByteRange> result = new TreeSet<ByteRange>();
-            result.add(new ByteRange(start, end-start+1));
+            result.add(new ByteRange(start, end - start + 1));
             return result;
         } catch (NumberFormatException e) {
             log.debug("Ignore illegal range value in: " + range);
