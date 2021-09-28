@@ -42,6 +42,14 @@ Multiple values of the permission granting service resourceID(s) may be provided
 settings. All services will be consulted but a single positive result is sufficient to grant permission for an 
 action.
 
+Another set of optional keys configure raven to prioritize sites returned in a transfer, with higher priority
+sites first in the list of transfer URL's to GET or PUT a file.
+```
+org.opencadc.raven.putPreference={storage site name}
+{storage site name).resourceID={storage site resourceID}
+{storage site name).namespaces={comma delimited list of namespaces}
+```
+
 **For developer testing only:** To disable authorization checking (via `readGrantProvider` or `writeGrantProvider`
 services), add the following configuration entry to raven.properties:
 ```
@@ -63,6 +71,10 @@ ivo://ivoa.net/std/UMS#login-0.1 = ivo://cadc.nrc.ca/gms
 
 ivo://ivoa.net/std/CDP#delegate-1.0 = ivo://cadc.nrc.ca/cred
 ivo://ivoa.net/std/CDP#proxy-1.0 = ivo://cadc.nrc.ca/cred
+
+org.opencadc.raven.putPreference=@CADC
+@CADC.resourceID=ivo://cadc.nrc.ca/cadc/minoc
+@CADC.namespaces=cadc:IRIS/ cadc:CGPS/
 ```
 
 ### cadcproxy.pem

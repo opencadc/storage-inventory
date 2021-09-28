@@ -69,10 +69,17 @@
 package org.opencadc.raven;
 
 import ca.nrc.cadc.util.Log4jInit;
+import ca.nrc.cadc.util.PropertiesReader;
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
+import java.util.Set;
+import java.util.SortedSet;
+import java.util.TreeSet;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
@@ -99,6 +106,52 @@ public class ProtocolsGeneratorTest {
         for (int i = 1; i < sites.size() - 1; i++) {
             Assert.assertFalse(!sites.get(i - 1).getAllowWrite() && sites.get(i).getAllowWrite());
         }
+    }
+
+    @Test
+    public void testPrioritizePushToSites() throws Exception {
+
+        URI readOnlySite = URI.create("ivo://readonly-site");
+        URI cadcSite = URI.create("ivo://cadc-site");
+        URI otherSite = URI.create("ivo://other-site");
+
+        List<String> cadcNS = Arrays.asList("cadc:CFHT/", "cadc:IRIS/", "cadc:CGPS/");
+        List<String> gemNS = Arrays.asList("gemini:GEMINI/", "gem:GEM/");
+        List<String> otherNS = Arrays.asList("mast:HST/", "foo:bar/");
+
+        SortedSet<StorageSite> sites = new TreeSet<>();
+        sites.add(new StorageSite(cadcSite, "cadc", false, true));
+        sites.add(new StorageSite(readOnlySite, "read-only", true, false));
+        sites.add(new StorageSite(otherSite, "other", true, true));
+
+        Map<URI, StorageSiteRule> rules = new HashMap<>();
+        rules.put(cadcSite, new StorageSiteRule(cadcNS));
+        rules.put(readOnlySite, new StorageSiteRule(gemNS));
+        rules.put(otherSite, new StorageSiteRule(otherNS));
+
+        // artifact with no preferences in config, returns two read-write sites
+        List<StorageSite> ret = ProtocolsGenerator.prioritizePushToSites(sites, URI.create("get:SITE/file.ext"), rules);
+        Assert.assertEquals(2, ret.size());
+        Assert.assertEquals(cadcSite, ret.get(0).getResourceID());
+        Assert.assertEquals(otherSite, ret.get(1).getResourceID());
+
+        // artifact with namespace in read-only site, returns two read-write sites
+        ret = ProtocolsGenerator.prioritizePushToSites(sites, URI.create("gemini:GEMINI/file.ext"), rules);
+        Assert.assertEquals(2, ret.size());
+        Assert.assertEquals(cadcSite, ret.get(0).getResourceID());
+        Assert.assertEquals(otherSite, ret.get(1).getResourceID());
+
+        // artifact with cadc-site namespace, returns two read-write sites, cadc-ste first
+        ret = ProtocolsGenerator.prioritizePushToSites(sites, URI.create("cadc:CGPS/file.ext"), rules);
+        Assert.assertEquals(2, ret.size());
+        Assert.assertEquals(cadcSite, ret.get(0).getResourceID());
+        Assert.assertEquals(otherSite, ret.get(1).getResourceID());
+
+        // artifact with other-site namespace, return two read-write sites, other-site first
+        ret = ProtocolsGenerator.prioritizePushToSites(sites, URI.create("foo:bar/file.ext"), rules);
+        Assert.assertEquals(2, ret.size());
+        Assert.assertEquals(otherSite, ret.get(0).getResourceID());
+        Assert.assertEquals(cadcSite, ret.get(1).getResourceID());
     }
 }
 

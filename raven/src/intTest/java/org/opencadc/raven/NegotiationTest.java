@@ -67,8 +67,10 @@
 
 package org.opencadc.raven;
 
+import ca.nrc.cadc.auth.AuthMethod;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.reg.Standards;
+import ca.nrc.cadc.reg.client.RegistryClient;
 import ca.nrc.cadc.util.Log4jInit;
 import ca.nrc.cadc.vos.Direction;
 import ca.nrc.cadc.vos.Protocol;
@@ -105,12 +107,10 @@ public class NegotiationTest extends RavenTest {
     private static final Logger log = Logger.getLogger(NegotiationTest.class);
     
     static {
-        Log4jInit.setLevel("org.opencadc.raven", Level.INFO);
+        Log4jInit.setLevel("org.opencadc.raven", Level.DEBUG);
         Log4jInit.setLevel("ca.nrc.cadc.db", Level.INFO);
     }
-    
-    
-    
+
     ArtifactDAO artifactDAO;
     StorageSiteDAO siteDAO;
     
@@ -475,6 +475,98 @@ public class NegotiationTest extends RavenTest {
                     }
                 }
             });
+        } catch (Exception e) {
+            log.error("unexpected exception", e);
+            Assert.fail("unexpected exception: " + e);
+        }
+    }
+
+    @Test
+    public void testPrioritizedSites() throws Exception {
+        /**
+         * org.opencadc.raven.putPreference=@SITE1
+         * @SITE1.resourceID=ivo://negotiation-test-site1
+         * @SITE1.namespaces=cadc:TEST/
+         *
+         * org.opencadc.raven.putPreference=@SITE2
+         * @SITE2.resourceID=ivo://negotiation-test-site2
+         * @SITE2.namespaces=cadc:INT-TEST/
+         *
+         * org.opencadc.raven.putPreference=@SITE3
+         * @SITE3.resourceID=ivo://negotiation-test-site3
+         * @SITE3.namespaces=cadc:TEST/
+         */
+
+        URI testSite1ID = URI.create("ivo://negotiation-test-site1");
+        URI testSite2ID = URI.create("ivo://negotiation-test-site2");
+        URI testSite3ID = URI.create("ivo://negotiation-test-site3");
+
+        // testSite1 is readonly, testSite1&2 are read write
+        StorageSite testSite1 = new StorageSite(testSite1ID, "testSite1", true, false);
+        StorageSite testSite2 = new StorageSite(testSite2ID, "testSite2", true, true);
+        StorageSite testSite3 = new StorageSite(testSite3ID, "testSite3", true, true);
+
+        RegistryClient registryClient = new RegistryClient();
+        URL testSite2URL = registryClient.getServiceURL(testSite2ID, Standards.SI_FILES, AuthMethod.CERT);
+        URL testSite3URL = registryClient.getServiceURL(testSite3ID, Standards.SI_FILES, AuthMethod.CERT);
+
+        try {
+            Subject.doAs(userSubject, new PrivilegedExceptionAction<Object>() {
+                public Object run() throws Exception {
+
+                    URI artifactURI = URI.create("cadc:TEST/" + UUID.randomUUID() + ".fits");
+
+                    try {
+                        // add readonly storage site
+                        siteDAO.put(testSite1);
+
+                        List<Protocol> protos = new ArrayList<>();
+                        Protocol p = new Protocol(VOS.PROTOCOL_HTTPS_GET);
+                        p.setSecurityMethod(Standards.SECURITY_METHOD_CERT);
+                        protos.add(p);
+
+                        Transfer transfer = new Transfer(artifactURI, Direction.pushToVoSpace, protos);
+                        transfer.version = VOS.VOSPACE_21;
+                        Transfer response = negotiate(transfer);
+
+                        // read only storage site should not return an PUT endpoints
+                        Assert.assertEquals(0, response.getAllEndpoints().size());
+
+                        // add read write storage site
+                        siteDAO.put(testSite2);
+                        response = negotiate(transfer);
+
+                        // read write storage site should return a single endpoint
+                        Assert.assertEquals(1, response.getProtocols().size());
+                        Protocol actual = response.getProtocols().get(0);
+                        log.debug("single rw endpoint: " + actual.getEndpoint());
+                        Assert.assertNotNull(actual.getEndpoint());
+                        Assert.assertEquals(p.getUri(), actual.getUri());
+                        Assert.assertTrue(actual.getEndpoint().startsWith(testSite2URL.toString()));
+
+                        // add read write and preferred site
+                        siteDAO.put(testSite3);
+                        response = negotiate(transfer);
+
+                        // preferred storage site should be first in the list of endpoints
+                        Assert.assertEquals(2, response.getAllEndpoints().size());
+                        Protocol preferred = response.getProtocols().get(0);
+                        Protocol other = response.getProtocols().get(1);
+                        log.debug("preferred: " + preferred.getEndpoint());
+                        log.debug("other: " + other.getEndpoint());
+                        Assert.assertTrue(preferred.getEndpoint().startsWith(testSite3URL.toString()));
+                        Assert.assertTrue(other.getEndpoint().startsWith(testSite2URL.toString()));
+
+                        return null;
+
+                    } finally {
+                        // cleanup sites
+                        siteDAO.delete(testSite1.getID());
+                        siteDAO.delete(testSite2.getID());
+                        siteDAO.delete(testSite3.getID());
+                    }
+                }
+           });
         } catch (Exception e) {
             log.error("unexpected exception", e);
             Assert.fail("unexpected exception: " + e);

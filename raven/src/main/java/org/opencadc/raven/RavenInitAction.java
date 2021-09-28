@@ -77,6 +77,7 @@ import ca.nrc.cadc.vosi.AvailabilityClient;
 import java.io.File;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -335,8 +336,8 @@ public class RavenInitAction extends InitAction {
             }
 
             if (resourceID != null && namespace != null) {
-                StorageSiteRule storageSitePreference = new StorageSiteRule(namespaces);
-                prefs.put(resourceID, storageSitePreference);
+                StorageSiteRule rule = new StorageSiteRule(Arrays.asList(namespace.split("\\s+")));
+                prefs.put(resourceID, rule);
             }
         }
         if (sb.length() > 0) {

@@ -113,15 +113,17 @@ public class ProtocolsGenerator {
     private final File publicKeyFile;
     private final File privateKeyFile;
     private final Map<URI, Availability> siteAvailabilities;
+    private final Map<URI, StorageSiteRule> siteRules;
 
 
     public ProtocolsGenerator(ArtifactDAO artifactDAO, File publicKeyFile, File privateKeyFile, String user,
-                              Map<URI, Availability> siteAvailabilities) {
+                              Map<URI, Availability> siteAvailabilities, Map<URI, StorageSiteRule> siteRules) {
         this.artifactDAO = artifactDAO;
         this.user = user;
         this.publicKeyFile = publicKeyFile;
         this.privateKeyFile = privateKeyFile;
         this.siteAvailabilities = siteAvailabilities;
+        this.siteRules = siteRules;
     }
 
     List<Protocol> getProtocols(Transfer transfer) throws ResourceNotFoundException, IOException {
@@ -244,14 +246,51 @@ public class ProtocolsGenerator {
         return protos;
     }
 
+    static List<StorageSite> prioritizePushToSites(Set<StorageSite> storageSites, URI artifactURI,
+                                                   Map<URI, StorageSiteRule> siteRules) {
+        // pushTo storage sites in priority order
+        List<StorageSite> orderedSites = new ArrayList<>();
+
+        // for each remote storage site in global
+        for (StorageSite storageSite : storageSites) {
+            // skip the storage site if it doesn't allow writes
+            if (!storageSite.getAllowWrite()) {
+                continue;
+            }
+
+            boolean added = false;
+            for (Map.Entry<URI, StorageSiteRule> ruleMap : siteRules.entrySet()) {
+                // check if a rule resourceID matches a storage site resourceID
+                if (ruleMap.getKey().equals(storageSite.getResourceID())) {
+                    // if the rule namespace matches the Artifact namespace
+                    for (String namespace : ruleMap.getValue().getNamespaces()) {
+                        if (artifactURI.toASCIIString().startsWith(namespace)) {
+                            // found a matching namespace for this storage site
+                            // insert at the front of the list
+                            orderedSites.add(0, storageSite);
+                            added = true;
+                            break;
+                        }
+                    }
+                }
+            }
+            if (!added) {
+                orderedSites.add(storageSite);
+            }
+        }
+        return orderedSites;
+    }
+
     private List<Protocol> doPushTo(URI artifactURI, Transfer transfer, String authToken) throws IOException {
         RegistryClient regClient = new RegistryClient();
         StorageSiteDAO storageSiteDAO = new StorageSiteDAO(artifactDAO);
-        Set<StorageSite> sites = storageSiteDAO.list(); // this set could be cached
+        Set<StorageSite> storageSites = storageSiteDAO.list(); // this set could be cached
 
         List<Protocol> protos = new ArrayList<>();
+        List<StorageSite> orderedSites = prioritizePushToSites(storageSites, artifactURI, this.siteRules);
+
         // produce URLs for all writable sites
-        for (StorageSite storageSite : sites) {
+        for (StorageSite storageSite : orderedSites) {
             // check if site is currently offline
             if (!isAvailable(storageSite.getResourceID())) {
                 log.warn("storage site is offline: " + storageSite.getResourceID());
