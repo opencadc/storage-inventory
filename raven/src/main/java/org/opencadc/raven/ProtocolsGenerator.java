@@ -373,6 +373,7 @@ public class ProtocolsGenerator {
 
     private boolean isAvailable(URI resourceID) {
         Availability availability = siteAvailabilities.get(resourceID);
+        log.debug("checking availablity: " + resourceID + " " + availability);
         if (availability != null && !availability.isAvailable()) {
             return false;
         }
