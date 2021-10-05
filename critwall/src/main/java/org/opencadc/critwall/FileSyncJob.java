@@ -77,6 +77,7 @@ import ca.nrc.cadc.net.FileContent;
 import ca.nrc.cadc.net.HttpGet;
 import ca.nrc.cadc.net.HttpPost;
 import ca.nrc.cadc.net.PreconditionFailedException;
+import ca.nrc.cadc.net.RangeNotSatisfiableException;
 import ca.nrc.cadc.net.ResourceAlreadyExistsException;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
@@ -352,7 +353,12 @@ public class FileSyncJob implements Runnable {
         HttpPost post = new HttpPost(transferURL, content, true);
         post.setConnectionTimeout(6000); // ms
         post.setReadTimeout(60000);      // ms
-        post.prepare();
+        try {
+            post.prepare();
+        } catch (RangeNotSatisfiableException unexpected) {
+            log.debug("error type: " + unexpected.getClass());
+            throw new RuntimeException(unexpected.getMessage());
+        }
         log.debug("post prepare done");
 
         TransferReader reader = new TransferReader();
