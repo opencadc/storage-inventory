@@ -165,7 +165,7 @@ public class ArtifactValidator {
         // if (L==global) delete Artifact, if (L==storage) delete Artifact only if
         // remote has multiple copies and create DeletedStorageLocationEvent
         log.debug("checking explanation 0");
-        Artifact remote = getRemoteArtifact(local.getURI());
+        Artifact remote = getRemoteArtifact(local.getID());
         if (remote != null) {
             boolean multipleCopies = false;
             // if L == storage, get the Artifact count from global
@@ -203,8 +203,7 @@ public class ArtifactValidator {
                 } else {
                     log.info(String.format(
                         "ArtifactValidator.didNotDeleteArtifact Artifact.id=%s Artifact.uri=%s "
-                            + "reason=local-filter-policy-change, but single copy in local storage ",
-                        local.getID(), local.getURI()));
+                            + "reason=local-filter-policy-change", local.getID(), local.getURI()));
                 }
 
                 log.debug("committing transaction");
@@ -638,11 +637,11 @@ public class ArtifactValidator {
     /**
      * Get a remote Artifact
      */
-    Artifact getRemoteArtifact(URI uri)
+    Artifact getRemoteArtifact(UUID id)
         throws InterruptedException, IOException, ResourceNotFoundException, TransientException {
 
         final TapClient<Artifact> tapClient = new TapClient<>(this.resourceID);
-        final String query = String.format("%s WHERE uri = '%s'", ArtifactRowMapper.BASE_QUERY, uri.toASCIIString());
+        final String query = String.format("%s WHERE id = '%s'", ArtifactRowMapper.BASE_QUERY, id);
         log.debug("\nExecuting query '" + query + "'\n");
         ResourceIterator<Artifact> results = tapClient.execute(query, new ArtifactRowMapper());
         if (results.hasNext()) {
