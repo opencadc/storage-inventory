@@ -70,6 +70,7 @@ package org.opencadc.minoc;
 import ca.nrc.cadc.io.ByteCountOutputStream;
 import ca.nrc.cadc.io.WriteException;
 import ca.nrc.cadc.net.HttpTransfer;
+import ca.nrc.cadc.net.RangeNotSatisfiableException;
 import ca.nrc.cadc.util.CaseInsensitiveStringComparator;
 import ca.nrc.cadc.util.StringUtil;
 import java.util.ArrayList;
@@ -165,12 +166,11 @@ public class GetAction extends ArtifactAction {
                             syncOutput.setHeader(CONTENT_LENGTH, byteRange.getLength());
                             storageAdapter.get(storageLocation, bcos, rangeSet);
                         }
-                    } catch (NotSatisfiableRangeException e) {
+                    } catch (RangeNotSatisfiableException e) {
                         log.debug("Invalid Range - offset greater then the content length:" + range);
                         syncOutput.setHeader(CONTENT_RANGE, "bytes */" + artifact.getContentLength());
                         syncOutput.setHeader(CONTENT_LENGTH, "0");
-                        syncOutput.setCode(416);  //  Range not satisfiable
-                        return;
+                        throw e;
                     }
                 }
                 storageAdapter.get(storageLocation, bcos);
@@ -283,13 +283,7 @@ public class GetAction extends ArtifactAction {
         }
     }
 
-    /**
-     * Range is outside the file content
-     */
-    class NotSatisfiableRangeException extends IllegalArgumentException{
-    }
-
-    SortedSet<ByteRange> parseRange(String range, long contentLength) throws NotSatisfiableRangeException {
+    SortedSet<ByteRange> parseRange(String range, long contentLength) throws RangeNotSatisfiableException {
         String sanitizedRange = range.replaceAll("\\s","");  // remove whitespaces
         if (!sanitizedRange.startsWith("bytes=")) {
             log.debug("Ignore Range with invalid unit (only bytes supported): " + range);
@@ -308,7 +302,7 @@ public class GetAction extends ArtifactAction {
         try {
             Long start = new Long(interval[0].length() == 0 ? "0" : interval[0]);
             if (start > contentLength - 1) {
-                throw new NotSatisfiableRangeException();
+                throw new RangeNotSatisfiableException("Offset greater than size of file");
             }
             long end = contentLength - 1;
             if (interval.length == 2) {

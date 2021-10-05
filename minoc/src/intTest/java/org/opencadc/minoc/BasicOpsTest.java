@@ -73,11 +73,11 @@ import ca.nrc.cadc.net.HttpGet;
 import ca.nrc.cadc.net.HttpPost;
 import ca.nrc.cadc.net.HttpTransfer;
 import ca.nrc.cadc.net.HttpUpload;
+import ca.nrc.cadc.net.RangeNotSatisfiableException;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.util.Log4jInit;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
-import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URI;
@@ -305,7 +305,7 @@ public class BasicOpsTest extends MinocTest {
             get.setRequestProperty("Range", "bytes=" + data.length + "-");  // offset = content length
             Subject.doAs(userSubject, new RunnableAction(get));
             Assert.assertEquals(416, get.getResponseCode());
-            Assert.assertEquals(IOException.class, get.getThrowable().getClass());
+            Assert.assertEquals(RangeNotSatisfiableException.class, get.getThrowable().getClass());
 
             // delete
             HttpDelete delete = new HttpDelete(artifactURL, false);

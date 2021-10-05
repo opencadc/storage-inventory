@@ -67,6 +67,7 @@
 
 package org.opencadc.minoc;
 
+import ca.nrc.cadc.net.RangeNotSatisfiableException;
 import ca.nrc.cadc.rest.SyncInput;
 import ca.nrc.cadc.util.Log4jInit;
 import java.io.IOException;
@@ -103,13 +104,13 @@ public class GetActionTest {
         }
     }
 
-    private void assertIgnoredRange(String range, long contentLength) throws GetAction.NotSatisfiableRangeException {
+    private void assertIgnoredRange(String range, long contentLength) throws RangeNotSatisfiableException {
         GetAction action = new GetAction(false);
         Assert.assertNull(action.parseRange(range, contentLength));
     }
     
     private void assertCorrectRange(String range, long contentLength, long expectedOffset, long expectedLength)
-            throws GetAction.NotSatisfiableRangeException {
+            throws RangeNotSatisfiableException {
         GetAction action = new GetAction(false);
         SortedSet<ByteRange> byteRangeSet = action.parseRange(range, contentLength);
         Assert.assertEquals(1, byteRangeSet.size());
@@ -137,7 +138,7 @@ public class GetActionTest {
         GetAction action = new GetAction(false);
         Assert.assertThrows(Exception.class, () -> {
             action.parseRange("bytes=30-40", 20); });
-        Assert.assertThrows(GetAction.NotSatisfiableRangeException.class, () -> {
+        Assert.assertThrows(RangeNotSatisfiableException.class, () -> {
             action.parseRange("bytes=30-", 20); });
     }
     
