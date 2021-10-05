@@ -69,105 +69,55 @@
 
 package org.opencadc.luskan;
 
-import ca.nrc.cadc.auth.AuthMethod;
-import ca.nrc.cadc.auth.AuthenticationUtil;
-import ca.nrc.cadc.auth.NotAuthenticatedException;
-import ca.nrc.cadc.auth.SSLUtil;
-import ca.nrc.cadc.net.HttpGet;
-import ca.nrc.cadc.reg.Standards;
-import ca.nrc.cadc.reg.client.RegistryClient;
-import ca.nrc.cadc.util.FileUtil;
-import ca.nrc.cadc.util.Log4jInit;
-import java.io.File;
-import java.net.URL;
-import java.security.AccessControlException;
-import java.security.PrivilegedExceptionAction;
-import javax.security.auth.Subject;
-import org.apache.log4j.Level;
+import ca.nrc.cadc.tap.parser.ParserUtil;
+import ca.nrc.cadc.tap.parser.navigator.FromItemNavigator;
+import ca.nrc.cadc.tap.parser.navigator.ReferenceNavigator;
+import ca.nrc.cadc.tap.parser.navigator.SelectNavigator;
+import java.util.List;
+import net.sf.jsqlparser.expression.Expression;
+import net.sf.jsqlparser.statement.select.PlainSelect;
+import net.sf.jsqlparser.statement.select.SelectItem;
 import org.apache.log4j.Logger;
-import org.junit.Assert;
-import org.junit.Test;
 
-public class AuthQueryTest {
-    private static final Logger log = Logger.getLogger(AuthQueryTest.class);
+/**
+ * Checks there is a single Artifact table in the FROM clause,
+ * then applies the InventoryFunctionConverter to the SELECT, WHERE, and GROUP BY clauses.
+ *
+ */
+public class InventoryFunctionNavigator extends SelectNavigator {
+    private static final Logger log = Logger.getLogger(InventoryFunctionNavigator.class);
 
-    protected URL luskanURL;
-    protected Subject anonymousSubject;
-    protected Subject authorizedSubject;
-    protected Subject notAuthorizedSubject;
+    InventoryFunctionConverter inventoryFunctionConverter;
 
-    static {
-        Log4jInit.setLevel("org.opencadc.luskan", Level.INFO);
+    public InventoryFunctionNavigator() {
+        super(new InventoryFunctionConverter(), new ReferenceNavigator(), new FromItemNavigator());
+        this.inventoryFunctionConverter = (InventoryFunctionConverter) this.expressionNavigator;
     }
 
-    public AuthQueryTest() {
-        RegistryClient regClient = new RegistryClient();
-        luskanURL = regClient.getServiceURL(Constants.RESOURCE_ID, Standards.TAP_10, AuthMethod.CERT);
-        log.debug("luskan URL: " + luskanURL);
+    @Override
+    public void visit(PlainSelect ps) {
+        log.debug("visit(PlainSelect) " + ps);
+        this.inventoryFunctionConverter.setFromTables(ParserUtil.getFromTableList(ps));
 
-        anonymousSubject = AuthenticationUtil.getAnonSubject();
+        // select list
+        List<SelectItem> selectItems = ps.getSelectItems();
+        for (SelectItem selectItem : selectItems) {
+            selectItem.accept(inventoryFunctionConverter);
+        }
 
-        File cert = FileUtil.getFileFromResource("luskan-test-noauth.pem", AuthQueryTest.class);
-        notAuthorizedSubject = SSLUtil.createSubject(cert);
-        log.debug("not authorized Subject: " + notAuthorizedSubject);
+        // where clause
+        Expression where = ps.getWhere();
+        if (where != null) {
+            where.accept(inventoryFunctionConverter);
+        }
 
-        cert = FileUtil.getFileFromResource("luskan-test-auth.pem", AuthQueryTest.class);
-        authorizedSubject = SSLUtil.createSubject(cert);
-        log.debug("authorized Subject: " + authorizedSubject);
-    }
-
-    @Test
-    public void anonymousTest() throws Exception {
-        String query = luskanURL.toExternalForm() + "/sync?LANG=ADQL&QUERY=SELECT+TOP+1+*+FROM+inventory.Artifact";
-        log.debug("query: " + query);
-        HttpGet httpGet = new HttpGet(new URL(query), true);
-        Subject.doAs(anonymousSubject, new PrivilegedExceptionAction<Object>() {
-            public Object run() throws Exception {
-                try {
-                    httpGet.prepare();
-                    Assert.fail("anonymous access should throw exception");
-                } catch (NotAuthenticatedException expected) {
-                    Assert.assertEquals(401, httpGet.getResponseCode());
-                }
-                return null;
+        // group by clause
+        List<Expression> groupBys = ps.getGroupByColumnReferences();
+        if (groupBys != null) {
+            for (Expression groupBy : groupBys) {
+                groupBy.accept(inventoryFunctionConverter);
             }
-        });
-    }
-
-    @Test
-    public void notAuthorizedTest() throws Exception {
-        String query = luskanURL.toExternalForm() + "/sync?LANG=ADQL&QUERY=SELECT+TOP+1+*+FROM+inventory.Artifact";
-        log.debug("query: " + query);
-        HttpGet httpGet = new HttpGet(new URL(query), true);
-        Subject.doAs(notAuthorizedSubject, new PrivilegedExceptionAction<Object>() {
-            public Object run() throws Exception {
-                try {
-                    httpGet.prepare();
-                    Assert.fail("unauthorized access should throw exception");
-                } catch (AccessControlException expected) {
-                    Assert.assertEquals(403, httpGet.getResponseCode());
-                }
-                return null;
-            }
-        });
-    }
-
-    @Test
-    public void authorizedTest() throws Exception {
-        String query = luskanURL.toExternalForm() + "/sync?LANG=ADQL&QUERY=SELECT+TOP+1+*+FROM+inventory.Artifact";
-        log.debug("query: " + query);
-        HttpGet httpGet = new HttpGet(new URL(query), true);
-        Subject.doAs(authorizedSubject, new PrivilegedExceptionAction<Object>() {
-            public Object run() throws Exception {
-                try {
-                    httpGet.prepare();
-                    Assert.assertEquals(httpGet.getResponseCode(), 200);
-                } catch (Exception e) {
-                    Assert.fail("authorized access should not throw exception");
-                }
-                return null;
-            }
-        });
+        }
     }
 
 }

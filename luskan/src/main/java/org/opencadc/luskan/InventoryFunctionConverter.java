@@ -69,105 +69,75 @@
 
 package org.opencadc.luskan;
 
-import ca.nrc.cadc.auth.AuthMethod;
-import ca.nrc.cadc.auth.AuthenticationUtil;
-import ca.nrc.cadc.auth.NotAuthenticatedException;
-import ca.nrc.cadc.auth.SSLUtil;
-import ca.nrc.cadc.net.HttpGet;
-import ca.nrc.cadc.reg.Standards;
-import ca.nrc.cadc.reg.client.RegistryClient;
-import ca.nrc.cadc.util.FileUtil;
-import ca.nrc.cadc.util.Log4jInit;
-import java.io.File;
-import java.net.URL;
-import java.security.AccessControlException;
-import java.security.PrivilegedExceptionAction;
-import javax.security.auth.Subject;
-import org.apache.log4j.Level;
+import ca.nrc.cadc.tap.parser.navigator.ExpressionNavigator;
+import java.util.ArrayList;
+import java.util.List;
+import net.sf.jsqlparser.expression.Expression;
+import net.sf.jsqlparser.expression.Function;
+import net.sf.jsqlparser.expression.operators.relational.ExpressionList;
+import net.sf.jsqlparser.schema.Column;
+import net.sf.jsqlparser.schema.Table;
 import org.apache.log4j.Logger;
-import org.junit.Assert;
-import org.junit.Test;
 
-public class AuthQueryTest {
-    private static final Logger log = Logger.getLogger(AuthQueryTest.class);
+/**
+ * Class to change a num_copies() function to cardinality(inventory.Artifact.siteLocations).
+ */
+public class InventoryFunctionConverter extends ExpressionNavigator {
+    private static final Logger log = Logger.getLogger(InventoryFunctionConverter.class);
 
-    protected URL luskanURL;
-    protected Subject anonymousSubject;
-    protected Subject authorizedSubject;
-    protected Subject notAuthorizedSubject;
+    protected List<Table> fromTables;
 
-    static {
-        Log4jInit.setLevel("org.opencadc.luskan", Level.INFO);
+    public InventoryFunctionConverter() {
+        super();
     }
 
-    public AuthQueryTest() {
-        RegistryClient regClient = new RegistryClient();
-        luskanURL = regClient.getServiceURL(Constants.RESOURCE_ID, Standards.TAP_10, AuthMethod.CERT);
-        log.debug("luskan URL: " + luskanURL);
-
-        anonymousSubject = AuthenticationUtil.getAnonSubject();
-
-        File cert = FileUtil.getFileFromResource("luskan-test-noauth.pem", AuthQueryTest.class);
-        notAuthorizedSubject = SSLUtil.createSubject(cert);
-        log.debug("not authorized Subject: " + notAuthorizedSubject);
-
-        cert = FileUtil.getFileFromResource("luskan-test-auth.pem", AuthQueryTest.class);
-        authorizedSubject = SSLUtil.createSubject(cert);
-        log.debug("authorized Subject: " + authorizedSubject);
+    public void setFromTables(List<Table> tables) {
+        this.fromTables = tables;
     }
 
-    @Test
-    public void anonymousTest() throws Exception {
-        String query = luskanURL.toExternalForm() + "/sync?LANG=ADQL&QUERY=SELECT+TOP+1+*+FROM+inventory.Artifact";
-        log.debug("query: " + query);
-        HttpGet httpGet = new HttpGet(new URL(query), true);
-        Subject.doAs(anonymousSubject, new PrivilegedExceptionAction<Object>() {
-            public Object run() throws Exception {
-                try {
-                    httpGet.prepare();
-                    Assert.fail("anonymous access should throw exception");
-                } catch (NotAuthenticatedException expected) {
-                    Assert.assertEquals(401, httpGet.getResponseCode());
-                }
-                return null;
+    @Override
+    public void visit(Function function) {
+        log.debug("visit(function) " + function);
+        if (function.getName().equalsIgnoreCase("num_copies")) {
+
+            if (this.fromTables == null || this.fromTables.size() == 0) {
+                throw new IllegalArgumentException("num_copies() requires inventory.Artifact table in FROM statement, "
+                                                       + "no tables found");
             }
-        });
-    }
 
-    @Test
-    public void notAuthorizedTest() throws Exception {
-        String query = luskanURL.toExternalForm() + "/sync?LANG=ADQL&QUERY=SELECT+TOP+1+*+FROM+inventory.Artifact";
-        log.debug("query: " + query);
-        HttpGet httpGet = new HttpGet(new URL(query), true);
-        Subject.doAs(notAuthorizedSubject, new PrivilegedExceptionAction<Object>() {
-            public Object run() throws Exception {
-                try {
-                    httpGet.prepare();
-                    Assert.fail("unauthorized access should throw exception");
-                } catch (AccessControlException expected) {
-                    Assert.assertEquals(403, httpGet.getResponseCode());
+            List<Table> artifactTables = new ArrayList<>();
+            for (Table fromTable : this.fromTables) {
+                if (fromTable.getWholeTableName().equalsIgnoreCase("inventory.Artifact")) {
+                    artifactTables.add(fromTable);
+                    log.debug("found fromTable: ");
                 }
-                return null;
             }
-        });
-    }
+            if (artifactTables.size() == 0) {
+                throw new IllegalArgumentException("num_copies() requires inventory.Artifact table in FROM statement, "
+                                                       + "table not found");
+            }
+            if (artifactTables.size() > 1) {
+                throw new IllegalArgumentException("num_copies() requires single inventory.Artifact table "
+                                                       + "in FROM statement, multiple tables found");
+            }
 
-    @Test
-    public void authorizedTest() throws Exception {
-        String query = luskanURL.toExternalForm() + "/sync?LANG=ADQL&QUERY=SELECT+TOP+1+*+FROM+inventory.Artifact";
-        log.debug("query: " + query);
-        HttpGet httpGet = new HttpGet(new URL(query), true);
-        Subject.doAs(authorizedSubject, new PrivilegedExceptionAction<Object>() {
-            public Object run() throws Exception {
-                try {
-                    httpGet.prepare();
-                    Assert.assertEquals(httpGet.getResponseCode(), 200);
-                } catch (Exception e) {
-                    Assert.fail("authorized access should not throw exception");
-                }
-                return null;
+            Table artifactTable = artifactTables.get(0);
+
+            Column column = new Column();
+            column.setColumnName("siteLocations");
+            if (artifactTable.getAlias() != null) {
+                column.setTable(new Table(null, artifactTable.getAlias()));
+            } else {
+                column.setTable(artifactTable);
             }
-        });
+
+            List<Expression> expressions = new ArrayList<>();
+            expressions.add(column);
+            ExpressionList parameters = new ExpressionList();
+            parameters.setExpressions(expressions);
+            function.setName("cardinality");
+            function.setParameters(parameters);
+        }
     }
 
 }

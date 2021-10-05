@@ -759,7 +759,7 @@ public class ArtifactDAOTest {
         int num = 10;
         try {
             int numArtifacts = 0;
-            int numExpected = 0;
+            int numStuffExpected = 0;
             // artifacts with storageLocation
             String collection = "STUFF";
             for (int i = 0; i < num; i++) {
@@ -777,7 +777,7 @@ public class ArtifactDAOTest {
                 log.debug("put: " + a);
                 numArtifacts++;
                 if (collection.equals("STUFF")) {
-                    numExpected++;
+                    numStuffExpected++;
                 }
             }
             // some artifacts with no storageLocation
@@ -796,14 +796,36 @@ public class ArtifactDAOTest {
                 log.debug("put: " + a);
                 numArtifacts++;
                 if (collection.equals("STUFF")) {
-                    numExpected++;
+                    numStuffExpected++;
+                }
+            }
+            // some artifacts with siteLocations
+            UUID siteID = UUID.randomUUID();
+            int numSiteExpected = 0;
+            collection = "STUFF";
+            for (int i = 2 * num; i < 3 * num; i++) {
+                if (i == num + num / 2) {
+                    collection = "NONSENSE";
+                }
+                Artifact a = new Artifact(
+                        URI.create("cadc:" + collection + "/filename" + i),
+                        URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"),
+                        new Date(),
+                        new Long(666L));
+                a.siteLocations.add(new SiteLocation(siteID));
+                originDAO.put(a);
+                log.debug("put: " + a);
+                numArtifacts++;
+                numSiteExpected++;
+                if (collection.equals("STUFF")) {
+                    numStuffExpected++;
                 }
             }
             log.info("added: " + numArtifacts);
             
             log.info("count all...");
             int count = 0;
-            try (ResourceIterator<Artifact> iter = originDAO.iterator(null, null, false)) {
+            try (ResourceIterator<Artifact> iter = originDAO.iterator(null, false)) {
                 while (iter.hasNext()) {
                     Artifact actual = iter.next();
                     count++;
@@ -822,14 +844,27 @@ public class ArtifactDAOTest {
                     Assert.assertTrue("STUFF", actual.getURI().toASCIIString().startsWith("cadc:STUFF/"));
                 }
             }
-            Assert.assertEquals("count", numExpected, count);
+            Assert.assertEquals("count", numStuffExpected, count);
+            
+            log.info("count vs siteID...");
+            count = 0;
+            try (ResourceIterator<Artifact> iter = originDAO.iterator(siteID, null, false)) {
+                while (iter.hasNext()) {
+                    Artifact actual = iter.next();
+                    count++;
+                    log.info("found: " + actual.getURI());
+                    Assert.assertFalse("siteID", actual.siteLocations.isEmpty());
+                    Assert.assertEquals("siteID", siteID, actual.siteLocations.iterator().next().getSiteID());
+                }
+            }
+            Assert.assertEquals("count", numSiteExpected, count);
             
             log.info("count in buckets...");
             count = 0;
             for (byte b = 0; b < 16; b++) {
                 String bpre = HexUtil.toHex(b).substring(1);
                 log.debug("bucket prefix: " + bpre);
-                try (ResourceIterator<Artifact> iter = originDAO.iterator(null, bpre, false)) {
+                try (ResourceIterator<Artifact> iter = originDAO.iterator(bpre, false)) {
                     while (iter.hasNext()) {
                         Artifact actual = iter.next();
                         count++;
@@ -853,7 +888,7 @@ public class ArtifactDAOTest {
                     }
                 }
             }
-            Assert.assertEquals("count", numExpected, count);
+            Assert.assertEquals("count", numStuffExpected, count);
             
         } catch (Exception unexpected) {
             log.error("unexpected exception", unexpected);

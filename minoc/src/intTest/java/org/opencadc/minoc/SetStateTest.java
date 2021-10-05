@@ -157,7 +157,7 @@ public class SetStateTest extends MinocTest {
             HttpUpload put = new HttpUpload(in, artifactURL);
             put.setRequestProperty(HttpTransfer.CONTENT_LENGTH, String.valueOf(content.length()));
 
-            put.setRetry(1, 0, HttpTransfer.RetryReason.TRANSIENT);
+            put.setRetry(0, 0, HttpTransfer.RetryReason.TRANSIENT);
             Subject.doAs(userSubject, new RunnableAction(put));
             int responseCode = put.getResponseCode();
             log.info(testMethod + " put response: " + responseCode + " " + put.getThrowable());
@@ -169,7 +169,7 @@ public class SetStateTest extends MinocTest {
             // get
             OutputStream out = new ByteArrayOutputStream();
             HttpGet get = new HttpGet(artifactURL, out);
-            get.setRetry(1, 0, HttpTransfer.RetryReason.TRANSIENT);
+            get.setRetry(0, 0, HttpTransfer.RetryReason.TRANSIENT);
             Subject.doAs(userSubject, new RunnableAction(get));
             responseCode = get.getResponseCode();
             log.info(testMethod + " get response: " + responseCode + " " + get.getThrowable());
@@ -183,7 +183,7 @@ public class SetStateTest extends MinocTest {
             Map<String,Object> postParams = new HashMap<String,Object>(2);
             postParams.put("contentEncoding", newEncoding);
             HttpPost post = new HttpPost(artifactURL, postParams, false);
-            post.setRetry(1, 0, HttpTransfer.RetryReason.TRANSIENT);
+            post.setRetry(0, 0, HttpTransfer.RetryReason.TRANSIENT);
             Subject.doAs(userSubject, new RunnableAction(post));
             responseCode = post.getResponseCode();
             log.info(testMethod + " post response: " + responseCode + " " + post.getThrowable());
@@ -195,7 +195,7 @@ public class SetStateTest extends MinocTest {
             // head
             ByteArrayOutputStream bos = new ByteArrayOutputStream();
             HttpGet head = new HttpGet(artifactURL, bos);
-            head.setRetry(1, 0, HttpTransfer.RetryReason.TRANSIENT);
+            head.setRetry(0, 0, HttpTransfer.RetryReason.TRANSIENT);
             Subject.doAs(userSubject, new RunnableAction(head));
             responseCode = head.getResponseCode();
             log.info(testMethod + " head response: " + responseCode + " " + head.getThrowable());
@@ -206,7 +206,7 @@ public class SetStateTest extends MinocTest {
 
             // delete
             HttpDelete delete = new HttpDelete(artifactURL, false);
-            delete.setRetry(1, 0, HttpTransfer.RetryReason.TRANSIENT);
+            delete.setRetry(0, 0, HttpTransfer.RetryReason.TRANSIENT);
             Subject.doAs(userSubject, new RunnableAction(delete));
             responseCode = head.getResponseCode();
             log.info(testMethod + " delete response: " + responseCode + " " + delete.getThrowable());
@@ -271,7 +271,7 @@ public class SetStateTest extends MinocTest {
             in = new ByteArrayInputStream(data);
             put = new HttpUpload(in, artifactURL);
             put.setRequestProperty(HttpTransfer.CONTENT_LENGTH, String.valueOf(content.length()));
-	    put.setRetry(1, 0, HttpTransfer.RetryReason.TRANSIENT);
+	    put.setRetry(0, 0, HttpTransfer.RetryReason.TRANSIENT);
             Subject.doAs(userSubject, new RunnableAction(put));
             responseCode = put.getResponseCode();
             log.info(testMethod + " put response: " + responseCode + " " + put.getThrowable());
@@ -285,7 +285,7 @@ public class SetStateTest extends MinocTest {
             Map<String,Object> postParams = new HashMap<String,Object>(2);
             postParams.put("contentEncoding", newEncoding);
             HttpPost post = new HttpPost(artifactURL, postParams, false);
-            post.setRetry(1, 0, HttpTransfer.RetryReason.TRANSIENT);
+            post.setRetry(0, 0, HttpTransfer.RetryReason.TRANSIENT);
             Subject.doAs(userSubject, new RunnableAction(post));
             responseCode = post.getResponseCode();
             log.info(testMethod + " post response: " + responseCode + " " + post.getThrowable());
@@ -306,7 +306,7 @@ public class SetStateTest extends MinocTest {
 
             // delete
             HttpDelete delete = new HttpDelete(artifactURL, false);
-            delete.setRetry(1, 0, HttpTransfer.RetryReason.TRANSIENT);
+            delete.setRetry(0, 0, HttpTransfer.RetryReason.TRANSIENT);
             Subject.doAs(userSubject, new RunnableAction(delete));
             responseCode = delete.getResponseCode();
             log.info(testMethod + " delete response: " + responseCode + " " + delete.getThrowable());

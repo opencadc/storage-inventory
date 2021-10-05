@@ -533,6 +533,7 @@ public class SQLGenerator {
 
         private Boolean storageLocationRequired;
         private String prefix;
+        private UUID siteID;
         private String whereClause;
         private boolean ordered;
 
@@ -569,6 +570,10 @@ public class SQLGenerator {
         public void setOrderedOutput(boolean ordered) {
             this.ordered = ordered;
         }
+
+        public void setSiteID(UUID siteID) {
+            this.siteID = siteID;
+        }
         
         @Override
         public ResourceIterator<Artifact> query(DataSource ds) {
@@ -599,20 +604,32 @@ public class SQLGenerator {
                 if (ordered) {
                     sb.append(" ORDER BY uri");
                 }
-            } else {
-                if (prefix != null && whereClause != null) {
-                    sb.append(" uriBucket LIKE ? AND ( ").append(whereClause).append(" )");
-                } else if (prefix != null) {
-                    sb.append(" uriBucket LIKE ?");
-                } else if (whereClause != null) {
-                    sb.append(" (").append(whereClause).append(" )");
+            } else if (siteID != null) {
+                if (prefix != null && siteID != null) {
+                    sb.append(" uriBucket LIKE ? AND ").append("siteLocations @> ARRAY[?]");
                 } else {
-                    // trim off " WHERE"
-                    sb.delete(sb.length() - 6, sb.length());
+                    sb.append(" siteLocations @> ARRAY[?]");
                 }
                 if (ordered) {
                     sb.append(" ORDER BY uri");
                 }
+            } else if (whereClause != null) {
+                if (prefix != null && whereClause != null) {
+                    sb.append(" uriBucket LIKE ? AND ( ").append(whereClause).append(" )");
+                } else {
+                    sb.append(" (").append(whereClause).append(" )");
+                }
+                if (ordered) {
+                    sb.append(" ORDER BY uri");
+                }
+            } else if (prefix != null) {
+                sb.append(" uriBucket LIKE ?");
+                if (ordered) {
+                    sb.append(" ORDER BY uri");
+                }
+            } else {
+                // trim off " WHERE"
+                sb.delete(sb.length() - 6, sb.length());
             }
             
             String sql = sb.toString();
@@ -626,10 +643,15 @@ public class SQLGenerator {
                 PreparedStatement ps = con.prepareStatement(sql);
                 ps.setFetchSize(1000);
                 ps.setFetchDirection(ResultSet.FETCH_FORWARD);
+                int col = 1;
                 if (prefix != null) {
                     String val = prefix + "%";
                     log.debug("bucket prefix: " + val);
-                    ps.setString(1, val);
+                    ps.setString(col++, val);
+                }
+                if (siteID != null) {
+                    log.debug("siteID: " + siteID);
+                    ps.setObject(col++, siteID);
                 }
                 ResultSet rs = ps.executeQuery();
                 
