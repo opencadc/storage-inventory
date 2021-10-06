@@ -318,7 +318,7 @@ public class FileSyncJob implements Runnable {
     private List<Protocol> getDownloadURLs(URI resource, URI artifact)
         throws IOException, InterruptedException,
         ResourceAlreadyExistsException, ResourceNotFoundException,
-        TransientException, TransferParsingException {
+        TransientException, TransferParsingException, RangeNotSatisfiableException {
 
         RegistryClient regClient = new RegistryClient();
         Subject subject = AuthenticationUtil.getCurrentSubject();
@@ -353,12 +353,7 @@ public class FileSyncJob implements Runnable {
         HttpPost post = new HttpPost(transferURL, content, true);
         post.setConnectionTimeout(6000); // ms
         post.setReadTimeout(60000);      // ms
-        try {
-            post.prepare();
-        } catch (RangeNotSatisfiableException unexpected) {
-            log.debug("error type: " + unexpected.getClass());
-            throw new RuntimeException(unexpected.getMessage());
-        }
+        post.prepare();
         log.debug("post prepare done");
 
         TransferReader reader = new TransferReader();
@@ -427,7 +422,8 @@ public class FileSyncJob implements Runnable {
                 // IOException will capture this if not explicitly caught and rethrown
                 log.debug("FileSyncJob.FAIL fatal", ex);
                 throw ex;
-            } catch (MalformedURLException | ResourceNotFoundException | ResourceAlreadyExistsException | PreconditionFailedException ex) {
+            } catch (MalformedURLException | ResourceNotFoundException | ResourceAlreadyExistsException |
+                     PreconditionFailedException | RangeNotSatisfiableException ex) {
                 log.debug("FileSyncJob.FAIL remove: " + u, ex);
                 urlIterator.remove();
             } catch (IOException | TransientException ex) {
