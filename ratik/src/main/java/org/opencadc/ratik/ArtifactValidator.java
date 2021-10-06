@@ -165,12 +165,12 @@ public class ArtifactValidator {
         // if (L==global) delete Artifact, if (L==storage) delete Artifact only if
         // remote has multiple copies and create DeletedStorageLocationEvent
         log.debug("checking explanation 0");
-        Artifact remote = getRemoteArtifact(local.getID());
+        Artifact remote = getRemoteArtifact(local.getURI());
         if (remote != null) {
             boolean multipleCopies = false;
             // if L == storage, get the Artifact count from global
             if (this.remoteSite == null) {
-                Integer count = this.getRemoteArtifactCount(local.getURI());
+                Integer count = this.getRemoteArtifactCount(local.getID());
                 if (count != null && count > 1) {
                     multipleCopies = true;
                 }
@@ -637,11 +637,11 @@ public class ArtifactValidator {
     /**
      * Get a remote Artifact
      */
-    Artifact getRemoteArtifact(UUID id)
+    Artifact getRemoteArtifact(URI uri)
         throws InterruptedException, IOException, ResourceNotFoundException, TransientException {
 
         final TapClient<Artifact> tapClient = new TapClient<>(this.resourceID);
-        final String query = String.format("%s WHERE id = '%s'", ArtifactRowMapper.BASE_QUERY, id);
+        final String query = String.format("%s WHERE uri = '%s'", ArtifactRowMapper.BASE_QUERY, uri.toASCIIString());
         log.debug("\nExecuting query '" + query + "'\n");
         ResourceIterator<Artifact> results = tapClient.execute(query, new ArtifactRowMapper());
         if (results.hasNext()) {
@@ -650,12 +650,11 @@ public class ArtifactValidator {
         return null;
     }
 
-    Integer getRemoteArtifactCount(URI uri)
+    Integer getRemoteArtifactCount(UUID id)
         throws InterruptedException, IOException, ResourceNotFoundException, TransientException {
 
         final TapClient<Integer> tapClient = new TapClient<>(this.resourceID);
-        final String query = String.format("SELECT num_copies() FROM inventory.Artifact WHERE uri = '%s'",
-                                           uri.toASCIIString());
+        final String query = String.format("SELECT num_copies() FROM inventory.Artifact WHERE id = '%s'", id);
         log.debug(String.format("\nExecuting query '%s'\n", query));
         ResourceIterator<Integer> results = tapClient.execute(query, new NumCopiesRowMapper());
         Integer count = 0;
