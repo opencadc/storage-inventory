@@ -77,6 +77,7 @@ import ca.nrc.cadc.net.FileContent;
 import ca.nrc.cadc.net.HttpGet;
 import ca.nrc.cadc.net.HttpPost;
 import ca.nrc.cadc.net.PreconditionFailedException;
+import ca.nrc.cadc.net.RangeNotSatisfiableException;
 import ca.nrc.cadc.net.ResourceAlreadyExistsException;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
@@ -315,9 +316,8 @@ public class FileSyncJob implements Runnable {
 
     // Use transfer negotiation at resource URI to get list of download URLs for the artifact.
     private List<Protocol> getDownloadURLs(URI resource, URI artifact)
-        throws IOException, InterruptedException,
-        ResourceAlreadyExistsException, ResourceNotFoundException,
-        TransientException, TransferParsingException {
+        throws IOException, InterruptedException, ResourceAlreadyExistsException, ResourceNotFoundException,
+               TransientException, TransferParsingException, RangeNotSatisfiableException {
 
         RegistryClient regClient = new RegistryClient();
         Subject subject = AuthenticationUtil.getCurrentSubject();

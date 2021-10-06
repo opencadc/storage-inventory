@@ -79,6 +79,7 @@ import ca.nrc.cadc.io.WriteException;
 import ca.nrc.cadc.net.HttpGet;
 import ca.nrc.cadc.net.IncorrectContentChecksumException;
 import ca.nrc.cadc.net.IncorrectContentLengthException;
+import ca.nrc.cadc.net.RangeNotSatisfiableException;
 import ca.nrc.cadc.net.ResourceAlreadyExistsException;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
@@ -150,7 +151,8 @@ public class AdStorageAdapter implements StorageAdapter {
             MultiBufferIO tio = new MultiBufferIO();
             tio.copy(get.getInputStream(), dest);
 
-        } catch (ByteLimitExceededException | ResourceAlreadyExistsException unexpected) {
+        } catch (ByteLimitExceededException | ResourceAlreadyExistsException
+            | RangeNotSatisfiableException unexpected) {
             log.debug("error type: " + unexpected.getClass());
             throw new RuntimeException(unexpected.getMessage());
         } catch (InterruptedException | IOException ie) {
