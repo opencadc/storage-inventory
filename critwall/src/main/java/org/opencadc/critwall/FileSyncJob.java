@@ -422,8 +422,8 @@ public class FileSyncJob implements Runnable {
                 // IOException will capture this if not explicitly caught and rethrown
                 log.debug("FileSyncJob.FAIL fatal", ex);
                 throw ex;
-            } catch (MalformedURLException | ResourceNotFoundException | ResourceAlreadyExistsException |
-                     PreconditionFailedException | RangeNotSatisfiableException ex) {
+            } catch (MalformedURLException | ResourceNotFoundException | ResourceAlreadyExistsException
+                     | PreconditionFailedException | RangeNotSatisfiableException ex) {
                 log.debug("FileSyncJob.FAIL remove: " + u, ex);
                 urlIterator.remove();
             } catch (IOException | TransientException ex) {
