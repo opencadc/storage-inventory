@@ -90,6 +90,7 @@ import org.opencadc.inventory.db.EntityNotFoundException;
 import org.opencadc.inventory.query.ArtifactRowMapper;
 import org.opencadc.inventory.query.DeletedArtifactEventRowMapper;
 import org.opencadc.inventory.query.DeletedStorageLocationEventRowMapper;
+import org.opencadc.inventory.util.ArtifactSelector;
 import org.opencadc.tap.TapClient;
 import org.opencadc.tap.TapRowMapper;
 
@@ -103,6 +104,7 @@ public class ArtifactValidator {
     private final ArtifactDAO artifactDAO;
     private final URI resourceID;
     private final StorageSite remoteSite;
+    private final ArtifactSelector artifactSelector;
 
     private final DeletedArtifactEventDAO deletedArtifactEventDAO;
     private final DeletedStorageLocationEventDAO deletedStorageLocationEventDAO;
@@ -115,10 +117,12 @@ public class ArtifactValidator {
      * @param resourceID    identifier for the remote query service
      * @param remoteSite    identifier for remote file service, null when local is a storage site
      */
-    public ArtifactValidator(ArtifactDAO artifactDAO, URI resourceID, StorageSite remoteSite) {
+    public ArtifactValidator(ArtifactDAO artifactDAO, URI resourceID, StorageSite remoteSite,
+                             ArtifactSelector artifactSelector) {
         this.artifactDAO = artifactDAO;
         this.resourceID = resourceID;
         this.remoteSite = remoteSite;
+        this.artifactSelector = artifactSelector;
 
         this.transactionManager = this.artifactDAO.getTransactionManager();
         this.deletedArtifactEventDAO = new DeletedArtifactEventDAO(this.artifactDAO);
@@ -161,70 +165,71 @@ public class ArtifactValidator {
         throws InterruptedException, IOException, ResourceNotFoundException, TransientException {
 
         // explanation0: filter policy at L changed to exclude artifact in R
-        // evidence: Artifact in R without filter
+        // evidence: R uses a filter policy AND Artifact in R without filter
         // if (L==global) delete Artifact, if (L==storage) delete Artifact only if
         // remote has multiple copies and create DeletedStorageLocationEvent
         log.debug("checking explanation 0");
-        Artifact remote = getRemoteArtifact(local.getURI());
-        if (remote != null) {
-            boolean multipleCopies = false;
-            // if L == storage, get the Artifact count from global
-            if (this.remoteSite == null) {
-                Integer count = this.getRemoteArtifactCount(local.getID());
-                if (count != null && count > 1) {
-                    multipleCopies = true;
+        if (this.artifactSelector.getConstraint() != null) {
+            Artifact remote = getRemoteArtifact(local.getURI());
+            if (remote != null) {
+                boolean multipleCopies = false;
+                // if L == storage, get the Artifact count from global
+                if (this.remoteSite == null) {
+                    Integer count = this.getRemoteArtifactCount(local.getID());
+                    if (count != null && count > 1) {
+                        multipleCopies = true;
+                    }
                 }
-            }
-            try {
-                log.debug("starting transaction");
-                this.transactionManager.startTransaction();
-                log.debug("start txn: OK");
+                try {
+                    log.debug("starting transaction");
+                    this.transactionManager.startTransaction();
+                    log.debug("start txn: OK");
 
-                this.artifactDAO.lock(local);
-                if (this.remoteSite != null) {
-                    // if L==global, delete Artifact, do not create a DeletedStorageLocationEvent
-                    log.info(String.format(
-                        "ArtifactValidator.deleteArtifact Artifact.id=%s Artifact.uri=%s reason=local-filter-policy-change",
-                        local.getID(), local.getURI()));
-                    this.artifactDAO.delete(local.getID());
-                } else if (multipleCopies) {
-                    // if L==storage, delete Artifact only if multiple copies in global, and create a DeletedStorageLocationEvent
-                    log.info(String.format(
-                        "ArtifactValidator.deleteArtifact Artifact.id=%s Artifact.uri=%s "
-                            + "reason=local-filter-policy-change, multiple copies in global",
-                        local.getID(), local.getURI()));
-                    this.artifactDAO.delete(local.getID());
+                    this.artifactDAO.lock(local);
+                    if (this.remoteSite != null) {
+                        // if L==global, delete Artifact, do not create a DeletedStorageLocationEvent
+                        log.info(String.format(
+                            "ArtifactValidator.deleteArtifact Artifact.id=%s Artifact.uri=%s reason=local-filter-policy-change",
+                            local.getID(), local.getURI()));
+                        this.artifactDAO.delete(local.getID());
+                    } else if (multipleCopies) {
+                        // if L==storage, delete Artifact only if multiple copies in global, and create a DeletedStorageLocationEvent
+                        log.info(String.format(
+                            "ArtifactValidator.deleteArtifact Artifact.id=%s Artifact.uri=%s "
+                                + "reason=local-filter-policy-change, multiple copies in global",
+                            local.getID(), local.getURI()));
+                        this.artifactDAO.delete(local.getID());
 
-                    DeletedStorageLocationEvent deletedStorageLocationEvent = new DeletedStorageLocationEvent(local.getID());
-                    log.info(String.format(
-                        "ArtifactValidator.createDeletedStorageLocationEvent event=%s reason=local-filter-policy-change",
-                        deletedStorageLocationEvent));
-                    this.deletedStorageLocationEventDAO.put(deletedStorageLocationEvent);
-                } else {
-                    log.info(String.format(
-                        "ArtifactValidator.didNotDeleteArtifact Artifact.id=%s Artifact.uri=%s "
-                            + "reason=local-filter-policy-change", local.getID(), local.getURI()));
-                }
+                        DeletedStorageLocationEvent deletedStorageLocationEvent = new DeletedStorageLocationEvent(local.getID());
+                        log.info(String.format(
+                            "ArtifactValidator.createDeletedStorageLocationEvent event=%s reason=local-filter-policy-change",
+                            deletedStorageLocationEvent));
+                        this.deletedStorageLocationEventDAO.put(deletedStorageLocationEvent);
+                    } else {
+                        log.info(String.format("ArtifactValidator.didNotDeleteArtifact Artifact.id=%s Artifact.uri=%s "
+                                                   + "reason=local-filter-policy-change", local.getID(), local.getURI()));
+                    }
 
-                log.debug("committing transaction");
-                this.transactionManager.commitTransaction();
-                log.debug("commit txn: OK");
-            } catch (EntityNotFoundException e) {
-                log.debug(String.format("ArtifactValidator.skip: Artifact.id=%s Artifact.uri=%s reason=stale-local-artifact",
-                                           local.getID(), local.getURI()));
-                this.transactionManager.rollbackTransaction();
-            } catch (Exception e) {
-                log.error(String.format("failed to delete %s %s", local.getID(), local.getURI()), e);
-                this.transactionManager.rollbackTransaction();
-                log.debug("rollback txn: OK");
-            } finally {
-                if (this.transactionManager.isOpen()) {
-                    log.error("BUG - open transaction in finally");
+                    log.debug("committing transaction");
+                    this.transactionManager.commitTransaction();
+                    log.debug("commit txn: OK");
+                } catch (EntityNotFoundException e) {
+                    log.debug(String.format(
+                        "ArtifactValidator.skip: Artifact.id=%s Artifact.uri=%s reason=stale-local-artifact", local.getID(), local.getURI()));
                     this.transactionManager.rollbackTransaction();
-                    log.error("rollback txn: OK");
+                } catch (Exception e) {
+                    log.error(String.format("failed to delete %s %s", local.getID(), local.getURI()), e);
+                    this.transactionManager.rollbackTransaction();
+                    log.debug("rollback txn: OK");
+                } finally {
+                    if (this.transactionManager.isOpen()) {
+                        log.error("BUG - open transaction in finally");
+                        this.transactionManager.rollbackTransaction();
+                        log.error("rollback txn: OK");
+                    }
                 }
+                return;
             }
-            return;
         }
 
         // explanation1: deleted from R, pending/missed DeletedArtifactEvent in L

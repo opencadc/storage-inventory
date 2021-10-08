@@ -228,7 +228,7 @@ public class InventoryValidatorTest {
     /** discrepancy: artifact in L && artifact not in R
      *
      * explanation0: filter policy at L changed to exclude artifact in R
-     * evidence: Artifact in R without filter
+     * evidence: R uses a filter policy AND Artifact in R without filter
      * action: if (L==global) delete Artifact, if (L==storage) delete Artifact only if
      *         remote has multiple copies and create DeletedStorageLocationEvent
      *

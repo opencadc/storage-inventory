@@ -210,7 +210,7 @@ public class InventoryValidator implements Runnable {
         
         ArtifactDAO txnDAO = new ArtifactDAO(false);
         txnDAO.setConfig(txnConfig);
-        this.artifactValidator = new ArtifactValidator(txnDAO, resourceID, remoteSite);
+        this.artifactValidator = new ArtifactValidator(txnDAO, resourceID, this.remoteSite, this.artifactSelector);
 
         try {
             this.messageDigest = MessageDigest.getInstance("MD5");
