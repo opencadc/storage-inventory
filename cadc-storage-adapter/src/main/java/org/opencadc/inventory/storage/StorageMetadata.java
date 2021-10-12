@@ -94,9 +94,9 @@ public class StorageMetadata implements Comparable<StorageMetadata> {
     /**
      * Constructor for a valid stored object.
      * 
-     * @param storageLocation
-     * @param contentChecksum
-     * @param contentLength 
+     * @param storageLocation location the data is stored
+     * @param contentChecksum message digest of the data
+     * @param contentLength size of the data in bytes
      */
     public StorageMetadata(StorageLocation storageLocation, URI contentChecksum, Long contentLength) {
         InventoryUtil.assertNotNull(StorageMetadata.class, "storageLocation", storageLocation);
@@ -113,7 +113,7 @@ public class StorageMetadata implements Comparable<StorageMetadata> {
     /**
      * Constructor for an invalid stored object that should be cleaned up.
      * 
-     * @param storageLocation 
+     * @param storageLocation location the data is stored
      */
     public StorageMetadata(StorageLocation storageLocation) {
         InventoryUtil.assertNotNull(StorageMetadata.class, "storageLocation", storageLocation);

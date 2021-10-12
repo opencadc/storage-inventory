@@ -90,6 +90,7 @@ import org.opencadc.inventory.db.EntityNotFoundException;
 import org.opencadc.inventory.db.ObsoleteStorageLocation;
 import org.opencadc.inventory.db.ObsoleteStorageLocationDAO;
 import org.opencadc.inventory.storage.NewArtifact;
+import org.opencadc.inventory.storage.PutTransaction;
 import org.opencadc.inventory.storage.StorageEngageException;
 import org.opencadc.inventory.storage.StorageMetadata;
 import org.opencadc.permissions.WriteGrant;
@@ -160,9 +161,23 @@ public class PutAction extends ArtifactAction {
         
         String txnID = syncInput.getHeader(PUT_TXN);
         if ("true".equals(txnID)) {
-            txnID = storageAdapter.startTransaction(artifactURI);
+            PutTransaction t = storageAdapter.startTransaction(artifactURI, contentLength);
+            txnID = t.getID();
+            if (contentLength != null && contentLength == 0L) {
+                // explicit start transaction, no data
+                syncOutput.setCode(202); // accepted
+                HeadAction.setTransactionHeaders(t, syncOutput);
+                super.logInfo.setMessage("transaction: " + txnID);
+                return;
+            }
         }
         log.debug("transactionID: " + txnID);
+
+        // here: txnID != null means in a transaction
+        //       segmentSize == 0 means start transaction and return (header) info
+        //       0 < segmentSize < contentLength means put a segment of the file
+        //       segmentSize == null means put whole file
+        //       segmentSize == contentLength means put whole file
         
         NewArtifact newArtifact = new NewArtifact(artifactURI);
         newArtifact.contentChecksum = digest;
@@ -224,8 +239,9 @@ public class PutAction extends ArtifactAction {
         artifact.storageLocation = artifactMetadata.getStorageLocation();
 
         if (txnID != null) {
+            PutTransaction t = storageAdapter.getTransactionStatus(txnID);
             syncOutput.setCode(202); // accepted
-            syncOutput.setHeader(PUT_TXN, txnID);
+            HeadAction.setTransactionHeaders(t, syncOutput);
             HeadAction.setHeaders(artifact, syncOutput);
             super.logInfo.setMessage("transaction: " + txnID);
             return;
@@ -319,5 +335,4 @@ public class PutAction extends ArtifactAction {
         }
         
     }
-
 }

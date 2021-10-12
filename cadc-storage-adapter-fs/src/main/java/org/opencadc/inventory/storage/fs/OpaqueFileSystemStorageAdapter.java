@@ -72,7 +72,6 @@ import ca.nrc.cadc.io.ReadException;
 import ca.nrc.cadc.io.WriteException;
 import ca.nrc.cadc.net.IncorrectContentChecksumException;
 import ca.nrc.cadc.net.IncorrectContentLengthException;
-import ca.nrc.cadc.net.PreconditionFailedException;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.util.HexUtil;
@@ -113,6 +112,7 @@ import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.storage.ByteRange;
 import org.opencadc.inventory.storage.NewArtifact;
+import org.opencadc.inventory.storage.PutTransaction;
 import org.opencadc.inventory.storage.StorageAdapter;
 import org.opencadc.inventory.storage.StorageEngageException;
 import org.opencadc.inventory.storage.StorageMetadata;
@@ -152,6 +152,10 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
             
     static final String ARTIFACTID_ATTR = "artifactID";
     static final String CHECKSUM_ATTR = "contentChecksum";
+    static final String EXP_LENGTH_ATTR = "contentLength";
+    
+    private static final Long PT_MIN_BYTES = 1L;
+    private static final Long PT_MAX_BYTES = null;
     
     private static final String TXN_FOLDER = "transaction";
     private static final String CONTENT_FOLDER = "content";
@@ -411,10 +415,11 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
         } catch (NoSuchAlgorithmException ex) {
             throw new RuntimeException("failed to create MessageDigest: MD5");
         }
-        log.warn("transaction: " + txnTarget + " transactionID: " + transactionID);
+        log.debug("transaction: " + txnTarget + " transactionID: " + transactionID);
         
         Throwable throwable = null;
         URI checksum = null;
+        
         Long length = null;
         
         try {
@@ -425,19 +430,21 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
             DigestOutputStream out = new DigestOutputStream(Files.newOutputStream(txnTarget, StandardOpenOption.WRITE, opt), txnDigest);
             MultiBufferIO io = new MultiBufferIO();
             if (transactionID != null) {
+                long prevLength = 0L;
                 try {
+                    prevLength = Files.size(txnTarget);
+                    log.debug("append starting at offset " + prevLength);
                     io.copy(source, out);
                     out.flush();
                 } catch (ReadException ex) {
+                    // rollback to prevLength
+                    RandomAccessFile raf = new RandomAccessFile(txnTarget.toFile(), "rws");
+                    log.debug("rollback from " + raf.length() + " to " + prevLength + " after " + ex);
+                    raf.setLength(prevLength);
                     length = Files.size(txnTarget);
-                    if (length == 0L) {
-                        log.warn("abort transactionID " + transactionID + " after failed input (no bytes): " + ex);
-                        abortTransaction(transactionID);
-                        throw ex;
-                    }
-                    log.warn("proceeding with transaction " + transactionID + " after failed input (" + length + " bytes): " + ex);
+                    log.debug("proceeding with transaction " + transactionID + " at offset " + length + " after failed input: " + ex);
                 } catch (WriteException ex) {
-                    log.warn("abort transactionID " + transactionID + " after failed write to back end: ", ex);
+                    log.debug("abort transactionID " + transactionID + " after failed write to back end: ", ex);
                     abortTransaction(transactionID);
                     throw ex;
                 }
@@ -451,9 +458,9 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
             MessageDigest curMD = (MessageDigest) md.clone();
             String md5Val = HexUtil.toHex(curMD.digest());
             checksum = URI.create(MD5_CHECKSUM_SCHEME + ":" + md5Val);
-            log.warn("current checksum: " + checksum);
+            log.debug("current checksum: " + checksum);
             length = Files.size(txnTarget);
-            log.warn("current file size: " + length);
+            log.debug("current file size: " + length);
             
             if (transactionID != null && (newArtifact.contentLength == null || length < newArtifact.contentLength)) {
                 // incomplete: no further content checks
@@ -482,7 +489,7 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
             StorageLocation storageLocation = pathToStorageLocation(txnTarget);
             
             if (transactionID != null) {
-                log.warn("transaction uncommitted: " + transactionID + " " + storageLocation);
+                log.debug("transaction uncommitted: " + transactionID + " " + storageLocation);
                 // transaction will continue
                 txnDigestStore.put(transactionID, md);
                 if (length == 0L) {
@@ -525,7 +532,7 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
     }
     
     @Override
-    public String startTransaction(URI artifactURI) throws StorageEngageException, TransientException {
+    public PutTransaction startTransaction(URI artifactURI, Long contentLength) throws StorageEngageException, TransientException {
         InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "artifactURI", artifactURI);
         try {
             String transactionID = UUID.randomUUID().toString();
@@ -541,7 +548,10 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
             
             setFileAttribute(txnTarget, CHECKSUM_ATTR, checksum.toASCIIString());
             setFileAttribute(txnTarget, ARTIFACTID_ATTR, artifactURI.toASCIIString());
-            return transactionID;
+            if (contentLength != null) {
+                setFileAttribute(txnTarget, EXP_LENGTH_ATTR, contentLength.toString());
+            }
+            return new PutTransaction(transactionID, PT_MIN_BYTES, PT_MAX_BYTES);
         } catch (IOException ex) {
             throw new StorageEngageException("failed to create transaction", ex);
         } catch (CloneNotSupportedException | NoSuchAlgorithmException ex) {
@@ -566,7 +576,7 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
     }
     
     @Override
-    public StorageMetadata getTransactionStatus(String transactionID)
+    public PutTransaction getTransactionStatus(String transactionID)
         throws IllegalArgumentException, StorageEngageException, TransientException {
         InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "transactionID", transactionID);
         try {
@@ -577,7 +587,9 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
                 StorageMetadata ret = createStorageMetadata(txnPath, path);
                 // txnPath does not have bucket dirs
                 ret.getStorageLocation().storageBucket = InventoryUtil.computeBucket(ret.getStorageLocation().getStorageID(), bucketLength);
-                return ret;
+                PutTransaction pt = new PutTransaction(transactionID, PT_MIN_BYTES, PT_MAX_BYTES);
+                pt.storageMetadata = ret;
+                return pt;
             }
         } catch (InvalidPathException e) {
             throw new RuntimeException("BUG: invalid path: " + txnPath, e);
@@ -588,10 +600,9 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
     @Override
     public StorageMetadata commitTransaction(String transactionID)
         throws IllegalArgumentException, StorageEngageException, TransientException {
-        StorageMetadata metadata = getTransactionStatus(transactionID);
+        PutTransaction pt = getTransactionStatus(transactionID);
         Path txnTarget = txnPath.resolve(transactionID); // again
-        
-        StorageMetadata ret = commit(metadata, txnTarget);
+        StorageMetadata ret = commit(pt.storageMetadata, txnTarget);
         txnDigestStore.remove(transactionID);
         return ret;
     }

@@ -83,6 +83,7 @@ import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.Test;
 import org.opencadc.inventory.storage.NewArtifact;
+import org.opencadc.inventory.storage.PutTransaction;
 import org.opencadc.inventory.storage.StorageAdapter;
 import org.opencadc.inventory.storage.StorageMetadata;
 
@@ -114,31 +115,33 @@ public class StorageAdapterPutTxnTest {
             final ByteArrayInputStream source = new ByteArrayInputStream(data);
             
             log.info("init");
-
-            String transactionID = adapter.startTransaction(uri);
+            final Long contentLength = new Long(data.length);
+            PutTransaction txn = adapter.startTransaction(uri, contentLength);
             log.info("start");
             
-            StorageMetadata meta = adapter.put(newArtifact, source, transactionID);
+            StorageMetadata meta = adapter.put(newArtifact, source, txn.getID());
             log.info("put");
-            
+
             Assert.assertNotNull(meta);
             
             Iterator<StorageMetadata> iter = adapter.iterator();
             Assert.assertFalse("content not committed", iter.hasNext());
             
-            StorageMetadata meta2 = adapter.getTransactionStatus(transactionID);
-            log.info("testPutTransactionCommit: " + meta2 + " in " + transactionID);
+            PutTransaction ts = adapter.getTransactionStatus(txn.getID());
+            Assert.assertNotNull(ts.storageMetadata);
+            StorageMetadata meta2 = ts.storageMetadata;
+            log.info("testPutTransactionCommit: " + meta2 + " in " + txn.getID());
             Assert.assertNotNull(meta2);
             Assert.assertTrue("valid", meta2.isValid());
             Assert.assertNotNull("artifactURI", meta2.artifactURI);
             
-            log.info("commit: " + transactionID);
-            StorageMetadata meta3 = adapter.commitTransaction(transactionID);
+            log.info("commit: " + txn);
+            StorageMetadata meta3 = adapter.commitTransaction(txn.getID());
             Assert.assertNotNull(meta3);
             log.info("commit");
             
             try {
-                StorageMetadata oldtxn = adapter.getTransactionStatus(transactionID);
+                PutTransaction oldtxn = adapter.getTransactionStatus(txn.getID());
                 Assert.fail("expected IllegalArgumentException, got: " + oldtxn);
             } catch (IllegalArgumentException expected) {
                 log.info("caught expected: " + expected);
@@ -174,11 +177,11 @@ public class StorageAdapterPutTxnTest {
             final ByteArrayInputStream source = new ByteArrayInputStream(data);
             
             log.info("init");
-            
-            String transactionID = adapter.startTransaction(uri);
+            final Long contentLength = new Long(data.length);
+            PutTransaction txn = adapter.startTransaction(uri, contentLength);
             log.info("start");
             
-            StorageMetadata meta = adapter.put(newArtifact, source, transactionID);
+            StorageMetadata meta = adapter.put(newArtifact, source, txn.getID());
             log.info("put");
             
             Assert.assertNotNull(meta);
@@ -186,17 +189,19 @@ public class StorageAdapterPutTxnTest {
             Iterator<StorageMetadata> iter = adapter.iterator();
             Assert.assertFalse("content not committed", iter.hasNext());
             
-            StorageMetadata meta2 = adapter.getTransactionStatus(transactionID);
-            log.info("testPutTransactionAbort: " + meta2 + " in " + transactionID);
+            PutTransaction ts = adapter.getTransactionStatus(txn.getID());
+            Assert.assertNotNull(ts.storageMetadata);
+            StorageMetadata meta2 = ts.storageMetadata;
+            log.info("testPutTransactionAbort: " + meta2 + " in " + txn.getID());
             Assert.assertNotNull(meta2);
             Assert.assertTrue("valid", meta2.isValid());
             Assert.assertNotNull("artifactURI", meta2.artifactURI);
             
-            adapter.abortTransaction(transactionID);
+            adapter.abortTransaction(txn.getID());
             log.info("abort");
 
             try {
-                StorageMetadata oldtxn = adapter.getTransactionStatus(transactionID);
+                PutTransaction oldtxn = adapter.getTransactionStatus(txn.getID());
                 Assert.fail("expected IllegalArgumentException, got: " + oldtxn);
             } catch (IllegalArgumentException expected) {
                 log.info("verify txn gone: caught expected: " + expected);
@@ -233,49 +238,52 @@ public class StorageAdapterPutTxnTest {
             newArtifact.contentLength = expectedLength;
             
             log.info("init");
-            
-            String transactionID = adapter.startTransaction(uri);
+            PutTransaction txn = adapter.startTransaction(uri, expectedLength);
             log.info("start");
             
             // write part 1
             data = dataString1.getBytes();
             ByteArrayInputStream source = new ByteArrayInputStream(data);
-            StorageMetadata meta1 = adapter.put(newArtifact, source, transactionID);
+            StorageMetadata meta1 = adapter.put(newArtifact, source, txn.getID());
             log.info("meta1: " + meta1);
             Assert.assertNotNull(meta1);
             Assert.assertEquals("length", data.length, meta1.getContentLength().longValue());
             log.info("put 1");
             
             // check txn status
-            StorageMetadata txnMeta = adapter.getTransactionStatus(transactionID);
-            log.info("after write part 1: " + txnMeta + " in " + transactionID);
-            Assert.assertNotNull(txnMeta);
-            Assert.assertTrue("valid", txnMeta.isValid());
-            Assert.assertNotNull("artifactURI", txnMeta.artifactURI);
-            Assert.assertEquals("length", data.length, txnMeta.getContentLength().longValue());
+            PutTransaction ts1 = adapter.getTransactionStatus(txn.getID());
+            Assert.assertNotNull(ts1.storageMetadata);
+            StorageMetadata txnMeta1 = ts1.storageMetadata;
+            log.info("after write part 1: " + txnMeta1 + " in " + txn.getID());
+            Assert.assertNotNull(txnMeta1);
+            Assert.assertTrue("valid", txnMeta1.isValid());
+            Assert.assertNotNull("artifactURI", txnMeta1.artifactURI);
+            Assert.assertEquals("length", data.length, txnMeta1.getContentLength().longValue());
 
             // write part 2            
             data = dataString2.getBytes();
             source = new ByteArrayInputStream(data);
-            StorageMetadata meta2 = adapter.put(newArtifact, source, transactionID);
+            StorageMetadata meta2 = adapter.put(newArtifact, source, txn.getID());
             log.info("meta2: " + meta2);
             Assert.assertNotNull(meta2);
             Assert.assertEquals("length", expectedLength, meta2.getContentLength().longValue());
             log.info("put 2");
             
             // check txn status
-            txnMeta = adapter.getTransactionStatus(transactionID);
-            log.info("after write part 2: " + txnMeta + " in " + transactionID);
-            Assert.assertNotNull(txnMeta);
-            Assert.assertTrue("valid", txnMeta.isValid());
-            Assert.assertNotNull("artifactURI", txnMeta.artifactURI);
-            Assert.assertEquals("length", expectedLength, meta2.getContentLength().longValue());
+            PutTransaction ts2 = adapter.getTransactionStatus(txn.getID());
+            Assert.assertNotNull(ts2.storageMetadata);
+            StorageMetadata txnMeta2 = ts2.storageMetadata;
+            log.info("after write part 2: " + txnMeta2 + " in " + txn.getID());
+            Assert.assertNotNull(txnMeta2);
+            Assert.assertTrue("valid", txnMeta2.isValid());
+            Assert.assertNotNull("artifactURI", txnMeta2.artifactURI);
+            Assert.assertEquals("length", expectedLength, txnMeta2.getContentLength().longValue());
             
-            StorageMetadata finalMeta = adapter.commitTransaction(transactionID);
+            StorageMetadata finalMeta = adapter.commitTransaction(txn.getID());
             log.info("commit");
             
             try {
-                StorageMetadata oldtxn = adapter.getTransactionStatus(transactionID);
+                PutTransaction oldtxn = adapter.getTransactionStatus(txn.getID());
                 Assert.fail("expected IllegalArgumentException, got: " + oldtxn);
             } catch (IllegalArgumentException expected) {
                 log.info("caught expected: " + expected);
@@ -303,48 +311,6 @@ public class StorageAdapterPutTxnTest {
     }
     
     @Test
-    public void testPut_ReadFailFast_AutoAbort() {
-        try {
-            String dataString1 = "abcdefghijklmnopqrstuvwxyz\n";
-            String dataString2 = "ABCDEFGHIJKLMNOPQRSTUVWXYZ\n";
-            String dataString = dataString1 + dataString2;
-            MessageDigest md = MessageDigest.getInstance("MD5");
-            byte[] data = dataString.getBytes();
-            md.update(data);
-            URI expectedChecksum = URI.create("md5:" + HexUtil.toHex(md.digest()));
-            long expectedLength = data.length;
-            
-            URI uri = URI.create("cadc:TEST/testPutFastFailAutoAbort");
-            NewArtifact newArtifact = new NewArtifact(uri);
-            newArtifact.contentChecksum = expectedChecksum;
-            newArtifact.contentLength = expectedLength;
-            
-            String transactionID = adapter.startTransaction(uri);
-            
-            // write 
-            data = dataString.getBytes();
-            InputStream source = getFailingInput(0, data); // throw after 0 bytes
-            try {
-                StorageMetadata meta1 = adapter.put(newArtifact, source, transactionID);
-                Assert.fail("expected ReadException, got: " + meta1);
-            } catch (ReadException expected) {
-                log.info("caught expected: " + expected);
-            }
-            
-            try {
-                StorageMetadata oldtxn = adapter.getTransactionStatus(transactionID);
-                Assert.fail("expected IllegalArgumentException, got: " + oldtxn);
-            } catch (IllegalArgumentException expected) {
-                log.info("caught expected: " + expected);
-            }
-            
-        } catch (Exception unexpected) {
-            log.error("unexpected exception", unexpected);
-            Assert.fail("unexpected exception: " + unexpected);
-        }
-    }
-
-    @Test
     public void testPutFailResumeCommit() {
         try {
             String dataString1 = "abcdefghijklmnopqrstuvwxyz\n";
@@ -362,56 +328,78 @@ public class StorageAdapterPutTxnTest {
             newArtifact.contentLength = expectedLength;
             
             log.info("init");
-            
-            String transactionID = adapter.startTransaction(uri);
+            PutTransaction txn = adapter.startTransaction(uri, expectedLength);
             log.info("start");
             
             // write part 1
             data = dataString1.getBytes();
             InputStream source = new ByteArrayInputStream(data);
-            StorageMetadata meta1 = adapter.put(newArtifact, source, transactionID);
-            log.info("after write part 1: " + meta1 + " in " + transactionID);
+            StorageMetadata meta1 = adapter.put(newArtifact, source, txn.getID());
+            log.info("after write part 1: " + meta1 + " in " + txn.getID());
             Assert.assertNotNull(meta1);
             Assert.assertEquals("length", data.length, meta1.getContentLength().longValue());
-            log.info("put 1");
+            log.info("put 1 done");
             
             // check txn status
-            StorageMetadata txnMeta = adapter.getTransactionStatus(transactionID);
-            log.info("txn status after write part 1: " + txnMeta + " in " + transactionID);
-            Assert.assertNotNull(txnMeta);
-            Assert.assertTrue("valid", txnMeta.isValid());
-            Assert.assertNotNull("artifactURI", txnMeta.artifactURI);
-            Assert.assertEquals("length", data.length, txnMeta.getContentLength().longValue());
+            PutTransaction ts1 = adapter.getTransactionStatus(txn.getID());
+            Assert.assertNotNull(ts1.storageMetadata);
+            StorageMetadata tmeta1 = ts1.storageMetadata;
+            log.info("txn status after write part 1: " + tmeta1 + " in " + txn.getID());
+            Assert.assertNotNull(tmeta1);
+            Assert.assertTrue("valid", tmeta1.isValid());
+            Assert.assertNotNull("artifactURI", tmeta1.artifactURI);
+            Assert.assertEquals("length", data.length, tmeta1.getContentLength().longValue());
 
-            // fail to write part 2
+            log.info("START put 2 fail(0)");
             data = dataString2.getBytes();
-            source = getFailingInput(0, data);
-            StorageMetadata meta2 = adapter.put(newArtifact, source, transactionID);
-            log.info("after write part 2 fail: " + meta2 + " in " + transactionID);
-            Assert.assertNotNull(meta2);
-            Assert.assertEquals("length", txnMeta.getContentLength(), meta2.getContentLength());
-            log.info("put 2 fail");
+            source = getFailingInput(0, data); // no need for rollback to work
+            StorageMetadata failedPut = adapter.put(newArtifact, source, txn.getID());
+            log.info("failed put(0): " + failedPut);
+            Assert.assertNotNull("failed put (0)", failedPut);
+            PutTransaction ts2 = adapter.getTransactionStatus(txn.getID());
+            Assert.assertNotNull(ts2.storageMetadata);
+            StorageMetadata tmeta2 = ts2.storageMetadata;
+            log.info("after write part 2 fail (0 bytes): " + tmeta2 + " in " + txn.getID());
+            Assert.assertNotNull(tmeta2);
+            Assert.assertEquals("length", data.length, tmeta2.getContentLength().longValue());
+            log.info("DONE put 2 fail(0)");
+            
+            log.info("START put 2 fail(20)");
+            data = dataString2.getBytes();
+            source = getFailingInput(20, data); // fail after 32 bytes: need rollback to work
+            failedPut = adapter.put(newArtifact, source, txn.getID());
+            log.info("failed put(20): " + failedPut);
+            Assert.assertNotNull("failed put (20)", failedPut);
+            ts2 = adapter.getTransactionStatus(txn.getID());
+            Assert.assertNotNull(ts2.storageMetadata);
+            tmeta2 = ts2.storageMetadata;
+            log.info("after write part 2 fail (20 bytes): " + tmeta2 + " in " + txn.getID());
+            Assert.assertNotNull(tmeta2);
+            Assert.assertEquals("length", data.length, tmeta2.getContentLength().longValue());
+            log.info("DONE put 2 fail(20)");
             
             // write part 2            
             source = new ByteArrayInputStream(data);
-            StorageMetadata meta3 = adapter.put(newArtifact, source, transactionID);
+            StorageMetadata meta3 = adapter.put(newArtifact, source, txn.getID());
             Assert.assertNotNull(meta3);
             Assert.assertEquals("length", expectedLength, meta3.getContentLength().longValue());
             log.info("put 2");
             
             // check txn status
-            txnMeta = adapter.getTransactionStatus(transactionID);
-            log.info("after write part 2: " + txnMeta + " in " + transactionID);
-            Assert.assertNotNull(txnMeta);
-            Assert.assertTrue("valid", txnMeta.isValid());
-            Assert.assertNotNull("artifactURI", txnMeta.artifactURI);
-            Assert.assertEquals("length", expectedLength, txnMeta.getContentLength().longValue());
+            PutTransaction ts3 = adapter.getTransactionStatus(txn.getID());
+            Assert.assertNotNull(ts3.storageMetadata);
+            StorageMetadata tmeta3 = ts3.storageMetadata;
+            log.info("after write part 2: " + tmeta3 + " in " + txn.getID());
+            Assert.assertNotNull(tmeta3);
+            Assert.assertTrue("valid", tmeta3.isValid());
+            Assert.assertNotNull("artifactURI", tmeta3.artifactURI);
+            Assert.assertEquals("length", expectedLength, tmeta3.getContentLength().longValue());
             
-            StorageMetadata finalMeta = adapter.commitTransaction(transactionID);
+            StorageMetadata finalMeta = adapter.commitTransaction(txn.getID());
             log.info("commit");
             
             try {
-                StorageMetadata oldtxn = adapter.getTransactionStatus(transactionID);
+                PutTransaction oldtxn = adapter.getTransactionStatus(txn.getID());
                 Assert.fail("expected IllegalArgumentException, got: " + oldtxn);
             } catch (IllegalArgumentException expected) {
                 log.info("caught expected: " + expected);

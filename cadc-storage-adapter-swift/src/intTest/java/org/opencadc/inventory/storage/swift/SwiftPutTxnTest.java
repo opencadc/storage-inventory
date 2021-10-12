@@ -78,6 +78,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.storage.NewArtifact;
+import org.opencadc.inventory.storage.PutTransaction;
 import org.opencadc.inventory.storage.StorageMetadata;
 import org.opencadc.inventory.storage.test.StorageAdapterPutTxnTest;
 
@@ -136,13 +137,13 @@ public class SwiftPutTxnTest extends StorageAdapterPutTxnTest {
                 final NewArtifact newArtifact = new NewArtifact(uri);
                 final ByteArrayInputStream source = new ByteArrayInputStream(data);
 
-                String transactionID = adapter.startTransaction(uri);
-                StorageMetadata meta = adapter.put(newArtifact, source, transactionID);
+                PutTransaction txn = adapter.startTransaction(uri, null);
+                StorageMetadata meta = adapter.put(newArtifact, source, txn.getID());
                 Assert.assertNotNull(meta);
                 log.info("put: " + meta);
                 if (i % 2 == 0) {
                     log.info("commit: " + uri);
-                    adapter.commitTransaction(transactionID);
+                    adapter.commitTransaction(txn.getID());
                     numCommitted++;
                 }
             }

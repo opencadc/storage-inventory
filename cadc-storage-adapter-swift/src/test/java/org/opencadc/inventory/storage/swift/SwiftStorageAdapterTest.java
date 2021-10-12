@@ -93,9 +93,99 @@ public class SwiftStorageAdapterTest {
         Log4jInit.setLevel("org.opencadc.inventory", Level.INFO);
     }
     
+    private static final long GB = 1024L * 1024L * 1024L;
+    private static final long HALF_GB = 512L * 1024L * 1024L;
     
     public SwiftStorageAdapterTest() { 
         
+    }
+    
+    @Test
+    public void testCalcMinSegmentSize() throws Exception {
+        
+        // small object
+        long contentLength = HALF_GB;
+        long min = SwiftStorageAdapter.calcMinSegmentSize(contentLength);
+        int num = 0;
+        long rem = contentLength;
+        while (rem >= min) {
+            rem -= min;
+            num++;
+        }
+        if (rem > 0) {
+            num++;
+        }
+        log.info("contentLength " + contentLength + " min " + min + " last " + rem);
+        Assert.assertEquals("small-object min", contentLength, min);
+        Assert.assertEquals("small-object num", 1, num);
+        Assert.assertEquals("small-object rem", 0, rem);
+        
+        // largest simple object
+        contentLength = 5 * GB;
+        min = SwiftStorageAdapter.calcMinSegmentSize(contentLength);
+        rem = contentLength;
+        num = 0;
+        while (rem >= min) {
+            rem -= min;
+            num++;
+        }
+        if (rem > 0) {
+            num++;
+        }
+        log.info("contentLength " + contentLength + " min " + min + " last " + rem);
+        Assert.assertEquals("object-5G min", contentLength, min);
+        Assert.assertEquals("object-5G num", 1, num);
+        Assert.assertEquals("object-5G rem", 0, rem);
+        
+        // typical segmented object
+        contentLength = 12 * GB;
+        min = SwiftStorageAdapter.calcMinSegmentSize(contentLength);
+        rem = contentLength;
+        num = 0;
+        while (rem >= min) {
+            rem -= min;
+            num++;
+        }
+        if (rem > 0) {
+            num++;
+        }
+        log.info("contentLength " + contentLength + " min " + min + " last " + rem);
+        Assert.assertEquals("object-12G min", 4 * GB, min);
+        Assert.assertEquals("object-12G num", 3, num);
+        Assert.assertEquals("object-12G rem", 0, rem);
+        
+        // smallest segmented object, odd size with rem
+        contentLength = 5 * GB + 1;
+        min = SwiftStorageAdapter.calcMinSegmentSize(contentLength);
+        rem = contentLength;
+        num = 0;
+        while (rem >= min) {
+            rem -= min;
+            num++;
+        }
+        if (rem > 0) {
+            num++;
+        }
+        log.info("contentLength " + contentLength + " min " + min + " last " + rem);
+        Assert.assertEquals("object 5G+1 num", 2, num);
+        Assert.assertEquals("object 5G+1 min", (2 * GB + HALF_GB + 1), min);
+        Assert.assertEquals("object 5G+1 rem", (2 * GB + HALF_GB), rem);
+        
+        // first prime after 5GiB
+        contentLength = 5368709131L;
+        min = SwiftStorageAdapter.calcMinSegmentSize(contentLength);
+        rem = contentLength;
+        num = 0;
+        while (rem >= min) {
+            rem -= min;
+            num++;
+        }
+        if (rem > 0) {
+            num++;
+        }
+        log.info("contentLength " + contentLength + " min " + min + " last " + rem);
+        Assert.assertEquals("object >5G prime num", 2, num);
+        Assert.assertEquals("object >5G prime min+rem", contentLength, (min + rem));
     }
     
     @Test

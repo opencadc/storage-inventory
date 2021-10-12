@@ -118,6 +118,7 @@ import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.storage.ByteRange;
 import org.opencadc.inventory.storage.InvalidConfigException;
 import org.opencadc.inventory.storage.NewArtifact;
+import org.opencadc.inventory.storage.PutTransaction;
 import org.opencadc.inventory.storage.StorageAdapter;
 import org.opencadc.inventory.storage.StorageEngageException;
 import org.opencadc.inventory.storage.StorageMetadata;
@@ -129,8 +130,11 @@ import org.opencadc.inventory.storage.StorageMetadata;
 public class SwiftStorageAdapter  implements StorageAdapter {
     private static final Logger log = Logger.getLogger(SwiftStorageAdapter.class);
 
-    private static final long CEPH_UPLOAD_LIMIT = 5 * 1024L * 1024L * 1024L; // 5 GiB
-    private static final String CEPH_UPLOAD_LIMIT_MSG = "5 GiB";
+    private static final long CEPH_OBJECT_SIZE_LIMIT = 5 * 1024L * 1024L * 1024L; // 5 GiB
+    private static final String CEPH_OBJECT_SIZE_LIMIT_MSG = "5 GiB";
+    
+    private static final long PT_MIN_BYTES = 1L;
+    private static final long PT_MAX_BYTES = CEPH_OBJECT_SIZE_LIMIT;
     
     static final String CONFIG_FILENAME = "cadc-storage-adapter-swift.properties";
     
@@ -593,8 +597,8 @@ public class SwiftStorageAdapter  implements StorageAdapter {
         }
         log.warn("transaction: " + writeDataLocation + " transactionID: " + transactionID);
         
-        if (newArtifact.contentLength != null && newArtifact.contentLength > CEPH_UPLOAD_LIMIT) {
-            throw new ByteLimitExceededException("put exceeds size limit (" + CEPH_UPLOAD_LIMIT_MSG + ") for simple stream", CEPH_UPLOAD_LIMIT);
+        if (newArtifact.contentLength != null && newArtifact.contentLength > CEPH_OBJECT_SIZE_LIMIT) {
+            throw new ByteLimitExceededException("put exceeds size limit (" + CEPH_OBJECT_SIZE_LIMIT_MSG + ") for simple stream", CEPH_OBJECT_SIZE_LIMIT);
         }
 
         try {
@@ -606,34 +610,33 @@ public class SwiftStorageAdapter  implements StorageAdapter {
             StoredObject obj = sub.getObject(writeDataLocation.getStorageID().toASCIIString());
             StoredObject metaObj = obj;
             UploadInstructions up = new UploadInstructions(dis);
-            //if (newArtifact.contentChecksum != null && "MD5".equalsIgnoreCase(newArtifact.contentChecksum.getScheme())) {
-            //    up.setMd5(newArtifact.contentChecksum.getSchemeSpecificPart());
-            //}
 
             if (transactionID != null) {
+                long prevLength = 0L;
                 try {
                     UUID id = UUID.fromString(transactionID);
                     StorageLocation mloc = toStorageLocation(id);
                     log.warn("get manifest: " + mloc);
                     metaObj = sub.getObject(mloc.getStorageID().toASCIIString());
+                    prevLength = metaObj.getContentLength();
                     obj.uploadObject(up);
-                //} catch (Md5ChecksumException ex) {
-                    //swift detected
-                //    throw new PreconditionFailedException("checksum mismatch: " + newArtifact.contentChecksum + " did not match content");
                 } catch (CommandException ex) {
-                    if (bcis.getByteCount() >= CEPH_UPLOAD_LIMIT && hasWriteFailSocketException(ex)) {
+                    if (bcis.getByteCount() >= CEPH_OBJECT_SIZE_LIMIT && hasWriteFailSocketException(ex)) {
                         abortTransaction(transactionID);
-                        throw new ByteLimitExceededException("put exceeds size limit (" + CEPH_UPLOAD_LIMIT_MSG + ") for simple stream", CEPH_UPLOAD_LIMIT);
+                        throw new ByteLimitExceededException("put exceeds size limit (" + CEPH_OBJECT_SIZE_LIMIT_MSG + ")", 
+                                CEPH_OBJECT_SIZE_LIMIT);
                     }
-                    if (trap.fail != null) {
-                        // read exception
-                        long length = metaObj.getContentLength();
-                        if (length == 0L) {
-                            log.warn("abort transactionID " + transactionID + " after failed input (no bytes): " + trap.fail);
-                            abortTransaction(transactionID);
-                            throw new ReadException("read from input stream failed", trap.fail);
+                    if (trap.fail != null) { // read exception
+                        // rollback to prev state
+                        long len = metaObj.getContentLength();
+                        if (obj.exists()) {
+                            log.debug("rollback from " + len + " to " + prevLength + " after " + trap.fail);
+                            obj.delete();
+                            len = metaObj.getContentLength();
+                        } else {
+                            log.debug("rollback to " + len + "==" + prevLength + " not necessary after " + trap.fail);
                         }
-                        log.warn("proceeding with transaction " + transactionID + " after failed input (" + length + " bytes): " + ex);
+                        log.debug("proceeding with transaction " + transactionID + " at offset " + len + " after failed input: " + ex);
                     } else {
                         // write exception
                         log.warn("abort transactionID " + transactionID + " after failed write to back end: ", ex);
@@ -643,13 +646,17 @@ public class SwiftStorageAdapter  implements StorageAdapter {
                 }
             } else {
                 try {
+                    if (newArtifact.contentChecksum != null && "MD5".equalsIgnoreCase(newArtifact.contentChecksum.getScheme())) {
+                        up.setMd5(newArtifact.contentChecksum.getSchemeSpecificPart());
+                    }
                     obj.uploadObject(up);
                 } catch (Md5ChecksumException ex) {
                     //swift detected
                     throw new PreconditionFailedException("checksum mismatch: " + newArtifact.contentChecksum + " did not match content");
                 } catch (CommandException ex) {
-                    if (bcis.getByteCount() >= CEPH_UPLOAD_LIMIT && hasWriteFailSocketException(ex)) {
-                        throw new ByteLimitExceededException("put exceeds size limit (" + CEPH_UPLOAD_LIMIT_MSG + ") for simple stream", CEPH_UPLOAD_LIMIT);
+                    if (bcis.getByteCount() >= CEPH_OBJECT_SIZE_LIMIT && hasWriteFailSocketException(ex)) {
+                        throw new ByteLimitExceededException("put exceeds size limit (" + CEPH_OBJECT_SIZE_LIMIT_MSG + ")", 
+                                CEPH_OBJECT_SIZE_LIMIT);
                     }
                     if (trap.fail != null) {
                         throw new ReadException("read from input stream failed", trap.fail);
@@ -696,7 +703,8 @@ public class SwiftStorageAdapter  implements StorageAdapter {
                 
                 txnDigestStore.put(transactionID, md);
                 
-                return getTransactionStatus(transactionID);
+                PutTransaction t = getTransactionStatus(transactionID);
+                return t.storageMetadata;
             }
 
             // create this before committing the file so constraints applied
@@ -753,12 +761,37 @@ public class SwiftStorageAdapter  implements StorageAdapter {
         }
     }
 
+    static long calcMinSegmentSize(long contentLength) {
+        long num = (long) Math.ceil(((double)contentLength) / ((double) PT_MAX_BYTES));
+        long minSeg = (long) Math.ceil(((double)contentLength) / ((double) num));
+        return minSeg;
+    }
+    
     @Override
-    public String startTransaction(URI artifactURI) throws StorageEngageException, TransientException {
+    public PutTransaction startTransaction(URI artifactURI, Long contentLength) throws StorageEngageException, TransientException {
         InventoryUtil.assertNotNull(SwiftStorageAdapter.class, "artifactURI", artifactURI);
         try {
             UUID id = UUID.randomUUID();
             final String transactionID = id.toString();
+            
+            // calculate segmentation
+            boolean dlo = false;
+            PutTransaction ret;
+            if (contentLength == null) {
+                // stream of unknown length: default to simple object
+                ret = new PutTransaction(transactionID, null, null);
+                // stream of unknown length: assume dynamic large object
+                //ret = new PutTransaction(transactionID, PT_MAX_BYTES, PT_MAX_BYTES);
+                //dlo = true;
+            } else if (contentLength <= PT_MIN_BYTES) {
+                // normal object
+                ret = new PutTransaction(transactionID, contentLength, contentLength);
+            } else {
+                // dynamic large object
+                long minSeg = calcMinSegmentSize(contentLength);
+                ret = new PutTransaction(transactionID, minSeg, PT_MAX_BYTES);
+                dlo = true;
+            }
             
             // init digest
             MessageDigest md = MessageDigest.getInstance("MD5");
@@ -775,27 +808,30 @@ public class SwiftStorageAdapter  implements StorageAdapter {
 
             txn.setAndDoNotSaveMetadata(ARTIFACT_ID_ATTR, artifactURI.toASCIIString());
             txn.setAndDoNotSaveMetadata(CONTENT_CHECKSUM_ATTR, checksum.toASCIIString());
+            txn.setAndDoNotSaveMetadata(DLO_ATTR, false);
             txn.saveMetadata();
 
-            // TODO: serialise the md object and store it in the txn status object
+            // TODO: serialise the md object and store it in the txn status object instead of "dig"
             txnDigestStore.put(transactionID, md);
             
-            // create large object manifest; each write (append) is a new object with this prefix
-            StorageLocation mloc = toStorageLocation(id);
-            log.warn("create manifest: " + mloc);
-            Container sub = getContainerImpl(mloc);
-            StoredObject mo = sub.getObject(mloc.getStorageID().toASCIIString());
-            ObjectManifest manifest = new ObjectManifest(sub.getName() + "/" + mloc.getStorageID().toASCIIString());
-            UploadInstructions up = new UploadInstructions(new byte[0]);
-            up.setObjectManifest(manifest);
-            mo.uploadObject(up);
-            mo.setAndDoNotSaveMetadata(ARTIFACT_ID_ATTR, artifactURI.toASCIIString());
-            mo.setAndDoNotSaveMetadata(CONTENT_CHECKSUM_ATTR, checksum.toASCIIString());
-            mo.setAndDoNotSaveMetadata(DLO_ATTR, true);
-            mo.setAndDoNotSaveMetadata(TRANSACTION_ATTR, true);
-            mo.saveMetadata();
+            if (dlo) {
+                // create large object manifest; each write (append) is a new object with this prefix
+                StorageLocation mloc = toStorageLocation(id);
+                log.warn("create manifest: " + mloc);
+                Container sub = getContainerImpl(mloc);
+                StoredObject mo = sub.getObject(mloc.getStorageID().toASCIIString());
+                ObjectManifest manifest = new ObjectManifest(sub.getName() + "/" + mloc.getStorageID().toASCIIString());
+                UploadInstructions up = new UploadInstructions(new byte[0]);
+                up.setObjectManifest(manifest);
+                mo.uploadObject(up);
+                mo.setAndDoNotSaveMetadata(ARTIFACT_ID_ATTR, artifactURI.toASCIIString());
+                mo.setAndDoNotSaveMetadata(CONTENT_CHECKSUM_ATTR, checksum.toASCIIString());
+                mo.setAndDoNotSaveMetadata(DLO_ATTR, true);
+                mo.setAndDoNotSaveMetadata(TRANSACTION_ATTR, true);
+                mo.saveMetadata();
+            }
             
-            return transactionID;
+            return ret;
         } catch (CloneNotSupportedException | NoSuchAlgorithmException ex) {
             throw new RuntimeException("BUG", ex);
         } catch (Exception ex) {
@@ -807,8 +843,9 @@ public class SwiftStorageAdapter  implements StorageAdapter {
     public StorageMetadata commitTransaction(String transactionID) throws IllegalArgumentException, StorageEngageException, TransientException {
         InventoryUtil.assertNotNull(SwiftStorageAdapter.class, "transactionID", transactionID);
         try {
-            StorageMetadata metadata = getTransactionStatus(transactionID);
-            log.warn("txn status: " + metadata.getStorageLocation());
+            PutTransaction pt = getTransactionStatus(transactionID);
+            StorageMetadata metadata = pt.storageMetadata;
+            log.warn("txn status: " + pt + " " + metadata.getStorageLocation());
             
             StoredObject txn = txnContainer.getObject("txn:" + transactionID);
             if (!txn.exists()) {
@@ -854,8 +891,9 @@ public class SwiftStorageAdapter  implements StorageAdapter {
         UUID uuid = UUID.fromString(transactionID);
         
         try {
-            StorageMetadata metadata = getTransactionStatus(transactionID);
-            log.warn("txn status: " + metadata.getStorageLocation());
+            PutTransaction pt = getTransactionStatus(transactionID);
+            StorageMetadata metadata = pt.storageMetadata;
+            log.warn("txn status: " + pt + " " + metadata.getStorageLocation());
                 
             StoredObject txn = txnContainer.getObject("txn:" + transactionID);
             if (!txn.exists()) {
@@ -892,7 +930,7 @@ public class SwiftStorageAdapter  implements StorageAdapter {
     }
 
     @Override
-    public StorageMetadata getTransactionStatus(String transactionID) throws IllegalArgumentException, StorageEngageException, TransientException {
+    public PutTransaction getTransactionStatus(String transactionID) throws IllegalArgumentException, StorageEngageException, TransientException {
         InventoryUtil.assertNotNull(SwiftStorageAdapter.class, "transactionID", transactionID);
         UUID uuid = UUID.fromString(transactionID);
         try {
@@ -905,13 +943,16 @@ public class SwiftStorageAdapter  implements StorageAdapter {
                 Container sub = getContainerImpl(loc);
                 StoredObject obj = sub.getObject(loc.getStorageID().toASCIIString());
                 log.warn("getTransactionStatus: " + obj.getName());
+                
+                PutTransaction ret = new PutTransaction(transactionID, PT_MIN_BYTES, PT_MAX_BYTES);
 
                 long contentLength = 0L;
                 if (obj.exists()) {
                     contentLength = obj.getContentLength();
                 } 
                 if (contentLength == 0L) {
-                    return new StorageMetadata(loc);
+                    ret.storageMetadata = new StorageMetadata(loc);
+                    return ret;
                 }
             
                 Map<String,Object> meta = txn.getMetadata();
@@ -922,7 +963,8 @@ public class SwiftStorageAdapter  implements StorageAdapter {
                 URI artifactURI = new URI(auri);
                 // location of the actual file
                 
-                return toStorageMetadata(loc, md5, contentLength, artifactURI, txn.getLastModifiedAsDate());
+                ret.storageMetadata = toStorageMetadata(loc, md5, contentLength, artifactURI, txn.getLastModifiedAsDate());
+                return ret;
             }
         } catch (IllegalArgumentException | IllegalStateException | URISyntaxException ex) {
             throw new RuntimeException("BUG: invalid object: " + transactionID, ex);

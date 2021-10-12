@@ -141,8 +141,9 @@ public interface StorageAdapter {
      * @param newArtifact The holds information about the incoming artifact.  if the contentChecksum
      *     and contentLength are set, they will be used to validate the bytes received.
      * @param source The stream from which to read.
-     * @param transactionID null for auto-commit, existing transactionID
-     * @return result StorageMetadata
+     * @param transactionID existing transactionID or null for auto-commit
+     * @param segmentLength length of data to be stored in this segment (requires transactionID != null) or null
+     * @return current StorageMetadata
      * 
      * @throws ByteLimitExceededException if content length exceeds internal limit
      * @throws IllegalArgumentException if the newArtifact is invalid or the transaction does not exist
@@ -176,19 +177,20 @@ public interface StorageAdapter {
     /**
      * Start a transaction for a PUT operation.
      * 
-     * @param artifactURI
-     * @return transactionID
+     * @param artifactURI artifact identifier
+     * @param contentLength complete length of the data
+     * @return transaction status
      * 
      * @throws StorageEngageException if the adapter failed to interact with storage
-     * @throws TransientException 
+     * @throws TransientException if an unexpected, temporary exception occurred 
      */
-    String startTransaction(URI artifactURI) 
+    PutTransaction startTransaction(URI artifactURI, Long contentLength) 
         throws StorageEngageException, TransientException;
     
     /**
      * Commit a transaction.
      * 
-     * @param transactionID
+     * @param transactionID existing transaction ID
      * @return final storage metadata
      * 
      * @throws IllegalArgumentException if the specified transaction does not exist
@@ -201,7 +203,8 @@ public interface StorageAdapter {
     /**
      * Abort a transaction.
      * 
-     * @param transactionID
+     * @param transactionID existing transaction ID
+     * 
      * @throws IllegalArgumentException if the specified transaction does not exist
      * @throws StorageEngageException if the adapter failed to interact with storage
      * @throws TransientException if an unexpected, temporary exception occurred 
@@ -212,13 +215,14 @@ public interface StorageAdapter {
     /**
      * Get current transaction status.
      * 
-     * @param transactionID
-     * @return metadata for bytes currently received and stored
+     * @param transactionID existing transaction ID
+     * @return transaction status with current storage metadata for bytes received and stored
+     * 
      * @throws IllegalArgumentException if the specified transaction does not exist
      * @throws StorageEngageException if the adapter failed to interact with storage
      * @throws TransientException if an unexpected, temporary exception occurred 
      */
-    public StorageMetadata getTransactionStatus(String transactionID)
+    public PutTransaction getTransactionStatus(String transactionID)
         throws IllegalArgumentException, StorageEngageException, TransientException;
             
     /**
@@ -243,13 +247,4 @@ public interface StorageAdapter {
      */
     public Iterator<StorageMetadata> iterator(String storageBucketPrefix)
         throws StorageEngageException, TransientException;
-    
-    // for a symbolic bucket scheme (eg AD or human-usable filesystem):
-    //public String[] getStorageBucketDelimiters();
-    // public int getMaxDepth();
-    //public SortedSet<String> getBuckets(int len);
-    
-    // for a programmatic prefixable bucket scheme:
-    // char set specified as lower case hex [0-9a-f]
-    //public int getMaxBucketLength();
 }

@@ -101,6 +101,7 @@ import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.storage.ByteRange;
 import org.opencadc.inventory.storage.NewArtifact;
+import org.opencadc.inventory.storage.PutTransaction;
 import org.opencadc.inventory.storage.StorageAdapter;
 import org.opencadc.inventory.storage.StorageEngageException;
 import org.opencadc.inventory.storage.StorageMetadata;
@@ -561,22 +562,22 @@ abstract class S3StorageAdapter implements StorageAdapter {
     }
 
     @Override
-    public String startTransaction(URI uri) throws StorageEngageException, TransientException {
+    public PutTransaction startTransaction(URI uri) throws StorageEngageException, TransientException {
         throw new UnsupportedOperationException();
     }
 
     @Override
-    public StorageMetadata commitTransaction(String string) throws ResourceNotFoundException, StorageEngageException, TransientException {
+    public StorageMetadata commitTransaction(String string) throws StorageEngageException, TransientException {
         throw new UnsupportedOperationException();
     }
 
     @Override
-    public void abortTransaction(String string) throws ResourceNotFoundException, StorageEngageException, TransientException {
+    public void abortTransaction(String string) throws StorageEngageException, TransientException {
         throw new UnsupportedOperationException();
     }
 
     @Override
-    public StorageMetadata getTransactionStatus(String string) throws ResourceNotFoundException, StorageEngageException, TransientException {
+    public PutTransaction getTransactionStatus(String string) throws StorageEngageException, TransientException {
         throw new UnsupportedOperationException();
     }
 

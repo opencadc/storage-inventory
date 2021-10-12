@@ -105,6 +105,7 @@ import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.storage.ByteRange;
 import org.opencadc.inventory.storage.NewArtifact;
+import org.opencadc.inventory.storage.PutTransaction;
 import org.opencadc.inventory.storage.StorageAdapter;
 import org.opencadc.inventory.storage.StorageEngageException;
 import org.opencadc.inventory.storage.StorageMetadata;
@@ -552,7 +553,7 @@ public class FileSystemStorageAdapter implements StorageAdapter {
     }
 
     @Override
-    public String startTransaction(URI uri) throws StorageEngageException, TransientException {
+    public PutTransaction startTransaction(URI uri, Long contentLength) throws StorageEngageException, TransientException {
         throw new UnsupportedOperationException();
     }
 
@@ -567,7 +568,7 @@ public class FileSystemStorageAdapter implements StorageAdapter {
     }
 
     @Override
-    public StorageMetadata getTransactionStatus(String string) throws IllegalArgumentException, StorageEngageException, TransientException {
+    public PutTransaction getTransactionStatus(String string) throws IllegalArgumentException, StorageEngageException, TransientException {
         throw new UnsupportedOperationException();
     }
     

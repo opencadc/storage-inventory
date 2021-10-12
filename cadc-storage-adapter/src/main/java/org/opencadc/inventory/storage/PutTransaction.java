@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2019.                            (c) 2019.
+*  (c) 2021.                            (c) 2021.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -65,90 +65,59 @@
 ************************************************************************
 */
 
-package org.opencadc.minoc;
+package org.opencadc.inventory.storage;
 
-import ca.nrc.cadc.date.DateUtil;
-import ca.nrc.cadc.rest.SyncOutput;
-import java.text.DateFormat;
 import org.apache.log4j.Logger;
-import org.opencadc.inventory.Artifact;
-import org.opencadc.inventory.InventoryUtil;
-import org.opencadc.inventory.storage.PutTransaction;
-import org.opencadc.inventory.storage.StorageMetadata;
-import org.opencadc.permissions.ReadGrant;
 
 /**
- * Interface with storage and inventory to get the metadata of an artifact.
  *
- * @author majorb
+ * @author pdowler
  */
-public class HeadAction extends ArtifactAction {
-    
-    private static final Logger log = Logger.getLogger(HeadAction.class);
+public class PutTransaction {
+    private static final Logger log = Logger.getLogger(PutTransaction.class);
 
+    private final String id;
+    private final Long minSegmentSize;
+    private final Long maxSegmentSize;
+    private boolean committed;
+    public StorageMetadata storageMetadata;
+    
     /**
-     * Default, no-arg constructor.
+     * Constructor.
+     * 
+     * @param id transactionID
+     * @param minSegmentSize minimum size for any but the last segment, null means non-segmented
+     * @param maxSegmentSize maximum size for any segment, null means non-segmented
      */
-    public HeadAction() {
-        super();
+    public PutTransaction(String id, Long minSegmentSize, Long maxSegmentSize) { 
+        this.id = id;
+        this.minSegmentSize = minSegmentSize;
+        this.maxSegmentSize = maxSegmentSize;
+        this.committed = false;
+    }
+    
+    public boolean isCommitted() {
+        return committed;
     }
 
-    /**
-     * Return the artifact metadata as repsonse headers.
-     */
+    public void setCommitted(boolean committed) {
+        this.committed = committed;
+    }
+    
+    public String getID() {
+        return id;
+    }
+    
+    public Long getMinSegmentSize() {
+        return minSegmentSize;
+    }
+    
+    public Long getMaxSegmentSize() {
+        return maxSegmentSize;
+    }
+
     @Override
-    public void doAction() throws Exception {
-        
-        checkReadable();
-        initAndAuthorize(ReadGrant.class);
-        initDAO();
-        
-        String txnID = syncInput.getHeader(PUT_TXN);
-        log.debug("transactionID: " + txnID);
-        Artifact artifact;
-        if (txnID != null) {
-            PutTransaction t = storageAdapter.getTransactionStatus(txnID);
-            StorageMetadata sm = t.storageMetadata;
-            artifact = new Artifact(sm.artifactURI, sm.getContentChecksum(), sm.contentLastModified, sm.getContentLength());
-            setTransactionHeaders(t, syncOutput);
-            super.logInfo.setMessage("transaction: " + txnID);
-        } else {
-            artifact = getArtifact(artifactURI);
-        }
-        setHeaders(artifact, syncOutput);
-    }
-    
-    /**
-     * Set the HTTP response headers for an artifact.
-     * @param artifact The artifact with metadata
-     * @param syncOutput The target response
-     */
-    static void setHeaders(Artifact artifact, SyncOutput syncOutput) {
-        syncOutput.setDigest(artifact.getContentChecksum());
-        syncOutput.setLastModified(artifact.getContentLastModified());
-        syncOutput.setHeader("Content-Length", artifact.getContentLength());
-        
-        DateFormat df = DateUtil.getDateFormat(DateUtil.HTTP_DATE_FORMAT, DateUtil.GMT);
-        syncOutput.setHeader("Last-Modified", df.format(artifact.getContentLastModified()));
-
-        String filename = InventoryUtil.computeArtifactFilename(artifact.getURI());
-        syncOutput.setHeader("Content-Disposition", "attachment; filename=\"" + filename + "\"");
-
-        if (artifact.contentEncoding != null) {
-            syncOutput.setHeader("Content-Encoding", artifact.contentEncoding);
-        }
-        if (artifact.contentType != null) {
-            syncOutput.setHeader("Content-Type", artifact.contentType);
-        }
-    }
-
-    static void setTransactionHeaders(PutTransaction txn, SyncOutput syncOutput) {
-        syncOutput.setHeader(PUT_TXN, txn.getID());
-        if (txn.getMinSegmentSize() != null) {
-            syncOutput.setHeader(PUT_TXN_MIN_SIZE, txn.getMinSegmentSize());
-        }
-        if (txn.getMaxSegmentSize() != null) {
-            syncOutput.setHeader(PUT_TXN_MAX_SIZE, txn.getMaxSegmentSize());
-        }
+    public String toString() {
+        return "PutTransaction[" + id + "," + minSegmentSize + "," + maxSegmentSize + "]";
     }
 }
