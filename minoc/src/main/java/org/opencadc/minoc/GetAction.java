@@ -153,27 +153,19 @@ public class GetAction extends ArtifactAction {
                 log.debug("No parameters specified.");
                 HeadAction.setHeaders(artifact, syncOutput);
                 bcos = new ByteCountOutputStream(syncOutput.getOutputStream());
-                if (range != null) {
-                    try {
-                        SortedSet<ByteRange> rangeSet = parseRange(range, artifact.getContentLength());
-                        if (rangeSet != null) {
-                            ByteRange byteRange = rangeSet.first();
-                            syncOutput.setCode(206);
-                            long lastByte = byteRange.getOffset() + byteRange.getLength() - 1;
-                            syncOutput.setHeader(CONTENT_RANGE, "bytes " + byteRange.getOffset() + "-"
-                                    + lastByte + "/" + artifact.getContentLength());
-                            // override content length
-                            syncOutput.setHeader(CONTENT_LENGTH, byteRange.getLength());
-                            storageAdapter.get(storageLocation, bcos, rangeSet);
-                        }
-                    } catch (RangeNotSatisfiableException e) {
-                        log.debug("Invalid Range - offset greater then the content length:" + range);
-                        syncOutput.setHeader(CONTENT_RANGE, "bytes */" + artifact.getContentLength());
-                        syncOutput.setHeader(CONTENT_LENGTH, "0");
-                        throw e;
-                    }
+                SortedSet<ByteRange> rangeSet = parseRange(range, artifact.getContentLength());
+                if (rangeSet.isEmpty()) {
+                    storageAdapter.get(storageLocation, bcos);
+                } else {
+                    ByteRange byteRange = rangeSet.first();
+                    syncOutput.setCode(206);
+                    long lastByte = byteRange.getOffset() + byteRange.getLength() - 1;
+                    syncOutput.setHeader(CONTENT_RANGE, "bytes " + byteRange.getOffset() + "-"
+                            + lastByte + "/" + artifact.getContentLength());
+                    // override content length
+                    syncOutput.setHeader(CONTENT_LENGTH, byteRange.getLength());
+                    storageAdapter.get(storageLocation, bcos, rangeSet);
                 }
-                storageAdapter.get(storageLocation, bcos);
             } else {
                 if (range != null) {
                     log.debug("Range (" + range + ") ignored in GET with operations");
@@ -217,6 +209,11 @@ public class GetAction extends ArtifactAction {
                 
                 throw new RuntimeException("BUG: unhandled SODA parameters");
             }
+        } catch (RangeNotSatisfiableException e) {
+            log.debug("Invalid Range - offset greater then the content length:" + range);
+            syncOutput.setHeader(CONTENT_RANGE, "bytes */" + artifact.getContentLength());
+            syncOutput.setHeader(CONTENT_LENGTH, "0");
+            throw e;
         } catch (WriteException e) {
             // error on client write
             String msg = "write output error";
@@ -278,26 +275,29 @@ public class GetAction extends ArtifactAction {
                 conflicts.add(SodaParamValidator.META);
                 conflicts.add(SodaParamValidator.SUB);
             }
-
             return conflicts;
         }
     }
 
     SortedSet<ByteRange> parseRange(String range, long contentLength) throws RangeNotSatisfiableException {
+        SortedSet<ByteRange> result = new TreeSet<ByteRange>();
+        if (range == null) {
+            return result;
+        }
         String sanitizedRange = range.replaceAll("\\s","");  // remove whitespaces
         if (!sanitizedRange.startsWith("bytes=")) {
             log.debug("Ignore Range with invalid unit (only bytes supported): " + range);
-            return null;
+            return result;
         }
         String[] ranges = sanitizedRange.replace("bytes=", "").split(",");
         if (ranges.length > 1) {
             log.debug("Ignore multiple Ranges (only one supported): " + range);
-            return null;
+            return result;
         }
         String[] interval = ranges[0].split("-");
         if ((interval.length == 0) || (interval.length > 2)) {
             log.debug("Ignore Range with invalid interval: " + range);
-            return null;
+            return result;
         }
         try {
             Long start = new Long(interval[0].length() == 0 ? "0" : interval[0]);
@@ -310,17 +310,16 @@ public class GetAction extends ArtifactAction {
             }
             if (end < start) {
                 log.debug("Ignore Range with invalid interval: " + range);
-                return null;
+                return result;
             }
             if (end >= contentLength - 1) {
                 end = contentLength - 1;
             }
-            SortedSet<ByteRange> result = new TreeSet<ByteRange>();
             result.add(new ByteRange(start, end - start + 1));
             return result;
         } catch (NumberFormatException e) {
             log.debug("Ignore illegal range value in: " + range);
         }
-        return null;
+        return result;
     }
 }

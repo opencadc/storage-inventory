@@ -106,7 +106,8 @@ public class GetActionTest {
 
     private void assertIgnoredRange(String range, long contentLength) throws RangeNotSatisfiableException {
         GetAction action = new GetAction(false);
-        Assert.assertNull(action.parseRange(range, contentLength));
+        Assert.assertEquals(0, action.parseRange(null, contentLength).size());
+        Assert.assertEquals(0, action.parseRange(range, contentLength).size());
     }
     
     private void assertCorrectRange(String range, long contentLength, long expectedOffset, long expectedLength)
