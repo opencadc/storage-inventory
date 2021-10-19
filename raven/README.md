@@ -47,7 +47,7 @@ sites first in the list of transfer URL's to GET or PUT a file.
 ```
 org.opencadc.raven.putPreference={storage site name}
 {storage site name).resourceID={storage site resourceID}
-{storage site name).namespaces={comma delimited list of namespaces}
+{storage site name).namespace={storage site namespace}
 ```
 
 **For developer testing only:** To disable authorization checking (via `readGrantProvider` or `writeGrantProvider`
@@ -74,7 +74,8 @@ ivo://ivoa.net/std/CDP#proxy-1.0 = ivo://cadc.nrc.ca/cred
 
 org.opencadc.raven.putPreference=@CADC
 @CADC.resourceID=ivo://cadc.nrc.ca/cadc/minoc
-@CADC.namespaces=cadc:IRIS/ cadc:CGPS/
+@CADC.namespace=cadc:IRIS/
+@CADC.namespace=cadc:CGPS/
 ```
 
 ### cadcproxy.pem

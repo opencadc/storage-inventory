@@ -304,7 +304,7 @@ public class RavenInitAction extends InitAction {
 
             URI resourceID = null;
             List<String> resourceIDs = props.getProperty(putPreference + ".resourceID");
-            if (resourceIDs.size() == 0) {
+            if (resourceIDs.isEmpty()) {
                 sb.append(String.format("%s.resourceID: MISSING\n", putPreference));
             } else if (resourceIDs.size() > 1) {
                 sb.append(String.format("%s.resourceID: MULTIPLE ENTRIES\n", putPreference));
@@ -318,23 +318,20 @@ public class RavenInitAction extends InitAction {
                 }
             }
 
-            String namespace = null;
-            List<String> namespaces = props.getProperty(putPreference + ".namespaces");
-            if (namespaces.size() == 0) {
-                sb.append(String.format("%s.namespaces: MISSING\n", putPreference));
-            } else if (namespaces.size() > 1) {
-                sb.append(String.format("%s.namespaces: MULTIPLE ENTRIES\n", putPreference));
+            List<String> namespaces = props.getProperty(putPreference + ".namespace");
+            if (namespaces.isEmpty()) {
+                sb.append(String.format("%s.namespace: MISSING\n", putPreference));
             } else {
-                if (StringUtil.hasText(namespaces.get(0))) {
-                    namespace = namespaces.get(0);
-                } else {
-                    sb.append(String.format("%s.namespaces: EMPTY VALUE\n", putPreference));
+                for (String namespace : namespaces) {
+                    if (!StringUtil.hasText(namespace)) {
+                        sb.append(String.format("%s.namespace: EMPTY VALUE\n", putPreference));
+                    } else if (namespace.matches(".*[\\s].*")) {
+                        sb.append(String.format("%s.namespace: MULTIPLE ENTRIES\n", putPreference));
+                    }
                 }
-            }
-
-            if (resourceID != null && namespace != null) {
-                StorageSiteRule rule = new StorageSiteRule(Arrays.asList(namespace.split("\\s+")));
-                prefs.put(resourceID, rule);
+                if (resourceID != null) {
+                    prefs.put(resourceID, new StorageSiteRule(namespaces));
+                }
             }
         }
         if (sb.length() > 0) {

@@ -152,9 +152,9 @@ public class RavenInitActionTest {
             Assert.assertTrue(message.contains("resourceID: EMPTY VALUE"));
             Assert.assertTrue(message.contains("resourceID: MULTIPLE ENTRIES"));
             Assert.assertTrue(message.contains("resourceID: INVALID URI"));
-            Assert.assertTrue(message.contains("namespaces: MISSING"));
-            Assert.assertTrue(message.contains("namespaces: EMPTY VALUE"));
-            Assert.assertTrue(message.contains("namespaces: MULTIPLE ENTRIES"));
+            Assert.assertTrue(message.contains("namespace: MISSING"));
+            Assert.assertTrue(message.contains("namespace: EMPTY VALUE"));
+            Assert.assertTrue(message.contains("namespace: MULTIPLE ENTRIES"));
         } finally {
             System.setProperty("user.home", USER_HOME);
         }
