@@ -67,60 +67,80 @@
 
 package org.opencadc.minoc;
 
-import ca.nrc.cadc.rest.SyncOutput;
+import ca.nrc.cadc.net.RangeNotSatisfiableException;
+import ca.nrc.cadc.rest.SyncInput;
+import ca.nrc.cadc.util.Log4jInit;
+import java.io.IOException;
+import java.util.SortedSet;
+import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
-import org.opencadc.inventory.Artifact;
-import org.opencadc.inventory.InventoryUtil;
-import org.opencadc.permissions.ReadGrant;
+import org.junit.Assert;
+import org.junit.Test;
+import org.opencadc.inventory.storage.ByteRange;
 
-/**
- * Interface with storage and inventory to get the metadata of an artifact.
- *
- * @author majorb
- */
-public class HeadAction extends ArtifactAction {
-    
-    private static final Logger log = Logger.getLogger(HeadAction.class);
+public class GetActionTest {
 
-    /**
-     * Default, no-arg constructor.
-     */
-    public HeadAction() {
-        super();
-    }
+    private static final Logger log = Logger.getLogger(GetActionTest.class);
 
-    /**
-     * Return the artifact metadata as repsonse headers.
-     */
-    @Override
-    public void doAction() throws Exception {
-        
-        checkReadable();
-        initAndAuthorize(ReadGrant.class);
-        initDAO();
-        
-        Artifact artifact = getArtifact(artifactURI);
-        setHeaders(artifact, syncOutput);
+    static {
+        Log4jInit.setLevel("org.opencadc.minoc", Level.INFO);
     }
     
-    /**
-     * Set the HTTP response headers for an artifact.
-     * @param artifact The artifact with metadata
-     * @param syncOutput The target response
-     */
-    public static void setHeaders(Artifact artifact, SyncOutput syncOutput) {
-        syncOutput.setDigest(artifact.getContentChecksum());
-        syncOutput.setLastModified(artifact.getContentLastModified());
-        syncOutput.setHeader("Content-Length", artifact.getContentLength());
-        String filename = InventoryUtil.computeArtifactFilename(artifact.getURI());
-        syncOutput.setHeader("Content-Disposition", "attachment; filename=\"" + filename + "\"");
-        if (artifact.contentEncoding != null) {
-            syncOutput.setHeader("Content-Encoding", artifact.contentEncoding);
+    class TestSyncInput extends SyncInput {
+
+        private String path;
+        
+        public TestSyncInput(String path) throws IOException {
+            super(null, null);
+            this.path = path;
         }
-        if (artifact.contentType != null) {
-            syncOutput.setHeader("Content-Type", artifact.contentType);
+        
+        public String getPath() {
+            return path;
         }
-        syncOutput.setHeader("Accept-Ranges", "bytes");
+
+        public String getComponentPath() {
+            return "";
+        }
     }
 
+    private void assertIgnoredRange(String range, long contentLength) throws RangeNotSatisfiableException {
+        GetAction action = new GetAction(false);
+        Assert.assertEquals(0, action.parseRange(null, contentLength).size());
+        Assert.assertEquals(0, action.parseRange(range, contentLength).size());
+    }
+    
+    private void assertCorrectRange(String range, long contentLength, long expectedOffset, long expectedLength)
+            throws RangeNotSatisfiableException {
+        GetAction action = new GetAction(false);
+        SortedSet<ByteRange> byteRangeSet = action.parseRange(range, contentLength);
+        Assert.assertEquals(1, byteRangeSet.size());
+        ByteRange br = byteRangeSet.first();
+        Assert.assertEquals(expectedOffset, br.getOffset());
+        Assert.assertEquals(expectedLength, br.getLength());
+    }
+    
+    @Test
+    public void testParseRange() throws Exception {
+        assertCorrectRange("bytes=3-99", 200, 3, 97);
+        assertCorrectRange(" bytes \t= 3 -   99 ", 200, 3, 97);
+        assertCorrectRange("bytes=3-99", 50, 3, 47);
+        assertCorrectRange("bytes=-99", 50, 0, 50);
+        assertCorrectRange("bytes=20-", 50, 20, 30);
+        assertCorrectRange("bytes=20-50", 50, 20, 30);
+
+        assertIgnoredRange("nobyteunit=2-4", 10);
+        assertIgnoredRange("bytes 2-4", 10);
+        assertIgnoredRange("2 - 4", 10);
+        assertIgnoredRange("bytes=2-4,6-8", 10);
+        assertIgnoredRange("bytes=9-7", 10);
+        assertIgnoredRange("bytes=2:4", 10);
+
+        GetAction action = new GetAction(false);
+        Assert.assertThrows(Exception.class, () -> {
+            action.parseRange("bytes=30-40", 20); });
+        Assert.assertThrows(RangeNotSatisfiableException.class, () -> {
+            action.parseRange("bytes=30-", 20); });
+    }
+    
 }
