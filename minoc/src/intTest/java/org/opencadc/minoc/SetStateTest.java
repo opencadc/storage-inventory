@@ -271,7 +271,7 @@ public class SetStateTest extends MinocTest {
             in = new ByteArrayInputStream(data);
             put = new HttpUpload(in, artifactURL);
             put.setRequestProperty(HttpTransfer.CONTENT_LENGTH, String.valueOf(content.length()));
-	    put.setRetry(0, 0, HttpTransfer.RetryReason.TRANSIENT);
+	        put.setRetry(0, 0, HttpTransfer.RetryReason.TRANSIENT);
             Subject.doAs(userSubject, new RunnableAction(put));
             responseCode = put.getResponseCode();
             log.info(testMethod + " put response: " + responseCode + " " + put.getThrowable());

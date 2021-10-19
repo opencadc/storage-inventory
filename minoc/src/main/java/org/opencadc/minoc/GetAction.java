@@ -70,20 +70,22 @@ package org.opencadc.minoc;
 import ca.nrc.cadc.io.ByteCountOutputStream;
 import ca.nrc.cadc.io.WriteException;
 import ca.nrc.cadc.net.HttpTransfer;
+import ca.nrc.cadc.net.RangeNotSatisfiableException;
 import ca.nrc.cadc.util.CaseInsensitiveStringComparator;
 import ca.nrc.cadc.util.StringUtil;
-
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
-
+import java.util.SortedSet;
 import java.util.TreeMap;
+import java.util.TreeSet;
 import org.apache.log4j.Logger;
 import org.opencadc.fits.FitsOperations;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.StorageLocation;
+import org.opencadc.inventory.storage.ByteRange;
 import org.opencadc.minoc.operations.CutoutFileNameFormat;
 import org.opencadc.minoc.operations.ProxyRandomAccessFits;
 import org.opencadc.permissions.ReadGrant;
@@ -98,13 +100,20 @@ import org.opencadc.soda.SodaParamValidator;
 public class GetAction extends ArtifactAction {
     
     private static final Logger log = Logger.getLogger(GetAction.class);
+    private static final String RANGE = "RANGE";
     private static final String CONTENT_DISPOSITION = "Content-Disposition";
+    private static final String CONTENT_RANGE = "Content-Range";
+    private static final String CONTENT_LENGTH = "Content-Length";
     private static final String[] FITS_CONTENT_TYPES = new String[] {
         "application/fits", "image/fits"
     };
 
     private static final SodaParamValidator SODA_PARAM_VALIDATOR = new SodaParamValidator();
 
+    // constructor for unit tests with no config/init
+    GetAction(boolean init) {
+        super(init);
+    }
 
     /**
      * Default, no-arg constructor.
@@ -134,6 +143,9 @@ public class GetAction extends ArtifactAction {
         storageLocation.storageBucket = artifact.storageLocation.storageBucket;
         
         log.debug("retrieving artifact from storage: " + storageLocation);
+
+        String range = syncInput.getHeader("Range");
+        log.debug("Range: " + range);
         
         ByteCountOutputStream bcos = null;
         try {
@@ -141,8 +153,23 @@ public class GetAction extends ArtifactAction {
                 log.debug("No parameters specified.");
                 HeadAction.setHeaders(artifact, syncOutput);
                 bcos = new ByteCountOutputStream(syncOutput.getOutputStream());
-                storageAdapter.get(storageLocation, bcos);
+                SortedSet<ByteRange> rangeSet = parseRange(range, artifact.getContentLength());
+                if (rangeSet.isEmpty()) {
+                    storageAdapter.get(storageLocation, bcos);
+                } else {
+                    ByteRange byteRange = rangeSet.first();
+                    syncOutput.setCode(206);
+                    long lastByte = byteRange.getOffset() + byteRange.getLength() - 1;
+                    syncOutput.setHeader(CONTENT_RANGE, "bytes " + byteRange.getOffset() + "-"
+                            + lastByte + "/" + artifact.getContentLength());
+                    // override content length
+                    syncOutput.setHeader(CONTENT_LENGTH, byteRange.getLength());
+                    storageAdapter.get(storageLocation, bcos, rangeSet);
+                }
             } else {
+                if (range != null) {
+                    log.debug("Range (" + range + ") ignored in GET with operations");
+                }
                 if (!isFITS(artifact)) {
                     throw new IllegalArgumentException("not a fits file: " + artifactURI);
                 }
@@ -182,6 +209,11 @@ public class GetAction extends ArtifactAction {
                 
                 throw new RuntimeException("BUG: unhandled SODA parameters");
             }
+        } catch (RangeNotSatisfiableException e) {
+            log.debug("Invalid Range - offset greater then the content length:" + range);
+            syncOutput.setHeader(CONTENT_RANGE, "bytes */" + artifact.getContentLength());
+            syncOutput.setHeader(CONTENT_LENGTH, "0");
+            throw e;
         } catch (WriteException e) {
             // error on client write
             String msg = "write output error";
@@ -243,8 +275,51 @@ public class GetAction extends ArtifactAction {
                 conflicts.add(SodaParamValidator.META);
                 conflicts.add(SodaParamValidator.SUB);
             }
-
             return conflicts;
         }
+    }
+
+    SortedSet<ByteRange> parseRange(String range, long contentLength) throws RangeNotSatisfiableException {
+        SortedSet<ByteRange> result = new TreeSet<ByteRange>();
+        if (range == null) {
+            return result;
+        }
+        String sanitizedRange = range.replaceAll("\\s","");  // remove whitespaces
+        if (!sanitizedRange.startsWith("bytes=")) {
+            log.debug("Ignore Range with invalid unit (only bytes supported): " + range);
+            return result;
+        }
+        String[] ranges = sanitizedRange.replace("bytes=", "").split(",");
+        if (ranges.length > 1) {
+            log.debug("Ignore multiple Ranges (only one supported): " + range);
+            return result;
+        }
+        String[] interval = ranges[0].split("-");
+        if ((interval.length == 0) || (interval.length > 2)) {
+            log.debug("Ignore Range with invalid interval: " + range);
+            return result;
+        }
+        try {
+            Long start = new Long(interval[0].length() == 0 ? "0" : interval[0]);
+            if (start > contentLength - 1) {
+                throw new RangeNotSatisfiableException("Offset greater than size of file");
+            }
+            long end = contentLength - 1;
+            if (interval.length == 2) {
+                end = new Long(interval[1]);
+            }
+            if (end < start) {
+                log.debug("Ignore Range with invalid interval: " + range);
+                return result;
+            }
+            if (end >= contentLength - 1) {
+                end = contentLength - 1;
+            }
+            result.add(new ByteRange(start, end - start + 1));
+            return result;
+        } catch (NumberFormatException e) {
+            log.debug("Ignore illegal range value in: " + range);
+        }
+        return result;
     }
 }
