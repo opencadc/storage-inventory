@@ -72,7 +72,6 @@ import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.util.PropertiesReader;
 import ca.nrc.cadc.vosi.Availability;
 import ca.nrc.cadc.vosi.AvailabilityClient;
-
 import java.io.File;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -81,11 +80,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
-
 import javax.naming.Context;
 import javax.naming.InitialContext;
 import javax.naming.NamingException;
-
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.StorageSite;
 import org.opencadc.inventory.db.ArtifactDAO;
@@ -328,6 +325,7 @@ public class RavenInitAction extends InitAction {
 
                 for (StorageSite site: sites) {
                     URI resourceID = site.getResourceID();
+                    log.debug("checking site: " + resourceID);
                     SiteState siteState = this.siteStates.get(resourceID);
                     if (siteState == null) {
                         siteState = new SiteState(true, 0);
@@ -340,15 +338,18 @@ public class RavenInitAction extends InitAction {
                         availability = new Availability(false, e.getMessage());
                         log.debug(String.format("availability check failed %s - %s", resourceID, e.getMessage()));
                     }
+                    final boolean prev = siteState.available;
                     siteState.available = availability.isAvailable();
                     this.siteStates.put(resourceID, siteState);
                     this.siteAvailabilities.put(resourceID, availability);
                     String message = String.format("availability check %s %s - %s", minDetail ? "MIN" : "FULL",
                                                    resourceID, siteState.available ? "UP" : "DOWN");
-                    if (siteState.available) {
-                        log.debug(message);
-                    } else {
+                    if (!siteState.available) {
                         log.warn(message);
+                    } else if (prev != siteState.available) {
+                        log.info(message);
+                    } else {
+                        log.debug(message);
                     }
                 }
 

@@ -227,8 +227,11 @@ public abstract class ArtifactAction extends RestAction {
         try {
             Context initContext = new InitialContext();
             this.siteAvailabilities = (Map<URI, Availability>) initContext.lookup(siteAvailabilitiesKey);
+            log.debug("found siteAvailabilities in JNDI: " + siteAvailabilitiesKey + " = " + siteAvailabilities);
+            for (Map.Entry<URI, Availability> me: siteAvailabilities.entrySet()) {
+                log.debug("found: " + me.getKey() + " = " + me.getValue());
+            }
         } catch (NamingException e) {
-            log.error("JNDI lookup error: " + e.getMessage());
             throw new IllegalStateException("JNDI lookup error", e);
         }
     }

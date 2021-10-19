@@ -77,6 +77,7 @@ import ca.nrc.cadc.net.FileContent;
 import ca.nrc.cadc.net.HttpGet;
 import ca.nrc.cadc.net.HttpPost;
 import ca.nrc.cadc.net.PreconditionFailedException;
+import ca.nrc.cadc.net.RangeNotSatisfiableException;
 import ca.nrc.cadc.net.ResourceAlreadyExistsException;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
@@ -317,7 +318,7 @@ public class FileSyncJob implements Runnable {
     private List<Protocol> getDownloadURLs(URI resource, URI artifact)
         throws IOException, InterruptedException,
         ResourceAlreadyExistsException, ResourceNotFoundException,
-        TransientException, TransferParsingException {
+        TransientException, TransferParsingException, RangeNotSatisfiableException {
 
         RegistryClient regClient = new RegistryClient();
         Subject subject = AuthenticationUtil.getCurrentSubject();
@@ -421,7 +422,8 @@ public class FileSyncJob implements Runnable {
                 // IOException will capture this if not explicitly caught and rethrown
                 log.debug("FileSyncJob.FAIL fatal", ex);
                 throw ex;
-            } catch (MalformedURLException | ResourceNotFoundException | ResourceAlreadyExistsException | PreconditionFailedException ex) {
+            } catch (MalformedURLException | ResourceNotFoundException | ResourceAlreadyExistsException
+                     | PreconditionFailedException | RangeNotSatisfiableException ex) {
                 log.debug("FileSyncJob.FAIL remove: " + u, ex);
                 urlIterator.remove();
             } catch (IOException | TransientException ex) {

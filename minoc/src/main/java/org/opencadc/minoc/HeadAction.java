@@ -120,6 +120,7 @@ public class HeadAction extends ArtifactAction {
         if (artifact.contentType != null) {
             syncOutput.setHeader("Content-Type", artifact.contentType);
         }
+        syncOutput.setHeader("Accept-Ranges", "bytes");
     }
 
 }
