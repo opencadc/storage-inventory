@@ -685,6 +685,7 @@ public class InventoryHarvester implements Runnable {
         return lastModified;
         
     }
+    
     private void logRetry(int retries, int timeout, String message) {
         log.error(String.format("retry[%s] timeout %ss - reason: %s", retries, timeout, message));
     }
