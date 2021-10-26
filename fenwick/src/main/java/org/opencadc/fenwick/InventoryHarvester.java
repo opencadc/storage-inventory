@@ -91,6 +91,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.PrivilegedAction;
 import java.text.DateFormat;
+import java.util.Calendar;
 import java.util.Date;
 import java.util.Map;
 import javax.security.auth.Subject;
@@ -122,7 +123,8 @@ public class InventoryHarvester implements Runnable {
     private static final Logger log = Logger.getLogger(InventoryHarvester.class);
     public static final String CERTIFICATE_FILE_LOCATION = System.getProperty("user.home") + "/.ssl/cadcproxy.pem";
     public static final int INITIAL_SLEEP_TIMEOUT = 20;
-    public static final int DEFAULT_SLEEP_TIMEOUT = 60;
+    
+    private static final long LOOKBACK_TIME = 2 * 60 * 1000L; // two minutes
 
     private final ArtifactDAO artifactDAO;
     private final URI resourceID;
@@ -278,6 +280,7 @@ public class InventoryHarvester implements Runnable {
                        InterruptedException {
         final TapClient tapClient = new TapClient<>(this.resourceID);
         final Date end = new Date();
+        final Date lookBack = new Date(end.getTime() - LOOKBACK_TIME);
         
         final StorageSite storageSite;
         if (trackSiteLocations) {
@@ -286,19 +289,20 @@ public class InventoryHarvester implements Runnable {
             final StorageSiteSync storageSiteSync = new StorageSiteSync(tapClient, storageSiteDAO);
             storageSite = storageSiteSync.doit();
 
-            syncDeletedStorageLocationEvents(tapClient, end, storageSite);
+            syncDeletedStorageLocationEvents(tapClient, lookBack, end, storageSite);
         } else {
             storageSite = null;
         }
 
-        syncDeletedArtifactEvents(tapClient, end);
-        syncArtifacts(tapClient, end, storageSite);
+        syncDeletedArtifactEvents(tapClient, lookBack, end);
+        syncArtifacts(tapClient, lookBack, end, storageSite);
     }
 
     /**
      * Perform a sync for deleted storage locations.  This will be used by Global sites to sync from storage sites to
      * indicate that an Artifact at the given storage site is no longer available.
      * @param tapClient                  A TAP client to issue a Luskan request.
+     * @param lookBack                   Conservative lower bound of the Luskan query.
      * @param endDate                    The upper bound of the Luskan query.
      * @param storageSite                The storage site obtained from the Storage Site sync.  Cannot be null.
      * @throws ResourceNotFoundException For any missing required configuration that is missing.
@@ -307,7 +311,7 @@ public class InventoryHarvester implements Runnable {
      * @throws TransientException        temporary failure of TAP service: same call could work in future
      * @throws InterruptedException      thread interrupted
      */
-    private void syncDeletedStorageLocationEvents(final TapClient tapClient, final Date endDate,
+    private void syncDeletedStorageLocationEvents(final TapClient tapClient, final Date lookBack, final Date endDate,
                                                   final StorageSite storageSite)
             throws ResourceNotFoundException, IOException, IllegalStateException, TransientException,
                    InterruptedException {
@@ -321,7 +325,7 @@ public class InventoryHarvester implements Runnable {
 
         final DeletedStorageLocationEventSync deletedStorageLocationEventSync =
                 new DeletedStorageLocationEventSync(tapClient);
-        deletedStorageLocationEventSync.startTime = harvestState.curLastModified;
+        deletedStorageLocationEventSync.startTime = getQueryLowerBound(lookBack, harvestState.curLastModified);
         deletedStorageLocationEventSync.endTime = endDate;
 
         final TransactionManager transactionManager = artifactDAO.getTransactionManager();
@@ -406,6 +410,7 @@ public class InventoryHarvester implements Runnable {
     /**
      * Perform a sync of the remote deleted artifact events.
      * @param tapClient                  A TAP client to issue a Luskan request.
+     * @param lookBack                   Conservative lower bound of the Luskan query.
      * @param endDate                    The upper bound of the Luskan query.
      * @throws ResourceNotFoundException For any missing required configuration that is missing.
      * @throws IOException               For unreadable configuration files.
@@ -413,7 +418,7 @@ public class InventoryHarvester implements Runnable {
      * @throws TransientException        temporary failure of TAP service: same call could work in future
      * @throws InterruptedException      thread interrupted
      */
-    private void syncDeletedArtifactEvents(final TapClient tapClient, final Date endDate)
+    private void syncDeletedArtifactEvents(final TapClient tapClient, final Date lookBack, final Date endDate)
             throws ResourceNotFoundException, IOException, IllegalStateException, TransientException,
                    InterruptedException {
         final HarvestState harvestState = this.harvestStateDAO.get(DeletedArtifactEvent.class.getName(),
@@ -426,7 +431,7 @@ public class InventoryHarvester implements Runnable {
         final DeletedArtifactEventSync deletedArtifactEventSync = new DeletedArtifactEventSync(tapClient);
         final DeletedArtifactEventDAO deletedArtifactEventDeletedEventDAO = new DeletedArtifactEventDAO(this.artifactDAO);
 
-        deletedArtifactEventSync.startTime = harvestState.curLastModified;
+        deletedArtifactEventSync.startTime = getQueryLowerBound(lookBack, harvestState.curLastModified);
         deletedArtifactEventSync.endTime = endDate;
 
         final TransactionManager transactionManager = artifactDAO.getTransactionManager();
@@ -493,6 +498,8 @@ public class InventoryHarvester implements Runnable {
     /**
      * Synchronize the artifacts found by the TAP (Luskan) query.
      *
+     * @param tapClient                  A TAP client to issue a Luskan request.
+     * @param lookBack                   Conservative lower bound of the Luskan query.
      * @param endDate                    The upper bound of the Luskan query.
      * @param storageSite                The storage site obtained from the Storage Site sync.  Optional.
      * @throws ResourceNotFoundException For any missing required configuration that is missing.
@@ -501,7 +508,7 @@ public class InventoryHarvester implements Runnable {
      * @throws TransientException        temporary failure of TAP service: same call could work in future
      * @throws InterruptedException      thread interrupted
      */
-    private void syncArtifacts(final TapClient tapClient, final Date endDate, final StorageSite storageSite)
+    private void syncArtifacts(final TapClient tapClient, final Date lookBack, final Date endDate, final StorageSite storageSite)
             throws ResourceNotFoundException, IOException, IllegalStateException, InterruptedException,
                    TransientException {
         final MessageDigest messageDigest;
@@ -510,7 +517,6 @@ public class InventoryHarvester implements Runnable {
         } catch (NoSuchAlgorithmException e) {
             throw new RuntimeException("BUG: failed to get instance of MD5", e);
         }
-        DateFormat df = DateUtil.getDateFormat(DateUtil.IVOA_DATE_FORMAT, DateUtil.UTC);
 
         SSLUtil.renewSubject(AuthenticationUtil.getCurrentSubject(), new File(CERTIFICATE_FILE_LOCATION));
 
@@ -518,13 +524,14 @@ public class InventoryHarvester implements Runnable {
 
         final ArtifactSync artifactSync = new ArtifactSync(tapClient);
         artifactSync.includeClause = this.selector.getConstraint();
-        artifactSync.startTime = harvestState.curLastModified;
+        artifactSync.startTime = getQueryLowerBound(lookBack, harvestState.curLastModified);
         artifactSync.endTime = endDate;
         
-        final TransactionManager transactionManager = artifactDAO.getTransactionManager();
-
-        DeletedArtifactEventDAO daeDAO = new DeletedArtifactEventDAO(artifactDAO);
-
+        DateFormat df = DateUtil.getDateFormat(DateUtil.IVOA_DATE_FORMAT, DateUtil.UTC);
+        if (lookBack != null && harvestState.curLastModified != null) {
+            log.debug("lookBack=" + df.format(lookBack) + " curLastModified=" + df.format(harvestState.curLastModified) 
+                + " -> " + df.format(artifactSync.startTime));
+        }
         String start = null;
         if (artifactSync.startTime != null) {
             start = df.format(artifactSync.startTime);
@@ -534,6 +541,10 @@ public class InventoryHarvester implements Runnable {
             end = df.format(artifactSync.endTime);
         }
         log.info("Artifact.QUERY start=" + start + " end=" + end);
+        
+        final TransactionManager transactionManager = artifactDAO.getTransactionManager();
+        final DeletedArtifactEventDAO daeDAO = new DeletedArtifactEventDAO(artifactDAO);
+        
         boolean first = true;
         long t1 = System.currentTimeMillis();
         try (final ResourceIterator<Artifact> artifactResourceIterator = artifactSync.iterator()) {
@@ -658,6 +669,23 @@ public class InventoryHarvester implements Runnable {
         }
     }
 
+    // incremental mode: look back in time a little because head of sequence is not stable
+    private Date getQueryLowerBound(Date lookBack, Date lastModified) {
+        if (lookBack == null) {
+            // feature not enabled
+            return lastModified;
+        }
+        if (lastModified == null) {
+            // first harvest
+            return null;
+        }
+        if (lookBack.before(lastModified)) {
+            return lookBack;
+        }
+        return lastModified;
+        
+    }
+    
     private void logRetry(int retries, int timeout, String message) {
         log.error(String.format("retry[%s] timeout %ss - reason: %s", retries, timeout, message));
     }
