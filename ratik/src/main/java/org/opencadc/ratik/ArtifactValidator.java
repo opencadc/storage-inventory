@@ -164,19 +164,19 @@ public class ArtifactValidator {
     protected void validateLocal(Artifact local)
         throws InterruptedException, IOException, ResourceNotFoundException, TransientException {
 
-        // explanation0: filter policy at L changed to exclude artifact in R
+        // explanation0: filter policy at L excludes artifact in R
         // evidence: R uses a filter policy AND Artifact in R without filter
         // if (L==global) delete Artifact, if (L==storage) delete Artifact only if
         // remote has multiple copies and create DeletedStorageLocationEvent
         log.debug("checking explanation 0");
         if (this.artifactSelector.getConstraint() != null) {
-            Artifact remote = getRemoteArtifact(local.getURI());
-            if (remote != null) {
+            ArtifactQueryResult queryResult = getRemoteArtifactQueryResult(local.getID());
+            if (queryResult != null && queryResult.artifact != null) {
                 boolean multipleCopies = false;
                 // if L == storage, get the Artifact count from global
                 if (this.remoteSite == null) {
-                    Integer count = this.getRemoteArtifactCount(local.getID());
-                    if (count != null && count > 1) {
+                    Integer numCopies = queryResult.numCopies;
+                    if (numCopies != null && numCopies > 1) {
                         multipleCopies = true;
                     }
                 }
@@ -642,43 +642,18 @@ public class ArtifactValidator {
     /**
      * Get a remote Artifact
      */
-    Artifact getRemoteArtifact(URI uri)
+    ArtifactQueryResult getRemoteArtifactQueryResult(UUID id)
         throws InterruptedException, IOException, ResourceNotFoundException, TransientException {
 
-        final TapClient<Artifact> tapClient = new TapClient<>(this.resourceID);
-        final String query = String.format("%s WHERE uri = '%s'", ArtifactRowMapper.BASE_QUERY, uri.toASCIIString());
+        final TapClient<ArtifactQueryResult> tapClient = new TapClient<>(this.resourceID);
+        final String query = String.format("%s, num_copies() %s WHERE id = '%s'",  ArtifactRowMapper.SELECT,  ArtifactRowMapper.FROM, id);
         log.debug("\nExecuting query '" + query + "'\n");
-        ResourceIterator<Artifact> results = tapClient.execute(query, new ArtifactRowMapper());
+        ResourceIterator<ArtifactQueryResult> results = tapClient.execute(query, new ArtifactQueryResultRowMapper());
         if (results.hasNext()) {
             return results.next();
         }
         return null;
     }
-
-    Integer getRemoteArtifactCount(UUID id)
-        throws InterruptedException, IOException, ResourceNotFoundException, TransientException {
-
-        final TapClient<Integer> tapClient = new TapClient<>(this.resourceID);
-        final String query = String.format("SELECT num_copies() FROM inventory.Artifact WHERE id = '%s'", id);
-        log.debug(String.format("\nExecuting query '%s'\n", query));
-        ResourceIterator<Integer> results = tapClient.execute(query, new NumCopiesRowMapper());
-        Integer count = 0;
-        if (results.hasNext()) {
-            count = results.next();
-        }
-        log.debug(String.format("Artifact count: %s", count));
-        return count;
-    }
-
-    public class NumCopiesRowMapper implements TapRowMapper<Integer> {
-
-        @Override
-        public Integer mapRow(final List<Object> row) {
-            return (Integer) row.get(0);
-        }
-
-    }
-
 
     /**
      * Get a remote DeletedArtifactEvent
@@ -717,5 +692,23 @@ public class ArtifactValidator {
         log.info(String.format("no action %s %s, reason: %s", artifact.getID(), artifact.getURI(), message));
     }
 
+    private class ArtifactQueryResultRowMapper implements TapRowMapper<ArtifactQueryResult> {
+
+        public ArtifactQueryResult mapRow(final List<Object> row) {
+            ArtifactRowMapper mapper = new ArtifactRowMapper();
+            Artifact artifact = mapper.mapRow(row);
+            Integer numCopies = (Integer) row.get(row.size() - 1);
+
+            ArtifactQueryResult result = new ArtifactQueryResult();
+            result.artifact = artifact;
+            result.numCopies = numCopies;
+            return result;
+        }
+    }
+
+    private static class ArtifactQueryResult {
+        Artifact artifact;
+        Integer numCopies;
+    }
 }
 
