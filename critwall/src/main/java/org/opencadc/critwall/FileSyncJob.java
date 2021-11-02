@@ -316,9 +316,9 @@ public class FileSyncJob implements Runnable {
 
     // Use transfer negotiation at resource URI to get list of download URLs for the artifact.
     private List<Protocol> getDownloadURLs(URI resource, URI artifact)
-        throws IOException, InterruptedException,
-        ResourceAlreadyExistsException, ResourceNotFoundException,
-        TransientException, TransferParsingException, RangeNotSatisfiableException {
+        throws IOException, InterruptedException, 
+               ResourceAlreadyExistsException, ResourceNotFoundException,
+               TransientException, TransferParsingException {
 
         RegistryClient regClient = new RegistryClient();
         Subject subject = AuthenticationUtil.getCurrentSubject();
