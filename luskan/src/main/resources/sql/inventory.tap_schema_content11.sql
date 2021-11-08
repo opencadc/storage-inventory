@@ -90,11 +90,12 @@ insert into tap_schema.columns11 (table_name,column_name,utype,description,unit,
 ;
 
 insert into tap_schema.columns11 (table_name,column_name,utype,description,unit,datatype,arraysize,xtype,principal,indexed,std,column_index) values
-( 'inventory.HarvestState', 'resourceID',       'si:HarvestState.resourceID',       'ID of the remote luskan (URI)', NULL, 'char','512*', 'uri', 1, 1, 1, 1 ),
-( 'inventory.HarvestState', 'curLastModified',  'si:HarvestState.curLastModified',  'lastModified timestamp of the last entity harvested', NULL, 'char','23*','timestamp', 1, 1, 1, 2 ),
-( 'inventory.HarvestState', 'curID',            'si:HarvestState`.curID',           'id of the last entity harvested', NULL, 'char','36','uuid', 1, 1, 1, 3 ),
-( 'inventory.HarvestState', 'id',               'si:HarvestState`.id',              'primary key', NULL, 'char','36','uuid', 1, 1, 1, 4 ),
-( 'inventory.HarvestState', 'lastModified',     'si:HarvestState.lastModified',     'timestamp of the event', NULL, 'char','23*','timestamp', 1, 1, 1, 5 ),
-( 'inventory.HarvestState', 'metaChecksum',     'si:HarvestState.metaChecksum',     'checksum of the file metadata', NULL, 'char','136*','uri', 1, 0, 1, 6 )
+( 'inventory.HarvestState', 'name',             'si:HarvestState.name',             'classname of the harvested entity', NULL, 'char','64*', NULL, 1, 1, 1, 1 ),
+( 'inventory.HarvestState', 'resourceID',       'si:HarvestState.resourceID',       'ID of the remote luskan (URI)', NULL, 'char','512*', 'uri', 1, 1, 1, 2 ),
+( 'inventory.HarvestState', 'curLastModified',  'si:HarvestState.curLastModified',  'lastModified timestamp of the last entity harvested', NULL, 'char','23*','timestamp', 1, 1, 1, 3 ),
+( 'inventory.HarvestState', 'curID',            'si:HarvestState`.curID',           'id of the last entity harvested', NULL, 'char','36','uuid', 1, 1, 1, 4 ),
+( 'inventory.HarvestState', 'id',               'si:HarvestState`.id',              'primary key', NULL, 'char','36','uuid', 1, 1, 1, 5 ),
+( 'inventory.HarvestState', 'lastModified',     'si:HarvestState.lastModified',     'timestamp of the event', NULL, 'char','23*','timestamp', 1, 1, 1, 6 ),
+( 'inventory.HarvestState', 'metaChecksum',     'si:HarvestState.metaChecksum',     'checksum of the file metadata', NULL, 'char','136*','uri', 1, 0, 1, 7 )
 
 ;
