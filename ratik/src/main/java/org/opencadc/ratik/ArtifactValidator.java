@@ -172,12 +172,11 @@ public class ArtifactValidator {
         if (this.artifactSelector.getConstraint() != null) {
             ArtifactQueryResult queryResult = getRemoteArtifactQueryResult(local.getID());
             if (queryResult != null && queryResult.artifact != null) {
-                boolean multipleCopies = false;
+                int numCopies = 0;
                 // if L == storage, get the Artifact count from global
                 if (this.remoteSite == null) {
-                    Integer numCopies = queryResult.numCopies;
-                    if (numCopies != null && numCopies > 1) {
-                        multipleCopies = true;
+                    if (queryResult.numCopies != null) {
+                        numCopies = queryResult.numCopies;
                     }
                 }
                 try {
@@ -189,25 +188,28 @@ public class ArtifactValidator {
                     if (this.remoteSite != null) {
                         // if L==global, delete Artifact, do not create a DeletedStorageLocationEvent
                         log.info(String.format(
-                            "ArtifactValidator.deleteArtifact Artifact.id=%s Artifact.uri=%s reason=local-filter-policy-change",
+                            "ArtifactValidator.deleteArtifact Artifact.id=%s Artifact.uri=%s"
+                                + " reason=local-filter-policy-change",
                             local.getID(), local.getURI()));
                         this.artifactDAO.delete(local.getID());
-                    } else if (multipleCopies) {
+                    } else if (numCopies > 1) { 
+                        // TODO: could be that the limit above is increased above 1 for reasons
                         // if L==storage, delete Artifact only if multiple copies in global, and create a DeletedStorageLocationEvent
                         log.info(String.format(
-                            "ArtifactValidator.deleteArtifact Artifact.id=%s Artifact.uri=%s "
-                                + "reason=local-filter-policy-change, multiple copies in global",
+                            "ArtifactValidator.deleteArtifact Artifact.id=%s Artifact.uri=%s"
+                                + " reason=local-filter-policy-exclude numCopies=" + numCopies,
                             local.getID(), local.getURI()));
                         this.artifactDAO.delete(local.getID());
 
                         DeletedStorageLocationEvent deletedStorageLocationEvent = new DeletedStorageLocationEvent(local.getID());
                         log.info(String.format(
-                            "ArtifactValidator.createDeletedStorageLocationEvent event=%s reason=local-filter-policy-change",
+                            "ArtifactValidator.createDeletedStorageLocationEvent event=%s"
+                                + " reason=local-filter-policy-exclude numCopies=" + numCopies,
                             deletedStorageLocationEvent));
                         this.deletedStorageLocationEventDAO.put(deletedStorageLocationEvent);
                     } else {
-                        log.info(String.format("ArtifactValidator.didNotDeleteArtifact Artifact.id=%s Artifact.uri=%s "
-                                                   + "reason=local-filter-policy-change", local.getID(), local.getURI()));
+                        log.info(String.format("ArtifactValidator.deleteArtifact-delayed Artifact.id=%s Artifact.uri=%s"
+                                + "reason=local-filter-policy-exclude numCopies=" + numCopies, local.getID(), local.getURI()));
                     }
 
                     log.debug("committing transaction");
