@@ -235,7 +235,7 @@ public class InventoryValidator implements Runnable {
             final Subject subject = SSLUtil.createSubject(new File(CERTIFICATE_FILE_LOCATION));
             Subject.doAs(subject, (PrivilegedExceptionAction<Void>) () -> {
                 doit();
-                log.info(this.getClass().getSimpleName() + ".summary numLocal= " + numLocalArtifacts
+                log.info(InventoryValidator.class.getSimpleName() + ".summary numLocal= " + numLocalArtifacts
                     + " numRemote=" + numRemoteArtifacts + " numMatched=" + numMatchedArtifacts);
                 return null;
             });
@@ -413,14 +413,14 @@ public class InventoryValidator implements Runnable {
         // order query results by Artifact.uri
         boolean ordered = true;
         long t1 = System.currentTimeMillis();
-        log.debug(this.getClass().getSimpleName() + ".localQuery bucket=" + bucket);
+        log.debug(InventoryValidator.class.getSimpleName() + ".localQuery bucket=" + bucket);
         UUID remoteSiteID = null;
         if (this.remoteSite != null) {
             remoteSiteID = this.remoteSite.getID();
         }
         ResourceIterator<Artifact> ret = this.artifactDAO.iterator(remoteSiteID, bucket, ordered);
         long dt = System.currentTimeMillis() - t1;
-        log.info(this.getClass().getSimpleName() + ".localQuery bucket=" + bucket + " duration=" + dt);
+        log.info(InventoryValidator.class.getSimpleName() + ".localQuery bucket=" + bucket + " duration=" + dt);
         return ret;
     }
 
@@ -442,10 +442,10 @@ public class InventoryValidator implements Runnable {
         final String query = buildRemoteQuery(bucket);
         log.debug("\nExecuting query '" + query + "'\n");
         long t1 = System.currentTimeMillis();
-        log.debug(this.getClass().getSimpleName() + ".remoteQuery bucket=" + bucket);
+        log.debug(InventoryValidator.class.getSimpleName() + ".remoteQuery bucket=" + bucket);
         ResourceIterator<Artifact> ret = tapClient.execute(query, new ArtifactRowMapper());
         long dt = System.currentTimeMillis() - t1;
-        log.info(this.getClass().getSimpleName() + ".remoteQuery bucket=" + bucket + " duration=" + dt);
+        log.info(InventoryValidator.class.getSimpleName() + ".remoteQuery bucket=" + bucket + " duration=" + dt);
         return ret;
     }
 

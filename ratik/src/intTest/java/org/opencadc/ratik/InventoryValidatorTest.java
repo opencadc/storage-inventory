@@ -238,15 +238,42 @@ public class InventoryValidatorTest {
     @Test
     public void explanation0_ArtifactInLocal_LocalIsStorage() throws Exception {
 
-        // case 1: single copy of Artifact in remote.
-        // Put the same Artifact into local and remote, single copy in remote.
+        // Put the same Artifact into local
         Artifact artifact = new Artifact(URI.create("cadc:INTTEST/one.ext"), TestUtil.getRandomMD5(),
                                          new Date(), 1024L);
         this.localEnvironment.artifactDAO.put(artifact);
 
+        // case 1: no copies in remote
+        try {
+            System.setProperty("user.home", TMP_DIR);
+            InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.inventoryConnectionConfig,
+                                                                    this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
+                                                                    new IncludeArtifacts(),null,
+                                                                    false) {
+                // Override the remote query to not return the remote Artifact.
+                @Override
+                String buildRemoteQuery(final String bucket) throws ResourceNotFoundException, IOException {
+                    return ArtifactRowMapper.BASE_QUERY + " WHERE uri LIKE 'cadc:FOO/%'";
+                }
+            };
+            testSubject.run();
+        } finally {
+            System.setProperty("user.home", USER_HOME);
+        }
+
+        // Local Artifact should not have been removed if only a single copy in remote.
+        Artifact localArtifact = this.localEnvironment.artifactDAO.get(artifact.getID());
+        Assert.assertNotNull("no remote: local artifact preserved", localArtifact);
+
+        // DeletedStorageLocationEvent should not have been created.
+        DeletedStorageLocationEvent dsle = this.localEnvironment.deletedStorageLocationEventDAO.get(artifact.getID());
+        Assert.assertNull("no remote: DeletedStorageLocationEvent not created", dsle);
+
+        
+        // case 2: single copy in remote
         UUID remoteSiteID = this.remoteEnvironment.storageSiteDAO.list().iterator().next().getID();
         artifact.siteLocations.add(new SiteLocation(remoteSiteID));
-        this.remoteEnvironment.artifactDAO.put(artifact);
+        this.remoteEnvironment.globalArtifactDAO.put(artifact);
 
 
         try {
@@ -267,28 +294,16 @@ public class InventoryValidatorTest {
         }
 
         // Local Artifact should not have been removed if only a single copy in remote.
-        Artifact localArtifact = this.localEnvironment.artifactDAO.get(artifact.getID());
-        Assert.assertNotNull("local artifact not found", localArtifact);
+        localArtifact = this.localEnvironment.artifactDAO.get(artifact.getID());
+        Assert.assertNotNull("single remote: local artifact preserved", localArtifact);
 
         // DeletedStorageLocationEvent should not have been created.
-        DeletedStorageLocationEvent dsle = this.localEnvironment.deletedStorageLocationEventDAO.get(artifact.getID());
-        Assert.assertNull("DeletedStorageLocationEvent found", dsle);
+        dsle = this.localEnvironment.deletedStorageLocationEventDAO.get(artifact.getID());
+        Assert.assertNull("single remote: DeletedStorageLocationEvent not created", dsle);
 
-        // cleanup between tests
-        this.localEnvironment.cleanTestEnvironment();
-        this.remoteEnvironment.cleanTestEnvironment();
-        this.remoteEnvironment.initStorageSite(REMOTE_STORAGE_SITE);
-
-        // case 2: multiple copies of Artifact in remote.
-        // Put Artifact in local, add second copy of Artifact to remote.
-        artifact = new Artifact(URI.create("cadc:INTTEST/one.ext"), TestUtil.getRandomMD5(),
-                                new Date(), 1024L);
-        this.localEnvironment.artifactDAO.put(artifact);
-
-        remoteSiteID = this.remoteEnvironment.storageSiteDAO.list().iterator().next().getID();
-        artifact.siteLocations.add(new SiteLocation(remoteSiteID));
-        artifact.siteLocations.add(new SiteLocation(UUID.randomUUID()));
-        this.remoteEnvironment.artifactDAO.put(artifact);
+        // add another site
+        SiteLocation loc = new SiteLocation(UUID.randomUUID());
+        this.remoteEnvironment.globalArtifactDAO.addSiteLocation(artifact, loc);
 
         try {
             System.setProperty("user.home", TMP_DIR);
@@ -309,11 +324,11 @@ public class InventoryValidatorTest {
 
         // Local Artifact should be deleted if multiple copies in remote.
         localArtifact = this.localEnvironment.artifactDAO.get(artifact.getID());
-        Assert.assertNull("local artifact found", localArtifact);
+        Assert.assertNull("multiple remote: local artifact removed", localArtifact);
 
         // DeletedStorageLocationEvent should have been created.
         dsle = this.localEnvironment.deletedStorageLocationEventDAO.get(artifact.getID());
-        Assert.assertNotNull("DeletedStorageLocationEvent not found", dsle);
+        Assert.assertNotNull("multiple remote: DeletedStorageLocationEvent created", dsle);
     }
 
     @Test
