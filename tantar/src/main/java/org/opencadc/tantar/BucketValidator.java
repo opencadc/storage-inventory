@@ -294,10 +294,17 @@ public class BucketValidator implements ValidateEventListener {
      */
     public void validate() throws Exception {
         final Profiler profiler = new Profiler(BucketValidator.class);
-        LOGGER.debug("Acquiring iterators.");
+        LOGGER.info("BucketValidator.validate phase=start");
+        long t1 = System.currentTimeMillis();
+
         final Iterator<StorageMetadata> storageMetadataIterator = getStorageMetadataIterator();
+        long t2 = System.currentTimeMillis();
+        LOGGER.info("BucketValidator.storageQuery duration=" + (t2 - t1));
+
         final Iterator<Artifact> inventoryIterator = iterateInventory();
-        profiler.checkpoint("iterators: ok");
+        long t3 = System.currentTimeMillis();
+        LOGGER.info("BucketValidator.inventoryQuery duration=" + (t3 - t2));
+
         LOGGER.debug(String.format("Acquired iterators: \nHas Artifacts (%b)\nHas Storage Metadata (%b).",
                                    inventoryIterator.hasNext(), storageMetadataIterator.hasNext()));
 
@@ -357,7 +364,7 @@ public class BucketValidator implements ValidateEventListener {
         }
         logSummary(true, false);
 
-        LOGGER.debug("END validating iterators.");
+        LOGGER.info("BucketValidator.validate phase=end");
     }
 
     // default per-item invocation
