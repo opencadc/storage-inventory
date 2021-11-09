@@ -114,7 +114,7 @@ public abstract class AbstractDAO<T extends Entity> {
      * Copy configuration from argument DAO. This uses the same DataSource and TransactionManager
      * so calls to this and another DAO participate in the same transaction.
      * 
-     * @param dao another DAO to copy/share configuration
+     * @param dao another DAO to share configuration and datasource
      */
     protected AbstractDAO(AbstractDAO dao) {
         this(dao.origin);
@@ -126,8 +126,8 @@ public abstract class AbstractDAO<T extends Entity> {
      * Copy configuration but override origin setting. This is for HarvestStateDAO which is
      * always origin=true.
      * 
-     * @param dao
-     * @param origin 
+     * @param dao another DAO to share configuration and datasource
+     * @param origin origin flag for lastModified update
      */
     protected AbstractDAO(AbstractDAO dao, boolean origin) {
         this(origin);
