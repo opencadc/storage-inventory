@@ -71,11 +71,9 @@ package org.opencadc.inventory.storage.ad;
 
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.util.ArrayList;
 import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
-
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.StorageLocation;
@@ -91,7 +89,7 @@ public class AdStorageQuery {
 
     private static final String QTMPL = "SELECT archiveName, fileName, uri, inventoryURI, contentMD5, fileSize,"
             + " contentEncoding, contentType, ingestDate"
-            + " FROM archive_files WHERE archiveName = '%s' AND fileName >= 'CFHTLS_D_g_100028+021230_T0001.cat.gz'"
+            + " FROM archive_files WHERE archiveName = '%s'"
             + " ORDER BY fileName ASC, ingestDate DESC";
 
     private String query;
