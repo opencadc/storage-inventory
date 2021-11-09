@@ -122,6 +122,19 @@ public abstract class AbstractDAO<T extends Entity> {
         this.dataSource = dao.getDataSource();
     }
 
+    /**
+     * Copy configuration but override origin setting. This is for HarvestStateDAO which is
+     * always origin=true.
+     * 
+     * @param dao
+     * @param origin 
+     */
+    protected AbstractDAO(AbstractDAO dao, boolean origin) {
+        this(origin);
+        this.gen = dao.getSQLGenerator();
+        this.dataSource = dao.getDataSource();
+    }
+    
     protected MessageDigest getDigest() {
         try {
             return MessageDigest.getInstance("MD5");
