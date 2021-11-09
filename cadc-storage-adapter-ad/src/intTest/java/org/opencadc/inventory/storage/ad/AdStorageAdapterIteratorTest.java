@@ -66,9 +66,10 @@
  ************************************************************************
  */
 
-package org.opencadc.inventory.storage.ad.integration;
+package org.opencadc.inventory.storage.ad;
 
 import ca.nrc.cadc.auth.SSLUtil;
+import ca.nrc.cadc.io.ResourceIterator;
 import ca.nrc.cadc.util.FileUtil;
 import ca.nrc.cadc.util.Log4jInit;
 import java.io.File;
@@ -206,5 +207,31 @@ public class AdStorageAdapterIteratorTest {
     }
 
 
+    //@Test
+    public void testIteratorStream() throws Exception {
+        Subject.doAs(testSubject, new PrivilegedExceptionAction<Object>() {
+            public Object run() throws Exception {
+                final AdStorageAdapter adStorageAdapter = new AdStorageAdapter();
+
+                // query should come back with 0
+                String archiveName = "CFHT";
+                log.info("iterator/query START: " + archiveName);
+                try {
+                    Iterator<StorageMetadata> storageMetaIterator = adStorageAdapter.iterator(archiveName);
+                    long num = 0L;
+                    while (storageMetaIterator.hasNext()) {
+                        StorageMetadata sm = storageMetaIterator.next();
+                        num++;
+                        System.out.println(String.format("%12d %s", num, sm));
+                    }
+                } catch (Exception unexpected) {
+                    log.error("unexpected exception", unexpected);
+                    Assert.fail("unexpected exception: " + unexpected.getMessage());
+                }
+
+                return null;
+            }
+        });
+    }
 
 }

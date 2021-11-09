@@ -87,7 +87,7 @@ public class HarvestStateDAO extends AbstractDAO<HarvestState> {
     }
     
     public HarvestStateDAO(AbstractDAO src) {
-        super(src);
+        super(src, true);
     }
     
     public HarvestState get(UUID id) {
