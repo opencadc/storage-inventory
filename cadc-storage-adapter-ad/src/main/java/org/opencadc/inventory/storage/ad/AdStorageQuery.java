@@ -91,7 +91,8 @@ public class AdStorageQuery {
 
     private static final String QTMPL = "SELECT archiveName, fileName, uri, inventoryURI, contentMD5, fileSize,"
             + " contentEncoding, contentType, ingestDate"
-            + " FROM archive_files WHERE archiveName = '%s' ORDER BY fileName ASC, ingestDate DESC";
+            + " FROM archive_files WHERE archiveName = '%s' AND fileName >= 'CFHTLS_D_g_100028+021230_T0001.cat.gz'"
+            + " ORDER BY fileName ASC, ingestDate DESC";
 
     private String query;
     
@@ -116,6 +117,11 @@ public class AdStorageQuery {
             String storageBucket = (String) i.next();
             String fname = (String) i.next();
             URI uri = (URI) i.next();
+            if (uri == null) {
+                log.warn(AdStorageMetadataRowMapper.class.getSimpleName() + ".SKIP loc=" + storageBucket + "/" + fname + " reason=null-uri");
+                return null;
+            }
+            
             // chose best storageID
             URI sid = URI.create("ad:" + storageBucket + "/" + fname);
             if ("mast".equals(uri.getScheme())) {
@@ -125,7 +131,7 @@ public class AdStorageQuery {
             
             URI artifactURI = (URI) i.next();
             if (artifactURI == null) {
-                log.warn(AdStorageMetadataRowMapper.class.getSimpleName() + ".SKIP loc=" + storageBucket + "/" + storageID + " reason=null-artifactURI");
+                log.warn(AdStorageMetadataRowMapper.class.getSimpleName() + ".SKIP loc=" + storageBucket + "/" + fname + " reason=null-artifactURI");
                 return null;
             }
             
@@ -136,18 +142,18 @@ public class AdStorageQuery {
                 contentChecksum = new URI(MD5_ENCODING_SCHEME + hex);
                 InventoryUtil.assertValidChecksumURI(AdStorageQuery.class, "contentChecksum", contentChecksum);
             } catch (IllegalArgumentException | URISyntaxException u) {
-                log.warn(AdStorageMetadataRowMapper.class.getSimpleName() + ".SKIP loc=" + storageBucket + "/" + storageID + " reason=invalid=contentChecksum");
+                log.warn(AdStorageMetadataRowMapper.class.getSimpleName() + ".SKIP loc=" + storageBucket + "/" + fname + " reason=invalid=contentChecksum");
                 return null;
             }
             
             // archive_files.fileSize
             Long contentLength = (Long) i.next();
             if (contentLength == null) {
-                log.warn(AdStorageMetadataRowMapper.class.getSimpleName() + ".SKIP loc=" + storageBucket + "/" + storageID + " reason=null-contentLength");
+                log.warn(AdStorageMetadataRowMapper.class.getSimpleName() + ".SKIP loc=" + storageBucket + "/" + fname + " reason=null-contentLength");
                 return null;
             }
             if (contentLength == 0L) {
-                log.warn(AdStorageMetadataRowMapper.class.getSimpleName() + ".SKIP loc=" + storageBucket + "/" + storageID + " reason=zero-contentLength");
+                log.warn(AdStorageMetadataRowMapper.class.getSimpleName() + ".SKIP loc=" + storageBucket + "/" + fname + " reason=zero-contentLength");
                 return null;
             }
 

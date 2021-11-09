@@ -200,6 +200,22 @@ public class InventoryUtilTest {
             } catch (IllegalArgumentException expected) {
                 log.info("caught expected: " + expected);
             }
+            
+            try {
+                URI u = URI.create("cadc:foo[bar");
+                InventoryUtil.validateArtifactURI(InventoryUtilTest.class, u);
+                Assert.fail("expected invalid: " + u);
+            } catch (IllegalArgumentException expected) {
+                log.info("caught expected: " + expected);
+            }
+            
+            try {
+                URI u = URI.create("cadc:foo]bar");
+                InventoryUtil.validateArtifactURI(InventoryUtilTest.class, u);
+                Assert.fail("expected invalid: " + u);
+            } catch (IllegalArgumentException expected) {
+                log.info("caught expected: " + expected);
+            }
 
         } catch (Exception unexpected) {
             log.error("unexpected exception", unexpected);

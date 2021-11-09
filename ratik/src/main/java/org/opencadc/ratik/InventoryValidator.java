@@ -210,7 +210,7 @@ public class InventoryValidator implements Runnable {
         
         ArtifactDAO txnDAO = new ArtifactDAO(false);
         txnDAO.setConfig(txnConfig);
-        this.artifactValidator = new ArtifactValidator(txnDAO, resourceID, remoteSite);
+        this.artifactValidator = new ArtifactValidator(txnDAO, resourceID, this.remoteSite, this.artifactSelector);
 
         try {
             this.messageDigest = MessageDigest.getInstance("MD5");
@@ -235,7 +235,7 @@ public class InventoryValidator implements Runnable {
             final Subject subject = SSLUtil.createSubject(new File(CERTIFICATE_FILE_LOCATION));
             Subject.doAs(subject, (PrivilegedExceptionAction<Void>) () -> {
                 doit();
-                log.info(this.getClass().getSimpleName() + ".summary numLocal= " + numLocalArtifacts
+                log.info(InventoryValidator.class.getSimpleName() + ".summary numLocal= " + numLocalArtifacts
                     + " numRemote=" + numRemoteArtifacts + " numMatched=" + numMatchedArtifacts);
                 return null;
             });
@@ -404,24 +404,23 @@ public class InventoryValidator implements Runnable {
      * Get local artifacts matching the uriBuckets.
      *
      * @param bucket The bucket prefix.
-     * @return ResourceIterator over Artifact's matching the remote filter policy and the uri buckets.
+     * @return ResourceIterator over Artifact's matching the uri buckets.
      *
-     * @throws ResourceNotFoundException For any missing required configuration that is missing.
      * @throws IOException               For unreadable configuration files.
      */
     ResourceIterator<Artifact> getLocalIterator(final String bucket)
-        throws ResourceNotFoundException, IOException {
-        String constraint = null;
-        if (StringUtil.hasText(this.artifactSelector.getConstraint())) {
-            constraint = this.artifactSelector.getConstraint().trim();
-        }
+        throws IOException {
         // order query results by Artifact.uri
         boolean ordered = true;
         long t1 = System.currentTimeMillis();
-        log.debug(this.getClass().getSimpleName() + ".localQuery bucket=" + bucket);
-        ResourceIterator<Artifact> ret = this.artifactDAO.iterator(constraint, bucket, ordered);
+        log.debug(InventoryValidator.class.getSimpleName() + ".localQuery bucket=" + bucket);
+        UUID remoteSiteID = null;
+        if (this.remoteSite != null) {
+            remoteSiteID = this.remoteSite.getID();
+        }
+        ResourceIterator<Artifact> ret = this.artifactDAO.iterator(remoteSiteID, bucket, ordered);
         long dt = System.currentTimeMillis() - t1;
-        log.info(this.getClass().getSimpleName() + ".localQuery bucket=" + bucket + " duration=" + dt);
+        log.info(InventoryValidator.class.getSimpleName() + ".localQuery bucket=" + bucket + " duration=" + dt);
         return ret;
     }
 
@@ -443,10 +442,10 @@ public class InventoryValidator implements Runnable {
         final String query = buildRemoteQuery(bucket);
         log.debug("\nExecuting query '" + query + "'\n");
         long t1 = System.currentTimeMillis();
-        log.debug(this.getClass().getSimpleName() + ".remoteQuery bucket=" + bucket);
+        log.debug(InventoryValidator.class.getSimpleName() + ".remoteQuery bucket=" + bucket);
         ResourceIterator<Artifact> ret = tapClient.execute(query, new ArtifactRowMapper());
         long dt = System.currentTimeMillis() - t1;
-        log.info(this.getClass().getSimpleName() + ".remoteQuery bucket=" + bucket + " duration=" + dt);
+        log.info(InventoryValidator.class.getSimpleName() + ".remoteQuery bucket=" + bucket + " duration=" + dt);
         return ret;
     }
 
