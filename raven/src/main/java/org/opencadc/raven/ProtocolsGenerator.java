@@ -81,12 +81,16 @@ import ca.nrc.cadc.vosi.Availability;
 
 import java.io.File;
 import java.io.IOException;
+import java.net.InetAddress;
 import java.net.URI;
 import java.net.URL;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.SortedSet;
+import java.util.TreeSet;
 import java.util.UUID;
 
 import org.apache.log4j.Logger;
@@ -246,39 +250,17 @@ public class ProtocolsGenerator {
         return protos;
     }
 
-    static List<StorageSite> prioritizePushToSites(Set<StorageSite> storageSites, URI artifactURI,
-                                                   Map<URI, StorageSiteRule> siteRules) {
-        // pushTo storage sites in priority order
-        List<StorageSite> orderedSites = new ArrayList<>();
-
-        // for each remote storage site in global
+    static SortedSet<StorageSite> prioritizePushToSites(Set<StorageSite> storageSites, URI artifactURI,
+                                                        Map<URI, StorageSiteRule> siteRules) {
+        PrioritizingStorageSiteComparator comparator = new PrioritizingStorageSiteComparator(siteRules, artifactURI, null);
+        TreeSet<StorageSite> orderedSet = new TreeSet<>(comparator);
         for (StorageSite storageSite : storageSites) {
-            // skip the storage site if it doesn't allow writes
-            if (!storageSite.getAllowWrite()) {
-                continue;
-            }
-
-            boolean added = false;
-            for (Map.Entry<URI, StorageSiteRule> ruleMap : siteRules.entrySet()) {
-                // check if a rule resourceID matches a storage site resourceID
-                if (ruleMap.getKey().equals(storageSite.getResourceID())) {
-                    // if the rule namespace matches the Artifact namespace
-                    for (String namespace : ruleMap.getValue().getNamespaces()) {
-                        if (artifactURI.toASCIIString().startsWith(namespace)) {
-                            // found a matching namespace for this storage site
-                            // insert at the front of the list
-                            orderedSites.add(0, storageSite);
-                            added = true;
-                            break;
-                        }
-                    }
-                }
-            }
-            if (!added) {
-                orderedSites.add(storageSite);
+            if (storageSite.getAllowWrite()) {
+                orderedSet.add(storageSite);
             }
         }
-        return orderedSites;
+        // return the set in descending order, higher priority sites first.
+        return orderedSet.descendingSet();
     }
 
     private List<Protocol> doPushTo(URI artifactURI, Transfer transfer, String authToken) throws IOException {
@@ -287,8 +269,7 @@ public class ProtocolsGenerator {
         Set<StorageSite> storageSites = storageSiteDAO.list(); // this set could be cached
 
         List<Protocol> protos = new ArrayList<>();
-        List<StorageSite> orderedSites = prioritizePushToSites(storageSites, artifactURI, this.siteRules);
-
+        SortedSet<StorageSite> orderedSites = prioritizePushToSites(storageSites, artifactURI, this.siteRules);
         // produce URLs for all writable sites
         for (StorageSite storageSite : orderedSites) {
             // check if site is currently offline
@@ -378,6 +359,64 @@ public class ProtocolsGenerator {
             return false;
         }
         return true;
+    }
+
+    /**
+     * Compare two StorageSite's, giving higher ranking to the site with a
+     * namespace matching an Artifact URI.
+     */
+    static class PrioritizingStorageSiteComparator implements Comparator<StorageSite> {
+
+        private final Map<URI, StorageSiteRule> siteRules;
+        private final URI artifactURI;
+        private InetAddress clientIP;
+
+        public PrioritizingStorageSiteComparator(Map<URI, StorageSiteRule> siteRules,
+                                                 URI artifactURI, InetAddress clientIP) {
+            this.siteRules = siteRules;
+            this.artifactURI = artifactURI;
+            this.clientIP = clientIP;
+        }
+
+        @Override
+        public int compare(StorageSite site1, StorageSite site2) {
+
+            boolean site1Match = hasMatchingNamespace(site1);
+            boolean site2match = hasMatchingNamespace(site2);
+
+            // give higher priority to the site with a namespace that matches the Artifact URI.
+            if (site1Match && !site2match) {
+                return 1;
+            } else if (!site1Match && site2match) {
+                return -1;
+            } else {
+                // 2 sites that both either match the namespace or do not match the namespace
+                // of the Artifact URI.
+                if (!site1.getResourceID().equals(site2.getResourceID())) {
+                    // randomly prioritize the first site higher for now,
+                    // use the clientIP when implemented.
+                    return 1;
+                }
+                // resourceID's also match, equal
+                return 0;
+            }
+        }
+
+        /**
+         * Check if a StorageSite has a namespace matching the Artifact URI.
+         */
+        protected boolean hasMatchingNamespace(StorageSite site) {
+            for (Map.Entry<URI, StorageSiteRule> ruleMap : this.siteRules.entrySet()) {
+                if (ruleMap.getKey().equals(site.getResourceID())) {
+                    for (Namespace namespace : ruleMap.getValue().getNamespaces()) {
+                        if (this.artifactURI.toASCIIString().startsWith(namespace.getNamespace())) {
+                            return true;
+                        }
+                    }
+                }
+            }
+            return false;
+        }
     }
 
 }

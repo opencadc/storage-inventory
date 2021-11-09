@@ -69,96 +69,31 @@
 
 package org.opencadc.raven;
 
-import ca.nrc.cadc.util.Log4jInit;
-import ca.nrc.cadc.util.PropertiesReader;
-import java.net.URI;
-import org.apache.log4j.Level;
-import org.apache.log4j.Logger;
-import org.junit.Assert;
-import org.junit.Test;
+public class Namespace {
 
-public class RavenInitActionTest {
-    private static final Logger log = Logger.getLogger(RavenInitActionTest.class);
+    private final String namespace;
 
-    static {
-        Log4jInit.setLevel("org.opencadc.raven", Level.INFO);
+    public Namespace(String value) throws NamespaceSyntaxException {
+        this.namespace = value;
+        parse(value);
     }
 
-    static String USER_HOME = System.getProperty("user.home");
+    protected void parse(String value) throws NamespaceSyntaxException {
+        if (value == null) {
+            throw new NamespaceSyntaxException("null namespace");
+        }
+        if (value.isEmpty()) {
+            throw new NamespaceSyntaxException("zero length namespace");
+        }
 
-    @Test
-    public void testValidRavenProperties() {
-        System.setProperty(PropertiesReader.CONFIG_DIR_SYSTEM_PROPERTY, "src/test/resources/testValidConfig");
-
-        try {
-            System.setProperty("user.home", "src/test/resources/testValidConfig");
-            RavenInitAction testSubject = new RavenInitAction() {
-                @Override
-                public void doInit() {
-                    initConfig();
-                    initStorageSiteRules();
-                }
-            };
-            testSubject.doInit();
-        } catch (Exception e) {
-            Assert.fail("exception not expected; " + e.getMessage());
-        } finally {
-            System.setProperty("user.home", USER_HOME);
+        int colon = value.indexOf(':');
+        if (colon == -1) {
+            throw new NamespaceSyntaxException(String.format("invalid syntax %s - expected <schema>:[<path>]", value));
         }
     }
 
-    @Test
-    public void testInvalidConfig() {
-        System.setProperty(PropertiesReader.CONFIG_DIR_SYSTEM_PROPERTY, "src/test/resources/testInvalidConfig");
-
-        try {
-            System.setProperty("user.home", "src/test/resources/testInvalidConfig");
-            RavenInitAction testSubject = new RavenInitAction() {
-                @Override
-                public void doInit() {
-                    initConfig();
-                }
-            };
-            testSubject.doInit();
-            Assert.fail("exception expected to be thrown");
-        } catch (Exception e) {
-            String message = e.getMessage();
-            log.debug(message);
-            Assert.assertTrue(message.contains(String.format("%s: MISSING", RavenInitAction.SCHEMA_KEY)));
-            Assert.assertTrue(message.contains(String.format("%s: MISSING", RavenInitAction.PUBKEYFILE_KEY)));
-            Assert.assertTrue(message.contains(String.format("%s: MISSING", RavenInitAction.PRIVKEYFILE_KEY)));
-        } finally {
-            System.setProperty("user.home", USER_HOME);
-        }
-    }
-
-    @Test
-    public void testInvalidStorageSiteRules() {
-        System.setProperty(PropertiesReader.CONFIG_DIR_SYSTEM_PROPERTY, "src/test/resources/testInvalidStorageSiteRules");
-
-        try {
-            System.setProperty("user.home", "src/test/resources/testInvalidConfig");
-            RavenInitAction testSubject = new RavenInitAction() {
-                @Override
-                public void doInit() {
-                    initStorageSiteRules();
-                }
-            };
-            testSubject.doInit();
-            Assert.fail("exception expected to be thrown");
-        } catch (Exception e) {
-            String message = e.getMessage();
-            log.debug(message);
-            Assert.assertTrue(message.contains("resourceID: missing"));
-            Assert.assertTrue(message.contains("resourceID: missing or empty value"));
-            Assert.assertTrue(message.contains("resourceID: found multiple properties"));
-            Assert.assertTrue(message.contains("resourceID: invalid uri"));
-            Assert.assertTrue(message.contains("namespace: missing"));
-            Assert.assertTrue(message.contains("namespace: empty value"));
-            Assert.assertTrue(message.contains("invalid namespace, whitespace not allowed"));
-        } finally {
-            System.setProperty("user.home", USER_HOME);
-        }
+    public String getNamespace() {
+        return this.namespace;
     }
 
 }

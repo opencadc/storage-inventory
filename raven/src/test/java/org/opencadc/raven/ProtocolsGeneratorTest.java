@@ -111,47 +111,62 @@ public class ProtocolsGeneratorTest {
     @Test
     public void testPrioritizePushToSites() throws Exception {
 
-        URI readOnlySite = URI.create("ivo://readonly-site");
-        URI cadcSite = URI.create("ivo://cadc-site");
-        URI otherSite = URI.create("ivo://other-site");
+        URI readWriteResourceID = URI.create("ivo://read-write-site");
+        URI readOnlyResourceID = URI.create("ivo://read-only-site");
+        URI writeOnlyResourceID = URI.create("ivo://write-only-site");
 
-        List<String> cadcNS = Arrays.asList("cadc:CFHT/", "cadc:IRIS/", "cadc:CGPS/");
-        List<String> gemNS = Arrays.asList("gemini:GEMINI/", "gem:GEM/");
-        List<String> otherNS = Arrays.asList("mast:HST/", "foo:bar/");
+        List<Namespace> readWriteNamespaces = new ArrayList<>();
+        readWriteNamespaces.add(new Namespace("readwrite:RW1/"));
+        readWriteNamespaces.add(new Namespace("readwrite:RW2/"));
+        readWriteNamespaces.add(new Namespace("readwrite:RW3/"));
+
+        List<Namespace> readOnlyNamespaces = new ArrayList<>();
+        readOnlyNamespaces.add(new Namespace("readonly:RO1/"));
+        readOnlyNamespaces.add(new Namespace("readonly:RO2/"));
+
+        List<Namespace> writeOnlyNamespaces = new ArrayList<>();
+        writeOnlyNamespaces.add(new Namespace("writeonly:WO1/"));
+        writeOnlyNamespaces.add(new Namespace("writeonly:WO2/"));
+
+        StorageSite readWriteSite = new StorageSite(readWriteResourceID, "read-write-site", true, true);
+        StorageSite readOnlySite = new StorageSite(readOnlyResourceID, "read-only-site", true, false);
+        StorageSite writeOnlySite = new StorageSite(writeOnlyResourceID, "write-only-site", false, true);
 
         SortedSet<StorageSite> sites = new TreeSet<>();
-        sites.add(new StorageSite(cadcSite, "cadc", false, true));
-        sites.add(new StorageSite(readOnlySite, "read-only", true, false));
-        sites.add(new StorageSite(otherSite, "other", true, true));
+        sites.add(readWriteSite);
+        sites.add(readOnlySite);
+        sites.add(writeOnlySite);
 
-        Map<URI, StorageSiteRule> rules = new HashMap<>();
-        rules.put(cadcSite, new StorageSiteRule(cadcNS));
-        rules.put(readOnlySite, new StorageSiteRule(gemNS));
-        rules.put(otherSite, new StorageSiteRule(otherNS));
+        Map<URI, StorageSiteRule> siteRules = new HashMap<>();
+        siteRules.put(readWriteResourceID, new StorageSiteRule(readWriteNamespaces));
+        siteRules.put(readOnlyResourceID, new StorageSiteRule(readOnlyNamespaces));
+        siteRules.put(writeOnlyResourceID, new StorageSiteRule(writeOnlyNamespaces));
 
-        // artifact with no preferences in config, returns two read-write sites
-        List<StorageSite> ret = ProtocolsGenerator.prioritizePushToSites(sites, URI.create("get:SITE/file.ext"), rules);
-        Assert.assertEquals(2, ret.size());
-        Assert.assertEquals(cadcSite, ret.get(0).getResourceID());
-        Assert.assertEquals(otherSite, ret.get(1).getResourceID());
+        // artifact with no preferences in config, returns two read-write sites, no order
+        SortedSet<StorageSite> pushToSites = ProtocolsGenerator.prioritizePushToSites(sites, URI.create("other:SITE/file.ext"), siteRules);
+        Assert.assertEquals(2, pushToSites.size());
+        Assert.assertFalse(pushToSites.contains(readOnlySite));
+        pushToSites.clear();
 
-        // artifact with namespace in read-only site, returns two read-write sites
-        ret = ProtocolsGenerator.prioritizePushToSites(sites, URI.create("gemini:GEMINI/file.ext"), rules);
-        Assert.assertEquals(2, ret.size());
-        Assert.assertEquals(cadcSite, ret.get(0).getResourceID());
-        Assert.assertEquals(otherSite, ret.get(1).getResourceID());
+        // artifact with namespace in read-only site, returns two read-write sites, no order
+        pushToSites = ProtocolsGenerator.prioritizePushToSites(sites, URI.create("readonly:RO2/file.ext"), siteRules);
+        Assert.assertEquals(2, pushToSites.size());
+        Assert.assertFalse(pushToSites.contains(readOnlySite));
+        pushToSites.clear();
 
-        // artifact with cadc-site namespace, returns two read-write sites, cadc-ste first
-        ret = ProtocolsGenerator.prioritizePushToSites(sites, URI.create("cadc:CGPS/file.ext"), rules);
-        Assert.assertEquals(2, ret.size());
-        Assert.assertEquals(cadcSite, ret.get(0).getResourceID());
-        Assert.assertEquals(otherSite, ret.get(1).getResourceID());
+        // artifact with read-write namespace, returns two read-write sites, cadc-site first
+        pushToSites = ProtocolsGenerator.prioritizePushToSites(sites, URI.create("readwrite:RW3/file.ext"), siteRules);
+        Assert.assertEquals(2, pushToSites.size());
+        Assert.assertEquals(readWriteSite, pushToSites.first());
+        Assert.assertEquals(writeOnlySite, pushToSites.last());
+        pushToSites.clear();
 
-        // artifact with other-site namespace, return two read-write sites, other-site first
-        ret = ProtocolsGenerator.prioritizePushToSites(sites, URI.create("foo:bar/file.ext"), rules);
-        Assert.assertEquals(2, ret.size());
-        Assert.assertEquals(otherSite, ret.get(0).getResourceID());
-        Assert.assertEquals(cadcSite, ret.get(1).getResourceID());
+        // artifact with write-only namespace, return two read-write sites, write-only site first
+        pushToSites = ProtocolsGenerator.prioritizePushToSites(sites, URI.create("writeonly:WO1/file.ext"), siteRules);
+        Assert.assertEquals(2, pushToSites.size());
+        Assert.assertEquals(writeOnlySite, pushToSites.first());
+        Assert.assertEquals(readWriteSite, pushToSites.last());
     }
+
 }
 

@@ -73,13 +73,13 @@ import java.util.List;
 
 public class StorageSiteRule {
 
-    private final List<String> namespaces;
+    private final List<Namespace> namespaces;
 
-    public StorageSiteRule(List<String> namespaces) {
+    public StorageSiteRule(List<Namespace> namespaces) {
         this.namespaces = namespaces;
     }
 
-    public List<String> getNamespaces() {
+    public List<Namespace> getNamespaces() {
         return this.namespaces;
     }
 

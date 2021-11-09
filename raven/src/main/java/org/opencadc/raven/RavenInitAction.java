@@ -76,7 +76,7 @@ import ca.nrc.cadc.vosi.AvailabilityClient;
 import java.io.File;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -299,34 +299,46 @@ public class RavenInitAction extends InitAction {
         StringBuilder sb = new StringBuilder();
         Map<URI, StorageSiteRule> prefs = new HashMap<>();
 
+        String propName;
         List<String> putPreferences = props.getProperty("org.opencadc.raven.putPreference");
         for (String putPreference : putPreferences) {
 
+            propName = putPreference + ".resourceID";
             URI resourceID = null;
-            List<String> resourceIDs = props.getProperty(putPreference + ".resourceID");
-            if (resourceIDs.isEmpty()) {
-                sb.append(String.format("%s.resourceID: MISSING\n", putPreference));
-            } else if (resourceIDs.size() > 1) {
-                sb.append(String.format("%s.resourceID: MULTIPLE ENTRIES\n", putPreference));
-            } else if (!StringUtil.hasText(resourceIDs.get(0))) {
-                sb.append(String.format("%s.resourceID: EMPTY VALUE\n", putPreference));
+            List<String> property = props.getProperty(propName);
+            if (property.isEmpty()) {
+                sb.append(String.format("%s: missing or empty value\n", propName));
+            } else if (property.size() > 1) {
+                sb.append(String.format("%s: found multiple properties, expected one\n", propName));
+            } else if (!StringUtil.hasText(property.get(0))) {
+                sb.append(String.format("%s: property has no value\n", propName));
             } else {
                 try {
-                    resourceID = new URI(resourceIDs.get(0));
+                    resourceID = new URI(property.get(0));
                 } catch (URISyntaxException e) {
-                    sb.append(String.format("%s.resourceID: INVALID URI\n", putPreference));
+                    sb.append(String.format("%s: invalid uri\n", propName));
                 }
             }
 
-            List<String> namespaces = props.getProperty(putPreference + ".namespace");
-            if (namespaces.isEmpty()) {
-                sb.append(String.format("%s.namespace: MISSING\n", putPreference));
+            propName = putPreference + ".namespace";
+            property = props.getProperty(propName);
+            List<Namespace> namespaces = new ArrayList<>();
+            if (property.isEmpty()) {
+                sb.append(String.format("%s: missing or empty value\n", propName));
             } else {
-                for (String namespace : namespaces) {
-                    if (!StringUtil.hasText(namespace)) {
-                        sb.append(String.format("%s.namespace: EMPTY VALUE\n", putPreference));
+                for (String namespace : property) {
+                    if (namespace.isEmpty()) {
+                        sb.append(String.format("%s: empty value\n", propName));
                     } else if (namespace.matches(".*[\\s].*")) {
-                        sb.append(String.format("%s.namespace: MULTIPLE ENTRIES\n", putPreference));
+                        sb.append(String.format("%s: invalid namespace, whitespace not allowed '%s'\n",
+                                                propName, namespace));
+                    } else {
+                        try {
+                            namespaces.add(new Namespace(namespace));
+                        } catch (NamespaceSyntaxException e) {
+                            sb.append(String.format("%s: invalid namespace syntax %s %s",
+                                                    propName, namespace, e.getMessage()));
+                        }
                     }
                 }
                 if (resourceID != null) {
