@@ -69,49 +69,71 @@
 
 package org.opencadc.raven;
 
-public class Namespace {
+import org.junit.Assert;
+import org.junit.Test;
 
-    private final String namespace;
+public class NamespaceTest {
 
-    public Namespace(String value) throws NamespaceSyntaxException {
-        this.namespace = value;
-        parse(value);
+    @Test
+    public void testParse() {
+
+        Namespace namespace;
+
+        // null namespace value
+        try {
+            namespace = new Namespace(null);
+            Assert.fail("null namespace should throw exception");
+        } catch (NamespaceSyntaxException e) {
+            Assert.assertTrue(e.getMessage().contains("null namespace"));
+        }
+
+        // empty namespace value
+        try {
+            namespace = new Namespace("");
+            Assert.fail("zero length namespace should throw exception");
+        } catch (NamespaceSyntaxException e) {
+            Assert.assertTrue(e.getMessage().contains("zero length namespace"));
+        }
+
+        // schema not ending in ':'
+        try {
+            namespace = new Namespace("foo");
+            Assert.fail("schema without : should throw exception");
+        } catch (NamespaceSyntaxException e) {
+            Assert.assertTrue(e.getMessage().contains("invalid syntax"));
+        }
+
+        // missing schema before the ':'
+        try {
+            namespace = new Namespace(":");
+            Assert.fail(": with schema should throw exception");
+        } catch (NamespaceSyntaxException e) {
+            Assert.assertTrue(e.getMessage().contains("invalid syntax"));
+        }
+
+        // path not ending in '/'
+        try {
+            namespace = new Namespace("foo:bar");
+            Assert.fail("path not ending in / should throw exception");
+        } catch (NamespaceSyntaxException e) {
+            Assert.assertTrue(e.getMessage().contains("invalid syntax"));
+        }
+
+        // path not ending in '/'
+        try {
+            namespace = new Namespace("foo/bar:");
+            Assert.fail("/ before : should throw exception");
+        } catch (NamespaceSyntaxException e) {
+            Assert.assertTrue(e.getMessage().contains("invalid syntax"));
+        }
+
+        // path not ending in '/'
+        try {
+            namespace = new Namespace("foo:bar/baz");
+            Assert.fail("path not ending in / should throw exception");
+        } catch (NamespaceSyntaxException e) {
+            Assert.assertTrue(e.getMessage().contains("invalid syntax"));
+        }
+
     }
-
-    protected void parse(String value) throws NamespaceSyntaxException {
-        if (value == null) {
-            throw new NamespaceSyntaxException("null namespace");
-        }
-        if (value.isEmpty()) {
-            throw new NamespaceSyntaxException("zero length namespace");
-        }
-
-        int colon = value.indexOf(':');
-        int slash = value.indexOf('/');
-        String message = "invalid syntax %s - expected <schema>:[<path>/]";
-
-        // namespace should have a ':', and minimum of one character before the ':'
-        if (colon <= 0) {
-            throw new NamespaceSyntaxException(String.format(message, value));
-        }
-
-        // if namespace doesn't contain a '/', it should end with a ':'
-        if (slash == -1 && value.length() > colon + 1) {
-            throw new NamespaceSyntaxException(String.format(message, value));
-        }
-
-        if (colon > slash) {
-            throw new NamespaceSyntaxException(String.format(message, value));
-        }
-
-        // namespace should end with a '/' if present
-        if (value.length() > slash + 1) {
-            throw new NamespaceSyntaxException(String.format(message, value));
-        }
-    }
-
-    public String getNamespace() {
-        return this.namespace;
-    }
-
 }
