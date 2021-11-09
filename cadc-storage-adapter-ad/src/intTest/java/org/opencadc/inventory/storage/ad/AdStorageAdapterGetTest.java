@@ -66,7 +66,7 @@
  ************************************************************************
  */
 
-package org.opencadc.inventory.storage.ad.integration;
+package org.opencadc.inventory.storage.ad;
 
 import ca.nrc.cadc.io.ByteCountOutputStream;
 import ca.nrc.cadc.util.Log4jInit;
