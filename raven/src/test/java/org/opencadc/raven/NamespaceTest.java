@@ -135,5 +135,20 @@ public class NamespaceTest {
             Assert.assertTrue(e.getMessage().contains("invalid syntax"));
         }
 
+        // valid namespace ending in ':'
+        try {
+            namespace = new Namespace("foo:");
+        } catch (NamespaceSyntaxException e) {
+            Assert.fail(e.getMessage());
+
+        }
+
+        // valid namespace ending in '/'
+        try {
+            namespace = new Namespace("foo:bar/");
+        } catch (NamespaceSyntaxException e) {
+            Assert.fail(e.getMessage());
+        }
+
     }
 }

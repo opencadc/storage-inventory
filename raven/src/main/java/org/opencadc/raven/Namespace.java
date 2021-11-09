@@ -100,12 +100,12 @@ public class Namespace {
             throw new NamespaceSyntaxException(String.format(message, value));
         }
 
-        if (colon > slash) {
+        if (slash != -1 && colon > slash) {
             throw new NamespaceSyntaxException(String.format(message, value));
         }
 
         // namespace should end with a '/' if present
-        if (value.length() > slash + 1) {
+        if (slash != -1 && value.length() > slash + 1) {
             throw new NamespaceSyntaxException(String.format(message, value));
         }
     }
