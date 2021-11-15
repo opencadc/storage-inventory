@@ -182,7 +182,14 @@ public abstract class ArtifactAction extends RestAction {
         Map<String, Object> config = RavenInitAction.getDaoConfig(props);
         this.artifactDAO = new ArtifactDAO();
         artifactDAO.setConfig(config); // connectivity tested
+      
+        // get the storage site rules
+        this.siteRules = RavenInitAction.getStorageSiteRules(props);
+    }
 
+    protected void initAndAuthorize() throws Exception {
+        init();
+        
         // set the user for logging
         AuthMethod authMethod = AuthenticationUtil.getAuthMethod(AuthenticationUtil.getCurrentSubject());
         if (authMethod != null && !authMethod.equals(AuthMethod.ANON)) {
@@ -191,13 +198,6 @@ public abstract class ArtifactAction extends RestAction {
                 user = userids.iterator().next();
             }
         }
-
-        // get the storage site rules
-        this.siteRules = RavenInitAction.getStorageSiteRules(props);
-    }
-
-    protected void initAndAuthorize() throws Exception {
-        init();
 
         Class grantClass = ReadGrant.class;
         if ((transfer != null) && (transfer.getDirection().equals(Direction.pushToVoSpace))) {

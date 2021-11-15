@@ -233,6 +233,7 @@ public abstract class ArtifactAction extends RestAction {
             // augment subject (minoc is configured so augment
             // is not done in rest library)
             AuthenticationUtil.augmentSubject(subject);
+            logInfo.setSubject(subject);
             PermissionsCheck permissionsCheck = new PermissionsCheck(this.artifactURI, this.authenticateOnly,
                                                                      this.logInfo);
             if (ReadGrant.class.isAssignableFrom(grantClass)) {

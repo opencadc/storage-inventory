@@ -176,6 +176,8 @@ public class AdStorageAdapterIteratorTest {
                     Assert.fail("unexpected exception: " + unexpected.getMessage());
                 }
                 
+                Assert.assertFalse("found some records to compare", sortedMeta.isEmpty());
+                
                 log.info("found: " + sortedMeta.size() + " in " + archiveName);
 
                 // Get second version of iterator

@@ -169,10 +169,10 @@ public class PermissionsCheck {
                 }
             }
         } catch (CertificateException ex) {
-            throw new AccessControlException("read permission denied (invalid delegated client certificate)");
+            throw new AccessControlException("permission denied (invalid delegated client certificate)");
         }
         
-        throw new AccessControlException("read permission denied");
+        throw new AccessControlException("permission denied");
     }
 
     /**
@@ -233,10 +233,10 @@ public class PermissionsCheck {
                 }
             }
         } catch (CertificateException ex) {
-            throw new AccessControlException("read permission denied (invalid delegated client certificate)");
+            throw new AccessControlException("permission denied (invalid delegated client certificate)");
         }
 
-        throw new AccessControlException("read permission denied");
+        throw new AccessControlException("permission denied");
     }
 
     private class GetReadGrantsAction implements PrivilegedExceptionAction<List<ReadGrant>> {
