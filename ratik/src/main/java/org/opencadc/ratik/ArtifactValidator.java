@@ -185,6 +185,7 @@ public class ArtifactValidator {
                     log.debug("start txn: OK");
 
                     this.artifactDAO.lock(local);
+                    Artifact cur = artifactDAO.get(local.getID());
                     if (this.remoteSite != null) {
                         // if L==global, delete Artifact, do not create a DeletedStorageLocationEvent
                         log.info(String.format(
@@ -192,7 +193,7 @@ public class ArtifactValidator {
                                 + " reason=local-filter-policy-change",
                             local.getID(), local.getURI()));
                         this.artifactDAO.delete(local.getID());
-                    } else if (numCopies > 1) { 
+                    } else if (cur != null && (cur.storageLocation == null || numCopies > 1)) { 
                         // TODO: could be that the limit above is increased above 1 for reasons
                         // if L==storage, delete Artifact only if multiple copies in global, and create a DeletedStorageLocationEvent
                         log.info(String.format(
@@ -201,12 +202,14 @@ public class ArtifactValidator {
                             local.getID(), local.getURI()));
                         this.artifactDAO.delete(local.getID());
 
-                        DeletedStorageLocationEvent deletedStorageLocationEvent = new DeletedStorageLocationEvent(local.getID());
-                        log.info(String.format(
-                            "ArtifactValidator.createDeletedStorageLocationEvent event=%s"
-                                + " reason=local-filter-policy-exclude numCopies=" + numCopies,
-                            deletedStorageLocationEvent));
-                        this.deletedStorageLocationEventDAO.put(deletedStorageLocationEvent);
+                        if (cur.storageLocation != null) {
+                            DeletedStorageLocationEvent deletedStorageLocationEvent = new DeletedStorageLocationEvent(local.getID());
+                            log.info(String.format(
+                                "ArtifactValidator.createDeletedStorageLocationEvent event=%s"
+                                    + " reason=local-filter-policy-exclude numCopies=" + numCopies,
+                                deletedStorageLocationEvent));
+                            this.deletedStorageLocationEventDAO.put(deletedStorageLocationEvent);
+                        }
                     } else {
                         log.info(String.format("ArtifactValidator.deleteArtifact-delayed Artifact.id=%s Artifact.uri=%s"
                                 + "reason=local-filter-policy-exclude numCopies=" + numCopies, local.getID(), local.getURI()));
