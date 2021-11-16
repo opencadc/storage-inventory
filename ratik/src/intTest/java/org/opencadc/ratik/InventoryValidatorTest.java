@@ -97,6 +97,7 @@ import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.DeletedArtifactEvent;
 import org.opencadc.inventory.DeletedStorageLocationEvent;
 import org.opencadc.inventory.SiteLocation;
+import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.query.ArtifactRowMapper;
 import org.opencadc.inventory.util.IncludeArtifacts;
 
@@ -242,7 +243,13 @@ public class InventoryValidatorTest {
         Artifact artifact = new Artifact(URI.create("cadc:INTTEST/one.ext"), TestUtil.getRandomMD5(),
                                          new Date(), 1024L);
         this.localEnvironment.artifactDAO.put(artifact);
+        // needs a storageLocation for delayed delete to apply
+        this.localEnvironment.artifactDAO.setStorageLocation(artifact, new StorageLocation(URI.create("foo:bar")));
 
+        Artifact metaOnly = new Artifact(URI.create("cadc:INTTEST/meta.ext"), TestUtil.getRandomMD5(),
+                                         new Date(), 1024L);
+        this.localEnvironment.artifactDAO.put(metaOnly);
+        
         // case 1: no copies in remote
         try {
             System.setProperty("user.home", TMP_DIR);
@@ -269,12 +276,21 @@ public class InventoryValidatorTest {
         DeletedStorageLocationEvent dsle = this.localEnvironment.deletedStorageLocationEventDAO.get(artifact.getID());
         Assert.assertNull("no remote: DeletedStorageLocationEvent not created", dsle);
 
+        // metaOnly should have been removed
+        Artifact notDeleted = this.localEnvironment.artifactDAO.get(metaOnly.getID());
+        Assert.assertNotNull("no storageLocation: local not deleted", notDeleted);
+        
+        // DeletedStorageLocationEvent should not have been created.
+        dsle = this.localEnvironment.deletedStorageLocationEventDAO.get(metaOnly.getID());
+        Assert.assertNull("no storageLocation: DeletedStorageLocationEvent not created", dsle);
         
         // case 2: single copy in remote
         UUID remoteSiteID = this.remoteEnvironment.storageSiteDAO.list().iterator().next().getID();
         artifact.siteLocations.add(new SiteLocation(remoteSiteID));
         this.remoteEnvironment.globalArtifactDAO.put(artifact);
-
+        
+        metaOnly.siteLocations.add(new SiteLocation(remoteSiteID));
+        this.remoteEnvironment.globalArtifactDAO.put(metaOnly);
 
         try {
             System.setProperty("user.home", TMP_DIR);
@@ -301,6 +317,14 @@ public class InventoryValidatorTest {
         dsle = this.localEnvironment.deletedStorageLocationEventDAO.get(artifact.getID());
         Assert.assertNull("single remote: DeletedStorageLocationEvent not created", dsle);
 
+        // metaOnly should have been removed
+        Artifact deleted = this.localEnvironment.artifactDAO.get(metaOnly.getID());
+        Assert.assertNull("no storageLocation: local deleted", deleted);
+        
+        // DeletedStorageLocationEvent should not have been created.
+        dsle = this.localEnvironment.deletedStorageLocationEventDAO.get(metaOnly.getID());
+        Assert.assertNull("no storageLocation: DeletedStorageLocationEvent not created", dsle);
+        
         // add another site
         SiteLocation loc = new SiteLocation(UUID.randomUUID());
         this.remoteEnvironment.globalArtifactDAO.addSiteLocation(artifact, loc);
@@ -1102,6 +1126,7 @@ public class InventoryValidatorTest {
         // case 1: single copy of nonpolicy Artifact in global
         this.localEnvironment.artifactDAO.put(policyArtifact);
         this.localEnvironment.artifactDAO.put(nonpolicyArtifact);
+        this.localEnvironment.artifactDAO.setStorageLocation(nonpolicyArtifact, new StorageLocation(URI.create("foo:bar")));
 
         this.remoteEnvironment.artifactDAO.put(policyArtifact);
         nonpolicyArtifact.siteLocations.add(new SiteLocation(localSiteID));
