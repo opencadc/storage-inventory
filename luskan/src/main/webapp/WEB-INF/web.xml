@@ -124,10 +124,12 @@
             <param-name>input</param-name>
             <param-value>/capabilities.xml</param-value>
         </init-param>
+	<!--
         <init-param>
             <param-name>authRequired</param-name>
             <param-value>true</param-value>
-        </init-param>
+	</init-param>
+	-->
         <load-on-startup>3</load-on-startup>
     </servlet>
 
