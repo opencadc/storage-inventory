@@ -97,6 +97,7 @@ import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.DeletedArtifactEvent;
 import org.opencadc.inventory.DeletedStorageLocationEvent;
 import org.opencadc.inventory.SiteLocation;
+import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.query.ArtifactRowMapper;
 import org.opencadc.inventory.util.IncludeArtifacts;
 
@@ -242,7 +243,13 @@ public class InventoryValidatorTest {
         Artifact artifact = new Artifact(URI.create("cadc:INTTEST/one.ext"), TestUtil.getRandomMD5(),
                                          new Date(), 1024L);
         this.localEnvironment.artifactDAO.put(artifact);
+        // needs a storageLocation for delayed delete to apply
+        this.localEnvironment.artifactDAO.setStorageLocation(artifact, new StorageLocation(URI.create("foo:bar")));
 
+        Artifact metaOnly = new Artifact(URI.create("cadc:INTTEST/meta.ext"), TestUtil.getRandomMD5(),
+                                         new Date(), 1024L);
+        this.localEnvironment.artifactDAO.put(metaOnly);
+        
         // case 1: no copies in remote
         try {
             System.setProperty("user.home", TMP_DIR);
@@ -261,20 +268,29 @@ public class InventoryValidatorTest {
             System.setProperty("user.home", USER_HOME);
         }
 
-        // Local Artifact should not have been removed if only a single copy in remote.
+        // Local Artifact should not have been removed
         Artifact localArtifact = this.localEnvironment.artifactDAO.get(artifact.getID());
         Assert.assertNotNull("no remote: local artifact preserved", localArtifact);
 
-        // DeletedStorageLocationEvent should not have been created.
+        // DeletedStorageLocationEvent should not have been created
         DeletedStorageLocationEvent dsle = this.localEnvironment.deletedStorageLocationEventDAO.get(artifact.getID());
         Assert.assertNull("no remote: DeletedStorageLocationEvent not created", dsle);
 
+        // metaOnly should not have been removed (this could change in future)
+        Artifact notDeleted = this.localEnvironment.artifactDAO.get(metaOnly.getID());
+        Assert.assertNotNull("no storageLocation: local not deleted", notDeleted);
+        
+        // DeletedStorageLocationEvent should not have been created
+        dsle = this.localEnvironment.deletedStorageLocationEventDAO.get(metaOnly.getID());
+        Assert.assertNull("no storageLocation: DeletedStorageLocationEvent not created", dsle);
         
         // case 2: single copy in remote
         UUID remoteSiteID = this.remoteEnvironment.storageSiteDAO.list().iterator().next().getID();
         artifact.siteLocations.add(new SiteLocation(remoteSiteID));
         this.remoteEnvironment.globalArtifactDAO.put(artifact);
-
+        
+        metaOnly.siteLocations.add(new SiteLocation(remoteSiteID));
+        this.remoteEnvironment.globalArtifactDAO.put(metaOnly);
 
         try {
             System.setProperty("user.home", TMP_DIR);
@@ -293,15 +309,23 @@ public class InventoryValidatorTest {
             System.setProperty("user.home", USER_HOME);
         }
 
-        // Local Artifact should not have been removed if only a single copy in remote.
+        // Local Artifact should not have been removed
         localArtifact = this.localEnvironment.artifactDAO.get(artifact.getID());
         Assert.assertNotNull("single remote: local artifact preserved", localArtifact);
 
-        // DeletedStorageLocationEvent should not have been created.
+        // DeletedStorageLocationEvent should not have been created
         dsle = this.localEnvironment.deletedStorageLocationEventDAO.get(artifact.getID());
         Assert.assertNull("single remote: DeletedStorageLocationEvent not created", dsle);
 
-        // add another site
+        // metaOnly should have been removed
+        Artifact deleted = this.localEnvironment.artifactDAO.get(metaOnly.getID());
+        Assert.assertNull("no storageLocation: local deleted", deleted);
+        
+        // DeletedStorageLocationEvent should not have been created
+        dsle = this.localEnvironment.deletedStorageLocationEventDAO.get(metaOnly.getID());
+        Assert.assertNull("no storageLocation: DeletedStorageLocationEvent not created", dsle);
+        
+        // case 3: multiple copies in remote
         SiteLocation loc = new SiteLocation(UUID.randomUUID());
         this.remoteEnvironment.globalArtifactDAO.addSiteLocation(artifact, loc);
 
@@ -322,11 +346,11 @@ public class InventoryValidatorTest {
             System.setProperty("user.home", USER_HOME);
         }
 
-        // Local Artifact should be deleted if multiple copies in remote.
+        // Local Artifact should be deleted
         localArtifact = this.localEnvironment.artifactDAO.get(artifact.getID());
         Assert.assertNull("multiple remote: local artifact removed", localArtifact);
 
-        // DeletedStorageLocationEvent should have been created.
+        // DeletedStorageLocationEvent should have been created
         dsle = this.localEnvironment.deletedStorageLocationEventDAO.get(artifact.getID());
         Assert.assertNotNull("multiple remote: DeletedStorageLocationEvent created", dsle);
     }
@@ -1074,81 +1098,6 @@ public class InventoryValidatorTest {
         Assert.assertNotNull("local artifact not found", localArtifact);
         Assert.assertEquals("local artifact is right and remote is wrong so discrepancy not be fixed",
                             artifact.getMetaChecksum(), localArtifact.getMetaChecksum());
-    }
-
-    /**
-     * A local storage site with an Artifact that does not match the remote filter policy.
-     *
-     * case 1: global has a single copy of the nonpolicy Artifact.
-     * action: do nothing
-     *
-     * case 2: global has multiple copies of the nonpolicy Artifact.
-     * action: delete the Artifact in local and create DeletedStorageLocationEvent,
-     *         remove the Artifact's local SiteLocation in global.
-     *
-     */
-    @Test
-    public void localArtifactNotMatchingRemoteFilterPolicy() throws Exception {
-
-        UUID localSiteID = UUID.randomUUID();
-        URI policyURI = URI.create("cadc:INTTEST/test.ext");
-        URI nonpolicyURI = URI.create("cadc:foo/test.ext");
-
-        Artifact policyArtifact = new Artifact(UUID.randomUUID(), policyURI, TestUtil.getRandomMD5(),
-                                               new Date(), 1024L);
-        Artifact nonpolicyArtifact = new Artifact(UUID.randomUUID(), nonpolicyURI, TestUtil.getRandomMD5(),
-                                                  new Date(), 1024L);
-
-        // case 1: single copy of nonpolicy Artifact in global
-        this.localEnvironment.artifactDAO.put(policyArtifact);
-        this.localEnvironment.artifactDAO.put(nonpolicyArtifact);
-
-        this.remoteEnvironment.artifactDAO.put(policyArtifact);
-        nonpolicyArtifact.siteLocations.add(new SiteLocation(localSiteID));
-        this.remoteEnvironment.artifactDAO.put(nonpolicyArtifact);
-
-        try {
-            System.setProperty("user.home", TMP_DIR);
-            InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.inventoryConnectionConfig,
-                                                                    this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
-                                                                    new IncludeArtifacts(),null,
-                                                                    false);
-            testSubject.run();
-        } finally {
-            System.setProperty("user.home", USER_HOME);
-        }
-
-        // nonpolicy Artifact not deleted from local
-        Artifact localNonpolicyArtifact = this.localEnvironment.artifactDAO.get(nonpolicyArtifact.getID());
-        Assert.assertNotNull("local nonpolicy artifact not found", localNonpolicyArtifact);
-
-        // cleanup between tests
-        this.localEnvironment.cleanTestEnvironment();
-        this.remoteEnvironment.cleanTestEnvironment();
-
-        // case 2: multiple copies of nonpolicy Artifact in global
-        this.localEnvironment.artifactDAO.put(policyArtifact);
-        this.localEnvironment.artifactDAO.put(nonpolicyArtifact);
-
-        this.remoteEnvironment.artifactDAO.put(policyArtifact);
-        // add second SiteLocation to remote nonpolicy Artifact
-        nonpolicyArtifact.siteLocations.add(new SiteLocation(UUID.randomUUID()));
-        this.remoteEnvironment.artifactDAO.put(nonpolicyArtifact);
-
-        try {
-            System.setProperty("user.home", TMP_DIR);
-            InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.inventoryConnectionConfig,
-                                                                    this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
-                                                                    new IncludeArtifacts(),null,
-                                                                    false);
-            testSubject.run();
-        } finally {
-            System.setProperty("user.home", USER_HOME);
-        }
-
-        // nonpolicy Artifact deleted from local, DeletedStorageLocationEvent in local
-        localNonpolicyArtifact = this.localEnvironment.artifactDAO.get(nonpolicyArtifact.getID());
-        Assert.assertNull("local nonpolicy artifact found", localNonpolicyArtifact);
     }
 
 }
