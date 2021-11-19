@@ -75,9 +75,6 @@ import ca.nrc.cadc.db.DBUtil;
 import ca.nrc.cadc.io.ResourceIterator;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
-import ca.nrc.cadc.reg.Capabilities;
-import ca.nrc.cadc.reg.Capability;
-import ca.nrc.cadc.reg.Standards;
 import ca.nrc.cadc.reg.client.RegistryClient;
 import ca.nrc.cadc.util.StringUtil;
 import java.io.File;
@@ -353,7 +350,8 @@ public class InventoryValidator implements Runnable {
                 }
             }
         } catch (IOException ex) {
-            log.error("Error closing iterator", ex);
+            //log.error("Error closing iterator", ex);
+            throw new RuntimeException("error while closing ResourceIterator(s)", ex);
         }
     }
 
