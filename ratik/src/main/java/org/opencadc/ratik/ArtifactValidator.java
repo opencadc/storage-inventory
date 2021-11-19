@@ -212,7 +212,7 @@ public class ArtifactValidator {
                         }
                     } else {
                         log.info(String.format("ArtifactValidator.deleteArtifact-delayed Artifact.id=%s Artifact.uri=%s"
-                                + "reason=local-filter-policy-exclude numCopies=" + numCopies, local.getID(), local.getURI()));
+                                + " reason=local-filter-policy-exclude numCopies=" + numCopies, local.getID(), local.getURI()));
                     }
 
                     log.debug("committing transaction");
@@ -653,11 +653,7 @@ public class ArtifactValidator {
         final TapClient<ArtifactQueryResult> tapClient = new TapClient<>(this.resourceID);
         final String query = String.format("%s, num_copies() %s WHERE id = '%s'",  ArtifactRowMapper.SELECT,  ArtifactRowMapper.FROM, id);
         log.debug("\nExecuting query '" + query + "'\n");
-        ResourceIterator<ArtifactQueryResult> results = tapClient.execute(query, new ArtifactQueryResultRowMapper());
-        if (results.hasNext()) {
-            return results.next();
-        }
-        return null;
+        return tapClient.queryForObject(query, new ArtifactQueryResultRowMapper());
     }
 
     /**
@@ -669,11 +665,7 @@ public class ArtifactValidator {
         final TapClient<DeletedArtifactEvent> tapClient = new TapClient<>(this.resourceID);
         final String query = String.format("%s WHERE id = '%s'", DeletedArtifactEventRowMapper.BASE_QUERY, id);
         log.debug("\nExecuting query '" + query + "'\n");
-        ResourceIterator<DeletedArtifactEvent> results = tapClient.execute(query, new DeletedArtifactEventRowMapper());
-        if (results.hasNext()) {
-            return results.next();
-        }
-        return null;
+        return tapClient.queryForObject(query, new DeletedArtifactEventRowMapper());
     }
 
     /**
@@ -685,12 +677,7 @@ public class ArtifactValidator {
         final TapClient<DeletedStorageLocationEvent> tapClient = new TapClient<>(this.resourceID);
         final String query = String.format("%s WHERE id = '%s'", DeletedStorageLocationEventRowMapper.BASE_QUERY, id);
         log.debug("\nExecuting query '" + query + "'\n");
-        ResourceIterator<DeletedStorageLocationEvent> results =
-            tapClient.execute(query, new DeletedStorageLocationEventRowMapper());
-        if (results.hasNext()) {
-            return results.next();
-        }
-        return null;
+        return tapClient.queryForObject(query, new DeletedStorageLocationEventRowMapper());
     }
 
     private void logNoAction(Artifact artifact, String message) {
