@@ -83,6 +83,7 @@ import ca.nrc.cadc.util.StringUtil;
 import java.io.File;
 import java.io.IOException;
 import java.net.URI;
+import java.net.URL;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.PrivilegedActionException;
@@ -187,15 +188,12 @@ public class InventoryValidator implements Runnable {
         
         try {
             RegistryClient rc = new RegistryClient();
-            Capabilities caps = rc.getCapabilities(resourceID);
-            // above call throws IllegalArgumentException... should be ResourceNotFoundException but out of scope to fix
-            Capability capability = caps.findCapability(Standards.TAP_10);
-            if (capability == null) {
-                throw new IllegalArgumentException(
-                    "invalid config: remote query service " + resourceID + " does not implement " + Standards.TAP_10);
+            URL capURL = rc.getAccessURL(resourceID);
+            if (capURL == null) {
+                throw new IllegalArgumentException("invalid config: query service not found: " + resourceID);
             }
         } catch (ResourceNotFoundException ex) {
-            throw new IllegalArgumentException("query service not found: " + resourceID, ex);
+            throw new IllegalArgumentException("invalid config: query service not found: " + resourceID);
         } catch (IOException ex) {
             throw new IllegalArgumentException("invalid config", ex);
         }
@@ -234,7 +232,8 @@ public class InventoryValidator implements Runnable {
         this.messageDigest = null;
     }
 
-    @Override public void run() {
+    @Override 
+    public void run() {
         try {
             final Subject subject = SSLUtil.createSubject(new File(CERTIFICATE_FILE_LOCATION));
             Subject.doAs(subject, (PrivilegedExceptionAction<Void>) () -> {
@@ -246,7 +245,7 @@ public class InventoryValidator implements Runnable {
             });
         } catch (PrivilegedActionException privilegedActionException) {
             final Exception exception = privilegedActionException.getException();
-            throw new IllegalStateException(exception.getMessage(), exception);
+            log.error(InventoryValidator.class.getSimpleName() + ".ABORT", exception);
         }
     }
 
