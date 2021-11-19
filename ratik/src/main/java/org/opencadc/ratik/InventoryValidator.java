@@ -127,18 +127,22 @@ public class InventoryValidator implements Runnable {
     private long numLocalArtifacts = 0L;
     private long numRemoteArtifacts = 0L;
     private long numMatchedArtifacts = 0L;
+    private long numFixed = 0L;
 
     /**
      * Constructor.
      *
+     * @param connectionConfig   database connection config
      * @param daoConfig          config map to pass to cadc-inventory-db DAO classes
      * @param resourceID         identifier for the remote query service
      * @param artifactSelector   artifact selector implementation
      * @param bucketSelector     uri buckets
      * @param trackSiteLocations local site type
      */
-    public InventoryValidator(ConnectionConfig cc, Map<String, Object> daoConfig, URI resourceID, ArtifactSelector artifactSelector,
-                              BucketSelector bucketSelector, boolean trackSiteLocations) {
+    public InventoryValidator(ConnectionConfig connectionConfig, Map<String, Object> daoConfig, 
+            URI resourceID, ArtifactSelector artifactSelector,
+            BucketSelector bucketSelector, boolean trackSiteLocations) {
+        InventoryUtil.assertNotNull(InventoryValidator.class, "connectionConfig", connectionConfig);
         InventoryUtil.assertNotNull(InventoryValidator.class, "daoConfig", daoConfig);
         InventoryUtil.assertNotNull(InventoryValidator.class, "resourceID", resourceID);
         InventoryUtil.assertNotNull(InventoryValidator.class, "artifactSelector", artifactSelector);
@@ -148,20 +152,18 @@ public class InventoryValidator implements Runnable {
         txnConfig.putAll(daoConfig);
         
         try {
-            DBUtil.createJNDIDataSource("jdbc/inventory", cc);
+            DBUtil.createJNDIDataSource("jdbc/inventory", connectionConfig);
         } catch (NamingException ne) {
-            throw new IllegalStateException(String.format("Unable to access database: %s", cc.getURL()), ne);
+            throw new IllegalStateException(String.format("Unable to access database: %s", connectionConfig.getURL()), ne);
         }
         daoConfig.put("jndiDataSourceName", "jdbc/inventory");
         
         try {
-            DBUtil.createJNDIDataSource("jdbc/inventory-txn", cc);
+            DBUtil.createJNDIDataSource("jdbc/inventory-txn", connectionConfig);
         } catch (NamingException ne) {
-            throw new IllegalStateException(String.format("Unable to access database: %s", cc.getURL()), ne);
+            throw new IllegalStateException(String.format("Unable to access database: %s", connectionConfig.getURL()), ne);
         }
         txnConfig.put("jndiDataSourceName", "jdbc/inventory-txn");
-        
-        
 
         try {
             String jndiDataSourceName = (String) daoConfig.get("jndiDataSourceName");
@@ -262,7 +264,14 @@ public class InventoryValidator implements Runnable {
         } else {
             Iterator<String> bucketIterator = this.bucketSelector.getBucketIterator();
             while (bucketIterator.hasNext()) {
-                iterateBucket(bucketIterator.next());
+                String bucket = bucketIterator.next();
+                log.info(InventoryValidator.class.getSimpleName() + ".START bucket=" + bucket);
+                try {
+                    iterateBucket(bucket);
+                    log.info(InventoryValidator.class.getSimpleName() + ".END bucket=" + bucket);
+                } catch (IOException | TransientException | RuntimeException ex) {
+                    log.error(InventoryValidator.class.getSimpleName() + ".FAIL bucket=" + bucket, ex);
+                }
             }
         }
     }
@@ -336,8 +345,8 @@ public class InventoryValidator implements Runnable {
                         throw new IllegalStateException(message);
                 }
             }
-        } catch (IOException e) {
-            log.error("Error closing iterator: " + e.getMessage());
+        } catch (IOException ex) {
+            log.error("Error closing iterator", ex);
         }
     }
 
@@ -443,7 +452,7 @@ public class InventoryValidator implements Runnable {
         log.debug("\nExecuting query '" + query + "'\n");
         long t1 = System.currentTimeMillis();
         log.debug(InventoryValidator.class.getSimpleName() + ".remoteQuery bucket=" + bucket);
-        ResourceIterator<Artifact> ret = tapClient.execute(query, new ArtifactRowMapper());
+        ResourceIterator<Artifact> ret = tapClient.query(query, new ArtifactRowMapper());
         long dt = System.currentTimeMillis() - t1;
         log.info(InventoryValidator.class.getSimpleName() + ".remoteQuery bucket=" + bucket + " duration=" + dt);
         return ret;
