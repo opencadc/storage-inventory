@@ -86,6 +86,7 @@ import ca.nrc.cadc.reg.client.RegistryClient;
 import java.io.File;
 import java.io.IOException;
 import java.net.URI;
+import java.net.URL;
 import java.security.AccessControlException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -128,7 +129,6 @@ public class InventoryHarvester implements Runnable {
 
     private final ArtifactDAO artifactDAO;
     private final URI resourceID;
-    private final Capability inventoryTAP;
     private final ArtifactSelector selector;
     private final boolean trackSiteLocations;
     private final HarvestStateDAO harvestStateDAO;
@@ -171,16 +171,12 @@ public class InventoryHarvester implements Runnable {
 
         try {
             RegistryClient rc = new RegistryClient();
-            Capabilities caps = rc.getCapabilities(resourceID);
-            // above call throws IllegalArgumentException... should be ResourceNotFoundException but out of scope to fix
-            this.inventoryTAP = caps.findCapability(Standards.TAP_10);
-            if (inventoryTAP == null) {
-                throw new IllegalArgumentException(
-                        "invalid config: remote query service " + resourceID + " does not implement "
-                        + Standards.TAP_10);
+            URL capURL = rc.getAccessURL(resourceID);
+            if (capURL == null) {
+                throw new IllegalArgumentException("invalid config: query service not found: " + resourceID);
             }
         } catch (ResourceNotFoundException ex) {
-            throw new IllegalArgumentException("query service not found: " + resourceID, ex);
+            throw new IllegalArgumentException("invalid config: query service not found: " + resourceID);
         } catch (IOException ex) {
             throw new IllegalArgumentException("invalid config", ex);
         }
@@ -278,7 +274,7 @@ public class InventoryHarvester implements Runnable {
      */
     void doit() throws ResourceNotFoundException, IOException, IllegalStateException, TransientException,
                        InterruptedException {
-        final TapClient tapClient = new TapClient<>(this.resourceID);
+        final TapClient tapClient = new TapClient(this.resourceID);
         final Date end = new Date();
         final Date lookBack = new Date(end.getTime() - LOOKBACK_TIME);
         

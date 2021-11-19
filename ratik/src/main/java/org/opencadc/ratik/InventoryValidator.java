@@ -75,14 +75,12 @@ import ca.nrc.cadc.db.DBUtil;
 import ca.nrc.cadc.io.ResourceIterator;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
-import ca.nrc.cadc.reg.Capabilities;
-import ca.nrc.cadc.reg.Capability;
-import ca.nrc.cadc.reg.Standards;
 import ca.nrc.cadc.reg.client.RegistryClient;
 import ca.nrc.cadc.util.StringUtil;
 import java.io.File;
 import java.io.IOException;
 import java.net.URI;
+import java.net.URL;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.PrivilegedActionException;
@@ -127,18 +125,24 @@ public class InventoryValidator implements Runnable {
     private long numLocalArtifacts = 0L;
     private long numRemoteArtifacts = 0L;
     private long numMatchedArtifacts = 0L;
-
+    
+    private int numValidBuckets = 0;
+    private int numFailedBuckets = 0;
+    
     /**
      * Constructor.
      *
+     * @param connectionConfig   database connection config
      * @param daoConfig          config map to pass to cadc-inventory-db DAO classes
      * @param resourceID         identifier for the remote query service
      * @param artifactSelector   artifact selector implementation
      * @param bucketSelector     uri buckets
      * @param trackSiteLocations local site type
      */
-    public InventoryValidator(ConnectionConfig cc, Map<String, Object> daoConfig, URI resourceID, ArtifactSelector artifactSelector,
-                              BucketSelector bucketSelector, boolean trackSiteLocations) {
+    public InventoryValidator(ConnectionConfig connectionConfig, Map<String, Object> daoConfig, 
+            URI resourceID, ArtifactSelector artifactSelector,
+            BucketSelector bucketSelector, boolean trackSiteLocations) {
+        InventoryUtil.assertNotNull(InventoryValidator.class, "connectionConfig", connectionConfig);
         InventoryUtil.assertNotNull(InventoryValidator.class, "daoConfig", daoConfig);
         InventoryUtil.assertNotNull(InventoryValidator.class, "resourceID", resourceID);
         InventoryUtil.assertNotNull(InventoryValidator.class, "artifactSelector", artifactSelector);
@@ -148,20 +152,18 @@ public class InventoryValidator implements Runnable {
         txnConfig.putAll(daoConfig);
         
         try {
-            DBUtil.createJNDIDataSource("jdbc/inventory", cc);
+            DBUtil.createJNDIDataSource("jdbc/inventory", connectionConfig);
         } catch (NamingException ne) {
-            throw new IllegalStateException(String.format("Unable to access database: %s", cc.getURL()), ne);
+            throw new IllegalStateException(String.format("Unable to access database: %s", connectionConfig.getURL()), ne);
         }
         daoConfig.put("jndiDataSourceName", "jdbc/inventory");
         
         try {
-            DBUtil.createJNDIDataSource("jdbc/inventory-txn", cc);
+            DBUtil.createJNDIDataSource("jdbc/inventory-txn", connectionConfig);
         } catch (NamingException ne) {
-            throw new IllegalStateException(String.format("Unable to access database: %s", cc.getURL()), ne);
+            throw new IllegalStateException(String.format("Unable to access database: %s", connectionConfig.getURL()), ne);
         }
         txnConfig.put("jndiDataSourceName", "jdbc/inventory-txn");
-        
-        
 
         try {
             String jndiDataSourceName = (String) daoConfig.get("jndiDataSourceName");
@@ -183,15 +185,12 @@ public class InventoryValidator implements Runnable {
         
         try {
             RegistryClient rc = new RegistryClient();
-            Capabilities caps = rc.getCapabilities(resourceID);
-            // above call throws IllegalArgumentException... should be ResourceNotFoundException but out of scope to fix
-            Capability capability = caps.findCapability(Standards.TAP_10);
-            if (capability == null) {
-                throw new IllegalArgumentException(
-                    "invalid config: remote query service " + resourceID + " does not implement " + Standards.TAP_10);
+            URL capURL = rc.getAccessURL(resourceID);
+            if (capURL == null) {
+                throw new IllegalArgumentException("invalid config: query service not found: " + resourceID);
             }
         } catch (ResourceNotFoundException ex) {
-            throw new IllegalArgumentException("query service not found: " + resourceID, ex);
+            throw new IllegalArgumentException("invalid config: query service not found: " + resourceID);
         } catch (IOException ex) {
             throw new IllegalArgumentException("invalid config", ex);
         }
@@ -230,18 +229,20 @@ public class InventoryValidator implements Runnable {
         this.messageDigest = null;
     }
 
-    @Override public void run() {
+    @Override 
+    public void run() {
         try {
             final Subject subject = SSLUtil.createSubject(new File(CERTIFICATE_FILE_LOCATION));
             Subject.doAs(subject, (PrivilegedExceptionAction<Void>) () -> {
                 doit();
                 log.info(InventoryValidator.class.getSimpleName() + ".summary numLocal= " + numLocalArtifacts
-                    + " numRemote=" + numRemoteArtifacts + " numMatched=" + numMatchedArtifacts);
+                    + " numRemote=" + numRemoteArtifacts + " numMatched=" + numMatchedArtifacts
+                    + " numValidBuckets=" + numValidBuckets + " numFailedBuckets=" + numFailedBuckets);
                 return null;
             });
         } catch (PrivilegedActionException privilegedActionException) {
             final Exception exception = privilegedActionException.getException();
-            throw new IllegalStateException(exception.getMessage(), exception);
+            log.error(InventoryValidator.class.getSimpleName() + ".ABORT", exception);
         }
     }
 
@@ -262,7 +263,19 @@ public class InventoryValidator implements Runnable {
         } else {
             Iterator<String> bucketIterator = this.bucketSelector.getBucketIterator();
             while (bucketIterator.hasNext()) {
-                iterateBucket(bucketIterator.next());
+                String bucket = bucketIterator.next();
+                log.info(InventoryValidator.class.getSimpleName() + ".START bucket=" + bucket);
+                try {
+                    iterateBucket(bucket);
+                    log.info(InventoryValidator.class.getSimpleName() + ".END bucket=" + bucket);
+                    numValidBuckets++;
+                } catch (IOException | TransientException | RuntimeException ex) {
+                    log.error(InventoryValidator.class.getSimpleName() + ".FAIL bucket=" + bucket, ex);
+                    numFailedBuckets++;
+                } catch (Exception unhandled) {
+                    numFailedBuckets++;
+                    throw unhandled;
+                }
             }
         }
     }
@@ -336,8 +349,9 @@ public class InventoryValidator implements Runnable {
                         throw new IllegalStateException(message);
                 }
             }
-        } catch (IOException e) {
-            log.error("Error closing iterator: " + e.getMessage());
+        } catch (IOException ex) {
+            //log.error("Error closing iterator", ex);
+            throw new RuntimeException("error while closing ResourceIterator(s)", ex);
         }
     }
 
@@ -443,7 +457,7 @@ public class InventoryValidator implements Runnable {
         log.debug("\nExecuting query '" + query + "'\n");
         long t1 = System.currentTimeMillis();
         log.debug(InventoryValidator.class.getSimpleName() + ".remoteQuery bucket=" + bucket);
-        ResourceIterator<Artifact> ret = tapClient.execute(query, new ArtifactRowMapper());
+        ResourceIterator<Artifact> ret = tapClient.query(query, new ArtifactRowMapper());
         long dt = System.currentTimeMillis() - t1;
         log.info(InventoryValidator.class.getSimpleName() + ".remoteQuery bucket=" + bucket + " duration=" + dt);
         return ret;
