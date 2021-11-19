@@ -73,7 +73,16 @@ import java.net.URI;
 import org.opencadc.inventory.InventoryUtil;
 
 /**
- * Class to represent a prefix for an Artifact URI.
+ * Class to represent a namespace, which is a prefix for an Artifact URI.
+ *
+ * A namespace contains a schema with an optional path.
+ *
+ * {@code <schema>:[<path>/] }
+ *
+ * <p>A namespace containing a schema only must end with a colon ':',
+ * i.e. <code>cadc:</code></p>
+ * <p>A namespace with a schema and a path must end with a forward slash '/' after the path,
+ * i.e. <code>cadc:CFHT/123/</code></p>
  */
 public class Namespace {
 
@@ -85,13 +94,7 @@ public class Namespace {
     }
 
     /**
-     * Parse and validate the namespace. A namespace contains a schema with an optional path.
-     *
-     * {@code <schema>:[<path>/] }
-     *
-     * <p>A namespace containing a schema only must end with a colon ':', i.e. <code>cadc:</code></p>
-     * <p>A namespace with a schema and a path must end with a forward slash '/' after the path,
-     * i.e. <code>cadc:CFHT/123/</code></p>
+     * Parse and validate the namespace.
      *
      * @param value namespaced to validate
      * @throws IllegalArgumentException if the namespace fails validation
