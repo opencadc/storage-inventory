@@ -127,8 +127,10 @@ public class InventoryValidator implements Runnable {
     private long numLocalArtifacts = 0L;
     private long numRemoteArtifacts = 0L;
     private long numMatchedArtifacts = 0L;
-    private long numFixed = 0L;
-
+    
+    private int numValidBuckets = 0;
+    private int numFailedBuckets = 0;
+    
     /**
      * Constructor.
      *
@@ -238,7 +240,8 @@ public class InventoryValidator implements Runnable {
             Subject.doAs(subject, (PrivilegedExceptionAction<Void>) () -> {
                 doit();
                 log.info(InventoryValidator.class.getSimpleName() + ".summary numLocal= " + numLocalArtifacts
-                    + " numRemote=" + numRemoteArtifacts + " numMatched=" + numMatchedArtifacts);
+                    + " numRemote=" + numRemoteArtifacts + " numMatched=" + numMatchedArtifacts
+                    + " numValidBuckets=" + numValidBuckets + " numFailedBuckets=" + numFailedBuckets);
                 return null;
             });
         } catch (PrivilegedActionException privilegedActionException) {
@@ -269,8 +272,13 @@ public class InventoryValidator implements Runnable {
                 try {
                     iterateBucket(bucket);
                     log.info(InventoryValidator.class.getSimpleName() + ".END bucket=" + bucket);
+                    numValidBuckets++;
                 } catch (IOException | TransientException | RuntimeException ex) {
                     log.error(InventoryValidator.class.getSimpleName() + ".FAIL bucket=" + bucket, ex);
+                    numFailedBuckets++;
+                } catch (Exception unhandled) {
+                    numFailedBuckets++;
+                    throw unhandled;
                 }
             }
         }
