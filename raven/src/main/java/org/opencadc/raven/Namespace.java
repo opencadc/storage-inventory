@@ -69,49 +69,72 @@
 
 package org.opencadc.raven;
 
+import java.net.URI;
+import org.opencadc.inventory.InventoryUtil;
+
+/**
+ * Class to represent a prefix for an Artifact URI.
+ */
 public class Namespace {
 
     private final String namespace;
 
-    public Namespace(String value) throws NamespaceSyntaxException {
+    public Namespace(String value) throws IllegalArgumentException {
         this.namespace = value;
         parse(value);
     }
 
-    protected void parse(String value) throws NamespaceSyntaxException {
+    /**
+     * Parse and validate the namespace. A namespace contains a schema with an optional path.
+     *
+     * {@code <schema>:[<path>/] }
+     *
+     * <p>A namespace containing a schema only must end with a colon ':', i.e. <code>cadc:</code></p>
+     * <p>A namespace with a schema and a path must end with a forward slash '/' after the path,
+     * i.e. <code>cadc:CFHT/123/</code></p>
+     *
+     * @param value namespaced to validate
+     * @throws IllegalArgumentException if the namespace fails validation
+     */
+    private void parse(String value) throws IllegalArgumentException {
+
         if (value == null) {
-            throw new NamespaceSyntaxException("null namespace");
+            throw new IllegalArgumentException("null namespace");
         }
         if (value.isEmpty()) {
-            throw new NamespaceSyntaxException("zero length namespace");
+            throw new IllegalArgumentException("zero length namespace");
         }
 
         int colon = value.indexOf(':');
-        int slash = value.indexOf('/');
-        String message = "invalid syntax %s - expected <schema>:[<path>/]";
-
-        // namespace should have a ':', and minimum of one character before the ':'
-        if (colon <= 0) {
-            throw new NamespaceSyntaxException(String.format(message, value));
-        }
+        int slash = value.lastIndexOf('/');
+        String message = "invalid namespace %s : %s, expected <schema>:[<path>/]";
 
         // if namespace doesn't contain a '/', it should end with a ':'
         if (slash == -1 && value.length() > colon + 1) {
-            throw new NamespaceSyntaxException(String.format(message, value));
+            throw new IllegalArgumentException(String.format(message, value,
+                                                             "schema only namespace should end with :"));
         }
 
-        if (slash != -1 && colon > slash) {
-            throw new NamespaceSyntaxException(String.format(message, value));
-        }
-
-        // namespace should end with a '/' if present
+        // namespace with a path should end with a '/'
         if (slash != -1 && value.length() > slash + 1) {
-            throw new NamespaceSyntaxException(String.format(message, value));
+            throw new IllegalArgumentException(String.format(message, value,
+                                                             "namespace with path should end with /"));
         }
+
+        try {
+            InventoryUtil.validateArtifactURI(Namespace.class, URI.create(value + "file.ext"));
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException(String.format(message, value, e.getMessage()));
+        }
+
     }
 
     public String getNamespace() {
         return this.namespace;
+    }
+
+    public boolean matches(URI artifactURI) {
+        return artifactURI.toASCIIString().startsWith(this.namespace);
     }
 
 }

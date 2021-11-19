@@ -381,41 +381,58 @@ public class ProtocolsGenerator {
         @Override
         public int compare(StorageSite site1, StorageSite site2) {
 
-            boolean site1Match = hasMatchingNamespace(site1);
-            boolean site2match = hasMatchingNamespace(site2);
+            // check for null StorageSite's
+            if (site1 == null && site2 == null) {
+                return 0;
+            }
+            if (site1 == null) {
+                return -1;
+            }
+            if (site2 == null) {
+                return 1;
+            }
+
+            // get the rules for each site
+            StorageSiteRule rule1 = this.siteRules.get(site1.getResourceID());
+            StorageSiteRule rule2 = this.siteRules.get(site2.getResourceID());
+
+            // check for null StorageSiteRule's
+            if (rule1 == null && rule2 == null) {
+                return 0;
+            }
+            if (rule1 == null) {
+                return -1;
+            }
+            if (rule2 == null) {
+                return 1;
+            }
+
+            // check if a site namespace matches the ArtifactURI
+            boolean site1Match = false;
+            for (Namespace ns : rule1.getNamespaces()) {
+                if (ns.matches(this.artifactURI)) {
+                    site1Match = true;
+                    break;
+                }
+            }
+
+            boolean site2match = false;
+            for (Namespace ns : rule2.getNamespaces()) {
+                if (ns.matches(this.artifactURI)) {
+                    site2match = true;
+                    break;
+                }
+            }
 
             // give higher priority to the site with a namespace that matches the Artifact URI.
             if (site1Match && !site2match) {
                 return 1;
-            } else if (!site1Match && site2match) {
+            }
+            if (!site1Match && site2match) {
                 return -1;
-            } else {
-                // 2 sites that both either match the namespace or do not match the namespace
-                // of the Artifact URI.
-                if (!site1.getResourceID().equals(site2.getResourceID())) {
-                    // randomly prioritize the first site higher for now,
-                    // use the clientIP when implemented.
-                    return 1;
-                }
-                // resourceID's also match, equal
-                return 0;
             }
-        }
-
-        /**
-         * Check if a StorageSite has a namespace matching the Artifact URI.
-         */
-        protected boolean hasMatchingNamespace(StorageSite site) {
-            for (Map.Entry<URI, StorageSiteRule> ruleMap : this.siteRules.entrySet()) {
-                if (ruleMap.getKey().equals(site.getResourceID())) {
-                    for (Namespace namespace : ruleMap.getValue().getNamespaces()) {
-                        if (this.artifactURI.toASCIIString().startsWith(namespace.getNamespace())) {
-                            return true;
-                        }
-                    }
-                }
-            }
-            return false;
+            // default: order of site names
+            return site1.getResourceID().compareTo(site2.getResourceID());
         }
     }
 

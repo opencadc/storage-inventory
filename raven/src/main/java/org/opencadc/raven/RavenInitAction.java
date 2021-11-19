@@ -335,7 +335,7 @@ public class RavenInitAction extends InitAction {
                     } else {
                         try {
                             namespaces.add(new Namespace(namespace));
-                        } catch (NamespaceSyntaxException e) {
+                        } catch (IllegalArgumentException e) {
                             sb.append(String.format("%s: invalid namespace syntax %s %s",
                                                     propName, namespace, e.getMessage()));
                         }

@@ -75,7 +75,23 @@ import org.junit.Test;
 public class NamespaceTest {
 
     @Test
-    public void testParse() {
+    public void testValidNamespace() {
+
+        try {
+            Namespace namespace;
+            namespace = new Namespace("cadc:");
+            namespace = new Namespace("cadc:CFHT/");
+            namespace = new Namespace("cadc:CFHT/preview/");
+            namespace = new Namespace("cadc:CFHT/preview+/");
+
+        } catch (IllegalArgumentException e) {
+            Assert.fail(e.getMessage());
+        }
+
+    }
+
+    @Test
+    public void testInvalidNamespace() {
 
         Namespace namespace;
 
@@ -83,7 +99,7 @@ public class NamespaceTest {
         try {
             namespace = new Namespace(null);
             Assert.fail("null namespace should throw exception");
-        } catch (NamespaceSyntaxException e) {
+        } catch (IllegalArgumentException e) {
             Assert.assertTrue(e.getMessage().contains("null namespace"));
         }
 
@@ -91,63 +107,48 @@ public class NamespaceTest {
         try {
             namespace = new Namespace("");
             Assert.fail("zero length namespace should throw exception");
-        } catch (NamespaceSyntaxException e) {
+        } catch (IllegalArgumentException e) {
             Assert.assertTrue(e.getMessage().contains("zero length namespace"));
         }
 
         // schema not ending in ':'
         try {
-            namespace = new Namespace("foo");
+            namespace = new Namespace("cadc");
             Assert.fail("schema without : should throw exception");
-        } catch (NamespaceSyntaxException e) {
-            Assert.assertTrue(e.getMessage().contains("invalid syntax"));
+        } catch (IllegalArgumentException e) {
+            Assert.assertTrue(e.getMessage().contains("invalid namespace"));
         }
 
         // missing schema before the ':'
         try {
             namespace = new Namespace(":");
             Assert.fail(": with schema should throw exception");
-        } catch (NamespaceSyntaxException e) {
-            Assert.assertTrue(e.getMessage().contains("invalid syntax"));
+        } catch (IllegalArgumentException e) {
+            Assert.assertTrue(e.getMessage().contains("invalid namespace"));
+        }
+
+        // missing schema and path before the '/'
+        try {
+            namespace = new Namespace("/");
+            Assert.fail(": with schema should throw exception");
+        } catch (IllegalArgumentException e) {
+            Assert.assertTrue(e.getMessage().contains("invalid namespace"));
         }
 
         // path not ending in '/'
         try {
-            namespace = new Namespace("foo:bar");
+            namespace = new Namespace("cadc:CFHT");
             Assert.fail("path not ending in / should throw exception");
-        } catch (NamespaceSyntaxException e) {
-            Assert.assertTrue(e.getMessage().contains("invalid syntax"));
+        } catch (IllegalArgumentException e) {
+            Assert.assertTrue(e.getMessage().contains("invalid namespace"));
         }
 
         // path not ending in '/'
         try {
-            namespace = new Namespace("foo/bar:");
-            Assert.fail("/ before : should throw exception");
-        } catch (NamespaceSyntaxException e) {
-            Assert.assertTrue(e.getMessage().contains("invalid syntax"));
-        }
-
-        // path not ending in '/'
-        try {
-            namespace = new Namespace("foo:bar/baz");
+            namespace = new Namespace("cadc:CFHT/preview+");
             Assert.fail("path not ending in / should throw exception");
-        } catch (NamespaceSyntaxException e) {
-            Assert.assertTrue(e.getMessage().contains("invalid syntax"));
-        }
-
-        // valid namespace ending in ':'
-        try {
-            namespace = new Namespace("foo:");
-        } catch (NamespaceSyntaxException e) {
-            Assert.fail(e.getMessage());
-
-        }
-
-        // valid namespace ending in '/'
-        try {
-            namespace = new Namespace("foo:bar/");
-        } catch (NamespaceSyntaxException e) {
-            Assert.fail(e.getMessage());
+        } catch (IllegalArgumentException e) {
+            Assert.assertTrue(e.getMessage().contains("invalid namespace"));
         }
 
     }
