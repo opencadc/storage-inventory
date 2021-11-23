@@ -88,16 +88,22 @@ public class HeadAction extends ArtifactAction {
     public HeadAction() {
         super();
     }
+    
+    /**
+     * Perform auth checks and initialize resources.
+     */
+    @Override
+    public void initAction() throws Exception {
+        checkReadable();
+        initAndAuthorize(ReadGrant.class);
+        initDAO();
+    }
 
     /**
      * Return the artifact metadata as repsonse headers.
      */
     @Override
     public void doAction() throws Exception {
-        
-        checkReadable();
-        initAndAuthorize(ReadGrant.class);
-        initDAO();
         
         Artifact artifact = getArtifact(artifactURI);
         setHeaders(artifact, syncOutput);
