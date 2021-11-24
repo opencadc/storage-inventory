@@ -69,6 +69,7 @@ package org.opencadc.minoc;
 
 import ca.nrc.cadc.auth.AuthenticationUtil;
 import ca.nrc.cadc.auth.HttpPrincipal;
+import ca.nrc.cadc.cred.client.CredUtil;
 import ca.nrc.cadc.log.WebServiceLogInfo;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
@@ -229,6 +230,7 @@ public abstract class ArtifactAction extends RestAction {
                 subject.getPrincipals().add(new HttpPrincipal(tokenUser));
             }
             logInfo.setSubject(subject);
+            logInfo.setMessage("valid pre-auth " + grantClass.getSimpleName());
         } else {
             // augment subject (minoc is configured so augment
             // is not done in rest library)
