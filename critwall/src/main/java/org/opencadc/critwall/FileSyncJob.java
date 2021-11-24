@@ -69,6 +69,7 @@ package org.opencadc.critwall;
 
 import ca.nrc.cadc.auth.AuthMethod;
 import ca.nrc.cadc.auth.AuthenticationUtil;
+import ca.nrc.cadc.auth.NotAuthenticatedException;
 import ca.nrc.cadc.auth.RunnableAction;
 import ca.nrc.cadc.db.TransactionManager;
 import ca.nrc.cadc.io.ByteLimitExceededException;
@@ -95,6 +96,8 @@ import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URL;
+import java.security.AccessControlContext;
+import java.security.AccessControlException;
 import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
@@ -287,7 +290,7 @@ public class FileSyncJob implements Runnable {
                         }
                     }
                     
-                    if (!success) {
+                    if (!success && !urlList.isEmpty()) {
                         log.info("FileSyncJob.SLEEP dt=" + RETRY_DELAY[retryCount]);
                         Thread.sleep(RETRY_DELAY[retryCount++]);
                     }
@@ -316,9 +319,9 @@ public class FileSyncJob implements Runnable {
 
     // Use transfer negotiation at resource URI to get list of download URLs for the artifact.
     private List<Protocol> getDownloadURLs(URI resource, URI artifact)
-        throws IOException, InterruptedException,
-        ResourceAlreadyExistsException, ResourceNotFoundException,
-        TransientException, TransferParsingException, RangeNotSatisfiableException {
+        throws IOException, InterruptedException, 
+               ResourceAlreadyExistsException, ResourceNotFoundException,
+               TransientException, TransferParsingException {
 
         RegistryClient regClient = new RegistryClient();
         Subject subject = AuthenticationUtil.getCurrentSubject();
@@ -423,7 +426,8 @@ public class FileSyncJob implements Runnable {
                 log.debug("FileSyncJob.FAIL fatal", ex);
                 throw ex;
             } catch (MalformedURLException | ResourceNotFoundException | ResourceAlreadyExistsException
-                     | PreconditionFailedException | RangeNotSatisfiableException ex) {
+                     | PreconditionFailedException | RangeNotSatisfiableException 
+                     | AccessControlException | NotAuthenticatedException ex) {
                 log.debug("FileSyncJob.FAIL remove: " + u, ex);
                 urlIterator.remove();
             } catch (IOException | TransientException ex) {

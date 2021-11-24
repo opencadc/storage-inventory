@@ -129,6 +129,17 @@ public class GetAction extends ArtifactAction {
     }
 
     /**
+     * Perform auth checks and initialize resources.
+     */
+    @Override
+    public void initAction() throws Exception {
+        checkReadable();
+        initAndAuthorize(ReadGrant.class);
+        initDAO();
+        initStorageAdapter();
+    }
+
+    /**
      * Download the artifact or cutouts of the artifact.  In the event that an optional cutout was requested, then
      * mangle the output filename to reflect the requested values.
      * The META=true keyword can be passed in to print the headers, but only if NO OTHER cutout parameters were
@@ -136,11 +147,6 @@ public class GetAction extends ArtifactAction {
      */
     @Override
     public void doAction() throws Exception {
-        
-        checkReadable();
-        initAndAuthorize(ReadGrant.class);
-        initDAO();
-        initStorageAdapter();
         
         Artifact artifact = getArtifact(artifactURI);
         SodaCutout sodaCutout = new SodaCutout();

@@ -75,6 +75,7 @@ import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
 import java.io.IOException;
 import java.net.URI;
+import java.util.List;
 import java.util.UUID;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
@@ -89,7 +90,9 @@ import org.opencadc.inventory.db.EntityNotFoundException;
 import org.opencadc.inventory.query.ArtifactRowMapper;
 import org.opencadc.inventory.query.DeletedArtifactEventRowMapper;
 import org.opencadc.inventory.query.DeletedStorageLocationEventRowMapper;
+import org.opencadc.inventory.util.ArtifactSelector;
 import org.opencadc.tap.TapClient;
+import org.opencadc.tap.TapRowMapper;
 
 /**
  * Class that compares and validates two Artifacts, repairing the local Artifact to
@@ -101,6 +104,7 @@ public class ArtifactValidator {
     private final ArtifactDAO artifactDAO;
     private final URI resourceID;
     private final StorageSite remoteSite;
+    private final ArtifactSelector artifactSelector;
 
     private final DeletedArtifactEventDAO deletedArtifactEventDAO;
     private final DeletedStorageLocationEventDAO deletedStorageLocationEventDAO;
@@ -113,10 +117,12 @@ public class ArtifactValidator {
      * @param resourceID    identifier for the remote query service
      * @param remoteSite    identifier for remote file service, null when local is a storage site
      */
-    public ArtifactValidator(ArtifactDAO artifactDAO, URI resourceID, StorageSite remoteSite) {
+    public ArtifactValidator(ArtifactDAO artifactDAO, URI resourceID, StorageSite remoteSite,
+                             ArtifactSelector artifactSelector) {
         this.artifactDAO = artifactDAO;
         this.resourceID = resourceID;
         this.remoteSite = remoteSite;
+        this.artifactSelector = artifactSelector;
 
         this.transactionManager = this.artifactDAO.getTransactionManager();
         this.deletedArtifactEventDAO = new DeletedArtifactEventDAO(this.artifactDAO);
@@ -158,49 +164,77 @@ public class ArtifactValidator {
     protected void validateLocal(Artifact local)
         throws InterruptedException, IOException, ResourceNotFoundException, TransientException {
 
-        // explanation0: filter policy at L changed to exclude artifact in R
-        // evidence: Artifact in R without filter
-        // action: delete Artifact, if (L==storage) create DeletedStorageLocationEvent
+        // explanation0: filter policy at L excludes artifact in R
+        // evidence: R uses a filter policy AND Artifact in R without filter
+        // if (L==global) delete Artifact, if (L==storage) delete Artifact only if
+        // remote has multiple copies and create DeletedStorageLocationEvent
         log.debug("checking explanation 0");
-        Artifact remote = getRemoteArtifact(local.getURI());
-        if (remote != null) {
-            try {
-                log.debug("starting transaction");
-                this.transactionManager.startTransaction();
-                log.debug("start txn: OK");
-
-                this.artifactDAO.lock(local);
-                log.info(String.format("ArtifactValidator.deleteArtifact Artifact.id=%s Artifact.uri=%s reason=local-filter-policy-change",
-                                       local.getID(), local.getURI()));
-                this.artifactDAO.delete(local.getID());
-
+        if (this.artifactSelector.getConstraint() != null) {
+            ArtifactQueryResult queryResult = getRemoteArtifactQueryResult(local.getID());
+            if (queryResult != null && queryResult.artifact != null) {
+                int numCopies = 0;
+                // if L == storage, get the Artifact count from global
                 if (this.remoteSite == null) {
-                    DeletedStorageLocationEvent deletedStorageLocationEvent =
-                        new DeletedStorageLocationEvent(local.getID());
-                    log.info(String.format("ArtifactValidator.createDeletedStorageLocationEvent event=%s reason=local-filter-policy-change",
-                                           deletedStorageLocationEvent));
-                    this.deletedStorageLocationEventDAO.put(deletedStorageLocationEvent);
+                    if (queryResult.numCopies != null) {
+                        numCopies = queryResult.numCopies;
+                    }
                 }
+                try {
+                    log.debug("starting transaction");
+                    this.transactionManager.startTransaction();
+                    log.debug("start txn: OK");
 
-                log.debug("committing transaction");
-                this.transactionManager.commitTransaction();
-                log.debug("commit txn: OK");
-            } catch (EntityNotFoundException e) {
-                log.debug(String.format("ArtifactValidator.skip: Artifact.id=%s Artifact.uri=%s reason=stale-local-artifact",
-                                           local.getID(), local.getURI()));
-                this.transactionManager.rollbackTransaction();
-            } catch (Exception e) {
-                log.error(String.format("failed to delete %s %s", local.getID(), local.getURI()), e);
-                this.transactionManager.rollbackTransaction();
-                log.debug("rollback txn: OK");
-            } finally {
-                if (this.transactionManager.isOpen()) {
-                    log.error("BUG - open transaction in finally");
+                    this.artifactDAO.lock(local);
+                    Artifact cur = artifactDAO.get(local.getID());
+                    if (this.remoteSite != null) {
+                        // if L==global, delete Artifact, do not create a DeletedStorageLocationEvent
+                        log.info(String.format(
+                            "ArtifactValidator.deleteArtifact Artifact.id=%s Artifact.uri=%s"
+                                + " reason=local-filter-policy-change",
+                            local.getID(), local.getURI()));
+                        this.artifactDAO.delete(local.getID());
+                    } else if (cur != null && (cur.storageLocation == null || numCopies > 1)) { 
+                        // TODO: could be that the limit above is increased above 1 for reasons
+                        // if L==storage, delete Artifact only if multiple copies in global, and create a DeletedStorageLocationEvent
+                        log.info(String.format(
+                            "ArtifactValidator.deleteArtifact Artifact.id=%s Artifact.uri=%s"
+                                + " reason=local-filter-policy-exclude numCopies=" + numCopies,
+                            local.getID(), local.getURI()));
+                        this.artifactDAO.delete(local.getID());
+
+                        if (cur.storageLocation != null) {
+                            DeletedStorageLocationEvent deletedStorageLocationEvent = new DeletedStorageLocationEvent(local.getID());
+                            log.info(String.format(
+                                "ArtifactValidator.createDeletedStorageLocationEvent event=%s"
+                                    + " reason=local-filter-policy-exclude numCopies=" + numCopies,
+                                deletedStorageLocationEvent));
+                            this.deletedStorageLocationEventDAO.put(deletedStorageLocationEvent);
+                        }
+                    } else {
+                        log.info(String.format("ArtifactValidator.deleteArtifact-delayed Artifact.id=%s Artifact.uri=%s"
+                                + " reason=local-filter-policy-exclude numCopies=" + numCopies, local.getID(), local.getURI()));
+                    }
+
+                    log.debug("committing transaction");
+                    this.transactionManager.commitTransaction();
+                    log.debug("commit txn: OK");
+                } catch (EntityNotFoundException e) {
+                    log.debug(String.format(
+                        "ArtifactValidator.skip: Artifact.id=%s Artifact.uri=%s reason=stale-local-artifact", local.getID(), local.getURI()));
                     this.transactionManager.rollbackTransaction();
-                    log.error("rollback txn: OK");
+                } catch (Exception e) {
+                    log.error(String.format("failed to delete %s %s", local.getID(), local.getURI()), e);
+                    this.transactionManager.rollbackTransaction();
+                    log.debug("rollback txn: OK");
+                } finally {
+                    if (this.transactionManager.isOpen()) {
+                        log.error("BUG - open transaction in finally");
+                        this.transactionManager.rollbackTransaction();
+                        log.error("rollback txn: OK");
+                    }
                 }
+                return;
             }
-            return;
         }
 
         // explanation1: deleted from R, pending/missed DeletedArtifactEvent in L
@@ -613,17 +647,13 @@ public class ArtifactValidator {
     /**
      * Get a remote Artifact
      */
-    Artifact getRemoteArtifact(URI uri)
+    ArtifactQueryResult getRemoteArtifactQueryResult(UUID id)
         throws InterruptedException, IOException, ResourceNotFoundException, TransientException {
 
-        final TapClient<Artifact> tapClient = new TapClient<>(this.resourceID);
-        final String query = String.format("%s WHERE uri = '%s'", ArtifactRowMapper.BASE_QUERY, uri.toASCIIString());
+        final TapClient<ArtifactQueryResult> tapClient = new TapClient<>(this.resourceID);
+        final String query = String.format("%s, num_copies() %s WHERE id = '%s'",  ArtifactRowMapper.SELECT,  ArtifactRowMapper.FROM, id);
         log.debug("\nExecuting query '" + query + "'\n");
-        ResourceIterator<Artifact> results = tapClient.execute(query, new ArtifactRowMapper());
-        if (results.hasNext()) {
-            return results.next();
-        }
-        return null;
+        return tapClient.queryForObject(query, new ArtifactQueryResultRowMapper());
     }
 
     /**
@@ -635,11 +665,7 @@ public class ArtifactValidator {
         final TapClient<DeletedArtifactEvent> tapClient = new TapClient<>(this.resourceID);
         final String query = String.format("%s WHERE id = '%s'", DeletedArtifactEventRowMapper.BASE_QUERY, id);
         log.debug("\nExecuting query '" + query + "'\n");
-        ResourceIterator<DeletedArtifactEvent> results = tapClient.execute(query, new DeletedArtifactEventRowMapper());
-        if (results.hasNext()) {
-            return results.next();
-        }
-        return null;
+        return tapClient.queryForObject(query, new DeletedArtifactEventRowMapper());
     }
 
     /**
@@ -651,17 +677,30 @@ public class ArtifactValidator {
         final TapClient<DeletedStorageLocationEvent> tapClient = new TapClient<>(this.resourceID);
         final String query = String.format("%s WHERE id = '%s'", DeletedStorageLocationEventRowMapper.BASE_QUERY, id);
         log.debug("\nExecuting query '" + query + "'\n");
-        ResourceIterator<DeletedStorageLocationEvent> results =
-            tapClient.execute(query, new DeletedStorageLocationEventRowMapper());
-        if (results.hasNext()) {
-            return results.next();
-        }
-        return null;
+        return tapClient.queryForObject(query, new DeletedStorageLocationEventRowMapper());
     }
 
     private void logNoAction(Artifact artifact, String message) {
         log.info(String.format("no action %s %s, reason: %s", artifact.getID(), artifact.getURI(), message));
     }
 
+    private class ArtifactQueryResultRowMapper implements TapRowMapper<ArtifactQueryResult> {
+
+        public ArtifactQueryResult mapRow(final List<Object> row) {
+            ArtifactRowMapper mapper = new ArtifactRowMapper();
+            Artifact artifact = mapper.mapRow(row);
+            Integer numCopies = (Integer) row.get(row.size() - 1);
+
+            ArtifactQueryResult result = new ArtifactQueryResult();
+            result.artifact = artifact;
+            result.numCopies = numCopies;
+            return result;
+        }
+    }
+
+    private static class ArtifactQueryResult {
+        Artifact artifact;
+        Integer numCopies;
+    }
 }
 

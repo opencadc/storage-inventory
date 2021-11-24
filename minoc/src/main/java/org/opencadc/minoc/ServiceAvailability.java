@@ -68,7 +68,6 @@
 package org.opencadc.minoc;
 
 import ca.nrc.cadc.auth.AuthMethod;
-import ca.nrc.cadc.db.DBUtil;
 import ca.nrc.cadc.reg.Standards;
 import ca.nrc.cadc.reg.client.LocalAuthority;
 import ca.nrc.cadc.reg.client.RegistryClient;
@@ -80,16 +79,11 @@ import ca.nrc.cadc.vosi.avail.CheckCertificate;
 import ca.nrc.cadc.vosi.avail.CheckException;
 import ca.nrc.cadc.vosi.avail.CheckResource;
 import ca.nrc.cadc.vosi.avail.CheckWebService;
-
 import java.io.File;
 import java.net.URI;
 import java.util.Map;
-
-import javax.sql.DataSource;
-
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.db.ArtifactDAO;
-import org.opencadc.inventory.db.version.InitDatabase;
 
 /**
  * This class performs the work of determining if the executing artifact
@@ -158,7 +152,6 @@ public class ServiceAvailability implements AvailabilityPlugin {
             // check for a certficate needed to perform network ops
             CheckCertificate checkCert = new CheckCertificate(SERVOPS_PEM_FILE);
             checkCert.check();
-            log.info("cert check ok");
 
             // check other services we depend on
             RegistryClient reg = new RegistryClient();
@@ -172,10 +165,10 @@ public class ServiceAvailability implements AvailabilityPlugin {
             checkResource = new CheckWebService(url);
             checkResource.check();
 
-            URI usersURI = localAuthority.getServiceURI(Standards.UMS_USERS_01.toString());
-            url = reg.getServiceURL(usersURI, Standards.VOSI_AVAILABILITY, AuthMethod.ANON).toExternalForm();
-            checkResource = new CheckWebService(url);
-            checkResource.check();
+            //URI usersURI = localAuthority.getServiceURI(Standards.UMS_USERS_01.toString());
+            //url = reg.getServiceURL(usersURI, Standards.VOSI_AVAILABILITY, AuthMethod.ANON).toExternalForm();
+            //checkResource = new CheckWebService(url);
+            //checkResource.check();
             
             URI groupsURI = localAuthority.getServiceURI(Standards.GMS_SEARCH_01.toString());
             url = reg.getServiceURL(groupsURI, Standards.VOSI_AVAILABILITY, AuthMethod.ANON).toExternalForm();

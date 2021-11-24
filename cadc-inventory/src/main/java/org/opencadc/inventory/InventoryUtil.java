@@ -347,15 +347,17 @@ public abstract class InventoryUtil {
         boolean amp = (test.indexOf('&') >= 0);
         boolean dollar = (test.indexOf('$') >= 0);
         boolean question = (test.indexOf('?') >= 0);
+        boolean sqopen = (test.indexOf('[') >= 0);
+        boolean sqclose = (test.indexOf(']') >= 0);
 
-        if (space || slash || escape || percent || semic || amp || dollar || question) {
+        if (space || slash || escape || percent || semic || amp || dollar || question || sqopen || sqclose) {
             String s = "invalid ";
             if (caller != null) {
                 s += caller.getSimpleName() + ".";
             }
             throw new IllegalArgumentException(s + name + ": " + test
                     + " reason: path component may not contain space ( ), slash (/), escape (\\), percent (%),"
-                    + " semi-colon (;), ampersand (&), or dollar ($)");
+                    + " semi-colon (;), ampersand (&), or dollar ($), question (?), or square brackets ([])");
         }
     }
 
