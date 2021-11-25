@@ -159,6 +159,14 @@ public class AdStorageQuery {
             storageLocation.storageBucket = storageBucket;
             
             Date contentLastModified = (Date) i.next();
+            if (contentLastModified == null) {
+                // work-around for cases with NULL ingestDate:
+                // select archiveName, count(*) from archive_files where ingestDate=Null group by archiveName;
+                // JCMT   30525
+                // XDSS 1696503
+                // CFHT   22286
+                contentLastModified = new Date();
+            }
 
             StorageMetadata storageMetadata = new StorageMetadata(storageLocation, contentChecksum, contentLength, contentLastModified);
             storageMetadata.artifactURI = artifactURI;
