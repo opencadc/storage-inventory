@@ -251,12 +251,9 @@ public abstract class StorageAdapterByteRangeTest {
             
             for (int i : readOrder) {
                 ByteRange r = ranges.get(i);
-                
-                SortedSet<ByteRange> br = new TreeSet<>();
-                br.add(r);
                 ByteCountOutputStream bcos = new ByteCountOutputStream(new DiscardOutputStream());
                 t1 = System.nanoTime();
-                adapter.get(storageMetadata.getStorageLocation(), bcos, br);
+                adapter.get(storageMetadata.getStorageLocation(), bcos, r);
                 t2 = System.nanoTime();
                 micros = (t2 - t1) / 1024L;
                 Assert.assertEquals("num bytes returned", rlen, bcos.getByteCount());

@@ -85,9 +85,10 @@ public class StorageMetadata implements Comparable<StorageMetadata> {
     private final StorageLocation storageLocation;
     private final URI contentChecksum;
     private final Long contentLength;
+    private final Date contentLastModified;
     
     public URI artifactURI;
-    public Date contentLastModified;
+    
 
     public String contentEncoding;
     public String contentType;
@@ -98,17 +99,20 @@ public class StorageMetadata implements Comparable<StorageMetadata> {
      * @param storageLocation
      * @param contentChecksum
      * @param contentLength 
+     * @param contentLastModified 
      */
-    public StorageMetadata(StorageLocation storageLocation, URI contentChecksum, Long contentLength) {
+    public StorageMetadata(StorageLocation storageLocation, URI contentChecksum, Long contentLength, Date contentLastModified) {
         InventoryUtil.assertNotNull(StorageMetadata.class, "storageLocation", storageLocation);
         InventoryUtil.assertNotNull(StorageMetadata.class, "contentChecksum", contentChecksum);
         InventoryUtil.assertNotNull(StorageMetadata.class, "contentLength", contentLength);
+        InventoryUtil.assertNotNull(StorageMetadata.class, "contentLastModified", contentLastModified);
         if (contentLength <= 0L) {
             throw new IllegalArgumentException("invalid " + StorageMetadata.class.getSimpleName() + ".contentLength: " + contentLength);
         }
         this.storageLocation = storageLocation;
         this.contentChecksum = contentChecksum;
         this.contentLength = contentLength;
+        this.contentLastModified = contentLastModified;
     }
     
     /**
@@ -121,6 +125,7 @@ public class StorageMetadata implements Comparable<StorageMetadata> {
         this.storageLocation = storageLocation;
         this.contentChecksum = null;
         this.contentLength = null;
+        this.contentLastModified = null;
     }
 
     public boolean isValid() {
@@ -137,6 +142,10 @@ public class StorageMetadata implements Comparable<StorageMetadata> {
 
     public Long getContentLength() {
         return contentLength;
+    }
+
+    public Date getContentLastModified() {
+        return contentLastModified;
     }
     
     @Override
