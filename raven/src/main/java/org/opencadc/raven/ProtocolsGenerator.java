@@ -259,8 +259,7 @@ public class ProtocolsGenerator {
                 orderedSet.add(storageSite);
             }
         }
-        // return the set in descending order, higher priority sites first.
-        return orderedSet.descendingSet();
+        return orderedSet;
     }
 
     private List<Protocol> doPushTo(URI artifactURI, Transfer transfer, String authToken) throws IOException {
@@ -362,8 +361,11 @@ public class ProtocolsGenerator {
     }
 
     /**
-     * Compare two StorageSite's, giving higher ranking to the site with a
-     * namespace matching an Artifact URI.
+     * Compare two StorageSite's. A site with a namespace matching the given Artifact URI
+     * is ordered higher than a site without a matching namespace. If two StorageSite's
+     * both have a matching namespace, or both do not have a matching namespace,
+     * they are ordered using StorageSite default ordering. The StorageSite's are ordered
+     * in descending order.
      */
     static class PrioritizingStorageSiteComparator implements Comparator<StorageSite> {
 
@@ -381,58 +383,51 @@ public class ProtocolsGenerator {
         @Override
         public int compare(StorageSite site1, StorageSite site2) {
 
-            // check for null StorageSite's
+            // nothing to compare so considered equal.
             if (site1 == null && site2 == null) {
                 return 0;
             }
             if (site1 == null) {
-                return -1;
+                return 1;
             }
             if (site2 == null) {
-                return 1;
+                return -1;
             }
 
             // get the rules for each site
             StorageSiteRule rule1 = this.siteRules.get(site1.getResourceID());
             StorageSiteRule rule2 = this.siteRules.get(site2.getResourceID());
 
-            // check for null StorageSiteRule's
-            if (rule1 == null && rule2 == null) {
-                return 0;
-            }
-            if (rule1 == null) {
-                return -1;
-            }
-            if (rule2 == null) {
-                return 1;
-            }
-
-            // check if a site namespace matches the ArtifactURI
+            // check if a site has a namespace matching the ArtifactURI
             boolean site1Match = false;
-            for (Namespace ns : rule1.getNamespaces()) {
-                if (ns.matches(this.artifactURI)) {
-                    site1Match = true;
-                    break;
+            if (rule1 != null) {
+                for (Namespace ns : rule1.getNamespaces()) {
+                    if (ns.matches(this.artifactURI)) {
+                        site1Match = true;
+                        break;
+                    }
                 }
             }
 
             boolean site2match = false;
-            for (Namespace ns : rule2.getNamespaces()) {
-                if (ns.matches(this.artifactURI)) {
-                    site2match = true;
-                    break;
+            if (rule2 != null) {
+                for (Namespace ns : rule2.getNamespaces()) {
+                    if (ns.matches(this.artifactURI)) {
+                        site2match = true;
+                        break;
+                    }
                 }
             }
 
             // give higher priority to the site with a namespace that matches the Artifact URI.
             if (site1Match && !site2match) {
-                return 1;
-            }
-            if (!site1Match && site2match) {
                 return -1;
             }
-            // default: order of site names
-            return site1.getResourceID().compareTo(site2.getResourceID());
+            if (!site1Match && site2match) {
+                return 1;
+            }
+            // default: StorageSite order
+            return site1.compareTo(site2);
         }
     }
 
