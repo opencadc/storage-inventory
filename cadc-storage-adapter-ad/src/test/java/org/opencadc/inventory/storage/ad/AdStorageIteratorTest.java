@@ -71,11 +71,11 @@ package org.opencadc.inventory.storage.ad;
 import ca.nrc.cadc.util.Log4jInit;
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.Iterator;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.storage.StorageMetadata;
@@ -196,7 +196,7 @@ public class AdStorageIteratorTest {
         URI uri = new URI(uriStr);
         StorageLocation storageLocation = new StorageLocation(uri);
         storageLocation.storageBucket = "testBucket";
-        StorageMetadata storageMetadata = new StorageMetadata(storageLocation, new URI("md5:12345"), 12345L);
+        StorageMetadata storageMetadata = new StorageMetadata(storageLocation, new URI("md5:12345"), 12345L, new Date());
         storageMetadata.artifactURI = uri;
         return storageMetadata;
     }

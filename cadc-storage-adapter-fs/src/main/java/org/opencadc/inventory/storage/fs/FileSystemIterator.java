@@ -76,6 +76,7 @@ import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.attribute.UserDefinedFileAttributeView;
+import java.util.Date;
 import java.util.EmptyStackException;
 import java.util.Iterator;
 import java.util.Stack;
@@ -196,7 +197,7 @@ public class FileSystemIterator implements Iterator<StorageMetadata> {
         try {
             URI checksum = new URI(getFileAttribute(next.path, FileSystemStorageAdapter.CHECKSUM_ATTRIBUTE_NAME));
             long length = Files.size(next.path);
-            StorageMetadata meta = new StorageMetadata(storageLocation, checksum, length);
+            StorageMetadata meta = new StorageMetadata(storageLocation, checksum, length, new Date(Files.getLastModifiedTime(next.path).toMillis()));
             meta.artifactURI = storageID;
             return meta;
         } catch (Exception e) {

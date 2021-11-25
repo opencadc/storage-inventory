@@ -303,12 +303,12 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
      * @throws StorageEngageException If the adapter failed to interact with storage
      * @throws TransientException If an unexpected, temporary exception occurred
      */
-    public void get(StorageLocation storageLocation, OutputStream dest, SortedSet<ByteRange> byteRanges)
+    public void get(StorageLocation storageLocation, OutputStream dest, ByteRange byteRange)
         throws ResourceNotFoundException, ReadException, WriteException, StorageEngageException, TransientException {
         InventoryUtil.assertNotNull(OpaqueFileSystemStorageAdapter.class, "storageLocation", storageLocation);
         InventoryUtil.assertNotNull(OpaqueFileSystemStorageAdapter.class, "dest", dest);
-        InventoryUtil.assertNotNull(OpaqueFileSystemStorageAdapter.class, "byteRanges", byteRanges);
-        log.debug("get: " + storageLocation + " " + byteRanges.size());
+        InventoryUtil.assertNotNull(OpaqueFileSystemStorageAdapter.class, "byteRange", byteRange);
+        log.debug("get: " + storageLocation + " " + byteRange);
 
         Path path = storageLocationToPath(storageLocation);
         if (!Files.exists(path)) {
@@ -319,9 +319,11 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
         }
         InputStream source = null;
         try {
-            if (!byteRanges.isEmpty()) {
+            if (byteRange != null) {
                 RandomAccessFile raf = new RandomAccessFile(path.toFile(), "r");
-                source = new PartialReadInputStream(raf, byteRanges);
+                SortedSet<ByteRange> brs = new TreeSet<>();
+                brs.add(byteRange);
+                source = new PartialReadInputStream(raf, brs);
             } else {
                 source = Files.newInputStream(path, StandardOpenOption.READ);
             }
@@ -335,25 +337,6 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
         } catch (InterruptedException ex) {
             log.debug("get interrupted", ex);
         }
-    }
-    
-    /**
-     * Get from storage the artifact identified by storageLocation.
-     * 
-     * @param storageLocation The storage location containing storageID and storageBucket.
-     * @param dest The destination stream.
-     * @param cutouts Cutouts to be applied to the artifact
-     * 
-     * @throws ResourceNotFoundException If the artifact could not be found.
-     * @throws ReadException If the storage system failed to stream.
-     * @throws WriteException If the client failed to stream.
-     * @throws StorageEngageException If the adapter failed to interact with storage.
-     * @throws TransientException If an unexpected, temporary exception occurred. 
-     */
-    @Override
-    public void get(StorageLocation storageLocation, OutputStream dest, Set<String> cutouts)
-        throws ResourceNotFoundException, ReadException, WriteException, StorageEngageException, TransientException {
-        throw new UnsupportedOperationException("cutouts not supported");
     }
     
     /**
@@ -470,15 +453,14 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
                 }
 
                 // create this before committing the file so constraints applied
-                StorageMetadata metadata = new StorageMetadata(storageLocation, checksum, length);
+                StorageMetadata test = new StorageMetadata(storageLocation, checksum, length, new Date());
                 
                 // to atomic copy into content directory
                 final Path result = Files.move(txnTarget, contentTarget, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
                 log.debug("moved file to : " + contentTarget);
                 txnTarget = null;
-                
+                StorageMetadata metadata = new StorageMetadata(storageLocation, checksum, length, new Date(Files.getLastModifiedTime(result).toMillis()));
                 metadata.artifactURI = artifactURI;
-                metadata.contentLastModified = new Date(Files.getLastModifiedTime(result).toMillis());
                 return metadata;
 
             } catch (InvalidPathException e) {
