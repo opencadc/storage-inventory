@@ -139,7 +139,7 @@ public abstract class StorageAdapterBasicTest {
             Assert.assertEquals(newArtifact.contentChecksum, storageMetadata.getContentChecksum());
             Assert.assertEquals(newArtifact.contentLength, storageMetadata.getContentLength());
             Assert.assertEquals("artifactURI",  artifactURI, storageMetadata.artifactURI);
-            Assert.assertNotNull(storageMetadata.contentLastModified);
+            Assert.assertNotNull(storageMetadata.getContentLastModified());
             
             // verify data stored
             log.debug("testPutGetDelete get: " + artifactURI);
@@ -351,8 +351,8 @@ public abstract class StorageAdapterBasicTest {
                 Assert.assertNotNull("artifactURI", am.artifactURI);
                 Assert.assertEquals("artifactURI", em.artifactURI, am.artifactURI);
                 
-                Assert.assertNotNull("contentLastModified", am.contentLastModified);
-                Assert.assertEquals("contentLastModified", em.contentLastModified, am.contentLastModified);
+                Assert.assertNotNull("contentLastModified", am.getContentLastModified());
+                Assert.assertEquals("contentLastModified", em.getContentLastModified(), am.getContentLastModified());
             }
             
             // rely on cleanup()

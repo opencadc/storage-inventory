@@ -206,15 +206,9 @@ public class PutAction extends ArtifactAction {
         }
         log.debug("writing new artifact to " + storageAdapter.getClass().getName() + " OK");
         
-        log.debug("wrote new artifact to storage");
-        if (artifactMetadata.contentLastModified == null) {
-            // not provided by StorageAdapter
-            artifactMetadata.contentLastModified = new Date();
-        }
-        
         Artifact artifact = new Artifact(
             artifactURI, artifactMetadata.getContentChecksum(),
-            artifactMetadata.contentLastModified, artifactMetadata.getContentLength());
+            artifactMetadata.getContentLastModified(), artifactMetadata.getContentLength());
         artifact.contentEncoding = encodingHeader;
         artifact.contentType = typeHeader;
         artifact.storageLocation = artifactMetadata.getStorageLocation();

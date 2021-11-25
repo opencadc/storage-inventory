@@ -537,12 +537,9 @@ public class BucketValidator implements ValidateEventListener {
     // used by createArtifact and replaceArtifact
     private Artifact toArtifact(StorageMetadata storageMetadata) {
         if (storageMetadata.artifactURI != null) {
-            final Date contentLastModified =
-                storageMetadata.contentLastModified == null ? new Date() : storageMetadata.contentLastModified;
-
             final Artifact artifact = new Artifact(storageMetadata.artifactURI,
                                                    storageMetadata.getContentChecksum(),
-                                                   contentLastModified,
+                                                   storageMetadata.getContentLastModified(),
                                                    storageMetadata.getContentLength());
             artifact.storageLocation = storageMetadata.getStorageLocation();
             artifact.contentType = storageMetadata.contentType;

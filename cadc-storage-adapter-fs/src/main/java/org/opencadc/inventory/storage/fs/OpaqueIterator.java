@@ -212,11 +212,10 @@ class OpaqueIterator implements Iterator<StorageMetadata> {
             
                 URI contentChecksum = new URI(csAttr);
                 long contentLength = Files.size(p);
-                StorageMetadata ret = new StorageMetadata(sloc, contentChecksum, contentLength);
+                StorageMetadata ret = new StorageMetadata(sloc, contentChecksum, contentLength, new Date(Files.getLastModifiedTime(p).toMillis()));
             
                 // optional
                 ret.artifactURI = new URI(aidAttr);
-                ret.contentLastModified = new Date(Files.getLastModifiedTime(p).toMillis());
                 return ret;
             } catch (FileSystemException | IllegalArgumentException | URISyntaxException ex) {
                 return new StorageMetadata(sloc); // missing attrs: invalid stored object

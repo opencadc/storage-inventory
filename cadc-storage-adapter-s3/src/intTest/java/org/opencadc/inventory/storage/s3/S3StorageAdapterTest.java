@@ -399,7 +399,7 @@ abstract class S3StorageAdapterTest {
                 Assert.assertNotNull("artifactUIRI", am.artifactURI);
                 Assert.assertEquals("artifactURI", em.artifactURI, am.artifactURI);
                 
-                Assert.assertNotNull("contentLastModified", am.contentLastModified);
+                Assert.assertNotNull("contentLastModified", am.getContentLastModified());
                 //Assert.assertEquals("contentLastModified", em.contentLastModified, am.contentLastModified);
             }
             

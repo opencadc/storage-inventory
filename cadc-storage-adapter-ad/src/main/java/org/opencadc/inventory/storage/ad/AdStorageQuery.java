@@ -87,8 +87,8 @@ import org.opencadc.tap.TapRowMapper;
 public class AdStorageQuery {
     private static final Logger log = Logger.getLogger(AdStorageMetadataRowMapper.class); // intentional: log message are from nested class
 
-    private static final String QTMPL = "SELECT archiveName, fileName, uri, inventoryURI, contentMD5, fileSize,"
-            + " contentEncoding, contentType, ingestDate"
+    private static final String QTMPL = "SELECT archiveName, fileName, uri, inventoryURI, contentMD5, fileSize, ingestDate,"
+            + " contentEncoding, contentType"
             + " FROM archive_files WHERE archiveName = '%s'"
             + " ORDER BY fileName ASC, ingestDate DESC";
 
@@ -157,14 +157,24 @@ public class AdStorageQuery {
 
             StorageLocation storageLocation = new StorageLocation(storageID);
             storageLocation.storageBucket = storageBucket;
+            
+            Date contentLastModified = (Date) i.next();
+            if (contentLastModified == null) {
+                // work-around for cases with NULL ingestDate:
+                // select archiveName, count(*) from archive_files where ingestDate=Null group by archiveName;
+                // JCMT   30525
+                // XDSS 1696503
+                // CFHT   22286
+                contentLastModified = new Date();
+            }
 
-            StorageMetadata storageMetadata = new StorageMetadata(storageLocation, contentChecksum, contentLength);
+            StorageMetadata storageMetadata = new StorageMetadata(storageLocation, contentChecksum, contentLength, contentLastModified);
             storageMetadata.artifactURI = artifactURI;
 
             // optional values
             storageMetadata.contentEncoding = (String) i.next();
             storageMetadata.contentType = (String) i.next();
-            storageMetadata.contentLastModified = (Date) i.next();
+            
 
             return storageMetadata;
         }

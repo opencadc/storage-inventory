@@ -160,13 +160,7 @@ public class AdStorageAdapter implements StorageAdapter {
     }
 
     @Override
-    public void get(StorageLocation storageLocation, OutputStream dest, SortedSet<ByteRange> byteRanges)
-        throws ResourceNotFoundException, ReadException, WriteException, StorageEngageException, TransientException {
-        throw new UnsupportedOperationException("not supported");
-    }
-    
-    @Override
-    public void get(StorageLocation storageLocation, OutputStream dest, Set<String> operations)
+    public void get(StorageLocation storageLocation, OutputStream dest, ByteRange byteRange)
         throws ResourceNotFoundException, ReadException, WriteException, StorageEngageException, TransientException {
         throw new UnsupportedOperationException("not supported");
     }
