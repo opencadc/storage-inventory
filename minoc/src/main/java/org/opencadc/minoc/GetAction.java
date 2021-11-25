@@ -106,10 +106,10 @@ import org.opencadc.soda.server.Cutout;
 public class GetAction extends ArtifactAction {
     
     private static final Logger log = Logger.getLogger(GetAction.class);
-    private static final String RANGE = "RANGE";
-    private static final String CONTENT_DISPOSITION = "Content-Disposition";
-    private static final String CONTENT_RANGE = "Content-Range";
-    private static final String CONTENT_LENGTH = "Content-Length";
+    private static final String RANGE = "range";
+    private static final String CONTENT_DISPOSITION = "content-disposition";
+    private static final String CONTENT_RANGE = "content-range";
+    private static final String CONTENT_LENGTH = "content-length";
     private static final String[] FITS_CONTENT_TYPES = new String[] {
         "application/fits", "image/fits"
     };
@@ -156,7 +156,7 @@ public class GetAction extends ArtifactAction {
         
         log.debug("retrieving artifact from storage: " + storageLocation);
 
-        String range = syncInput.getHeader("Range");
+        String range = syncInput.getHeader(RANGE);
         log.debug("Range: " + range);
         
         ByteCountOutputStream bcos = null;
@@ -165,18 +165,17 @@ public class GetAction extends ArtifactAction {
                 log.debug("No parameters specified.");
                 HeadAction.setHeaders(artifact, syncOutput);
                 bcos = new ByteCountOutputStream(syncOutput.getOutputStream());
-                SortedSet<ByteRange> rangeSet = parseRange(range, artifact.getContentLength());
-                if (rangeSet.isEmpty()) {
-                    storageAdapter.get(storageLocation, bcos);
-                } else {
-                    ByteRange byteRange = rangeSet.first();
+                ByteRange byteRange = getByteRange(range, artifact.getContentLength());
+                if (byteRange != null) {
                     syncOutput.setCode(206);
                     long lastByte = byteRange.getOffset() + byteRange.getLength() - 1;
                     syncOutput.setHeader(CONTENT_RANGE, "bytes " + byteRange.getOffset() + "-"
                             + lastByte + "/" + artifact.getContentLength());
                     // override content length
                     syncOutput.setHeader(CONTENT_LENGTH, byteRange.getLength());
-                    storageAdapter.get(storageLocation, bcos, rangeSet);
+                    storageAdapter.get(storageLocation, bcos, byteRange);
+                } else {
+                    storageAdapter.get(storageLocation, bcos);
                 }
             } else {
                 if (range != null) {
@@ -448,6 +447,17 @@ public class GetAction extends ArtifactAction {
         }
     }
 
+    ByteRange getByteRange(String range, long contentLength) throws RangeNotSatisfiableException {
+        SortedSet<ByteRange> ranges = parseRange(range, contentLength);
+        if (ranges.isEmpty()) {
+            return null;
+        }
+        if (ranges.size() == 1) {
+            return ranges.first();
+        }
+        throw new RangeNotSatisfiableException("multiple ranges in request not supported");
+    }
+    
     SortedSet<ByteRange> parseRange(String range, long contentLength) throws RangeNotSatisfiableException {
         SortedSet<ByteRange> result = new TreeSet<ByteRange>();
         if (range == null) {

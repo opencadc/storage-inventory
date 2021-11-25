@@ -1,6 +1,6 @@
 FROM cadc-tomcat:1
 
-COPY build/libs/minoc.war /usr/share/tomcat/webapps/
+RUN dnf install -y wcslib && dnf clean all
 
-RUN yum install -y wcslib
+COPY build/libs/minoc.war /usr/share/tomcat/webapps/
 
