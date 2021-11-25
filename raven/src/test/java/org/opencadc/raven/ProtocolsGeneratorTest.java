@@ -123,12 +123,15 @@ public class ProtocolsGeneratorTest {
 
         //2nd StorageSite null
         actual = comparator.compare(new StorageSite(URI.create("ivo:site1"), "site1", true, true), null);
-        Assert.assertEquals(-1, actual);
+        Assert.assertTrue(actual != 0);
 
         // 1st StorageSite null
         actual = comparator.compare(null, new StorageSite(URI.create("ivo:site1"), "site1", true, true));
-        Assert.assertEquals(1, actual);
+        Assert.assertTrue(actual != 0);
 
+        actual = comparator.compare(new StorageSite(URI.create("ivo:site5"), "site5", true, true),
+                                    new StorageSite(URI.create("ivo:site2"), "site2", true, true));
+        Assert.assertTrue(actual != 0);
 
         List<Namespace> namespaces = new ArrayList<>();
         namespaces.add(new Namespace("ivo:aaa/"));
@@ -141,23 +144,23 @@ public class ProtocolsGeneratorTest {
 
         actual = comparator.compare(new StorageSite(URI.create("ivo:site5"), "site5", true, true),
                                     new StorageSite(URI.create("ivo:site2"), "site2", true, true));
-        Assert.assertEquals(-1, actual);
+        Assert.assertTrue(actual != 0);
 
         // 2nd StorageSite has a rule with a namespace matching the ArtifactURI
         actual = comparator.compare(new StorageSite(URI.create("ivo:site2"), "site2", true, true),
                                     new StorageSite(URI.create("ivo:site5"), "site5", true, true));
-        Assert.assertEquals(1, actual);
+        Assert.assertTrue(actual != 0);
 
         comparator = new ProtocolsGenerator.PrioritizingStorageSiteComparator(siteRules, URI.create("ivo:bbb/123"), clientIP);
 
         // no StorageSite's with a rule with a namespace that matches ArtifactURI, StorageSite ordering used (resourceID)
         actual = comparator.compare(new StorageSite(URI.create("ivo:site2"), "site2", true, true),
                                     new StorageSite(URI.create("ivo:site3"), "site3", true, true));
-        Assert.assertEquals(-1, actual);
+        Assert.assertTrue(actual != 0);
 
         actual = comparator.compare(new StorageSite(URI.create("ivo:site3"), "site3", true, true),
                                     new StorageSite(URI.create("ivo:site2"), "site2", true, true));
-        Assert.assertEquals(1, actual);
+        Assert.assertTrue(actual != 0);
     }
 
     @Test
