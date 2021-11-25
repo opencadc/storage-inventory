@@ -68,6 +68,8 @@
 
 package org.opencadc.minoc;
 
+import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.util.Arrays;
 
 import ca.nrc.cadc.util.Log4jInit;
@@ -113,14 +115,14 @@ public class FitsTest {
         }
     }
 
-    public static void assertHDUEqual(final BasicHDU<?> expectedHDU, final BasicHDU<?> resultHDU) throws Exception {
+    public static void assertHDUEqual(final BasicHDU<?> expectedHDU, final BasicHDU<?> resultHDU) {
         final Header expectedHeader = expectedHDU.getHeader();
         final Header resultHeader = resultHDU.getHeader();
 
         FitsTest.assertHeadersEqual(expectedHeader, resultHeader);
     }
 
-    public static void assertHeadersEqual(final Header expectedHeader, final Header resultHeader) throws Exception {
+    public static void assertHeadersEqual(final Header expectedHeader, final Header resultHeader) {
         Arrays.stream(HEADER_CARD_KEYS_TO_CHECK).forEach(headerCardKey -> {
             final HeaderCard expectedCard = expectedHeader.findCard(headerCardKey);
             final HeaderCard resultCard = resultHeader.findCard(headerCardKey);
@@ -129,8 +131,30 @@ public class FitsTest {
                 Assert.assertNull("Card " + headerCardKey.key() + " should be null.", resultCard);
             } else {
                 Assert.assertNotNull("Header " + headerCardKey.key() + " should not be null.", resultCard);
+                final Class<?> valueType = expectedCard.valueType();
+                final String expectedStringValue = expectedCard.getValue();
+                final String resultStringValue = resultCard.getValue();
+
+                final Object expectedValue;
+                final Object resultValue;
+
+                if (valueType == Integer.class) {
+                    expectedValue = Integer.parseInt(expectedStringValue);
+                    resultValue = Integer.parseInt(resultStringValue);
+                } else if (valueType == Long.class) {
+                    expectedValue = Long.parseLong(expectedStringValue);
+                    resultValue = Long.parseLong(resultStringValue);
+                } else if (valueType == Double.class || valueType == BigDecimal.class
+                           || valueType == BigInteger.class) {
+                    expectedValue = Double.parseDouble(expectedStringValue);
+                    resultValue = Double.parseDouble(resultStringValue);
+                } else {
+                    expectedValue = expectedStringValue;
+                    resultValue = resultStringValue;
+                }
+
                 Assert.assertEquals("Header " + headerCardKey.key() + " has the wrong value.",
-                                    expectedCard.getValue(), resultCard.getValue());
+                                    expectedValue, resultValue);
             }
         });
 

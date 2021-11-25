@@ -127,17 +127,24 @@ public class PutAction extends ArtifactAction {
             }
         };
     }
+    
+
+    /**
+     * Perform auth checks and initialize resources.
+     */
+    @Override
+    public void initAction() throws Exception {
+        checkWritable();
+        initAndAuthorize(WriteGrant.class);
+        initDAO();
+        initStorageAdapter();
+    }
 
     /**
      * Perform the PUT.
      */
     @Override
     public void doAction() throws Exception {
-        
-        checkWritable();
-        initAndAuthorize(WriteGrant.class);
-        initDAO();
-        initStorageAdapter();
         
         URI digest = syncInput.getDigest();
         String lengthHeader = syncInput.getHeader("Content-Length");
