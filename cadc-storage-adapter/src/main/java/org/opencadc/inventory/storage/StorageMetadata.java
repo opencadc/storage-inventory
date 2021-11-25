@@ -118,7 +118,7 @@ public class StorageMetadata implements Comparable<StorageMetadata> {
     /**
      * Constructor for an invalid stored object that should be cleaned up.
      * 
-     * @param storageLocation 
+     * @param storageLocation location of the file in back end storage
      */
     public StorageMetadata(StorageLocation storageLocation) {
         InventoryUtil.assertNotNull(StorageMetadata.class, "storageLocation", storageLocation);
