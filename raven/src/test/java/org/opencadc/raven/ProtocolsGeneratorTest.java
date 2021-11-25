@@ -115,7 +115,7 @@ public class ProtocolsGeneratorTest {
         InetAddress clientIP = null;
 
         ProtocolsGenerator.PrioritizingStorageSiteComparator comparator =
-            new ProtocolsGenerator.PrioritizingStorageSiteComparator(siteRules, URI.create("ivo:aaa"), clientIP);
+            new ProtocolsGenerator.PrioritizingStorageSiteComparator(siteRules, URI.create("ivo:aaa/123"), clientIP);
 
         // both StorageSite's null
         int actual = comparator.compare(null, null);
@@ -129,15 +129,22 @@ public class ProtocolsGeneratorTest {
         actual = comparator.compare(null, new StorageSite(URI.create("ivo:site1"), "site1", true, true));
         Assert.assertTrue(actual != 0);
 
-        actual = comparator.compare(new StorageSite(URI.create("ivo:site5"), "site5", true, true),
-                                    new StorageSite(URI.create("ivo:site2"), "site2", true, true));
-        Assert.assertTrue(actual != 0);
 
+        // site2 orders less than site5 using StorageSite default ordering
+        actual = comparator.compare(new StorageSite(URI.create("ivo:site2"), "site2", true, true),
+                                    new StorageSite(URI.create("ivo:site5"), "site5", true, true));
+        Assert.assertTrue(actual < 0);
+
+
+        // site2 orders greater than site5 using the site rules
         List<Namespace> namespaces = new ArrayList<>();
         namespaces.add(new Namespace("ivo:aaa/"));
-
-        siteRules = new HashMap<>();
         siteRules.put(URI.create("ivo:site5"), new StorageSiteRule(namespaces));
+
+        actual = comparator.compare(new StorageSite(URI.create("ivo:site2"), "site2", true, true),
+                                    new StorageSite(URI.create("ivo:site5"), "site5", true, true));
+        Assert.assertTrue(actual > 0);
+
 
         // 1st StorageSite has a rule with a namespace matching the ArtifactURI
         comparator = new ProtocolsGenerator.PrioritizingStorageSiteComparator(siteRules, URI.create("ivo:aaa/123"), clientIP);
