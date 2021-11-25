@@ -96,10 +96,10 @@ public class StorageMetadata implements Comparable<StorageMetadata> {
     /**
      * Constructor for a valid stored object.
      * 
-     * @param storageLocation
-     * @param contentChecksum
-     * @param contentLength 
-     * @param contentLastModified 
+     * @param storageLocation location of the file in back end storage
+     * @param contentChecksum checksum of the file in the form {algorithm}:{hex value}
+     * @param contentLength length of the file in bytes
+     * @param contentLastModified timestamp when the file was last modified
      */
     public StorageMetadata(StorageLocation storageLocation, URI contentChecksum, Long contentLength, Date contentLastModified) {
         InventoryUtil.assertNotNull(StorageMetadata.class, "storageLocation", storageLocation);
