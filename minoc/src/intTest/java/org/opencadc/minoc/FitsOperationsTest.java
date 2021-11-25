@@ -86,11 +86,13 @@ import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.Test;
+import org.opencadc.soda.SodaParamValidator;
 
 import javax.security.auth.Subject;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.InputStream;
 import java.net.URI;
 import java.net.URL;
 import java.nio.file.Files;
@@ -139,7 +141,7 @@ public class FitsOperationsTest extends MinocTest {
                 "[0][*,100:400]"
         };
 
-        uploadAndCompare(artifactURI, cutoutSpecs, testFilePrefix, testFileExtension);
+        uploadAndCompareCutout(artifactURI, SodaParamValidator.SUB, cutoutSpecs, testFilePrefix, testFileExtension);
     }
 
     @Test
@@ -151,7 +153,7 @@ public class FitsOperationsTest extends MinocTest {
                 "[0][200:350,100:300]"
         };
 
-        uploadAndCompare(artifactURI, cutoutSpecs, testFilePrefix, testFileExtension);
+        uploadAndCompareCutout(artifactURI, SodaParamValidator.SUB, cutoutSpecs, testFilePrefix, testFileExtension);
     }
 
     @Test
@@ -165,7 +167,20 @@ public class FitsOperationsTest extends MinocTest {
                 "[91][*,90:255]"
         };
 
-        uploadAndCompare(artifactURI, cutoutSpecs, testFilePrefix, testFileExtension);
+        uploadAndCompareCutout(artifactURI, SodaParamValidator.SUB, cutoutSpecs, testFilePrefix, testFileExtension);
+    }
+
+    @Test
+    public void testMEFStriding() throws Exception {
+        final String testFilePrefix = "test-mef-striding";
+        final String testFileExtension = "fits";
+        final URI artifactURI = URI.create("cadc:TEST/" + testFilePrefix + "." + testFileExtension);
+        final String[] cutoutSpecs = new String[] {
+                "[SCI,14][100:125:4,100:175:3]",
+                "[91][*,90:255:2]"
+        };
+
+        uploadAndCompareCutout(artifactURI, SodaParamValidator.SUB, cutoutSpecs, testFilePrefix, testFileExtension);
     }
 
     @Test
@@ -178,19 +193,125 @@ public class FitsOperationsTest extends MinocTest {
                 "[4][50:90,*]"
         };
 
-        uploadAndCompare(artifactURI, cutoutSpecs, testFilePrefix, testFileExtension);
+        uploadAndCompareCutout(artifactURI, SodaParamValidator.SUB, cutoutSpecs, testFilePrefix, testFileExtension);
     }
 
-    private void uploadAndCompare(final URI artifactURI, final String[] cutoutSpecs, final String testFilePrefix,
-                                  final String testFileExtension) throws Exception {
-        ensureFile(artifactURI);
-        final StringBuilder queryStringBuilder = new StringBuilder("?");
-        Arrays.stream(cutoutSpecs).
-                forEach(cut -> queryStringBuilder.append("SUB=").append(NetUtil.encode(cut)).append("&"));
+    @Test
+    public void testALMACircleCutout() throws Exception {
+        final String testFilePrefix = "test-alma-cube";
+        final String testFileExtension = "fits";
+        final URI artifactURI = URI.create("cadc:TEST/" + testFilePrefix + "." + testFileExtension);
+        final String[] cutoutSpecs = new String[] {
+                "246.52 -24.33 0.01"
+        };
 
-        queryStringBuilder.deleteCharAt(queryStringBuilder.lastIndexOf("&"));
+        uploadAndCompareCutout(artifactURI, SodaParamValidator.CIRCLE, cutoutSpecs, testFilePrefix, testFileExtension);
 
-        final URL artifactSUBURL = new URL(filesURL + "/" + artifactURI.toString() + queryStringBuilder.toString());
+        try {
+            // Test not found
+            doCutout(artifactURI, "CIRCLE=" + NetUtil.encode("0.3 0.3 0.002"),
+                     "NOOVERLAP", "fits", "text/plain");
+            Assert.fail("Should throw IllegalArgumentException.");
+        } catch (IllegalArgumentException illegalArgumentException) {
+            Assert.assertEquals("Wrong message.", "No overlap found.\n",
+                              illegalArgumentException.getMessage());
+        }
+    }
+
+    @Test
+    public void testALMAPolygonCutout() throws Exception {
+        final String testFilePrefix = "test-alma-cube-polygon";
+        final String testFileExtension = "fits";
+        final URI artifactURI = URI.create("cadc:TEST/" + testFilePrefix + "." + testFileExtension);
+        final String[] cutoutSpecs = new String[] {
+                "246.509 -24.34 246.53 -24.34 246.53 -24.31 246.50 -24.31"
+        };
+
+        uploadAndCompareCutout(artifactURI, SodaParamValidator.POLYGON, cutoutSpecs, testFilePrefix, testFileExtension);
+
+        try {
+            // Test not found
+            doCutout(artifactURI, "POLYGON=" + NetUtil.encode("122.0 -4.0 124.0 -4.5 123.0 -4.5 129 -4.0"),
+                     "NOOVERLAP", "fits", "text/plain");
+            Assert.fail("Should throw IllegalArgumentException.");
+        } catch (IllegalArgumentException illegalArgumentException) {
+            Assert.assertEquals("Wrong message.", "No overlap found.\n",
+                                illegalArgumentException.getMessage());
+        }
+    }
+
+    @Test
+    public void testALMABandCutout() throws Exception {
+        final String testFilePrefix = "test-alma-cube-band";
+        final String testFileExtension = "fits";
+        final URI artifactURI = URI.create("cadc:TEST/" + testFilePrefix + "." + testFileExtension);
+        final String[] cutoutSpecs = new String[] {
+                "0.0013606 0.0013616"
+        };
+
+        uploadAndCompareCutout(artifactURI, SodaParamValidator.BAND, cutoutSpecs, testFilePrefix, testFileExtension);
+
+        try {
+            // Test not found
+            doCutout(artifactURI, "BAND=" + NetUtil.encode("2.0 3.0"),
+                     "NOOVERLAP", "fits", "text/plain");
+            Assert.fail("Should throw IllegalArgumentException.");
+        } catch (IllegalArgumentException illegalArgumentException) {
+            Assert.assertEquals("Wrong message.", "No overlap found.\n",
+                                illegalArgumentException.getMessage());
+        }
+    }
+
+    @Test
+    public void testALMAPolarizationCutout() throws Exception {
+        final String testFilePrefix = "test-alma-cube-polarization";
+        final String testFileExtension = "fits";
+        final URI artifactURI = URI.create("cadc:TEST/" + testFilePrefix + "." + testFileExtension);
+        final String[] cutoutSpecs = new String[] {
+                "I"
+        };
+
+        uploadAndCompareCutout(artifactURI, SodaParamValidator.POL, cutoutSpecs, testFilePrefix, testFileExtension);
+
+        try {
+            // Test not found
+            doCutout(artifactURI, "POL=RR",
+                     "NOOVERLAP", "fits", "text/plain");
+            Assert.fail("Should throw IllegalArgumentException.");
+        } catch (IllegalArgumentException illegalArgumentException) {
+            Assert.assertEquals("Wrong message.", "No overlap found.\n",
+                                illegalArgumentException.getMessage());
+        }
+    }
+
+    @Test
+    public void testCGPSPolarizationCutout() throws Exception {
+        final String testFilePrefix = "test-cgps-polarization";
+        final String testFileExtension = "fits";
+        final URI artifactURI = URI.create("cadc:TEST/" + testFilePrefix + "." + testFileExtension);
+        final String[] cutoutSpecs = new String[] {
+                "U"
+        };
+
+        uploadAndCompareCutout(artifactURI, SodaParamValidator.POL, cutoutSpecs, testFilePrefix, testFileExtension);
+    }
+
+    @Test
+    public void testJCMTPolarizationCutout() throws Exception {
+        final String testFilePrefix = "test-jcmt-polarization";
+        final String testFileExtension = "fits";
+        final URI artifactURI = URI.create("cadc:TEST/" + testFilePrefix + "." + testFileExtension);
+        final String[] cutoutSpecs = new String[] {
+                "I"
+        };
+
+        uploadAndCompareCutout(artifactURI, SodaParamValidator.POL, cutoutSpecs, testFilePrefix, testFileExtension);
+    }
+
+    private File doCutout(final URI artifactURI, final String queryString, final String testFilePrefix,
+                          final String testFileExtension, final String expectedContentType) throws Exception {
+        final URL artifactSUBURL = new URL(filesURL + "/" + artifactURI
+                                           + (queryString == null ? "" : "?" + queryString));
         final File outputFile = Files.createTempFile(testFilePrefix + "-", "." + testFileExtension).toFile();
         LOGGER.debug("Writing cutout to " + outputFile);
 
@@ -198,28 +319,58 @@ public class FitsOperationsTest extends MinocTest {
         Subject.doAs(userSubject, (PrivilegedExceptionAction<Boolean>) () -> {
             LOGGER.debug("Testing cutout with " + artifactSUBURL);
             try (final FileOutputStream fileOutputStream = new FileOutputStream(outputFile)) {
-                final HttpGet cutoutClient = new HttpGet(artifactSUBURL, fileOutputStream);
+                final HttpGet cutoutClient = new HttpGet(artifactSUBURL, true);
                 cutoutClient.setFollowRedirects(true);
-                cutoutClient.run();
-                fileOutputStream.flush();
+                cutoutClient.prepare();
 
                 Assert.assertEquals("Wrong content type.",
-                                    "application/fits", cutoutClient.getResponseHeader(HttpTransfer.CONTENT_TYPE));
+                                    expectedContentType, cutoutClient.getResponseHeader(HttpTransfer.CONTENT_TYPE));
                 Assert.assertNotNull("Should include Content-Disposition ("
                                      + cutoutClient.getResponseHeader("Content-Disposition") + ")",
                                      cutoutClient.getResponseHeader("Content-Disposition"));
 
                 Assert.assertEquals("Should NOT contain " + HttpTransfer.CONTENT_LENGTH, -1L,
-                                  cutoutClient.getContentLength());
+                                    cutoutClient.getContentLength());
                 Assert.assertFalse("Should NOT contain " + HttpTransfer.CONTENT_MD5,
                                    StringUtil.hasText(cutoutClient.getContentMD5()));
                 Assert.assertFalse("Should NOT contain " + HttpTransfer.CONTENT_ENCODING,
                                    StringUtil.hasText(cutoutClient.getContentEncoding()));
+
+                final byte[] buffer = new byte[64 * 1024];
+                int bytesRead;
+                final InputStream inputStream = cutoutClient.getInputStream();
+                while ((bytesRead = inputStream.read(buffer)) > 0) {
+                    fileOutputStream.write(buffer, 0, bytesRead);
+                }
+                fileOutputStream.flush();
             }
 
             LOGGER.debug("Cutout complete -> " + artifactURI);
             return Boolean.TRUE;
         });
+
+        return outputFile;
+    }
+
+    private void uploadAndCompareCutout(final URI artifactURI, final String cutoutKey, final String[] cutoutSpecs,
+                                        final String testFilePrefix, final String testFileExtension)
+            throws Exception {
+        final StringBuilder queryStringBuilder = new StringBuilder();
+        Arrays.stream(cutoutSpecs).
+                forEach(cut -> queryStringBuilder.append(cutoutKey).append("=").append(NetUtil.encode(cut))
+                                                 .append("&"));
+
+        queryStringBuilder.deleteCharAt(queryStringBuilder.lastIndexOf("&"));
+
+        uploadAndCompare(artifactURI, queryStringBuilder.toString(), testFilePrefix, testFileExtension);
+    }
+
+    private void uploadAndCompare(final URI artifactURI, final String queryString, final String testFilePrefix,
+                                  final String testFileExtension) throws Exception {
+        ensureFile(artifactURI);
+
+        final File outputFile = doCutout(artifactURI, queryString, testFilePrefix, testFileExtension,
+                                         "application/fits");
 
         // setup
         final File expectedFile = new File(DEFAULT_DATA_PATH.toFile(), testFilePrefix + "-cutout.fits");
