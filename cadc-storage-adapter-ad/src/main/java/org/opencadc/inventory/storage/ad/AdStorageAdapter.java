@@ -203,7 +203,9 @@ public class AdStorageAdapter implements StorageAdapter {
         Iterator<StorageMetadata> storageMetadataIterator = null;
 
         try {
-            storageMetadataIterator = tc.execute(adQuery.getQuery(), adQuery.getRowMapper());
+            String adql = adQuery.getQuery();
+            log.debug("bucket: " + storageBucket + " query: " + adql);
+            storageMetadataIterator = tc.query(adql, adQuery.getRowMapper());
         } catch (Exception e) {
             log.error("error executing TapClient query");
 
