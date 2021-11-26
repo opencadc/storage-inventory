@@ -95,7 +95,7 @@ public class AdStorageQuery {
 
     // some archive names are prefixes for others
     static final String DISAMBIGUATE_PREFIX = "x-";
-    private final List<String> ARC_PREFIX_ARC = Arrays.asList("CFHT", "GEM");
+    private static final List<String> ARC_PREFIX_ARC = Arrays.asList("CFHT", "GEM");
     
     private String query;
     
