@@ -69,7 +69,6 @@ package org.opencadc.inventory.storage.fs;
 
 import ca.nrc.cadc.io.MultiBufferIO;
 import ca.nrc.cadc.io.ReadException;
-import ca.nrc.cadc.io.ThreadedIO;
 import ca.nrc.cadc.io.WriteException;
 import ca.nrc.cadc.net.IncorrectContentChecksumException;
 import ca.nrc.cadc.net.IncorrectContentLengthException;
@@ -99,7 +98,6 @@ import java.security.DigestOutputStream;
 import java.security.MessageDigest;
 import java.util.Date;
 import java.util.Iterator;
-import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.UUID;
