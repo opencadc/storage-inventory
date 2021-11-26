@@ -76,10 +76,8 @@ import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.Test;
-
 import org.opencadc.inventory.storage.StorageMetadata;
 import org.opencadc.tap.TapRowMapper;
-
 
 public class AdStorageQueryTest {
 
@@ -98,19 +96,35 @@ public class AdStorageQueryTest {
     }
     
     @Test
-    public void testQueryHST() throws Exception {
-        AdStorageQuery asq = new AdStorageQuery("HST");
+    public void testQueryGEMINI() throws Exception {
+        AdStorageQuery asq = new AdStorageQuery(AdStorageQuery.DISAMBIGUATE_PREFIX + "GEMINI");
         String query = asq.getQuery();
         Assert.assertNotNull(query);
-        Assert.assertTrue(query.contains("archiveName = 'HST'"));
+        Assert.assertTrue(query.contains("archiveName = 'GEMINI'"));
     }
     
     @Test
-    public void testQueryJWST() throws Exception {
-        AdStorageQuery asq = new AdStorageQuery("JWST");
+    public void testQueryCFHTSG() throws Exception {
+        AdStorageQuery asq = new AdStorageQuery(AdStorageQuery.DISAMBIGUATE_PREFIX + "CFHTSG");
         String query = asq.getQuery();
         Assert.assertNotNull(query);
-        Assert.assertTrue(query.contains("archiveName = 'JWST'"));
+        Assert.assertTrue(query.contains("archiveName = 'CFHTSG'"));
+    }
+    
+    @Test
+    public void testQueryCFHT() throws Exception {
+        AdStorageQuery asq = new AdStorageQuery("CFHT");
+        String query = asq.getQuery();
+        Assert.assertNotNull(query);
+        Assert.assertTrue(query.contains("archiveName = 'CFHT'"));
+    }
+    
+    @Test
+    public void testQueryGEM() throws Exception {
+        AdStorageQuery asq = new AdStorageQuery("GEM");
+        String query = asq.getQuery();
+        Assert.assertNotNull(query);
+        Assert.assertTrue(query.contains("archiveName = 'GEM'"));
     }
     
     @Test

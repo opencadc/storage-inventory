@@ -71,6 +71,7 @@ package org.opencadc.inventory.storage.ad;
 
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
@@ -92,19 +93,40 @@ public class AdStorageQuery {
             + " FROM archive_files WHERE archiveName = '%s'"
             + " ORDER BY fileName ASC, ingestDate DESC";
 
+    // some archive names are prefixes for others
+    static final String DISAMBIGUATE_PREFIX = "x-";
+    private final List<String> ARC_PREFIX_ARC = Arrays.asList("CFHT", "GEM");
+    
     private String query;
     
     private static String MD5_ENCODING_SCHEME = "md5:";
 
     AdStorageQuery(String storageBucket) {
         InventoryUtil.assertNotNull(AdStorageQuery.class, "storageBucket", storageBucket);
-        this.query = String.format(this.QTMPL, storageBucket);
+        String archive = bucket2archive(storageBucket);
+        this.query = String.format(this.QTMPL, archive);
     }
 
     public TapRowMapper<StorageMetadata> getRowMapper() {
         return new AdStorageMetadataRowMapper();
     }
 
+    private String archive2bucket(String arc) {
+        for (String pre : ARC_PREFIX_ARC) {
+            if (!arc.equals(pre) && arc.startsWith(pre)) {
+                return DISAMBIGUATE_PREFIX + arc;
+            }
+        }
+        return arc;
+    }
+    
+    private String bucket2archive(String sb) {
+        if (sb.startsWith(DISAMBIGUATE_PREFIX)) {
+            return sb.substring(DISAMBIGUATE_PREFIX.length());
+        }
+        return sb;
+    }
+    
     class AdStorageMetadataRowMapper implements TapRowMapper<StorageMetadata> {
         public AdStorageMetadataRowMapper() { }
 
@@ -112,16 +134,16 @@ public class AdStorageQuery {
         public StorageMetadata mapRow(List<Object> row) {
             Iterator i = row.iterator();
 
-            String storageBucket = (String) i.next();
+            String archive = (String) i.next();
             String fname = (String) i.next();
             URI uri = (URI) i.next();
             if (uri == null) {
-                log.warn(AdStorageMetadataRowMapper.class.getSimpleName() + ".SKIP loc=" + storageBucket + "/" + fname + " reason=null-uri");
+                log.warn(AdStorageMetadataRowMapper.class.getSimpleName() + ".SKIP loc=" + archive + "/" + fname + " reason=null-uri");
                 return null;
             }
             
             // chose best storageID
-            URI sid = URI.create("ad:" + storageBucket + "/" + fname);
+            URI sid = URI.create("ad:" + archive + "/" + fname);
             if ("mast".equals(uri.getScheme())) {
                 sid = uri;
             }
@@ -129,7 +151,7 @@ public class AdStorageQuery {
             
             URI artifactURI = (URI) i.next();
             if (artifactURI == null) {
-                log.warn(AdStorageMetadataRowMapper.class.getSimpleName() + ".SKIP loc=" + storageBucket + "/" + fname + " reason=null-artifactURI");
+                log.warn(AdStorageMetadataRowMapper.class.getSimpleName() + ".SKIP loc=" + archive + "/" + fname + " reason=null-artifactURI");
                 return null;
             }
             
@@ -140,23 +162,23 @@ public class AdStorageQuery {
                 contentChecksum = new URI(MD5_ENCODING_SCHEME + hex);
                 InventoryUtil.assertValidChecksumURI(AdStorageQuery.class, "contentChecksum", contentChecksum);
             } catch (IllegalArgumentException | URISyntaxException u) {
-                log.warn(AdStorageMetadataRowMapper.class.getSimpleName() + ".SKIP loc=" + storageBucket + "/" + fname + " reason=invalid=contentChecksum");
+                log.warn(AdStorageMetadataRowMapper.class.getSimpleName() + ".SKIP loc=" + archive + "/" + fname + " reason=invalid=contentChecksum");
                 return null;
             }
             
             // archive_files.fileSize
             Long contentLength = (Long) i.next();
             if (contentLength == null) {
-                log.warn(AdStorageMetadataRowMapper.class.getSimpleName() + ".SKIP loc=" + storageBucket + "/" + fname + " reason=null-contentLength");
+                log.warn(AdStorageMetadataRowMapper.class.getSimpleName() + ".SKIP loc=" + archive + "/" + fname + " reason=null-contentLength");
                 return null;
             }
             if (contentLength == 0L) {
-                log.warn(AdStorageMetadataRowMapper.class.getSimpleName() + ".SKIP loc=" + storageBucket + "/" + fname + " reason=zero-contentLength");
+                log.warn(AdStorageMetadataRowMapper.class.getSimpleName() + ".SKIP loc=" + archive + "/" + fname + " reason=zero-contentLength");
                 return null;
             }
 
             StorageLocation storageLocation = new StorageLocation(storageID);
-            storageLocation.storageBucket = storageBucket;
+            storageLocation.storageBucket = archive2bucket(archive);
             
             Date contentLastModified = (Date) i.next();
             if (contentLastModified == null) {

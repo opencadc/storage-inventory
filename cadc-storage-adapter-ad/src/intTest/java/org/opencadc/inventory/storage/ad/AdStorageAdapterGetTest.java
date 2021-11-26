@@ -81,8 +81,6 @@ import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.Test;
 import org.opencadc.inventory.StorageLocation;
-import org.opencadc.inventory.storage.ad.AdStorageAdapter;
-
 
 public class AdStorageAdapterGetTest {
     private static final Logger log = Logger.getLogger(AdStorageAdapterGetTest.class);
@@ -108,6 +106,35 @@ public class AdStorageAdapterGetTest {
 
             final StorageLocation storageLocation = new StorageLocation(testIrisUri);
             storageLocation.storageBucket = "IRIS";
+
+            testSubject.get(storageLocation, byteCountOutputStream);
+
+            Assert.assertEquals("Wrong checksum.", expectedIrisChecksum,
+                URI.create(String.format("%s:%s", messageDigest.getAlgorithm().toLowerCase(),
+                    new BigInteger(1, messageDigest.digest()).toString(16))));
+
+        } catch (Exception unexpected) {
+            log.error("unexpected exception", unexpected);
+            Assert.fail("Unexpected exception");
+        }
+    }
+    
+    @Test
+    public void testGetIgnoresStorageBucket() {
+        final AdStorageAdapter testSubject = new AdStorageAdapter();
+        final URI testIrisUri = URI.create("ad:IRIS/I429B4H0.fits");
+
+        // IRIS
+        final URI expectedIrisChecksum = URI.create("md5:e3922d47243563529f387ebdf00b66da");
+        try {
+            final OutputStream outputStream = new ByteArrayOutputStream();
+            final DigestOutputStream digestOutputStream = new DigestOutputStream(outputStream, MessageDigest
+                .getInstance(AdStorageAdapterGetTest.DIGEST_ALGORITHM));
+            final ByteCountOutputStream byteCountOutputStream = new ByteCountOutputStream(digestOutputStream);
+            final MessageDigest messageDigest = digestOutputStream.getMessageDigest();
+
+            final StorageLocation storageLocation = new StorageLocation(testIrisUri);
+            storageLocation.storageBucket = AdStorageQuery.DISAMBIGUATE_PREFIX + "NoBucket";
 
             testSubject.get(storageLocation, byteCountOutputStream);
 
