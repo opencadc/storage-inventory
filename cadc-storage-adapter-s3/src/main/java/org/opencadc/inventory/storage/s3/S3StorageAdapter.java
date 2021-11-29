@@ -304,9 +304,8 @@ abstract class S3StorageAdapter implements StorageAdapter {
      */
     StorageMetadata toStorageMetadata(StorageLocation loc, URI md5, long contentLength, 
             final URI artifactURI, Date lastModified) {
-        StorageMetadata storageMetadata = new StorageMetadata(loc, md5, contentLength);
+        StorageMetadata storageMetadata = new StorageMetadata(loc, md5, contentLength, lastModified);
         storageMetadata.artifactURI = artifactURI;
-        storageMetadata.contentLastModified = lastModified;
         return storageMetadata;
     }
 
@@ -342,61 +341,9 @@ abstract class S3StorageAdapter implements StorageAdapter {
     }
 
     @Override
-    public void get(StorageLocation storageLocation, OutputStream dest, SortedSet<ByteRange> byteRanges) 
+    public void get(StorageLocation storageLocation, OutputStream dest, ByteRange byteRange) 
         throws InterruptedException, ResourceNotFoundException, ReadException, WriteException, StorageEngageException, TransientException {
         throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public void get(StorageLocation storageLocation, OutputStream dest, Set<String> cutouts)
-            throws ResourceNotFoundException, ReadException, WriteException, StorageEngageException {
-        throw new UnsupportedOperationException("preflight data operations not implemented");
-        /*
-        if ((cutouts == null) || cutouts.isEmpty()) {
-            get(storageLocation, dest);
-            return;
-        } else {
-            final long start = System.currentTimeMillis();
-            try (final InputStream inputStream = toObjectInputStream(storageLocation)) {
-                final Fits fitsFile = new Fits(inputStream);
-                final ArrayDataOutput dataOutput = new BufferedDataOutputStream(dest);
-
-                // Just get the first cutout for now.
-                BasicHDU<?> hdu;
-                long beforeHDU = System.currentTimeMillis();
-                int count = 1;
-                while ((hdu = fitsFile.readHDU()) != null) {
-                    final Header header = hdu.getHeader();
-                    final long afterReadHDU = System.currentTimeMillis();
-                    final HeaderCard headerNameCard = header.findCard("EXTNAME");
-                    LOGGER.debug(String.format("%d,\"%s\",%d,\"milliseconds\"",
-                            count,
-                            headerNameCard == null ? "N/A" : headerNameCard.getValue(),
-                            afterReadHDU - beforeHDU));
-                    beforeHDU = System.currentTimeMillis();
-                    if (hdu.getAxes() != null) {
-                        final int axesCount = hdu.getAxes().length;
-                        for (int i = 0; i < axesCount; i++) {
-                            header.findCard(String.format("NAXIS%d", i + 1)).setValue(0);
-                        }
-                    }
-
-                    header.write(dataOutput);
-                    dataOutput.write(new short[0]);
-                    count++;
-                }
-            } catch (FitsException e) {
-                throw new ReadException("Unable to process FITS file.", e);
-            } catch (NoSuchKeyException e) {
-                throw new ResourceNotFoundException(e.getMessage(), e);
-            } catch (S3Exception | SdkClientException e) {
-                throw new StorageEngageException(e.getMessage(), e);
-            } catch (IOException e) {
-                throw new ReadException(e.getMessage(), e);
-            }
-            LOGGER.debug(String.format("Read and wrote HDUs in %d milliseconds.", System.currentTimeMillis() - start));
-        }
-        */
     }
 
     // internal bucket management used for init, dynamic buckets, and intTest cleanup

@@ -107,7 +107,7 @@ public class InventoryIsAlwaysRight extends ResolutionPolicy {
         StringBuilder sb = new StringBuilder();
         sb.append(this.getClass().getSimpleName());
         if (artifact == null) {
-            if (delayAction(storageMetadata.contentLastModified)) {
+            if (delayAction(storageMetadata.getContentLastModified())) {
                 // delay cleanup in case the object was stored since we started validating
                 sb.append(".delayAction");
                 sb.append(" loc=").append(storageMetadata.getStorageLocation());

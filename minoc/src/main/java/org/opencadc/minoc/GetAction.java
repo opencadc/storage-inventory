@@ -72,11 +72,16 @@ import ca.nrc.cadc.dali.Interval;
 import ca.nrc.cadc.dali.Polygon;
 import ca.nrc.cadc.dali.Shape;
 import ca.nrc.cadc.io.ByteCountOutputStream;
+import ca.nrc.cadc.io.ReadException;
 import ca.nrc.cadc.io.WriteException;
 import ca.nrc.cadc.net.HttpTransfer;
 import ca.nrc.cadc.net.RangeNotSatisfiableException;
+import ca.nrc.cadc.net.ResourceNotFoundException;
+import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.util.CaseInsensitiveStringComparator;
 import ca.nrc.cadc.util.StringUtil;
+import java.io.IOException;
+import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -91,6 +96,7 @@ import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.storage.ByteRange;
+import org.opencadc.inventory.storage.StorageEngageException;
 import org.opencadc.minoc.operations.CutoutFileNameFormat;
 import org.opencadc.minoc.operations.ProxyRandomAccessFits;
 import org.opencadc.permissions.ReadGrant;
@@ -106,10 +112,10 @@ import org.opencadc.soda.server.Cutout;
 public class GetAction extends ArtifactAction {
     
     private static final Logger log = Logger.getLogger(GetAction.class);
-    private static final String RANGE = "RANGE";
-    private static final String CONTENT_DISPOSITION = "Content-Disposition";
-    private static final String CONTENT_RANGE = "Content-Range";
-    private static final String CONTENT_LENGTH = "Content-Length";
+    private static final String RANGE = "range";
+    private static final String CONTENT_DISPOSITION = "content-disposition";
+    private static final String CONTENT_RANGE = "content-range";
+    private static final String CONTENT_LENGTH = "content-length";
     private static final String[] FITS_CONTENT_TYPES = new String[] {
         "application/fits", "image/fits"
     };
@@ -151,37 +157,18 @@ public class GetAction extends ArtifactAction {
         Artifact artifact = getArtifact(artifactURI);
         SodaCutout sodaCutout = new SodaCutout();
 
-        StorageLocation storageLocation = new StorageLocation(artifact.storageLocation.getStorageID());
-        storageLocation.storageBucket = artifact.storageLocation.storageBucket;
-        
-        log.debug("retrieving artifact from storage: " + storageLocation);
-
-        String range = syncInput.getHeader("Range");
+        String range = syncInput.getHeader(RANGE);
         log.debug("Range: " + range);
         
         ByteCountOutputStream bcos = null;
         try {
-            if (sodaCutout.hasNoOperations()) {
-                log.debug("No parameters specified.");
-                HeadAction.setHeaders(artifact, syncOutput);
-                bcos = new ByteCountOutputStream(syncOutput.getOutputStream());
-                SortedSet<ByteRange> rangeSet = parseRange(range, artifact.getContentLength());
-                if (rangeSet.isEmpty()) {
-                    storageAdapter.get(storageLocation, bcos);
-                } else {
-                    ByteRange byteRange = rangeSet.first();
-                    syncOutput.setCode(206);
-                    long lastByte = byteRange.getOffset() + byteRange.getLength() - 1;
-                    syncOutput.setHeader(CONTENT_RANGE, "bytes " + byteRange.getOffset() + "-"
-                            + lastByte + "/" + artifact.getContentLength());
-                    // override content length
-                    syncOutput.setHeader(CONTENT_LENGTH, byteRange.getLength());
-                    storageAdapter.get(storageLocation, bcos, rangeSet);
-                }
-            } else {
+            // operations
+            if (!sodaCutout.isEmpty()) {
                 if (range != null) {
+                    // TODO: UnsupportedOperationException to be explicit?
                     log.debug("Range (" + range + ") ignored in GET with operations");
                 }
+                
                 if (!isFITS(artifact)) {
                     throw new IllegalArgumentException("not a fits file: " + artifactURI);
                 }
@@ -191,118 +178,25 @@ public class GetAction extends ArtifactAction {
                     throw new IllegalArgumentException("Conflicting SODA parameters found: " + conflicts);
                 }
 
-                final FitsOperations fitsOperations =
-                        new FitsOperations(new ProxyRandomAccessFits(this.storageAdapter, artifact.storageLocation,
-                                                                     artifact.getContentLength()));
-
-                if (sodaCutout.hasSUB()) {
-                    log.debug("SUB supplied");
-                    final Map<String, List<String>> parameterMap = new TreeMap<>(new CaseInsensitiveStringComparator());
-                    parameterMap.put(SodaParamValidator.SUB, sodaCutout.requestedSubs);
-                    final List<ExtensionSlice> slices = SODA_PARAM_VALIDATOR.validateSUB(parameterMap);
-                    final Cutout cutout = new Cutout();
-                    cutout.pixelCutouts = slices;
-
-                    final String schemePath = artifactURI.getSchemeSpecificPart();
-                    final String fileName = schemePath.substring(schemePath.lastIndexOf("/") + 1);
-                    final CutoutFileNameFormat cutoutFileNameFormat = new CutoutFileNameFormat(fileName);
-                    syncOutput.setHeader(CONTENT_DISPOSITION, "inline; filename=\""
-                                                              + cutoutFileNameFormat.format(cutout) + "\"");
-                    syncOutput.setHeader(HttpTransfer.CONTENT_TYPE, "application/fits");
-                    bcos = new ByteCountOutputStream(syncOutput.getOutputStream());
-                    fitsOperations.cutoutToStream(cutout, bcos);
-                    return;
-                }
-
-                if (sodaCutout.hasWCS()) {
-                    log.debug("WCS supplied.");
-                    final Cutout cutout = new Cutout();
-
-                    if (sodaCutout.hasCIRCLE()) {
-                        log.debug("CIRCLE supplied.");
-                        final Map<String, List<String>> parameterMap =
-                                new TreeMap<>(new CaseInsensitiveStringComparator());
-                        parameterMap.put(SodaParamValidator.CIRCLE, sodaCutout.requestedCircles);
-                        final List<Circle> validCircles = SODA_PARAM_VALIDATOR.validateCircle(parameterMap);
-
-                        cutout.pos = assertSingleWCS(SodaParamValidator.CIRCLE, validCircles);
-                    }
-
-                    if (sodaCutout.hasPOLYGON()) {
-                        log.debug("POLYGON supplied.");
-                        final Map<String, List<String>> parameterMap =
-                                new TreeMap<>(new CaseInsensitiveStringComparator());
-                        parameterMap.put(SodaParamValidator.POLYGON, sodaCutout.requestedPolygons);
-                        final List<Polygon> validPolygons = SODA_PARAM_VALIDATOR.validatePolygon(parameterMap);
-
-                        cutout.pos = assertSingleWCS(SodaParamValidator.POLYGON, validPolygons);
-                    }
-
-                    if (sodaCutout.hasPOS()) {
-                        log.debug("POS supplied.");
-                        final Map<String, List<String>> parameterMap =
-                                new TreeMap<>(new CaseInsensitiveStringComparator());
-                        parameterMap.put(SodaParamValidator.POS, sodaCutout.requestedPOSs);
-                        final List<Shape> validShapes = SODA_PARAM_VALIDATOR.validatePOS(parameterMap);
-
-                        cutout.pos = assertSingleWCS(SodaParamValidator.POS, validShapes);
-                    }
-
-                    if (sodaCutout.hasBAND()) {
-                        log.debug("BAND supplied.");
-                        final Map<String, List<String>> parameterMap =
-                                new TreeMap<>(new CaseInsensitiveStringComparator());
-                        parameterMap.put(SodaParamValidator.BAND, sodaCutout.requestedBands);
-                        final List<Interval> validBandIntervals = SODA_PARAM_VALIDATOR.validateBAND(parameterMap);
-
-                        cutout.band = assertSingleWCS(SodaParamValidator.BAND, validBandIntervals);
-                    }
-
-                    if (sodaCutout.hasTIME()) {
-                        log.debug("TIME supplied.");
-                        final Map<String, List<String>> parameterMap =
-                                new TreeMap<>(new CaseInsensitiveStringComparator());
-                        parameterMap.put(SodaParamValidator.TIME, sodaCutout.requestedTimes);
-                        final List<Interval> validTimeIntervals = SODA_PARAM_VALIDATOR.validateTIME(parameterMap);
-
-                        cutout.time = assertSingleWCS(SodaParamValidator.TIME, validTimeIntervals);
-                    }
-
-                    if (sodaCutout.hasPOL()) {
-                        log.debug("POL supplied.");
-                        final Map<String, List<String>> parameterMap =
-                                new TreeMap<>(new CaseInsensitiveStringComparator());
-                        parameterMap.put(SodaParamValidator.POL, sodaCutout.requestedPOLs);
-                        cutout.pol = SODA_PARAM_VALIDATOR.validatePOL(parameterMap);
-
-                        if (cutout.pol.size() != sodaCutout.requestedPOLs.size()) {
-                            log.debug("Accepted " + cutout.pol + " valid POL states but " + sodaCutout.requestedPOLs
-                                      + " was requested.");
-                        }
-                    }
-
-                    final String schemePath = artifactURI.getSchemeSpecificPart();
-                    final String fileName = schemePath.substring(schemePath.lastIndexOf("/") + 1);
-                    final CutoutFileNameFormat cutoutFileNameFormat = new CutoutFileNameFormat(fileName);
-                    syncOutput.setHeader(CONTENT_DISPOSITION, "inline; filename=\""
-                                                              + cutoutFileNameFormat.format(cutout) + "\"");
-                    syncOutput.setHeader(HttpTransfer.CONTENT_TYPE, "application/fits");
-                    bcos = new ByteCountOutputStream(syncOutput.getOutputStream());
-                    fitsOperations.cutoutToStream(cutout, bcos);
-                    return;
-                }
+                final FitsOperations fitsOperations = new FitsOperations(
+                    new ProxyRandomAccessFits(this.storageAdapter, artifact.storageLocation, artifact.getContentLength()));
                 
-                if (sodaCutout.isMETA()) {
-                    log.debug("META supplied");
-                    final String filename = InventoryUtil.computeArtifactFilename(artifact.getURI());
-                    syncOutput.setHeader(CONTENT_DISPOSITION, "inline; filename=\"" + filename + ".txt\"");
-                    syncOutput.setHeader(HttpTransfer.CONTENT_TYPE, "text/plain");
-                    fitsOperations.headersToStream(syncOutput.getOutputStream());
-                    return;
-                }
-                
-                throw new RuntimeException("BUG: unhandled SODA parameters");
+                bcos = doOperation(fitsOperations, sodaCutout);
+                return;
             }
+            
+            // partial get
+            ByteRange byteRange = getByteRange(range, artifact.getContentLength());
+            if (byteRange != null) {
+                bcos = doByteRangeRequest(artifact, byteRange);
+                return;
+            }
+            
+            // default: complete download
+            HeadAction.setHeaders(artifact, syncOutput);
+            bcos = new ByteCountOutputStream(syncOutput.getOutputStream());
+            storageAdapter.get(artifact.storageLocation, bcos);
+            
         } catch (RangeNotSatisfiableException e) {
             log.debug("Invalid Range - offset greater then the content length:" + range);
             syncOutput.setHeader(CONTENT_RANGE, "bytes */" + artifact.getContentLength());
@@ -333,6 +227,138 @@ public class GetAction extends ArtifactAction {
         log.debug("retrieved artifact from storage");
     }
 
+    private ByteCountOutputStream doByteRangeRequest(Artifact artifact, ByteRange byteRange) 
+            throws InterruptedException, IOException, ResourceNotFoundException, 
+                ReadException, WriteException, StorageEngageException, TransientException {
+        HeadAction.setHeaders(artifact, syncOutput);
+        syncOutput.setCode(206);
+        long lastByte = byteRange.getOffset() + byteRange.getLength() - 1;
+        syncOutput.setHeader(CONTENT_RANGE, "bytes " + byteRange.getOffset() + "-"
+                + lastByte + "/" + artifact.getContentLength());
+        // override content length
+        syncOutput.setHeader(CONTENT_LENGTH, byteRange.getLength());
+
+        ByteCountOutputStream bcos = new ByteCountOutputStream(syncOutput.getOutputStream());
+        storageAdapter.get(artifact.storageLocation, bcos, byteRange);
+        return bcos;
+    }
+    
+    private ByteCountOutputStream doOperation(FitsOperations fitsOperations, SodaCutout sodaCutout)
+            throws NoOverlapException, ReadException, IOException {
+        
+        if (sodaCutout.isMETA()) {
+            log.debug("META supplied");
+            final String filename = InventoryUtil.computeArtifactFilename(artifactURI) + ".txt";
+            syncOutput.setHeader(CONTENT_DISPOSITION, "inline; filename=\"" + filename + "\"");
+            syncOutput.setHeader(HttpTransfer.CONTENT_TYPE, "text/plain");
+
+            ByteCountOutputStream bcos = new ByteCountOutputStream(syncOutput.getOutputStream());
+            fitsOperations.headersToStream(bcos);
+            return bcos;
+        }
+        
+        if (sodaCutout.hasSUB()) {
+            log.debug("SUB supplied");
+            final Map<String, List<String>> parameterMap = new TreeMap<>(new CaseInsensitiveStringComparator());
+            parameterMap.put(SodaParamValidator.SUB, sodaCutout.requestedSubs);
+            final List<ExtensionSlice> slices = SODA_PARAM_VALIDATOR.validateSUB(parameterMap);
+            final Cutout cutout = new Cutout();
+            cutout.pixelCutouts = slices;
+
+            final String schemePath = artifactURI.getSchemeSpecificPart();
+            final String fileName = schemePath.substring(schemePath.lastIndexOf("/") + 1);
+            final CutoutFileNameFormat cutoutFileNameFormat = new CutoutFileNameFormat(fileName);
+            syncOutput.setHeader(CONTENT_DISPOSITION, "inline; filename=\""
+                                                      + cutoutFileNameFormat.format(cutout) + "\"");
+            syncOutput.setHeader(HttpTransfer.CONTENT_TYPE, "application/fits");
+            
+            ByteCountOutputStream bcos = new ByteCountOutputStream(syncOutput.getOutputStream());
+            fitsOperations.cutoutToStream(cutout, bcos);
+            return bcos;
+        }
+        
+        if (sodaCutout.hasWCS()) {
+            log.debug("WCS supplied.");
+            final Cutout cutout = new Cutout();
+
+            if (sodaCutout.hasCIRCLE()) {
+                log.debug("CIRCLE supplied.");
+                final Map<String, List<String>> parameterMap =
+                        new TreeMap<>(new CaseInsensitiveStringComparator());
+                parameterMap.put(SodaParamValidator.CIRCLE, sodaCutout.requestedCircles);
+                final List<Circle> validCircles = SODA_PARAM_VALIDATOR.validateCircle(parameterMap);
+
+                cutout.pos = assertSingleWCS(SodaParamValidator.CIRCLE, validCircles);
+            }
+
+            if (sodaCutout.hasPOLYGON()) {
+                log.debug("POLYGON supplied.");
+                final Map<String, List<String>> parameterMap =
+                        new TreeMap<>(new CaseInsensitiveStringComparator());
+                parameterMap.put(SodaParamValidator.POLYGON, sodaCutout.requestedPolygons);
+                final List<Polygon> validPolygons = SODA_PARAM_VALIDATOR.validatePolygon(parameterMap);
+
+                cutout.pos = assertSingleWCS(SodaParamValidator.POLYGON, validPolygons);
+            }
+
+            if (sodaCutout.hasPOS()) {
+                log.debug("POS supplied.");
+                final Map<String, List<String>> parameterMap =
+                        new TreeMap<>(new CaseInsensitiveStringComparator());
+                parameterMap.put(SodaParamValidator.POS, sodaCutout.requestedPOSs);
+                final List<Shape> validShapes = SODA_PARAM_VALIDATOR.validatePOS(parameterMap);
+
+                cutout.pos = assertSingleWCS(SodaParamValidator.POS, validShapes);
+            }
+
+            if (sodaCutout.hasBAND()) {
+                log.debug("BAND supplied.");
+                final Map<String, List<String>> parameterMap =
+                        new TreeMap<>(new CaseInsensitiveStringComparator());
+                parameterMap.put(SodaParamValidator.BAND, sodaCutout.requestedBands);
+                final List<Interval> validBandIntervals = SODA_PARAM_VALIDATOR.validateBAND(parameterMap);
+
+                cutout.band = assertSingleWCS(SodaParamValidator.BAND, validBandIntervals);
+            }
+
+            if (sodaCutout.hasTIME()) {
+                log.debug("TIME supplied.");
+                final Map<String, List<String>> parameterMap =
+                        new TreeMap<>(new CaseInsensitiveStringComparator());
+                parameterMap.put(SodaParamValidator.TIME, sodaCutout.requestedTimes);
+                final List<Interval> validTimeIntervals = SODA_PARAM_VALIDATOR.validateTIME(parameterMap);
+
+                cutout.time = assertSingleWCS(SodaParamValidator.TIME, validTimeIntervals);
+            }
+
+            if (sodaCutout.hasPOL()) {
+                log.debug("POL supplied.");
+                final Map<String, List<String>> parameterMap =
+                        new TreeMap<>(new CaseInsensitiveStringComparator());
+                parameterMap.put(SodaParamValidator.POL, sodaCutout.requestedPOLs);
+                cutout.pol = SODA_PARAM_VALIDATOR.validatePOL(parameterMap);
+
+                if (cutout.pol.size() != sodaCutout.requestedPOLs.size()) {
+                    log.debug("Accepted " + cutout.pol + " valid POL states but " + sodaCutout.requestedPOLs
+                              + " was requested.");
+                }
+            }
+
+            final String schemePath = artifactURI.getSchemeSpecificPart();
+            final String fileName = schemePath.substring(schemePath.lastIndexOf("/") + 1);
+            final CutoutFileNameFormat cutoutFileNameFormat = new CutoutFileNameFormat(fileName);
+            syncOutput.setHeader(CONTENT_DISPOSITION, "inline; filename=\""
+                                                      + cutoutFileNameFormat.format(cutout) + "\"");
+            syncOutput.setHeader(HttpTransfer.CONTENT_TYPE, "application/fits");
+            
+            ByteCountOutputStream bcos = new ByteCountOutputStream(syncOutput.getOutputStream());
+            fitsOperations.cutoutToStream(cutout, bcos);
+            return bcos;
+        }
+                
+        throw new RuntimeException("BUG: unhandled SODA parameters");
+    }
+    
     private <T> T assertSingleWCS(final String key, final List<T> wcsValues) {
         if (wcsValues.isEmpty()) {
             log.debug("No valid " + key + "s found.");
@@ -409,7 +435,7 @@ public class GetAction extends ArtifactAction {
             return requestedMeta;
         }
 
-        boolean hasNoOperations() {
+        boolean isEmpty() {
             return !hasSUB() && !isMETA() && !hasWCS();
         }
 
@@ -448,6 +474,18 @@ public class GetAction extends ArtifactAction {
         }
     }
 
+    private ByteRange getByteRange(String range, long contentLength) throws RangeNotSatisfiableException {
+        SortedSet<ByteRange> ranges = parseRange(range, contentLength);
+        if (ranges.isEmpty()) {
+            return null;
+        }
+        if (ranges.size() == 1) {
+            return ranges.first();
+        }
+        throw new RangeNotSatisfiableException("multiple ranges in request not supported");
+    }
+    
+    // parse the complete HTTP range spec
     SortedSet<ByteRange> parseRange(String range, long contentLength) throws RangeNotSatisfiableException {
         SortedSet<ByteRange> result = new TreeSet<ByteRange>();
         if (range == null) {

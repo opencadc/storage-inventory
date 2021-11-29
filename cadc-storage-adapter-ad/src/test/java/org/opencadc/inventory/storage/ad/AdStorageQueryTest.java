@@ -76,10 +76,8 @@ import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.Test;
-
 import org.opencadc.inventory.storage.StorageMetadata;
 import org.opencadc.tap.TapRowMapper;
-
 
 public class AdStorageQueryTest {
 
@@ -98,19 +96,35 @@ public class AdStorageQueryTest {
     }
     
     @Test
-    public void testQueryHST() throws Exception {
-        AdStorageQuery asq = new AdStorageQuery("HST");
+    public void testQueryGEMINI() throws Exception {
+        AdStorageQuery asq = new AdStorageQuery(AdStorageQuery.DISAMBIGUATE_PREFIX + "GEMINI");
         String query = asq.getQuery();
         Assert.assertNotNull(query);
-        Assert.assertTrue(query.contains("archiveName = 'HST'"));
+        Assert.assertTrue(query.contains("archiveName = 'GEMINI'"));
     }
     
     @Test
-    public void testQueryJWST() throws Exception {
-        AdStorageQuery asq = new AdStorageQuery("JWST");
+    public void testQueryCFHTSG() throws Exception {
+        AdStorageQuery asq = new AdStorageQuery(AdStorageQuery.DISAMBIGUATE_PREFIX + "CFHTSG");
         String query = asq.getQuery();
         Assert.assertNotNull(query);
-        Assert.assertTrue(query.contains("archiveName = 'JWST'"));
+        Assert.assertTrue(query.contains("archiveName = 'CFHTSG'"));
+    }
+    
+    @Test
+    public void testQueryCFHT() throws Exception {
+        AdStorageQuery asq = new AdStorageQuery("CFHT");
+        String query = asq.getQuery();
+        Assert.assertNotNull(query);
+        Assert.assertTrue(query.contains("archiveName = 'CFHT'"));
+    }
+    
+    @Test
+    public void testQueryGEM() throws Exception {
+        AdStorageQuery asq = new AdStorageQuery("GEM");
+        String query = asq.getQuery();
+        Assert.assertNotNull(query);
+        Assert.assertTrue(query.contains("archiveName = 'GEM'"));
     }
     
     @Test
@@ -125,19 +139,22 @@ public class AdStorageQueryTest {
         row.add(new URI("cadc:GEMINI/foo.fits.gz"));
         row.add("e687e2ecea45e78822eb68294566e6a1");
         row.add(new Long(33));
+        Date now = new Date();
+        row.add(now);
         row.add("gzip");
         row.add("application/fits");
-        Date now = new Date(System.currentTimeMillis());
-        row.add(now);
+        
+       
         StorageMetadata metadata = (StorageMetadata) mapper.mapRow(row);
         Assert.assertTrue("cadc:GEMINI/foo.fits.gz".equals(metadata.artifactURI.toString()));
         Assert.assertTrue("ad:GEM/foo.fits.gz".equals(metadata.getStorageLocation().getStorageID().toString()));
         Assert.assertTrue(metadata.getStorageLocation().storageBucket.equals("GEM"));
         Assert.assertTrue(metadata.getContentChecksum().toString().equals("md5:e687e2ecea45e78822eb68294566e6a1"));
         Assert.assertEquals(33, metadata.getContentLength().longValue());
+        Assert.assertEquals(now, metadata.getContentLastModified());
         Assert.assertTrue(metadata.contentEncoding.equals("gzip"));
         Assert.assertTrue(metadata.contentType.equals("application/fits"));
-        Assert.assertEquals(now, metadata.contentLastModified);
+        
     }
     
     @Test
@@ -152,21 +169,20 @@ public class AdStorageQueryTest {
         row.add(new URI("mast:HST/product/foo.fits.gz"));
         row.add("e687e2ecea45e78822eb68294566e6a1");
         row.add(new Long(33));
-        row.add("gzip");
-        row.add("application/fits");
         Date now = new Date(System.currentTimeMillis());
         row.add(now);
+        row.add("gzip");
+        row.add("application/fits");
+        
         StorageMetadata metadata = (StorageMetadata) mapper.mapRow(row);
         Assert.assertTrue("mast:HST/product/foo.fits.gz".equals(metadata.artifactURI.toString()));
         Assert.assertTrue("mast:HST/product/foo.fits.gz".equals(metadata.getStorageLocation().getStorageID().toString()));
         Assert.assertTrue(metadata.getStorageLocation().storageBucket.equals("HST"));
         Assert.assertTrue(metadata.getContentChecksum().toString().equals("md5:e687e2ecea45e78822eb68294566e6a1"));
         Assert.assertEquals(33, metadata.getContentLength().longValue());
+        Assert.assertEquals(now, metadata.getContentLastModified());
         Assert.assertTrue(metadata.contentEncoding.equals("gzip"));
         Assert.assertTrue(metadata.contentType.equals("application/fits"));
-        Assert.assertEquals(now, metadata.contentLastModified);
-
-        
     }
     
 

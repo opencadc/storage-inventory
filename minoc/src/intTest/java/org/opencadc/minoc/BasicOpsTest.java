@@ -198,10 +198,10 @@ public class BasicOpsTest extends MinocTest {
     @Test
     public void testGetRanges() {
         try {
-            URI artifactURI = URI.create("cadc:TEST/file.txt");
+            URI artifactURI = URI.create("cadc:TEST/testGetRanges.txt");
             URL artifactURL = new URL(filesURL + "/" + artifactURI.toString());
 
-            String content = "abcdefghijklmnopqrstuvwxyz";
+            String content = "abcdefghijklmnopqrstuvwxyz\n";
             String encoding = "test-encoding";
             String type = "text/plain";
             byte[] data = content.getBytes();
@@ -281,10 +281,10 @@ public class BasicOpsTest extends MinocTest {
             Assert.assertEquals(206, get.getResponseCode());
             contentLength = get.getContentLength();
             Assert.assertEquals(3, contentLength);
-            Assert.assertEquals("xyz", out.toString());
+            Assert.assertEquals("yz\n", out.toString());
             contentRange = get.getResponseHeaderValues("Content-Range");
             Assert.assertEquals(1, contentRange.size());
-            Assert.assertEquals("bytes 23-25/" + data.length, contentRange.get(0));
+            Assert.assertEquals("bytes 24-26/" + data.length, contentRange.get(0));
 
             // in case of an incorrect Range attribute, ignore and return a 200 with the content of
             // the entire file
@@ -308,9 +308,9 @@ public class BasicOpsTest extends MinocTest {
             Assert.assertEquals(RangeNotSatisfiableException.class, get.getThrowable().getClass());
 
             // delete
-            HttpDelete delete = new HttpDelete(artifactURL, false);
-            Subject.doAs(userSubject, new RunnableAction(delete));
-            Assert.assertNull(delete.getThrowable());
+            //HttpDelete delete = new HttpDelete(artifactURL, false);
+            //Subject.doAs(userSubject, new RunnableAction(delete));
+            //Assert.assertNull(delete.getThrowable());
 
         } catch (Exception t) {
             log.error("unexpected throwable", t);

@@ -160,13 +160,7 @@ public class AdStorageAdapter implements StorageAdapter {
     }
 
     @Override
-    public void get(StorageLocation storageLocation, OutputStream dest, SortedSet<ByteRange> byteRanges)
-        throws ResourceNotFoundException, ReadException, WriteException, StorageEngageException, TransientException {
-        throw new UnsupportedOperationException("not supported");
-    }
-    
-    @Override
-    public void get(StorageLocation storageLocation, OutputStream dest, Set<String> operations)
+    public void get(StorageLocation storageLocation, OutputStream dest, ByteRange byteRange)
         throws ResourceNotFoundException, ReadException, WriteException, StorageEngageException, TransientException {
         throw new UnsupportedOperationException("not supported");
     }
@@ -209,7 +203,9 @@ public class AdStorageAdapter implements StorageAdapter {
         Iterator<StorageMetadata> storageMetadataIterator = null;
 
         try {
-            storageMetadataIterator = tc.execute(adQuery.getQuery(), adQuery.getRowMapper());
+            String adql = adQuery.getQuery();
+            log.debug("bucket: " + storageBucket + " query: " + adql);
+            storageMetadataIterator = tc.query(adql, adQuery.getRowMapper());
         } catch (Exception e) {
             log.error("error executing TapClient query");
 

@@ -292,11 +292,8 @@ public abstract class ArtifactAction extends RestAction {
     
     Artifact getArtifact(URI artifactURI) throws ResourceNotFoundException {
         Artifact artifact = artifactDAO.get(artifactURI);
-        if (artifact == null) {
+        if (artifact == null || artifact.storageLocation == null) {
             throw new ResourceNotFoundException("not found: " + artifactURI);
-        }
-        if (artifact.storageLocation == null) {
-            throw new ResourceNotFoundException("not available: " + artifactURI);
         }
         return artifact;
     }
