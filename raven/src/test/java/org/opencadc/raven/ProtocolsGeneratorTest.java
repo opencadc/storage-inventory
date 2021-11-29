@@ -69,10 +69,18 @@
 package org.opencadc.raven;
 
 import ca.nrc.cadc.util.Log4jInit;
+import ca.nrc.cadc.util.PropertiesReader;
+import java.net.InetAddress;
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
+import java.util.Set;
+import java.util.SortedSet;
+import java.util.TreeSet;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
@@ -83,9 +91,8 @@ public class ProtocolsGeneratorTest {
     private static final Logger log = Logger.getLogger(ProtocolsGeneratorTest.class);
 
     static {
-        Log4jInit.setLevel("org.opencadc.raven", Level.DEBUG);
+        Log4jInit.setLevel("org.opencadc.raven", Level.INFO);
     }
-
 
     @Test
     public void testPrioritizePullFromSites() throws Exception {
@@ -100,5 +107,151 @@ public class ProtocolsGeneratorTest {
             Assert.assertFalse(!sites.get(i - 1).getAllowWrite() && sites.get(i).getAllowWrite());
         }
     }
+
+    @Test
+    public void testPrioritizingStorageSiteComparator() throws Exception {
+
+        Map<URI, StorageSiteRule> siteRules = new HashMap<>();
+        InetAddress clientIP = null;
+
+        ProtocolsGenerator.PrioritizingStorageSiteComparator comparator =
+            new ProtocolsGenerator.PrioritizingStorageSiteComparator(siteRules, URI.create("ivo:aaa/123"), clientIP);
+
+        // both StorageSite's null
+        int actual = comparator.compare(null, null);
+        Assert.assertEquals(0, actual);
+
+        //2nd StorageSite null
+        actual = comparator.compare(new StorageSite(URI.create("ivo:site1"), "site1", true, true), null);
+        Assert.assertTrue(actual != 0);
+
+        // 1st StorageSite null
+        actual = comparator.compare(null, new StorageSite(URI.create("ivo:site1"), "site1", true, true));
+        Assert.assertTrue(actual != 0);
+
+
+        // site2 orders less than site5 using StorageSite default ordering
+        actual = comparator.compare(new StorageSite(URI.create("ivo:site2"), "site2", true, true),
+                                    new StorageSite(URI.create("ivo:site5"), "site5", true, true));
+        Assert.assertTrue(actual < 0);
+
+
+        // site2 orders greater than site5 using the site rules
+        List<Namespace> namespaces = new ArrayList<>();
+        namespaces.add(new Namespace("ivo:aaa/"));
+        siteRules.put(URI.create("ivo:site5"), new StorageSiteRule(namespaces));
+
+        actual = comparator.compare(new StorageSite(URI.create("ivo:site2"), "site2", true, true),
+                                    new StorageSite(URI.create("ivo:site5"), "site5", true, true));
+        Assert.assertTrue(actual > 0);
+
+
+        // 1st StorageSite has a rule with a namespace matching the ArtifactURI
+        comparator = new ProtocolsGenerator.PrioritizingStorageSiteComparator(siteRules, URI.create("ivo:aaa/123"), clientIP);
+
+        actual = comparator.compare(new StorageSite(URI.create("ivo:site5"), "site5", true, true),
+                                    new StorageSite(URI.create("ivo:site2"), "site2", true, true));
+        Assert.assertTrue(actual != 0);
+
+        // 2nd StorageSite has a rule with a namespace matching the ArtifactURI
+        actual = comparator.compare(new StorageSite(URI.create("ivo:site2"), "site2", true, true),
+                                    new StorageSite(URI.create("ivo:site5"), "site5", true, true));
+        Assert.assertTrue(actual != 0);
+
+        comparator = new ProtocolsGenerator.PrioritizingStorageSiteComparator(siteRules, URI.create("ivo:bbb/123"), clientIP);
+
+        // no StorageSite's with a rule with a namespace that matches ArtifactURI, StorageSite ordering used (resourceID)
+        actual = comparator.compare(new StorageSite(URI.create("ivo:site2"), "site2", true, true),
+                                    new StorageSite(URI.create("ivo:site3"), "site3", true, true));
+        Assert.assertTrue(actual != 0);
+
+        actual = comparator.compare(new StorageSite(URI.create("ivo:site3"), "site3", true, true),
+                                    new StorageSite(URI.create("ivo:site2"), "site2", true, true));
+        Assert.assertTrue(actual != 0);
+    }
+
+    @Test
+    public void testPrioritizePushToSites() throws Exception {
+
+        URI readWriteResourceID = URI.create("ivo://read-write-site");
+        URI readOnlyResourceID = URI.create("ivo://read-only-site");
+        URI writeOnlyResourceID = URI.create("ivo://write-only-site");
+
+        List<Namespace> readWriteNamespaces = new ArrayList<>();
+        readWriteNamespaces.add(new Namespace("readwrite:RW1/"));
+        readWriteNamespaces.add(new Namespace("readwrite:RW2/"));
+        readWriteNamespaces.add(new Namespace("readwrite:RW3/"));
+
+        List<Namespace> readOnlyNamespaces = new ArrayList<>();
+        readOnlyNamespaces.add(new Namespace("readonly:RO1/"));
+        readOnlyNamespaces.add(new Namespace("readonly:RO2/"));
+
+        List<Namespace> writeOnlyNamespaces = new ArrayList<>();
+        writeOnlyNamespaces.add(new Namespace("writeonly:WO1/"));
+        writeOnlyNamespaces.add(new Namespace("writeonly:WO2/"));
+
+        StorageSite readWriteSite = new StorageSite(readWriteResourceID, "read-write-site", true, true);
+        StorageSite readOnlySite = new StorageSite(readOnlyResourceID, "read-only-site", true, false);
+        StorageSite writeOnlySite = new StorageSite(writeOnlyResourceID, "write-only-site", false, true);
+
+        SortedSet<StorageSite> sites = new TreeSet<>();
+        Map<URI, StorageSiteRule> siteRules = new HashMap<>();
+
+        // empty set of StorageSite's
+        SortedSet<StorageSite> actual = ProtocolsGenerator.prioritizePushToSites(sites, URI.create("other:SITE/file.ext"), siteRules);
+        Assert.assertTrue(actual.isEmpty());
+
+        // single StorageSite
+        sites.add(readWriteSite);
+        actual = ProtocolsGenerator.prioritizePushToSites(sites, URI.create("other:SITE/file.ext"), siteRules);
+        Assert.assertEquals(1, actual.size());
+        actual.clear();
+
+        // artifact with no preferences in config, returns two read-write sites
+        sites.add(readOnlySite);
+        sites.add(writeOnlySite);
+
+        siteRules.put(readWriteResourceID, new StorageSiteRule(readWriteNamespaces));
+        siteRules.put(readOnlyResourceID, new StorageSiteRule(readOnlyNamespaces));
+        siteRules.put(writeOnlyResourceID, new StorageSiteRule(writeOnlyNamespaces));
+
+        actual = ProtocolsGenerator.prioritizePushToSites(sites, URI.create("other:SITE/file.ext"), siteRules);
+        Assert.assertEquals(2, actual.size());
+        Assert.assertFalse(actual.contains(readOnlySite));
+        actual.clear();
+
+        // artifact with namespace in read-only site, returns two read-write sites
+        actual = ProtocolsGenerator.prioritizePushToSites(sites, URI.create("readonly:RO2/file.ext"), siteRules);
+        Assert.assertEquals(2, actual.size());
+        Assert.assertFalse(actual.contains(readOnlySite));
+        actual.clear();
+
+        // artifact with read-write namespace, returns two read-write sites, cadc-site first
+        actual = ProtocolsGenerator.prioritizePushToSites(sites, URI.create("readwrite:RW3/file.ext"), siteRules);
+        Assert.assertEquals(2, actual.size());
+        Assert.assertEquals(readWriteSite, actual.first());
+        Assert.assertEquals(writeOnlySite, actual.last());
+        actual.clear();
+
+        // artifact with write-only namespace, return two read-write sites, write-only site first
+        actual = ProtocolsGenerator.prioritizePushToSites(sites, URI.create("writeonly:WO1/file.ext"), siteRules);
+        Assert.assertEquals(2, actual.size());
+        Assert.assertEquals(writeOnlySite, actual.first());
+        Assert.assertEquals(readWriteSite, actual.last());
+
+        // two sites that both have a namespace matching the artifact URI
+        //sites.clear();
+        siteRules.clear();
+        siteRules.put(readWriteResourceID, new StorageSiteRule(readWriteNamespaces));
+        siteRules.put(writeOnlyResourceID, new StorageSiteRule(readWriteNamespaces));
+        siteRules.put(readOnlyResourceID, new StorageSiteRule(readOnlyNamespaces));
+
+        actual = ProtocolsGenerator.prioritizePushToSites(sites, URI.create("readwrite:RW2/file.ext"), siteRules);
+        Assert.assertEquals(2, actual.size());
+        // ivo://read-write-site orders higher than ivo://write-only-site
+        Assert.assertEquals(readWriteSite, actual.first());
+        Assert.assertEquals(writeOnlySite, actual.last());
+    }
+
 }
 

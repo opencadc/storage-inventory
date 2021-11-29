@@ -115,6 +115,7 @@ public abstract class ArtifactAction extends RestAction {
 
     protected final boolean authenticateOnly;
     protected Map<URI, Availability> siteAvailabilities;
+    protected Map<URI, StorageSiteRule> siteRules;
 
     // constructor for unit tests with no config/init
     ArtifactAction(boolean init) {
@@ -181,6 +182,9 @@ public abstract class ArtifactAction extends RestAction {
         Map<String, Object> config = RavenInitAction.getDaoConfig(props);
         this.artifactDAO = new ArtifactDAO();
         artifactDAO.setConfig(config); // connectivity tested
+      
+        // get the storage site rules
+        this.siteRules = RavenInitAction.getStorageSiteRules(props);
     }
 
     protected void initAndAuthorize() throws Exception {
