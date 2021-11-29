@@ -42,7 +42,7 @@ Multiple values of the permission granting service resourceID(s) may be provided
 settings. All services will be consulted but a single positive result is sufficient to grant permission for an 
 action.
 
-The following optional keys configure raven to prioritize sites returned in transfer negotiaiton, with higher priority
+The following optional keys configure raven to prioritize sites returned in transfer negotiation, with higher priority
 sites first in the list of transfer URL's. Multiple values of `namespace` may be specified for a single `resourceID`. 
 The `namespace` value(s) must end with a colon (:) or slash (/) so one namespace cannot accidentally match (be a 
 prefix of) another namepsace.
