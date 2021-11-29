@@ -25,13 +25,13 @@ raven.properties requires the following putPreference configuration:
 ```
 org.opencadc.raven.putPreference=@SITE1
 @SITE1.resourceID=ivo://negotiation-test-site1
-@SITE1.namespaces=cadc:TEST/
+@SITE1.namespace=cadc:TEST/
 
 org.opencadc.raven.putPreference=@SITE2
 @SITE2.resourceID=ivo://negotiation-test-site2
-@SITE2.namespaces=cadc:INT-TEST/
+@SITE2.namespace=cadc:INT-TEST/
 
 org.opencadc.raven.putPreference=@SITE3
 @SITE3.resourceID=ivo://negotiation-test-site3
-@SITE3.namespaces=cadc:TEST/
+@SITE3.namespace=cadc:TEST/
 ```
