@@ -4,7 +4,8 @@ info:
   title: Artifact storage and management service (minoc)
   description: 'A programmatic interface for storing, retrieving and managing artifacts at a storage site.<br/><br/>Clients may authenticate to this service in one of three ways:<br/>1.  By supplying an authentication token and using it as the auth-token parameter in the path.  URLs containing auth-tokens can be retrieved from the global locate service.<br/>2.  By providing a cookie in the Cookie header<br/>3.  By using a client certificate over SSL.'
 basePath: '/minoc'
-
+schemes:
+  - https
 paths:
   '/files/{artifact-uri}':
     parameters:
@@ -19,8 +20,6 @@ paths:
       tags:
         - Artifact transfer
       summary: Download a file
-      schemes:
-        - https
       produces:
         - application/octet-stream
       responses:
@@ -205,8 +204,6 @@ paths:
       tags:
         - Artifact transfer
       summary: Download a file
-      schemes:
-        - https
       produces:
         - application/octet-stream
       responses:
