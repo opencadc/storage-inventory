@@ -265,16 +265,24 @@ public class InventoryValidator implements Runnable {
             while (bucketIterator.hasNext()) {
                 String bucket = bucketIterator.next();
                 log.info(InventoryValidator.class.getSimpleName() + ".START bucket=" + bucket);
-                try {
-                    iterateBucket(bucket);
-                    log.info(InventoryValidator.class.getSimpleName() + ".END bucket=" + bucket);
-                    numValidBuckets++;
-                } catch (IOException | TransientException | RuntimeException ex) {
-                    log.error(InventoryValidator.class.getSimpleName() + ".FAIL bucket=" + bucket, ex);
-                    numFailedBuckets++;
-                } catch (Exception unhandled) {
-                    numFailedBuckets++;
-                    throw unhandled;
+                
+                int retries = 0;
+                boolean done = false;
+                while (!done && retries < 3) {
+                    try {
+                        iterateBucket(bucket);
+                        log.info(InventoryValidator.class.getSimpleName() + ".END bucket=" + bucket);
+                        numValidBuckets++;
+                        done = true;
+                    } catch (IOException | TransientException | RuntimeException ex) {
+                        log.error(InventoryValidator.class.getSimpleName() + ".FAIL bucket=" + bucket, ex);
+                        numFailedBuckets++;
+                        retries++;
+                    } catch (Exception ex) {
+                        log.error(InventoryValidator.class.getSimpleName() + ".FAIL bucket=" + bucket, ex);
+                        numFailedBuckets++;
+                        throw ex;
+                    }
                 }
             }
         }
