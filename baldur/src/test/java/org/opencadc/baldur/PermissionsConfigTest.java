@@ -321,7 +321,7 @@ public class PermissionsConfigTest {
                 Assert.fail("should have received IllegalStateException");
             } catch (IllegalStateException e) {
                 // expected
-                Assert.assertTrue(e.getMessage(), e.getMessage().toLowerCase().contains("too many"));
+                Assert.assertTrue(e.getMessage(), e.getMessage().toLowerCase().contains("multiple entries"));
             }
         } catch (Exception unexpected) {
             log.error("unexpected exception", unexpected);
