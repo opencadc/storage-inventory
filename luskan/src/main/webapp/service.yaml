@@ -4,7 +4,7 @@ info:
   title: storage metadata query service (luskan)
   description: A programatic interface for querying the file metadata of the storage inventory system. The service uses the IVOA Table Access Protocol (TAP)
 schemes:
-  - http
+  - https
 basePath: /luskan
 paths:
   /async:
