@@ -637,28 +637,6 @@ public class InventoryHarvester implements Runnable {
                         artifactDAO.addSiteLocation(artifact, new SiteLocation(storageSite.getID()));
                     }
                     
-                    /*
-                    if (storageSite != null && currentArtifact != null && artifact.getMetaChecksum().equals(currentArtifact.getMetaChecksum())) {
-                        // only adding a SiteLocation
-                        artifactDAO.addSiteLocation(currentArtifact, new SiteLocation(storageSite.getID()));
-                    } else {
-                        // new artifact || updated metadata
-                        if (storageSite != null) {
-                            // trackSiteLocations: keep SiteLocation(s)
-                            if (currentArtifact != null) {
-                                artifact.siteLocations.addAll(currentArtifact.siteLocations);
-                            }
-                            artifact.siteLocations.add(new SiteLocation(storageSite.getID()));
-                        } else {
-                            // storage site: keep StorageLocation
-                            if (currentArtifact != null) {
-                                artifact.storageLocation = currentArtifact.storageLocation;
-                            }
-                        }
-                        artifactDAO.put(artifact);
-                    }
-                    */
-                    
                     harvestState.curLastModified = harvestedLastModified;
                     harvestState.curID = artifact.getID();
                     harvestStateDAO.put(harvestState);
