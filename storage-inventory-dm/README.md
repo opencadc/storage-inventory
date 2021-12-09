@@ -199,18 +199,18 @@ How does delete file get propagated?
 
 ## lastModified updates
 How does global learn about copies at sites other than the original?
-- when a site syncs a file (adds a local StorageLocation): update the Artifact.lastModified
-- global metadata-sync from site(s) will see this and add a SiteLocation
-- metadata-sync never modifies Entity metdata: id, metaChecksum, lastModified never change during sync
+- when a site file-sync completes (adds a local StorageLocation): update the Artifact.lastModified
+- when global metadata-sync from site(s) see this and tracks (add a SiteLocation): update Artifact.lastModified
+- metadata-sync never modifies Entity metdata: id, metaChecksum never change during sync
 - eventually: Artifact.lastModified will be the latest change at all sites, but that doesn't stop metadata-sync from processing an "event" out of order and merging in the new SiteLocation
 
 ## cache site
 How would a temporary cache instance at a site be maintained?
 - site could accept writes to a "cache" instance for Artifact(s) that do not match local policy
-- site could delete once global has other SiteLocation(s), update Artifact.lastModified so global will detect 
-  and remove SiteLocation
+- site metadata-validate can delete once the artifact+file are synced to sites where it does match policy: global has multiple SiteLocation(s)
+- metadata-validate removed the Artifact and creates a DeletedStorageLocationEvent; file-validate cleans up local copy of file
 - files could sit there orphaned if no one else wants/copies them
-- this feature is not planned, just speculation
+- a pure cache site is simply a site with local policy of "no files" and does not need to run metadata-sync w/ global
 
 ## metadata-validate
 How does global inventory validate vs a storage site?  how does a storage site validate vs global?
