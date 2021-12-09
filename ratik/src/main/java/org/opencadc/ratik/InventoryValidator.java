@@ -331,9 +331,6 @@ public class InventoryValidator implements Runnable {
                 }
                 log.debug(String.format("comparing Artifacts:\n local - %s\nremote - %s", local, remote));
 
-                // overridable method for int-tests
-                testAction();
-
                 // check if Artifacts are the same, or if the local Artifact
                 // precedes or follows the remote Artifact.
                 int order = orderArtifacts(local, remote);
@@ -504,11 +501,6 @@ public class InventoryValidator implements Runnable {
         query.append(" ORDER BY uri ASC");
         return query.toString();
     }
-
-    /**
-     * Method that can be overridden in tests to insert Artifact's after the iterator queries.
-     */
-    void testAction() { }
 
     /**
      * Get the StorageSite for the remote instance resourceID;

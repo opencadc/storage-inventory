@@ -69,6 +69,7 @@
 
 package org.opencadc.ratik;
 
+import ca.nrc.cadc.date.DateUtil;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.util.FileUtil;
 import ca.nrc.cadc.util.Log4jInit;
@@ -82,6 +83,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.text.DateFormat;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.MissingResourceException;
@@ -98,6 +100,7 @@ import org.opencadc.inventory.DeletedArtifactEvent;
 import org.opencadc.inventory.DeletedStorageLocationEvent;
 import org.opencadc.inventory.SiteLocation;
 import org.opencadc.inventory.StorageLocation;
+import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.query.ArtifactRowMapper;
 import org.opencadc.inventory.util.IncludeArtifacts;
 
@@ -120,6 +123,8 @@ public class InventoryValidatorTest {
     static String USER_HOME = System.getProperty("user.home");
     static URI REMOTE_STORAGE_SITE = URI.create("ivo://cadc.nrc.ca/minoc");
 
+    private final DateFormat df = DateUtil.getDateFormat(DateUtil.IVOA_DATE_FORMAT, DateUtil.UTC);
+    
     static {
         try {
             File opt = FileUtil.getFileFromResource("intTest.properties", InventoryValidatorTest.class);
@@ -814,50 +819,55 @@ public class InventoryValidatorTest {
         // Put Artifact in remote.
         final UUID remoteSiteID = this.remoteEnvironment.storageSiteDAO.list().iterator().next().getID();
         final UUID randomSiteID = UUID.randomUUID();
+        
+        log.info("remote site: " + remoteSiteID);
+        log.info("random site: " + randomSiteID);
 
+        // resolve with addSiteLocation
         Artifact artifact1 = new Artifact(URI.create("cadc:INTTEST/one.ext"), TestUtil.getRandomMD5(),
                                          new Date(), 1024L);
         this.remoteEnvironment.artifactDAO.put(artifact1);
         
+        this.localEnvironment.nonOriginArtifactDAO.put(artifact1);
+        this.localEnvironment.nonOriginArtifactDAO.addSiteLocation(artifact1, new SiteLocation(randomSiteID));
+        
+        // resolve with put Artifact
         Artifact artifact2 = new Artifact(URI.create("cadc:INTTEST/two.ext"), TestUtil.getRandomMD5(),
                                          new Date(), 1024L);
         this.remoteEnvironment.artifactDAO.put(artifact2);
         
+        Log4jInit.setLevel(ArtifactDAO.class.getPackage().getName(), Level.DEBUG);
         try {
             System.setProperty("user.home", TMP_DIR);
             InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.inventoryConnectionConfig, 
                                                                     this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
                                                                     new IncludeArtifacts(),null,
-                                                                    true) {
-                // Add a local Artifact with a random SiteLocation
-                // after the local and remote iterators have been populated.
-                @Override
-                void testAction() {
-                    artifact1.siteLocations.add(new SiteLocation(randomSiteID));
-                    localEnvironment.artifactDAO.put(artifact1);
-                }
-            };
+                                                                    true);
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
         }
-
+        
+        
         // Local Artifact should not have been deleted and Artifact.siteLocations should
         // contain the remote and random SiteLocation's.
         Artifact localArtifact1 = this.localEnvironment.artifactDAO.get(artifact1.getID());
         Assert.assertNotNull("local artifact1 not found", localArtifact1);
         Assert.assertEquals("metaChecksum mismatch", artifact1.getMetaChecksum(), localArtifact1.getMetaChecksum());
-        Assert.assertTrue("artifact1 does not contains remote site location",
+        for (SiteLocation loc : localArtifact1.siteLocations) {
+            log.info("artifact: " + localArtifact1.getID() + " site: " + loc);
+        }
+        Assert.assertTrue("artifact1 does not contains remote site location " + remoteSiteID,
                           localArtifact1.siteLocations.contains(new SiteLocation(remoteSiteID)));
-        Assert.assertTrue("artifact1 does not contains other site location",
+        Assert.assertTrue("artifact1 does not contains other site location " + randomSiteID,
                           localArtifact1.siteLocations.contains(new SiteLocation(randomSiteID)));
         
         Artifact localArtifact2 = this.localEnvironment.artifactDAO.get(artifact2.getID());
         Assert.assertNotNull("local artifact2 not found", localArtifact2);
         Assert.assertEquals("metaChecksum mismatch", artifact2.getMetaChecksum(), localArtifact2.getMetaChecksum());
-        Assert.assertTrue("artifact2 does not contains remote site location",
+        Assert.assertTrue("artifact2 does not contains remote site location " + remoteSiteID,
                           localArtifact2.siteLocations.contains(new SiteLocation(remoteSiteID)));
-        Assert.assertFalse("artifact2 contains other site location",
+        Assert.assertFalse("artifact2 contains other site location " + randomSiteID,
                           localArtifact2.siteLocations.contains(new SiteLocation(randomSiteID)));
     }
 

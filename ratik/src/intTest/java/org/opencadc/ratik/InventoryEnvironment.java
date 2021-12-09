@@ -84,6 +84,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 public class InventoryEnvironment {
     final StorageSiteDAO storageSiteDAO = new StorageSiteDAO();
     final ArtifactDAO artifactDAO = new ArtifactDAO();
+    final ArtifactDAO nonOriginArtifactDAO = new ArtifactDAO(false);
     final DeletedArtifactEventDAO deletedArtifactEventDAO = new DeletedArtifactEventDAO();
     final DeletedStorageLocationEventDAO deletedStorageLocationEventDAO = new DeletedStorageLocationEventDAO();
     final Map<String, Object> daoConfig = new TreeMap<>();
@@ -105,6 +106,7 @@ public class InventoryEnvironment {
         
         storageSiteDAO.setConfig(daoConfig);
         artifactDAO.setConfig(daoConfig);
+        nonOriginArtifactDAO.setConfig(daoConfig);
         deletedArtifactEventDAO.setConfig(daoConfig);
         deletedStorageLocationEventDAO.setConfig(daoConfig);
 
