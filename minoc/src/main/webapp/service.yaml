@@ -32,8 +32,8 @@ paths:
             Content-Type:
               description: The content type of the file
               type: string
-            Content-MD5:
-              description: The content MD5 of the file
+            Digest:
+              description: The content checksum (MD5) of the file
               type: string
             Content-Length:
               description: The content length of the file
@@ -90,7 +90,7 @@ paths:
           required: false
         - name: META
           in: query
-          description: 'extract METAdata (headers) from a file. A single parameter META=true is supported for FITS files. Output will be a plain text rendition of the headers.'
+          description: 'extract metadata (headers) from a file. A single parameter META=true is supported for FITS files. Output will be a plain text rendition of the headers.'
           required: false
           type: boolean
     put:
@@ -120,10 +120,10 @@ paths:
           type: string
           description: The content type of the file
           required: false
-        - name: Content-MD5
+        - name: Digest
           in: header
           type: string
-          description: The content MD5 of the file
+          description: The content checksum (MD5) of the file
           required: false
         - name: Content-Length
           in: header
@@ -142,11 +142,14 @@ paths:
         '200':
           description: Successful response
           headers:
+            Content-Disposition:
+              description: 'The content-disposition with suggested filename (normally last path element in artifact URI)'
+              type: string
             Content-Type:
               description: The content type of the file
               type: string
-            Content-MD5:
-              description: The content MD5 of the file
+            Digest:
+              description: The content checksum (MD5) of the file
               type: string
             Content-Length:
               description: The content length of the file
@@ -244,13 +247,13 @@ paths:
           description: Successful response.
           headers:
             Content-Disposition:
-              description: 'The content-disposition of the file in the form<br/><br/>Content-Disposition\: inline; filename=\"\<name\>\"<br/><br/>where \<name\> is the last path segment of the URI of the artifact.'
+              description: 'The content-disposition with suggested filename (normally last path element in artifact URI)'
               type: string
             Content-Type:
               description: The content type of the file
               type: string
-            Content-MD5:
-              description: The content MD5 of the file
+            Digest:
+              description: The content checksum (MD5) of the file
               type: string
             Content-Length:
               description: The content length of the file
@@ -305,6 +308,11 @@ paths:
             type: string
           description: The polarization state(s) (Stokes), supports multiple values.
           required: false
+        - name: META
+          in: query
+          description: 'extract metadata (headers) from a file. A single parameter META=true is supported for FITS files. Output will be a plain text rendition of the headers.'
+          required: false
+          type: boolean
     put:
       description: |
         Upload a file identified by parameter artifact-uri.
@@ -332,10 +340,10 @@ paths:
           type: string
           description: The content type of the file
           required: false
-        - name: Content-MD5
+        - name: Digest
           in: header
           type: string
-          description: The content MD5 of the file
+          description: The content checksum (MD5) of the file
           required: false
         - name: Content-Length
           in: header
@@ -354,11 +362,14 @@ paths:
         '200':
           description: Successful response
           headers:
+            Content-Disposition:
+              description: 'The content-disposition with suggested filename (normally last path element in artifact URI)'
+              type: string
             Content-Type:
               description: The content type of the artifact
               type: string
-            Content-MD5:
-              description: The content MD5 of the artifact
+            Digest:
+              description: The content checksum (MD5) of the artifact
               type: string
             Content-Length:
               description: The content length of the artifact

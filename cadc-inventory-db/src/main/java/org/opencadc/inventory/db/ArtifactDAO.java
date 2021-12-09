@@ -137,6 +137,9 @@ public class ArtifactDAO extends AbstractDAO<Artifact> {
         }
         a.storageLocation = loc;
         boolean timestampUpdate = loc != null;
+        if (timestampUpdate) {
+            log.debug("force lastModified update when assigning storageLocation");
+        }
         put(a, true, timestampUpdate);
     }
     
@@ -146,7 +149,8 @@ public class ArtifactDAO extends AbstractDAO<Artifact> {
         }
         if (!a.siteLocations.contains(loc)) {
             a.siteLocations.add(loc);
-            put(a, true, false);
+            log.debug("force lastModified update when adding siteLocation");
+            put(a, true, true);
         }
     }
     

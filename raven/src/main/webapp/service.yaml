@@ -49,21 +49,6 @@ paths:
         - Artifact transfer
       summary: Redirect to a URL and download
       responses:
-        '200':
-          description: Successful response.
-          headers:
-            Content-Disposition:
-              description: 'The content-disposition of the file in the form<br/><br/>Content-Disposition\: inline; filename=\"\<name\>\"<br/><br/>where \<name\> is the last path segment of the URI of the artifact.'
-              type: string
-            Content-Type:
-              description: The content type of the file
-              type: string
-            Content-MD5:
-              description: The content MD5 of the file
-              type: string
-            Content-Length:
-              description: The content length of the file
-              type: string
         '303':
           description: Redirect to a URL where download can start.
           headers:
@@ -137,13 +122,13 @@ paths:
           description: Successful response.
           headers:
             Content-Disposition:
-              description: 'The content-disposition of the file in the form<br/><br/>Content-Disposition\: inline; filename=\"\<name\>\"<br/><br/>where \<name\> is the last path segment of the URI of the artifact.'
+              description: 'The content-disposition with suggested filename (normally last path element in artifact URI)'
               type: string
             Content-Type:
               description: The content type of the file
               type: string
-            Content-MD5:
-              description: The content MD5 of the file
+            Digest:
+              description: The content checksum (MD5) of the file
               type: string
             Content-Length:
               description: The content length of the file

@@ -378,7 +378,7 @@ public abstract class AbstractDAO<T extends Entity> {
             delta = !entity.getMetaChecksum().equals(cur.getMetaChecksum());
         }
         
-        if ((origin && delta) || (origin && timestampUpdate) || entity.getLastModified() == null) {
+        if ((origin && delta) || entity.getLastModified() == null || timestampUpdate) {
             InventoryUtil.assignLastModified(entity, now);
         }
         

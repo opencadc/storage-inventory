@@ -724,6 +724,36 @@ public class SQLGenerator {
         }
     }
     
+    private void safeSetLong(PreparedStatement prep, int col, Long value) throws SQLException {
+        log.debug("safeSetLong: " + col + " " + value);
+        if (value != null) {
+            prep.setLong(col, value);
+        } else {
+            prep.setNull(col, Types.BIGINT);
+        }
+    }
+    
+    private void safeSetTimestamp(PreparedStatement prep, int col, Timestamp value, Calendar cal) throws SQLException {
+        log.debug("safeSetTimestamp: " + col + " " + value);
+        if (value != null) {
+            prep.setTimestamp(col, value, cal);
+        } else {
+            prep.setNull(col, Types.TIMESTAMP);
+        }
+    }
+    
+    private void safeSetArray(PreparedStatement prep, int col, UUID[] value) throws SQLException {
+        
+        if (value != null) {
+            log.debug("safeSetArray: " + col + " UUID[" + value.length + "]");
+            java.sql.Array arr = prep.getConnection().createArrayOf("uuid", value);
+            prep.setObject(col, arr);
+        } else {
+            log.debug("safeSetArray: " + col + " " + value);
+            prep.setNull(col, Types.ARRAY);
+        }
+    }
+    
     private class ArtifactPut implements EntityPut<Artifact> {
         private final Calendar utc = Calendar.getInstance(DateUtil.UTC);
         private final boolean update;
@@ -755,11 +785,11 @@ public class SQLGenerator {
             log.debug("ArtifactPut: " + sql);
             PreparedStatement prep = conn.prepareStatement(sql);
             int col = 1;
-            prep.setString(col++, value.getURI().toASCIIString());
-            prep.setString(col++, value.getBucket());
-            prep.setString(col++, value.getContentChecksum().toASCIIString());
-            prep.setTimestamp(col++, new Timestamp(value.getContentLastModified().getTime()), utc);
-            prep.setLong(col++, value.getContentLength());
+            safeSetString(prep, col++, value.getURI().toASCIIString());
+            safeSetString(prep, col++, value.getBucket());
+            safeSetString(prep, col++, value.getContentChecksum().toASCIIString());
+            safeSetTimestamp(prep, col++, new Timestamp(value.getContentLastModified().getTime()), utc);
+            safeSetLong(prep, col++, value.getContentLength());
             safeSetString(prep, col++, value.contentType);
             safeSetString(prep, col++, value.contentEncoding);
             
@@ -769,21 +799,23 @@ public class SQLGenerator {
                 for (SiteLocation si : value.siteLocations) {
                     ua[i++] = si.getSiteID();
                 }
-                java.sql.Array arr = prep.getConnection().createArrayOf("uuid", ua);
-                prep.setObject(col++, arr);
+                safeSetArray(prep, col++, ua);
             } else {
-                prep.setObject(col++, null); // siteLocations uuid[]
-            }
-            if (value.storageLocation != null) {
-                prep.setString(col++, value.storageLocation.getStorageID().toASCIIString());
-                safeSetString(prep, col++, value.storageLocation.storageBucket);
-            } else {
-                prep.setNull(col++, Types.VARCHAR); // storageLocation.storageID
-                prep.setNull(col++, Types.VARCHAR); // storageLocation.storageBucket
+                safeSetArray(prep, col++, (UUID[]) null);
             }
             
-            prep.setTimestamp(col++, new Timestamp(value.getLastModified().getTime()), utc);
-            prep.setString(col++, value.getMetaChecksum().toASCIIString());
+            if (value.storageLocation != null) {
+                safeSetString(prep, col++, value.storageLocation.getStorageID().toASCIIString());
+                safeSetString(prep, col++, value.storageLocation.storageBucket);
+            } else {
+                safeSetString(prep, col++, null); // storageLocation.storageID
+                safeSetString(prep, col++, null); // storageLocation.storageBucket
+            }
+            
+            safeSetTimestamp(prep, col++, new Timestamp(value.getLastModified().getTime()), utc);
+            safeSetString(prep, col++, value.getMetaChecksum().toASCIIString());
+            
+            log.debug("id " + value.getID());
             prep.setObject(col++, value.getID());
             
             return prep;

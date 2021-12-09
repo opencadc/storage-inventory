@@ -552,7 +552,7 @@ public class InventoryHarvester implements Runnable {
                     first = false;
                     if (artifact.getID().equals(harvestState.curID)
                         && artifact.getLastModified().equals(harvestState.curLastModified)) {
-                        log.debug("SKIP: previously processed: " + artifact.getID() + " " + artifact.getURI());
+                        log.debug("SKIP PUT: previously processed: " + artifact.getID() + " " + artifact.getURI());
                         // ugh but the skip is comprehensible: have to do this inside the loop when using
                         // try-with-resources
                         continue;
@@ -619,28 +619,25 @@ public class InventoryHarvester implements Runnable {
                         }
                     }
 
+                    // addSiteLocation may modify lastModified so capture real value here
+                    final Date harvestedLastModified = artifact.getLastModified();
                     log.info("Artifact.PUT " + artifact.getID() + " " + artifact.getURI() + " " + df.format(artifact.getLastModified()));
-                    if (storageSite != null && currentArtifact != null && artifact.getMetaChecksum().equals(currentArtifact.getMetaChecksum())) {
-                        // only adding a SiteLocation
-                        artifactDAO.addSiteLocation(currentArtifact, new SiteLocation(storageSite.getID()));
-                    } else {
-                        // new artifact || updated metadata
+                    if (currentArtifact != null) {
                         if (storageSite != null) {
-                            // trackSiteLocations: merge SiteLocation(s)
-                            artifact.siteLocations.add(new SiteLocation(storageSite.getID()));
-                            if (currentArtifact != null) {
-                                artifact.siteLocations.addAll(currentArtifact.siteLocations);
-                            }
+                            // trackSiteLocations: keep SiteLocation(s)
+                            artifact.siteLocations.addAll(currentArtifact.siteLocations);
                         } else {
                             // storage site: keep StorageLocation
-                            if (currentArtifact != null) {
-                                artifact.storageLocation = currentArtifact.storageLocation;
-                            }
+                            artifact.storageLocation = currentArtifact.storageLocation;
                         }
-                        artifactDAO.put(artifact);
                     }
-
-                    harvestState.curLastModified = artifact.getLastModified();
+                    artifactDAO.put(artifact);
+                    if (storageSite != null) {
+                        // explicit so addSiteLocation can force lastModified update in global
+                        artifactDAO.addSiteLocation(artifact, new SiteLocation(storageSite.getID()));
+                    }
+                    
+                    harvestState.curLastModified = harvestedLastModified;
                     harvestState.curID = artifact.getID();
                     harvestStateDAO.put(harvestState);
                     transactionManager.commitTransaction();

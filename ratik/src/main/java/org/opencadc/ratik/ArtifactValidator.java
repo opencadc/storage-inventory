@@ -459,13 +459,12 @@ public class ArtifactValidator {
         // explanation0: filter policy at L changed to include artifact in R
         // explanation6: deleted from L, lost DeletedArtifactEvent
         // evidence: ?
-        // action: insert Artifact or add siteID to Artifact.siteLocations
+        // action: insert Artifact and/or add siteID to Artifact.siteLocations
         log.debug("checking explanation 4");
         if (this.remoteSite != null) {
             SiteLocation remoteSiteLocation = new SiteLocation(this.remoteSite.getID());
             Artifact local = this.artifactDAO.get(remote.getID());
             if (local != null) {
-                
                 try {
                     log.debug("starting transaction");
                     this.transactionManager.startTransaction();
@@ -473,11 +472,9 @@ public class ArtifactValidator {
 
                     this.artifactDAO.lock(local);
                     Artifact current = this.artifactDAO.get(local.getID());
-                    if (!current.siteLocations.contains(remoteSiteLocation)) {
-                        log.info(String.format("ArtifactValidator.addSiteLocation Artifact.id=%s Artifact.uri=%s site=%s",
-                                               current.getID(), current.getURI(), remoteSiteLocation));
-                        this.artifactDAO.addSiteLocation(current, remoteSiteLocation);
-                    }
+                    log.info(String.format("ArtifactValidator.addSiteLocation Artifact.id=%s Artifact.uri=%s site=%s",
+                                           current.getID(), current.getURI(), remoteSiteLocation));
+                    this.artifactDAO.addSiteLocation(current, remoteSiteLocation);
 
                     log.debug("committing transaction");
                     this.transactionManager.commitTransaction();
@@ -502,10 +499,11 @@ public class ArtifactValidator {
                 this.transactionManager.startTransaction();
                 log.debug("start txn: OK");
 
-                log.info(String.format("ArtifactValidator.putArtifact Artifact.id=%s Artifact.uri=%s", 
-                        remote.getID(), remote.getURI()));
-                remote.siteLocations.add(remoteSiteLocation);
+                log.info(String.format("ArtifactValidator.putArtifact Artifact.id=%s Artifact.uri=%s  site=%s", 
+                        remote.getID(), remote.getURI(), remoteSiteLocation));
                 this.artifactDAO.put(remote);
+                // explicit addSiteLocations like fenwick to propagate event
+                this.artifactDAO.addSiteLocation(remote, remoteSiteLocation);
 
                 log.debug("committing transaction");
                 this.transactionManager.commitTransaction();

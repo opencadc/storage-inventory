@@ -105,7 +105,7 @@ public class ArtifactDAOTest {
 
     static {
         Log4jInit.setLevel("org.opencadc.inventory", Level.INFO);
-        Log4jInit.setLevel("org.opencadc.inventory.db", Level.DEBUG);
+        Log4jInit.setLevel("org.opencadc.inventory.db", Level.INFO);
         Log4jInit.setLevel("ca.nrc.cadc.db", Level.INFO);
     }
     
@@ -339,23 +339,39 @@ public class ArtifactDAOTest {
             Assert.assertEquals("round trip metachecksum unchanged", expected.getMetaChecksum(), mcs1);
             Assert.assertTrue("no siteLocations", a1.siteLocations.isEmpty());
             
+            log.info("adding " + loc1);
             nonOriginDAO.addSiteLocation(expected, loc1);
             Artifact a2 = nonOriginDAO.get(expected.getID());
             Assert.assertNotNull(a2);
             URI mcs2 = a2.computeMetaChecksum(MessageDigest.getInstance("MD5"));
             Assert.assertEquals("round trip metachecksum unchanged", expected.getMetaChecksum(), mcs2);
-            Assert.assertTrue("lastModified unchanged", a1.getLastModified().equals(a2.getLastModified()));
+            log.info("lastModified: " + a1.getLastModified() + " vs " + a2.getLastModified());
+            Assert.assertTrue("lastModified changed", a1.getLastModified().before(a2.getLastModified()));
             Assert.assertEquals(1, a2.siteLocations.size());
             Thread.sleep(20L);
             
+            log.info("adding " + loc2);
             nonOriginDAO.addSiteLocation(expected, loc2);
+            log.info("adding " + loc3);
             nonOriginDAO.addSiteLocation(expected, loc3);
             Artifact a3 = nonOriginDAO.get(expected.getID());
             Assert.assertNotNull(a3);
             URI mcs3 = a3.computeMetaChecksum(MessageDigest.getInstance("MD5"));
             Assert.assertEquals("round trip metachecksum unchanged", expected.getMetaChecksum(), mcs3);
-            Assert.assertTrue("lastModified unchanged", a1.getLastModified().equals(a3.getLastModified()));
+            log.info("lastModified: " + a1.getLastModified() + " vs " + a3.getLastModified());
+            Assert.assertTrue("lastModified changed", a1.getLastModified().before(a3.getLastModified()));
             Assert.assertEquals(3, a3.siteLocations.size());
+            Thread.sleep(20L);
+            
+            log.info("adding again: " + loc1);
+            nonOriginDAO.addSiteLocation(expected, loc1);
+            Artifact a4 = nonOriginDAO.get(expected.getID());
+            Assert.assertNotNull(a4);
+            URI mcs4 = a4.computeMetaChecksum(MessageDigest.getInstance("MD5"));
+            Assert.assertEquals("round trip metachecksum unchanged", expected.getMetaChecksum(), mcs4);
+            log.info("lastModified: " + a3.getLastModified() + " vs " + a4.getLastModified());
+            Assert.assertTrue("lastModified unchanged", a3.getLastModified().equals(a4.getLastModified()));
+            Assert.assertEquals(3, a4.siteLocations.size());
             Thread.sleep(20L);
             
             // must remove from the persisted artifact that contains them
@@ -364,11 +380,12 @@ public class ArtifactDAOTest {
             nonOriginDAO.removeSiteLocation(a3, loc1);
             Assert.assertEquals("removed", 1, originDAO.get(expected.getID()).siteLocations.size());
             nonOriginDAO.removeSiteLocation(a3, loc2);
-            Artifact a4 = nonOriginDAO.get(expected.getID());
+            Artifact a5 = nonOriginDAO.get(expected.getID());
             Assert.assertNotNull(a1);
-            URI mcs4 = a4.computeMetaChecksum(MessageDigest.getInstance("MD5"));
-            Assert.assertEquals("round trip metachecksum unchanged", expected.getMetaChecksum(), mcs3);
-            Assert.assertTrue(a1.getLastModified().equals(a4.getLastModified()));
+            URI mcs5 = a5.computeMetaChecksum(MessageDigest.getInstance("MD5"));
+            Assert.assertEquals("round trip metachecksum unchanged", expected.getMetaChecksum(), mcs5);
+            Assert.assertTrue("lastModified unchanged", a3.getLastModified().equals(a4.getLastModified()));
+            Assert.assertEquals(0, a5.siteLocations.size());
             
             originDAO.delete(expected.getID());
             Artifact deleted = originDAO.get(expected.getID());
