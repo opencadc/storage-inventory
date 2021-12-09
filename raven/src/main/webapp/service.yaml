@@ -80,6 +80,51 @@ paths:
           description: Internal error
         '503':
           description: Service busy
+      parameters:
+        - name: SUB
+          in: query
+          description: 'SUB-region of a FITS file image.  Multiple SUB parameters are allowed and will generate MEF output in file order. Examples: entire extensions (SUB=[1]&SUB=[SCI,2]), or more general purpose (SUB=[SCI,3][400:500]).'
+          required: false
+          type: string
+          collectionFormat: multi
+        - name: POS
+          in: query
+          description: The positional regions to be extracted from the data.
+          required: false
+          type: string
+        - name: CIRCLE
+          in: query
+          description: The spatial region using the CIRCLE xtype defined in DALI.
+          required: false
+          type: string
+        - name: POLYGON
+          in: query
+          description: The spatial region using the POLYGON xtype defined in DALI.
+          required: false
+          type: string
+        - name: BAND
+          in: query
+          description: The wavelength interval(s) using the INTERVAL xtype defined in DALI.
+          required: false
+          type: string
+        - name: TIME
+          in: query
+          description: The time interval(s) using the INTERVAL xtype defined in DALI.
+          required: false
+          type: string
+        - name: POL
+          in: query
+          type: array
+          collectionFormat: multi
+          items:
+            type: string
+          description: The polarization state(s) (Stokes), supports multiple values.
+          required: false
+        - name: META
+          in: query
+          description: 'extract METAdata (headers) from a file. A single parameter META=true is supported for FITS files. Output will be a plain text rendition of the headers.'
+          required: false
+          type: boolean
     head:
       description: 'Return metadata about a given artifact indentified by parameter artifact-uri'
       tags:
