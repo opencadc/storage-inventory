@@ -475,9 +475,8 @@ public class SwiftStorageAdapter  implements StorageAdapter {
     
     private StorageMetadata toStorageMetadata(StorageLocation loc, URI md5, long contentLength, 
             final URI artifactURI, Date lastModified) {
-        StorageMetadata storageMetadata = new StorageMetadata(loc, md5, contentLength);
+        StorageMetadata storageMetadata = new StorageMetadata(loc, md5, contentLength, lastModified);
         storageMetadata.artifactURI = artifactURI;
-        storageMetadata.contentLastModified = lastModified;
         return storageMetadata;
     }
     
@@ -531,23 +530,17 @@ public class SwiftStorageAdapter  implements StorageAdapter {
     }
 
     @Override
-    public void get(StorageLocation storageLocation, OutputStream dest, SortedSet<ByteRange> byteRanges) 
+    public void get(StorageLocation storageLocation, OutputStream dest, ByteRange byteRange) 
         throws ResourceNotFoundException, ReadException, WriteException, StorageEngageException, TransientException {
         log.debug("get: " + storageLocation);
         
         StoredObject obj = getStoredObject(storageLocation, false);
         
         DownloadInstructions di = new DownloadInstructions();
-        if (!byteRanges.isEmpty()) {
-            Iterator<ByteRange> iter = byteRanges.iterator();
-            ByteRange br = iter.next();
-            if (iter.hasNext()) {
-                throw new UnsupportedOperationException("multiple byte ranges not supported");
-            }
-            
-            long endPos = br.getOffset() + br.getLength() - 1L; // RFC7233 range is inclusive
+        if (byteRange != null) {
+            long endPos = byteRange.getOffset() + byteRange.getLength() - 1L; // RFC7233 range is inclusive
             //di.setRange(new MidPartRange(br.getOffset(), endPos)); // published javaswift 0.10.4 constructor: MidPartRange(int, int)
-            di.setRange(new JossRangeWorkaround(br.getOffset(), endPos));
+            di.setRange(new JossRangeWorkaround(byteRange.getOffset(), endPos));
         }
         try (final InputStream source = obj.downloadObjectAsInputStream(di)) {
             MultiBufferIO io = new MultiBufferIO(CIRC_BUFFERS, CIRC_BUFFERSIZE);

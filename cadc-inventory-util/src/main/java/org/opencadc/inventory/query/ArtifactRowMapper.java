@@ -82,8 +82,12 @@ import org.opencadc.tap.TapRowMapper;
  */
 public class ArtifactRowMapper implements TapRowMapper<Artifact>  {
 
-    public static final String BASE_QUERY = "SELECT id, uri, contentChecksum, contentLastModified, contentLength, "
-        + "contentType, contentEncoding, lastModified, metaChecksum FROM inventory.Artifact";
+    public static final String SELECT = "SELECT id, uri, contentChecksum, contentLastModified, contentLength, "
+        + "contentType, contentEncoding, lastModified, metaChecksum";
+
+    public static final String FROM = "FROM inventory.Artifact";
+
+    public static final String BASE_QUERY = SELECT + " " + FROM;
 
     @Override
     public Artifact mapRow(final List<Object> row) {

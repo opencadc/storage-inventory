@@ -70,12 +70,15 @@
 package org.opencadc.luskan;
 
 import ca.nrc.cadc.auth.AuthMethod;
+import ca.nrc.cadc.auth.SSLUtil;
 import ca.nrc.cadc.reg.Capabilities;
 import ca.nrc.cadc.reg.Capability;
 import ca.nrc.cadc.reg.Interface;
 import ca.nrc.cadc.reg.Standards;
+import ca.nrc.cadc.util.FileUtil;
 import ca.nrc.cadc.util.Log4jInit;
 import ca.nrc.cadc.vosi.CapabilitiesTest;
+import java.io.File;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
@@ -95,6 +98,8 @@ public class VosiCapabilitiesTest extends CapabilitiesTest {
     
     public VosiCapabilitiesTest() {
         super(Constants.RESOURCE_ID);
+        File testCertFile = FileUtil.getFileFromResource("luskan-test-auth.pem", LuskanSyncQueryTest.class);
+        setSubject(SSLUtil.createSubject(testCertFile));
     }
 
     @Override

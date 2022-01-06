@@ -69,10 +69,13 @@ package org.opencadc.minoc;
 
 import ca.nrc.cadc.auth.AuthenticationUtil;
 import ca.nrc.cadc.auth.HttpPrincipal;
+import ca.nrc.cadc.cred.client.CredUtil;
+import ca.nrc.cadc.log.WebServiceLogInfo;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.rest.InlineContentHandler;
 import ca.nrc.cadc.rest.RestAction;
+import ca.nrc.cadc.rest.SyncInput;
 import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.util.PropertiesReader;
 import java.io.File;
@@ -118,6 +121,9 @@ public abstract class ArtifactAction extends RestAction {
     
     // The (possibly null) authentication token.
     String authToken;
+
+    // servlet path minus the auth token
+    String loggablePath;
     
     // immutable state set in constructor
     protected final MultiValuedProperties config;
@@ -125,7 +131,7 @@ public abstract class ArtifactAction extends RestAction {
     protected final List<URI> readGrantServices = new ArrayList<>();
     protected final List<URI> writeGrantServices = new ArrayList<>();
     
-    // laxy init
+    // lazy init
     protected ArtifactDAO artifactDAO;
     protected StorageAdapter storageAdapter;
     
@@ -139,7 +145,6 @@ public abstract class ArtifactAction extends RestAction {
         this.storageAdapter = null;
         this.authenticateOnly = false;
         this.publicKey = null;
-        
     }
 
     protected ArtifactAction() {
@@ -181,10 +186,7 @@ public abstract class ArtifactAction extends RestAction {
         } else {
             authenticateOnly = false;
         }
-        
-        
-        
-        
+
         String pubkeyFileName = config.getFirstPropertyValue(MinocInitAction.PUBKEYFILE_KEY);
         this.publicKey = new File(System.getProperty("user.home") + "/config/" + pubkeyFileName);
     }
@@ -197,13 +199,31 @@ public abstract class ArtifactAction extends RestAction {
     protected InlineContentHandler getInlineContentHandler() {
         return null;
     }
-    
+
+    @Override
+    public void setLogInfo(WebServiceLogInfo logInfo) {
+        super.setLogInfo(logInfo);
+        if (this.artifactURI != null && this.loggablePath != null) {
+            this.logInfo.setPath(this.loggablePath + "/" + this.artifactURI.toASCIIString());
+        }
+    }
+
+    @Override
+    public void setSyncInput(SyncInput syncInput) {
+        super.setSyncInput(syncInput);
+        this.loggablePath = syncInput.getComponentPath();
+        parsePath();
+        if (this.artifactURI != null && this.logInfo != null) {
+            this.logInfo.setPath(this.loggablePath + "/" + this.artifactURI.toASCIIString());
+        }
+    }
+
     protected void initAndAuthorize(Class<? extends Grant> grantClass)
         throws AccessControlException, CertificateException, IOException,
                ResourceNotFoundException, TransientException {
-        
+
         init();
-        
+
         // do authorization (with token or subject)
         Subject subject = AuthenticationUtil.getCurrentSubject();
         if (authToken != null) {
@@ -214,10 +234,12 @@ public abstract class ArtifactAction extends RestAction {
                 subject.getPrincipals().add(new HttpPrincipal(tokenUser));
             }
             logInfo.setSubject(subject);
+            logInfo.setMessage("valid pre-auth " + grantClass.getSimpleName());
         } else {
             // augment subject (minoc is configured so augment
             // is not done in rest library)
             AuthenticationUtil.augmentSubject(subject);
+            logInfo.setSubject(subject);
             PermissionsCheck permissionsCheck = new PermissionsCheck(this.artifactURI, this.authenticateOnly,
                                                                      this.logInfo);
             if (ReadGrant.class.isAssignableFrom(grantClass)) {
@@ -229,11 +251,13 @@ public abstract class ArtifactAction extends RestAction {
             }
         }
     }
-    
+
     void init() {
-        parsePath();
+        if (this.artifactURI == null) {
+            throw new IllegalArgumentException("missing or invalid artifact URI");
+        }
     }
-    
+
     protected void initDAO() {
         if (artifactDAO == null) {
             Map<String, Object> configMap = MinocInitAction.getDaoConfig(config);
@@ -252,44 +276,28 @@ public abstract class ArtifactAction extends RestAction {
      * Parse the request path.
      */
     void parsePath() {
-        String path = syncInput.getPath();
+        String path = this.syncInput.getPath();
         log.debug("path: " + path);
-        if (path == null) {
-            throw new IllegalArgumentException("missing artifact URI");
-        }
-        int colonIndex = path.indexOf(":");
-        int firstSlashIndex = path.indexOf("/");
-        
-        if (colonIndex < 0) {
-            if (firstSlashIndex > 0 && path.length() > firstSlashIndex + 1) {
-                throw new IllegalArgumentException(
-                    "missing scheme in artifact URI: "
-                        + path.substring(firstSlashIndex + 1));
-            } else {
-                throw new IllegalArgumentException(
-                    "missing artifact URI in path: " + path);
+        if (path != null) {
+            int colonIndex = path.indexOf(":");
+            int firstSlashIndex = path.indexOf("/");
+            if (colonIndex != -1) {
+                if (firstSlashIndex < 0 || firstSlashIndex > colonIndex) {
+                    // no auth token--artifact URI is complete path
+                    this.artifactURI = createArtifactURI(path);
+                } else {
+                    this.artifactURI = createArtifactURI(path.substring(firstSlashIndex + 1));
+                    this.authToken = path.substring(0, firstSlashIndex);
+                    log.debug("authToken: " + this.authToken);
+                }
             }
         }
-        
-        if (firstSlashIndex < 0 || firstSlashIndex > colonIndex) {
-            // no auth token--artifact URI is complete path
-            artifactURI = createArtifactURI(path);
-            return;
-        }
-        
-        artifactURI = createArtifactURI(path.substring(firstSlashIndex + 1));
-        
-        authToken = path.substring(0, firstSlashIndex);
-        log.debug("authToken: " + authToken);
     }
     
     Artifact getArtifact(URI artifactURI) throws ResourceNotFoundException {
         Artifact artifact = artifactDAO.get(artifactURI);
-        if (artifact == null) {
+        if (artifact == null || artifact.storageLocation == null) {
             throw new ResourceNotFoundException("not found: " + artifactURI);
-        }
-        if (artifact.storageLocation == null) {
-            throw new ResourceNotFoundException("not available: " + artifactURI);
         }
         return artifact;
     }
@@ -300,16 +308,16 @@ public abstract class ArtifactAction extends RestAction {
      * @return The artifact uri object.
      */
     private URI createArtifactURI(String uri) {
+        log.debug("artifact URI: " + uri);
+        URI ret;
         try {
-            log.debug("artifactURI: " + uri);
-            artifactURI = new URI(uri);
-            InventoryUtil.validateArtifactURI(ArtifactAction.class, artifactURI);
-            return artifactURI;
-        } catch (URISyntaxException e) {
-            String message = "illegal artifact URI: " + uri;
-            log.debug(message, e);
-            throw new IllegalArgumentException(message);
+            ret = new URI(uri);
+            InventoryUtil.validateArtifactURI(ArtifactAction.class, ret);
+        } catch (URISyntaxException | IllegalArgumentException e) {
+            ret = null;
+            log.debug("illegal artifact URI: " + uri, e);
         }
+        return ret;
     }
 
     protected List<String> getReadGrantServices(MultiValuedProperties props) {
@@ -373,4 +381,5 @@ public abstract class ArtifactAction extends RestAction {
 
         return config;
     }
+
 }

@@ -105,7 +105,7 @@ public class ArtifactDAOTest {
 
     static {
         Log4jInit.setLevel("org.opencadc.inventory", Level.INFO);
-        Log4jInit.setLevel("org.opencadc.inventory.db", Level.DEBUG);
+        Log4jInit.setLevel("org.opencadc.inventory.db", Level.INFO);
         Log4jInit.setLevel("ca.nrc.cadc.db", Level.INFO);
     }
     
@@ -339,23 +339,39 @@ public class ArtifactDAOTest {
             Assert.assertEquals("round trip metachecksum unchanged", expected.getMetaChecksum(), mcs1);
             Assert.assertTrue("no siteLocations", a1.siteLocations.isEmpty());
             
+            log.info("adding " + loc1);
             nonOriginDAO.addSiteLocation(expected, loc1);
             Artifact a2 = nonOriginDAO.get(expected.getID());
             Assert.assertNotNull(a2);
             URI mcs2 = a2.computeMetaChecksum(MessageDigest.getInstance("MD5"));
             Assert.assertEquals("round trip metachecksum unchanged", expected.getMetaChecksum(), mcs2);
-            Assert.assertTrue("lastModified unchanged", a1.getLastModified().equals(a2.getLastModified()));
+            log.info("lastModified: " + a1.getLastModified() + " vs " + a2.getLastModified());
+            Assert.assertTrue("lastModified changed", a1.getLastModified().before(a2.getLastModified()));
             Assert.assertEquals(1, a2.siteLocations.size());
             Thread.sleep(20L);
             
+            log.info("adding " + loc2);
             nonOriginDAO.addSiteLocation(expected, loc2);
+            log.info("adding " + loc3);
             nonOriginDAO.addSiteLocation(expected, loc3);
             Artifact a3 = nonOriginDAO.get(expected.getID());
             Assert.assertNotNull(a3);
             URI mcs3 = a3.computeMetaChecksum(MessageDigest.getInstance("MD5"));
             Assert.assertEquals("round trip metachecksum unchanged", expected.getMetaChecksum(), mcs3);
-            Assert.assertTrue("lastModified unchanged", a1.getLastModified().equals(a3.getLastModified()));
+            log.info("lastModified: " + a1.getLastModified() + " vs " + a3.getLastModified());
+            Assert.assertTrue("lastModified changed", a1.getLastModified().before(a3.getLastModified()));
             Assert.assertEquals(3, a3.siteLocations.size());
+            Thread.sleep(20L);
+            
+            log.info("adding again: " + loc1);
+            nonOriginDAO.addSiteLocation(expected, loc1);
+            Artifact a4 = nonOriginDAO.get(expected.getID());
+            Assert.assertNotNull(a4);
+            URI mcs4 = a4.computeMetaChecksum(MessageDigest.getInstance("MD5"));
+            Assert.assertEquals("round trip metachecksum unchanged", expected.getMetaChecksum(), mcs4);
+            log.info("lastModified: " + a3.getLastModified() + " vs " + a4.getLastModified());
+            Assert.assertTrue("lastModified unchanged", a3.getLastModified().equals(a4.getLastModified()));
+            Assert.assertEquals(3, a4.siteLocations.size());
             Thread.sleep(20L);
             
             // must remove from the persisted artifact that contains them
@@ -364,11 +380,12 @@ public class ArtifactDAOTest {
             nonOriginDAO.removeSiteLocation(a3, loc1);
             Assert.assertEquals("removed", 1, originDAO.get(expected.getID()).siteLocations.size());
             nonOriginDAO.removeSiteLocation(a3, loc2);
-            Artifact a4 = nonOriginDAO.get(expected.getID());
+            Artifact a5 = nonOriginDAO.get(expected.getID());
             Assert.assertNotNull(a1);
-            URI mcs4 = a4.computeMetaChecksum(MessageDigest.getInstance("MD5"));
-            Assert.assertEquals("round trip metachecksum unchanged", expected.getMetaChecksum(), mcs3);
-            Assert.assertTrue(a1.getLastModified().equals(a4.getLastModified()));
+            URI mcs5 = a5.computeMetaChecksum(MessageDigest.getInstance("MD5"));
+            Assert.assertEquals("round trip metachecksum unchanged", expected.getMetaChecksum(), mcs5);
+            Assert.assertTrue("lastModified unchanged", a3.getLastModified().equals(a4.getLastModified()));
+            Assert.assertEquals(0, a5.siteLocations.size());
             
             originDAO.delete(expected.getID());
             Artifact deleted = originDAO.get(expected.getID());
@@ -759,7 +776,7 @@ public class ArtifactDAOTest {
         int num = 10;
         try {
             int numArtifacts = 0;
-            int numExpected = 0;
+            int numStuffExpected = 0;
             // artifacts with storageLocation
             String collection = "STUFF";
             for (int i = 0; i < num; i++) {
@@ -777,7 +794,7 @@ public class ArtifactDAOTest {
                 log.debug("put: " + a);
                 numArtifacts++;
                 if (collection.equals("STUFF")) {
-                    numExpected++;
+                    numStuffExpected++;
                 }
             }
             // some artifacts with no storageLocation
@@ -796,14 +813,36 @@ public class ArtifactDAOTest {
                 log.debug("put: " + a);
                 numArtifacts++;
                 if (collection.equals("STUFF")) {
-                    numExpected++;
+                    numStuffExpected++;
+                }
+            }
+            // some artifacts with siteLocations
+            UUID siteID = UUID.randomUUID();
+            int numSiteExpected = 0;
+            collection = "STUFF";
+            for (int i = 2 * num; i < 3 * num; i++) {
+                if (i == num + num / 2) {
+                    collection = "NONSENSE";
+                }
+                Artifact a = new Artifact(
+                        URI.create("cadc:" + collection + "/filename" + i),
+                        URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"),
+                        new Date(),
+                        new Long(666L));
+                a.siteLocations.add(new SiteLocation(siteID));
+                originDAO.put(a);
+                log.debug("put: " + a);
+                numArtifacts++;
+                numSiteExpected++;
+                if (collection.equals("STUFF")) {
+                    numStuffExpected++;
                 }
             }
             log.info("added: " + numArtifacts);
             
             log.info("count all...");
             int count = 0;
-            try (ResourceIterator<Artifact> iter = originDAO.iterator(null, null, false)) {
+            try (ResourceIterator<Artifact> iter = originDAO.iterator(null, false)) {
                 while (iter.hasNext()) {
                     Artifact actual = iter.next();
                     count++;
@@ -822,14 +861,27 @@ public class ArtifactDAOTest {
                     Assert.assertTrue("STUFF", actual.getURI().toASCIIString().startsWith("cadc:STUFF/"));
                 }
             }
-            Assert.assertEquals("count", numExpected, count);
+            Assert.assertEquals("count", numStuffExpected, count);
+            
+            log.info("count vs siteID...");
+            count = 0;
+            try (ResourceIterator<Artifact> iter = originDAO.iterator(siteID, null, false)) {
+                while (iter.hasNext()) {
+                    Artifact actual = iter.next();
+                    count++;
+                    log.info("found: " + actual.getURI());
+                    Assert.assertFalse("siteID", actual.siteLocations.isEmpty());
+                    Assert.assertEquals("siteID", siteID, actual.siteLocations.iterator().next().getSiteID());
+                }
+            }
+            Assert.assertEquals("count", numSiteExpected, count);
             
             log.info("count in buckets...");
             count = 0;
             for (byte b = 0; b < 16; b++) {
                 String bpre = HexUtil.toHex(b).substring(1);
                 log.debug("bucket prefix: " + bpre);
-                try (ResourceIterator<Artifact> iter = originDAO.iterator(null, bpre, false)) {
+                try (ResourceIterator<Artifact> iter = originDAO.iterator(bpre, false)) {
                     while (iter.hasNext()) {
                         Artifact actual = iter.next();
                         count++;
@@ -853,7 +905,7 @@ public class ArtifactDAOTest {
                     }
                 }
             }
-            Assert.assertEquals("count", numExpected, count);
+            Assert.assertEquals("count", numStuffExpected, count);
             
         } catch (Exception unexpected) {
             log.error("unexpected exception", unexpected);

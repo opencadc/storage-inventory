@@ -42,6 +42,29 @@ Multiple values of the permission granting service resourceID(s) may be provided
 settings. All services will be consulted but a single positive result is sufficient to grant permission for an 
 action.
 
+The following optional keys configure raven to prioritize sites returned in transfer negotiation, with higher priority
+sites first in the list of transfer URL's. Multiple values of `namespace` may be specified for a single `resourceID`. 
+The `namespace` value(s) must end with a colon (:) or slash (/) so one namespace cannot accidentally match (be a 
+prefix of) another namepsace.
+
+```
+org.opencadc.raven.putPreference={entry name}
+{entry name}.resourceID={storage site resourceID}
+{entry name}.namespace={storage site namespace}
+```
+
+Example `putPreference` config:
+```
+org.opencadc.raven.putPreference=CADC
+CADC.resourceID=ivo://cadc.nrc.ca/cadc/minoc
+CADC.namespace=cadc:IRIS/
+CADC.namespace=cadc:CGPS/
+```
+
+The `putPreference` rules are optimizations; they do not restrict the destination of a PUT. They are useful in cases 
+where a namespace is intended to be stored only in some site(s) or where most or all PUTs come from systems that are near one 
+storage site. TODO: support for `GET` preferences? also use client IP address to prioritize?
+
 **For developer testing only:** To disable authorization checking (via `readGrantProvider` or `writeGrantProvider`
 services), add the following configuration entry to raven.properties:
 ```

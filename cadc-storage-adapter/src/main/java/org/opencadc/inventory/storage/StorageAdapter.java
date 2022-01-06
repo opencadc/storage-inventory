@@ -113,7 +113,7 @@ public interface StorageAdapter {
      * 
      * @param storageLocation the object to read
      * @param dest the destination stream
-     * @param byteRanges one or more byte ranges ordered to only seek forward
+     * @param byteRange a single byte range to retrieve
      * 
      * @throws java.lang.InterruptedException if thread receives an interrupt
      * @throws ResourceNotFoundException if the artifact could not be found
@@ -122,7 +122,7 @@ public interface StorageAdapter {
      * @throws StorageEngageException if the adapter failed to interact with storage
      * @throws TransientException if an unexpected, temporary exception occurred
      */
-    public void get(StorageLocation storageLocation, OutputStream dest, SortedSet<ByteRange> byteRanges)
+    public void get(StorageLocation storageLocation, OutputStream dest, ByteRange byteRange)
         throws InterruptedException, ResourceNotFoundException, ReadException, WriteException, StorageEngageException, TransientException;
             
     /**

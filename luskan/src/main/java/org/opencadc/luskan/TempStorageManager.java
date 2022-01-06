@@ -121,12 +121,13 @@ public class TempStorageManager implements ResultStore, UWSInlineContentHandler 
             String suri = props.getFirstPropertyValue(LuskanConfig.URI_KEY);
             log.debug("system property: " + LuskanConfig.URI_KEY + " = " + suri);
             URI luskan = new URI(suri);
-            
+
+            // use registry to find public-facing baseURL: 
+            // - getAccessURL does not call the capabilities endpoint so does not require auth
+            // - the "results" endpoint name is specified in web.xml
             RegistryClient regClient = new RegistryClient();
-            URL serviceURL = regClient.getServiceURL(luskan, Standards.TAP_10, AuthMethod.CERT);
-            
-            // NOTE: "results" is used in the servlet mapping in web.xml
-            this.baseResultsURL = serviceURL.toExternalForm() + "/results";
+            URL capURL = regClient.getAccessURL(luskan);
+            this.baseResultsURL = capURL.toExternalForm().replace("capabilities", "results");
             log.debug("resultsURL: " + baseResultsURL);
 
             String srd = props.getFirstPropertyValue(LuskanConfig.TMPDIR_KEY);

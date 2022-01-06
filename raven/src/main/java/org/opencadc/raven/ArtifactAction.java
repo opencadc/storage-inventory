@@ -73,6 +73,7 @@ import ca.nrc.cadc.rest.RestAction;
 import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.vos.Direction;
 import ca.nrc.cadc.vos.Transfer;
+import ca.nrc.cadc.vosi.Availability;
 import java.io.File;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -80,6 +81,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import javax.naming.Context;
+import javax.naming.InitialContext;
+import javax.naming.NamingException;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.server.PermissionsCheck;
@@ -110,6 +114,8 @@ public abstract class ArtifactAction extends RestAction {
     protected final List<URI> writeGrantServices = new ArrayList<>();
 
     protected final boolean authenticateOnly;
+    protected Map<URI, Availability> siteAvailabilities;
+    protected Map<URI, StorageSiteRule> siteRules;
 
     // constructor for unit tests with no config/init
     ArtifactAction(boolean init) {
@@ -176,7 +182,14 @@ public abstract class ArtifactAction extends RestAction {
         Map<String, Object> config = RavenInitAction.getDaoConfig(props);
         this.artifactDAO = new ArtifactDAO();
         artifactDAO.setConfig(config); // connectivity tested
+      
+        // get the storage site rules
+        this.siteRules = RavenInitAction.getStorageSiteRules(props);
+    }
 
+    protected void initAndAuthorize() throws Exception {
+        init();
+        
         // set the user for logging
         AuthMethod authMethod = AuthenticationUtil.getAuthMethod(AuthenticationUtil.getCurrentSubject());
         if (authMethod != null && !authMethod.equals(AuthMethod.ANON)) {
@@ -185,10 +198,6 @@ public abstract class ArtifactAction extends RestAction {
                 user = userids.iterator().next();
             }
         }
-    }
-
-    protected void initAndAuthorize() throws Exception {
-        init();
 
         Class grantClass = ReadGrant.class;
         if ((transfer != null) && (transfer.getDirection().equals(Direction.pushToVoSpace))) {
@@ -215,6 +224,19 @@ public abstract class ArtifactAction extends RestAction {
         parseRequest();
         if (artifactURI == null) {
             throw new IllegalArgumentException("Missing artifact URI from path or request content");
+        }
+
+        String siteAvailabilitiesKey = this.appName + RavenInitAction.JNDI_AVAILABILITY_NAME;
+        log.debug("siteAvailabilitiesKey: " + siteAvailabilitiesKey);
+        try {
+            Context initContext = new InitialContext();
+            this.siteAvailabilities = (Map<URI, Availability>) initContext.lookup(siteAvailabilitiesKey);
+            log.debug("found siteAvailabilities in JNDI: " + siteAvailabilitiesKey + " = " + siteAvailabilities);
+            for (Map.Entry<URI, Availability> me: siteAvailabilities.entrySet()) {
+                log.debug("found: " + me.getKey() + " = " + me.getValue());
+            }
+        } catch (NamingException e) {
+            throw new IllegalStateException("JNDI lookup error", e);
         }
     }
 

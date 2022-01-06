@@ -37,7 +37,8 @@ insert into tap_schema.tables11 (schema_name,table_name,table_type,description,t
 ( 'inventory', 'inventory.StorageSite', 'table', 'Table of storage sites', 11 ),
 ( 'inventory', 'inventory.DeletedArtifactEvent', 'table', 'Table of deleted artifact events', 12 ),
 ( 'inventory', 'inventory.DeletedStorageLocationEvent', 'table', 'Table of deleted location events', 13 ),
-( 'inventory', 'inventory.ArtifactMetadata', 'view', 'All Artifact Metadata', 14 )
+( 'inventory', 'inventory.ArtifactMetadata', 'view', 'All Artifact Metadata', 14 ),
+( 'inventory', 'inventory.HarvestState', 'view', 'fenwick artifact-sync state', 15 )
 ;
 
 insert into tap_schema.columns11 (table_name,column_name,utype,description,unit,datatype,arraysize,xtype,principal,indexed,std,column_index) values
@@ -86,4 +87,15 @@ insert into tap_schema.columns11 (table_name,column_name,utype,description,unit,
 ( 'inventory.DeletedStorageLocationEvent', 'id', 'si:Entity.id', 'primary key', NULL, 'char','36','uuid', 1, 1, 1, 1 ),
 ( 'inventory.DeletedStorageLocationEvent', 'lastModified', 'si:Entity.lastModified', 'timestamp of the event', NULL, 'char','23*','timestamp', 1, 1, 1, 2 ),
 ( 'inventory.DeletedStorageLocationEvent', 'metaChecksum', 'si:Entity.metaChecksum', 'checksum of the file metadata', NULL, 'char','136*','uri', 1, 0, 1, 3 )
+;
+
+insert into tap_schema.columns11 (table_name,column_name,utype,description,unit,datatype,arraysize,xtype,principal,indexed,std,column_index) values
+( 'inventory.HarvestState', 'name',             'si:HarvestState.name',             'classname of the harvested entity', NULL, 'char','64*', NULL, 1, 1, 1, 1 ),
+( 'inventory.HarvestState', 'resourceID',       'si:HarvestState.resourceID',       'ID of the remote luskan (URI)', NULL, 'char','512*', 'uri', 1, 1, 1, 2 ),
+( 'inventory.HarvestState', 'curLastModified',  'si:HarvestState.curLastModified',  'lastModified timestamp of the last entity harvested', NULL, 'char','23*','timestamp', 1, 1, 1, 3 ),
+( 'inventory.HarvestState', 'curID',            'si:HarvestState`.curID',           'id of the last entity harvested', NULL, 'char','36','uuid', 1, 1, 1, 4 ),
+( 'inventory.HarvestState', 'id',               'si:HarvestState`.id',              'primary key', NULL, 'char','36','uuid', 1, 1, 1, 5 ),
+( 'inventory.HarvestState', 'lastModified',     'si:HarvestState.lastModified',     'timestamp of the event', NULL, 'char','23*','timestamp', 1, 1, 1, 6 ),
+( 'inventory.HarvestState', 'metaChecksum',     'si:HarvestState.metaChecksum',     'checksum of the file metadata', NULL, 'char','136*','uri', 1, 0, 1, 7 )
+
 ;

@@ -96,6 +96,7 @@ import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.UserDefinedFileAttributeView;
 import java.security.DigestOutputStream;
 import java.security.MessageDigest;
+import java.util.Date;
 import java.util.Iterator;
 import java.util.SortedSet;
 import java.util.TreeSet;
@@ -336,12 +337,12 @@ public class FileSystemStorageAdapter implements StorageAdapter {
     }
 
     @Override
-    public void get(StorageLocation storageLocation, OutputStream dest, SortedSet<ByteRange> byteRanges) 
+    public void get(StorageLocation storageLocation, OutputStream dest, ByteRange byteRange) 
         throws ResourceNotFoundException, ReadException, WriteException, StorageEngageException, TransientException {
         InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "storageLocation", storageLocation);
         InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "dest", dest);
-        InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "byteRanges", byteRanges);
-        log.debug("get: " + storageLocation + " " + byteRanges.size());
+        InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "byteRange", byteRange);
+        log.debug("get: " + storageLocation + " " + byteRange);
 
         Path path = createStorageLocationPath(storageLocation);
         if (!Files.exists(path)) {
@@ -352,9 +353,11 @@ public class FileSystemStorageAdapter implements StorageAdapter {
         }
         InputStream source = null;
         try {
-            if (!byteRanges.isEmpty()) {
+            if (byteRange != null) {
                 RandomAccessFile raf = new RandomAccessFile(path.toFile(), "r");
-                source = new PartialReadInputStream(raf, byteRanges);
+                SortedSet<ByteRange> brs = new TreeSet<>();
+                brs.add(byteRange);
+                source = new PartialReadInputStream(raf, brs);
             } else {
                 source = Files.newInputStream(path, StandardOpenOption.READ);
             }
@@ -499,12 +502,15 @@ public class FileSystemStorageAdapter implements StorageAdapter {
                 throw new IllegalStateException("Failed to create content file: " + contentTarget, e);
             }
 
+            // create this before committing the file so constraints applied
+            StorageMetadata test = new StorageMetadata(storageLocation, checksum, length, new Date());
+                
             // to atomic copy into content directory
-            Path newCopy = Files.move(txnTarget, contentTarget, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+            Path result = Files.move(txnTarget, contentTarget, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
             log.debug("moved file to : " + contentTarget);
             txnTarget = null;
 
-            StorageMetadata metadata = new StorageMetadata(storageLocation, checksum, length);
+            StorageMetadata metadata = new StorageMetadata(storageLocation, checksum, length, new Date(Files.getLastModifiedTime(result).toMillis()));
             metadata.artifactURI = artifactURI;
             return metadata;
             

@@ -71,6 +71,7 @@ package org.opencadc.luskan;
 
 import ca.nrc.cadc.auth.AuthMethod;
 import ca.nrc.cadc.auth.AuthenticationUtil;
+import ca.nrc.cadc.auth.NotAuthenticatedException;
 import ca.nrc.cadc.auth.SSLUtil;
 import ca.nrc.cadc.net.HttpGet;
 import ca.nrc.cadc.reg.Standards;
@@ -125,8 +126,8 @@ public class AuthQueryTest {
                 try {
                     httpGet.prepare();
                     Assert.fail("anonymous access should throw exception");
-                } catch (AccessControlException expected) {
-                    Assert.assertEquals(403, httpGet.getResponseCode());
+                } catch (NotAuthenticatedException expected) {
+                    Assert.assertEquals(401, httpGet.getResponseCode());
                 }
                 return null;
             }

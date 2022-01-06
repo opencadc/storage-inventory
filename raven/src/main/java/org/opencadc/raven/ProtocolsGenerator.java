@@ -77,14 +77,22 @@ import ca.nrc.cadc.vos.Direction;
 import ca.nrc.cadc.vos.Protocol;
 import ca.nrc.cadc.vos.Transfer;
 import ca.nrc.cadc.vos.VOS;
+import ca.nrc.cadc.vosi.Availability;
+
 import java.io.File;
 import java.io.IOException;
+import java.net.InetAddress;
 import java.net.URI;
 import java.net.URL;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.SortedSet;
+import java.util.TreeSet;
 import java.util.UUID;
+
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.SiteLocation;
@@ -104,19 +112,22 @@ public class ProtocolsGenerator {
 
     private static final Logger log = Logger.getLogger(ProtocolsGenerator.class);
 
-    private ArtifactDAO artifactDAO;
-    private String user;
+    private final ArtifactDAO artifactDAO;
+    private final String user;
     private final File publicKeyFile;
     private final File privateKeyFile;
+    private final Map<URI, Availability> siteAvailabilities;
+    private final Map<URI, StorageSiteRule> siteRules;
 
-    /**
-     * Ctor
-     */
-    public ProtocolsGenerator(ArtifactDAO artifactDAO, File publicKeyFile, File privateKeyFile, String user) {
+
+    public ProtocolsGenerator(ArtifactDAO artifactDAO, File publicKeyFile, File privateKeyFile, String user,
+                              Map<URI, Availability> siteAvailabilities, Map<URI, StorageSiteRule> siteRules) {
         this.artifactDAO = artifactDAO;
         this.user = user;
         this.publicKeyFile = publicKeyFile;
         this.privateKeyFile = privateKeyFile;
+        this.siteAvailabilities = siteAvailabilities;
+        this.siteRules = siteRules;
     }
 
     List<Protocol> getProtocols(Transfer transfer) throws ResourceNotFoundException, IOException {
@@ -153,13 +164,13 @@ public class ProtocolsGenerator {
         List<Protocol> protos = new ArrayList<>();
         Artifact artifact = artifactDAO.get(artifactURI);
         if (artifact == null) {
-            throw new ResourceNotFoundException(artifactURI.toString());
+            throw new ResourceNotFoundException("not found: " + artifactURI.toString());
         }
 
         // TODO: this can currently happen but maybe should not:
-        // --- when the last siteLocation is removed, the artifact should be deleted?
+        // --- when the last siteLocation is removed, the artifact should be deleted (fenwick, ratik)
         if (artifact.siteLocations.isEmpty()) {
-            throw new ResourceNotFoundException("TBD: no copies available");
+            throw new ResourceNotFoundException("not found: " + artifactURI.toString());
         }
 
         // produce URLs to each of the copies for each of the protocols
@@ -170,6 +181,12 @@ public class ProtocolsGenerator {
         }
         prioritizePullFromSites(storageSites);
         for (StorageSite storageSite : storageSites) {
+            // check if site is currently offline
+            if (!isAvailable(storageSite.getResourceID())) {
+                log.warn("storage site is offline: " + storageSite.getResourceID());
+                continue;
+            }
+            
             Capability filesCap = null;
             try {
                 Capabilities caps = regClient.getCapabilities(storageSite.getResourceID());
@@ -233,14 +250,33 @@ public class ProtocolsGenerator {
         return protos;
     }
 
+    static SortedSet<StorageSite> prioritizePushToSites(Set<StorageSite> storageSites, URI artifactURI,
+                                                        Map<URI, StorageSiteRule> siteRules) {
+        PrioritizingStorageSiteComparator comparator = new PrioritizingStorageSiteComparator(siteRules, artifactURI, null);
+        TreeSet<StorageSite> orderedSet = new TreeSet<>(comparator);
+        for (StorageSite storageSite : storageSites) {
+            if (storageSite.getAllowWrite()) {
+                orderedSet.add(storageSite);
+            }
+        }
+        return orderedSet;
+    }
+
     private List<Protocol> doPushTo(URI artifactURI, Transfer transfer, String authToken) throws IOException {
         RegistryClient regClient = new RegistryClient();
         StorageSiteDAO storageSiteDAO = new StorageSiteDAO(artifactDAO);
-        Set<StorageSite> sites = storageSiteDAO.list(); // this set could be cached
+        Set<StorageSite> storageSites = storageSiteDAO.list(); // this set could be cached
 
         List<Protocol> protos = new ArrayList<>();
+        SortedSet<StorageSite> orderedSites = prioritizePushToSites(storageSites, artifactURI, this.siteRules);
         // produce URLs for all writable sites
-        for (StorageSite storageSite : sites) {
+        for (StorageSite storageSite : orderedSites) {
+            // check if site is currently offline
+            if (!isAvailable(storageSite.getResourceID())) {
+                log.warn("storage site is offline: " + storageSite.getResourceID());
+                continue;
+            }
+
             //log.warn("PUT: " + storageSite);
             Capability filesCap = null;
             try {
@@ -313,6 +349,86 @@ public class ProtocolsGenerator {
             return VOS.PROTOCOL_HTTP_GET.equals(p.getUri()) || VOS.PROTOCOL_HTTP_PUT.equals(p.getUri());
         }
         return false;
+    }
+
+    private boolean isAvailable(URI resourceID) {
+        Availability availability = siteAvailabilities.get(resourceID);
+        log.debug("checking availablity: " + resourceID + " " + availability);
+        if (availability != null && !availability.isAvailable()) {
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * Compare two StorageSite's. A site with a namespace matching the given Artifact URI
+     * is ordered higher than a site without a matching namespace. If two StorageSite's
+     * both have a matching namespace, or both do not have a matching namespace,
+     * they are ordered using StorageSite default ordering. The StorageSite's are ordered
+     * in descending order.
+     */
+    static class PrioritizingStorageSiteComparator implements Comparator<StorageSite> {
+
+        private final Map<URI, StorageSiteRule> siteRules;
+        private final URI artifactURI;
+        private InetAddress clientIP;
+
+        public PrioritizingStorageSiteComparator(Map<URI, StorageSiteRule> siteRules,
+                                                 URI artifactURI, InetAddress clientIP) {
+            this.siteRules = siteRules;
+            this.artifactURI = artifactURI;
+            this.clientIP = clientIP;
+        }
+
+        @Override
+        public int compare(StorageSite site1, StorageSite site2) {
+
+            // nothing to compare so considered equal.
+            if (site1 == null && site2 == null) {
+                return 0;
+            }
+            if (site1 == null) {
+                return 1;
+            }
+            if (site2 == null) {
+                return -1;
+            }
+
+            // get the rules for each site
+            StorageSiteRule rule1 = this.siteRules.get(site1.getResourceID());
+            StorageSiteRule rule2 = this.siteRules.get(site2.getResourceID());
+
+            // check if a site has a namespace matching the ArtifactURI
+            boolean site1Match = false;
+            if (rule1 != null) {
+                for (Namespace ns : rule1.getNamespaces()) {
+                    if (ns.matches(this.artifactURI)) {
+                        site1Match = true;
+                        break;
+                    }
+                }
+            }
+
+            boolean site2match = false;
+            if (rule2 != null) {
+                for (Namespace ns : rule2.getNamespaces()) {
+                    if (ns.matches(this.artifactURI)) {
+                        site2match = true;
+                        break;
+                    }
+                }
+            }
+
+            // give higher priority to the site with a namespace that matches the Artifact URI.
+            if (site1Match && !site2match) {
+                return -1;
+            }
+            if (!site1Match && site2match) {
+                return 1;
+            }
+            // default: StorageSite order
+            return site1.compareTo(site2);
+        }
     }
 
 }

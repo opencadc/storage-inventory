@@ -22,12 +22,14 @@ TODO: add support for allowedGroup to give service access.
 org.opencadc.baldur.allowedGroup = {groupURI}
 
 # one or more entry properties to grant permission to access artifacts
-# - each entry has a name and an Artifact URI pattern (regex)
+# - each entry has a name
+# - an Artifact URI pattern (regex)
 # - followed by entry-specific permission keys with a space separated list of group identifiers
-org.opencadc.baldur.entry = {entry name} {regular expression}
+org.opencadc.baldur.entry = {entry name}
+{entry name}.pattern = {Aritifact URI pattern}
 {entry name}.anon = {true|false}
-{entry name}.readOnlyGroup = {group URI} ...
-{entry name}.readWriteGroup = {group URI} ...
+{entry name}.readOnlyGroup = {group URI}
+{entry name}.readWriteGroup = {group URI}
 ```
 `org.opencadc.baldur.grantExpiry` is used to calculate the expiry date of a grant. The value is an integer in seconds. The expiry date of a grant is: (the current time when a grant is issued + the number of seconds given by the expiryTime).
 
@@ -35,20 +37,23 @@ org.opencadc.baldur.entry = {entry name} {regular expression}
 
 `org.opencadc.baldur.allowedGroup` specifies the group(s) whose members have authorization to make calls to the service. The value is a list of group identifiers (e.g. ivo://cadc.nrc.ca/gms?CADC), one line per group.
 
+The `{entry name}.pattern` entry specifies an Artifact URI regular expression to match Artifacts.
+
 The `{entry name}.anon` flag specifies that all users (including anonymous) can get matching assets (default: false).
 
-The `{entry name}.readOnlyGroup` entries specifies the group(s) that can get matching assets (default: empty list).
+The `{entry name}.readOnlyGroup` entry specifies a group that can get matching assets (default: empty list).
 
-The `{entry name}.readWriteGroup` entries specifies the group(s) that can get/put/update/delete matching assets (default: empty list).
+The `{entry name}.readWriteGroup` entry specifies a group that can get/put/update/delete matching assets (default: empty list).
 
-### example baldur.properites entry section:
+### example baldur.properties entry section:
 ```
 org.opencadc.baldur.grantExpiry = 60
 
 org.opencadc.baldur.allowedUser = cn=foo,ou=acme,o=example,c=com 
-org.opencadc.baldur.allowedUser = bar,ou=acme,o=example,c=com
+org.opencadc.baldur.allowedUser = cn=bar,ou=acme,o=example,c=com
 
-org.opencadc.baldur.entry = TEST ^cadc:TEST/.*
+org.opencadc.baldur.entry = TEST
+TEST.pattern = ^cadc:TEST/.*
 TEST.anon = false
 TEST.readOnlyGroup = ivo://cadc.nrc.ca/gms?TestRead-1
 TEST.readOnlyGroup = ivo://cadc.nrc.ca/gms?TestRead-2
@@ -67,7 +72,7 @@ Any artifact with a URI that matches `^cadc:TEST\\/.*`, the read grant will be:
 And the write grant will be:
 * writable by members of group TestWrite-1 and TestWrite-2
 
-When more that one entry matches an artifact URI, the grants are combined as follows into one grant:
+When more than one entry matches an artifact URI, the grants are combined as follows into one grant:
 * if any of the matching entries allow anonymous read, anonymous read is allowed
 * the members of any of the groups in all matching readOnlyGroup lists are allowed to read
 * the members of any of the groups in all matching readWriteGroup lists are allowed to read and write
@@ -85,7 +90,8 @@ org.opencadc.baldur.grantExpiry = 60
 
 org.opencadc.baldur.allowedUser = { user identity for baldur-test-auth.pem }
 
-org.opencadc.baldur.entry = test ^cadc:TEST/.*
+org.opencadc.baldur.entry = test
+test.pattern = ^cadc:TEST/.*
 test.anon = true
 test.readOnlyGroups = ivo://cadc.nrc.ca/gms?Test-Read
 test.readWriteGroups = ivo://cadc.nrc.ca/gms?Test-Write

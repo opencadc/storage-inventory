@@ -84,9 +84,10 @@ public class StorageMetadata implements Comparable<StorageMetadata> {
     private final StorageLocation storageLocation;
     private final URI contentChecksum;
     private final Long contentLength;
+    private final Date contentLastModified;
     
     public URI artifactURI;
-    public Date contentLastModified;
+    
 
     public String contentEncoding;
     public String contentType;
@@ -94,32 +95,36 @@ public class StorageMetadata implements Comparable<StorageMetadata> {
     /**
      * Constructor for a valid stored object.
      * 
-     * @param storageLocation location the data is stored
-     * @param contentChecksum message digest of the data
-     * @param contentLength size of the data in bytes
+     * @param storageLocation location of the file in back end storage
+     * @param contentChecksum checksum of the file in the form {algorithm}:{hex value}
+     * @param contentLength length of the file in bytes
+     * @param contentLastModified timestamp when the file was last modified
      */
-    public StorageMetadata(StorageLocation storageLocation, URI contentChecksum, Long contentLength) {
+    public StorageMetadata(StorageLocation storageLocation, URI contentChecksum, Long contentLength, Date contentLastModified) {
         InventoryUtil.assertNotNull(StorageMetadata.class, "storageLocation", storageLocation);
         InventoryUtil.assertNotNull(StorageMetadata.class, "contentChecksum", contentChecksum);
         InventoryUtil.assertNotNull(StorageMetadata.class, "contentLength", contentLength);
+        InventoryUtil.assertNotNull(StorageMetadata.class, "contentLastModified", contentLastModified);
         if (contentLength <= 0L) {
             throw new IllegalArgumentException("invalid " + StorageMetadata.class.getSimpleName() + ".contentLength: " + contentLength);
         }
         this.storageLocation = storageLocation;
         this.contentChecksum = contentChecksum;
         this.contentLength = contentLength;
+        this.contentLastModified = contentLastModified;
     }
     
     /**
      * Constructor for an invalid stored object that should be cleaned up.
      * 
-     * @param storageLocation location the data is stored
+     * @param storageLocation location of the file in back end storage
      */
     public StorageMetadata(StorageLocation storageLocation) {
         InventoryUtil.assertNotNull(StorageMetadata.class, "storageLocation", storageLocation);
         this.storageLocation = storageLocation;
         this.contentChecksum = null;
         this.contentLength = null;
+        this.contentLastModified = null;
     }
 
     public boolean isValid() {
@@ -136,6 +141,10 @@ public class StorageMetadata implements Comparable<StorageMetadata> {
 
     public Long getContentLength() {
         return contentLength;
+    }
+
+    public Date getContentLastModified() {
+        return contentLastModified;
     }
     
     @Override

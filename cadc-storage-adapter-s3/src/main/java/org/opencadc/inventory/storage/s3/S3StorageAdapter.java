@@ -305,9 +305,8 @@ abstract class S3StorageAdapter implements StorageAdapter {
      */
     StorageMetadata toStorageMetadata(StorageLocation loc, URI md5, long contentLength, 
             final URI artifactURI, Date lastModified) {
-        StorageMetadata storageMetadata = new StorageMetadata(loc, md5, contentLength);
+        StorageMetadata storageMetadata = new StorageMetadata(loc, md5, contentLength, lastModified);
         storageMetadata.artifactURI = artifactURI;
-        storageMetadata.contentLastModified = lastModified;
         return storageMetadata;
     }
 
@@ -343,7 +342,7 @@ abstract class S3StorageAdapter implements StorageAdapter {
     }
 
     @Override
-    public void get(StorageLocation storageLocation, OutputStream dest, SortedSet<ByteRange> byteRanges) 
+    public void get(StorageLocation storageLocation, OutputStream dest, ByteRange byteRange) 
         throws InterruptedException, ResourceNotFoundException, ReadException, WriteException, StorageEngageException, TransientException {
         throw new UnsupportedOperationException();
     }

@@ -79,6 +79,7 @@ import ca.nrc.cadc.io.WriteException;
 import ca.nrc.cadc.net.HttpGet;
 import ca.nrc.cadc.net.IncorrectContentChecksumException;
 import ca.nrc.cadc.net.IncorrectContentLengthException;
+import ca.nrc.cadc.net.RangeNotSatisfiableException;
 import ca.nrc.cadc.net.ResourceAlreadyExistsException;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
@@ -150,7 +151,7 @@ public class AdStorageAdapter implements StorageAdapter {
             MultiBufferIO tio = new MultiBufferIO();
             tio.copy(get.getInputStream(), dest);
 
-        } catch (ByteLimitExceededException | ResourceAlreadyExistsException unexpected) {
+        } catch (ByteLimitExceededException | ResourceAlreadyExistsException | RangeNotSatisfiableException unexpected) {
             log.debug("error type: " + unexpected.getClass());
             throw new RuntimeException(unexpected.getMessage());
         } catch (InterruptedException | IOException ie) {
@@ -159,7 +160,11 @@ public class AdStorageAdapter implements StorageAdapter {
     }
 
     @Override
+<<<<<<< HEAD
     public void get(StorageLocation storageLocation, OutputStream dest, SortedSet<ByteRange> byteRanges)
+=======
+    public void get(StorageLocation storageLocation, OutputStream dest, ByteRange byteRange)
+>>>>>>> 4ca6bd1c3f0f1789bfa4cce42e436b554017a4e3
         throws ResourceNotFoundException, ReadException, WriteException, StorageEngageException, TransientException {
         throw new UnsupportedOperationException("not supported");
     }
@@ -222,7 +227,9 @@ public class AdStorageAdapter implements StorageAdapter {
         Iterator<StorageMetadata> storageMetadataIterator = null;
 
         try {
-            storageMetadataIterator = tc.execute(adQuery.getQuery(), adQuery.getRowMapper());
+            String adql = adQuery.getQuery();
+            log.debug("bucket: " + storageBucket + " query: " + adql);
+            storageMetadataIterator = tc.query(adql, adQuery.getRowMapper());
         } catch (Exception e) {
             log.error("error executing TapClient query");
 

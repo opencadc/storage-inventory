@@ -69,7 +69,10 @@
 
 package org.opencadc.luskan.ws;
 
+import ca.nrc.cadc.auth.AuthMethod;
+import ca.nrc.cadc.auth.AuthenticationUtil;
 import ca.nrc.cadc.auth.IdentityManager;
+import ca.nrc.cadc.auth.NotAuthenticatedException;
 import ca.nrc.cadc.cred.client.CredUtil;
 import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.reg.Standards;
@@ -83,6 +86,7 @@ import java.security.AccessControlException;
 import java.security.cert.CertificateException;
 import java.util.ArrayList;
 import java.util.List;
+import javax.security.auth.Subject;
 import org.apache.log4j.Logger;
 import org.opencadc.gms.GroupClient;
 import org.opencadc.gms.GroupURI;
@@ -108,6 +112,11 @@ public class AuthJobPersistence extends PostgresJobPersistence {
      *
      */
     private void checkPermission() {
+        Subject s = AuthenticationUtil.getCurrentSubject();
+        AuthMethod am = AuthenticationUtil.getAuthMethod(s);
+        if (am == null || AuthMethod.ANON.equals(am)) {
+            throw new NotAuthenticatedException("permission denied");
+        }
         try {
             if (CredUtil.checkCredentials()) {
                 // better to get all the groups for the caller which could be a long list,

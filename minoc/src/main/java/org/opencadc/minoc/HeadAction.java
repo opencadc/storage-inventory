@@ -92,16 +92,22 @@ public class HeadAction extends ArtifactAction {
     public HeadAction() {
         super();
     }
+    
+    /**
+     * Perform auth checks and initialize resources.
+     */
+    @Override
+    public void initAction() throws Exception {
+        checkReadable();
+        initAndAuthorize(ReadGrant.class);
+        initDAO();
+    }
 
     /**
      * Return the artifact metadata as repsonse headers.
      */
     @Override
     public void doAction() throws Exception {
-        
-        checkReadable();
-        initAndAuthorize(ReadGrant.class);
-        initDAO();
         
         String txnID = syncInput.getHeader(PUT_TXN);
         log.debug("transactionID: " + txnID);
@@ -140,6 +146,7 @@ public class HeadAction extends ArtifactAction {
         if (artifact.contentType != null) {
             syncOutput.setHeader("Content-Type", artifact.contentType);
         }
+        syncOutput.setHeader("Accept-Ranges", "bytes");
     }
 
     static void setTransactionHeaders(PutTransaction txn, SyncOutput syncOutput) {

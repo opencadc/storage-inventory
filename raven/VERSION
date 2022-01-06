@@ -2,4 +2,4 @@
 # semantic version tag: major.minor[.patch]
 # build version tag: timestamp
 # tag: {semantic}-{build}
-TAGS="0.3-$(date --utc +"%Y%m%dT%H%M%S")"
+TAGS="0.4-$(date --utc +"%Y%m%dT%H%M%S")"

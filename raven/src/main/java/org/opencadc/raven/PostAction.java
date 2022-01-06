@@ -156,7 +156,8 @@ public class PostAction extends ArtifactAction {
     public void doAction() throws Exception {
         initAndAuthorize();
 
-        ProtocolsGenerator pg = new ProtocolsGenerator(artifactDAO, publicKeyFile, privateKeyFile, user);
+        ProtocolsGenerator pg = new ProtocolsGenerator(this.artifactDAO, this.publicKeyFile, this.privateKeyFile,
+                                                       this.user, this.siteAvailabilities, this.siteRules);
         List<Protocol> protos = pg.getProtocols(transfer);
 
         // TODO: sort protocols as caller will try them in order until success

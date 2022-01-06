@@ -93,17 +93,23 @@ public class DeleteAction extends ArtifactAction {
     public DeleteAction() {
         super();
     }
+    
+    /**
+     * Perform auth checks and initialize resources.
+     */
+    @Override
+    public void initAction() throws Exception {
+        checkWritable();
+        initAndAuthorize(WriteGrant.class);
+        initDAO();
+        initStorageAdapter();
+    }
 
     /**
      * Delete the artifact. 
      */
     @Override
     public void doAction() throws Exception {
-        
-        checkWritable();
-        initAndAuthorize(WriteGrant.class);
-        initDAO();
-        initStorageAdapter();
         
         String txnID = syncInput.getHeader(PUT_TXN);
         log.debug("transactionID: " + txnID);

@@ -95,7 +95,7 @@ public class InventoryIsAlwaysRightTest extends AbstractResolutionPolicyTest<Inv
         artifact.storageLocation = new StorageLocation(URI.create("s3:998877"));
 
         final StorageMetadata storageMetadata = new StorageMetadata(new StorageLocation(URI.create("s3:989877")),
-                                                                    URI.create("md5:" + random16Bytes()), 1001L);
+                                                        URI.create("md5:" + random16Bytes()), 1001L, new Date());
         final TestEventListener testEventListener = new TestEventListener();
 
         testSubject = new InventoryIsAlwaysRight(testEventListener, reporter);
@@ -118,7 +118,7 @@ public class InventoryIsAlwaysRightTest extends AbstractResolutionPolicyTest<Inv
         final ByteArrayOutputStream output = new ByteArrayOutputStream();
         final Reporter reporter = new Reporter(getTestLogger(output));
         final StorageMetadata storageMetadata = new StorageMetadata(new StorageLocation(URI.create("s3:989877")),
-                                                                    URI.create("md5:" + random16Bytes()), 1001L);
+                                                        URI.create("md5:" + random16Bytes()), 1001L, new Date());
         final TestEventListener testEventListener = new TestEventListener();
 
         testSubject = new InventoryIsAlwaysRight(testEventListener, reporter);
@@ -148,8 +148,7 @@ public class InventoryIsAlwaysRightTest extends AbstractResolutionPolicyTest<Inv
         Thread.sleep(100L);
         
         final StorageMetadata storageMetadata = new StorageMetadata(new StorageLocation(URI.create("s3:989877")),
-                                                                    URI.create("md5:" + random16Bytes()), 1001L);
-        storageMetadata.contentLastModified = new Date();
+                                                        URI.create("md5:" + random16Bytes()), 1001L, new Date());
 
         
         testSubject.resolve(null, storageMetadata);

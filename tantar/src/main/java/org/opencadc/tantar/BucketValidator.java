@@ -227,7 +227,7 @@ public class BucketValidator implements ValidateEventListener {
         final String dbUsername = properties.getFirstPropertyValue(DB_USERNAME_KEY);
         final String dbPassword = properties.getFirstPropertyValue(DB_PASSWORD_KEY);
         final String jdbcURL = properties.getFirstPropertyValue(JDBC_URL_KEY);
-        LOGGER.debug("database props: " + schemaName + "," + dbUsername + "," + dbPassword + "," + jdbcURL);
+        LOGGER.debug("database connection: " + jdbcURL);
         final ConnectionConfig cc = new ConnectionConfig(null, null, dbUsername, dbPassword, jdbcDriverClassname, jdbcURL);
                                                          
         try {
@@ -293,15 +293,30 @@ public class BucketValidator implements ValidateEventListener {
      * @throws Exception Pass up any errors to the caller, which is most likely the Main.
      */
     public void validate() throws Exception {
+        LOGGER.info("BucketValidator.validate phase=start");
+        try {
+            doit();
+        } finally {
+            logSummary(true, false);
+            LOGGER.info("BucketValidator.validate phase=end");
+        }
+    }
+    
+    private void doit() throws Exception {
         final Profiler profiler = new Profiler(BucketValidator.class);
-        LOGGER.debug("Acquiring iterators.");
+        
+        long t1 = System.currentTimeMillis();
+
         final Iterator<StorageMetadata> storageMetadataIterator = getStorageMetadataIterator();
+        long t2 = System.currentTimeMillis();
+        LOGGER.info("BucketValidator.storageQuery duration=" + (t2 - t1));
+
         final Iterator<Artifact> inventoryIterator = iterateInventory();
-        profiler.checkpoint("iterators: ok");
+        long t3 = System.currentTimeMillis();
+        LOGGER.info("BucketValidator.inventoryQuery duration=" + (t3 - t2));
+
         LOGGER.debug(String.format("Acquired iterators: \nHas Artifacts (%b)\nHas Storage Metadata (%b).",
                                    inventoryIterator.hasNext(), storageMetadataIterator.hasNext()));
-
-        LOGGER.debug("START validating iterators.");
 
         Artifact unresolvedArtifact = null;
         StorageMetadata unresolvedStorageMetadata = null;
@@ -355,9 +370,6 @@ public class BucketValidator implements ValidateEventListener {
             numValidated++;
             logSummary();
         }
-        logSummary(true, false);
-
-        LOGGER.debug("END validating iterators.");
     }
 
     // default per-item invocation
@@ -525,12 +537,9 @@ public class BucketValidator implements ValidateEventListener {
     // used by createArtifact and replaceArtifact
     private Artifact toArtifact(StorageMetadata storageMetadata) {
         if (storageMetadata.artifactURI != null) {
-            final Date contentLastModified =
-                storageMetadata.contentLastModified == null ? new Date() : storageMetadata.contentLastModified;
-
             final Artifact artifact = new Artifact(storageMetadata.artifactURI,
                                                    storageMetadata.getContentChecksum(),
-                                                   contentLastModified,
+                                                   storageMetadata.getContentLastModified(),
                                                    storageMetadata.getContentLength());
             artifact.storageLocation = storageMetadata.getStorageLocation();
             artifact.contentType = storageMetadata.contentType;

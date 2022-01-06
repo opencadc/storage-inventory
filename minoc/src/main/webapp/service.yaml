@@ -5,7 +5,8 @@ info:
   description: |
     This service allows authorised users to read, write, update (metadata), and delete files. Pre-authorised URLs may be constructed by trusted services by including a signed pre-auth token in the path element before the Artifact URI.
 basePath: '/minoc'
-
+schemes:
+  - https
 paths:
   '/files/{Artifact.uri}':
     parameters:
@@ -20,8 +21,6 @@ paths:
       tags:
         - Artifact transfer
       summary: Download a file
-      schemes:
-        - https
       produces:
         - application/octet-stream
       responses:
@@ -37,8 +36,8 @@ paths:
             Content-Type:
               description: The content type of the file
               type: string
-            Content-MD5:
-              description: The MD5 checksum of the file (not set if SUB used)
+            Digest:
+              description: The content checksum (MD5) of the file
               type: string
             Content-Length:
               description: The length of the file in bytes (not set if SUB used)
@@ -57,18 +56,50 @@ paths:
         '503':
           description: Service busy
       parameters:
-       - name: SUB
-         in: query
-         description: |
-          'Sub-region of a FITS file image.  Multiple SUB parameters are allowed and will generate MEF output in file order. Examples: entire extensions (SUB=[1]&SUB=[SCI,2]), or more general purpose (SUB=[SCI,3][400:500]).'
-         required: false
-         type: string
-         collectionFormat: multi
-       - name: META
-         in: query
-         description: 'extract METAdata (headers) from a file. A single parameter META=true is supported for FITS files. Output will be a plain text rendition of the headers.'
-         required: false
-         type: boolean
+        - name: SUB
+          in: query
+          description: 'SUB-region of a FITS file image.  Multiple SUB parameters are allowed and will generate MEF output in file order. Examples: entire extensions (SUB=[1]&SUB=[SCI,2]), or more general purpose (SUB=[SCI,3][400:500]).'
+          required: false
+          type: string
+          collectionFormat: multi
+        - name: POS
+          in: query
+          description: The positional regions to be extracted from the data.
+          required: false
+          type: string
+        - name: CIRCLE
+          in: query
+          description: The spatial region using the CIRCLE xtype defined in DALI.
+          required: false
+          type: string
+        - name: POLYGON
+          in: query
+          description: The spatial region using the POLYGON xtype defined in DALI.
+          required: false
+          type: string
+        - name: BAND
+          in: query
+          description: The wavelength interval(s) using the INTERVAL xtype defined in DALI.
+          required: false
+          type: string
+        - name: TIME
+          in: query
+          description: The time interval(s) using the INTERVAL xtype defined in DALI.
+          required: false
+          type: string
+        - name: POL
+          in: query
+          type: array
+          collectionFormat: multi
+          items:
+            type: string
+          description: The polarization state(s) (Stokes), supports multiple values.
+          required: false
+        - name: META
+          in: query
+          description: 'extract metadata (headers) from a file. A single parameter META=true is supported for FITS files. Output will be a plain text rendition of the headers.'
+          required: false
+          type: boolean
     put:
       description: |
         Upload a file identified by parameter Artifact.uri
@@ -112,10 +143,10 @@ paths:
           type: string
           description: The content type of the file
           required: false
-        - name: Content-MD5
+        - name: Digest
           in: header
           type: string
-          description: The MD5 checksum of the file
+          description: The content checksum (MD5) of the file
           required: false
         - name: Content-Length
           in: header
@@ -141,16 +172,13 @@ paths:
           description: Successful response
           headers:
             Content-Disposition:
-              description: Contains suggested filename
-              type: string
-            Content-Encoding:
-              description: The content encoding of the file
+              description: 'The content-disposition with suggested filename (normally last path element in artifact URI)'
               type: string
             Content-Type:
               description: The content type of the file
               type: string
-            Content-MD5:
-              description: The MD5 checksum of the file
+            Digest:
+              description: The content checksum (MD5) of the file
               type: string
             Content-Length:
               description: The length of the file in bytes
@@ -224,20 +252,166 @@ paths:
           description: The new content encoding of the file
           required: false
       responses:
-        '202':
-          description: metadata change accepted
+        '200':
+          description: Successful response
+        '401':
+          description: If the client does not provide credentials and anonymous access is disallowed.
+        '403':
+          description: If the client does not have permission.
+        '404':
+          description: If the artifact could not be found.
+        '500':
+          description: Internal error
+        '503':
+          description: Service busy
+  '/files/{auth-token}/{artifact-uri}':
+    parameters:
+    - name: auth-token
+      in: path
+      type: string
+      description: An authorization token
+      required: true
+    - name: artifact-uri
+      in: path
+      type: string
+      description: The artifact URI
+      required: true
+    get:
+      description: |
+        Download the file identified by parameter artifact-uri.
+      tags:
+        - Artifact transfer
+      summary: Download a file
+      produces:
+        - application/octet-stream
+      responses:
+        '200':
+          description: Successful response.
           headers:
             Content-Disposition:
-              description: Contains suggested filename
-              type: string
-            Content-Encoding:
-              description: The content encoding of the file
+              description: 'The content-disposition with suggested filename (normally last path element in artifact URI)'
               type: string
             Content-Type:
               description: The content type of the file
               type: string
-            Content-MD5:
-              description: The MD5 checksum of the file
+            Digest:
+              description: The content checksum (MD5) of the file
+              type: string
+            Content-Encoding:
+              description: The content encoding of the file
+              type: string
+        '401':
+          description: If the client does not provide credentials and anonymous access is disallowed.
+        '403':
+          description: If the client does not have permission.
+        '404':
+          description: If the artifact could not be found.
+        '500':
+          description: Internal error
+        '503':
+          description: Service busy
+      parameters:
+        - name: SUB
+          in: query
+          description: 'Sub-region of a FITS file image.  Multiple SUB parameters are allowed and will generate MEF output in file order. Examples: entire extensions (SUB=[1]&SUB=[SCI,2]), or more general purpose (SUB=[SCI,3][400:500]).'
+          required: false
+          type: string
+          collectionFormat: multi
+        - name: POS
+          in: query
+          description: The positional regions to be extracted from the data.
+          required: false
+          type: string
+        - name: CIRCLE
+          in: query
+          description: The spatial region using the CIRCLE xtype defined in DALI.
+          required: false
+          type: string
+        - name: POLYGON
+          in: query
+          description: The spatial region using the POLYGON xtype defined in DALI.
+          required: false
+          type: string
+        - name: BAND
+          in: query
+          description: The wavelength interval(s) using the INTERVAL xtype defined in DALI.
+          required: false
+          type: string
+        - name: TIME
+          in: query
+          description: The time interval(s) using the INTERVAL xtype defined in DALI.
+          required: false
+          type: string
+        - name: POL
+          in: query
+          type: array
+          collectionFormat: multi
+          items:
+            type: string
+          description: The polarization state(s) (Stokes), supports multiple values.
+          required: false
+        - name: META
+          in: query
+          description: 'extract metadata (headers) from a file. A single parameter META=true is supported for FITS files. Output will be a plain text rendition of the headers.'
+          required: false
+          type: boolean
+    put:
+      description: |
+        Upload a file identified by parameter artifact-uri.
+      tags:
+        - Artifact transfer
+      summary: Upload a file
+      schemes:
+        - https
+      consumes:
+        - application/octet-stream
+      responses:
+        '201':
+          description: Successful response
+        '401':
+          description: If the client does not provide credentials and anonymous access is disallowed.
+        '403':
+          description: If the client does not have permission.
+        '500':
+          description: Internal error
+        '503':
+          description: Service busy
+      parameters:
+        - name: Content-Type
+          in: header
+          type: string
+          description: The content type of the file
+          required: false
+        - name: Digest
+          in: header
+          type: string
+          description: The content checksum (MD5) of the file
+          required: false
+        - name: Content-Length
+          in: header
+          type: string
+          description: The content length of the file
+          required: false
+    head:
+      description: |
+        Get the metadata for the file identified by parameter artifact-uri.
+      tags:
+        - Artifact management
+      summary: View file metadata
+      schemes:
+        - https
+      responses:
+        '200':
+          description: Successful response
+          headers:
+            Content-Disposition:
+              description: 'The content-disposition with suggested filename (normally last path element in artifact URI)'
+              type: string
+            Content-Type:
+              description: The content type of the file
+              type: string
+            Digest:
+              description: The content checksum (MD5) of the artifact
               type: string
             Content-Length:
               description: The length of the file in bytes

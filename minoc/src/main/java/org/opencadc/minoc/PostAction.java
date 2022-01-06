@@ -89,16 +89,22 @@ public class PostAction extends ArtifactAction {
     public PostAction() {
         super();
     }
+    
+    /**
+     * Perform auth checks and initialize resources.
+     */
+    @Override
+    public void initAction() throws Exception {
+        checkWritable();
+        initAndAuthorize(WriteGrant.class);
+        initDAO();
+    }
 
     /**
      * Update artifact metadata.
      */
     @Override
     public void doAction() throws Exception {
-        
-        checkWritable();
-        initAndAuthorize(WriteGrant.class);
-        initDAO();
         
         String newURI = syncInput.getParameter("uri");
         String newContentType = syncInput.getParameter("contentType");

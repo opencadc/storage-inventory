@@ -269,18 +269,6 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
         }
     }
     
-    /**
-     * Get from storage the artifact identified by storageLocation.
-     * 
-     * @param storageLocation The storage location containing storageID and storageBucket.
-     * @param dest The destination stream.
-     * 
-     * @throws ResourceNotFoundException If the artifact could not be found
-     * @throws ReadException If the storage system failed to stream
-     * @throws WriteException If the client failed to stream
-     * @throws StorageEngageException If the adapter failed to interact with storage
-     * @throws TransientException If an unexpected, temporary exception occurred
-     */
     @Override
     public void get(StorageLocation storageLocation, OutputStream dest)
         throws ResourceNotFoundException, ReadException, WriteException, WriteException, StorageEngageException, TransientException {
@@ -309,26 +297,14 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
             log.debug("get interrupted", ex);
         }
     }
-    
-    /**
-     * Get parts of a stored object specified by one or more byte ranges.
-     * 
-     * @param storageLocation the object to read
-     * @param dest the output stream
-     * @param byteRanges one or more byte ranges ordered to only seek forward
-     * 
-     * @throws ResourceNotFoundException If the artifact could not be found
-     * @throws ReadException If the storage system failed to stream
-     * @throws WriteException If the client failed to stream
-     * @throws StorageEngageException If the adapter failed to interact with storage
-     * @throws TransientException If an unexpected, temporary exception occurred
-     */
-    public void get(StorageLocation storageLocation, OutputStream dest, SortedSet<ByteRange> byteRanges)
+
+    @Override
+    public void get(StorageLocation storageLocation, OutputStream dest, ByteRange byteRange)
         throws ResourceNotFoundException, ReadException, WriteException, StorageEngageException, TransientException {
         InventoryUtil.assertNotNull(OpaqueFileSystemStorageAdapter.class, "storageLocation", storageLocation);
         InventoryUtil.assertNotNull(OpaqueFileSystemStorageAdapter.class, "dest", dest);
-        InventoryUtil.assertNotNull(OpaqueFileSystemStorageAdapter.class, "byteRanges", byteRanges);
-        log.debug("get: " + storageLocation + " " + byteRanges.size());
+        InventoryUtil.assertNotNull(OpaqueFileSystemStorageAdapter.class, "byteRange", byteRange);
+        log.debug("get: " + storageLocation + " " + byteRange);
 
         Path path = storageLocationToPath(storageLocation);
         if (!Files.exists(path)) {
@@ -339,9 +315,11 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
         }
         InputStream source = null;
         try {
-            if (!byteRanges.isEmpty()) {
+            if (byteRange != null) {
                 RandomAccessFile raf = new RandomAccessFile(path.toFile(), "r");
-                source = new PartialReadInputStream(raf, byteRanges);
+                SortedSet<ByteRange> brs = new TreeSet<>();
+                brs.add(byteRange);
+                source = new PartialReadInputStream(raf, brs);
             } else {
                 source = Files.newInputStream(path, StandardOpenOption.READ);
             }
@@ -357,27 +335,6 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
         }
     }
     
-    /**
-     * Write an artifact to storage.
-     * The value of storageBucket in the returned StorageMetadata and StorageLocation can be used to
-     * retrieve batches of artifacts in some of the iterator signatures defined in this interface.
-     * Batches of artifacts can be listed by bucket in two of the iterator methods in this interface.
-     * If storageBucket is null then the caller will not be able perform bucket-based batch
-     * validation through the iterator methods.
-     * 
-     * @param newArtifact The holds information about the incoming artifact.  If the contentChecksum
-     *     and contentLength are set, they will be used to validate the bytes received.
-     * @param source The stream from which to read.
-     * @param transactionID null for auto-commit, "true" to start a transaction, or existing transactionID
-     * @return The storage metadata.
-     * 
-     * @throws IncorrectContentChecksumException If the calculated checksum does not the expected checksum.
-     * @throws IncorrectContentLengthException If the calculated length does not the expected length.
-     * @throws ReadException If the client failed to stream.
-     * @throws WriteException If the storage system failed to stream.
-     * @throws StorageEngageException If the adapter failed to interact with storage.
-     * @throws TransientException If an unexpected, temporary exception occurred.
-     */
     @Override
     public StorageMetadata put(NewArtifact newArtifact, InputStream source, String transactionID)
         throws IncorrectContentChecksumException, IncorrectContentLengthException, 
@@ -495,7 +452,26 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
                 if (length == 0L) {
                     return new StorageMetadata(storageLocation);
                 }
+<<<<<<< HEAD
                 return new StorageMetadata(storageLocation, checksum, length);
+=======
+
+                // create this before committing the file so constraints applied
+                StorageMetadata test = new StorageMetadata(storageLocation, checksum, length, new Date());
+                
+                // to atomic copy into content directory
+                final Path result = Files.move(txnTarget, contentTarget, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+                log.debug("moved file to : " + contentTarget);
+                txnTarget = null;
+                StorageMetadata metadata = new StorageMetadata(storageLocation, checksum, length, new Date(Files.getLastModifiedTime(result).toMillis()));
+                metadata.artifactURI = artifactURI;
+                return metadata;
+
+            } catch (InvalidPathException e) {
+                throw new IllegalArgumentException("Illegal path: " + contentTarget, e);
+            } catch (IOException e) {
+                throw new IllegalStateException("Failed to create content file: " + contentTarget, e);
+>>>>>>> 4ca6bd1c3f0f1789bfa4cce42e436b554017a4e3
             }
 
             // create this before committing the file so constraints applied
@@ -611,6 +587,7 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
         
         try {
         
+<<<<<<< HEAD
             Path contentTarget = storageLocationToPath(sm.getStorageLocation());
             // make sure parent (bucket) directories exist
             Path parent = contentTarget.getParent();
@@ -644,6 +621,8 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
      * @throws StorageEngageException If the adapter failed to interact with storage.
      * @throws TransientException If an unexpected, temporary exception occurred. 
      */
+=======
+>>>>>>> 4ca6bd1c3f0f1789bfa4cce42e436b554017a4e3
     @Override
     public void delete(StorageLocation storageLocation)
         throws ResourceNotFoundException, IOException, StorageEngageException, TransientException {
@@ -652,13 +631,6 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
         Files.delete(path);
     }
     
-    /**
-     * Iterator of items ordered by storageLocation.
-     * 
-     * @return An iterator over an ordered list of items in storage.
-     * @throws StorageEngageException If the adapter failed to interact with storage.
-     * @throws TransientException If an unexpected, temporary exception occurred. 
-     */
     @Override
     public Iterator<StorageMetadata> iterator()
         throws StorageEngageException, TransientException {
@@ -666,20 +638,13 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
         return new OpaqueIterator(contentPath, null);
     }
     
-    /**
-     * Iterator of items ordered by storageLocation.
-     * 
-     * @param storageBucket Only iterate over items in this bucket.
-     * @return An iterator over an ordered list of items in this storage bucket.
-     * @throws StorageEngageException If the adapter failed to interact with storage.
-     * @throws TransientException If an unexpected, temporary exception occurred. 
-     */
     @Override
     public Iterator<StorageMetadata> iterator(String storageBucket)
         throws StorageEngageException, TransientException {
         return new OpaqueIterator(contentPath, storageBucket);
     }
     
+<<<<<<< HEAD
     /**
      * Ordered set of items in the given bucket.
      * 
@@ -696,6 +661,11 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
             ret.add(i.next());
         }
         return ret;
+=======
+    // temporary location to write stream to
+    Path createTmpFile() {
+        return txnPath.resolve(UUID.randomUUID().toString());
+>>>>>>> 4ca6bd1c3f0f1789bfa4cce42e436b554017a4e3
     }
     
     // create from tmpfile in the txnPath to re-use UUID

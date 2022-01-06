@@ -172,17 +172,16 @@ public class DeletedArtifactEventSyncTest {
         try {
             log.info("testGetEvents");
             Subject userSubject = SSLUtil.createSubject(PROXY_PEM);
-            TapClient<DeletedArtifactEvent> tapClient = new TapClient<>(TestUtil.LUSKAN_URI);
-
-            Calendar now = Calendar.getInstance();
-            now.add(Calendar.DAY_OF_MONTH, -1);
-            Date startTime = now.getTime();
-            DeletedArtifactEventSync sync = new DeletedArtifactEventSync(tapClient);
-            sync.startTime = startTime;
-
+            
             Subject.doAs(userSubject, new PrivilegedExceptionAction<Object>() {
 
                 public Object run() throws Exception {
+                    TapClient<DeletedArtifactEvent> tapClient = new TapClient<>(TestUtil.LUSKAN_URI);
+                    Calendar now = Calendar.getInstance();
+                    now.add(Calendar.DAY_OF_MONTH, -1);
+                    Date startTime = now.getTime();
+                    DeletedArtifactEventSync sync = new DeletedArtifactEventSync(tapClient);
+                    sync.startTime = startTime;
 
                     // query with no results
                     ResourceIterator<DeletedArtifactEvent> emptyIterator = sync.getEvents();

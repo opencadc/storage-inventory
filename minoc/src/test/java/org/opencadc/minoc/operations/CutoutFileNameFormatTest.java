@@ -68,11 +68,17 @@
 
 package org.opencadc.minoc.operations;
 
+import ca.nrc.cadc.dali.Circle;
+import ca.nrc.cadc.dali.DoubleInterval;
+import ca.nrc.cadc.dali.Point;
+import ca.nrc.cadc.dali.Polygon;
+import ca.nrc.cadc.dali.Range;
 import org.junit.Assert;
 import org.junit.Test;
 import org.opencadc.soda.ExtensionSlice;
 import org.opencadc.soda.ExtensionSliceFormat;
 import org.opencadc.soda.PixelRange;
+import org.opencadc.soda.server.Cutout;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -88,14 +94,17 @@ public class CutoutFileNameFormatTest {
     @Test
     public void testFileNameMangleSimple() {
         final CutoutFileNameFormat testSubject = new CutoutFileNameFormat("my_file.fits");
+        final Cutout cutout = new Cutout();
         final List<ExtensionSlice> testSlices = new ArrayList<>();
         testSlices.add(new ExtensionSlice(2));
+
+        cutout.pixelCutouts = testSlices;
 
         final ExtensionSlice slice2 = new ExtensionSlice("SCI", 3);
         slice2.getPixelRanges().add(new PixelRange(400, 500));
         testSlices.add(slice2);
 
-        final String result = testSubject.format(testSlices);
+        final String result = testSubject.format(cutout);
         final String expected = "my_file.2____SCI_3__400_500.fits";
 
         Assert.assertEquals("Wrong output.", expected, result);
@@ -110,18 +119,61 @@ public class CutoutFileNameFormatTest {
     @Test
     public void testFileNameMangleComplex() {
         final ExtensionSliceFormat format = new ExtensionSliceFormat();
+        final Cutout cutout = new Cutout();
         final String[] cutouts = new String[] {
                 "[116][100:250,*]",
                 "[SCI,14][100:125,100:175]",
                 "[91][*,90:255]",
                 "[101]"
         };
-        final List<ExtensionSlice> testSlices = Arrays.stream(cutouts).map(format::parse).collect(Collectors.toList());
+        cutout.pixelCutouts = Arrays.stream(cutouts).map(format::parse).collect(Collectors.toList());
         final CutoutFileNameFormat testSubject = new CutoutFileNameFormat("myfile_raw.fits");
 
-        final String result = testSubject.format(testSlices);
+        final String result = testSubject.format(cutout);
         final String expected = "myfile_raw.116__100_250_____SCI_14__100_125_100_175___91____90_255___101.fits";
 
         Assert.assertEquals("Wrong output.", expected, result);
+    }
+
+    @Test
+    public void testFileNameMangleCircle() {
+        final Cutout cutout = new Cutout();
+        cutout.pos = new Circle(new Point(45.6D, 77.3D), 0.5D);
+
+        final CutoutFileNameFormat testSubject = new CutoutFileNameFormat("fitsfile.fits");
+
+        Assert.assertEquals("Wrong filename.", "fitsfile.circle_45_6_77_3_0_5.fits",
+                            testSubject.format(cutout));
+    }
+
+    @Test
+    public void testFileNameManglePolygon() {
+        final Cutout cutout = new Cutout();
+        final Polygon polygon = new Polygon();
+
+        polygon.getVertices().add(new Point(12.4D, 38.4D));
+        polygon.getVertices().add(new Point(12.4D, 58.4D));
+        polygon.getVertices().add(new Point(0.4D, 58.4D));
+        polygon.getVertices().add(new Point(0.4D, 38.4D));
+
+        cutout.pos = polygon;
+
+        final CutoutFileNameFormat testSubject = new CutoutFileNameFormat("fitsfile.fits");
+
+        Assert.assertEquals("Wrong filename.",
+                            "fitsfile.polygon_12_4_38_4_12_4_58_4_0_4_58_4_0_4_38_4.fits",
+                            testSubject.format(cutout));
+    }
+
+    @Test
+    public void testFileNameMangleRange() {
+        final Cutout cutout = new Cutout();
+        cutout.pos = new Range(new DoubleInterval(0.12D, 3.45D),
+                               new DoubleInterval(6.78D, 9.10D));
+
+        final CutoutFileNameFormat testSubject = new CutoutFileNameFormat("fitsfile.fits");
+
+        Assert.assertEquals("Wrong filename.", "fitsfile.range_0_12_3_45_6_78_9_1.fits",
+                            testSubject.format(cutout));
     }
 }

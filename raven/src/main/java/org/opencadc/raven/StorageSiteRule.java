@@ -3,7 +3,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2020.                            (c) 2020.
+ *  (c) 2021.                            (c) 2021.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -62,62 +62,25 @@
  *  <http://www.gnu.org/licenses/>.      pas le cas, consultez :
  *                                       <http://www.gnu.org/licenses/>.
  *
+ *  : 5 $
  *
  ************************************************************************
  */
 
-package org.opencadc.inventory.storage.ad.integration;
+package org.opencadc.raven;
 
-import ca.nrc.cadc.io.ByteCountOutputStream;
-import ca.nrc.cadc.util.Log4jInit;
-import java.io.ByteArrayOutputStream;
-import java.io.OutputStream;
-import java.math.BigInteger;
-import java.net.URI;
-import java.security.DigestOutputStream;
-import java.security.MessageDigest;
-import org.apache.log4j.Level;
-import org.apache.log4j.Logger;
-import org.junit.Assert;
-import org.junit.Test;
-import org.opencadc.inventory.StorageLocation;
-import org.opencadc.inventory.storage.ad.AdStorageAdapter;
+import java.util.List;
 
+public class StorageSiteRule {
 
-public class AdStorageAdapterGetTest {
-    private static final Logger log = Logger.getLogger(AdStorageAdapterGetTest.class);
-    private static final String DIGEST_ALGORITHM = "MD5";
+    private final List<Namespace> namespaces;
 
-    static {
-        Log4jInit.setLevel("org.opencadc.inventory.storage", Level.INFO);
+    public StorageSiteRule(List<Namespace> namespaces) {
+        this.namespaces = namespaces;
     }
 
-    @Test
-    public void testGetValid() {
-        final AdStorageAdapter testSubject = new AdStorageAdapter();
-        final URI testIrisUri = URI.create("ad:IRIS/I429B4H0.fits");
-
-        // IRIS
-        final URI expectedIrisChecksum = URI.create("md5:e3922d47243563529f387ebdf00b66da");
-        try {
-            final OutputStream outputStream = new ByteArrayOutputStream();
-            final DigestOutputStream digestOutputStream = new DigestOutputStream(outputStream, MessageDigest
-                .getInstance(AdStorageAdapterGetTest.DIGEST_ALGORITHM));
-            final ByteCountOutputStream byteCountOutputStream = new ByteCountOutputStream(digestOutputStream);
-            final MessageDigest messageDigest = digestOutputStream.getMessageDigest();
-
-            final StorageLocation storageLocation = new StorageLocation(testIrisUri);
-            storageLocation.storageBucket = "IRIS";
-
-            testSubject.get(storageLocation, byteCountOutputStream);
-
-            Assert.assertEquals("Wrong checksum.", expectedIrisChecksum,
-                URI.create(String.format("%s:%s", messageDigest.getAlgorithm().toLowerCase(),
-                    new BigInteger(1, messageDigest.digest()).toString(16))));
-
-        } catch (Exception unexpected) {
-            log.error("unexpected exception", unexpected);
-            Assert.fail("Unexpected exception");
-        }
+    public List<Namespace> getNamespaces() {
+        return this.namespaces;
     }
+
 }
