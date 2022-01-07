@@ -26,7 +26,7 @@ dependencies {
     compile 'org.opencadc:cadc-dali:[1.2.1,)'
     compile 'org.opencadc:cadc-tap:[1.0.1,)'
     compile 'org.opencadc:cadc-inventory:[0.7,)'
-    compile 'org.opencadc:cadc-storage-adapter:[0.8,)'
+    compile 'org.opencadc:cadc-storage-adapter:[0.9,)'
     compile 'org.opencadc:cadc-registry:[1.0,)'
 
     testCompile 'junit:junit:[4.0,)'

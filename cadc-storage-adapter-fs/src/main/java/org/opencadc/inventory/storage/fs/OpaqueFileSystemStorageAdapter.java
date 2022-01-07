@@ -384,6 +384,7 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
             if (transactionID != null) {
                 opt = StandardOpenOption.APPEND;
             }
+            MessageDigest md = (MessageDigest) txnDigest.clone();
             DigestOutputStream out = new DigestOutputStream(Files.newOutputStream(txnTarget, StandardOpenOption.WRITE, opt), txnDigest);
             MultiBufferIO io = new MultiBufferIO();
             if (transactionID != null) {
@@ -393,6 +394,7 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
                     log.debug("append starting at offset " + prevLength);
                     io.copy(source, out);
                     out.flush();
+                    md = out.getMessageDigest();
                 } catch (ReadException ex) {
                     // rollback to prevLength
                     RandomAccessFile raf = new RandomAccessFile(txnTarget.toFile(), "rws");
@@ -408,9 +410,9 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
             } else {
                 io.copy(source, out);
                 out.flush();
+                md = out.getMessageDigest();
             }
 
-            final MessageDigest md = out.getMessageDigest();
             // clone so we can persist the current state for resume
             MessageDigest curMD = (MessageDigest) md.clone();
             String md5Val = HexUtil.toHex(curMD.digest());
@@ -452,30 +454,14 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
                 if (length == 0L) {
                     return new StorageMetadata(storageLocation);
                 }
-<<<<<<< HEAD
-                return new StorageMetadata(storageLocation, checksum, length);
-=======
-
-                // create this before committing the file so constraints applied
-                StorageMetadata test = new StorageMetadata(storageLocation, checksum, length, new Date());
-                
-                // to atomic copy into content directory
-                final Path result = Files.move(txnTarget, contentTarget, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-                log.debug("moved file to : " + contentTarget);
-                txnTarget = null;
-                StorageMetadata metadata = new StorageMetadata(storageLocation, checksum, length, new Date(Files.getLastModifiedTime(result).toMillis()));
-                metadata.artifactURI = artifactURI;
-                return metadata;
-
-            } catch (InvalidPathException e) {
-                throw new IllegalArgumentException("Illegal path: " + contentTarget, e);
-            } catch (IOException e) {
-                throw new IllegalStateException("Failed to create content file: " + contentTarget, e);
->>>>>>> 4ca6bd1c3f0f1789bfa4cce42e436b554017a4e3
+                // current state
+                return new StorageMetadata(storageLocation, checksum, length,
+                        new Date(Files.getLastModifiedTime(txnTarget).toMillis()));
             }
 
             // create this before committing the file so constraints applied
-            StorageMetadata metadata = new StorageMetadata(storageLocation, checksum, length);
+            StorageMetadata metadata = new StorageMetadata(storageLocation, checksum, length,
+                    new Date(Files.getLastModifiedTime(txnTarget).toMillis()));
             metadata.artifactURI = newArtifact.getArtifactURI();
             
             StorageMetadata ret = commit(metadata, txnTarget);
@@ -586,8 +572,6 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
     private StorageMetadata commit(StorageMetadata sm, Path txnTarget) throws StorageEngageException {
         
         try {
-        
-<<<<<<< HEAD
             Path contentTarget = storageLocationToPath(sm.getStorageLocation());
             // make sure parent (bucket) directories exist
             Path parent = contentTarget.getParent();
@@ -601,11 +585,10 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
             }
 
             // to atomic copy into content directory
+            // TODO: make sure lastModified is not changed by this
             final Path result = Files.move(txnTarget, contentTarget, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-            log.debug("moved file to : " + contentTarget);
+            log.debug("committed: " + result);
 
-
-            sm.contentLastModified = new Date(Files.getLastModifiedTime(result).toMillis());
             return sm;
         } catch (IOException ex) {
             throw new StorageEngageException("failed to finish write to final location", ex);
@@ -621,8 +604,6 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
      * @throws StorageEngageException If the adapter failed to interact with storage.
      * @throws TransientException If an unexpected, temporary exception occurred. 
      */
-=======
->>>>>>> 4ca6bd1c3f0f1789bfa4cce42e436b554017a4e3
     @Override
     public void delete(StorageLocation storageLocation)
         throws ResourceNotFoundException, IOException, StorageEngageException, TransientException {
@@ -644,28 +625,10 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
         return new OpaqueIterator(contentPath, storageBucket);
     }
     
-<<<<<<< HEAD
-    /**
-     * Ordered set of items in the given bucket.
-     * 
-     * @param storageBucket Only iterate over items in this bucket.
-     * @return set of items in this storage bucket.
-     * @throws StorageEngageException If the adapter failed to interact with storage.
-     * @throws TransientException If an unexpected, temporary exception occurred. 
-     */
-    public SortedSet<StorageMetadata> list(String storageBucket)
-        throws StorageEngageException, TransientException {
-        SortedSet<StorageMetadata> ret = new TreeSet<>();
-        Iterator<StorageMetadata> i = iterator(storageBucket);
-        while (i.hasNext()) {
-            ret.add(i.next());
-        }
-        return ret;
-=======
+
     // temporary location to write stream to
     Path createTmpFile() {
         return txnPath.resolve(UUID.randomUUID().toString());
->>>>>>> 4ca6bd1c3f0f1789bfa4cce42e436b554017a4e3
     }
     
     // create from tmpfile in the txnPath to re-use UUID
@@ -754,10 +717,10 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
                 String aidAttr = getFileAttribute(p, OpaqueFileSystemStorageAdapter.ARTIFACTID_ATTR);
                 URI contentChecksum = new URI(csAttr);
                 long contentLength = Files.size(p);
-                StorageMetadata ret = new StorageMetadata(sloc, contentChecksum, contentLength);
+                StorageMetadata ret = new StorageMetadata(sloc, contentChecksum, contentLength, 
+                        new Date(Files.getLastModifiedTime(p).toMillis()));
                 // optional
                 ret.artifactURI = new URI(aidAttr);
-                ret.contentLastModified = new Date(Files.getLastModifiedTime(p).toMillis());
                 return ret;
             } catch (FileSystemException | IllegalArgumentException | URISyntaxException ex) {
                 return new StorageMetadata(sloc); // missing attrs: invalid stored object

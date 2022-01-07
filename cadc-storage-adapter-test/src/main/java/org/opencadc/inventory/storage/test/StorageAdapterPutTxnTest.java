@@ -331,14 +331,14 @@ public class StorageAdapterPutTxnTest {
             PutTransaction txn = adapter.startTransaction(uri, expectedLength);
             log.info("start");
             
-            // write part 1
+            log.info("START put 1 ok");
             data = dataString1.getBytes();
             InputStream source = new ByteArrayInputStream(data);
             StorageMetadata meta1 = adapter.put(newArtifact, source, txn.getID());
             log.info("after write part 1: " + meta1 + " in " + txn.getID());
             Assert.assertNotNull(meta1);
             Assert.assertEquals("length", data.length, meta1.getContentLength().longValue());
-            log.info("put 1 done");
+            log.info("DONE put 1");
             
             // check txn status
             PutTransaction ts1 = adapter.getTransactionStatus(txn.getID());
@@ -364,7 +364,7 @@ public class StorageAdapterPutTxnTest {
             Assert.assertEquals("length", data.length, tmeta2.getContentLength().longValue());
             log.info("DONE put 2 fail(0)");
             
-            log.info("START put 2 fail(20)");
+            log.info("START put 3 fail(20)");
             data = dataString2.getBytes();
             source = getFailingInput(20, data); // fail after 32 bytes: need rollback to work
             failedPut = adapter.put(newArtifact, source, txn.getID());
@@ -376,14 +376,15 @@ public class StorageAdapterPutTxnTest {
             log.info("after write part 2 fail (20 bytes): " + tmeta2 + " in " + txn.getID());
             Assert.assertNotNull(tmeta2);
             Assert.assertEquals("length", data.length, tmeta2.getContentLength().longValue());
-            log.info("DONE put 2 fail(20)");
+            log.info("DONE put 3 fail(20)");
             
-            // write part 2            
+            // write part 2       
+            log.info("START put 4 ok");
             source = new ByteArrayInputStream(data);
             StorageMetadata meta3 = adapter.put(newArtifact, source, txn.getID());
             Assert.assertNotNull(meta3);
             Assert.assertEquals("length", expectedLength, meta3.getContentLength().longValue());
-            log.info("put 2");
+            log.info("DONE put 4");
             
             // check txn status
             PutTransaction ts3 = adapter.getTransactionStatus(txn.getID());

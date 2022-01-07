@@ -160,11 +160,7 @@ public class AdStorageAdapter implements StorageAdapter {
     }
 
     @Override
-<<<<<<< HEAD
-    public void get(StorageLocation storageLocation, OutputStream dest, SortedSet<ByteRange> byteRanges)
-=======
     public void get(StorageLocation storageLocation, OutputStream dest, ByteRange byteRange)
->>>>>>> 4ca6bd1c3f0f1789bfa4cce42e436b554017a4e3
         throws ResourceNotFoundException, ReadException, WriteException, StorageEngageException, TransientException {
         throw new UnsupportedOperationException("not supported");
     }
@@ -183,7 +179,7 @@ public class AdStorageAdapter implements StorageAdapter {
     }
 
     @Override
-    public PutTransaction startTransaction(URI uri) throws StorageEngageException, TransientException {
+    public PutTransaction startTransaction(URI uri, Long contentLength) throws StorageEngageException, TransientException {
         throw new UnsupportedOperationException();
     }
 
