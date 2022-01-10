@@ -115,8 +115,9 @@ public class StorageAdapterPutTxnTest {
             final ByteArrayInputStream source = new ByteArrayInputStream(data);
             
             log.info("init");
-            final Long contentLength = new Long(data.length);
+            final Long contentLength = (long) data.length;
             PutTransaction txn = adapter.startTransaction(uri, contentLength);
+            Assert.assertNotNull(txn);
             log.info("start");
             
             StorageMetadata meta = adapter.put(newArtifact, source, txn.getID());
@@ -128,6 +129,8 @@ public class StorageAdapterPutTxnTest {
             Assert.assertFalse("content not committed", iter.hasNext());
             
             PutTransaction ts = adapter.getTransactionStatus(txn.getID());
+            log.info("uncommitted: " + ts);
+            Assert.assertNotNull(ts);
             Assert.assertNotNull(ts.storageMetadata);
             StorageMetadata meta2 = ts.storageMetadata;
             log.info("testPutTransactionCommit: " + meta2 + " in " + txn.getID());
@@ -159,7 +162,7 @@ public class StorageAdapterPutTxnTest {
             Assert.assertEquals("checksum", meta3.getContentChecksum(), actualChecksum);
 
             // delete
-            adapter.delete(meta3.getStorageLocation());
+            //adapter.delete(meta3.getStorageLocation());
         } catch (Exception unexpected) {
             log.error("unexpected exception", unexpected);
             Assert.fail("unexpected exception: " + unexpected);
@@ -303,7 +306,7 @@ public class StorageAdapterPutTxnTest {
             Assert.assertEquals("checksum", expectedChecksum, actualChecksum);
 
             // delete
-            //adapter.delete(finalMeta.getStorageLocation());
+            adapter.delete(finalMeta.getStorageLocation());
         } catch (Exception unexpected) {
             log.error("unexpected exception", unexpected);
             Assert.fail("unexpected exception: " + unexpected);
@@ -420,7 +423,7 @@ public class StorageAdapterPutTxnTest {
             Assert.assertEquals("checksum", expectedChecksum, actualChecksum);
 
             // delete
-            //adapter.delete(finalMeta.getStorageLocation());
+            adapter.delete(finalMeta.getStorageLocation());
         } catch (Exception unexpected) {
             log.error("unexpected exception", unexpected);
             Assert.fail("unexpected exception: " + unexpected);
