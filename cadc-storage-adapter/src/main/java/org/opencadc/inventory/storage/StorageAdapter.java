@@ -188,10 +188,24 @@ public interface StorageAdapter {
         throws StorageEngageException, TransientException;
     
     /**
-     * Commit a transaction.
+     * Revert a transaction to a previous state.
      * 
      * @param transactionID existing transaction ID
      * @return final storage metadata
+     * 
+     * @throws IllegalArgumentException if the specified transaction does not exist
+     * @throws StorageEngageException if the adapter failed to interact with storage
+     * @throws TransientException if an unexpected, temporary exception occurred 
+     * @throws UnsupportedOperationException if the transaction cannot be reverted
+     */
+    public PutTransaction revertTransaction(String transactionID)
+        throws IllegalArgumentException, StorageEngageException, TransientException, UnsupportedOperationException;
+    
+    /**
+     * Commit a transaction.
+     * 
+     * @param transactionID existing transaction ID
+     * @return current transaction status
      * 
      * @throws IllegalArgumentException if the specified transaction does not exist
      * @throws StorageEngageException if the adapter failed to interact with storage

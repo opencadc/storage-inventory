@@ -118,7 +118,7 @@ public class StorageAdapterPutTxnTest {
             final Long contentLength = (long) data.length;
             PutTransaction txn = adapter.startTransaction(uri, contentLength);
             Assert.assertNotNull(txn);
-            log.info("start");
+            log.info("startTransaction: " + txn);
             
             StorageMetadata meta = adapter.put(newArtifact, source, txn.getID());
             log.info("put");
@@ -182,7 +182,8 @@ public class StorageAdapterPutTxnTest {
             log.info("init");
             final Long contentLength = new Long(data.length);
             PutTransaction txn = adapter.startTransaction(uri, contentLength);
-            log.info("start");
+            Assert.assertNotNull(txn);
+            log.info("startTransaction: " + txn);
             
             StorageMetadata meta = adapter.put(newArtifact, source, txn.getID());
             log.info("put");
@@ -242,7 +243,8 @@ public class StorageAdapterPutTxnTest {
             
             log.info("init");
             PutTransaction txn = adapter.startTransaction(uri, expectedLength);
-            log.info("start");
+            Assert.assertNotNull(txn);
+            log.info("startTransaction: " + txn);
             
             // write part 1
             data = dataString1.getBytes();
@@ -322,8 +324,9 @@ public class StorageAdapterPutTxnTest {
             MessageDigest md = MessageDigest.getInstance("MD5");
             byte[] data = dataString.getBytes();
             md.update(data);
-            URI expectedChecksum = URI.create("md5:" + HexUtil.toHex(md.digest()));
-            long expectedLength = data.length;
+            final URI expectedChecksum = URI.create("md5:" + HexUtil.toHex(md.digest()));
+            final long expectedLength = data.length;
+            log.info("testPutFailResumeCommit expected: " + expectedLength + " " + expectedChecksum + "\n" + dataString);
             
             URI uri = URI.create("cadc:TEST/testPutFailResumeCommit");
             NewArtifact newArtifact = new NewArtifact(uri);
@@ -332,13 +335,14 @@ public class StorageAdapterPutTxnTest {
             
             log.info("init");
             PutTransaction txn = adapter.startTransaction(uri, expectedLength);
-            log.info("start");
+            Assert.assertNotNull(txn);
+            log.info("startTransaction: " + txn);
             
             log.info("START put 1 ok");
             data = dataString1.getBytes();
             InputStream source = new ByteArrayInputStream(data);
             StorageMetadata meta1 = adapter.put(newArtifact, source, txn.getID());
-            log.info("after write part 1: " + meta1 + " in " + txn.getID());
+            log.info("put 1: " + meta1 + " in " + txn.getID());
             Assert.assertNotNull(meta1);
             Assert.assertEquals("length", data.length, meta1.getContentLength().longValue());
             log.info("DONE put 1");
@@ -398,6 +402,132 @@ public class StorageAdapterPutTxnTest {
             Assert.assertTrue("valid", tmeta3.isValid());
             Assert.assertNotNull("artifactURI", tmeta3.artifactURI);
             Assert.assertEquals("length", expectedLength, tmeta3.getContentLength().longValue());
+            Assert.assertEquals("checksum", expectedChecksum, tmeta3.getContentChecksum());
+            
+            StorageMetadata finalMeta = adapter.commitTransaction(txn.getID());
+            log.info("commit");
+            
+            try {
+                PutTransaction oldtxn = adapter.getTransactionStatus(txn.getID());
+                Assert.fail("expected IllegalArgumentException, got: " + oldtxn);
+            } catch (IllegalArgumentException expected) {
+                log.info("caught expected: " + expected);
+            }
+            
+            // get to verify
+            ByteArrayOutputStream bos = new ByteArrayOutputStream();
+            adapter.get(finalMeta.getStorageLocation(), bos);
+            byte[] actual = bos.toByteArray();
+            String str = new String(actual);
+            md.reset();
+            md.update(actual);
+            URI actualChecksum = URI.create("md5:" + HexUtil.toHex(md.digest()));
+            log.info("testPutFailResumeCommit actual: " + actual.length + " " + actualChecksum + "\n" + str);
+            Assert.assertEquals("length", expectedLength, actual.length);
+            Assert.assertEquals("length", finalMeta.getContentLength().longValue(), actual.length);
+            log.info("meta: " + finalMeta.getContentChecksum() + " vs " + actualChecksum);
+            Assert.assertEquals("checksum", finalMeta.getContentChecksum(), actualChecksum);
+            log.info("data: " + expectedChecksum + " vs " + actualChecksum);
+            Assert.assertEquals("checksum", expectedChecksum, actualChecksum);
+
+            // delete
+            adapter.delete(finalMeta.getStorageLocation());
+        } catch (Exception unexpected) {
+            log.error("unexpected exception", unexpected);
+            Assert.fail("unexpected exception: " + unexpected);
+        }
+    }
+    
+    @Test
+    public void testPutRevertPesumeCommit() {
+        try {
+            String dataString1 = "abcdefghijklmnopqrstuvwxyz\n";
+            String dataString2 = "ABCDEFGHIJKLMNOPQRSTUVWXYZ\n";
+            MessageDigest md = MessageDigest.getInstance("MD5");
+            
+            byte[] data = dataString1.getBytes();
+            md.update(data);
+            final URI expectedChecksum1 = URI.create("md5:" + HexUtil.toHex(md.digest()));
+            log.info("expected1: " + data.length + " " + expectedChecksum1);
+            
+            String dataString = dataString1 + dataString2;
+            data = dataString.getBytes();
+            md.update(data);
+            final URI expectedChecksum2 = URI.create("md5:" + HexUtil.toHex(md.digest()));
+            final long expectedLength = data.length;
+            log.info("expected2: " + data.length + " " + expectedChecksum2);
+            
+            URI uri = URI.create("cadc:TEST/testPutRevertPesumeCommit");
+            NewArtifact newArtifact = new NewArtifact(uri);
+            newArtifact.contentChecksum = expectedChecksum2;
+            newArtifact.contentLength = expectedLength;
+            
+            log.info("init");
+            PutTransaction txn = adapter.startTransaction(uri, expectedLength);
+            Assert.assertNotNull(txn);
+            log.info("startTransaction: " + txn);
+            
+            // write part 1
+            data = dataString1.getBytes();
+            ByteArrayInputStream source = new ByteArrayInputStream(data);
+            StorageMetadata meta1 = adapter.put(newArtifact, source, txn.getID());
+            log.info("meta1: " + meta1);
+            Assert.assertNotNull(meta1);
+            Assert.assertEquals("length", data.length, meta1.getContentLength().longValue());
+            Assert.assertEquals("checksum", expectedChecksum1, meta1.getContentChecksum());
+            log.info("put 1");
+            
+            // write part 2            
+            data = dataString2.getBytes();
+            source = new ByteArrayInputStream(data);
+            StorageMetadata meta2 = adapter.put(newArtifact, source, txn.getID());
+            log.info("meta2: " + meta2);
+            Assert.assertNotNull(meta2);
+            Assert.assertEquals("length", expectedLength, meta2.getContentLength().longValue());
+            Assert.assertEquals("checksum", expectedChecksum2, meta2.getContentChecksum());
+            log.info("put 2");
+
+            // check txn status
+            PutTransaction ts2 = adapter.getTransactionStatus(txn.getID());
+            Assert.assertNotNull(ts2.storageMetadata);
+            StorageMetadata txnMeta2 = ts2.storageMetadata;
+            log.info("after write part 2: " + txnMeta2 + " in " + txn.getID());
+            Assert.assertNotNull(txnMeta2);
+            Assert.assertTrue("valid", txnMeta2.isValid());
+            Assert.assertNotNull("artifactURI", txnMeta2.artifactURI);
+            Assert.assertEquals("length", expectedLength, txnMeta2.getContentLength().longValue());
+            Assert.assertEquals("checksum", expectedChecksum2, txnMeta2.getContentChecksum());
+
+            // revert to 1
+            PutTransaction reverted = adapter.revertTransaction(txn.getID());
+            Assert.assertNotNull(reverted.storageMetadata);
+            StorageMetadata revMeta = reverted.storageMetadata;
+            log.info("after revert part 2: " + revMeta + " in " + txn.getID());
+            Assert.assertNotNull(revMeta);
+            Assert.assertTrue("valid", revMeta.isValid());
+            Assert.assertNotNull("artifactURI", revMeta.artifactURI);
+            Assert.assertEquals("length", data.length, revMeta.getContentLength().longValue());
+            Assert.assertEquals("checksum", expectedChecksum1, revMeta.getContentChecksum());
+                   
+            // check txn status is consistent
+            PutTransaction ts1 = adapter.getTransactionStatus(txn.getID());
+            Assert.assertNotNull(ts1.storageMetadata);
+            StorageMetadata txnMeta1 = ts1.storageMetadata;
+            log.info("after write part 1: " + txnMeta1 + " in " + txn.getID());
+            Assert.assertNotNull(txnMeta1);
+            Assert.assertTrue("valid", txnMeta1.isValid());
+            Assert.assertNotNull("artifactURI", txnMeta1.artifactURI);
+            Assert.assertEquals("length", data.length, txnMeta1.getContentLength().longValue());
+            Assert.assertEquals("checksum", expectedChecksum1, txnMeta1.getContentChecksum());
+            
+            // write part 2 again
+            data = dataString2.getBytes();
+            source = new ByteArrayInputStream(data);
+            meta2 = adapter.put(newArtifact, source, txn.getID());
+            log.info("meta2: " + meta2);
+            Assert.assertNotNull(meta2);
+            Assert.assertEquals("length", expectedLength, meta2.getContentLength().longValue());
+            log.info("put 2");
             
             StorageMetadata finalMeta = adapter.commitTransaction(txn.getID());
             log.info("commit");
@@ -416,11 +546,11 @@ public class StorageAdapterPutTxnTest {
             md.reset();
             md.update(actual);
             URI actualChecksum = URI.create("md5:" + HexUtil.toHex(md.digest()));
-            log.info("testPutFailResumeCommit get: " + actual.length + " " + actualChecksum);
+            log.info("testPutTransactionCommit get: " + actual.length + " " + actualChecksum);
             Assert.assertEquals("length", expectedLength, actual.length);
             Assert.assertEquals("length", finalMeta.getContentLength().longValue(), actual.length);
             Assert.assertEquals("checksum", finalMeta.getContentChecksum(), actualChecksum);
-            Assert.assertEquals("checksum", expectedChecksum, actualChecksum);
+            Assert.assertEquals("checksum", expectedChecksum2, actualChecksum);
 
             // delete
             adapter.delete(finalMeta.getStorageLocation());
@@ -429,8 +559,6 @@ public class StorageAdapterPutTxnTest {
             Assert.fail("unexpected exception: " + unexpected);
         }
     }
-    
-    
     
     private InputStream getFailingInput(final int failAfter, final byte[] data) {
         return new InputStream() {
