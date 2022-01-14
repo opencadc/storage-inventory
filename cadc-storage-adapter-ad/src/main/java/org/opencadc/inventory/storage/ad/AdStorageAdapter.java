@@ -194,6 +194,11 @@ public class AdStorageAdapter implements StorageAdapter {
     }
 
     @Override
+    public PutTransaction revertTransaction(String transactionID) throws IllegalArgumentException, StorageEngageException, TransientException, UnsupportedOperationException {
+        throw new UnsupportedOperationException();
+    }
+    
+    @Override
     public PutTransaction getTransactionStatus(String string) throws StorageEngageException, TransientException {
         throw new UnsupportedOperationException();
     }

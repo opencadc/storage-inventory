@@ -105,6 +105,69 @@ public class StorageAdapterPutTxnTest {
     }
     
     @Test
+    public void testIncorrectURI() {
+        try {
+            String dataString1 = "abcdefghijklmnopqrstuvwxyz\n";
+            String dataString2 = "ABCDEFGHIJKLMNOPQRSTUVWXYZ\n";
+            String dataString = dataString1 + dataString2;
+            MessageDigest md = MessageDigest.getInstance("MD5");
+            byte[] data = dataString.getBytes();
+            md.update(data);
+            URI expectedChecksum = URI.create("md5:" + HexUtil.toHex(md.digest()));
+            long expectedLength = data.length;
+            
+            URI uri = URI.create("cadc:TEST/testIncorrectURI");
+            NewArtifact newArtifact = new NewArtifact(uri);
+            newArtifact.contentChecksum = expectedChecksum;
+            newArtifact.contentLength = expectedLength;
+            
+            log.info("init");
+            PutTransaction txn = adapter.startTransaction(uri, expectedLength);
+            Assert.assertNotNull(txn);
+            log.info("startTransaction: " + txn);
+            
+            // write part 1
+            data = dataString1.getBytes();
+            ByteArrayInputStream source = new ByteArrayInputStream(data);
+            StorageMetadata meta1 = adapter.put(newArtifact, source, txn.getID());
+            log.info("meta1: " + meta1);
+            Assert.assertNotNull(meta1);
+            Assert.assertEquals("length", data.length, meta1.getContentLength().longValue());
+            log.info("put 1");
+            
+            // check txn status
+            PutTransaction ts1 = adapter.getTransactionStatus(txn.getID());
+            Assert.assertNotNull(ts1.storageMetadata);
+            StorageMetadata txnMeta1 = ts1.storageMetadata;
+            log.info("after write part 1: " + txnMeta1 + " in " + txn.getID());
+            Assert.assertNotNull(txnMeta1);
+            Assert.assertTrue("valid", txnMeta1.isValid());
+            Assert.assertNotNull("artifactURI", txnMeta1.artifactURI);
+            Assert.assertEquals("length", data.length, txnMeta1.getContentLength().longValue());
+
+            // write part 2  
+            URI uri2 = URI.create("cadc:TEST/testIncorrectURI-diff");
+            NewArtifact newArtifact2 = new NewArtifact(uri2);
+            newArtifact.contentChecksum = expectedChecksum;
+            newArtifact.contentLength = expectedLength;
+            
+            data = dataString2.getBytes();
+            source = new ByteArrayInputStream(data);
+            try {
+                StorageMetadata meta2 = adapter.put(newArtifact2, source, txn.getID());
+                Assert.fail("put succeeded: " + meta2);
+            } catch (IllegalArgumentException expected) {
+                log.info("caught expected: " + expected);
+            }
+            
+            adapter.abortTransaction(txn.getID());
+        } catch (Exception unexpected) {
+            log.error("unexpected exception", unexpected);
+            Assert.fail("unexpected exception: " + unexpected);
+        }
+    }
+    
+    @Test
     public void testPutTransactionCommit() {
         try {
             String dataString = "abcdefghijklmnopqrstuvwxyz\n";
@@ -162,7 +225,7 @@ public class StorageAdapterPutTxnTest {
             Assert.assertEquals("checksum", meta3.getContentChecksum(), actualChecksum);
 
             // delete
-            //adapter.delete(meta3.getStorageLocation());
+            adapter.delete(meta3.getStorageLocation());
         } catch (Exception unexpected) {
             log.error("unexpected exception", unexpected);
             Assert.fail("unexpected exception: " + unexpected);
