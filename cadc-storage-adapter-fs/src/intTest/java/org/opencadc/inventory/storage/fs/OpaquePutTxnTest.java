@@ -79,6 +79,7 @@ import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.Before;
+import org.opencadc.inventory.storage.InvalidConfigException;
 import org.opencadc.inventory.storage.test.StorageAdapterPutTxnTest;
 
 /**
@@ -99,7 +100,7 @@ public class OpaquePutTxnTest extends StorageAdapterPutTxnTest {
     
     final OpaqueFileSystemStorageAdapter ofsAdapter;
             
-    public OpaquePutTxnTest() { 
+    public OpaquePutTxnTest() throws InvalidConfigException {
         super(new OpaqueFileSystemStorageAdapter(ROOT_DIR, BUCKET_LEN));
         this.ofsAdapter = (OpaqueFileSystemStorageAdapter) super.adapter;
 

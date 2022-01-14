@@ -79,6 +79,7 @@ import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.Before;
+import org.opencadc.inventory.storage.InvalidConfigException;
 import org.opencadc.inventory.storage.test.StorageAdapterByteRangeTest;
 
 /**
@@ -101,7 +102,7 @@ public class OpaqueByteRangeTest extends StorageAdapterByteRangeTest {
     
     final OpaqueFileSystemStorageAdapter ofsAdapter;
     
-    public OpaqueByteRangeTest() { 
+    public OpaqueByteRangeTest() throws InvalidConfigException {
         super(new OpaqueFileSystemStorageAdapter(ROOT_DIR, BUCKET_LEN));
         this.ofsAdapter = (OpaqueFileSystemStorageAdapter) super.adapter;
 

@@ -67,380 +67,93 @@
 
 package org.opencadc.inventory.storage.fs;
 
-import ca.nrc.cadc.net.ResourceNotFoundException;
-import ca.nrc.cadc.util.HexUtil;
 import ca.nrc.cadc.util.Log4jInit;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
-import java.net.URI;
+import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
-import java.nio.file.Paths;
-import java.nio.file.attribute.FileAttribute;
-import java.nio.file.attribute.PosixFilePermission;
-import java.nio.file.attribute.PosixFilePermissions;
-import java.security.MessageDigest;
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Set;
-
-import java.util.SortedSet;
+import java.nio.file.Path;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.attribute.BasicFileAttributes;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
-import org.junit.BeforeClass;
+import org.junit.Ignore;
 import org.junit.Test;
-import org.opencadc.inventory.storage.NewArtifact;
-import org.opencadc.inventory.storage.StorageMetadata;
-import org.opencadc.inventory.storage.fs.FileSystemStorageAdapter.BucketMode;
+import org.opencadc.inventory.storage.test.StorageAdapterBasicTest;
 
 /**
  * @author majorb
  *
  */
-public class FileSystemStorageAdapterTest {
+public class FileSystemStorageAdapterTest extends StorageAdapterBasicTest {
     
     private static final Logger log = Logger.getLogger(FileSystemStorageAdapterTest.class);
     
-    private static final String TEST_ROOT = "build/tmp/fsroot";
-    static final int URI_BUCKET_LENGTH = 2;
-    
-    private static final String dataString = "abcdefghijklmnopqrstuvwxyz";
-    private static final byte[] data = dataString.getBytes();
+    static final File ROOT_DIR;
 
     static {
-        Log4jInit.setLevel("org.opencadc.inventory", Level.INFO);
+        Log4jInit.setLevel("org.opencadc.inventory.storage", Level.INFO);
+        ROOT_DIR = new File("build/tmp/fssa-int-tests");
+        ROOT_DIR.mkdir();
     }
     
-    @BeforeClass
-    public static void setup() {
-        try {
-            Set<PosixFilePermission> perms = PosixFilePermissions.fromString("rwxrwxrw-");
-            FileAttribute<Set<PosixFilePermission>> attr = PosixFilePermissions.asFileAttribute(perms);
-            Files.createDirectories(Paths.get(TEST_ROOT), attr);
-        } catch (Throwable t) {
-            log.error("setup error", t);
-        }
+    final FileSystemStorageAdapter fsAdapter;
+            
+    public FileSystemStorageAdapterTest() { 
+        super(new FileSystemStorageAdapter(ROOT_DIR));
+        this.fsAdapter = (FileSystemStorageAdapter) super.adapter;
+
+        log.debug("    content path: " + fsAdapter.contentPath);
+        log.debug("transaction path: " + fsAdapter.txnPath);
+        Assert.assertTrue("testInit: contentPath", Files.exists(fsAdapter.contentPath));
+        Assert.assertTrue("testInit: txnPath", Files.exists(fsAdapter.txnPath));
     }
 
-    private void createInstanceTestRoot(String path) throws IOException {
-        Set<PosixFilePermission> perms = PosixFilePermissions.fromString("rwxrwxrw-");
-        FileAttribute<Set<PosixFilePermission>> attr = PosixFilePermissions.asFileAttribute(perms);
-        Files.createDirectories(Paths.get(path), attr);
-    }
-    
-    @Test
-    public void testPutGetDeleteURIMode() {
-        this.testPutGetDelete(BucketMode.URI, 0);
-    }
-    
-    @Test
-    public void testPutGetDeleteURIBucketMode() {
-        this.testPutGetDelete(BucketMode.URIBUCKET, URI_BUCKET_LENGTH);
-    }
-    
-    private void testPutGetDelete(BucketMode bucketMode, int bucketLen) {
-        try {
-            log.info("testPutGetDelete(" + bucketMode + ") - start");
-
-            String testDir = TEST_ROOT + File.separator + "testPutGetDelete-" + bucketMode;
-            this.createInstanceTestRoot(testDir);
-
-            URI artifactURI = URI.create("test:path/file");
-            MessageDigest md = MessageDigest.getInstance("MD5");
-            String md5Val = HexUtil.toHex(md.digest(data));
-            URI checksum = URI.create("md5:" + md5Val);
-            log.info("expected md5sum: " + checksum);
-            long length = data.length;
-            NewArtifact newArtifact = new NewArtifact(artifactURI);
-            newArtifact.contentChecksum = checksum;
-            newArtifact.contentLength = length;
-            
-            ByteArrayInputStream source = new ByteArrayInputStream(data);
-
-            FileSystemStorageAdapter fs = new FileSystemStorageAdapter(testDir, bucketMode, bucketLen);
-            StorageMetadata storageMetadata = fs.put(newArtifact, source, null);
-
-            Assert.assertEquals("artifactURI",  artifactURI, storageMetadata.artifactURI);
-            
-            TestOutputStream dest = new TestOutputStream();
-            fs.get(storageMetadata.getStorageLocation(), dest);
-            
-            String resultData = new String(dest.mydata);
-            log.info("result data: " + resultData);
-            Assert.assertEquals("data", dataString, resultData);
-
-            SortedSet<StorageMetadata> fsList = fs.list(storageMetadata.getStorageLocation().storageBucket);
-
-            StorageMetadata listItem = fsList.first();
-            Assert.assertNotNull(listItem.getContentChecksum());
-            log.info("content checksum found: " + listItem.getContentChecksum());
-            
-            fs.delete(storageMetadata.getStorageLocation());
-            
-            try {
-                fs.get(storageMetadata.getStorageLocation(), dest);
-                Assert.fail("Should have received resource not found exception");
-            } catch (ResourceNotFoundException e) {
-                // expected
-            }
-            
-        } catch (Exception unexpected) {
-            log.error("unexpected exception", unexpected);
-            Assert.fail("unexpected exception: " + unexpected);
-        } finally {
-            log.info("testPutGetDelete(" + bucketMode + ") - end");
-        }
-
-    }
-
-    @Test
-    public void testInvalidBucketLengthTooLong() {
-        BucketMode bucketMode = BucketMode.URIBUCKET;
-        try {
-            log.info("testInvalidBucketLengthTooLong(" + bucketMode + ") - start");
-            String testDir = TEST_ROOT + File.separator + "testPutGetDelete-" + bucketMode;
-            FileSystemStorageAdapter fs = new FileSystemStorageAdapter(testDir, bucketMode, 10);
-            Assert.fail("bucketlength should be wrong for mode");
-
-        } catch (IllegalStateException ise) {
-            log.info("expected exception", ise);
-        }
-        catch (Exception unexpected) {
-            log.error("unexpected exception", unexpected);
-            Assert.fail("unexpected exception: " + unexpected);
-        } finally {
-            log.info("testPutGetDelete(" + bucketMode + ") - end");
-        }
-    }
-
-    @Test
-    public void testInvalidBucketLengthTooShort() {
-        BucketMode bucketMode = BucketMode.URIBUCKET;
-        try {
-            log.info("testInvalidBucketLengthTooLong(" + bucketMode + ") - start");
-            String testDir = TEST_ROOT + File.separator + "testPutGetDelete-" + bucketMode;
-            // nonsense value passed in, should blurt an error
-            FileSystemStorageAdapter fs = new FileSystemStorageAdapter(testDir, bucketMode, -1);
-            Assert.fail("bucketlength should be wrong for mode");
-        } catch (IllegalStateException ise) {
-            log.info("expected exception", ise);
-        }
-        catch (Exception unexpected) {
-            log.error("unexpected exception", unexpected);
-            Assert.fail("unexpected exception: " + unexpected);
-        } finally {
-            log.info("testPutGetDelete(" + bucketMode + ") - end");
-        }
-    }
-
-    //@Test
-    public void testList_URIMode() {
-        this.testList(BucketMode.URI, 0);
-    }
-    
-    //@Test
-    public void testList_URIBucketMode() {
-        this.testList(BucketMode.URIBUCKET, URI_BUCKET_LENGTH);
-    }
-
-    private void testList(BucketMode bucketMode, int bucketLength) {
-        try {
-            
-            log.info("testUnsortedIterator(" + bucketMode + ") - start");
-
-            String testDir = TEST_ROOT + File.separator + "testUnsortedIterator-" + bucketMode;
-            this.createInstanceTestRoot(testDir);
-
-            FileSystemStorageAdapter fs = new FileSystemStorageAdapter(testDir, bucketMode, bucketLength);
-            
-            MessageDigest md = MessageDigest.getInstance("MD5");
-            String md5Val = HexUtil.toHex(md.digest(data));
-            URI checksum = URI.create("md5:" + md5Val);
-            log.info("expected md5sum: " + checksum);
-            long length = data.length;
-            
-            String[] files = new String[] {
-                "test:dir1/file1",
-                "test:dir1/file2",
-                "test:dir1/dir2/file3",
-                "test:dir1/dir2/file4",
-                "test:dir1/file5",
-                "test:dir1/dir3/dir4/file6",
-                "test:dir1/dir3/dir4/file7",
-                "test:dir1/dir3/file8",
-                "test:dir1/file9",
-                "test:dir1/dir5/file10",
-                "test:dir5/file11",
-                "test:dir5/dir6/dir7/dir8/file12",
-            };
-            
-            List<StorageMetadata> storageMetadataList = new ArrayList<StorageMetadata>();
-            
-            for (String file : files) {
-                URI uri = URI.create(file);
-                NewArtifact newArtifact = new NewArtifact(uri);
-                newArtifact.contentChecksum = checksum;
-                newArtifact.contentLength = length;
-                
-                ByteArrayInputStream source = new ByteArrayInputStream(data);
-
-                StorageMetadata meta = fs.put(newArtifact, source, null);
-                storageMetadataList.add(meta);
-                log.info("added " + meta.getStorageLocation());
-            }
-            
-            // list all
-            {
-                SortedSet<StorageMetadata> result = fs.list("");
-                Assert.assertEquals("file count", storageMetadataList.size(), result.size());
-                Iterator<StorageMetadata> iterator = result.iterator();
-                int a = 0;
-                while (iterator.hasNext()) {
-                    StorageMetadata expected = storageMetadataList.get(a++);
-                    StorageMetadata actual = iterator.next();
-                    Assert.assertEquals("order", expected.getStorageLocation(), actual.getStorageLocation());
-
-                    Assert.assertEquals("checksum", checksum, actual.getContentChecksum());
-                    Assert.assertEquals("length", new Long(length), actual.getContentLength());
-                    Assert.assertNotNull("artifactURI", actual.artifactURI.toASCIIString());
-                    Assert.assertEquals("artifactURI", files[a], actual.artifactURI.toASCIIString());
+    @Override
+    public void cleanupBefore() throws Exception {
+        log.info("cleanupBefore: " + fsAdapter.contentPath.getParent());
+        if (Files.exists(fsAdapter.contentPath)) {
+            Files.walkFileTree(fsAdapter.contentPath, new SimpleFileVisitor<Path>() {
+                @Override
+                public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+                    Files.delete(file);
+                    return FileVisitResult.CONTINUE;
                 }
-            }
-            
-            // list subset
-            {
-                SortedSet<StorageMetadata> result3 = fs.list("test:dir1/dir3");  // 3 in the middle (5-7)
-                Iterator<StorageMetadata> iterator3 = result3.iterator();
-                int a = 5; // start at 5
-                int count = 0;
-                while (iterator3.hasNext()) {
-                    StorageMetadata expected = storageMetadataList.get(a++);
-                    StorageMetadata actual = iterator3.next();
-                    Assert.assertEquals("order", expected.getStorageLocation(), actual.getStorageLocation());
 
-                    Assert.assertEquals("checksum", checksum, actual.getContentChecksum());
-                    Assert.assertEquals("length", new Long(length), actual.getContentLength());
-                    Assert.assertNotNull("artifactURI", actual.artifactURI.toASCIIString());
-                    Assert.assertEquals("artifactURI", files[a], actual.artifactURI.toASCIIString());
-                    count++;
+                @Override
+                public FileVisitResult postVisitDirectory(Path dir, IOException exc) throws IOException {
+                    if (!fsAdapter.contentPath.equals(dir)) {
+                        Files.delete(dir);
+                    }
+                    return FileVisitResult.CONTINUE;
                 }
-                Assert.assertEquals("file count", 3, count);
-            }
-        } catch (Exception unexpected) {
-            log.error("unexpected exception", unexpected);
-            Assert.fail("unexpected exception: " + unexpected);
-        } finally {
-            log.info("testUnsortedIterator(" + bucketMode + ") - end");
+            });
         }
-    }
-    
-    //@Test
-    public void testIterateURI() {
-        try {
-            
-            log.info("testIterateSubsetURIMode - start");
-
-            String testDir = TEST_ROOT + File.separator + "testIterateSubsetURIMode";
-            this.createInstanceTestRoot(testDir);
-
-            FileSystemStorageAdapter fs = new FileSystemStorageAdapter(testDir, BucketMode.URI, 0);
-            
-            MessageDigest md = MessageDigest.getInstance("MD5");
-            String md5Val = HexUtil.toHex(md.digest(data));
-            URI checksum = URI.create("md5:" + md5Val);
-            log.info("expected md5sum: " + checksum);
-            long length = data.length;
-            
-            String[] files = new String[] {
-                "test:dir1/file1",
-                "test:dir1/file2",
-                "test:dir1/dir2/file3",
-                "test:dir1/dir2/file4",
-                "test:dir1/file5",
-                "test:dir1/dir3/dir4/file6",
-                "test:dir1/dir3/dir4/file7",
-                "test:dir1/dir3/file8",
-                "test:dir1/file9",
-                "test:dir1/dir5/file10",
-                "test:dir5/file11",
-                "test:dir5/dir6/dir7/dir8/file12",
-            };
-            
-            List<StorageMetadata> storageMetadataList = new ArrayList<StorageMetadata>();
-            for (String file : files) {
-                URI uri = URI.create(file);
-                NewArtifact newArtifact = new NewArtifact(uri);
-                newArtifact.contentChecksum = checksum;
-                newArtifact.contentLength = length;
-                
-                ByteArrayInputStream source = new ByteArrayInputStream(data);
-
-                StorageMetadata meta = fs.put(newArtifact, source, null);
-                storageMetadataList.add(meta);
-                log.info("added " + meta.getStorageLocation());
-            }
-            
-            // iterate from start
-            {
-                Iterator<StorageMetadata> iterator = fs.iterator("test:dir1"); // the first n-2
-                int a = 0;
-                int count = 0;
-                while (iterator.hasNext()) {
-                    StorageMetadata expected = storageMetadataList.get(a++);
-                    StorageMetadata actual = iterator.next();
-                    Assert.assertEquals("order", expected.getStorageLocation(), actual.getStorageLocation());
-
-                    Assert.assertEquals("checksum", checksum, actual.getContentChecksum());
-                    Assert.assertEquals("length", new Long(length), actual.getContentLength());
-                    Assert.assertNotNull("artifactURI", actual.artifactURI.toASCIIString());
-                    Assert.assertEquals("artifactURI", files[a], actual.artifactURI.toASCIIString());
-                    count++;
+        if (Files.exists(fsAdapter.txnPath)) {
+            Files.walkFileTree(fsAdapter.txnPath, new SimpleFileVisitor<Path>() {
+                @Override
+                public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+                    Files.delete(file);
+                    return FileVisitResult.CONTINUE;
                 }
-                // take the two non 'dir1' buckets out of the expected list
-                Assert.assertEquals("file count", storageMetadataList.size() - 2, count);
-            }
-            
-            // iterate in middle
-            {
-                Iterator<StorageMetadata> iterator3 = fs.iterator("test:dir1/dir3"); // 3 in the middle (5-7)
-                int a = 5; // start at 5
-                int count = 0;
-                while (iterator3.hasNext()) {
-                    StorageMetadata expected = storageMetadataList.get(a++);
-                    StorageMetadata actual = iterator3.next();
-                    Assert.assertEquals("order", expected.getStorageLocation(), actual.getStorageLocation());
-
-                    Assert.assertEquals("checksum", checksum, actual.getContentChecksum());
-                    Assert.assertEquals("length", new Long(length), actual.getContentLength());
-                    Assert.assertNotNull("artifactURI", actual.artifactURI.toASCIIString());
-                    Assert.assertEquals("artifactURI", files[a], actual.artifactURI.toASCIIString());
-                    count++;
-                }
-                Assert.assertEquals("file count", 3, count);
-            }
-
-        } catch (Exception unexpected) {
-            log.error("unexpected exception", unexpected);
-            Assert.fail("unexpected exception: " + unexpected);
-        } finally {
-            log.info("testIterateSubsetURIMode - end");
+            });
         }
-    }
-    
-    private class TestOutputStream extends ByteArrayOutputStream {
-        byte[] mydata = new byte[data.length];
-        int mypos = 0;
-
-        @Override
-        public void write(byte[] buf, int pos, int bytes) {
-            System.arraycopy(buf, pos, mydata, mypos, bytes);
-            mypos += bytes;
-        }
-        
+        log.info("cleanupBefore: " + fsAdapter.contentPath.getParent() + " DONE");
     }
 
+    @Override
+    @Test
+    @Ignore
+    public void testIteratorBucketPrefix() {
+        super.testIteratorBucketPrefix();
+    }
+
+    @Override
+    @Test
+    @Ignore
+    public void testIterator() {
+        super.testIterator();
+    }
 }

@@ -67,34 +67,23 @@
 
 package org.opencadc.inventory.storage.fs;
 
-import ca.nrc.cadc.io.ReadException;
-import ca.nrc.cadc.net.ResourceNotFoundException;
-import ca.nrc.cadc.util.HexUtil;
 import ca.nrc.cadc.util.Log4jInit;
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
-import java.net.URI;
+import java.io.OutputStream;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
+import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.BasicFileAttributes;
-import java.security.MessageDigest;
-import java.util.Iterator;
-import java.util.SortedSet;
-import java.util.TreeSet;
+import java.util.UUID;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
-import org.opencadc.inventory.Artifact;
-import org.opencadc.inventory.storage.NewArtifact;
-import org.opencadc.inventory.storage.StorageAdapter;
-import org.opencadc.inventory.storage.StorageMetadata;
+import org.opencadc.inventory.storage.InvalidConfigException;
 import org.opencadc.inventory.storage.test.StorageAdapterBasicTest;
 
 /**
@@ -117,7 +106,7 @@ public class OpaqueStorageAdapterTest extends StorageAdapterBasicTest {
     
     final OpaqueFileSystemStorageAdapter ofsAdapter;
             
-    public OpaqueStorageAdapterTest() { 
+    public OpaqueStorageAdapterTest() throws InvalidConfigException {
         super(new OpaqueFileSystemStorageAdapter(ROOT_DIR, BUCKET_LEN));
         this.ofsAdapter = (OpaqueFileSystemStorageAdapter) super.adapter;
 
@@ -157,5 +146,39 @@ public class OpaqueStorageAdapterTest extends StorageAdapterBasicTest {
             });
         }
         log.info("cleanupBefore: " + ofsAdapter.contentPath.getParent() + " DONE");
+    }
+    
+    @Test
+    public void testSetGetAttributes() {
+        try {
+            String txnID = UUID.randomUUID().toString();
+            Path p = ofsAdapter.txnPath.resolve(txnID);
+            OutputStream  ostream = Files.newOutputStream(p, StandardOpenOption.WRITE, StandardOpenOption.CREATE_NEW);
+            ostream.close();
+
+            OpaqueFileSystemStorageAdapter.setFileAttribute(p, "foo", "bar");
+            
+            // attr set
+            String val = OpaqueFileSystemStorageAdapter.getFileAttribute(p, "foo");
+            Assert.assertEquals("bar", val);
+
+            // attr not set
+            val = OpaqueFileSystemStorageAdapter.getFileAttribute(p, "no-foo");
+            Assert.assertNull("attr-not-set", val);
+            
+            // delete attr
+            OpaqueFileSystemStorageAdapter.setFileAttribute(p, "foo", null);
+            val = OpaqueFileSystemStorageAdapter.getFileAttribute(p, "foo");
+            Assert.assertNull("deleted", val);
+            
+            // delete not-set attr
+            OpaqueFileSystemStorageAdapter.setFileAttribute(p, "no-foo", null);
+            val = OpaqueFileSystemStorageAdapter.getFileAttribute(p, "no-foo");
+            Assert.assertNull("not-set-deleted", val);
+            
+        } catch (Exception unexpected) {
+            log.error("unexpected exception", unexpected);
+            Assert.fail("unexpected exception: " + unexpected);
+        }
     }
 }

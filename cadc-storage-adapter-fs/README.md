@@ -1,5 +1,5 @@
 # cadc-storage-adapter-fs
-File system storage adapter implementation
+File system storage adapter implementation(s)
 
 ### cadc-storage-adapter-fs.properties
 
@@ -9,7 +9,7 @@ The following StorageAdapter implementations are provided:
 |--------------------------|-----------|
 |org.opencadc.inventory.storage.fs.OpaqueFileSystemStorageAdapter|stores files in an opaque structure in the filesystem, requires POSIX extended attribute support, iterator: scalable|
 
-TODO: fix up the previous implementation's URI mode as TransparentFileSystemStorageAdapter (name TBD).
+TODO: finish implementation of FileSystemStorageAdapter and rename to something more specific.
 
 ```
 org.opencadc.inventory.storage.fs.baseDir = {absolute path to base directory}

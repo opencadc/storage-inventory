@@ -80,6 +80,7 @@ import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.Test;
 import org.opencadc.inventory.StorageLocation;
+import org.opencadc.inventory.storage.InvalidConfigException;
 
 /**
  * Unit tests that create base directory structure but do not otherwise
@@ -97,7 +98,7 @@ public class OpaqueFileSystemStorageAdapterTest {
     OpaqueFileSystemStorageAdapter adapter;
     int depth = 2;
             
-    public OpaqueFileSystemStorageAdapterTest() { 
+    public OpaqueFileSystemStorageAdapterTest() throws InvalidConfigException {
         File tmp = new File("build/tmp");
         File root = new File(tmp, "opaque-unit-tests");
         root.mkdir();
