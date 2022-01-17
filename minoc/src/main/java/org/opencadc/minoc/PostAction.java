@@ -72,6 +72,10 @@ import ca.nrc.cadc.profiler.Profiler;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.db.EntityNotFoundException;
+import org.opencadc.inventory.storage.PutTransaction;
+import org.opencadc.inventory.storage.StorageMetadata;
+import static org.opencadc.minoc.HeadAction.setHeaders;
+import static org.opencadc.minoc.HeadAction.setTransactionHeaders;
 import org.opencadc.permissions.WriteGrant;
 
 /**
@@ -98,6 +102,7 @@ public class PostAction extends ArtifactAction {
         checkWritable();
         initAndAuthorize(WriteGrant.class);
         initDAO();
+        initStorageAdapter();
     }
 
     /**
@@ -112,6 +117,40 @@ public class PostAction extends ArtifactAction {
         log.debug("new uri: " + newURI);
         log.debug("new contentType: " + newContentType);
         log.debug("new contentEncoding: " + newContentEncoding);
+        
+        String txnID = syncInput.getHeader(PUT_TXN_ID);
+        String txnOP = syncInput.getHeader(PUT_TXN_OP);
+        log.warn("transactionID: " + txnID + " " + txnOP);
+        if (txnID != null) {
+            if (PUT_TXN_OP_COMMIT.equalsIgnoreCase(txnOP)) {
+                throw new IllegalArgumentException("invalid " + PUT_TXN_OP + "=" + PUT_TXN_OP_COMMIT + " must be done with PUT");
+            } 
+            if (PUT_TXN_OP_ABORT.equalsIgnoreCase(txnOP)) {
+                log.warn("abortTransaction: " + txnID);
+                storageAdapter.abortTransaction(txnID);
+                syncOutput.setCode(204);
+                return;
+            }
+            
+            PutTransaction t;
+            if (PUT_TXN_OP_REVERT.equalsIgnoreCase(txnOP)) {
+                t = storageAdapter.revertTransaction(txnID);
+                syncOutput.setCode(202);
+            } else if (txnOP == null) {
+                // POST without no OP:  no change
+                t = storageAdapter.getTransactionStatus(txnID);
+                syncOutput.setCode(204);
+            } else {
+                throw new IllegalArgumentException("invalid " + PUT_TXN_OP + "=" + txnOP);
+            }
+            
+            StorageMetadata sm = t.storageMetadata;
+            Artifact artifact = new Artifact(sm.artifactURI, sm.getContentChecksum(), sm.getContentLastModified(), sm.getContentLength());
+            setTransactionHeaders(t, syncOutput);
+            setHeaders(artifact, syncOutput);
+            
+            return;
+        }
         
         final Profiler profiler = new Profiler(PostAction.class);
         Artifact existing = getArtifact(artifactURI);

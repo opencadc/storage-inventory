@@ -101,6 +101,7 @@ public class HeadAction extends ArtifactAction {
         checkReadable();
         initAndAuthorize(ReadGrant.class);
         initDAO();
+        initStorageAdapter();
     }
 
     /**
@@ -109,13 +110,13 @@ public class HeadAction extends ArtifactAction {
     @Override
     public void doAction() throws Exception {
         
-        String txnID = syncInput.getHeader(PUT_TXN);
-        log.debug("transactionID: " + txnID);
+        String txnID = syncInput.getHeader(PUT_TXN_ID);
+        log.warn("transactionID: " + txnID);
         Artifact artifact;
         if (txnID != null) {
             PutTransaction t = storageAdapter.getTransactionStatus(txnID);
             StorageMetadata sm = t.storageMetadata;
-            artifact = new Artifact(sm.artifactURI, sm.getContentChecksum(), sm.contentLastModified, sm.getContentLength());
+            artifact = new Artifact(sm.artifactURI, sm.getContentChecksum(), sm.getContentLastModified(), sm.getContentLength());
             setTransactionHeaders(t, syncOutput);
             super.logInfo.setMessage("transaction: " + txnID);
         } else {
@@ -150,7 +151,7 @@ public class HeadAction extends ArtifactAction {
     }
 
     static void setTransactionHeaders(PutTransaction txn, SyncOutput syncOutput) {
-        syncOutput.setHeader(PUT_TXN, txn.getID());
+        syncOutput.setHeader(PUT_TXN_ID, txn.getID());
         if (txn.getMinSegmentSize() != null) {
             syncOutput.setHeader(PUT_TXN_MIN_SIZE, txn.getMinSegmentSize());
         }

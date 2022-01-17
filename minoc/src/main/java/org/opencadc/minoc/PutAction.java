@@ -81,7 +81,6 @@ import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
-import java.util.Date;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.DeletedArtifactEvent;
@@ -105,17 +104,10 @@ public class PutAction extends ArtifactAction {
     
     private static final String INLINE_CONTENT_TAG = "inputstream";
 
-    /**
-     * Default, no-arg constructor.
-     */
     public PutAction() {
         super();
     }
     
-    /**
-     * Return the input stream.
-     * @return The Object representing the input stream.
-     */
     @Override
     protected InlineContentHandler getInlineContentHandler() {
         return new InlineContentHandler() {
@@ -129,10 +121,6 @@ public class PutAction extends ArtifactAction {
         };
     }
     
-
-    /**
-     * Perform auth checks and initialize resources.
-     */
     @Override
     public void initAction() throws Exception {
         checkWritable();
@@ -141,9 +129,6 @@ public class PutAction extends ArtifactAction {
         initStorageAdapter();
     }
 
-    /**
-     * Perform the PUT.
-     */
     @Override
     public void doAction() throws Exception {
         
@@ -159,16 +144,33 @@ public class PutAction extends ArtifactAction {
         Long contentLength = null;
         if (lengthHeader != null) {
             try {
-                contentLength = new Long(lengthHeader);
+                contentLength = Long.parseLong(lengthHeader);
             } catch (NumberFormatException e) {
                 throw new IllegalArgumentException("Illegal Content-Length header: " + lengthHeader);
             }
         }
         log.debug("Content-Length: " + contentLength);
         
-        String txnID = syncInput.getHeader(PUT_TXN);
-        if ("true".equals(txnID)) {
-            PutTransaction t = storageAdapter.startTransaction(artifactURI, contentLength);
+        String txnID = syncInput.getHeader(PUT_TXN_ID);
+        String txnOP = syncInput.getHeader(PUT_TXN_OP);
+        String totalLengthHeader = syncInput.getHeader("x-total-length");
+        Long totalLength = null;
+        if (totalLengthHeader != null) {
+            try {
+                totalLength = Long.parseLong(totalLengthHeader);
+            } catch (NumberFormatException e) {
+                throw new IllegalArgumentException("Illegal x-total-length header: " + totalLengthHeader);
+            }
+        } 
+        if (PUT_TXN_OP_START.equals(txnOP)) {
+            // check for invalid transaction start
+            if (txnID != null) {
+                throw new IllegalArgumentException(PUT_TXN_OP + "=" + txnOP + " cannot include " + PUT_TXN_ID + "=" + txnID);
+            }
+            if (totalLength == null && contentLength != null) {
+                totalLength = contentLength;
+            }
+            PutTransaction t = storageAdapter.startTransaction(artifactURI, totalLength);
             txnID = t.getID();
             if (contentLength != null && contentLength == 0L) {
                 // explicit start transaction, no data
@@ -178,7 +180,17 @@ public class PutAction extends ArtifactAction {
                 return;
             }
         }
-        log.debug("transactionID: " + txnID);
+        if (PUT_TXN_OP_COMMIT.equalsIgnoreCase(txnOP)) {
+            // check for invalid transaction commit
+            if (txnID == null) {
+                throw new IllegalArgumentException(PUT_TXN_OP + "=" + txnOP + ": requires " + PUT_TXN_ID + "={transaction ID}");
+            }
+            if (contentLength != null && contentLength > 0) {
+                throw new IllegalArgumentException(PUT_TXN_OP + "=" + txnOP + ": requires content-length=0");
+            }
+        }
+        
+        log.warn("transactionID: " + txnID + " " + txnOP);
 
         // here: txnID != null means in a transaction
         //       segmentSize == 0 means start transaction and return (header) info
@@ -201,7 +213,7 @@ public class PutAction extends ArtifactAction {
 
         // commit transaction or write data
         StorageMetadata artifactMetadata = null;
-        if (txnID != null && contentLength != null && contentLength == 0) {
+        if (PUT_TXN_OP_COMMIT.equalsIgnoreCase(txnOP)) {
             artifactMetadata = storageAdapter.commitTransaction(txnID);
             txnID = null;
             profiler.checkpoint("storageAdapter.put.commit.ok");

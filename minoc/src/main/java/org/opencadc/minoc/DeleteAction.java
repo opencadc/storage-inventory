@@ -110,16 +110,6 @@ public class DeleteAction extends ArtifactAction {
      */
     @Override
     public void doAction() throws Exception {
-        
-        String txnID = syncInput.getHeader(PUT_TXN);
-        log.debug("transactionID: " + txnID);
-        
-        if (txnID != null) {
-            storageAdapter.abortTransaction(txnID);
-            syncOutput.setCode(204);
-            return;
-        }
-        
         Artifact existing = artifactDAO.get(artifactURI);
         if (existing == null) {
             throw new ResourceNotFoundException("not found: " + artifactURI);

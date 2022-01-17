@@ -70,6 +70,7 @@ package org.opencadc.minoc;
 import ca.nrc.cadc.auth.RunnableAction;
 import ca.nrc.cadc.net.HttpDelete;
 import ca.nrc.cadc.net.HttpGet;
+import ca.nrc.cadc.net.HttpPost;
 import ca.nrc.cadc.net.HttpTransfer;
 import ca.nrc.cadc.net.HttpUpload;
 import ca.nrc.cadc.util.HexUtil;
@@ -79,6 +80,8 @@ import java.io.InputStream;
 import java.net.URI;
 import java.net.URL;
 import java.security.MessageDigest;
+import java.util.Map;
+import java.util.TreeMap;
 import javax.security.auth.Subject;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
@@ -121,13 +124,13 @@ public class PutTransactionTest extends MinocTest {
             // put with txn
             InputStream in = new ByteArrayInputStream(data);
             HttpUpload put = new HttpUpload(in, artifactURL);
-            put.setRequestProperty(ArtifactAction.PUT_TXN, "true");
+            put.setRequestProperty(ArtifactAction.PUT_TXN_OP, ArtifactAction.PUT_TXN_OP_START);
             Subject.doAs(userSubject, new RunnableAction(put));
             Assert.assertNull(put.getThrowable());
             Assert.assertEquals("Accepted", 202, put.getResponseCode());
             Assert.assertNotNull("digest", put.getResponseHeader(HttpTransfer.DIGEST));
             Assert.assertNotNull("length", put.getResponseHeader(HttpTransfer.CONTENT_LENGTH));
-            String txnID = put.getResponseHeader(ArtifactAction.PUT_TXN);
+            String txnID = put.getResponseHeader(ArtifactAction.PUT_TXN_ID);
             Assert.assertNotNull("txnID", txnID);
             log.info("transactionID " + txnID);
             
@@ -146,10 +149,10 @@ public class PutTransactionTest extends MinocTest {
             // head in txn
             head = new HttpGet(artifactURL, true);
             head.setHeadOnly(true);
-            head.setRequestProperty(ArtifactAction.PUT_TXN, txnID);
+            head.setRequestProperty(ArtifactAction.PUT_TXN_ID, txnID);
             Subject.doAs(userSubject, new RunnableAction(head));
             Assert.assertEquals("found transaction", 200, head.getResponseCode());
-            Assert.assertEquals("txnID", txnID, head.getResponseHeader(ArtifactAction.PUT_TXN));
+            Assert.assertEquals("txnID", txnID, head.getResponseHeader(ArtifactAction.PUT_TXN_ID));
             Assert.assertNotNull("digest", head.getResponseHeader(HttpTransfer.DIGEST));
             Assert.assertNotNull("length", head.getResponseHeader(HttpTransfer.CONTENT_LENGTH));
             
@@ -159,11 +162,12 @@ public class PutTransactionTest extends MinocTest {
             Assert.assertEquals("contentChecksum", expectedChecksum, actualChecksum);
             Assert.assertEquals("contentlength", expectedLength, actualLength);
 
-            // commit
+            // commit: PUT
             in = new ByteArrayInputStream(new byte[0]);
             put = new HttpUpload(in, artifactURL);
             put.setRequestProperty(HttpTransfer.CONTENT_LENGTH, "0");
-            put.setRequestProperty(ArtifactAction.PUT_TXN,txnID);
+            put.setRequestProperty(ArtifactAction.PUT_TXN_ID, txnID);
+            put.setRequestProperty(ArtifactAction.PUT_TXN_OP, ArtifactAction.PUT_TXN_OP_COMMIT);
             Subject.doAs(userSubject, new RunnableAction(put));
             Assert.assertNull(put.getThrowable());
             Assert.assertEquals("Created", 201, put.getResponseCode());
@@ -179,16 +183,16 @@ public class PutTransactionTest extends MinocTest {
             // head in txn
             head = new HttpGet(artifactURL, true);
             head.setHeadOnly(true);
-            head.setRequestProperty(ArtifactAction.PUT_TXN, txnID);
+            head.setRequestProperty(ArtifactAction.PUT_TXN_ID, txnID);
             Subject.doAs(userSubject, new RunnableAction(head));
-            Assert.assertEquals("no more txn", 404, head.getResponseCode());
+            Assert.assertEquals("no more txn", 400, head.getResponseCode()); // 400 vs 404 TBD
             
             // head
             head = new HttpGet(artifactURL, true);
             head.setHeadOnly(true);
             Subject.doAs(userSubject, new RunnableAction(head));
             Assert.assertEquals("found committed", 200, head.getResponseCode());
-            Assert.assertNull("no txn header", head.getResponseHeader(ArtifactAction.PUT_TXN));
+            Assert.assertNull("no txn header", head.getResponseHeader(ArtifactAction.PUT_TXN_ID));
             Assert.assertNotNull("digest", head.getResponseHeader(HttpTransfer.DIGEST));
             Assert.assertNotNull("length", head.getResponseHeader(HttpTransfer.CONTENT_LENGTH));
             
@@ -225,11 +229,11 @@ public class PutTransactionTest extends MinocTest {
             // put with txn
             InputStream in = new ByteArrayInputStream(data);
             HttpUpload put = new HttpUpload(in, artifactURL);
-            put.setRequestProperty(ArtifactAction.PUT_TXN, "true");
+            put.setRequestProperty(ArtifactAction.PUT_TXN_OP, ArtifactAction.PUT_TXN_OP_START);
             Subject.doAs(userSubject, new RunnableAction(put));
             Assert.assertNull(put.getThrowable());
             Assert.assertEquals("Accepted", 202, put.getResponseCode());
-            String txnID = put.getResponseHeader(ArtifactAction.PUT_TXN);
+            String txnID = put.getResponseHeader(ArtifactAction.PUT_TXN_ID);
             Assert.assertNotNull("txnID", txnID);
             log.info("transactionID " + txnID);
 
@@ -242,17 +246,18 @@ public class PutTransactionTest extends MinocTest {
             // head in txn
             head = new HttpGet(artifactURL, true);
             head.setHeadOnly(true);
-            head.setRequestProperty(ArtifactAction.PUT_TXN, txnID);
+            head.setRequestProperty(ArtifactAction.PUT_TXN_ID, txnID);
             Subject.doAs(userSubject, new RunnableAction(head));
             Assert.assertEquals("found in txn", 200, head.getResponseCode());
-            Assert.assertEquals("txnID", txnID, head.getResponseHeader(ArtifactAction.PUT_TXN));
+            Assert.assertEquals("txnID", txnID, head.getResponseHeader(ArtifactAction.PUT_TXN_ID));
 
-            // abort
-            delete = new HttpDelete(artifactURL, false);
-            delete.setRequestProperty(ArtifactAction.PUT_TXN, txnID);
-            Subject.doAs(userSubject, new RunnableAction(delete));
-            Assert.assertNull(delete.getThrowable());
-            Assert.assertEquals("no content", 204, delete.getResponseCode());
+            // abort: POST
+            HttpPost post = new HttpPost(artifactURL, new TreeMap<String,Object>(), true);
+            post.setRequestProperty(ArtifactAction.PUT_TXN_ID, txnID);
+            post.setRequestProperty(ArtifactAction.PUT_TXN_OP, ArtifactAction.PUT_TXN_OP_ABORT);
+            Subject.doAs(userSubject, new RunnableAction(post));
+            Assert.assertNull(post.getThrowable());
+            Assert.assertEquals("no content", 204, post.getResponseCode());
             
             // head
             head = new HttpGet(artifactURL, true);
@@ -287,7 +292,7 @@ public class PutTransactionTest extends MinocTest {
             HttpDelete delete = new HttpDelete(artifactURL, false);
             Subject.doAs(userSubject, new RunnableAction(delete));
             
-            // put part 1 with txn
+            log.info("put part 1 with txn");
             data = content1.getBytes();
             md.reset();
             md.update(data);
@@ -295,15 +300,17 @@ public class PutTransactionTest extends MinocTest {
             final long expectedLength1 = data.length;
             InputStream in = new ByteArrayInputStream(data);
             HttpUpload put = new HttpUpload(in, artifactURL);
-            put.setRequestProperty(ArtifactAction.PUT_TXN, "true");
+            put.setRequestProperty(ArtifactAction.PUT_TXN_OP, ArtifactAction.PUT_TXN_OP_START);
             Subject.doAs(userSubject, new RunnableAction(put));
             Assert.assertNull(put.getThrowable());
             Assert.assertEquals("Accepted", 202, put.getResponseCode());
             Assert.assertNotNull("digest", put.getResponseHeader(HttpTransfer.DIGEST));
             Assert.assertNotNull("length", put.getResponseHeader(HttpTransfer.CONTENT_LENGTH));
-            String txnID = put.getResponseHeader(ArtifactAction.PUT_TXN);
+            String txnID = put.getResponseHeader(ArtifactAction.PUT_TXN_ID);
             Assert.assertNotNull("txnID", txnID);
             log.info("transactionID " + txnID);
+            log.info("transaction segments: min=" + put.getResponseHeader(ArtifactAction.PUT_TXN_MIN_SIZE) 
+                    + " max=" + put.getResponseHeader(ArtifactAction.PUT_TXN_MAX_SIZE));
             
             URI actualChecksum = put.getDigest();
             long actualLength = put.getContentLength();
@@ -311,19 +318,19 @@ public class PutTransactionTest extends MinocTest {
             Assert.assertEquals("contentChecksum", expectedChecksum1, actualChecksum);
             Assert.assertEquals("contentlength", expectedLength1, actualLength);
 
-            // head
+            log.info("head");
             HttpGet head = new HttpGet(artifactURL, true);
             head.setHeadOnly(true);
             Subject.doAs(userSubject, new RunnableAction(head));
             Assert.assertEquals("not found", 404, head.getResponseCode());
 
-            // head in txn
+            log.info("head in txn");
             head = new HttpGet(artifactURL, true);
             head.setHeadOnly(true);
-            head.setRequestProperty(ArtifactAction.PUT_TXN, txnID);
+            head.setRequestProperty(ArtifactAction.PUT_TXN_ID, txnID);
             Subject.doAs(userSubject, new RunnableAction(head));
             Assert.assertEquals("found transaction", 200, head.getResponseCode());
-            Assert.assertEquals("txnID", txnID, head.getResponseHeader(ArtifactAction.PUT_TXN));
+            Assert.assertEquals("txnID", txnID, head.getResponseHeader(ArtifactAction.PUT_TXN_ID));
             Assert.assertNotNull("digest", head.getResponseHeader(HttpTransfer.DIGEST));
             Assert.assertNotNull("length", head.getResponseHeader(HttpTransfer.CONTENT_LENGTH));
             actualChecksum = head.getDigest();
@@ -332,11 +339,11 @@ public class PutTransactionTest extends MinocTest {
             Assert.assertEquals("contentChecksum", expectedChecksum1, actualChecksum);
             Assert.assertEquals("contentlength", expectedLength1, actualLength);
 
-            // put part 2 with txn
+            log.info("put part 2 with txn");
             data = content2.getBytes();
             in = new ByteArrayInputStream(data);
             put = new HttpUpload(in, artifactURL);
-            put.setRequestProperty(ArtifactAction.PUT_TXN, txnID);
+            put.setRequestProperty(ArtifactAction.PUT_TXN_ID, txnID);
             Subject.doAs(userSubject, new RunnableAction(put));
             Assert.assertNull(put.getThrowable());
             Assert.assertEquals("Accepted", 202, put.getResponseCode());
@@ -349,11 +356,63 @@ public class PutTransactionTest extends MinocTest {
             Assert.assertEquals("contentChecksum", expectedChecksum, actualChecksum);
             Assert.assertEquals("contentlength", expectedLength, actualLength);
             
-            // commit
+            log.info("revert to part 1 only");
+            HttpPost revert = new HttpPost(artifactURL, new TreeMap<>(), true);
+            revert.setRequestProperty(ArtifactAction.PUT_TXN_ID, txnID);
+            revert.setRequestProperty(ArtifactAction.PUT_TXN_OP, ArtifactAction.PUT_TXN_OP_REVERT);
+            
+            Subject.doAs(userSubject, new RunnableAction(revert));
+            log.info("revert: " + revert.getResponseCode() + " " + revert.getThrowable());
+            Assert.assertEquals(202, revert.getResponseCode());
+            // same as head in txn above
+            Assert.assertEquals("txnID", txnID, revert.getResponseHeader(ArtifactAction.PUT_TXN_ID));
+            Assert.assertNotNull("digest", revert.getResponseHeader(HttpTransfer.DIGEST));
+            Assert.assertNotNull("length", revert.getResponseHeader(HttpTransfer.CONTENT_LENGTH));
+            actualChecksum = revert.getDigest();
+            actualLength = revert.getContentLength();
+            Assert.assertNotNull("contentChecksum", actualChecksum);
+            Assert.assertEquals("contentChecksum", expectedChecksum1, actualChecksum);
+            Assert.assertEquals("contentlength", expectedLength1, actualLength);
+            
+            log.info("head in txn");
+            head = new HttpGet(artifactURL, true);
+            head.setHeadOnly(true);
+            head.setRequestProperty(ArtifactAction.PUT_TXN_ID, txnID);
+            
+            Subject.doAs(userSubject, new RunnableAction(head));
+            Assert.assertEquals("found transaction", 200, head.getResponseCode());
+            Assert.assertEquals("txnID", txnID, head.getResponseHeader(ArtifactAction.PUT_TXN_ID));
+            Assert.assertNotNull("digest", head.getResponseHeader(HttpTransfer.DIGEST));
+            Assert.assertNotNull("length", head.getResponseHeader(HttpTransfer.CONTENT_LENGTH));
+            actualChecksum = head.getDigest();
+            actualLength = head.getContentLength();
+            Assert.assertNotNull("contentChecksum", actualChecksum);
+            Assert.assertEquals("contentChecksum", expectedChecksum1, actualChecksum);
+            Assert.assertEquals("contentlength", expectedLength1, actualLength);
+            
+            log.info("put part 2 again");
+            data = content2.getBytes();
+            in = new ByteArrayInputStream(data);
+            put = new HttpUpload(in, artifactURL);
+            put.setRequestProperty(ArtifactAction.PUT_TXN_ID, txnID);
+            Subject.doAs(userSubject, new RunnableAction(put));
+            Assert.assertNull(put.getThrowable());
+            Assert.assertEquals("Accepted", 202, put.getResponseCode());
+            Assert.assertNotNull("digest", put.getResponseHeader(HttpTransfer.DIGEST));
+            Assert.assertNotNull("length", put.getResponseHeader(HttpTransfer.CONTENT_LENGTH));
+            
+            actualChecksum = put.getDigest();
+            actualLength = put.getContentLength();
+            Assert.assertNotNull("contentChecksum", actualChecksum);
+            Assert.assertEquals("contentChecksum", expectedChecksum, actualChecksum);
+            Assert.assertEquals("contentlength", expectedLength, actualLength);
+            
+            log.info("commit: PUT");
             in = new ByteArrayInputStream(new byte[0]);
             put = new HttpUpload(in, artifactURL);
             put.setRequestProperty(HttpTransfer.CONTENT_LENGTH, "0");
-            put.setRequestProperty(ArtifactAction.PUT_TXN,txnID);
+            put.setRequestProperty(ArtifactAction.PUT_TXN_ID,txnID);
+            put.setRequestProperty(ArtifactAction.PUT_TXN_OP, ArtifactAction.PUT_TXN_OP_COMMIT);
             Subject.doAs(userSubject, new RunnableAction(put));
             Assert.assertNull(put.getThrowable());
             Assert.assertEquals("Created", 201, put.getResponseCode());
@@ -366,19 +425,19 @@ public class PutTransactionTest extends MinocTest {
             Assert.assertEquals("contentChecksum", expectedChecksum, actualChecksum);
             Assert.assertEquals("contentlength", expectedLength, actualLength);
             
-            // head in txn
+            log.info("head in txn");
             head = new HttpGet(artifactURL, true);
             head.setHeadOnly(true);
-            head.setRequestProperty(ArtifactAction.PUT_TXN, txnID);
+            head.setRequestProperty(ArtifactAction.PUT_TXN_ID, txnID);
             Subject.doAs(userSubject, new RunnableAction(head));
-            Assert.assertEquals("no more txn", 404, head.getResponseCode());
+            Assert.assertEquals("no more txn", 400, head.getResponseCode()); // 400 vs 404 TBD
             
-            // head
+            log.info("head");
             head = new HttpGet(artifactURL, true);
             head.setHeadOnly(true);
             Subject.doAs(userSubject, new RunnableAction(head));
             Assert.assertEquals("found committed", 200, head.getResponseCode());
-            Assert.assertNull("no txn header", head.getResponseHeader(ArtifactAction.PUT_TXN));
+            Assert.assertNull("no txn header", head.getResponseHeader(ArtifactAction.PUT_TXN_ID));
             Assert.assertNotNull("digest", head.getResponseHeader(HttpTransfer.DIGEST));
             Assert.assertNotNull("length", head.getResponseHeader(HttpTransfer.CONTENT_LENGTH));
             actualChecksum = head.getDigest();
@@ -387,7 +446,7 @@ public class PutTransactionTest extends MinocTest {
             Assert.assertEquals("contentChecksum", expectedChecksum, actualChecksum);
             Assert.assertEquals("contentlength", expectedLength, actualLength);
             
-            // delete
+            log.info("delete");
             delete = new HttpDelete(artifactURL, false);
             Subject.doAs(userSubject, new RunnableAction(delete));
             Assert.assertNull(delete.getThrowable());

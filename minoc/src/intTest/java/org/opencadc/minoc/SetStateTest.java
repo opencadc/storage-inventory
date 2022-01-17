@@ -250,7 +250,7 @@ public class SetStateTest extends MinocTest {
             Subject.doAs(userSubject, new RunnableAction(put));
             int responseCode = put.getResponseCode();
             log.info(testMethod + " put response: " + responseCode + " " + put.getThrowable());
-            Assert.assertEquals("incorrect response code", 200, responseCode);
+            Assert.assertEquals("incorrect response code", 201, responseCode);
             Assert.assertNull(put.getThrowable());
 
             // set minoc state to 'ReadOnly'
