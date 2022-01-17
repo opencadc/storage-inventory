@@ -133,7 +133,7 @@ public class ProtocolsGenerator {
     List<Protocol> getProtocols(Transfer transfer) throws ResourceNotFoundException, IOException {
         String authToken = null;
         // create an auth token
-        URI artifactURI = transfer.getTarget();
+        URI artifactURI = transfer.getTargets().get(0); // see PostAction line ~127
         TokenTool tk = new TokenTool(publicKeyFile, privateKeyFile);
         if (transfer.getDirection().equals(Direction.pullFromVoSpace)) {
             authToken = tk.generateToken(artifactURI, ReadGrant.class, user);
