@@ -98,7 +98,7 @@ public class SingleBucketSwiftStorageAdapterTest extends StorageAdapterBasicTest
     final SwiftStorageAdapter swiftAdapter;
     
     public SingleBucketSwiftStorageAdapterTest() throws Exception {
-        super(new SwiftStorageAdapter(true, System.getProperty("user.name") + "-single-test", 3, false));
+        super(new SwiftStorageAdapter(true, System.getProperty("user.name") + "-single-test", 2, false));
         this.swiftAdapter = (SwiftStorageAdapter) super.adapter;
     }
     

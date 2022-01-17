@@ -102,10 +102,11 @@ public class SwiftStorageAdapterTest {
     
     @Test
     public void testCalcMinSegmentSize() throws Exception {
+        SwiftStorageAdapter ssa = new SwiftStorageAdapter("test-bucket", 0, false);
         
         // small object
         long contentLength = HALF_GB;
-        long min = SwiftStorageAdapter.calcMinSegmentSize(contentLength);
+        long min = ssa.calcMinSegmentSize(contentLength);
         int num = 0;
         long rem = contentLength;
         while (rem >= min) {
@@ -122,7 +123,7 @@ public class SwiftStorageAdapterTest {
         
         // largest simple object
         contentLength = 5 * GB;
-        min = SwiftStorageAdapter.calcMinSegmentSize(contentLength);
+        min = ssa.calcMinSegmentSize(contentLength);
         rem = contentLength;
         num = 0;
         while (rem >= min) {
@@ -139,7 +140,7 @@ public class SwiftStorageAdapterTest {
         
         // typical segmented object
         contentLength = 12 * GB;
-        min = SwiftStorageAdapter.calcMinSegmentSize(contentLength);
+        min = ssa.calcMinSegmentSize(contentLength);
         rem = contentLength;
         num = 0;
         while (rem >= min) {
@@ -156,7 +157,7 @@ public class SwiftStorageAdapterTest {
         
         // smallest segmented object, odd size with rem
         contentLength = 5 * GB + 1;
-        min = SwiftStorageAdapter.calcMinSegmentSize(contentLength);
+        min = ssa.calcMinSegmentSize(contentLength);
         rem = contentLength;
         num = 0;
         while (rem >= min) {
@@ -173,7 +174,7 @@ public class SwiftStorageAdapterTest {
         
         // first prime after 5GiB
         contentLength = 5368709131L;
-        min = SwiftStorageAdapter.calcMinSegmentSize(contentLength);
+        min = ssa.calcMinSegmentSize(contentLength);
         rem = contentLength;
         num = 0;
         while (rem >= min) {
@@ -190,29 +191,39 @@ public class SwiftStorageAdapterTest {
     
     @Test
     public void testGetNextPartName() throws Exception {
-        SwiftStorageAdapter swiftAdapter = new SwiftStorageAdapter("test-bucket", 3, false);
+        SwiftStorageAdapter swiftAdapter = new SwiftStorageAdapter("test-bucket", 0, false);
         
         String prefix = "id:uuid:p:";
         
         String e1 = prefix + "0001";
         String a1 = swiftAdapter.getNextPartName(prefix, null);
+        log.info(null + " -> " + a1);
         Assert.assertEquals(e1, a1);
         
         String e2 = prefix + "0002";
         String a2 = swiftAdapter.getNextPartName(prefix, a1);
+        log.info(a1 + " -> " + a2);
         Assert.assertEquals(e2, a2);
+        
+        try {
+            String a3 = prefix + "9999";
+            String a4 = swiftAdapter.getNextPartName(prefix, a3);
+            Assert.fail("expected IllegalArgumentException, got: " + a4);
+        } catch (IllegalArgumentException ex) {
+            log.info("caught expected: " + ex);
+        }
     }
     
     @Test
     public void testGenerateID() throws Exception {
-        SwiftStorageAdapter swiftAdapter = new SwiftStorageAdapter("test-bucket", 3, false);
+        SwiftStorageAdapter swiftAdapter = new SwiftStorageAdapter("test-bucket", 0, false);
         // enough to verify that randomness in the scheme doesn't create invalid URI?
         for (int i = 0; i < 20; i++) {
             StorageLocation loc = swiftAdapter.generateStorageLocation();
             log.info("testGenerateID (single-bucket): " + loc);
         }
         
-        swiftAdapter = new SwiftStorageAdapter("test-bucket", 3, true);
+        swiftAdapter = new SwiftStorageAdapter("test-bucket", 1, true);
         // enough to verify that randomness in the scheme doesn't create invalid URI?
         for (int i = 0; i < 20; i++) {
             StorageLocation loc = swiftAdapter.generateStorageLocation();

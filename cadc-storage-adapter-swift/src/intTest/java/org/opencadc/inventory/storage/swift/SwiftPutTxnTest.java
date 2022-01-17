@@ -96,7 +96,7 @@ public class SwiftPutTxnTest extends StorageAdapterPutTxnTest {
     final SwiftStorageAdapter swiftAdapter;
     
     public SwiftPutTxnTest() throws Exception {
-        super(new SwiftStorageAdapter(true, System.getProperty("user.name") + "-txn-test", 1, true)); // single-bucket adapter for this
+        super(new SwiftStorageAdapter(true, System.getProperty("user.name") + "-txn-test", 1, true));
         this.swiftAdapter = (SwiftStorageAdapter) super.adapter;
     }
     
@@ -121,6 +121,109 @@ public class SwiftPutTxnTest extends StorageAdapterPutTxnTest {
     @Test
     public void testCleanupOnly() {
         log.info("testCleanupOnly: no-op");
+    }
+    
+    @Test
+    public void testTransactionStatus() {
+        try {
+            URI uri = URI.create("cadc:TEST/testStartTransaction-null");
+            PutTransaction txn = adapter.startTransaction(uri, null);
+            log.info("null content length: " + txn);
+            Assert.assertNotNull(txn);
+            Assert.assertNull(txn.getMinSegmentSize());
+            Assert.assertNull(txn.getMaxSegmentSize());
+            Assert.assertFalse(((SwiftPutTransaction) txn).dynamicLargeObject);
+            
+            PutTransaction ts = adapter.getTransactionStatus(txn.getID());
+            Assert.assertNotNull(ts);
+            Assert.assertEquals(txn.getMinSegmentSize(), ts.getMinSegmentSize());
+            Assert.assertEquals(txn.getMaxSegmentSize(), ts.getMaxSegmentSize());
+            Assert.assertEquals(((SwiftPutTransaction) txn).dynamicLargeObject, ((SwiftPutTransaction) ts).dynamicLargeObject);
+            
+            adapter.abortTransaction(txn.getID());
+            try {
+                PutTransaction nf = adapter.getTransactionStatus(txn.getID());
+            } catch (IllegalArgumentException expected) {
+                log.info("caught expected: " + expected);
+            }
+            
+            uri = URI.create("cadc:TEST/testStartTransaction-small");
+            Long len = 1024L;
+            txn = adapter.startTransaction(uri, len);
+            log.info("small content length: " + txn);
+            Assert.assertNotNull(txn);
+            Assert.assertNull(txn.getMinSegmentSize());
+            Assert.assertNull(txn.getMaxSegmentSize());
+            Assert.assertFalse(((SwiftPutTransaction) txn).dynamicLargeObject);
+            
+            ts = adapter.getTransactionStatus(txn.getID());
+            Assert.assertNotNull(ts);
+            Assert.assertEquals(txn.getMinSegmentSize(), ts.getMinSegmentSize());
+            Assert.assertEquals(txn.getMaxSegmentSize(), ts.getMaxSegmentSize());
+            Assert.assertEquals(((SwiftPutTransaction) txn).dynamicLargeObject, ((SwiftPutTransaction) ts).dynamicLargeObject);
+            
+            adapter.abortTransaction(txn.getID());
+            try {
+                PutTransaction nf = adapter.getTransactionStatus(txn.getID());
+            } catch (IllegalArgumentException expected) {
+                log.info("caught expected: " + expected);
+            }
+            
+            uri = URI.create("cadc:TEST/testStartTransaction-large");
+            len = (long) 3L * swiftAdapter.segmentMaxBytes / 2L;
+            txn = adapter.startTransaction(uri, len);
+            log.info("large content length: " + txn);
+            Assert.assertNotNull(txn);
+            Assert.assertNotNull(txn.getMinSegmentSize());
+            Assert.assertTrue(txn.getMinSegmentSize() < swiftAdapter.segmentMaxBytes);
+            Assert.assertNotNull(txn.getMaxSegmentSize());
+            Assert.assertEquals(swiftAdapter.segmentMaxBytes, txn.getMaxSegmentSize().longValue());
+            Assert.assertTrue(((SwiftPutTransaction) txn).dynamicLargeObject);
+            
+            ts = adapter.getTransactionStatus(txn.getID());
+            Assert.assertNotNull(ts);
+            Assert.assertEquals(txn.getMinSegmentSize(), ts.getMinSegmentSize());
+            Assert.assertEquals(txn.getMaxSegmentSize(), ts.getMaxSegmentSize());
+            Assert.assertEquals(((SwiftPutTransaction) txn).dynamicLargeObject, ((SwiftPutTransaction) ts).dynamicLargeObject);
+            
+            adapter.abortTransaction(txn.getID());
+            try {
+                PutTransaction nf = adapter.getTransactionStatus(txn.getID());
+            } catch (IllegalArgumentException expected) {
+                log.info("caught expected: " + expected);
+            }
+            
+            uri = URI.create("cadc:TEST/testStartTransaction-dlo-adjust");
+            long tmp = swiftAdapter.segmentMinBytes;
+            swiftAdapter.segmentMinBytes = 1024L;
+            len = (long) 8192L;
+            txn = adapter.startTransaction(uri, len);
+            log.info("large content length: " + txn);
+            Assert.assertNotNull(txn);
+            Assert.assertNotNull(txn.getMinSegmentSize());
+            Assert.assertEquals(swiftAdapter.segmentMinBytes, txn.getMinSegmentSize().longValue());
+            Assert.assertNotNull(txn.getMaxSegmentSize());
+            Assert.assertEquals(swiftAdapter.segmentMaxBytes, txn.getMaxSegmentSize().longValue());
+            Assert.assertTrue(((SwiftPutTransaction) txn).dynamicLargeObject);
+            
+            ts = adapter.getTransactionStatus(txn.getID());
+            Assert.assertNotNull(ts);
+            Assert.assertEquals(txn.getMinSegmentSize(), ts.getMinSegmentSize());
+            Assert.assertEquals(txn.getMaxSegmentSize(), ts.getMaxSegmentSize());
+            Assert.assertEquals(((SwiftPutTransaction) txn).dynamicLargeObject, ((SwiftPutTransaction) ts).dynamicLargeObject);
+            
+            adapter.abortTransaction(txn.getID());
+            try {
+                PutTransaction nf = adapter.getTransactionStatus(txn.getID());
+            } catch (IllegalArgumentException expected) {
+                log.info("caught expected: " + expected);
+            }
+            
+        } catch (Exception unexpected) {
+            log.error("unexpected exception", unexpected);
+            Assert.fail("unexpected exception: " + unexpected);
+        } 
+        
     }
     
     @Test
@@ -163,4 +266,41 @@ public class SwiftPutTxnTest extends StorageAdapterPutTxnTest {
             Assert.fail("unexpected exception: " + unexpected);
         }
     }
+
+    @Override
+    public void testPutFailResumeCommit() {
+        long tmp = swiftAdapter.segmentMinBytes;
+        swiftAdapter.segmentMinBytes = 10L;
+        try {
+            super.testPutFailResumeCommit();
+        } finally {
+            swiftAdapter.segmentMinBytes = tmp;
+        }
+    }
+
+    @Override
+    public void testPutResumeCommit() {
+        long tmp = swiftAdapter.segmentMinBytes;
+        swiftAdapter.segmentMinBytes = 10L;
+        try {
+            super.testPutResumeCommit();
+        } finally {
+            swiftAdapter.segmentMinBytes = tmp;
+        }
+        
+    }
+
+    @Override
+    public void testPutRevertPesumeCommit() {
+        long tmp = swiftAdapter.segmentMinBytes;
+        swiftAdapter.segmentMinBytes = 10L;
+        try {
+            super.testPutRevertPesumeCommit();
+        } finally {
+            swiftAdapter.segmentMinBytes = tmp;
+        }
+    }
+    
+    
+    
 }

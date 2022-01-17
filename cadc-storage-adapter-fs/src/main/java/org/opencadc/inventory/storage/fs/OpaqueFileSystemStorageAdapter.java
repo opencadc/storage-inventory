@@ -144,7 +144,7 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
     private static final String TXN_FOLDER = "transaction";
     private static final String CONTENT_FOLDER = "content";
 
-    private static final String DEFAULT_CHECKSUM_SCHEME = "md5";
+    private static final String DEFAULT_CHECKSUM_ALGORITHM = "MD5";
     private static final int CIRC_BUFFERS = 3;
     private static final int CIRC_BUFFERSIZE = 64 * 1024;
 
@@ -319,6 +319,10 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
 
         Path txnTarget;
         MessageDigestAPI txnDigest = null;
+        String checksumAlg = DEFAULT_CHECKSUM_ALGORITHM;
+        if (newArtifact.contentChecksum != null) {
+            checksumAlg = newArtifact.contentChecksum.getScheme(); // TODO: try sha1 in here
+        }
         try {
             if (transactionID != null) {
                 // validate
@@ -345,7 +349,7 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
             } else {
                 String tmp = UUID.randomUUID().toString();
                 txnTarget = txnPath.resolve(tmp);
-                txnDigest = MessageDigestAPI.getInstance(DEFAULT_CHECKSUM_SCHEME);
+                txnDigest = MessageDigestAPI.getInstance(checksumAlg);
                 if (Files.exists(txnTarget)) {
                     // unlikely: duplicate UUID in the txnpath directory?
                     throw new RuntimeException("BUG: txnTarget already exists: " + txnTarget);
@@ -356,7 +360,7 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
         } catch (InvalidPathException e) {
             throw new RuntimeException("BUG: invalid path: " + txnPath, e);
         } catch (NoSuchAlgorithmException ex) {
-            throw new RuntimeException("BUG: failed to create MessageDigestAPI: " + ex);
+            throw new RuntimeException("failed to create MessageDigestAPI: " + checksumAlg, ex);
         }
         log.debug("transaction: " + txnTarget + " transactionID: " + transactionID);
         
@@ -408,8 +412,8 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
             String curDigestState = MessageDigestAPI.getEncodedState(md);
             Long curLength = Files.size(txnTarget);
             
-            String md5Val = HexUtil.toHex(md.digest());
-            checksum = URI.create(DEFAULT_CHECKSUM_SCHEME + ":" + md5Val);
+            String csVal = HexUtil.toHex(md.digest());
+            checksum = URI.create(checksumAlg.toLowerCase() + ":" + csVal);
             log.debug("current checksum: " + checksum);
             log.debug("current file size: " + curLength);
             
@@ -417,7 +421,7 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
                 // incomplete: no further content checks
                 log.debug("incomplete put in transaction: " + transactionID + " - not verifying checksum");
             } else {
-                boolean checksumProvided = newArtifact.contentChecksum != null && newArtifact.contentChecksum.getScheme().equals(DEFAULT_CHECKSUM_SCHEME);
+                boolean checksumProvided = newArtifact.contentChecksum != null;
                 if (checksumProvided) {
                     if (!newArtifact.contentChecksum.equals(checksum)) {
                         throw new IncorrectContentChecksumException(newArtifact.contentChecksum + " != " + checksum);
@@ -426,8 +430,8 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
                 if (newArtifact.contentLength != null && !newArtifact.contentLength.equals(curLength)) {
                     if (checksumProvided) {
                         // likely bug in the client, throw a 400 instead
-                        throw new IllegalArgumentException("length mismatch: " + newArtifact.contentLength + " != " + curLength
-                            + " when checksum was correct: client BUG?");
+                        throw new IncorrectContentLengthException(newArtifact.contentLength + " != " + curLength
+                            + " but checksum was correct! client BUG?");
                     }
                     throw new IncorrectContentLengthException(newArtifact.contentLength + " != " + curLength);
                 }
@@ -497,10 +501,11 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
             OutputStream  ostream = Files.newOutputStream(txnFile, StandardOpenOption.WRITE, StandardOpenOption.CREATE_NEW);
             ostream.close();
             
-            MessageDigestAPI md = MessageDigestAPI.getInstance(DEFAULT_CHECKSUM_SCHEME);
+            // TODO: accept non-default checksum algorithm for txn?
+            MessageDigestAPI md = MessageDigestAPI.getInstance(DEFAULT_CHECKSUM_ALGORITHM);
             String digestState = MessageDigestAPI.getEncodedState(md);
             String md5Val = HexUtil.toHex(md.digest());
-            URI checksum = URI.create(DEFAULT_CHECKSUM_SCHEME + ":" + md5Val);
+            URI checksum = URI.create(DEFAULT_CHECKSUM_ALGORITHM + ":" + md5Val);
             setFileAttribute(txnFile, CUR_DIGEST_ATTR, digestState);
             setFileAttribute(txnFile, CHECKSUM_ATTR, checksum.toASCIIString());
             setFileAttribute(txnFile, ARTIFACTID_ATTR, artifactURI.toASCIIString());
