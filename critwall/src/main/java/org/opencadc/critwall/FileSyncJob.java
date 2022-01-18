@@ -343,8 +343,9 @@ public class FileSyncJob implements Runnable {
             protocolList.add(httpsAuth);
         }
 
-        Transfer transfer = new Transfer(artifact, Direction.pullFromVoSpace, protocolList);
+        Transfer transfer = new Transfer(artifact, Direction.pullFromVoSpace);
         transfer.version = VOS.VOSPACE_21;
+        transfer.getProtocols().addAll(protocolList);
 
         TransferWriter writer = new TransferWriter();
         ByteArrayOutputStream out = new ByteArrayOutputStream();

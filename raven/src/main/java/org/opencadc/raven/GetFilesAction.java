@@ -135,13 +135,11 @@ public class GetFilesAction extends FilesAction {
 
 
     URI getFirstURL() throws ResourceNotFoundException, IOException {
-        List<Protocol> plist = new ArrayList<Protocol>();
+        Transfer transfer = new Transfer(artifactURI, Direction.pullFromVoSpace);
         Protocol proto = new Protocol(VOS.PROTOCOL_HTTPS_GET);
-        // request already authorized, hence ask for anon security to get a pre-authorized URL
         proto.setSecurityMethod(Standards.SECURITY_METHOD_ANON);
-        plist.add(proto);
-        Transfer transfer = new Transfer(artifactURI, Direction.pullFromVoSpace, plist);
-
+        transfer.getProtocols().add(proto);
+        
         ProtocolsGenerator pg = new ProtocolsGenerator(this.artifactDAO, this.publicKeyFile, this.privateKeyFile,
                                                        this.user, this.siteAvailabilities, this.siteRules);
         List<Protocol> protos = pg.getProtocols(transfer);
