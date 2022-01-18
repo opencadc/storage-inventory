@@ -69,7 +69,6 @@ package org.opencadc.minoc;
 
 import ca.nrc.cadc.auth.AuthenticationUtil;
 import ca.nrc.cadc.auth.HttpPrincipal;
-import ca.nrc.cadc.cred.client.CredUtil;
 import ca.nrc.cadc.log.WebServiceLogInfo;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
@@ -175,7 +174,9 @@ public abstract class ArtifactAction extends RestAction {
         if (ao != null) {
             try {
                 this.authenticateOnly = Boolean.valueOf(ao);
-                log.warn("(configuration) authenticateOnly = " + authenticateOnly);
+                if (authenticateOnly) {
+                    log.warn("(configuration) authenticateOnly = " + authenticateOnly);
+                }
             } catch (Exception ex) {
                 throw new IllegalStateException("invalid config: " + MinocInitAction.DEV_AUTH_ONLY_KEY + "=" + ao + " must be true|false or not set");
             }
