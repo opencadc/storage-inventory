@@ -69,7 +69,6 @@ package org.opencadc.minoc;
 
 import ca.nrc.cadc.auth.AuthenticationUtil;
 import ca.nrc.cadc.auth.HttpPrincipal;
-import ca.nrc.cadc.cred.client.CredUtil;
 import ca.nrc.cadc.log.WebServiceLogInfo;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;

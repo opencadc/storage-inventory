@@ -169,10 +169,8 @@ public class NegotiationTest extends RavenTest {
                             final SiteLocation location1 = new SiteLocation(site1.getID());
                             final SiteLocation location2 = new SiteLocation(site2.getID());
 
-                            List<Protocol> protos = new ArrayList<>();
-                            protos.add(p);
-                            
-                            Transfer transfer = new Transfer(artifactURI, Direction.pullFromVoSpace, protos);
+                            Transfer transfer = new Transfer(artifactURI, Direction.pullFromVoSpace);
+                            transfer.getProtocols().add(p);
                             transfer.version = VOS.VOSPACE_21;
 
                             artifactDAO.put(artifact);
@@ -304,10 +302,8 @@ public class NegotiationTest extends RavenTest {
                         try {
                             siteDAO.put(site1); // not writable
 
-                            List<Protocol> protos = new ArrayList<>();
-                            protos.add(p);
-
-                            Transfer transfer = new Transfer(artifactURI, Direction.pushToVoSpace, protos);
+                            Transfer transfer = new Transfer(artifactURI, Direction.pushToVoSpace);
+                            transfer.getProtocols().add(p);
                             transfer.version = VOS.VOSPACE_21;
 
                             // test that there's no place to put
@@ -416,7 +412,8 @@ public class NegotiationTest extends RavenTest {
                     try {
                         siteDAO.put(site1);
 
-                        Transfer transfer = new Transfer(artifactURI, Direction.pullFromVoSpace, protos);
+                        Transfer transfer = new Transfer(artifactURI, Direction.pullFromVoSpace);
+                        transfer.getProtocols().addAll(protos);
                         transfer.version = VOS.VOSPACE_21;
 
                         artifactDAO.put(artifact);
@@ -520,12 +517,11 @@ public class NegotiationTest extends RavenTest {
                         // add readonly storage site
                         siteDAO.put(testSite1);
 
-                        List<Protocol> protos = new ArrayList<>();
                         Protocol p = new Protocol(VOS.PROTOCOL_HTTPS_GET);
                         p.setSecurityMethod(Standards.SECURITY_METHOD_CERT);
-                        protos.add(p);
 
-                        Transfer transfer = new Transfer(artifactURI, Direction.pushToVoSpace, protos);
+                        Transfer transfer = new Transfer(artifactURI, Direction.pushToVoSpace);
+                        transfer.getProtocols().add(p);
                         transfer.version = VOS.VOSPACE_21;
                         Transfer response = negotiate(transfer);
 

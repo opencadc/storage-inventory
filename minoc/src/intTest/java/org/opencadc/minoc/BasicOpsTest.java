@@ -120,15 +120,18 @@ public class BasicOpsTest extends MinocTest {
             String encoding = "test-encoding";
             String type = "text/plain";
             byte[] data = content.getBytes();
+            URI expectedChecksum = computeChecksumURI(data);
 
             // put: no length or checksum
             InputStream in = new ByteArrayInputStream(data);
             HttpUpload put = new HttpUpload(in, artifactURL);
             put.setRequestProperty(HttpTransfer.CONTENT_TYPE, type);
             put.setRequestProperty(HttpTransfer.CONTENT_ENCODING, encoding);
-            put.setDigest(computeChecksumURI(data));
+            put.setDigest(expectedChecksum);
 
             Subject.doAs(userSubject, new RunnableAction(put));
+            log.info("put: " + put.getResponseCode() + " " + put.getThrowable());
+            log.info("headers: " + put.getResponseHeader("content-length") + " " + put.getResponseHeader("digest"));
             Assert.assertNull(put.getThrowable());
             Assert.assertEquals("Created", 201, put.getResponseCode());
 
@@ -136,6 +139,8 @@ public class BasicOpsTest extends MinocTest {
             OutputStream out = new ByteArrayOutputStream();
             HttpGet get = new HttpGet(artifactURL, out);
             Subject.doAs(userSubject, new RunnableAction(get));
+            log.info("get: " + get.getResponseCode() + " " + get.getThrowable());
+            log.info("headers: " + get.getResponseHeader("content-length") + " " + get.getResponseHeader("digest"));
             Assert.assertNull(get.getThrowable());
             URI checksumURI = get.getDigest();
             long contentLength = get.getContentLength();
@@ -158,6 +163,8 @@ public class BasicOpsTest extends MinocTest {
             HttpPost post = new HttpPost(artifactURL, params, false);
             post.setDigest(computeChecksumURI(data));
             Subject.doAs(userSubject, new RunnableAction(post));
+            log.info("post: " + post.getResponseCode() + " " + post.getThrowable());
+            log.info("headers: " + post.getResponseHeader("content-length") + " " + post.getResponseHeader("digest"));
             Assert.assertNull(post.getThrowable());
             Assert.assertEquals("Accepted", 202, post.getResponseCode());
 
@@ -166,6 +173,9 @@ public class BasicOpsTest extends MinocTest {
             HttpGet head = new HttpGet(artifactURL, bos);
             head.setHeadOnly(true);
             Subject.doAs(userSubject, new RunnableAction(head));
+            log.info("head: " + head.getResponseCode() + " " + head.getThrowable());
+            log.info("headers: " + head.getResponseHeader("content-length") + " " + head.getResponseHeader("digest"));
+            log.warn("head output: " + bos.toString());
             Assert.assertNull(head.getThrowable());
             checksumURI = head.getDigest();
             contentLength = head.getContentLength();
@@ -181,6 +191,7 @@ public class BasicOpsTest extends MinocTest {
             // delete
             HttpDelete delete = new HttpDelete(artifactURL, false);
             Subject.doAs(userSubject, new RunnableAction(delete));
+            log.info("delete: " + delete.getResponseCode() + " " + delete.getThrowable());
             Assert.assertNull(delete.getThrowable());
             Assert.assertEquals("no content", 204, delete.getResponseCode());
             

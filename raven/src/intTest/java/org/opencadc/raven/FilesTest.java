@@ -188,11 +188,11 @@ public class FilesTest extends RavenTest {
 
             // for multiple locations, the service returns the first entry in the list
             // of URLs returned by transfer negotiation.
-            List<Protocol> plist = new ArrayList<Protocol>();
             Protocol proto = new Protocol(VOS.PROTOCOL_HTTPS_GET);
             proto.setSecurityMethod(Standards.SECURITY_METHOD_ANON);
-            plist.add(proto);
-            Transfer transferReq = new Transfer(artifactURI, Direction.pullFromVoSpace, plist);
+            
+            Transfer transferReq = new Transfer(artifactURI, Direction.pullFromVoSpace);
+            transferReq.getProtocols().add(proto);
             transferReq.version = VOS.VOSPACE_21;
             Transfer transferResp = negotiate(transferReq);
             String expectedEndPoint = transferResp.getProtocols().get(0).getEndpoint();

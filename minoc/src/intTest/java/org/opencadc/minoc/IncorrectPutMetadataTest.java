@@ -306,7 +306,7 @@ public class IncorrectPutMetadataTest extends MinocTest {
                     put.run();
                     log.info("response code: " + put.getResponseCode() + " " + put.getThrowable());
                     Assert.assertNull(put.getThrowable());
-                    Assert.assertEquals("should be 201, ok", 201, put.getResponseCode());
+                    Assert.assertEquals("response code", 201, put.getResponseCode());
                     
                     // verify
                     head = new HttpGet(artifactURL, false);

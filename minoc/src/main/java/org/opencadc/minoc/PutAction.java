@@ -321,7 +321,8 @@ public class PutAction extends ArtifactAction {
             log.debug("commit txn: OK");
             
             syncOutput.setCode(201); // created
-            HeadAction.setHeaders(artifact, syncOutput);
+            syncOutput.setDigest(artifact.getContentChecksum());
+            
             super.logInfo.setBytes(artifact.getContentLength());
             
             // this block could be passed off to a thread so request completes??
