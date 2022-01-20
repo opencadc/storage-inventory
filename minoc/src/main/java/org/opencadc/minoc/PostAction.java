@@ -120,8 +120,9 @@ public class PostAction extends ArtifactAction {
         String txnOP = syncInput.getHeader(PUT_TXN_OP);
         log.warn("transactionID: " + txnID + " " + txnOP);
         if (txnID != null) {
-            if (PUT_TXN_OP_COMMIT.equalsIgnoreCase(txnOP)) {
-                throw new IllegalArgumentException("invalid " + PUT_TXN_OP + "=" + PUT_TXN_OP_COMMIT + " must be done with PUT");
+            if (PUT_TXN_OP_START.equalsIgnoreCase(txnOP) 
+                    || PUT_TXN_OP_COMMIT.equalsIgnoreCase(txnOP)) {
+                throw new IllegalArgumentException("invalid " + PUT_TXN_OP + "=" + txnOP + " must be done with PUT");
             } 
             if (PUT_TXN_OP_ABORT.equalsIgnoreCase(txnOP)) {
                 log.warn("abortTransaction: " + txnID);
@@ -135,7 +136,7 @@ public class PostAction extends ArtifactAction {
                 t = storageAdapter.revertTransaction(txnID);
                 syncOutput.setCode(202);
             } else if (txnOP == null) {
-                // POST without no OP:  no change
+                // POST without no OP:  no change or fail?
                 t = storageAdapter.getTransactionStatus(txnID);
                 syncOutput.setCode(204);
             } else {

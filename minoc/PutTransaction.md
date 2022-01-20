@@ -14,7 +14,7 @@ automatically abort failed uploads; this is the preferred approach.
 upload request:
 ```
 HTTP PUT /minoc/files/{Artifact.uri}
-content-length=0 (actual resppon
+content-length={number of bytes in body} (optional)
 digest={checksum of bytes} (optional)
 {body}
 ```
@@ -52,6 +52,7 @@ state:
 ```
 HTTP HEAD /minoc/files/{Artifact.uri}
 x-put-txn-id={transaction id}
+content-length={current length in bytes}
 ```
 response: same as above
 
