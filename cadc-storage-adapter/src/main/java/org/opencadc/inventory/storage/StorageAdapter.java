@@ -142,7 +142,7 @@ public interface StorageAdapter {
      *     and contentLength are set, they will be used to validate the bytes received.
      * @param source The stream from which to read.
      * @param transactionID existing transactionID or null for auto-commit
-     * @param segmentLength length of data to be stored in this segment (requires transactionID != null) or null
+     * 
      * @return current StorageMetadata
      * 
      * @throws ByteLimitExceededException if content length exceeds internal limit

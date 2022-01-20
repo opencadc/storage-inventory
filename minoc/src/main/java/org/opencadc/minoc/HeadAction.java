@@ -99,7 +99,7 @@ public class HeadAction extends ArtifactAction {
     @Override
     public void initAction() throws Exception {
         checkReadable();
-        initAndAuthorize(ReadGrant.class);
+        initAndAuthorize(ReadGrant.class, true); // allowReadWithWriteGrant for head after put
         initDAO();
         initStorageAdapter();
     }

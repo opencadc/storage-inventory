@@ -129,7 +129,6 @@ public class PutTransactionTest extends MinocTest {
             Assert.assertNull(put.getThrowable());
             Assert.assertEquals("Accepted", 202, put.getResponseCode());
             Assert.assertNotNull("digest", put.getResponseHeader(HttpTransfer.DIGEST));
-            Assert.assertNotNull("length", put.getResponseHeader(HttpTransfer.CONTENT_LENGTH));
             String txnID = put.getResponseHeader(ArtifactAction.PUT_TXN_ID);
             Assert.assertNotNull("txnID", txnID);
             log.info("transactionID " + txnID);
@@ -138,7 +137,7 @@ public class PutTransactionTest extends MinocTest {
             long actualLength = put.getContentLength();
             Assert.assertNotNull("contentChecksum", actualChecksum);
             Assert.assertEquals("contentChecksum", expectedChecksum, actualChecksum);
-            Assert.assertEquals("contentlength", expectedLength, actualLength);
+            Assert.assertEquals("contentlength", 0, actualLength);
             
             // head
             HttpGet head = new HttpGet(artifactURL, true);
@@ -178,7 +177,7 @@ public class PutTransactionTest extends MinocTest {
             actualLength = put.getContentLength();
             Assert.assertNotNull("contentChecksum", actualChecksum);
             Assert.assertEquals("contentChecksum", expectedChecksum, actualChecksum);
-            Assert.assertEquals("contentlength", expectedLength, actualLength);
+            Assert.assertEquals("contentlength", 0, actualLength);
             
             // head in txn
             head = new HttpGet(artifactURL, true);
@@ -316,7 +315,7 @@ public class PutTransactionTest extends MinocTest {
             long actualLength = put.getContentLength();
             Assert.assertNotNull("contentChecksum", actualChecksum);
             Assert.assertEquals("contentChecksum", expectedChecksum1, actualChecksum);
-            Assert.assertEquals("contentlength", expectedLength1, actualLength);
+            Assert.assertEquals("contentlength", 0, actualLength);
 
             log.info("head");
             HttpGet head = new HttpGet(artifactURL, true);
@@ -354,7 +353,7 @@ public class PutTransactionTest extends MinocTest {
             actualLength = put.getContentLength();
             Assert.assertNotNull("contentChecksum", actualChecksum);
             Assert.assertEquals("contentChecksum", expectedChecksum, actualChecksum);
-            Assert.assertEquals("contentlength", expectedLength, actualLength);
+            Assert.assertEquals("contentlength", 0, actualLength);
             
             log.info("revert to part 1 only");
             HttpPost revert = new HttpPost(artifactURL, new TreeMap<>(), true);
@@ -372,7 +371,7 @@ public class PutTransactionTest extends MinocTest {
             actualLength = revert.getContentLength();
             Assert.assertNotNull("contentChecksum", actualChecksum);
             Assert.assertEquals("contentChecksum", expectedChecksum1, actualChecksum);
-            Assert.assertEquals("contentlength", expectedLength1, actualLength);
+            Assert.assertEquals("contentlength", 0, actualLength);
             
             log.info("head in txn");
             head = new HttpGet(artifactURL, true);
@@ -405,7 +404,7 @@ public class PutTransactionTest extends MinocTest {
             actualLength = put.getContentLength();
             Assert.assertNotNull("contentChecksum", actualChecksum);
             Assert.assertEquals("contentChecksum", expectedChecksum, actualChecksum);
-            Assert.assertEquals("contentlength", expectedLength, actualLength);
+            Assert.assertEquals("contentlength", 0, actualLength);
             
             log.info("commit: PUT");
             in = new ByteArrayInputStream(new byte[0]);
@@ -423,7 +422,7 @@ public class PutTransactionTest extends MinocTest {
             actualLength = put.getContentLength();
             Assert.assertNotNull("contentChecksum", actualChecksum);
             Assert.assertEquals("contentChecksum", expectedChecksum, actualChecksum);
-            Assert.assertEquals("contentlength", expectedLength, actualLength);
+            Assert.assertEquals("contentlength", 0, actualLength);
             
             log.info("head in txn");
             head = new HttpGet(artifactURL, true);

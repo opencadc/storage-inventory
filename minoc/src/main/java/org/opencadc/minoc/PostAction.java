@@ -74,8 +74,6 @@ import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.db.EntityNotFoundException;
 import org.opencadc.inventory.storage.PutTransaction;
 import org.opencadc.inventory.storage.StorageMetadata;
-import static org.opencadc.minoc.HeadAction.setHeaders;
-import static org.opencadc.minoc.HeadAction.setTransactionHeaders;
 import org.opencadc.permissions.WriteGrant;
 
 /**
@@ -146,9 +144,9 @@ public class PostAction extends ArtifactAction {
             
             StorageMetadata sm = t.storageMetadata;
             Artifact artifact = new Artifact(sm.artifactURI, sm.getContentChecksum(), sm.getContentLastModified(), sm.getContentLength());
-            setTransactionHeaders(t, syncOutput);
-            setHeaders(artifact, syncOutput);
-            
+            HeadAction.setTransactionHeaders(t, syncOutput);
+            syncOutput.setDigest(artifact.getContentChecksum());
+            syncOutput.setHeader("content-length", 0);
             return;
         }
         

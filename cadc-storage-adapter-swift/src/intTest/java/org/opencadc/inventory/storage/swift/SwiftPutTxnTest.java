@@ -67,9 +67,12 @@
 
 package org.opencadc.inventory.storage.swift;
 
+import ca.nrc.cadc.util.HexUtil;
 import ca.nrc.cadc.util.Log4jInit;
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.net.URI;
+import java.security.MessageDigest;
 import java.util.Iterator;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
@@ -126,14 +129,19 @@ public class SwiftPutTxnTest extends StorageAdapterPutTxnTest {
     @Test
     public void testTransactionStatus() {
         try {
+            Long expectedSegSize = swiftAdapter.segmentMaxBytes;
+            
             URI uri = URI.create("cadc:TEST/testStartTransaction-null");
             PutTransaction txn = adapter.startTransaction(uri, null);
             log.info("null content length: " + txn);
             Assert.assertNotNull(txn);
-            Assert.assertNull(txn.getMinSegmentSize());
-            Assert.assertNull(txn.getMaxSegmentSize());
+            Assert.assertNotNull(txn.getMinSegmentSize());
+            Assert.assertNotNull(txn.getMaxSegmentSize());
+            Assert.assertEquals(expectedSegSize, txn.getMinSegmentSize());
+            Assert.assertEquals(expectedSegSize, txn.getMaxSegmentSize());
             Assert.assertFalse(((SwiftPutTransaction) txn).dynamicLargeObject);
             
+            // get status
             PutTransaction ts = adapter.getTransactionStatus(txn.getID());
             Assert.assertNotNull(ts);
             Assert.assertEquals(txn.getMinSegmentSize(), ts.getMinSegmentSize());
@@ -152,8 +160,10 @@ public class SwiftPutTxnTest extends StorageAdapterPutTxnTest {
             txn = adapter.startTransaction(uri, len);
             log.info("small content length: " + txn);
             Assert.assertNotNull(txn);
-            Assert.assertNull(txn.getMinSegmentSize());
-            Assert.assertNull(txn.getMaxSegmentSize());
+            Assert.assertNotNull(txn.getMinSegmentSize());
+            Assert.assertNotNull(txn.getMaxSegmentSize());
+            Assert.assertEquals(expectedSegSize, txn.getMinSegmentSize());
+            Assert.assertEquals(expectedSegSize, txn.getMaxSegmentSize());
             Assert.assertFalse(((SwiftPutTransaction) txn).dynamicLargeObject);
             
             ts = adapter.getTransactionStatus(txn.getID());
@@ -238,6 +248,7 @@ public class SwiftPutTxnTest extends StorageAdapterPutTxnTest {
                 boolean commit = (i % 2 == 0);
                 URI uri = URI.create("cadc:TEST/testPutTransactionIterator-" + i + "-" + commit);
                 final NewArtifact newArtifact = new NewArtifact(uri);
+                newArtifact.contentLength = (long) data.length;
                 final ByteArrayInputStream source = new ByteArrayInputStream(data);
 
                 PutTransaction txn = adapter.startTransaction(uri, null);
@@ -264,6 +275,85 @@ public class SwiftPutTxnTest extends StorageAdapterPutTxnTest {
         } catch (Exception unexpected) {
             log.error("unexpected exception", unexpected);
             Assert.fail("unexpected exception: " + unexpected);
+        }
+    }
+    
+    @Test
+    public void testSegmentTooSmallReject() {
+        long tmp = swiftAdapter.segmentMinBytes;
+        swiftAdapter.segmentMinBytes = 13L;
+        
+        try {
+            String dataString1 = "abcdefghijklmnopqrstuvwxyz\n";
+            String dataString2 = "ABCDEFGHIJKLMNOPQRSTUVWXYZ\n";
+            String dataSmall = "ABCDEFGH";
+            String dataString = dataString1 + dataString2;
+            MessageDigest md = MessageDigest.getInstance("MD5");
+            byte[] data = dataString.getBytes();
+            md.update(data);
+            URI expectedChecksum = URI.create("md5:" + HexUtil.toHex(md.digest()));
+            long expectedLength = data.length;
+            
+            URI uri = URI.create("cadc:TEST/testPutResumeCommit");
+            NewArtifact newArtifact = new NewArtifact(uri);
+            newArtifact.contentChecksum = expectedChecksum;
+            
+            log.info("init");
+            PutTransaction txn = adapter.startTransaction(uri, expectedLength);
+            Assert.assertNotNull(txn);
+            log.info("startTransaction: " + txn);
+            
+            // write part 1
+            data = dataString1.getBytes();
+            ByteArrayInputStream source = new ByteArrayInputStream(data);
+            newArtifact.contentLength = (long) data.length;
+            StorageMetadata meta1 = adapter.put(newArtifact, source, txn.getID());
+            log.info("meta1: " + meta1);
+            Assert.assertNotNull(meta1);
+            Assert.assertEquals("length", data.length, meta1.getContentLength().longValue());
+            log.info("put 1");
+            
+            // check txn status
+            PutTransaction ts1 = adapter.getTransactionStatus(txn.getID());
+            Assert.assertNotNull(ts1.storageMetadata);
+            StorageMetadata txnMeta1 = ts1.storageMetadata;
+            log.info("after write part 1: " + txnMeta1 + " in " + txn.getID());
+            Assert.assertNotNull(txnMeta1);
+            Assert.assertTrue("valid", txnMeta1.isValid());
+            Assert.assertNotNull("artifactURI", txnMeta1.artifactURI);
+            Assert.assertEquals("length", data.length, txnMeta1.getContentLength().longValue());
+
+            swiftAdapter.segmentMinBytes = tmp;
+            
+            // write too small data  
+            try {
+                data = dataSmall.getBytes();
+                source = new ByteArrayInputStream(data);
+                newArtifact.contentLength = (long) data.length;
+                StorageMetadata meta2 = adapter.put(newArtifact, source, txn.getID());
+                Assert.fail("expected IllegalArgumentException, got: " + meta2);
+            } catch (IllegalArgumentException ex) {
+                log.info("caught expected: " + ex);
+            }
+            
+            // check txn status
+            PutTransaction ts2 = adapter.getTransactionStatus(txn.getID());
+            Assert.assertNotNull(ts2.storageMetadata);
+            StorageMetadata txnMeta2 = ts2.storageMetadata;
+            log.info("after failed write part 2: " + txnMeta2 + " in " + txn.getID());
+            Assert.assertNotNull(txnMeta2);
+            Assert.assertEquals("valid", txnMeta1.isValid(), txnMeta2.isValid());
+            Assert.assertEquals("artifactURI", txnMeta1.artifactURI, txnMeta2.artifactURI);
+            Assert.assertEquals("length", txnMeta1.getContentLength(), txnMeta2.getContentLength());
+            Assert.assertEquals("length", txnMeta1.getContentChecksum(), txnMeta2.getContentChecksum());
+            
+            // abort
+            adapter.abortTransaction(txn.getID());
+        } catch (Exception unexpected) {
+            log.error("unexpected exception", unexpected);
+            Assert.fail("unexpected exception: " + unexpected);
+        } finally {
+            swiftAdapter.segmentMinBytes = tmp;
         }
     }
 

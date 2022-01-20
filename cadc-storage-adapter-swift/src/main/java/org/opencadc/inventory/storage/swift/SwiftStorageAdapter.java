@@ -169,6 +169,7 @@ public class SwiftStorageAdapter  implements StorageAdapter {
     private static final String PT_MAX_ATTR = TRANSACTION_ATTR + ".maxlen";
     private static final String CUR_DIGEST_ATTR = TRANSACTION_ATTR + ".curdigest";
     private static final String PREV_DIGEST_ATTR = TRANSACTION_ATTR + ".prevdigest";
+    private static final String TOTAL_LENGTH_ATTR = TRANSACTION_ATTR + ".totallen";
     
     private static final int CIRC_BUFFERS = 3;
     private static final int CIRC_BUFFERSIZE = 64 * 1024;
@@ -383,7 +384,7 @@ public class SwiftStorageAdapter  implements StorageAdapter {
         } else {
             Container mb = client.getContainer(storageBucket);
             if (!mb.exists()) {
-               try {
+                try {
                     log.info("creating: " + storageBucket);
                     mb.create();
                 } catch (CommandException ex) {
@@ -598,6 +599,35 @@ public class SwiftStorageAdapter  implements StorageAdapter {
         try {
             if (transactionID != null) {
                 txn = getTransactionStatusImpl(transactionID);
+                // enforce segment size limits
+                if (newArtifact.contentLength == null) {
+                    throw new IllegalArgumentException("invalid put: must specify content-length of segment");
+                }
+                log.warn("enforce segment size limit: " + newArtifact.contentLength + " vs "
+                        + "[" + txn.getMinSegmentSize() + "," + txn.getMaxSegmentSize() + "]");
+                
+                if (txn.getMaxSegmentSize() < newArtifact.contentLength) {
+                    throw new IllegalArgumentException("invalid put: segment too large - expected content-length in "
+                            + "[" + txn.getMinSegmentSize() + "," + txn.getMaxSegmentSize() + "]");
+                }
+                
+                Long curLength = 0L; 
+                if (txn.storageMetadata != null) {
+                    curLength = txn.storageMetadata.getContentLength();
+                }
+                long elen = curLength + newArtifact.contentLength;
+                if (txn.totalLength != null) {
+                    if (elen == txn.totalLength) {
+                        log.warn("transaction " + transactionID + ": last segment, allowing content-length=" + newArtifact.contentLength);
+                    } else {
+                        if (newArtifact.contentLength < txn.getMinSegmentSize()) {
+                            throw new IllegalArgumentException("invalid put: segment too small - expected content-length in "
+                                    + "[" + txn.getMinSegmentSize() + "," + txn.getMaxSegmentSize() + "]");
+                        }
+                        
+                    }
+                } // else: currently don't allow segmented put of unknown length
+                
                 if (txn.dynamicLargeObject) {
                     writeDataLocation = getNextTransactionStorageLocation(txn.getID());
                 } else {
@@ -721,10 +751,24 @@ public class SwiftStorageAdapter  implements StorageAdapter {
             log.debug("current checksum: " + checksum);
             log.debug("current file size: " + curLength);
             
-            if (txn != null && (newArtifact.contentLength == null || curLength < newArtifact.contentLength)) {
-                // incomplete: no further content checks
-                log.debug("incomplete put in transaction: " + txn.getID() + " - not verifying checksum");
+            if (txn != null) {
+                if (txn.totalLength != null && curLength < txn.totalLength) {
+                    // incomplete: no further content checks
+                    // TODO: could check that curLength increased by exactly newArtifact.contentLength
+                    log.debug("incomplete put in transaction: " + txn.getID() + " - not verifying checksum or length");
+                } else {
+                    // complete: do content checks
+                    if (newArtifact.contentChecksum != null && !checksum.equals(newArtifact.contentChecksum)) {
+                        // auto revert?
+                        throw new PreconditionFailedException("checksum mismatch: " + newArtifact.contentChecksum + " != " + checksum);
+                    }
+                    if (txn.totalLength != null && !curLength.equals(txn.totalLength)) {
+                        // auto revert?
+                        throw new PreconditionFailedException("length mismatch: " + txn.totalLength + " != " + curLength);
+                    }
+                }
             } else {
+                // no txn: single put
                 if (newArtifact.contentChecksum != null && !checksum.equals(newArtifact.contentChecksum)) {
                     obj.delete();
                     throw new PreconditionFailedException("checksum mismatch: " + newArtifact.contentChecksum + " != " + checksum);
@@ -826,14 +870,13 @@ public class SwiftStorageAdapter  implements StorageAdapter {
             SwiftPutTransaction ret;
             if (contentLength == null) {
                 // stream of unknown length: default to simple object
-                ret = new SwiftPutTransaction(transactionID, null, null);
+                ret = new SwiftPutTransaction(transactionID, segmentMaxBytes, segmentMaxBytes);
                 
                 // stream of unknown length: assume dynamic large object
-                //ret = new SwiftPutTransaction(transactionID, PT_MAX_BYTES, PT_MAX_BYTES);
                 //ret.dynamicLargeObject = true;
             } else if (contentLength <= segmentMinBytes) {
                 // normal object
-                ret = new SwiftPutTransaction(transactionID, null, null);
+                ret = new SwiftPutTransaction(transactionID, segmentMaxBytes, segmentMaxBytes);
             } else {
                 // dynamic large object
                 long minSeg = segmentMinBytes;
@@ -843,6 +886,7 @@ public class SwiftStorageAdapter  implements StorageAdapter {
                 ret = new SwiftPutTransaction(transactionID, minSeg, segmentMaxBytes);
                 ret.dynamicLargeObject = true;
             }
+            ret.totalLength = contentLength;
             
             // TODO: accept non-default checksum algorithm for txn?
             MessageDigestAPI md = MessageDigestAPI.getInstance(DEFAULT_CHECKSUM_ALGORITHM);
@@ -865,6 +909,9 @@ public class SwiftStorageAdapter  implements StorageAdapter {
             }
             if (ret.getMaxSegmentSize() != null) {
                 txn.setAndDoNotSaveMetadata(PT_MAX_ATTR, ret.getMaxSegmentSize().toString());
+            }
+            if (ret.totalLength != null) {
+                txn.setAndDoNotSaveMetadata(TOTAL_LENGTH_ATTR, ret.totalLength.toString());
             }
             
             txn.saveMetadata();
@@ -1034,7 +1081,6 @@ public class SwiftStorageAdapter  implements StorageAdapter {
                 Map<String,Object> meta = txn.getMetadata();
                 String smin = (String) meta.get(PT_MIN_ATTR);
                 String smax = (String) meta.get(PT_MAX_ATTR);
-                String sdlo = (String) meta.get(DLO_ATTR);
                 Long ptMin = null;
                 if (smin != null) { 
                     ptMin = Long.parseLong(smin);
@@ -1043,8 +1089,16 @@ public class SwiftStorageAdapter  implements StorageAdapter {
                 if (smax != null) {
                     ptMax = Long.parseLong(smax);
                 }
+                
                 final SwiftPutTransaction ret = new SwiftPutTransaction(transactionID, ptMin, ptMax);
+                
+                String sdlo = (String) meta.get(DLO_ATTR);
                 ret.dynamicLargeObject = "true".equals(sdlo);
+                
+                String stot = (String) meta.get(TOTAL_LENGTH_ATTR);
+                if (stot != null) {
+                    ret.totalLength = Long.parseLong(stot);
+                }
                 ret.txnObject = txn;
 
                 String scs = (String) meta.get(CONTENT_CHECKSUM_ATTR);

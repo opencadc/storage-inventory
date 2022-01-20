@@ -255,7 +255,8 @@ public class PutAction extends ArtifactAction {
             PutTransaction t = storageAdapter.getTransactionStatus(txnID);
             syncOutput.setCode(202); // accepted
             HeadAction.setTransactionHeaders(t, syncOutput);
-            HeadAction.setHeaders(artifact, syncOutput);
+            syncOutput.setDigest(artifact.getContentChecksum());
+            syncOutput.setHeader("content-length", 0);
             super.logInfo.setMessage("transaction: " + txnID);
             return;
         }
@@ -322,6 +323,7 @@ public class PutAction extends ArtifactAction {
             
             syncOutput.setCode(201); // created
             syncOutput.setDigest(artifact.getContentChecksum());
+            syncOutput.setHeader("content-length", 0);
             
             super.logInfo.setBytes(artifact.getContentLength());
             

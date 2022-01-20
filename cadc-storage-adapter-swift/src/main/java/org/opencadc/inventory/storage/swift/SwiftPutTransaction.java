@@ -83,6 +83,8 @@ public class SwiftPutTransaction extends PutTransaction {
     StoredObject txnObject;
     StoredObject metaObject;
     
+    Long totalLength;
+    
     public SwiftPutTransaction(String transactionID, Long minSegmentSize, Long maxSegmentSize) { 
         super(transactionID, minSegmentSize, maxSegmentSize);
     }
@@ -90,6 +92,7 @@ public class SwiftPutTransaction extends PutTransaction {
     @Override
     public String toString() {
         String ret = super.toString() 
+                + " len=" + totalLength
                 + " dlo=" + dynamicLargeObject
                 + " txnObject=" + (txnObject == null ? "n" : "y")
                 + " metaObject=" + (metaObject == null ? "n" : "y");

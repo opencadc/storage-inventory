@@ -14,14 +14,14 @@ automatically abort failed uploads; this is the preferred approach.
 upload request:
 ```
 HTTP PUT /minoc/files/{Artifact.uri}
-content-length={number of bytes} (optional)
+content-length=0 (actual resppon
 digest={checksum of bytes} (optional)
 {body}
 ```
 successful response:
 ```
 201 (Created)
-content-length={number of bytes stored}
+content-length=0 (no response body)
 digest={checksum of bytes stored}
 ```
 At this point, the file is permanently stored. 
@@ -36,7 +36,7 @@ upload request:
 ```
 HTTP PUT /minoc/files/{Artifact.uri}
 x-put-txn-op=start
-content-length={number of bytes} (optional)
+content-length={number of bytes in body} (optional)
 digest={checksum of bytes} (optional)
 {body}
 ```
@@ -44,7 +44,7 @@ successful response:
 ```
 202 (Accepted)
 x-put-txn-id={transaction id}
-content-length={number of bytes stored}
+content-length=0 (no response body)
 digest={checksum of bytes stored}
 ```
 
@@ -60,12 +60,12 @@ commit transaction:
 HTTP PUT /minoc/files/{Artifact.uri}
 x-put-txn-id={transaction ID}
 x-put-txn-op=commit
-content-length=0 (optional)
+content-length=0 (no more bytes)
 ```
 successful commit response:
 ```
 201 (Created)
-content-length={number of bytes stored}
+content-length=0 (no response body)
 digest={checksum of bytes stored}
 ```
 
@@ -120,7 +120,7 @@ successful response:
 x-put-txn-id={transaction id}
 x-put-segment-minbytes={minimum segment size} (optional)
 x-put-segment-maxbytes={maximum segment size} (optional)
-content-length={number of bytes stored}
+content-length=0 (no response body)
 digest={checksum of bytes stored}
 ```
 If the initial put has content-length=0 then this starts a transaction and gets server constraints
@@ -151,7 +151,7 @@ response:
 ```
 202 (Accepted)
 x-put-txn-id={transaction id}
-content-length={number of bytes stored}
+content-length=0 (no response body)
 digest={MD5 checksum of bytes stored}
 ```
 
@@ -165,7 +165,7 @@ response:
 ```
 202 (Accepted)
 x-put-txn-id={transaction id}
-content-length={number of bytes stored}
+content-length=0 (no response body)
 digest={MD5 checksum of bytes stored}
 
 ```
@@ -174,7 +174,18 @@ or, if the last append cannot be reverted:
 400 (Bad Request)
 ```
 
-commit, and abort: as above
+commit and abort: as above
+
+## HTP header info
+
+* content-length always describes the size of the body of the current request
+* x-total-length specifies the total file size in cases where append is going to be used
+* x-put-txn-op=start|revert|abort|commit
+* x-out-txn-id={transaction ID}
+* x-total-length={total length of file in bytes}
+
+* x-put-segment-minbytes={minimum segment size} (optional)
+* x-put-segment-maxbytes={maximum segment size} (optional)
 
 This pattern defines one feature: PUT can append by uploading more content in the same transaction. 
 The client can make use of the content-length to decide if it needs to send more bytes. The client 
@@ -182,11 +193,10 @@ can only feasibly use the MD5 to decide if it should commit or abort.
 
 In the context of large files (~5GiB) the total length in the initial request is required so the
 implementation can decide (i) if resume will be supported, and (ii) how to store the data.
-* content-length should always describe the size of the body of the current request
-* total length not provided: txn, resume?, default behaviour: fail if exceed implementation limit
-* total length ength not provided, X-Large-Stream=true: txn, resume, implementation prepares to accept 
-large amount of content, (client probably cannot resume)
-* total length provided: txn, resume?
+
+* total length provided: txn, resumable up to server
+* total length not provided: txn, resumable? fail if exceed implementation limit?
+* total length length not known because client is streaming but expected to be large: x-total-length=large??, txn, resume unlikely but early detection of fail and abort
 
 A StorageAdapter implementation must support put with transaction. The implementation
 will decide if resume is supported or not. If resume is not supported, the PUT with 

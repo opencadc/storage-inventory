@@ -229,6 +229,12 @@ public abstract class ArtifactAction extends RestAction {
     protected void initAndAuthorize(Class<? extends Grant> grantClass)
         throws AccessControlException, CertificateException, IOException,
                ResourceNotFoundException, TransientException {
+        initAndAuthorize(grantClass, false);
+    }
+    
+    protected void initAndAuthorize(Class<? extends Grant> grantClass, boolean allowReadWithWriteGrant)
+        throws AccessControlException, CertificateException, IOException,
+               ResourceNotFoundException, TransientException {
 
         init();
 
@@ -236,24 +242,29 @@ public abstract class ArtifactAction extends RestAction {
         Subject subject = AuthenticationUtil.getCurrentSubject();
         if (authToken != null) {
             TokenTool tk = new TokenTool(publicKey);
-            String tokenUser = tk.validateToken(authToken, artifactURI, grantClass);
+            String tokenUser;
+            if (allowReadWithWriteGrant && ReadGrant.class.isAssignableFrom(grantClass)) {
+                // treat a WriteGrant as also granting read permission
+                tokenUser = tk.validateToken(authToken, artifactURI, grantClass, WriteGrant.class);
+            } else {
+                tokenUser = tk.validateToken(authToken, artifactURI, grantClass);
+            }
             subject.getPrincipals().clear();
             if (tokenUser != null) {
                 subject.getPrincipals().add(new HttpPrincipal(tokenUser));
             }
             logInfo.setSubject(subject);
-            logInfo.setMessage("valid pre-auth " + grantClass.getSimpleName());
         } else {
-            // augment subject (minoc is configured so augment
-            // is not done in rest library)
+            // augment subject (minoc is configured so augment is not done in rest library)
             AuthenticationUtil.augmentSubject(subject);
             logInfo.setSubject(subject);
-            PermissionsCheck permissionsCheck = new PermissionsCheck(this.artifactURI, this.authenticateOnly,
-                                                                     this.logInfo);
+            PermissionsCheck permissionsCheck = new PermissionsCheck(artifactURI, authenticateOnly, logInfo);
+            // TODO: allowReadWithWriteGrant could be implemented here, but grant services are probably configured
+            // that way already so it's complexity that probably won't allow/enable any actions
             if (ReadGrant.class.isAssignableFrom(grantClass)) {
-                permissionsCheck.checkReadPermission(this.readGrantServices);
+                permissionsCheck.checkReadPermission(readGrantServices);
             } else if (WriteGrant.class.isAssignableFrom(grantClass)) {
-                permissionsCheck.checkWritePermission(this.writeGrantServices);
+                permissionsCheck.checkWritePermission(writeGrantServices);
             } else {
                 throw new IllegalStateException("Unsupported grant class: " + grantClass);
             }
