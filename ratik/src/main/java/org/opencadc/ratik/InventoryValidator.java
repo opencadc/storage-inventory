@@ -437,7 +437,7 @@ public class InventoryValidator implements Runnable {
         if (this.remoteSite != null) {
             remoteSiteID = this.remoteSite.getID();
         }
-        ResourceIterator<Artifact> ret = this.artifactDAO.iterator(remoteSiteID, bucket, ordered);
+        ResourceIterator<Artifact> ret = this.artifactDAO.iterator(bucket, ordered);
         long dt = System.currentTimeMillis() - t1;
         log.info(InventoryValidator.class.getSimpleName() + ".localQuery bucket=" + bucket + " duration=" + dt);
         return ret;
