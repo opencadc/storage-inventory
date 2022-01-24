@@ -100,6 +100,7 @@ import org.opencadc.inventory.DeletedArtifactEvent;
 import org.opencadc.inventory.DeletedStorageLocationEvent;
 import org.opencadc.inventory.SiteLocation;
 import org.opencadc.inventory.StorageLocation;
+import org.opencadc.inventory.StorageSite;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.query.ArtifactRowMapper;
 import org.opencadc.inventory.util.IncludeArtifacts;
@@ -187,7 +188,7 @@ public class InventoryValidatorTest {
         fileWriter.close();
     }
 
-    /**
+    /*
      * discrepancy: none
      * before: Artifact in L & R
      * after: Artifact in L & R
@@ -198,7 +199,7 @@ public class InventoryValidatorTest {
     }
 
     @Test
-    public void noDiscrepancyL_LocalIsGlobal() throws Exception {
+    public void noDiscrepancy_LocalIsGlobal() throws Exception {
         noDiscrepancy(true);
     }
 
@@ -231,7 +232,7 @@ public class InventoryValidatorTest {
         Assert.assertEquals("metaChecksum mismatch", artifact.getMetaChecksum(), localArtifact.getMetaChecksum());
     }
 
-    /** discrepancy: artifact in L && artifact not in R
+    /* discrepancy: artifact in L && artifact not in R
      *
      * explanation0: filter policy at L changed to exclude artifact in R
      * evidence: R uses a filter policy AND Artifact in R without filter
@@ -398,7 +399,7 @@ public class InventoryValidatorTest {
         Assert.assertNull("DeletedStorageLocationEvent found", dsle);
     }
 
-    /** discrepancy: artifact in L && artifact not in R
+    /* discrepancy: artifact in L && artifact not in R
      *
      * explanation1: deleted from R, pending/missed DeletedArtifactEvent in L
      * evidence: DeletedArtifactEvent in R
@@ -450,7 +451,7 @@ public class InventoryValidatorTest {
         Assert.assertNotNull("DeletedArtifactEvent not found", dae);
     }
 
-    /** discrepancy: artifact in L && artifact not in R
+    /* discrepancy: artifact in L && artifact not in R
      *
      * explanation2: L==global, deleted from R, pending/missed DeletedStorageLocationEvent in L
      * evidence: DeletedStorageLocationEvent in R
@@ -541,7 +542,7 @@ public class InventoryValidatorTest {
         Assert.assertNull("local artifact found", localArtifact);
     }
 
-    /** discrepancy: artifact in L && artifact not in R
+    /* discrepancy: artifact in L && artifact not in R
      *
      * explanation3: L==global, new Artifact in L, pending/missed Artifact or sync in R
      * evidence: ?
@@ -657,7 +658,7 @@ public class InventoryValidatorTest {
         Assert.assertNotNull("local artifact not found", localArtifact);
     }
 
-    /** discrepancy: artifact in L && artifact not in R
+    /* discrepancy: artifact in L && artifact not in R
      *
      * explanation6: deleted from R, lost DeletedArtifactEvent
      * evidence: ?
@@ -668,22 +669,19 @@ public class InventoryValidatorTest {
      * action: assume explanation3
      *
      * explanations 6 and 7 are covered by explanation 3
-     * (explanation6 requires that R == storage and hence L == global because
-     * at least right now only storage generates DeletedArtifactEvent).
      * The short hand there is that when it says evidence: ? that means with no evidence you
      * cannot tell the difference between the explanations with no evidence: any of them could be true.
      * But the correct action can be taken because it only depends on trackSiteLocations.
      */
 
-    /**
+    /* discrepancy: artifact not in L && artifact in R
+     *
      * explanation0: filter policy at L changed to include artifact in R
      * evidence: ?
-     * action: equivalent to missed Artifact event (explanation3 below)
-     *
-     * explanation 0 is covered by explanation 3.
+     * action: equivalent to missed Artifact event (explanation3/4 below)
      */
 
-    /** discrepancy: artifact not in L && artifact in R
+    /* discrepancy: artifact not in L && artifact in R
      *
      * explanation1: deleted from L, pending/missed DeletedArtifactEvent in R
      * evidence: DeletedArtifactEvent in L
@@ -731,7 +729,7 @@ public class InventoryValidatorTest {
         Assert.assertNotNull("DeletedArtifactEvent not found", localDeletedArtifactEvent);
     }
 
-    /** discrepancy: artifact not in L && artifact in R
+    /* discrepancy: artifact not in L && artifact in R
      *
      * explanation2: L==storage, deleted from L, pending/missed DeletedStorageLocationEvent in R
      * evidence: DeletedStorageLocationEvent in L
@@ -767,7 +765,7 @@ public class InventoryValidatorTest {
         Assert.assertNull("local artifact not found", localArtifact);
     }
 
-    /** discrepancy: artifact not in L && artifact in R
+    /* discrepancy: artifact not in L && artifact in R
      *
      * explanation3: L==storage, new Artifact in R, pending/missed new Artifact event in L
      * evidence: ?
@@ -801,7 +799,7 @@ public class InventoryValidatorTest {
         Assert.assertEquals("metaChecksum mismatch", artifact.getMetaChecksum(), localArtifact.getMetaChecksum());
     }
 
-    /** discrepancy: artifact not in L && artifact in R
+    /* discrepancy: artifact not in L && artifact in R
      *
      * explanation4: L==global, new Artifact in R, pending/missed changed Artifact event in L
      * evidence: Artifact not in local db or Artifact in local db but siteLocations does not include remote siteID
@@ -815,7 +813,7 @@ public class InventoryValidatorTest {
      */
     //@Ignore // explanation4 to be updated
     @Test
-    public void explanation4_ArtifactNotInL_LocalIsGlobal() throws Exception {
+    public void explanation4_ArtifactNotInLocal_LocalIsGlobal() throws Exception {
         // Put Artifact in remote.
         final UUID remoteSiteID = this.remoteEnvironment.storageSiteDAO.list().iterator().next().getID();
         final UUID randomSiteID = UUID.randomUUID();
@@ -871,7 +869,7 @@ public class InventoryValidatorTest {
                           localArtifact2.siteLocations.contains(new SiteLocation(randomSiteID)));
     }
 
-    /**
+    /*
      * explanation6: deleted from L, lost DeletedArtifactEvent
      * evidence: ?
      * action: assume explanation3
@@ -883,7 +881,7 @@ public class InventoryValidatorTest {
      * explanations 6 and 7 are covered by explanation 3
      */
 
-    /**
+    /*
      * discrepancy: artifact.uri in both && artifact.id mismatch
      *
      * explanation1: same ID collision due to race condition that metadata-sync has to handle
@@ -984,7 +982,7 @@ public class InventoryValidatorTest {
         Assert.assertNull("DeletedArtifactEvent found", deletedArtifactEvent);
     }
 
-    /**
+    /*
      * discrepancy: artifact in both && valid metaChecksum mismatch
      *
      * explanation1: pending/missed artifact update in L
@@ -1024,8 +1022,6 @@ public class InventoryValidatorTest {
         URI artifactURI = URI.create("cadc:INTTEST/one.ext");
 
         Calendar now = Calendar.getInstance();
-        Calendar newer = Calendar.getInstance();
-        newer.add(Calendar.HOUR, 1);
 
         Artifact localArtifact = new Artifact(artifactID, artifactURI, TestUtil.getRandomMD5(), now.getTime(), 1024L);
         if (trackSiteLocations) {
@@ -1034,8 +1030,10 @@ public class InventoryValidatorTest {
         }
         this.localEnvironment.artifactDAO.put(localArtifact);
 
-        // remote Artifact with same ID and URI and a new lastModified date.
-        Artifact remoteArtifact = new Artifact(artifactID, artifactURI, TestUtil.getRandomMD5(), newer.getTime(), 1024L);
+        // remote Artifact with same ID and immutable metadata, different mutable metadata, and nedwer Entity.lastModified
+        Thread.sleep(20L)
+                ;
+        Artifact remoteArtifact = new Artifact(artifactID, artifactURI, TestUtil.getRandomMD5(), now.getTime(), 1024L);
         remoteArtifact.contentType = "image/fits";
         this.remoteEnvironment.artifactDAO.put(remoteArtifact);
 
@@ -1089,6 +1087,7 @@ public class InventoryValidatorTest {
         this.localEnvironment.artifactDAO.put(artifact);
         this.remoteEnvironment.artifactDAO.put(artifact);
 
+        Thread.sleep(20L);
         artifact.contentType = "image/fits";
         this.localEnvironment.artifactDAO.put(artifact);
 
@@ -1110,4 +1109,40 @@ public class InventoryValidatorTest {
                             artifact.getMetaChecksum(), localArtifact.getMetaChecksum());
     }
 
+    /* discrepancy: artifact in both but siteLocations does not include remote
+     *
+     * explanation: pending/missed new Artifact event from storage site (after file-sync)
+     * evidence: remote siteID not in local Artifact.siteLocations
+     * action: add siteID to Artifact.siteLocations
+     */
+    @Test
+    public void artifactSiteLocationMissing_LocalIsGlobal() throws Exception {
+        UUID remoteSiteID = this.remoteEnvironment.storageSiteDAO.list().iterator().next().getID();
+        final SiteLocation sloc = new SiteLocation(remoteSiteID);
+        
+        UUID artifactID = UUID.randomUUID();
+        URI artifactURI = URI.create("cadc:INTTEST/one.ext");
+
+        Artifact artifact = new Artifact(artifactID, artifactURI, TestUtil.getRandomMD5(), new Date(), 1024L);
+        this.localEnvironment.artifactDAO.put(artifact);
+        this.remoteEnvironment.artifactDAO.put(artifact);
+        
+        try {
+            System.setProperty("user.home", TMP_DIR);
+            InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.inventoryConnectionConfig, 
+                                                                    this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
+                                                                    new IncludeArtifacts(),null,
+                                                                    true);
+            testSubject.run();
+        } finally {
+            System.setProperty("user.home", USER_HOME);
+        }
+        
+        // Local Artifact.siteLocations updated
+        Artifact localArtifact = this.localEnvironment.artifactDAO.get(artifact.getID());
+        Assert.assertNotNull("local artifact", localArtifact);
+        
+        Assert.assertTrue("contains siteLocation", localArtifact.siteLocations.contains(sloc));
+        
+    }
 }

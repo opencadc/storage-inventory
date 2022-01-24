@@ -495,19 +495,31 @@ public class ArtifactValidator {
                     }
                 }
             } else {
-                log.debug("starting transaction");
-                this.transactionManager.startTransaction();
-                log.debug("start txn: OK");
+                try {
+                    log.debug("starting transaction");
+                    this.transactionManager.startTransaction();
+                    log.debug("start txn: OK");
 
-                log.info(String.format("ArtifactValidator.putArtifact Artifact.id=%s Artifact.uri=%s  site=%s", 
-                        remote.getID(), remote.getURI(), remoteSiteLocation));
-                this.artifactDAO.put(remote);
-                // explicit addSiteLocations like fenwick to propagate event
-                this.artifactDAO.addSiteLocation(remote, remoteSiteLocation);
+                    log.info(String.format("ArtifactValidator.putArtifact Artifact.id=%s Artifact.uri=%s  site=%s", 
+                            remote.getID(), remote.getURI(), remoteSiteLocation));
+                    this.artifactDAO.put(remote);
+                    // explicit addSiteLocations like fenwick to propagate event
+                    this.artifactDAO.addSiteLocation(remote, remoteSiteLocation);
 
-                log.debug("committing transaction");
-                this.transactionManager.commitTransaction();
-                log.debug("commit txn: OK");
+                    log.debug("committing transaction");
+                    this.transactionManager.commitTransaction();
+                    log.debug("commit txn: OK");
+                } catch (Exception e) {
+                    log.error(String.format("failed to put %s %s", remote.getID(), remote.getURI()), e);
+                    this.transactionManager.rollbackTransaction();
+                    log.debug("rollback txn: OK");
+                } finally {
+                    if (this.transactionManager.isOpen()) {
+                        log.error("BUG - open transaction in finally");
+                        this.transactionManager.rollbackTransaction();
+                        log.error("rollback txn: OK");
+                    }
+                }
             }
         }
 
@@ -536,6 +548,10 @@ public class ArtifactValidator {
 
                 this.artifactDAO.lock(local);
                 if (local.getContentLastModified().before(remote.getContentLastModified())) {
+                    log.debug(String.format(
+                        "resolve Artifact.id collision: put DeletedArtifactEvent for local %s %s "
+                            + "reason: remote contentLastModified newer than local",
+                            remote.getID(), remote.getURI()));
                     DeletedArtifactEvent deletedArtifactEvent = new DeletedArtifactEvent(local.getID());
                     log.info(String.format("ArtifactValidator.createDeletedArtifactEvent id=%s reason=resolve-collision",
                             deletedArtifactEvent.getID()));
@@ -547,12 +563,12 @@ public class ArtifactValidator {
                             remote.getID(), remote.getURI()));
                     this.artifactDAO.put(remote);
                 } else {
-                    log.info(String.format(
+                    log.debug(String.format(
                         "resolve Artifact.id collision: put DeletedArtifactEvent for remote %s %s "
                             + "reason: local contentLastModified newer than remote",
-                        remote.getID(), remote.getURI()));
+                            remote.getID(), remote.getURI()));
                     DeletedArtifactEvent deletedArtifactEvent = new DeletedArtifactEvent(remote.getID());
-                    log.info(String.format("ArtifactValidator.createDeletedArtifactEvent id=%s reason=resolve-collision",
+                    log.info(String.format("ArtifactValidator.createDeletedArtifactEvent id=%s reason=resolve-collision", 
                             deletedArtifactEvent.getID()));
                     this.deletedArtifactEventDAO.put(deletedArtifactEvent);
                 }
@@ -576,6 +592,7 @@ public class ArtifactValidator {
                     log.error("rollback txn: OK");
                 }
             }
+            // subsequent discrepancies irrelevant now 
             return;
         }
 
@@ -638,8 +655,46 @@ public class ArtifactValidator {
                 log.info(String.format("ArtifactValidator.noAction Artifact.id=%s Artifact.uri=%s reason=metaChecksum-mismatch",
                         local.getID(), local.getURI()));
             }
+            // no return here: could also have to deal with subsequent discrepancies
         }
 
+        // artifact in both && L==global && siteLocations does not include remote
+        if (this.remoteSite != null) {
+            SiteLocation remoteSiteLocation = new SiteLocation(this.remoteSite.getID());
+            if (!local.siteLocations.contains(remoteSiteLocation)) {
+                try {
+                    log.debug("starting transaction");
+                    this.transactionManager.startTransaction();
+                    log.debug("start txn: OK");
+
+                    this.artifactDAO.lock(local);
+                    Artifact current = this.artifactDAO.get(local.getID());
+                    if (!current.siteLocations.contains(remoteSiteLocation)) {
+                        log.info(String.format("ArtifactValidator.addSiteLocation Artifact.id=%s Artifact.uri=%s site=%s",
+                                current.getID(), current.getURI(), remoteSiteLocation));
+                        this.artifactDAO.addSiteLocation(current, remoteSiteLocation);
+                    }
+
+                    log.debug("committing transaction");
+                    this.transactionManager.commitTransaction();
+                    log.debug("commit txn: OK");
+                } catch (EntityNotFoundException e) {
+                    log.debug(String.format("skip: %s %s reason: stale local Artifact",
+                                            local.getID(), local.getURI()));
+                    this.transactionManager.rollbackTransaction();
+                } catch (Exception e) {
+                    log.error(String.format("failed to put %s %s", local.getID(), local.getURI()), e);
+                    this.transactionManager.rollbackTransaction();
+                    log.debug("rollback txn: OK");
+                } finally {
+                    if (this.transactionManager.isOpen()) {
+                        log.error("BUG - open transaction in finally");
+                        this.transactionManager.rollbackTransaction();
+                        log.error("rollback txn: OK");
+                    }
+                }
+            }
+        }
     }
 
     /**
