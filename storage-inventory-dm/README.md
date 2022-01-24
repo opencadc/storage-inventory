@@ -219,8 +219,7 @@ How does global inventory validate vs a storage site?  how does a storage site v
 - validate subsets of artifacts (in parallel) using Artifact.uriBucket prefix
 - validate ordered streams to minimise memory requirements (large sets)
 
-**Local L** If L is global, then this set has artifacts where Artifact.siteLocations includes remote siteID.
-If L is a storage site, then this set is all artifacts in the database.
+**Local L** L is the set is all artifacts in the local database.
 
 **Remote R**: This set is the artifacts in the remote site that match the current filter policy.
 
@@ -240,16 +239,18 @@ the explanation #s match -- they are the same explanation seen from both sides.
     
     explanation2: L==global, deleted from R, pending/missed DeletedStorageLocationEvent in L
     evidence: DeletedStorageLocationEvent in R 
-    action: remove siteID from Artifact.siteLocations (see below)
+    action: remove siteID from Artifact.siteLocations if necessary (see below)
 
     explanation3: L==global, new Artifact in L, pending/missed Artifact or sync in R
     evidence: ?
-    action: remove siteID from Artifact.siteLocations (see below)
+    action: remove siteID from Artifact.siteLocations if necessary (see below)
     
     explanation4: L==storage, new Artifact in L, pending/missed new Artifact event in R
     evidence: ?
     action: none
 
+    explantion5: ??
+    
     explanation6: deleted from R, lost DeletedArtifactEvent
     evidence: ?
     action: assume explanation3
@@ -258,7 +259,7 @@ the explanation #s match -- they are the same explanation seen from both sides.
     evidence: ?
     action: assume explanation3
     
-    note: when removing siteID from Artifact.storageLocations in global, if the Artifact.siteLocations becomes empty
+    note: when removing siteID from Artifact.storageLocations in global, if the Artifact.siteLocations becomes empty:
         the artifact should be deleted (metadata-sync needs to also do this in response to a DeletedStorageLocationEvent)
         Deletion when siteLocations becomes empty due to DeletedStorageLocationEvent must not generate a DeletedArtifactEvent.
 
@@ -282,7 +283,9 @@ the explanation #s match -- they are the same explanation seen from both sides.
     
     explanation4: L==global, new Artifact in R, pending/missed changed Artifact event in L
     evidence: 
-    action: insert Artifact with siteLocation or add siteID to Artifact.siteLocations
+    action: insert Artifact with siteLocation
+    
+    explantion5: ??
     
     explanation6: deleted from L, lost DeletedArtifactEvent
     evidence: ?
@@ -307,6 +310,12 @@ the explanation #s match -- they are the same explanation seen from both sides.
     explanation2: pending/missed artifact update in R
     evidence: local artifact has newer Entity.lastModified indicating the update happened locally
     action: do nothing
+    
+*discrepancy*: artifact in both && siteLocations does not include R (L==global)
+
+    explanation: pending/missed new Artifact event from storage site (after file-sync)
+    evidence: remote siteID not in local Artifact.siteLocations
+    action: add siteID to Artifact.siteLocations
 
 ## file-validate
 How does a storage site validate vs local storage system?
