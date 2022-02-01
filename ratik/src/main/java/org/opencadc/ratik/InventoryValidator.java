@@ -433,10 +433,6 @@ public class InventoryValidator implements Runnable {
         boolean ordered = true;
         long t1 = System.currentTimeMillis();
         log.debug(InventoryValidator.class.getSimpleName() + ".localQuery bucket=" + bucket);
-        UUID remoteSiteID = null;
-        if (this.remoteSite != null) {
-            remoteSiteID = this.remoteSite.getID();
-        }
         ResourceIterator<Artifact> ret = this.artifactDAO.iterator(bucket, ordered);
         long dt = System.currentTimeMillis() - t1;
         log.info(InventoryValidator.class.getSimpleName() + ".localQuery bucket=" + bucket + " duration=" + dt);
@@ -462,7 +458,7 @@ public class InventoryValidator implements Runnable {
         log.debug("\nExecuting query '" + query + "'\n");
         long t1 = System.currentTimeMillis();
         log.debug(InventoryValidator.class.getSimpleName() + ".remoteQuery bucket=" + bucket);
-        ResourceIterator<Artifact> ret = tapClient.query(query, new ArtifactRowMapper());
+        ResourceIterator<Artifact> ret = tapClient.query(query, new ArtifactRowMapper(), true);
         long dt = System.currentTimeMillis() - t1;
         log.info(InventoryValidator.class.getSimpleName() + ".remoteQuery bucket=" + bucket + " duration=" + dt);
         return ret;
