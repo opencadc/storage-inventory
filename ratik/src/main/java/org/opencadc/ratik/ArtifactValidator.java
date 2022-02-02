@@ -116,6 +116,7 @@ public class ArtifactValidator {
      * @param artifactDAO   local inventory database.
      * @param resourceID    identifier for the remote query service
      * @param remoteSite    identifier for remote file service, null when local is a storage site
+     * @param artifactSelector selection policy implementation
      */
     public ArtifactValidator(ArtifactDAO artifactDAO, URI resourceID, StorageSite remoteSite,
                              ArtifactSelector artifactSelector) {
@@ -706,7 +707,16 @@ public class ArtifactValidator {
         final TapClient<ArtifactQueryResult> tapClient = new TapClient<>(this.resourceID);
         final String query = String.format("%s, num_copies() %s WHERE id = '%s'",  ArtifactRowMapper.SELECT,  ArtifactRowMapper.FROM, id);
         log.debug("\nExecuting query '" + query + "'\n");
-        return tapClient.queryForObject(query, new ArtifactQueryResultRowMapper());
+        
+        ArtifactQueryResultRowMapper mapper = new ArtifactQueryResultRowMapper();
+        int n = 0;
+        try {
+            return tapClient.queryForObject(query, mapper);
+        }  catch (TransientException ex) {
+            log.error("failed getRemote Artifact.id=" + id + " retryIn=2sec cause=" + ex);
+            Thread.sleep(2000L);
+            return tapClient.queryForObject(query, mapper);
+        }
     }
 
     /**
@@ -718,7 +728,16 @@ public class ArtifactValidator {
         final TapClient<DeletedArtifactEvent> tapClient = new TapClient<>(this.resourceID);
         final String query = String.format("%s WHERE id = '%s'", DeletedArtifactEventRowMapper.BASE_QUERY, id);
         log.debug("\nExecuting query '" + query + "'\n");
-        return tapClient.queryForObject(query, new DeletedArtifactEventRowMapper());
+        
+        DeletedArtifactEventRowMapper mapper = new DeletedArtifactEventRowMapper();
+        int n = 0;
+        try {
+            return tapClient.queryForObject(query, mapper);
+        } catch (TransientException ex) {
+            log.error("failed getRemote DeletedArtifactEvent.id=" + id + " retryIn=2sec cause=" + ex);
+            Thread.sleep(2000L);
+            return tapClient.queryForObject(query, mapper);
+        }
     }
 
     /**
@@ -730,7 +749,16 @@ public class ArtifactValidator {
         final TapClient<DeletedStorageLocationEvent> tapClient = new TapClient<>(this.resourceID);
         final String query = String.format("%s WHERE id = '%s'", DeletedStorageLocationEventRowMapper.BASE_QUERY, id);
         log.debug("\nExecuting query '" + query + "'\n");
-        return tapClient.queryForObject(query, new DeletedStorageLocationEventRowMapper());
+        DeletedStorageLocationEventRowMapper mapper = new DeletedStorageLocationEventRowMapper();
+        
+        int n = 0;
+        try {
+            return tapClient.queryForObject(query, mapper);
+        } catch (TransientException ex) {
+            log.error("failed getRemote DeletedStorageLocationEvent.id=" + id + " retryIn=2sec cause=" + ex);
+            Thread.sleep(2000L);
+            return tapClient.queryForObject(query, mapper);
+        }
     }
 
     private void logNoAction(Artifact artifact, String message) {
