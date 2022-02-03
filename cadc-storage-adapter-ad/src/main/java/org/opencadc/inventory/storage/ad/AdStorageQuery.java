@@ -88,10 +88,10 @@ import org.opencadc.tap.TapRowMapper;
 public class AdStorageQuery {
     private static final Logger log = Logger.getLogger(AdStorageMetadataRowMapper.class); // intentional: log message are from nested class
 
-    private static final String QTMPL = "SELECT archiveName, fileName, uri, inventoryURI, contentMD5, fileSize, ingestDate,"
+    private static final String QTMPL = "SELECT uri, inventoryURI, contentMD5, fileSize, ingestDate,"
             + " contentEncoding, contentType"
             + " FROM archive_files WHERE archiveName = '%s'"
-            + " ORDER BY fileName ASC, ingestDate DESC";
+            + " ORDER BY ingestDate DESC";
 
     // some archive names are prefixes for others
     static final String DISAMBIGUATE_PREFIX = "x-";
@@ -134,13 +134,16 @@ public class AdStorageQuery {
         public StorageMetadata mapRow(List<Object> row) {
             Iterator i = row.iterator();
 
-            String archive = (String) i.next();
-            String fname = (String) i.next();
             URI uri = (URI) i.next();
             if (uri == null) {
-                log.warn(AdStorageMetadataRowMapper.class.getSimpleName() + ".SKIP loc=" + archive + "/" + fname + " reason=null-uri");
+                log.warn(AdStorageMetadataRowMapper.class.getSimpleName() + ".SKIP loc=null/null reason=null-uri");
                 return null;
             }
+            
+            // trust uri, <scheme>:<archive>/<fname>
+            String archiveFname = uri.toString().split(":")[1];
+            String archive = archiveFname.split("/")[0];
+            String fname = archiveFname.split("/")[1];
             
             // chose best storageID
             URI sid = URI.create("ad:" + archive + "/" + fname);
