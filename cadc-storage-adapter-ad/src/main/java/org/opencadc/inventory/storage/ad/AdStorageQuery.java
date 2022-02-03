@@ -91,7 +91,7 @@ public class AdStorageQuery {
     private static final String QTMPL = "SELECT uri, inventoryURI, contentMD5, fileSize, ingestDate,"
             + " contentEncoding, contentType"
             + " FROM archive_files WHERE archiveName = '%s'"
-            + " ORDER BY ingestDate DESC";
+            + " ORDER BY uri ASC, ingestDate DESC";
 
     // some archive names are prefixes for others
     static final String DISAMBIGUATE_PREFIX = "x-";
