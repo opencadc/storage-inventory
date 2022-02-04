@@ -134,23 +134,18 @@ public class AdStorageQuery {
         public StorageMetadata mapRow(List<Object> row) {
             Iterator i = row.iterator();
 
-            URI uri = (URI) i.next();
-            if (uri == null) {
+            URI storageID = (URI) i.next();
+            if (storageID == null) {
                 log.warn(AdStorageMetadataRowMapper.class.getSimpleName() + ".SKIP reason=null-uri");
                 return null;
             }
             
             // trust uri, <scheme>:<archive>/<fname>
-            String archiveFname = uri.toString().split(":")[1];
-            final String archive = archiveFname.split("/")[0];
-            
-            // chose best storageID
-            URI sid = uri;
-            final URI storageID = sid;
+            final String archive = storageID.getSchemeSpecificPart().split("/")[0];
             
             URI artifactURI = (URI) i.next();
             if (artifactURI == null) {
-                log.warn(AdStorageMetadataRowMapper.class.getSimpleName() + ".SKIP uri=" + uri + " reason=null-artifactURI");
+                log.warn(AdStorageMetadataRowMapper.class.getSimpleName() + ".SKIP uri=" + storageID + " reason=null-artifactURI");
                 return null;
             }
             
@@ -161,18 +156,18 @@ public class AdStorageQuery {
                 contentChecksum = new URI(MD5_ENCODING_SCHEME + hex);
                 InventoryUtil.assertValidChecksumURI(AdStorageQuery.class, "contentChecksum", contentChecksum);
             } catch (IllegalArgumentException | URISyntaxException u) {
-                log.warn(AdStorageMetadataRowMapper.class.getSimpleName() + ".SKIP uri=" + uri + " reason=invalid=contentChecksum");
+                log.warn(AdStorageMetadataRowMapper.class.getSimpleName() + ".SKIP uri=" + storageID + " reason=invalid=contentChecksum");
                 return null;
             }
             
             // archive_files.fileSize
             Long contentLength = (Long) i.next();
             if (contentLength == null) {
-                log.warn(AdStorageMetadataRowMapper.class.getSimpleName() + ".SKIP uri=" + uri + " reason=null-contentLength");
+                log.warn(AdStorageMetadataRowMapper.class.getSimpleName() + ".SKIP uri=" + storageID + " reason=null-contentLength");
                 return null;
             }
             if (contentLength == 0L) {
-                log.warn(AdStorageMetadataRowMapper.class.getSimpleName() + ".SKIP uri=" + uri + " reason=zero-contentLength");
+                log.warn(AdStorageMetadataRowMapper.class.getSimpleName() + ".SKIP uri=" + storageID + " reason=zero-contentLength");
                 return null;
             }
 
