@@ -469,7 +469,11 @@ public class InventoryValidator implements Runnable {
         boolean ordered = true;
         long t1 = System.currentTimeMillis();
         log.debug(InventoryValidator.class.getSimpleName() + ".localQuery bucket=" + bucket);
-        ResourceIterator<Artifact> ret = this.artifactDAO.iterator(bucket, ordered);
+        UUID remoteSiteID = null;
+        if (this.remoteSite != null) {
+            remoteSiteID = this.remoteSite.getID();
+        }
+        ResourceIterator<Artifact> ret = this.artifactDAO.iterator(remoteSiteID, bucket, ordered);
         long dt = System.currentTimeMillis() - t1;
         log.info(InventoryValidator.class.getSimpleName() + ".localQuery bucket=" + bucket + " duration=" + dt);
         return ret;
