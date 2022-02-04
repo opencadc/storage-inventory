@@ -142,7 +142,7 @@ public class AdStorageQuery {
             
             // trust uri, <scheme>:<archive>/<fname>
             String archiveFname = uri.toString().split(":")[1];
-            String archive = archiveFname.split("/")[0];
+            final String archive = archiveFname.split("/")[0];
             
             // chose best storageID
             URI sid = uri;
