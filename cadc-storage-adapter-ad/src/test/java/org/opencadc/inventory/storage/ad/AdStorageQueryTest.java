@@ -133,9 +133,7 @@ public class AdStorageQueryTest {
         TapRowMapper mapper = query.getRowMapper();
         
         ArrayList<Object> row = new ArrayList<>(7);
-        row.add("GEM");
-        row.add("foo.fits.gz");
-        row.add(new URI("do:not-use"));
+        row.add(new URI("ad:GEM/foo.fits.gz"));
         row.add(new URI("cadc:GEMINI/foo.fits.gz"));
         row.add("e687e2ecea45e78822eb68294566e6a1");
         row.add(new Long(33));
@@ -163,8 +161,6 @@ public class AdStorageQueryTest {
         TapRowMapper mapper = query.getRowMapper();
         
         ArrayList<Object> row = new ArrayList<>(7);
-        row.add("HST");
-        row.add("foo.fits.gz-SOME-ENCODED-STUFF");
         row.add(new URI("mast:HST/product/foo.fits.gz"));
         row.add(new URI("mast:HST/product/foo.fits.gz"));
         row.add("e687e2ecea45e78822eb68294566e6a1");
