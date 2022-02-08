@@ -81,10 +81,13 @@ import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.Test;
 import org.opencadc.inventory.StorageLocation;
+import org.opencadc.inventory.storage.ByteRange;
 
 public class AdStorageAdapterGetTest {
     private static final Logger log = Logger.getLogger(AdStorageAdapterGetTest.class);
     private static final String DIGEST_ALGORITHM = "MD5";
+    
+    private static final URI TEST_URI = URI.create("ad:TEST/public_iris.fits");
 
     static {
         Log4jInit.setLevel("org.opencadc.inventory.storage", Level.INFO);
@@ -93,7 +96,6 @@ public class AdStorageAdapterGetTest {
     @Test
     public void testGetValid() {
         final AdStorageAdapter testSubject = new AdStorageAdapter();
-        final URI testIrisUri = URI.create("ad:IRIS/I429B4H0.fits");
 
         // IRIS
         final URI expectedIrisChecksum = URI.create("md5:e3922d47243563529f387ebdf00b66da");
@@ -104,7 +106,7 @@ public class AdStorageAdapterGetTest {
             final ByteCountOutputStream byteCountOutputStream = new ByteCountOutputStream(digestOutputStream);
             final MessageDigest messageDigest = digestOutputStream.getMessageDigest();
 
-            final StorageLocation storageLocation = new StorageLocation(testIrisUri);
+            final StorageLocation storageLocation = new StorageLocation(TEST_URI);
             storageLocation.storageBucket = "IRIS";
 
             testSubject.get(storageLocation, byteCountOutputStream);
@@ -122,7 +124,6 @@ public class AdStorageAdapterGetTest {
     @Test
     public void testGetIgnoresStorageBucket() {
         final AdStorageAdapter testSubject = new AdStorageAdapter();
-        final URI testIrisUri = URI.create("ad:IRIS/I429B4H0.fits");
 
         // IRIS
         final URI expectedIrisChecksum = URI.create("md5:e3922d47243563529f387ebdf00b66da");
@@ -133,7 +134,7 @@ public class AdStorageAdapterGetTest {
             final ByteCountOutputStream byteCountOutputStream = new ByteCountOutputStream(digestOutputStream);
             final MessageDigest messageDigest = digestOutputStream.getMessageDigest();
 
-            final StorageLocation storageLocation = new StorageLocation(testIrisUri);
+            final StorageLocation storageLocation = new StorageLocation(TEST_URI);
             storageLocation.storageBucket = AdStorageQuery.DISAMBIGUATE_PREFIX + "NoBucket";
 
             testSubject.get(storageLocation, byteCountOutputStream);
@@ -142,6 +143,35 @@ public class AdStorageAdapterGetTest {
                 URI.create(String.format("%s:%s", messageDigest.getAlgorithm().toLowerCase(),
                     new BigInteger(1, messageDigest.digest()).toString(16))));
 
+        } catch (Exception unexpected) {
+            log.error("unexpected exception", unexpected);
+            Assert.fail("Unexpected exception");
+        }
+    }
+    
+    @Test
+    public void testGetByteRange() {
+        final AdStorageAdapter testSubject = new AdStorageAdapter();
+
+        // IRIS
+        final URI expectedIrisChecksum = URI.create("md5:e3922d47243563529f387ebdf00b66da");
+        try {
+            final ByteArrayOutputStream bostream = new ByteArrayOutputStream();
+            final DigestOutputStream digestOutputStream = new DigestOutputStream(bostream, MessageDigest
+                .getInstance(AdStorageAdapterGetTest.DIGEST_ALGORITHM));
+            final ByteCountOutputStream byteCountOutputStream = new ByteCountOutputStream(digestOutputStream);
+            final MessageDigest messageDigest = digestOutputStream.getMessageDigest();
+
+            final StorageLocation storageLocation = new StorageLocation(TEST_URI);
+            storageLocation.storageBucket = "IRIS";
+
+            ByteRange range = new ByteRange(0, 2880); // one FITS header block
+            testSubject.get(storageLocation, byteCountOutputStream, range);
+            int len = bostream.toByteArray().length;
+            log.info("result: " + len + " bytes");
+            Assert.assertEquals(2880, byteCountOutputStream.getByteCount());
+            Assert.assertEquals(2880, bostream.toByteArray().length);
+            
         } catch (Exception unexpected) {
             log.error("unexpected exception", unexpected);
             Assert.fail("Unexpected exception");

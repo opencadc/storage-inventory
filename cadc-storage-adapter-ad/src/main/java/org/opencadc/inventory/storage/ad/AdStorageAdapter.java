@@ -3,7 +3,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2020.                            (c) 2020.
+ *  (c) 2022.                            (c) 2022.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -131,7 +131,12 @@ public class AdStorageAdapter implements StorageAdapter {
     @Override
     public void get(StorageLocation storageLocation, OutputStream dest)
         throws ResourceNotFoundException, ReadException, WriteException, StorageEngageException, TransientException {
+        get(storageLocation, dest, null);
+    }
 
+    @Override
+    public void get(StorageLocation storageLocation, OutputStream dest, ByteRange byteRange)
+        throws ResourceNotFoundException, ReadException, WriteException, StorageEngageException, TransientException {
         URL sourceURL = this.toURL(storageLocation.getStorageID());
         log.debug("sourceURL: " + sourceURL.toString());
 
@@ -145,6 +150,11 @@ public class AdStorageAdapter implements StorageAdapter {
         try {
             boolean followRedirects = true;
             HttpGet get = new HttpGet(sourceURL, followRedirects);
+            if (byteRange != null) {
+                long end = byteRange.getOffset() + byteRange.getLength() - 1;
+                String rval = "bytes=" + byteRange.getOffset() + "-" + end;
+                get.setRequestProperty("range", rval);
+            }
             get.prepare();
             MultiBufferIO tio = new MultiBufferIO();
             tio.copy(get.getInputStream(), dest);
@@ -155,12 +165,6 @@ public class AdStorageAdapter implements StorageAdapter {
         } catch (InterruptedException | IOException ie) {
             throw new TransientException(ie.getMessage());
         }
-    }
-
-    @Override
-    public void get(StorageLocation storageLocation, OutputStream dest, ByteRange byteRange)
-        throws ResourceNotFoundException, ReadException, WriteException, StorageEngageException, TransientException {
-        throw new UnsupportedOperationException("not supported");
     }
     
     @Override
