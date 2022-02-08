@@ -88,22 +88,23 @@ import org.opencadc.tap.TapRowMapper;
 public class AdStorageQuery {
     private static final Logger log = Logger.getLogger(AdStorageMetadataRowMapper.class); // intentional: log message are from nested class
 
+    private static final String MD5_ENCODING_SCHEME = "md5:";
+    
     private static final String QTMPL = "SELECT uri, inventoryURI, contentMD5, fileSize, ingestDate,"
             + " contentEncoding, contentType"
             + " FROM archive_files WHERE archiveName = '%s'"
             + " ORDER BY uri ASC, ingestDate DESC";
 
-    // some archive names are prefixes for others
     static final String DISAMBIGUATE_PREFIX = "x-";
-    private static final List<String> ARC_PREFIX_ARC = Arrays.asList("CFHT", "GEM", "JCMT");
+    //private static final List<String> ARC_PREFIX_ARC = Arrays.asList("CFHT", "GEM", "JCMT");
     
-    private String query;
-    
-    private static String MD5_ENCODING_SCHEME = "md5:";
+    private final String storagebucket;
+    private final String query;
 
     AdStorageQuery(String storageBucket) {
         InventoryUtil.assertNotNull(AdStorageQuery.class, "storageBucket", storageBucket);
         String archive = bucket2archive(storageBucket);
+        this.storagebucket = storageBucket;
         this.query = String.format(this.QTMPL, archive);
     }
 
@@ -111,14 +112,14 @@ public class AdStorageQuery {
         return new AdStorageMetadataRowMapper();
     }
 
-    private String archive2bucket(String arc) {
-        for (String pre : ARC_PREFIX_ARC) {
-            if (!arc.equals(pre) && arc.startsWith(pre)) {
-                return DISAMBIGUATE_PREFIX + arc;
-            }
-        }
-        return arc;
-    }
+    //private String archive2bucket(String arc) {
+    //    for (String pre : ARC_PREFIX_ARC) {
+    //        if (!arc.equals(pre) && arc.startsWith(pre)) {
+    //            return DISAMBIGUATE_PREFIX + arc;
+    //        }
+    //    }
+    //    return arc;
+    //}
     
     private String bucket2archive(String sb) {
         if (sb.startsWith(DISAMBIGUATE_PREFIX)) {
@@ -139,9 +140,10 @@ public class AdStorageQuery {
                 log.warn(AdStorageMetadataRowMapper.class.getSimpleName() + ".SKIP reason=null-uri");
                 return null;
             }
-            
-            // trust uri, <scheme>:<archive>/<fname>
-            final String archive = storageID.getSchemeSpecificPart().split("/")[0];
+            if (storageID.getScheme().equals("gemini")) {
+                // hack to preserve previously generated storageID values for GEM
+                storageID = URI.create("ad:" + storageID.getSchemeSpecificPart());
+            }
             
             URI artifactURI = (URI) i.next();
             if (artifactURI == null) {
@@ -172,7 +174,7 @@ public class AdStorageQuery {
             }
 
             StorageLocation storageLocation = new StorageLocation(storageID);
-            storageLocation.storageBucket = archive2bucket(archive);
+            storageLocation.storageBucket = storagebucket;
             
             Date contentLastModified = (Date) i.next();
             if (contentLastModified == null) {
