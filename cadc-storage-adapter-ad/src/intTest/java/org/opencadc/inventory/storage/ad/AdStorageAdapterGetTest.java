@@ -69,6 +69,7 @@
 package org.opencadc.inventory.storage.ad;
 
 import ca.nrc.cadc.io.ByteCountOutputStream;
+import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.util.Log4jInit;
 import java.io.ByteArrayOutputStream;
 import java.io.OutputStream;
@@ -153,14 +154,9 @@ public class AdStorageAdapterGetTest {
     public void testGetByteRange() {
         final AdStorageAdapter testSubject = new AdStorageAdapter();
 
-        // IRIS
-        final URI expectedIrisChecksum = URI.create("md5:e3922d47243563529f387ebdf00b66da");
         try {
             final ByteArrayOutputStream bostream = new ByteArrayOutputStream();
-            final DigestOutputStream digestOutputStream = new DigestOutputStream(bostream, MessageDigest
-                .getInstance(AdStorageAdapterGetTest.DIGEST_ALGORITHM));
-            final ByteCountOutputStream byteCountOutputStream = new ByteCountOutputStream(digestOutputStream);
-            final MessageDigest messageDigest = digestOutputStream.getMessageDigest();
+            final ByteCountOutputStream byteCountOutputStream = new ByteCountOutputStream(bostream);
 
             final StorageLocation storageLocation = new StorageLocation(TEST_URI);
             storageLocation.storageBucket = "IRIS";
@@ -168,10 +164,25 @@ public class AdStorageAdapterGetTest {
             ByteRange range = new ByteRange(0, 2880); // one FITS header block
             testSubject.get(storageLocation, byteCountOutputStream, range);
             int len = bostream.toByteArray().length;
-            log.info("result: " + len + " bytes");
+            log.info("result 1: " + len + " bytes");
             Assert.assertEquals(2880, byteCountOutputStream.getByteCount());
             Assert.assertEquals(2880, bostream.toByteArray().length);
             
+            range = new ByteRange(2881, 2880);
+            testSubject.get(storageLocation, bostream, range);
+            len = bostream.toByteArray().length;
+            log.info("result 2: " + len + " bytes");
+            Assert.assertEquals(2880, byteCountOutputStream.getByteCount());
+            Assert.assertEquals(2 * 2880, bostream.toByteArray().length); // both ranges
+            
+            StorageLocation storageLocation2 = new StorageLocation(URI.create("ad:TEST/not-found"));
+            storageLocation2.storageBucket = "TEST";
+            try {
+                testSubject.get(storageLocation2, bostream, range);
+                Assert.fail("expected get() to fail, but it re-used cached URL for a different StorageLocation");
+            } catch (ResourceNotFoundException expected) {
+                log.info("caught expected: " + expected);
+            }
         } catch (Exception unexpected) {
             log.error("unexpected exception", unexpected);
             Assert.fail("Unexpected exception");
