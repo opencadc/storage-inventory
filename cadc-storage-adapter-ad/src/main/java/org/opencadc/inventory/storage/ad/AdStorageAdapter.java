@@ -3,7 +3,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2020.                            (c) 2020.
+ *  (c) 2022.                            (c) 2022.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -71,14 +71,19 @@ package org.opencadc.inventory.storage.ad;
 
 import ca.nrc.cadc.auth.AuthMethod;
 import ca.nrc.cadc.auth.AuthenticationUtil;
+import ca.nrc.cadc.auth.NotAuthenticatedException;
 import ca.nrc.cadc.cred.client.CredUtil;
 import ca.nrc.cadc.io.ByteLimitExceededException;
 import ca.nrc.cadc.io.MultiBufferIO;
 import ca.nrc.cadc.io.ReadException;
 import ca.nrc.cadc.io.WriteException;
+import ca.nrc.cadc.net.ExpectationFailedException;
+import ca.nrc.cadc.net.FileContent;
 import ca.nrc.cadc.net.HttpGet;
+import ca.nrc.cadc.net.HttpPost;
 import ca.nrc.cadc.net.IncorrectContentChecksumException;
 import ca.nrc.cadc.net.IncorrectContentLengthException;
+import ca.nrc.cadc.net.PreconditionFailedException;
 import ca.nrc.cadc.net.RangeNotSatisfiableException;
 import ca.nrc.cadc.net.ResourceAlreadyExistsException;
 import ca.nrc.cadc.net.ResourceNotFoundException;
@@ -89,12 +94,21 @@ import ca.nrc.cadc.reg.Interface;
 import ca.nrc.cadc.reg.Standards;
 import ca.nrc.cadc.reg.client.RegistryClient;
 import ca.nrc.cadc.util.StringUtil;
+import ca.nrc.cadc.vos.Direction;
+import ca.nrc.cadc.vos.Protocol;
+import ca.nrc.cadc.vos.Transfer;
+import ca.nrc.cadc.vos.TransferParsingException;
+import ca.nrc.cadc.vos.TransferReader;
+import ca.nrc.cadc.vos.TransferWriter;
+import ca.nrc.cadc.vos.VOS;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.io.StringWriter;
 import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URL;
+import java.nio.charset.Charset;
 import java.security.AccessControlException;
 import java.security.cert.CertificateExpiredException;
 import java.security.cert.CertificateNotYetValidException;
@@ -122,6 +136,10 @@ public class AdStorageAdapter implements StorageAdapter {
     private static final URI DATA_RESOURCE_ID = URI.create("ivo://cadc.nrc.ca/data");
     private static final String TAP_SERVICE_URI = "ivo://cadc.nrc.ca/ad";
 
+    // cache for repeated ByteRange requests
+    private StorageLocation storageLoc;
+    private URL storageURL;
+    
     /**
      * Construct an AdStorageAdapter with the config stored in the
      * well-known properties file with well-known properties.
@@ -131,9 +149,13 @@ public class AdStorageAdapter implements StorageAdapter {
     @Override
     public void get(StorageLocation storageLocation, OutputStream dest)
         throws ResourceNotFoundException, ReadException, WriteException, StorageEngageException, TransientException {
+        get(storageLocation, dest, null);
+    }
 
-        URL sourceURL = this.toURL(storageLocation.getStorageID());
-        log.debug("sourceURL: " + sourceURL.toString());
+    @Override
+    public void get(StorageLocation storageLocation, OutputStream dest, ByteRange byteRange)
+        throws ResourceNotFoundException, ReadException, WriteException, StorageEngageException, TransientException {
+        
 
         try {
             boolean auth = CredUtil.checkCredentials();
@@ -143,8 +165,28 @@ public class AdStorageAdapter implements StorageAdapter {
         }
 
         try {
+            URL sourceURL;
+            if (byteRange != null && storageLoc != null && storageLoc.equals(storageLocation)) {
+                // use cached value
+                sourceURL = storageURL;
+                log.debug("cached URL: " + sourceURL);
+            } else {
+                this.storageLoc = null;
+                this.storageURL = null;
+                sourceURL = this.toURL(storageLocation.getStorageID());
+                log.debug("negotiated URL: " + sourceURL);
+                // cache for next request
+                this.storageLoc = storageLocation;
+                this.storageURL = sourceURL;
+            }
+        
             boolean followRedirects = true;
             HttpGet get = new HttpGet(sourceURL, followRedirects);
+            if (byteRange != null) {
+                long end = byteRange.getOffset() + byteRange.getLength() - 1;
+                String rval = "bytes=" + byteRange.getOffset() + "-" + end;
+                get.setRequestProperty("range", rval);
+            }
             get.prepare();
             MultiBufferIO tio = new MultiBufferIO();
             tio.copy(get.getInputStream(), dest);
@@ -155,12 +197,6 @@ public class AdStorageAdapter implements StorageAdapter {
         } catch (InterruptedException | IOException ie) {
             throw new TransientException(ie.getMessage());
         }
-    }
-
-    @Override
-    public void get(StorageLocation storageLocation, OutputStream dest, ByteRange byteRange)
-        throws ResourceNotFoundException, ReadException, WriteException, StorageEngageException, TransientException {
-        throw new UnsupportedOperationException("not supported");
     }
     
     @Override
@@ -214,7 +250,9 @@ public class AdStorageAdapter implements StorageAdapter {
         return new AdStorageIterator(storageMetadataIterator);
     }
 
-    private URL toURL(URI uri) {
+    // negotiate a URL so we can potentially re-use it for multiple ByteRange requests
+    private URL toURL(URI uri) throws AccessControlException, NotAuthenticatedException, 
+            ByteLimitExceededException, ResourceNotFoundException, TransientException {
         try {
             Subject subject = AuthenticationUtil.getCurrentSubject();
             AuthMethod authMethod = AuthenticationUtil.getAuthMethodFromCredentials(subject);
@@ -223,6 +261,8 @@ public class AdStorageAdapter implements StorageAdapter {
             }
             RegistryClient rc = new RegistryClient();
             Capabilities caps = rc.getCapabilities(DATA_RESOURCE_ID);
+            
+            /*
             Capability dataCap = caps.findCapability(Standards.DATA_10);
             Interface ifc = dataCap.findInterface(authMethod);
             if (ifc == null) {
@@ -232,11 +272,46 @@ public class AdStorageAdapter implements StorageAdapter {
             URL url = new URL(baseDataURL + "/" + uri.getSchemeSpecificPart());
             log.debug(uri + " --> " + url);
             return url;
-        } catch (MalformedURLException ex) {
+            */
+            
+            Capability negotiate = caps.findCapability(Standards.VOSPACE_SYNC_21);
+            Interface ifc = negotiate.findInterface(authMethod);
+            if (ifc == null) {
+                throw new IllegalArgumentException("No interface for auth method " + authMethod);
+            }
+            Transfer request = new Transfer(uri, Direction.pullFromVoSpace);
+            request.version = VOS.VOSPACE_21;
+            request.getProtocols().add(new Protocol(VOS.PROTOCOL_HTTPS_GET));
+            TransferWriter writer = new TransferWriter();
+            StringWriter out = new StringWriter();
+            writer.write(request, out);
+            String req = out.toString();
+            log.debug("request:\n" + req);
+
+            FileContent content = new FileContent(req, "text/xml", Charset.forName("UTF-8"));
+            HttpPost post = new HttpPost(ifc.getAccessURL().getURL(), content, true);
+            post.prepare();
+            
+            InputStream istream = post.getInputStream();
+            String xml = StringUtil.readFromInputStream(istream, "UTF-8");
+            log.debug("response:\n" + xml);
+
+            TransferReader reader = new TransferReader();
+            Transfer t = reader.read(xml, null);
+            if (t != null && !t.getProtocols().isEmpty()) {
+                Protocol p = t.getProtocols().get(0);
+                if (p.getEndpoint() != null) {
+                    return new URL(p.getEndpoint());
+                }
+            }
+            return null;
+            
+        } catch (MalformedURLException | ResourceAlreadyExistsException ex) {
             throw new RuntimeException("BUG", ex);
-        } catch (Throwable t) {
-            String message = "Failed to convert to data URL";
-            throw new RuntimeException(message, t);
+        } catch (IOException | TransferParsingException ex) {
+            throw new TransientException("failed to negotiate data URL", ex);
+        } catch (InterruptedException ex) {
+            throw new RuntimeException("interrupted", ex);
         }
     }
 
