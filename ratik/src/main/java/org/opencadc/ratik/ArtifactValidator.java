@@ -568,7 +568,7 @@ public class ArtifactValidator {
                 log.debug("start txn: OK");
 
                 this.artifactDAO.lock(local);
-                if (local.getContentLastModified().before(remote.getContentLastModified())) {
+                if (isRemoteWinner(local, remote)) {
                     log.debug(String.format(
                         "resolve Artifact.id collision: put DeletedArtifactEvent for local %s %s "
                             + "reason: remote contentLastModified newer than local",
@@ -577,9 +577,11 @@ public class ArtifactValidator {
                     log.info(String.format("ArtifactValidator.createDeletedArtifactEvent id=%s reason=resolve-collision",
                             deletedArtifactEvent.getID()));
                     this.deletedArtifactEventDAO.put(deletedArtifactEvent);
+                    
                     log.info(String.format("ArtifactValidator.deletedArtifact Artifact.id=%s Artifact.uri=%s reason=resolve-collision",
                             local.getID(), local.getURI()));
                     this.artifactDAO.delete(local.getID());
+                    
                     log.info(String.format("ArtifactValidator.putArtifact Artifact.id=%s Artifact.uri=%s reason=resolve-collision", 
                             remote.getID(), remote.getURI()));
                     this.artifactDAO.put(remote);
@@ -716,6 +718,25 @@ public class ArtifactValidator {
                 }
             }
         }
+    }
+    
+    // true if remote is the winner, false if local is the winner
+    boolean isRemoteWinner(Artifact local, Artifact remote) {
+        if (local.getContentLastModified().after(remote.getContentLastModified())) {
+            return false;
+        }
+        if (remote.getContentLastModified().after(local.getContentLastModified())) {
+            return true;
+        }
+        // equal timestamps and different instances:
+        // likely caused by poorly behaved storage site that ingests duplicates 
+        // from external system
+        if (remoteSite != null) {
+            // declare the artifact in global as the winner
+            return false;
+        }
+        // this is storage site: remote is global
+        return true;
     }
 
     /**
