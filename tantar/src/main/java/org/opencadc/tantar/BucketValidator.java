@@ -449,18 +449,18 @@ public class BucketValidator implements ValidateEventListener {
                 LOGGER.debug("Start transaction.");
                 transactionManager.startTransaction();
                 
-                artifactDAO.lock(artifact);
-                Artifact curArtifact = artifactDAO.get(artifact.getID());
-                final DeletedStorageLocationEventDAO deletedEventDAO = new DeletedStorageLocationEventDAO(artifactDAO);
-                deletedEventDAO.put(new DeletedStorageLocationEvent(artifact.getID()));
-                artifactDAO.setStorageLocation(curArtifact, null);
-                
-                transactionManager.commitTransaction();
-                numClearStorageLocation++;
-            } catch (EntityNotFoundException ex) {
-                // failed to lock: artifact deleted since start of iteration
-                transactionManager.rollbackTransaction();
-                LOGGER.debug("Rollback Transaction: OK");
+                Artifact curArtifact = artifactDAO.lock(artifact);
+                if (curArtifact != null) {
+                    final DeletedStorageLocationEventDAO deletedEventDAO = new DeletedStorageLocationEventDAO(artifactDAO);
+                    deletedEventDAO.put(new DeletedStorageLocationEvent(artifact.getID()));
+                    artifactDAO.setStorageLocation(curArtifact, null);
+                    
+                    transactionManager.commitTransaction();
+                    numClearStorageLocation++;
+                } else {
+                    transactionManager.rollbackTransaction();
+                    LOGGER.debug("failed to lock artifact, assume deleted: " + artifact.getID());
+                }
             } catch (Exception e) {
                 LOGGER.error(String.format("Failed to mark Artifact as new %s.", artifact.getURI()), e);
                 transactionManager.rollbackTransaction();
@@ -506,19 +506,18 @@ public class BucketValidator implements ValidateEventListener {
                 transactionManager.startTransaction();
                 LOGGER.debug("start transaction... OK");
 
-                artifactDAO.lock(artifact);
-                
-                final DeletedArtifactEventDAO deletedEventDAO = new DeletedArtifactEventDAO(artifactDAO);
-                deletedEventDAO.put(new DeletedArtifactEvent(artifact.getID()));
-                
-                artifactDAO.delete(artifact.getID());
-
-                LOGGER.debug("commit transaction...");
-                transactionManager.commitTransaction();
-                LOGGER.debug("commit transaction... OK");
-                numDeleteArtifact++;
-            } catch (EntityNotFoundException ex) {
-                LOGGER.debug("failed to lock Artifact " + artifact.getID() + " : already deleted");
+                Artifact cur = artifactDAO.lock(artifact);
+                if (cur != null) {
+                    final DeletedArtifactEventDAO deletedEventDAO = new DeletedArtifactEventDAO(artifactDAO);
+                    deletedEventDAO.put(new DeletedArtifactEvent(artifact.getID()));
+                    artifactDAO.delete(artifact.getID());
+                    
+                    transactionManager.commitTransaction();
+                    numDeleteArtifact++;
+                } else {
+                    transactionManager.rollbackTransaction();
+                    LOGGER.debug("failed to lock artifact, assume deleted: " + artifact.getID());
+                }
             } catch (Exception e) {
                 LOGGER.error(String.format("Failed to delete Artifact %s.", artifact.getURI()), e);
                 transactionManager.rollbackTransaction();
@@ -607,20 +606,14 @@ public class BucketValidator implements ValidateEventListener {
                 LOGGER.debug("Start transaction.");
                 transactionManager.startTransaction();
                 
-                try {
-                    artifactDAO.lock(artifact);
-                    
+                Artifact cur = artifactDAO.lock(artifact);
+                if (cur != null) {
                     DeletedArtifactEventDAO deletedEventDAO = new DeletedArtifactEventDAO(artifactDAO);
                     deletedEventDAO.put(new DeletedArtifactEvent(artifact.getID()));
-                    
                     artifactDAO.delete(artifact.getID());
-                } catch (EntityNotFoundException ex) {
-                    // artifact deleted since start of iteration - continue 
-                    LOGGER.debug("artifact to be replaced was already deleted... continuing to create replacement");
                 }
 
                 final Artifact replacementArtifact = toArtifact(storageMetadata);
-                
                 artifactDAO.put(replacementArtifact);
 
                 transactionManager.commitTransaction();
@@ -657,20 +650,22 @@ public class BucketValidator implements ValidateEventListener {
                 LOGGER.debug("Start transaction.");
                 transactionManager.startTransaction();
                 
-                artifactDAO.lock(artifact);
+                Artifact cur = artifactDAO.lock(artifact);
+                if (cur != null) {
+                    // By reusing the Artifact instance's ID we can have the original Artifact but reset the mutable
+                    // fields below.
+                    artifact.contentEncoding = storageMetadata.contentEncoding;
+                    artifact.contentType = storageMetadata.contentType;
+                    artifact.storageLocation = storageMetadata.getStorageLocation();
 
-                // By reusing the Artifact instance's ID we can have the original Artifact but reset the mutable
-                // fields below.
-                artifact.contentEncoding = storageMetadata.contentEncoding;
-                artifact.contentType = storageMetadata.contentType;
-                artifact.storageLocation = storageMetadata.getStorageLocation();
-
-                artifactDAO.put(artifact);
-
-                transactionManager.commitTransaction();
-                numUpdateArtifact++;
-            } catch (EntityNotFoundException ex) {
-                LOGGER.debug("failed to lock Artifact " + artifact.getID() + " : already deleted");
+                    artifactDAO.put(artifact);
+                    
+                    transactionManager.commitTransaction();
+                    numUpdateArtifact++;
+                } else {
+                    transactionManager.rollbackTransaction();
+                    LOGGER.debug("failed to lock artifact, assume deleted: " + artifact.getID());
+                }
             } catch (Exception e) {
                 LOGGER.error(String.format("Failed to update Artifact %s.", storageMetadata.artifactURI), e);
                 transactionManager.rollbackTransaction();

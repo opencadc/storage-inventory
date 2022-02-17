@@ -247,8 +247,7 @@ public class FileSyncJob implements Runnable {
                             txnMgr.startTransaction();
                             log.debug("start txn: OK");
                             
-                            artifactDAO.lock(artifact);
-                            curArtifact = artifactDAO.get(artifactID);
+                            curArtifact = artifactDAO.lock(artifact);
                             
                             ObsoleteStorageLocation prevOSL = locDAO.get(storageMeta.getStorageLocation());
                             if (prevOSL != null) {

@@ -126,11 +126,11 @@ public class DeleteAction extends ArtifactAction {
             
             boolean locked = false;
             while (existing != null && !locked) {
-                try { 
-                    artifactDAO.lock(existing);
+                existing = artifactDAO.getWithLock(existing);
+                if (existing != null) {
                     locked = true;
-                } catch (EntityNotFoundException ex) {
-                    // entity deleted
+                } else {
+                    // try again by uri
                     existing = artifactDAO.get(artifactURI);
                 }
             }
