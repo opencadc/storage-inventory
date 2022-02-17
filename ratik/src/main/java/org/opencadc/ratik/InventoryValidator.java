@@ -122,6 +122,8 @@ public class InventoryValidator implements Runnable {
     private final ArtifactValidator artifactValidator;
     private final MessageDigest messageDigest;
     
+    private final long summaryLogInterval = 5 * 60L; // 5 minutes
+    private long lastSummary = 0L;
     private long numLocalArtifacts = 0L;
     private long numRemoteArtifacts = 0L;
     private long numMatchedArtifacts = 0L;
@@ -235,9 +237,7 @@ public class InventoryValidator implements Runnable {
             final Subject subject = SSLUtil.createSubject(new File(CERTIFICATE_FILE_LOCATION));
             Subject.doAs(subject, (PrivilegedExceptionAction<Void>) () -> {
                 doit();
-                log.info(InventoryValidator.class.getSimpleName() + ".summary numLocal= " + numLocalArtifacts
-                    + " numRemote=" + numRemoteArtifacts + " numMatched=" + numMatchedArtifacts
-                    + " numValidBuckets=" + numValidBuckets + " numFailedBuckets=" + numFailedBuckets);
+                logSummary(true, false);
                 return null;
             });
         } catch (PrivilegedActionException privilegedActionException) {
@@ -269,6 +269,9 @@ public class InventoryValidator implements Runnable {
                 int retries = 0;
                 boolean done = false;
                 while (!done && retries < 3) {
+                    long nloc = numLocalArtifacts;
+                    long nrem = numRemoteArtifacts;
+                    long nmatch = numMatchedArtifacts;
                     try {
                         iterateBucket(bucket);
                         log.info(InventoryValidator.class.getSimpleName() + ".END bucket=" + bucket);
@@ -282,6 +285,13 @@ public class InventoryValidator implements Runnable {
                         log.error(InventoryValidator.class.getSimpleName() + ".FAIL bucket=" + bucket, ex);
                         numFailedBuckets++;
                         throw ex;
+                    } finally {
+                        if (!done) {
+                            // revert count changes from this failed bucket
+                            numLocalArtifacts = nloc;
+                            numRemoteArtifacts = nrem;
+                            numMatchedArtifacts = nmatch;
+                        }
                     }
                 }
             }
@@ -302,9 +312,10 @@ public class InventoryValidator implements Runnable {
         throws ResourceNotFoundException, IOException, IllegalStateException, TransientException,
                InterruptedException {
         log.debug("processing bucket: " + bucket);
+        logSummary(true, true);
         try (final ResourceIterator<Artifact> localIterator = getLocalIterator(bucket);
             final ResourceIterator<Artifact> remoteIterator = getRemoteIterator(bucket)) {
-
+            
             Artifact local = null;
             Artifact remote = null;
             boolean artifactsToValidate = true;
@@ -379,6 +390,31 @@ public class InventoryValidator implements Runnable {
             numMatchedArtifacts++;
         }
         artifactValidator.validate(local, remote);
+        
+        logSummary(false, true);
+        
+    }
+    
+    private void logSummary(boolean force, boolean next) {
+        long sec = System.currentTimeMillis() / 1000L;
+        long dt = (sec - lastSummary);
+        if (!force && dt < summaryLogInterval) {
+            return;
+        }
+        this.lastSummary = sec;
+        
+        StringBuilder sb = new StringBuilder();
+        sb.append(InventoryValidator.class.getSimpleName()).append(".summary");
+        sb.append(" numLocal=").append(numLocalArtifacts);
+        sb.append(" numRemote=").append(numRemoteArtifacts);
+        sb.append(" numMatched=").append(numMatchedArtifacts);
+        sb.append(" numValidBuckets=").append(numValidBuckets);
+        sb.append(" numFailedBuckets=").append(numFailedBuckets);
+        
+        if (next) {
+            sb.append(" nextSummaryIn=").append(summaryLogInterval).append("sec");
+        }
+        log.info(sb.toString());
     }
 
     /**
@@ -437,7 +473,7 @@ public class InventoryValidator implements Runnable {
         if (this.remoteSite != null) {
             remoteSiteID = this.remoteSite.getID();
         }
-        ResourceIterator<Artifact> ret = this.artifactDAO.iterator(bucket, ordered);
+        ResourceIterator<Artifact> ret = this.artifactDAO.iterator(remoteSiteID, bucket, ordered);
         long dt = System.currentTimeMillis() - t1;
         log.info(InventoryValidator.class.getSimpleName() + ".localQuery bucket=" + bucket + " duration=" + dt);
         return ret;
@@ -462,7 +498,7 @@ public class InventoryValidator implements Runnable {
         log.debug("\nExecuting query '" + query + "'\n");
         long t1 = System.currentTimeMillis();
         log.debug(InventoryValidator.class.getSimpleName() + ".remoteQuery bucket=" + bucket);
-        ResourceIterator<Artifact> ret = tapClient.query(query, new ArtifactRowMapper());
+        ResourceIterator<Artifact> ret = tapClient.query(query, new ArtifactRowMapper(), true);
         long dt = System.currentTimeMillis() - t1;
         log.info(InventoryValidator.class.getSimpleName() + ".remoteQuery bucket=" + bucket + " duration=" + dt);
         return ret;

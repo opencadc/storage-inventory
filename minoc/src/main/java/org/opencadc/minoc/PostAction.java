@@ -163,13 +163,13 @@ public class PostAction extends ArtifactAction {
             
             boolean locked = false;
             while (existing != null && !locked) {
-                try { 
-                    artifactDAO.lock(existing);
-                    profiler.checkpoint("artifactDAO.lock.ok");
+                existing = artifactDAO.lock(existing);
+                profiler.checkpoint("artifactDAO.lock.ok");
+                if (existing != null) {
                     locked = true;
-                } catch (EntityNotFoundException ex) {
+                } else {
                     profiler.checkpoint("artifactDAO.lock.fail");
-                    // entity deleted
+                    // try again via uri
                     existing = artifactDAO.get(artifactURI);
                     profiler.checkpoint("artifactDAO.get.ok");
                 }

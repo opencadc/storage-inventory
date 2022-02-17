@@ -3,7 +3,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2020.                            (c) 2020.
+ *  (c) 2022.                            (c) 2022.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -277,34 +277,45 @@ public abstract class AbstractDAO<T extends Entity> {
             long dt = System.currentTimeMillis() - t;
             log.debug("GET: " + id + " " + dt + "ms");
         }
-        throw new RuntimeException("BUG: should be unreachable");
+        throw new RuntimeException("BUG: handleInternalFail did not throw");
     }
     
     /**
      * Acquire a write lock on the existing entity. This is used as the first action
      * in a transaction in order to avoid race conditions and deadlocks.
      * @param val entity value to lock
-     * @throws EntityNotFoundException if the specified entity does not exist
+     * @return the current entity
      */
-    public void lock(T val) throws EntityNotFoundException {
+    public T lock(T val) {
         if (val == null) {
             throw new IllegalArgumentException("entity cannot be null");
         }
+        return lock(val.getClass(), val.getID());
+    }
+    
+    protected T lock(Class<? extends Entity> clz, UUID id) {
+        if (clz == null || id == null) {
+            throw new IllegalArgumentException("entity cannot be null");
+        }
         checkInit();
-        log.debug("LOCK: " + val.getID());
+        log.debug("LOCK: " + id);
         long t = System.currentTimeMillis();
 
         try {
             JdbcTemplate jdbc = new JdbcTemplate(dataSource);
-            EntityLock lock = gen.getEntityLock(val.getClass());
-            lock.setID(val.getID());
-            lock.execute(jdbc);
+            //EntityLock lock = gen.getEntityLock(val.getClass());
+            //lock.setID(val.getID());
+            //lock.execute(jdbc);
+            EntityGet<T> get = (EntityGet<T>) gen.getEntityGet(clz, true);
+            get.setID(id);
+            return get.execute(jdbc);
         } catch (BadSqlGrammarException ex) {
             handleInternalFail(ex);
         } finally {
             long dt = System.currentTimeMillis() - t;
-            log.debug("PUT: " + val.getID() + " " + dt + "ms");
+            log.debug("LOCK: " + id + " " + dt + "ms");
         }
+        throw new RuntimeException("BUG: handleInternalFail did not throw");
     }
     
     public void put(T val) {

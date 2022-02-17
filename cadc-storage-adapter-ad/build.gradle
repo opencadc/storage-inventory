@@ -28,6 +28,7 @@ dependencies {
     compile 'org.opencadc:cadc-inventory:[0.7,)'
     compile 'org.opencadc:cadc-storage-adapter:[0.9,)'
     compile 'org.opencadc:cadc-registry:[1.0,)'
+    compile 'org.opencadc:cadc-vos:[1.2,2.0)'
 
     testCompile 'junit:junit:[4.0,)'
 }

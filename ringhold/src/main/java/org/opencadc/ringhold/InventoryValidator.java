@@ -132,27 +132,23 @@ public class InventoryValidator implements Runnable {
                 try {
                     transactionManager.startTransaction();
 
-                    try {
-                        this.artifactDAO.lock(deselectorArtifact);
-                        deselectorArtifact = this.artifactDAO.get(deselectorArtifact.getID());
-                    } catch (EntityNotFoundException e) {
-                        deselectorArtifact = null;
-                    }
-
-                    if (deselectorArtifact != null) {
+                    Artifact cur = this.artifactDAO.lock(deselectorArtifact);
+                    if (cur != null) {
                         DeletedStorageLocationEvent deletedStorageLocationEvent =
-                            new DeletedStorageLocationEvent(deselectorArtifact.getID());
+                            new DeletedStorageLocationEvent(cur.getID());
                         deletedStorageLocationEventDAO.put(deletedStorageLocationEvent);
                         ObsoleteStorageLocation obsoleteStorageLocation =
-                            new ObsoleteStorageLocation(deselectorArtifact.storageLocation);
+                            new ObsoleteStorageLocation(cur.storageLocation);
                         obsoleteStorageLocationDAO.put(obsoleteStorageLocation);
-                        this.artifactDAO.delete(deselectorArtifact.getID());
+                        this.artifactDAO.delete(cur.getID());
+                        
                         transactionManager.commitTransaction();
-                        log.info("DELETE: Artifact " + deselectorArtifact.getID() + " " + deselectorArtifact.getURI());
+                        log.info("DELETE: Artifact " + cur.getID() + " " + cur.getURI());
                     } else {
                         transactionManager.rollbackTransaction();
                         log.debug("Artifact not found");
                     }
+                    
                     log.debug("END: Process Artifact " + deselectorArtifact.getID() + " "
                                   + deselectorArtifact.getURI());
                 } catch (Exception exception) {

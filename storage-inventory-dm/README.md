@@ -219,19 +219,20 @@ How does global inventory validate vs a storage site?  how does a storage site v
 - validate subsets of artifacts (in parallel) using Artifact.uriBucket prefix
 - validate ordered streams to minimise memory requirements (large sets)
 
-**Local L** L is the set is all artifacts in the local database.
+**Local L** L is the set of artifacts in the local database; if L is global, it is the subset that
+should match R.
 
 **Remote R**: This set is the artifacts in the remote site that match the current filter policy.
 
 The approach is to iterate through sets L and R, look for discrepancies, and fix L. There are only 
-minor differences if validating global L. Note: Except for explanation0 which are strictly local effects, 
-the explanation #s match -- they are the same explanation seen from both sides.
+minor differences if validating global L.
 
 *discrepancy*: artifact in L && artifact not in R
 
     explanation0: filter policy at L changed to exclude artifact in R
     evidence: Artifact in R without filter
-    action: delete Artifact, if (L==storage) create DeletedStorageLocationEvent 
+    action: if L==storage, check num_copies>1 in R, delete Artifact, create DeletedStorageLocationEvent
+            if L==global, delete Artifact (no event)
 
     explanation1: deleted from R, pending/missed DeletedArtifactEvent in L
     evidence: DeletedArtifactEvent in R 
@@ -239,21 +240,21 @@ the explanation #s match -- they are the same explanation seen from both sides.
     
     explanation2: L==global, deleted from R, pending/missed DeletedStorageLocationEvent in L
     evidence: DeletedStorageLocationEvent in R 
-    action: remove siteID from Artifact.siteLocations if necessary (see below)
+    action: remove siteID from Artifact.siteLocations (see below)
 
     explanation3: L==global, new Artifact in L, pending/missed Artifact or sync in R
     evidence: ?
-    action: remove siteID from Artifact.siteLocations if necessary (see below)
+    action: remove siteID from Artifact.siteLocations (see below)
     
     explanation4: L==storage, new Artifact in L, pending/missed new Artifact event in R
     evidence: ?
     action: none
-
-    explantion5: ??
     
+    explanation5: TBD
+
     explanation6: deleted from R, lost DeletedArtifactEvent
     evidence: ?
-    action: assume explanation3
+    action: if L==global, assume explanation3
     
     explanation7: L==global, lost DeletedStorageLocationEvent
     evidence: ?
@@ -281,15 +282,17 @@ the explanation #s match -- they are the same explanation seen from both sides.
     evidence: ?
     action: insert Artifact
     
-    explanation4: L==global, new Artifact in R, pending/missed changed Artifact event in L
-    evidence: 
-    action: insert Artifact with siteLocation
+    explanation4: L==global, new Artifact in L, stale Artifact in R
+    evidence: artifact in L without siteLocation constraint
+    action: resolve as ID collision
     
-    explantion5: ??
+    explanation5: L==global, new Artifact in R, pending/missed changed Artifact event in L
+    evidence: ?
+    action: insert Artifact and/or add siteLocation
     
     explanation6: deleted from L, lost DeletedArtifactEvent
     evidence: ?
-    action: assume explanation3
+    action: assume explanation3 or 5
     
     explanation7: L==storage, deleted from L, lost DeletedStorageLocationEvent
     evidence: ?

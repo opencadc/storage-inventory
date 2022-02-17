@@ -88,22 +88,23 @@ import org.opencadc.tap.TapRowMapper;
 public class AdStorageQuery {
     private static final Logger log = Logger.getLogger(AdStorageMetadataRowMapper.class); // intentional: log message are from nested class
 
-    private static final String QTMPL = "SELECT archiveName, fileName, uri, inventoryURI, contentMD5, fileSize, ingestDate,"
+    private static final String MD5_ENCODING_SCHEME = "md5:";
+    
+    private static final String QTMPL = "SELECT uri, inventoryURI, contentMD5, fileSize, ingestDate,"
             + " contentEncoding, contentType"
             + " FROM archive_files WHERE archiveName = '%s'"
-            + " ORDER BY fileName ASC, ingestDate DESC";
+            + " ORDER BY uri ASC, ingestDate DESC";
 
-    // some archive names are prefixes for others
     static final String DISAMBIGUATE_PREFIX = "x-";
-    private static final List<String> ARC_PREFIX_ARC = Arrays.asList("CFHT", "GEM");
+    //private static final List<String> ARC_PREFIX_ARC = Arrays.asList("CFHT", "GEM", "JCMT");
     
-    private String query;
-    
-    private static String MD5_ENCODING_SCHEME = "md5:";
+    private final String storagebucket;
+    private final String query;
 
     AdStorageQuery(String storageBucket) {
         InventoryUtil.assertNotNull(AdStorageQuery.class, "storageBucket", storageBucket);
         String archive = bucket2archive(storageBucket);
+        this.storagebucket = storageBucket;
         this.query = String.format(this.QTMPL, archive);
     }
 
@@ -111,14 +112,14 @@ public class AdStorageQuery {
         return new AdStorageMetadataRowMapper();
     }
 
-    private String archive2bucket(String arc) {
-        for (String pre : ARC_PREFIX_ARC) {
-            if (!arc.equals(pre) && arc.startsWith(pre)) {
-                return DISAMBIGUATE_PREFIX + arc;
-            }
-        }
-        return arc;
-    }
+    //private String archive2bucket(String arc) {
+    //    for (String pre : ARC_PREFIX_ARC) {
+    //        if (!arc.equals(pre) && arc.startsWith(pre)) {
+    //            return DISAMBIGUATE_PREFIX + arc;
+    //        }
+    //    }
+    //    return arc;
+    //}
     
     private String bucket2archive(String sb) {
         if (sb.startsWith(DISAMBIGUATE_PREFIX)) {
@@ -134,24 +135,19 @@ public class AdStorageQuery {
         public StorageMetadata mapRow(List<Object> row) {
             Iterator i = row.iterator();
 
-            String archive = (String) i.next();
-            String fname = (String) i.next();
-            URI uri = (URI) i.next();
-            if (uri == null) {
-                log.warn(AdStorageMetadataRowMapper.class.getSimpleName() + ".SKIP loc=" + archive + "/" + fname + " reason=null-uri");
+            URI storageID = (URI) i.next();
+            if (storageID == null) {
+                log.warn(AdStorageMetadataRowMapper.class.getSimpleName() + ".SKIP reason=null-uri");
                 return null;
             }
-            
-            // chose best storageID
-            URI sid = URI.create("ad:" + archive + "/" + fname);
-            if ("mast".equals(uri.getScheme())) {
-                sid = uri;
+            if (storageID.getScheme().equals("gemini")) {
+                // hack to preserve previously generated storageID values for GEM
+                storageID = URI.create("ad:" + storageID.getSchemeSpecificPart());
             }
-            final URI storageID = sid;
             
             URI artifactURI = (URI) i.next();
             if (artifactURI == null) {
-                log.warn(AdStorageMetadataRowMapper.class.getSimpleName() + ".SKIP loc=" + archive + "/" + fname + " reason=null-artifactURI");
+                log.warn(AdStorageMetadataRowMapper.class.getSimpleName() + ".SKIP uri=" + storageID + " reason=null-artifactURI");
                 return null;
             }
             
@@ -162,23 +158,23 @@ public class AdStorageQuery {
                 contentChecksum = new URI(MD5_ENCODING_SCHEME + hex);
                 InventoryUtil.assertValidChecksumURI(AdStorageQuery.class, "contentChecksum", contentChecksum);
             } catch (IllegalArgumentException | URISyntaxException u) {
-                log.warn(AdStorageMetadataRowMapper.class.getSimpleName() + ".SKIP loc=" + archive + "/" + fname + " reason=invalid=contentChecksum");
+                log.warn(AdStorageMetadataRowMapper.class.getSimpleName() + ".SKIP uri=" + storageID + " reason=invalid=contentChecksum");
                 return null;
             }
             
             // archive_files.fileSize
             Long contentLength = (Long) i.next();
             if (contentLength == null) {
-                log.warn(AdStorageMetadataRowMapper.class.getSimpleName() + ".SKIP loc=" + archive + "/" + fname + " reason=null-contentLength");
+                log.warn(AdStorageMetadataRowMapper.class.getSimpleName() + ".SKIP uri=" + storageID + " reason=null-contentLength");
                 return null;
             }
             if (contentLength == 0L) {
-                log.warn(AdStorageMetadataRowMapper.class.getSimpleName() + ".SKIP loc=" + archive + "/" + fname + " reason=zero-contentLength");
+                log.warn(AdStorageMetadataRowMapper.class.getSimpleName() + ".SKIP uri=" + storageID + " reason=zero-contentLength");
                 return null;
             }
 
             StorageLocation storageLocation = new StorageLocation(storageID);
-            storageLocation.storageBucket = archive2bucket(archive);
+            storageLocation.storageBucket = storagebucket;
             
             Date contentLastModified = (Date) i.next();
             if (contentLastModified == null) {

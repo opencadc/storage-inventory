@@ -70,6 +70,7 @@ package org.opencadc.inventory.db;
 import ca.nrc.cadc.db.ConnectionConfig;
 import ca.nrc.cadc.db.DBConfig;
 import ca.nrc.cadc.db.DBUtil;
+import ca.nrc.cadc.db.TransactionManager;
 import ca.nrc.cadc.io.ResourceIterator;
 import ca.nrc.cadc.util.HexUtil;
 import ca.nrc.cadc.util.Log4jInit;
@@ -163,6 +164,7 @@ public class ArtifactDAOTest {
     
     @Test
     public void testGetPutDelete() {
+        long t1 = System.currentTimeMillis();
         try {
             Artifact expected = new Artifact(
                     URI.create("cadc:ARCHIVE/filename"),
@@ -203,6 +205,65 @@ public class ArtifactDAOTest {
             Assert.assertEquals(expected.getMetaChecksum(), furi.getMetaChecksum());
             URI mcs2 = furi.computeMetaChecksum(MessageDigest.getInstance("MD5"));
             Assert.assertEquals("round trip metachecksum", expected.getMetaChecksum(), mcs2);
+            
+            originDAO.delete(expected.getID());
+            Artifact deleted = originDAO.get(expected.getID());
+            Assert.assertNull(deleted);
+            
+        } catch (Exception unexpected) {
+            log.error("unexpected exception", unexpected);
+            Assert.fail("unexpected exception: " + unexpected);
+        } finally {
+            long t2 = System.currentTimeMillis();
+            long dt = t2 - t1;
+            log.info("testGetPutDelete: " + dt + "ms");
+        }
+    }
+    
+    @Test
+    public void testGetWithLock() {
+        // to verify locking  and release by getWithLocks
+        // - set this to an amount of time in milliseconds so the test sleeps before and after rollback
+        // - run the query in sql/pg-locks.sql manually to check for locks
+        // note: assumes this test is the only user of the database
+        final long sleep = 0L;
+        
+        TransactionManager txn = originDAO.getTransactionManager();
+        
+        try {
+            Artifact expected = new Artifact(
+                    URI.create("cadc:ARCHIVE/filename"),
+                    URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"),
+                    new Date(),
+                    new Long(666L));
+            expected.contentType = "application/octet-stream";
+            expected.contentEncoding = "gzip";
+            log.info("  orig: " + expected);
+            
+            
+            Artifact notFound = originDAO.get(expected.getURI());
+            Assert.assertNull(notFound);
+            
+            originDAO.put(expected);
+            log.info("   put: " + expected);
+            
+            txn.startTransaction();
+            
+            Artifact fid = originDAO.lock(expected);
+            Assert.assertNotNull(fid);
+            
+            log.info("lock(Artifact): " + fid + " -- sleeping for " + sleep);
+            Thread.sleep(sleep);
+            
+            Artifact fid2 = originDAO.lock(expected.getID());
+            Assert.assertNotNull(fid2);
+            
+            log.info("lock(UUID): " + fid2 + " -- sleeping for " + sleep);
+            Thread.sleep(sleep);
+            
+            txn.rollbackTransaction();
+            log.info("rollback: -- sleeping for " + sleep);
+            Thread.sleep(sleep);
             
             originDAO.delete(expected.getID());
             Artifact deleted = originDAO.get(expected.getID());
@@ -314,6 +375,7 @@ public class ArtifactDAOTest {
     
     @Test
     public void testGetPutDeleteSiteLocations() {
+        long t1 = System.currentTimeMillis();
         try {
             Artifact expected = new Artifact(
                     URI.create("cadc:ARCHIVE/filename"),
@@ -393,6 +455,114 @@ public class ArtifactDAOTest {
             
         } catch (Exception unexpected) {
             log.error("unexpected exception", unexpected);
+            Assert.fail("unexpected exception: " + unexpected);
+        } finally {
+            long t2 = System.currentTimeMillis();
+            long dt = t2 - t1;
+            log.info("testGetPutDeleteSiteLocations: " + dt + "ms");
+        }
+    }
+    
+    @Test
+    public void testMetadataSyncSequenceNew() {
+
+        ArtifactDAO dao = nonOriginDAO;
+        final TransactionManager transactionManager = dao.getTransactionManager();
+        
+        
+        try {
+            Artifact expected = new Artifact(
+                    URI.create("cadc:ARCHIVE/filename"),
+                    URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"),
+                    new Date(),
+                    new Long(666L));
+            expected.contentType = "application/octet-stream";
+            log.info("expected: " + expected);
+            
+            final long t1 = System.currentTimeMillis();
+            
+            // get by uri
+            Artifact notFound = originDAO.get(expected.getURI());
+            Assert.assertNull(notFound);
+            
+            transactionManager.startTransaction();
+
+            Artifact cur = dao.lock(expected);
+            Assert.assertNull(cur);
+            
+            dao.put(expected);
+            dao.addSiteLocation(expected, new SiteLocation(UUID.randomUUID()));
+            
+            transactionManager.commitTransaction();
+            
+            long t2 = System.currentTimeMillis();
+            long dt = t2 - t1;
+            log.info("testMetadataSyncSequenceNew: " + dt + "ms");
+            
+            originDAO.delete(expected.getID());
+            Artifact deleted = originDAO.get(expected.getID());
+            Assert.assertNull(deleted);
+            
+        } catch (Exception unexpected) {
+            log.error("unexpected exception", unexpected);
+            if (transactionManager != null && transactionManager.isOpen()) {
+                transactionManager.rollbackTransaction();
+            }
+            
+            Assert.fail("unexpected exception: " + unexpected);
+        }
+    }
+    
+    @Test
+    public void testMetadataSyncSequenceMerge() {
+
+        ArtifactDAO dao = nonOriginDAO;
+        final TransactionManager transactionManager = dao.getTransactionManager();
+        
+        try {
+            Artifact expected = new Artifact(
+                    URI.create("cadc:ARCHIVE/filename"),
+                    URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"),
+                    new Date(),
+                    new Long(666L));
+            expected.contentType = "application/octet-stream";
+            log.info("expected: " + expected);
+            
+            dao.put(expected);
+            dao.addSiteLocation(expected, new SiteLocation(UUID.randomUUID()));
+            
+            long t1 = System.currentTimeMillis();
+            
+            // get by uri
+            Artifact collider = originDAO.get(expected.getURI());
+            Assert.assertNotNull(collider);
+            // not a collider, so ignore
+            
+            transactionManager.startTransaction();
+            
+            Artifact cur = dao.lock(expected);
+            Assert.assertNotNull(cur);
+            
+            expected.siteLocations.addAll(cur.siteLocations);
+            dao.put(expected);
+            dao.addSiteLocation(expected, new SiteLocation(UUID.randomUUID()));
+            
+            transactionManager.commitTransaction();
+            
+            long t2 = System.currentTimeMillis();
+            long dt = t2 - t1;
+            log.info("testMetadataSyncSequenceMerge: " + dt + "ms");
+            
+            originDAO.delete(expected.getID());
+            Artifact deleted = originDAO.get(expected.getID());
+            Assert.assertNull(deleted);
+            
+        } catch (Exception unexpected) {
+            log.error("unexpected exception", unexpected);
+            if (transactionManager != null && transactionManager.isOpen()) {
+                transactionManager.rollbackTransaction();
+            }
+            
             Assert.fail("unexpected exception: " + unexpected);
         }
     }
@@ -715,10 +885,10 @@ public class ArtifactDAOTest {
     
     @Test
     public void testIteratorClose() {
-         // to verify locking  and release of locks by ArtifactIterator.close():
-         // - set this to an amount of time in milliseconds so the test sleeps before and after close
-         // - run the query in sql/pg-locks.sql manually to check for locks
-         // note: assumes this test is the only user of the database
+        // to verify locking  and release of locks by ArtifactIterator.close():
+        // - set this to an amount of time in milliseconds so the test sleeps before and after close
+        // - run the query in sql/pg-locks.sql manually to check for locks
+        // note: assumes this test is the only user of the database
         final long sleep = 0L;
         
         int num = 10;
