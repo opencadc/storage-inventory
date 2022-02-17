@@ -131,6 +131,10 @@ public class ArtifactDAO extends AbstractDAO<Artifact> {
         super.delete(Artifact.class, id);
     }
     
+    public Artifact lock(UUID id) {
+        return super.lock(Artifact.class, id);
+    }
+    
     public void setStorageLocation(Artifact a, StorageLocation loc) {
         if (!origin) {
             throw new IllegalStateException("cannot update Artifact.storageLocation with origin=false");
