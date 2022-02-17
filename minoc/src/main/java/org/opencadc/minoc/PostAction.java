@@ -125,7 +125,7 @@ public class PostAction extends ArtifactAction {
             
             boolean locked = false;
             while (existing != null && !locked) {
-                existing = artifactDAO.getWithLock(existing);
+                existing = artifactDAO.lock(existing);
                 profiler.checkpoint("artifactDAO.lock.ok");
                 if (existing != null) {
                     locked = true;

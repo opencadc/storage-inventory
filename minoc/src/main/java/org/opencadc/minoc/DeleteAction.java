@@ -126,7 +126,7 @@ public class DeleteAction extends ArtifactAction {
             
             boolean locked = false;
             while (existing != null && !locked) {
-                existing = artifactDAO.getWithLock(existing);
+                existing = artifactDAO.lock(existing);
                 if (existing != null) {
                     locked = true;
                 } else {
