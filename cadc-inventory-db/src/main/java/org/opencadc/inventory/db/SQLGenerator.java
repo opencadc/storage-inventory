@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2020.                            (c) 2020.
+*  (c) 2022.                            (c) 2022.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -219,12 +219,21 @@ public class SQLGenerator {
     }
     
     public EntityGet<? extends Entity> getEntityGet(Class c) {
+        return getEntityGet(c, false);
+    }
+    
+    public EntityGet<? extends Entity> getEntityGet(Class c, boolean forUpdate) {
         if (Artifact.class.equals(c)) {
-            return new ArtifactGet();
+            return new ArtifactGet(forUpdate);
         }
         if (StorageSite.class.equals(c)) {
-            return new StorageSiteGet();
+            return new StorageSiteGet(forUpdate);
         }
+        
+        if (forUpdate) {
+            throw new UnsupportedOperationException("entity-get + forUpdate: " + c.getSimpleName());
+        }
+        
         if (DeletedArtifactEvent.class.equals(c)) {
             return new DeletedArtifactEventGet();
         }
@@ -491,7 +500,12 @@ public class SQLGenerator {
     class ArtifactGet implements EntityGet<Artifact> {
         private UUID id;
         private URI uri;
-
+        private final boolean forUpdate;
+        
+        ArtifactGet(boolean forUpdate) {
+            this.forUpdate = forUpdate;
+        }
+        
         @Override
         public void setID(UUID id) {
             this.id = id;
@@ -516,6 +530,9 @@ public class SQLGenerator {
             } else {
                 String col = getKeyColumn(Artifact.class, false);
                 sb.append(col).append(" = ?");
+            }
+            if (forUpdate) {
+                sb.append(" FOR UPDATE");
             }
             String sql = sb.toString();
             log.debug("ArtifactGet: " + sql);
@@ -666,7 +683,12 @@ public class SQLGenerator {
     private class StorageSiteGet implements EntityGet<StorageSite> {
         private UUID id;
         private URI uri;
+        private final boolean forUpdate;
 
+        public StorageSiteGet(boolean forUpdate) {
+            this.forUpdate = forUpdate;
+        }
+        
         @Override
         public void setID(UUID id) {
             this.id = id;
