@@ -177,7 +177,7 @@ or, if the last append cannot be reverted:
 
 commit and abort: as above
 
-## HTP header info
+## HTTP header info
 
 * content-length always describes the size of the body of the current request
 * x-total-length specifies the total file size in cases where append is going to be used
@@ -201,7 +201,7 @@ implementation can decide (i) if resume will be supported, and (ii) how to store
 
 A StorageAdapter implementation must support put with transaction. The implementation
 will decide if resume is supported or not. If resume is not supported, the PUT with 
-X-Put-Txn and {body} would fail with a 400 (405?).
+x-out-txn-id header and {body} would fail with a 400.
 
 **Future proofing**: there are several potential enhancements that could be added in the future that will 
 guide implementation choices, especially in the SwiftStorageAdapter and how CEPH object store is used.
