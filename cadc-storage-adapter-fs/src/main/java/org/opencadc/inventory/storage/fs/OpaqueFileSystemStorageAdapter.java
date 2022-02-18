@@ -245,7 +245,7 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
     
     @Override
     public void get(StorageLocation storageLocation, OutputStream dest)
-        throws ResourceNotFoundException, ReadException, WriteException, WriteException, StorageEngageException, TransientException {
+        throws ResourceNotFoundException, ReadException, WriteException, StorageEngageException, TransientException {
         InventoryUtil.assertNotNull(OpaqueFileSystemStorageAdapter.class, "storageLocation", storageLocation);
         InventoryUtil.assertNotNull(OpaqueFileSystemStorageAdapter.class, "dest", dest);
         log.debug("get: " + storageLocation);

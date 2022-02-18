@@ -190,7 +190,7 @@ public class PutAction extends ArtifactAction {
             }
         }
         
-        log.warn("transactionID: " + txnID + " " + txnOP);
+        log.debug("transactionID: " + txnID + " " + txnOP);
 
         // here: txnID != null means in a transaction
         //       segmentSize == 0 means start transaction and return (header) info
