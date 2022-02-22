@@ -288,7 +288,16 @@ public class StorageAdapterPutTxnTest {
     }
     
     @Test
-    public void testPutResumeCommit() {
+    public void testPutResumeCommit_ExpectedLength() {
+        testPutResumeCommit(true);
+    }
+    
+    @Test
+    public void testPutResumeCommit_UnknownLength() {
+        testPutResumeCommit(false);
+    }
+            
+    void testPutResumeCommit(boolean knownLength) {
         try {
             String dataString1 = "abcdefghijklmnopqrstuvwxyz\n";
             String dataString2 = "ABCDEFGHIJKLMNOPQRSTUVWXYZ\n";
@@ -296,23 +305,26 @@ public class StorageAdapterPutTxnTest {
             MessageDigest md = MessageDigest.getInstance("MD5");
             byte[] data = dataString.getBytes();
             md.update(data);
-            URI expectedChecksum = URI.create("md5:" + HexUtil.toHex(md.digest()));
-            long expectedLength = data.length;
+            final URI expectedChecksum = URI.create("md5:" + HexUtil.toHex(md.digest()));
+            final long expectedLength = data.length;
             
-            URI uri = URI.create("cadc:TEST/testPutResumeCommit");
-            NewArtifact newArtifact = new NewArtifact(uri);
-            newArtifact.contentChecksum = expectedChecksum;
-            newArtifact.contentLength = expectedLength;
+            final URI uri = URI.create("cadc:TEST/testPutResumeCommit");
+            Long knownLengthVal = null;
+            if (knownLength) {
+                knownLengthVal = expectedLength;
+            }
             
             log.info("init");
-            PutTransaction txn = adapter.startTransaction(uri, expectedLength);
+            PutTransaction txn = adapter.startTransaction(uri, knownLengthVal);
             Assert.assertNotNull(txn);
             log.info("startTransaction: " + txn);
             
             // write part 1
             data = dataString1.getBytes();
+            NewArtifact p1 = new NewArtifact(uri);
+            p1.contentLength = (long) data.length;
             ByteArrayInputStream source = new ByteArrayInputStream(data);
-            StorageMetadata meta1 = adapter.put(newArtifact, source, txn.getID());
+            StorageMetadata meta1 = adapter.put(p1, source, txn.getID());
             log.info("meta1: " + meta1);
             Assert.assertNotNull(meta1);
             Assert.assertEquals("length", data.length, meta1.getContentLength().longValue());
@@ -330,8 +342,10 @@ public class StorageAdapterPutTxnTest {
 
             // write part 2            
             data = dataString2.getBytes();
+            NewArtifact p2 = new NewArtifact(uri);
+            p2.contentLength = (long) data.length;
             source = new ByteArrayInputStream(data);
-            StorageMetadata meta2 = adapter.put(newArtifact, source, txn.getID());
+            StorageMetadata meta2 = adapter.put(p1, source, txn.getID());
             log.info("meta2: " + meta2);
             Assert.assertNotNull(meta2);
             Assert.assertEquals("length", expectedLength, meta2.getContentLength().longValue());
@@ -377,6 +391,7 @@ public class StorageAdapterPutTxnTest {
             Assert.fail("unexpected exception: " + unexpected);
         }
     }
+    
     
     @Test
     public void testPutFailResumeCommit() {
