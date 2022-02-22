@@ -400,6 +400,7 @@ public class FileSyncJob implements Runnable {
         return t.getProtocols();
     }
 
+    // no longer used but kept for reference: see syncArtifactTxn
     private StorageMetadata syncArtifact(Artifact a, List<Protocol> urls) throws Exception {
         StorageMetadata storageMeta = null;
         Iterator<Protocol> urlIterator = urls.iterator();
@@ -541,7 +542,7 @@ public class FileSyncJob implements Runnable {
                 }
                 
                 for (PutSegment seg : segs) {
-                    log.warn("get: " + seg);
+                    log.debug("get: " + seg);
                     postPrepare = false;
                     HttpGet get = new HttpGet(u, true);
                     get.setConnectionTimeout(6000); // ms
@@ -585,7 +586,7 @@ public class FileSyncJob implements Runnable {
                 PutTransaction status = storageAdapter.getTransactionStatus(txnID);
                 verifyMetadata(a, status.storageMetadata);
 
-                log.warn("committing " + txnID);
+                log.debug("committing " + txnID);
                 StorageMetadata ret = storageAdapter.commitTransaction(txnID);
                 txnID = null;
 
@@ -644,9 +645,9 @@ public class FileSyncJob implements Runnable {
     }
     
     private void verifyMetadata(Artifact a, HttpGet get, PutSegment seg) throws PreconditionFailedException {
-        log.warn("verify artifact: " + a);
-        log.warn("verify headers: " + get.getContentLength() + " " + get.getDigest());
-        log.warn("verify seg: " + seg);
+        log.debug("verify artifact: " + a);
+        log.debug("verify headers: " + get.getContentLength() + " " + get.getDigest());
+        log.debug("verify seg: " + seg);
         URI hdrContentChecksum = get.getDigest();
         if (hdrContentChecksum != null
             && !hdrContentChecksum.equals(a.getContentChecksum())) {
@@ -669,8 +670,8 @@ public class FileSyncJob implements Runnable {
     }
     
     private void verifyMetadata(Artifact a, StorageMetadata sm) throws PreconditionFailedException {
-        log.warn("verify artifact: " + a);
-        log.warn("verify storageMetadata: " + sm);
+        log.debug("verify artifact: " + a);
+        log.debug("verify storageMetadata: " + sm);
         if (!sm.getContentChecksum().equals(a.getContentChecksum())) {
             throw new PreconditionFailedException("contentChecksum artifact: " 
                 + a.getContentChecksum() + " storage: " + sm.getContentChecksum());
