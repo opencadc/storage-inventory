@@ -112,15 +112,19 @@ import org.opencadc.inventory.db.EntityNotFoundException;
 import org.opencadc.inventory.db.ObsoleteStorageLocation;
 import org.opencadc.inventory.db.ObsoleteStorageLocationDAO;
 import org.opencadc.inventory.storage.NewArtifact;
+import org.opencadc.inventory.storage.PutTransaction;
 import org.opencadc.inventory.storage.StorageAdapter;
 import org.opencadc.inventory.storage.StorageEngageException;
 import org.opencadc.inventory.storage.StorageMetadata;
+import org.springframework.transaction.TransactionStatus;
 
 
 public class FileSyncJob implements Runnable {
     private static final Logger log = Logger.getLogger(FileSyncJob.class);
 
     private static final long[] RETRY_DELAY = new long[] { 6000L, 12000L };
+    // adjustable by test code
+    static long SEGMENT_SIZE_PREF = 2 * 1024L * 1024L * 1024L; // 2 GiB
 
     private int syncArtifactAttempts = 0; // total count of attempted download
     
@@ -235,7 +239,7 @@ public class FileSyncJob implements Runnable {
                     
                     // attempt to sync file
                     log.debug("FileSyncJob.SYNC " + artifactLabel + " urls=" + urlList.size() + " attempts=" + retryCount);
-                    StorageMetadata storageMeta = syncArtifact(curArtifact, urlList);
+                    StorageMetadata storageMeta = syncArtifactTxn(curArtifact, urlList);
                     
                     // sync succeeded: update inventory
                     if (storageMeta != null) {
@@ -407,20 +411,12 @@ public class FileSyncJob implements Runnable {
             boolean postPrepare = false;
             try {
                 syncArtifactAttempts++;
-                ByteArrayOutputStream dest = new ByteArrayOutputStream();
-                HttpGet get = new HttpGet(u, dest);
+                HttpGet get = new HttpGet(u, true);
                 get.setConnectionTimeout(6000); // ms
                 get.setReadTimeout(60000);      // ms
                 if (p.getSecurityMethod() == null || p.getSecurityMethod().equals(Standards.getSecurityMethod(AuthMethod.ANON))) {
                     log.debug("download: " + u + " as " + anonSubject);
-                    try {
-                        Subject.doAs(anonSubject, (PrivilegedExceptionAction<Void>) () -> {
-                            get.prepare();
-                            return null;
-                        });
-                    } catch (PrivilegedActionException pex) {
-                        throw pex.getException();
-                    }
+                    doPrepareAnon(get);
                 } else {
                     log.debug("download: " + u + " as " + AuthenticationUtil.getCurrentSubject());
                     get.prepare();
@@ -428,22 +424,7 @@ public class FileSyncJob implements Runnable {
                 
                 postPrepare = true;
                 
-                // Note: the storage adapter 'put' below does checksum and content length
-                // checks, but only after downloading the entire file.
-                // Making the checks here is more efficient.
-                URI hdrContentChecksum = get.getDigest();
-                if (hdrContentChecksum != null
-                    && !hdrContentChecksum.equals(a.getContentChecksum())) {
-                    throw new PreconditionFailedException("contentChecksum expected: " 
-                        + a.getContentChecksum() + " header: " + hdrContentChecksum);
-                }
-
-                long hdrContentLen = get.getContentLength();
-                if (hdrContentLen != -1
-                    && hdrContentLen != a.getContentLength()) {
-                    throw new PreconditionFailedException("contentLength expected: " 
-                            + a.getContentLength() + " header: " + hdrContentLen);
-                }
+                verifyMetadata(a, get, null);
 
                 NewArtifact na = new NewArtifact(a.getURI());
                 na.contentChecksum = a.getContentChecksum();
@@ -488,6 +469,217 @@ public class FileSyncJob implements Runnable {
         }
         
         return null;
+    }
+    
+    static class PutSegment {
+        long start;
+        long end;
+        long contentLength;
+        
+        public String getRangeHeaderVal() {
+            return "bytes=" + start + "-" + end; 
+        }
+
+        @Override
+        public String toString() {
+            return PutSegment.class.getSimpleName() + "[" + start + "," + end + "," + contentLength + "]";
+        }
+    }
+    
+    static List<PutSegment> getSegmentPlan(Artifact a, PutTransaction pt) {
+        List<FileSyncJob.PutSegment> segs = new ArrayList<>();
+        
+        long segmentSize = Math.min(SEGMENT_SIZE_PREF, a.getContentLength()); // client preference
+        if (pt.getMinSegmentSize() != null) {
+            segmentSize = Math.max(segmentSize, pt.getMinSegmentSize());
+        }
+        if (pt.getMaxSegmentSize() != null) {
+            segmentSize = Math.min(segmentSize, pt.getMaxSegmentSize());
+        }
+        
+        long numWholeSegments = a.getContentLength() / segmentSize;
+        long lastSegment = a.getContentLength() - (segmentSize * numWholeSegments);
+        long numSegments = (lastSegment > 0L ? numWholeSegments + 1 : numWholeSegments);
+
+        for (int i = 0; i < numSegments; i++) {
+            FileSyncJob.PutSegment s = new FileSyncJob.PutSegment();
+
+            s.start = i * segmentSize;
+            s.end = s.start + segmentSize - 1;
+            s.contentLength = segmentSize;
+            if (i + 1 == numSegments && lastSegment > 0L) {
+                s.end = s.start + lastSegment - 1;
+                s.contentLength = lastSegment;
+            }
+            segs.add(s);
+        }
+        return segs;
+    }
+    
+    private StorageMetadata syncArtifactTxn(Artifact a, List<Protocol> urls) throws Exception {
+        Iterator<Protocol> urlIterator = urls.iterator();
+        while (urlIterator.hasNext()) {
+            Protocol p = urlIterator.next();
+            URL u = new URL(p.getEndpoint());
+            final String logURL = getLoggableString(u, p.getSecurityMethod());
+            
+            
+            
+            String txnID = null;
+            boolean postPrepare = false;
+            try {
+                syncArtifactAttempts++;
+                
+                // figure out txn params
+                PutTransaction pt = storageAdapter.startTransaction(a.getURI(), a.getContentLength());
+                txnID = pt.getID();
+                List<PutSegment> segs = FileSyncJob.getSegmentPlan(a, pt);
+                if (segs.size() == 1) {
+                    storageAdapter.abortTransaction(pt.getID());
+                    txnID = null;
+                    // proceed without txn
+                }
+                
+                for (PutSegment seg : segs) {
+                    log.warn("get: " + seg);
+                    postPrepare = false;
+                    HttpGet get = new HttpGet(u, true);
+                    get.setConnectionTimeout(6000); // ms
+                    get.setReadTimeout(60000);      // ms
+                    if (txnID != null) {
+                        get.setRequestProperty("range", seg.getRangeHeaderVal());
+                    }
+
+                    if (p.getSecurityMethod() == null || p.getSecurityMethod().equals(Standards.getSecurityMethod(AuthMethod.ANON))) {
+                        log.debug("download: " + u + " as " + anonSubject);
+                        doPrepareAnon(get);
+                    } else {
+                        log.debug("download: " + u + " as " + AuthenticationUtil.getCurrentSubject());
+                        get.prepare();
+                    }
+                    postPrepare = true;
+                    if (txnID != null && get.getResponseCode() != 206) {
+                        // TODO have to fall back to complete download somehow
+                        throw new RuntimeException("OOPS: " + logURL + " does not support range requests");
+                    }
+
+                    // when there is only one segment, pt==null but the seg.contentLength is correct
+                    verifyMetadata(a, get, seg);
+
+                    NewArtifact na = new NewArtifact(a.getURI());
+                    na.contentChecksum = a.getContentChecksum();
+                    na.contentLength = a.getContentLength();
+                    if (txnID != null) {
+                        na.contentLength = seg.contentLength;
+                    }
+                    
+                    StorageMetadata storageMeta = this.storageAdapter.put(na, get.getInputStream(), txnID);
+                    log.debug("put ok: " + storageMeta);
+                    
+                    if (txnID == null) {
+                        return storageMeta;
+                    }
+                    // TODO: verify partial put, maybe revert and try chunk again?
+                }
+                
+                PutTransaction status = storageAdapter.getTransactionStatus(txnID);
+                verifyMetadata(a, status.storageMetadata);
+
+                log.warn("committing " + txnID);
+                StorageMetadata ret = storageAdapter.commitTransaction(txnID);
+                txnID = null;
+
+                return ret;
+            } catch (ByteLimitExceededException | StorageEngageException | WriteException ex) {
+                // IOException will capture this if not explicitly caught and rethrown
+                log.error("FileSyncJob.FAIL", ex);
+                log.error("FileSyncJob.FAIL " + artifactLabel + " reason=" + ex);
+                throw ex;
+            } catch (MalformedURLException | ResourceNotFoundException | ResourceAlreadyExistsException
+                     | PreconditionFailedException | RangeNotSatisfiableException 
+                     | AccessControlException | NotAuthenticatedException ex) {
+                log.error("FileSyncJob.ERROR remove=" + u, ex);
+                log.warn("FileSyncJob.ERROR " + artifactLabel + " remove=" + logURL + " reason=" + ex);
+                fails.add(ex);
+                urlIterator.remove();
+            } catch (IOException | TransientException ex) {
+                // includes ReadException
+                // - prepare or put throwing this error
+                log.debug("FileSyncJob.ERROR keep=" + u, ex);
+                log.warn("FileSyncJob.ERROR " + artifactLabel + " keep=" + logURL + " reason=" + ex);
+                fails.add(ex);
+            } catch (Exception ex) {
+                if (!postPrepare) {
+                    // remote server 5xx response: discard
+                    log.debug("FileSyncJob.ERROR remove=" + u, ex);
+                    log.warn("FileSyncJob.ERROR " + artifactLabel + " remove=" + logURL + " reason=" + ex);
+                    urlIterator.remove();
+                    fails.add(ex);
+                } else {
+                    // StorageAdapter.put internal fail: abort
+                    log.debug("FileSyncJob.FAIL", ex);
+                    log.warn("FileSyncJob.FAIL " + artifactLabel + " reason=" + ex);
+                    throw ex;
+                }
+            } finally {
+                if (txnID != null) {
+                    // not comitted at end of try { }
+                    storageAdapter.abortTransaction(txnID);
+                }
+            }
+        }
+        
+        return null;
+    }
+    
+    private void doPrepareAnon(final HttpGet get) throws Exception {
+        try {
+            Subject.doAs(anonSubject, (PrivilegedExceptionAction<Void>) () -> {
+                get.prepare();
+                return null;
+            });
+        } catch (PrivilegedActionException pex) {
+            throw pex.getException();
+        }
+    }
+    
+    private void verifyMetadata(Artifact a, HttpGet get, PutSegment seg) throws PreconditionFailedException {
+        log.warn("verify artifact: " + a);
+        log.warn("verify headers: " + get.getContentLength() + " " + get.getDigest());
+        log.warn("verify seg: " + seg);
+        URI hdrContentChecksum = get.getDigest();
+        if (hdrContentChecksum != null
+            && !hdrContentChecksum.equals(a.getContentChecksum())) {
+            throw new PreconditionFailedException("contentChecksum artifact: " 
+                + a.getContentChecksum() + " header: " + hdrContentChecksum);
+        }
+
+        long hdrContentLen = get.getContentLength();
+        if (hdrContentLen != -1) {
+            if (seg != null) {
+                if (hdrContentLen != seg.contentLength) {
+                    throw new PreconditionFailedException("contentLength segment: " 
+                        + seg.contentLength + " header: " + hdrContentLen);
+                }
+            } else if (hdrContentLen != a.getContentLength()) {
+                throw new PreconditionFailedException("contentLength artifact: " 
+                    + a.getContentLength() + " header: " + hdrContentLen);
+            }
+        }
+    }
+    
+    private void verifyMetadata(Artifact a, StorageMetadata sm) throws PreconditionFailedException {
+        log.warn("verify artifact: " + a);
+        log.warn("verify storageMetadata: " + sm);
+        if (!sm.getContentChecksum().equals(a.getContentChecksum())) {
+            throw new PreconditionFailedException("contentChecksum artifact: " 
+                + a.getContentChecksum() + " storage: " + sm.getContentChecksum());
+        }
+
+        if (!sm.getContentLength().equals(a.getContentLength())) {
+            throw new PreconditionFailedException("contentLength artifact: " 
+                + a.getContentLength() + " storage: " + sm.getContentLength());
+        }
     }
     
     private String getLoggableString(URL url, URI sm) {

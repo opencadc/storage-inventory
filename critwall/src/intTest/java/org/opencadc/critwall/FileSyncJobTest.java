@@ -212,6 +212,13 @@ public class FileSyncJobTest {
         testValidJob(testDir, SSLUtil.createSubject(certificateFile));
     }
     
+    @Test
+    public void testValidJobPutTransaction() {
+        String testDir = TEST_ROOT + File.separator + "testValidJobPutTransaction";
+        FileSyncJob.SEGMENT_SIZE_PREF = 512 * 1024L; // 512KiB or 2 segments
+        testValidJob(testDir, anonSubject);
+    }
+    
     public void testValidJob(String testDir, Subject testSubject) {
         try {
             createTestDirectory(testDir);
