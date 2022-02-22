@@ -629,11 +629,13 @@ public class SwiftStorageAdapter  implements StorageAdapter {
                 } // else: currently don't allow segmented put of unknown length
                 
                 if (txn.dynamicLargeObject) {
+                    // allow segment put to proceed
                     writeDataLocation = getNextTransactionStorageLocation(txn.getID());
                 } else {
                     if (txn.storageMetadata != null) {
                         throw new IllegalArgumentException("data already written: contentLength=" + txn.storageMetadata.getContentLength());
                     }
+                    // allow single-segment put to proceed
                     UUID id = UUID.fromString(transactionID);
                     writeDataLocation = toStorageLocation(id);
                 }

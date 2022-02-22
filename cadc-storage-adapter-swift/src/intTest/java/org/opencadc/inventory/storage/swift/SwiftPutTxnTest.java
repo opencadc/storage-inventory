@@ -70,7 +70,6 @@ package org.opencadc.inventory.storage.swift;
 import ca.nrc.cadc.util.HexUtil;
 import ca.nrc.cadc.util.Log4jInit;
 import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.net.URI;
 import java.security.MessageDigest;
 import java.util.Iterator;
@@ -78,6 +77,7 @@ import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.storage.NewArtifact;
@@ -129,7 +129,7 @@ public class SwiftPutTxnTest extends StorageAdapterPutTxnTest {
     @Test
     public void testTransactionStatus() {
         try {
-            Long expectedSegSize = swiftAdapter.segmentMaxBytes;
+            final Long expectedSegSize = swiftAdapter.segmentMaxBytes;
             
             URI uri = URI.create("cadc:TEST/testStartTransaction-null");
             PutTransaction txn = adapter.startTransaction(uri, null);
@@ -369,15 +369,27 @@ public class SwiftPutTxnTest extends StorageAdapterPutTxnTest {
     }
 
     @Override
-    public void testPutResumeCommit() {
+    @Test
+    @Ignore // adapter currently defaults to simple object when content-length not known
+    public void testPutResumeCommit_UnknownLength() {
         long tmp = swiftAdapter.segmentMinBytes;
         swiftAdapter.segmentMinBytes = 10L;
         try {
-            super.testPutResumeCommit();
+            super.testPutResumeCommit_UnknownLength();
         } finally {
             swiftAdapter.segmentMinBytes = tmp;
         }
-        
+    }
+
+    @Override
+    public void testPutResumeCommit_ExpectedLength() {
+        long tmp = swiftAdapter.segmentMinBytes;
+        swiftAdapter.segmentMinBytes = 10L;
+        try {
+            super.testPutResumeCommit_ExpectedLength();
+        } finally {
+            swiftAdapter.segmentMinBytes = tmp;
+        }
     }
 
     @Override
@@ -390,7 +402,4 @@ public class SwiftPutTxnTest extends StorageAdapterPutTxnTest {
             swiftAdapter.segmentMinBytes = tmp;
         }
     }
-    
-    
-    
 }
