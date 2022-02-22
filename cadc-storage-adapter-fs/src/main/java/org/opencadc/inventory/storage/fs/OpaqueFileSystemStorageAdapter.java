@@ -318,6 +318,7 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
         InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "source", source);
 
         Path txnTarget;
+        Long expectedLength = null;
         MessageDigestAPI txnDigest = null;
         String checksumAlg = DEFAULT_CHECKSUM_ALGORITHM;
         if (newArtifact.contentChecksum != null) {
@@ -346,6 +347,14 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
                     throw new IllegalArgumentException("incorrect Artifact.uri in transaction: " + transactionID
                         + " expected: " + auri);
                 }
+                String alen = getFileAttribute(txnTarget, EXP_LENGTH_ATTR);
+                if (alen != null) {
+                    try {
+                        expectedLength = Long.valueOf(alen);
+                    } catch (NumberFormatException ex) {
+                        throw new RuntimeException("BUG: failed to restore expected content length attribute in transaction " + transactionID);
+                    }
+                }
             } else {
                 String tmp = UUID.randomUUID().toString();
                 txnTarget = txnPath.resolve(tmp);
@@ -354,6 +363,7 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
                     // unlikely: duplicate UUID in the txnpath directory?
                     throw new RuntimeException("BUG: txnTarget already exists: " + txnTarget);
                 }
+                expectedLength = newArtifact.contentLength;
             }
         } catch (IOException ex) {
             throw new StorageEngageException("failed to read file attributes", ex);
@@ -417,7 +427,7 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
             log.debug("current checksum: " + checksum);
             log.debug("current file size: " + curLength);
             
-            if (transactionID != null && (newArtifact.contentLength == null || curLength < newArtifact.contentLength)) {
+            if (transactionID != null && (expectedLength == null || curLength < expectedLength)) {
                 // incomplete: no further content checks
                 log.debug("incomplete put in transaction: " + transactionID + " - not verifying checksum");
             } else {
@@ -427,13 +437,13 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
                         throw new IncorrectContentChecksumException(newArtifact.contentChecksum + " != " + checksum);
                     }
                 }
-                if (newArtifact.contentLength != null && !newArtifact.contentLength.equals(curLength)) {
+                if (expectedLength != null && !expectedLength.equals(curLength)) {
                     if (checksumProvided) {
                         // likely bug in the client, throw a 400 instead
-                        throw new IncorrectContentLengthException(newArtifact.contentLength + " != " + curLength
+                        throw new IncorrectContentLengthException(expectedLength + " != " + curLength
                             + " but checksum was correct! client BUG?");
                     }
-                    throw new IncorrectContentLengthException(newArtifact.contentLength + " != " + curLength);
+                    throw new IncorrectContentLengthException(expectedLength + " != " + curLength);
                 }
             }
 
