@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2021.                            (c) 2021.
+*  (c) 2022.                            (c) 2022.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -67,7 +67,6 @@
 
 package org.opencadc.inventory.storage.test;
 
-import ca.nrc.cadc.io.ReadException;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.util.HexUtil;
 import ca.nrc.cadc.util.Log4jInit;
@@ -82,6 +81,7 @@ import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.Test;
+import org.opencadc.inventory.storage.ByteRange;
 import org.opencadc.inventory.storage.NewArtifact;
 import org.opencadc.inventory.storage.PutTransaction;
 import org.opencadc.inventory.storage.StorageAdapter;
@@ -320,14 +320,14 @@ public class StorageAdapterPutTxnTest {
             log.info("startTransaction: " + txn);
             
             // write part 1
-            data = dataString1.getBytes();
+            final byte[] data1 = dataString1.getBytes();
             NewArtifact p1 = new NewArtifact(uri);
-            p1.contentLength = (long) data.length;
-            ByteArrayInputStream source = new ByteArrayInputStream(data);
+            p1.contentLength = (long) data1.length;
+            ByteArrayInputStream source = new ByteArrayInputStream(data1);
             StorageMetadata meta1 = adapter.put(p1, source, txn.getID());
             log.info("meta1: " + meta1);
             Assert.assertNotNull(meta1);
-            Assert.assertEquals("length", data.length, meta1.getContentLength().longValue());
+            Assert.assertEquals("length", data1.length, meta1.getContentLength().longValue());
             log.info("put 1");
             
             // check txn status
@@ -338,13 +338,13 @@ public class StorageAdapterPutTxnTest {
             Assert.assertNotNull(txnMeta1);
             Assert.assertTrue("valid", txnMeta1.isValid());
             Assert.assertNotNull("artifactURI", txnMeta1.artifactURI);
-            Assert.assertEquals("length", data.length, txnMeta1.getContentLength().longValue());
+            Assert.assertEquals("length", data1.length, txnMeta1.getContentLength().longValue());
 
             // write part 2            
-            data = dataString2.getBytes();
+            final byte[] data2 = dataString2.getBytes();
             NewArtifact p2 = new NewArtifact(uri);
-            p2.contentLength = (long) data.length;
-            source = new ByteArrayInputStream(data);
+            p2.contentLength = (long) data2.length;
+            source = new ByteArrayInputStream(data2);
             StorageMetadata meta2 = adapter.put(p1, source, txn.getID());
             log.info("meta2: " + meta2);
             Assert.assertNotNull(meta2);
@@ -384,6 +384,29 @@ public class StorageAdapterPutTxnTest {
             Assert.assertEquals("checksum", finalMeta.getContentChecksum(), actualChecksum);
             Assert.assertEquals("checksum", expectedChecksum, actualChecksum);
 
+            // get bytes ranges and reassemble to verify -- get 3 segments so middle overlaps the boundary
+            long i1 = expectedLength / 3;
+            long i2 = expectedLength * 2 / 3;
+            ByteRange[] parts = new ByteRange[] {
+                new ByteRange(0, i1),
+                new ByteRange(i1, (i2 - i1)),
+                new ByteRange(i2, (expectedLength - i2))
+            };
+            bos = new ByteArrayOutputStream();
+            log.info("get part: " + parts[0]);
+            adapter.get(finalMeta.getStorageLocation(), bos, parts[0]);
+            log.info("get part: " + parts[1]);
+            adapter.get(finalMeta.getStorageLocation(), bos, parts[1]);
+            log.info("get part: " + parts[2]);
+            adapter.get(finalMeta.getStorageLocation(), bos, parts[2]);
+            actual = bos.toByteArray();
+            md.reset();
+            md.update(actual);
+            actualChecksum = URI.create("md5:" + HexUtil.toHex(md.digest()));
+            log.info("testPutTransactionCommit get-parts: " + actual.length + " " + actualChecksum);
+            Assert.assertEquals("length", expectedLength, actual.length);
+            Assert.assertEquals("checksum", expectedChecksum, actualChecksum);
+            
             // delete
             adapter.delete(finalMeta.getStorageLocation());
         } catch (Exception unexpected) {
