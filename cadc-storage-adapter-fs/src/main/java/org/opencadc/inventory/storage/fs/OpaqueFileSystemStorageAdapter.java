@@ -408,6 +408,7 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
                     md = MessageDigestAPI.getDigest(prevDigestState);
                     long len = Files.size(txnTarget);
                     log.debug("auto-revert transaction " + transactionID + " to length " + len + " after failed input: " + ex);
+                    throw ex;
                 } catch (WriteException ex) {
                     log.debug("auto-abort transaction " + transactionID + " after failed write to back end: ", ex);
                     abortTransaction(transactionID);

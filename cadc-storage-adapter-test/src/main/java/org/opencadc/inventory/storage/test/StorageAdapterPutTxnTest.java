@@ -67,6 +67,7 @@
 
 package org.opencadc.inventory.storage.test;
 
+import ca.nrc.cadc.io.ReadException;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.util.HexUtil;
 import ca.nrc.cadc.util.Log4jInit;
@@ -461,9 +462,12 @@ public class StorageAdapterPutTxnTest {
             log.info("START put 2 fail(0)");
             data = dataString2.getBytes();
             source = getFailingInput(0, data); // no need for rollback to work
-            StorageMetadata failedPut = adapter.put(newArtifact, source, txn.getID());
-            log.info("failed put(0): " + failedPut);
-            Assert.assertNotNull("failed put (0)", failedPut);
+            try {
+                StorageMetadata failedPut = adapter.put(newArtifact, source, txn.getID());
+                Assert.fail("expected ReadException, got: " + failedPut);
+            } catch (ReadException expected) {
+                log.info("caught expected: " + expected);
+            }
             PutTransaction ts2 = adapter.getTransactionStatus(txn.getID());
             Assert.assertNotNull(ts2.storageMetadata);
             StorageMetadata tmeta2 = ts2.storageMetadata;
@@ -474,10 +478,13 @@ public class StorageAdapterPutTxnTest {
             
             log.info("START put 3 fail(20)");
             data = dataString2.getBytes();
-            source = getFailingInput(20, data); // fail after 32 bytes: need rollback to work
-            failedPut = adapter.put(newArtifact, source, txn.getID());
-            log.info("failed put(20): " + failedPut);
-            Assert.assertNotNull("failed put (20)", failedPut);
+            source = getFailingInput(20, data); // fail after 20 bytes: need rollback to work
+            try {
+                StorageMetadata failedPut = adapter.put(newArtifact, source, txn.getID());
+                Assert.fail("expected ReadException, got: " + failedPut);
+            } catch (ReadException expected) {
+                log.info("caught expected: " + expected);
+            }
             ts2 = adapter.getTransactionStatus(txn.getID());
             Assert.assertNotNull(ts2.storageMetadata);
             tmeta2 = ts2.storageMetadata;

@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2020.                            (c) 2020.
+*  (c) 2022.                            (c) 2022.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -603,7 +603,7 @@ public class SwiftStorageAdapter  implements StorageAdapter {
                 if (newArtifact.contentLength == null) {
                     throw new IllegalArgumentException("invalid put: must specify content-length of segment");
                 }
-                log.warn("enforce segment size limit: " + newArtifact.contentLength + " vs "
+                log.debug("enforce segment size limit: " + newArtifact.contentLength + " vs "
                         + "[" + txn.getMinSegmentSize() + "," + txn.getMaxSegmentSize() + "]");
                 
                 if (txn.getMaxSegmentSize() < newArtifact.contentLength) {
@@ -618,7 +618,7 @@ public class SwiftStorageAdapter  implements StorageAdapter {
                 long elen = curLength + newArtifact.contentLength;
                 if (txn.totalLength != null) {
                     if (elen == txn.totalLength) {
-                        log.warn("transaction " + transactionID + ": last segment, allowing content-length=" + newArtifact.contentLength);
+                        log.debug("transaction " + transactionID + ": last segment, allowing content-length=" + newArtifact.contentLength);
                     } else {
                         if (newArtifact.contentLength < txn.getMinSegmentSize()) {
                             throw new IllegalArgumentException("invalid put: segment too small - expected content-length in "
@@ -715,6 +715,7 @@ public class SwiftStorageAdapter  implements StorageAdapter {
                         }
                         md = MessageDigestAPI.getDigest(prevDigestState);
                         log.debug("proceeding with transaction " + transactionID + " at offset " + len + " after failed input: " + ex);
+                        throw new ReadException("read input error", trap.fail);
                     } else {
                         // write exception
                         log.debug("auto-abort transactionID " + transactionID + " after failed write to back end: " + ex);
