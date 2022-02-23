@@ -67,10 +67,14 @@
 
 package org.opencadc.minoc;
 
+import ca.nrc.cadc.date.DateUtil;
 import ca.nrc.cadc.rest.SyncOutput;
+import java.text.DateFormat;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.InventoryUtil;
+import org.opencadc.inventory.storage.PutTransaction;
+import org.opencadc.inventory.storage.StorageMetadata;
 import org.opencadc.permissions.ReadGrant;
 
 /**
@@ -95,8 +99,9 @@ public class HeadAction extends ArtifactAction {
     @Override
     public void initAction() throws Exception {
         checkReadable();
-        initAndAuthorize(ReadGrant.class);
+        initAndAuthorize(ReadGrant.class, true); // allowReadWithWriteGrant for head after put
         initDAO();
+        initStorageAdapter();
     }
 
     /**
@@ -105,7 +110,18 @@ public class HeadAction extends ArtifactAction {
     @Override
     public void doAction() throws Exception {
         
-        Artifact artifact = getArtifact(artifactURI);
+        String txnID = syncInput.getHeader(PUT_TXN_ID);
+        log.warn("transactionID: " + txnID);
+        Artifact artifact;
+        if (txnID != null) {
+            PutTransaction t = storageAdapter.getTransactionStatus(txnID);
+            StorageMetadata sm = t.storageMetadata;
+            artifact = new Artifact(sm.artifactURI, sm.getContentChecksum(), sm.getContentLastModified(), sm.getContentLength());
+            setTransactionHeaders(t, syncOutput);
+            super.logInfo.setMessage("transaction: " + txnID);
+        } else {
+            artifact = getArtifact(artifactURI);
+        }
         setHeaders(artifact, syncOutput);
     }
     
@@ -114,12 +130,17 @@ public class HeadAction extends ArtifactAction {
      * @param artifact The artifact with metadata
      * @param syncOutput The target response
      */
-    public static void setHeaders(Artifact artifact, SyncOutput syncOutput) {
+    static void setHeaders(Artifact artifact, SyncOutput syncOutput) {
         syncOutput.setDigest(artifact.getContentChecksum());
         syncOutput.setLastModified(artifact.getContentLastModified());
         syncOutput.setHeader("Content-Length", artifact.getContentLength());
+        
+        DateFormat df = DateUtil.getDateFormat(DateUtil.HTTP_DATE_FORMAT, DateUtil.GMT);
+        syncOutput.setHeader("Last-Modified", df.format(artifact.getContentLastModified()));
+
         String filename = InventoryUtil.computeArtifactFilename(artifact.getURI());
         syncOutput.setHeader("Content-Disposition", "attachment; filename=\"" + filename + "\"");
+
         if (artifact.contentEncoding != null) {
             syncOutput.setHeader("Content-Encoding", artifact.contentEncoding);
         }
@@ -129,4 +150,13 @@ public class HeadAction extends ArtifactAction {
         syncOutput.setHeader("Accept-Ranges", "bytes");
     }
 
+    static void setTransactionHeaders(PutTransaction txn, SyncOutput syncOutput) {
+        syncOutput.setHeader(PUT_TXN_ID, txn.getID());
+        if (txn.getMinSegmentSize() != null) {
+            syncOutput.setHeader(PUT_TXN_MIN_SIZE, txn.getMinSegmentSize());
+        }
+        if (txn.getMaxSegmentSize() != null) {
+            syncOutput.setHeader(PUT_TXN_MAX_SIZE, txn.getMaxSegmentSize());
+        }
+    }
 }

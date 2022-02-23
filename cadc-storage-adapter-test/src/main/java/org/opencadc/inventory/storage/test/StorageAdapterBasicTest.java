@@ -131,7 +131,7 @@ public abstract class StorageAdapterBasicTest {
             log.debug("testPutGetDelete random data: " + data.length + " " + expectedChecksum);
             
             log.debug("testPutGetDelete put: " + artifactURI);
-            StorageMetadata storageMetadata = adapter.put(newArtifact, new ByteArrayInputStream(data));
+            StorageMetadata storageMetadata = adapter.put(newArtifact, new ByteArrayInputStream(data), null);
             log.info("testPutGetDelete put: " + artifactURI + " to " + storageMetadata.getStorageLocation());
             log.info("put: " + storageMetadata.getStorageLocation());
             Assert.assertNotNull(storageMetadata);
@@ -185,7 +185,7 @@ public abstract class StorageAdapterBasicTest {
             log.debug("testPutGetDeleteMinimal random data: " + data.length + " " + expectedChecksum);
             
             log.debug("testPutGetDeleteMinimal put: " + artifactURI);
-            StorageMetadata storageMetadata = adapter.put(na, new ByteArrayInputStream(data));
+            StorageMetadata storageMetadata = adapter.put(na, new ByteArrayInputStream(data), null);
             log.info("testPutGetDeleteMinimal put: " + artifactURI + " to " + storageMetadata.getStorageLocation());
             
             // verify data
@@ -218,7 +218,7 @@ public abstract class StorageAdapterBasicTest {
         try {
             URI artifactURI = URI.create("cadc:TEST/testPutReadFail");
             NewArtifact na = new NewArtifact(artifactURI);
-            adapter.put(na, TestUtil.getInputStreamThatFails(true)); // provoke IOException
+            adapter.put(na, TestUtil.getInputStreamThatFails(true), null); // provoke IOException
             Assert.fail("expected ReadException: call succeeded");
         } catch (ReadException expected) {
             log.info("caught expected: " + expected);
@@ -233,7 +233,7 @@ public abstract class StorageAdapterBasicTest {
         try {
             URI artifactURI = URI.create("cadc:TEST/testPutReadFail");
             NewArtifact na = new NewArtifact(artifactURI);
-            StorageMetadata sm = adapter.put(na, TestUtil.getInputStreamOfRandomBytes(8192));
+            StorageMetadata sm = adapter.put(na, TestUtil.getInputStreamOfRandomBytes(8192), null);
             Assert.assertNotNull(sm);
             
             adapter.get(sm.getStorageLocation(), TestUtil.getOutputStreamThatFails(true)); // provoke IOException
@@ -266,7 +266,7 @@ public abstract class StorageAdapterBasicTest {
             try {
                 newArtifact.contentLength = data.length - 1L;
                 ByteArrayInputStream bis = new ByteArrayInputStream(data);
-                StorageMetadata storageMetadata = adapter.put(newArtifact, bis);
+                StorageMetadata storageMetadata = adapter.put(newArtifact, bis, null);
                 Assert.fail("expected fail - got : " + storageMetadata);
             } catch (PreconditionFailedException expected) {
                 log.info("caught expected: " + expected);
@@ -276,7 +276,7 @@ public abstract class StorageAdapterBasicTest {
             try {
                 newArtifact.contentLength = data.length + 1L;
                 ByteArrayInputStream bis = new ByteArrayInputStream(data);
-                StorageMetadata storageMetadata = adapter.put(newArtifact, bis);
+                StorageMetadata storageMetadata = adapter.put(newArtifact, bis, null);
                 Assert.fail("expected fail - got : " + storageMetadata);
             } catch (PreconditionFailedException expected) {
                 log.info("caught expected: " + expected);
@@ -286,7 +286,7 @@ public abstract class StorageAdapterBasicTest {
             try {
                 newArtifact.contentChecksum = wrongChecksum;
                 ByteArrayInputStream bis = new ByteArrayInputStream(data);
-                StorageMetadata storageMetadata = adapter.put(newArtifact, bis);
+                StorageMetadata storageMetadata = adapter.put(newArtifact, bis, null);
                 Assert.fail("expected fail - got : " + storageMetadata);
             } catch (PreconditionFailedException expected) {
                 log.info("caught expected: " + expected);
@@ -309,7 +309,7 @@ public abstract class StorageAdapterBasicTest {
                 URI artifactURI = URI.create("cadc:TEST/testIterator-" + i);
                 NewArtifact na = new NewArtifact(artifactURI);
                 na.contentLength = (long) datalen;
-                StorageMetadata sm = adapter.put(na, TestUtil.getInputStreamOfRandomBytes(datalen));
+                StorageMetadata sm = adapter.put(na, TestUtil.getInputStreamOfRandomBytes(datalen), null);
                 Assert.assertNotNull(sm.artifactURI);
                 //Assert.assertNotNull(sm.contentLastModified);
                 log.debug("testIterator put: " + artifactURI + " to " + sm.getStorageLocation());
@@ -321,7 +321,7 @@ public abstract class StorageAdapterBasicTest {
                 URI uri = URI.create(suri);
                 NewArtifact na = new NewArtifact(uri);
                 na.contentLength = (long) datalen;
-                StorageMetadata meta = adapter.put(na, TestUtil.getInputStreamOfRandomBytes(datalen));
+                StorageMetadata meta = adapter.put(na, TestUtil.getInputStreamOfRandomBytes(datalen), null);
                 adapter.delete(meta.getStorageLocation());
                 log.info("extra storageBucket: " + meta.getStorageLocation().storageBucket);
             }
@@ -372,7 +372,7 @@ public abstract class StorageAdapterBasicTest {
                 URI artifactURI = URI.create("cadc:TEST/testIteratorBucketPrefix-" + i);
                 NewArtifact na = new NewArtifact(artifactURI);
                 na.contentLength = (long) datalen;
-                StorageMetadata sm = adapter.put(na,  TestUtil.getInputStreamOfRandomBytes(datalen));
+                StorageMetadata sm = adapter.put(na,  TestUtil.getInputStreamOfRandomBytes(datalen), null);
                 log.debug("testList put: " + artifactURI + " to " + sm.getStorageLocation());
                 expected.add(sm);
             }
@@ -382,7 +382,7 @@ public abstract class StorageAdapterBasicTest {
                 URI uri = URI.create(suri);
                 NewArtifact na = new NewArtifact(uri);
                 na.contentLength = (long) datalen;
-                StorageMetadata meta = adapter.put(na, TestUtil.getInputStreamOfRandomBytes(datalen));
+                StorageMetadata meta = adapter.put(na, TestUtil.getInputStreamOfRandomBytes(datalen), null);
                 adapter.delete(meta.getStorageLocation());
                 log.info("extra storageBucket: " + meta.getStorageLocation().storageBucket);
             }

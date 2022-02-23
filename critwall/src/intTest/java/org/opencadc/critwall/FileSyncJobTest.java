@@ -212,6 +212,19 @@ public class FileSyncJobTest {
         testValidJob(testDir, SSLUtil.createSubject(certificateFile));
     }
     
+    @Test
+    public void testValidJobPutTransaction() {
+        // reduce pref size to cause multi-segment put (FS adapter allows any size)
+        long prev = FileSyncJob.SEGMENT_SIZE_PREF;
+        try {
+            String testDir = TEST_ROOT + File.separator + "testValidJobPutTransaction";
+            FileSyncJob.SEGMENT_SIZE_PREF = 512 * 1024L; // 512KiB or 2 segments
+            testValidJob(testDir, anonSubject);
+        } finally {
+            FileSyncJob.SEGMENT_SIZE_PREF = prev;
+        }
+    }
+    
     public void testValidJob(String testDir, Subject testSubject) {
         try {
             createTestDirectory(testDir);

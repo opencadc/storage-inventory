@@ -1,33 +1,38 @@
 swagger: '2.0'
 info:
   version: '0.6'
-  title: Artifact storage and management service (minoc)
-  description: 'A programmatic interface for storing, retrieving and managing artifacts at a storage site.<br/><br/>Clients may authenticate to this service in one of three ways:<br/>1.  By supplying an authentication token and using it as the auth-token parameter in the path.  URLs containing auth-tokens can be retrieved from the global locate service.<br/>2.  By providing a cookie in the Cookie header<br/>3.  By using a client certificate over SSL.'
+  title: Storage Inventory files service (minoc)
+  description: |
+    This service allows authorised users to read, write, update (metadata), and delete files. Pre-authorised URLs may be constructed by trusted services by including a signed pre-auth token in the path element before the Artifact URI.
+    
+    Details on PUT transactions: https://github.com/opencadc/storage-inventory/blob/master/minoc/PutTransaction.md
 basePath: '/minoc'
 schemes:
   - https
 paths:
-  '/files/{artifact-uri}':
+  '/files/{Artifact.uri}':
     parameters:
-    - name: artifact-uri
+    - name: Artifact.uri
       in: path
       type: string
       description: The artifact URI
       required: true
     get:
-      description: |
-        Download the file identified by parameter artifact-uri, optionally cutting a subset of a FITS file.
+      description: Download the file identified by parameter Artifact.uri
       tags:
         - Artifact transfer
       summary: Download a file
       produces:
-        - application/octet-stream
+        - any
       responses:
         '200':
           description: Successful response.
           headers:
             Content-Disposition:
-              description: 'The content-disposition with suggested filename (normally last path element in artifact URI)'
+              description: Contains suggested filename
+              type: string
+            Content-Encoding:
+              description: The content encoding of the file
               type: string
             Content-Type:
               description: The content type of the file
@@ -36,14 +41,17 @@ paths:
               description: The content checksum (MD5) of the file
               type: string
             Content-Length:
-              description: The content length of the file
+              description: The length of the file in bytes
+              type: integer
+            Last-Modified:
+              description: Timestamp when data was modified
               type: string
         '401':
-          description: If the client does not provide credentials and anonymous access is disallowed.
+          description: If the client does not provide credentials and anonymous access is disallowed
         '403':
-          description: If the client does not have permission.
+          description: If the client does not have permission
         '404':
-          description: If the artifact could not be found.
+          description: If the artifact could not be found
         '500':
           description: Internal error
         '503':
@@ -95,21 +103,36 @@ paths:
           type: boolean
     put:
       description: |
-        Upload a file identified by parameter artifact-uri.
+        Upload a file identified by parameter Artifact.uri
       tags:
         - Artifact transfer
       summary: Upload a file
       schemes:
         - https
       consumes:
-        - application/octet-stream
+        - any
+      produces:
+        - none
       responses:
         '201':
-          description: Successful response
+          description: created - upload successful or transaction committed
+          headers:
+            Digest:
+              description: The checksum of the file
+              type: string
+        '202':
+          description: accepted - transaction started
+          headers:
+            x-put-txn-id:
+              description: transactionID
+              type: string
+            Digest:
+              description: The checksum of the (current) stored bytes
+              type: string
         '401':
-          description: If the client does not provide credentials and anonymous access is disallowed.
+          description: If the client does not provide credentials and anonymous access is disallowed
         '403':
-          description: If the client does not have permission.
+          description: If the client does not have permission
         '500':
           description: Internal error
         '503':
@@ -127,17 +150,35 @@ paths:
           required: false
         - name: Content-Length
           in: header
+          type: integer
+          description: The number of bytes to be uploaded
+          required: false
+        - name: x-put-txn-op
+          in: header
           type: string
-          description: The content length of the file
+          description: |
+            one of: start, commit (commit requires x-put-txn-id)
+          required: false
+        - name: x-put-txn-id
+          in: header
+          type: string
+          description: transaction ID
+          required: false
+        - name: x-total-length
+          in: header
+          type: integer
+          description: total number of bytes in file (for put in transaction)
           required: false
     head:
       description: |
-        Get the metadata for the file identified by parameter artifact-uri.
+        Get the metadata for the file identified by Artifact.uri
       tags:
         - Artifact management
       summary: View file metadata
       schemes:
         - https
+      produces:
+        - none
       responses:
         '200':
           description: Successful response
@@ -152,35 +193,47 @@ paths:
               description: The content checksum (MD5) of the file
               type: string
             Content-Length:
-              description: The content length of the file
+              description: The length of the file in bytes
+              type: integer
+            Last-Modified:
+              description: Timestamp when data was modified
+              type: string
+            x-put-txn-id:
+              description: transactionID
               type: string
         '401':
-          description: If the client does not provide credentials and anonymous access is disallowed.
+          description: If the client does not provide credentials and anonymous access is disallowed
         '403':
-          description: If the client does not have permission.
+          description: If the client does not have permission
         '404':
-          description: If the artifact could not be found.
+          description: If the artifact could not be found
         '500':
           description: Internal error
         '503':
           description: Service busy
+      parameters:
+        - name: x-put-txn-id
+          in: header
+          type: string
+          description: transactionID to check state of an existing transaction
+          required: false
     delete:
       description: |
-        Delete the file identified by parameter artifact-uri.
+        Delete the file identified by parameter Artifact.uri
       tags:
         - Artifact management
       summary: Delete a file
       schemes:
         - https
       responses:
-        '200':
+        '204':
           description: Successful response 
         '401':
-          description: If the client does not provide credentials and anonymous access is disallowed.
+          description: If the client does not provide credentials and anonymous access is disallowed
         '403':
-          description: If the client does not have permission.
+          description: If the client does not have permission
         '404':
-          description: If the artifact could not be found.
+          description: If the artifact could not be found
         '500':
           description: Internal error
         '503':
@@ -190,248 +243,42 @@ paths:
         Set the metadata values for an file
       tags:
         - Artifact management
-      summary: Update the metadata of the file identified by parameter artifct-uri.
+      summary: Update file metadata
       schemes:
         - https
       parameters:
-        - name: uri
-          in: query
-          type: string
-          description: The new URI for the file
-          required: false
         - name: contentType
           in: query
           type: string
-          description: The new content type of the file
+          description: The new content type of the file (ignored with x-put-txn-id)
           required: false
         - name: contentEncoding
           in: query
           type: string
-          description: The new content encoding of the file
+          description: The new content encoding of the file (ignored with x-put-txn-id)
+          required: false
+        - name: x-put-txn-id
+          in: header
+          type: string
+          description: transactionID
+          required: false
+        - name: x-put-txn-op
+          in: header
+          type: string
+          description: one of abort, revert (requires x-put-txn-id)
           required: false
       responses:
-        '200':
-          description: Successful response
-        '401':
-          description: If the client does not provide credentials and anonymous access is disallowed.
-        '403':
-          description: If the client does not have permission.
-        '404':
-          description: If the artifact could not be found.
-        '500':
-          description: Internal error
-        '503':
-          description: Service busy
-  '/files/{auth-token}/{artifact-uri}':
-    parameters:
-    - name: auth-token
-      in: path
-      type: string
-      description: An authorization token
-      required: true
-    - name: artifact-uri
-      in: path
-      type: string
-      description: The artifact URI
-      required: true
-    get:
-      description: |
-        Download the file identified by parameter artifact-uri.
-      tags:
-        - Artifact transfer
-      summary: Download a file
-      produces:
-        - application/octet-stream
-      responses:
-        '200':
-          description: Successful response.
+        '202':
+          description: Accepted (successful metadata update or x-put-txn-op=revert)
           headers:
-            Content-Disposition:
-              description: 'The content-disposition with suggested filename (normally last path element in artifact URI)'
-              type: string
-            Content-Type:
-              description: The content type of the file
-              type: string
             Digest:
               description: The content checksum (MD5) of the file
               type: string
-            Content-Length:
-              description: The content length of the file
+            x-put-txn-id:
+              description: transactionID
               type: string
-        '401':
-          description: If the client does not provide credentials and anonymous access is disallowed.
-        '403':
-          description: If the client does not have permission.
-        '404':
-          description: If the artifact could not be found.
-        '500':
-          description: Internal error
-        '503':
-          description: Service busy
-      parameters:
-        - name: SUB
-          in: query
-          description: 'Sub-region of a FITS file image.  Multiple SUB parameters are allowed and will generate MEF output in file order. Examples: entire extensions (SUB=[1]&SUB=[SCI,2]), or more general purpose (SUB=[SCI,3][400:500]).'
-          required: false
-          type: string
-          collectionFormat: multi
-        - name: POS
-          in: query
-          description: The positional regions to be extracted from the data.
-          required: false
-          type: string
-        - name: CIRCLE
-          in: query
-          description: The spatial region using the CIRCLE xtype defined in DALI.
-          required: false
-          type: string
-        - name: POLYGON
-          in: query
-          description: The spatial region using the POLYGON xtype defined in DALI.
-          required: false
-          type: string
-        - name: BAND
-          in: query
-          description: The wavelength interval(s) using the INTERVAL xtype defined in DALI.
-          required: false
-          type: string
-        - name: TIME
-          in: query
-          description: The time interval(s) using the INTERVAL xtype defined in DALI.
-          required: false
-          type: string
-        - name: POL
-          in: query
-          type: array
-          collectionFormat: multi
-          items:
-            type: string
-          description: The polarization state(s) (Stokes), supports multiple values.
-          required: false
-        - name: META
-          in: query
-          description: 'extract metadata (headers) from a file. A single parameter META=true is supported for FITS files. Output will be a plain text rendition of the headers.'
-          required: false
-          type: boolean
-    put:
-      description: |
-        Upload a file identified by parameter artifact-uri.
-      tags:
-        - Artifact transfer
-      summary: Upload a file
-      schemes:
-        - https
-      consumes:
-        - application/octet-stream
-      responses:
-        '201':
-          description: Successful response
-        '401':
-          description: If the client does not provide credentials and anonymous access is disallowed.
-        '403':
-          description: If the client does not have permission.
-        '500':
-          description: Internal error
-        '503':
-          description: Service busy
-      parameters:
-        - name: Content-Type
-          in: header
-          type: string
-          description: The content type of the file
-          required: false
-        - name: Digest
-          in: header
-          type: string
-          description: The content checksum (MD5) of the file
-          required: false
-        - name: Content-Length
-          in: header
-          type: string
-          description: The content length of the file
-          required: false
-    head:
-      description: |
-        Get the metadata for the file identified by parameter artifact-uri.
-      tags:
-        - Artifact management
-      summary: View file metadata
-      schemes:
-        - https
-      responses:
-        '200':
-          description: Successful response
-          headers:
-            Content-Disposition:
-              description: 'The content-disposition with suggested filename (normally last path element in artifact URI)'
-              type: string
-            Content-Type:
-              description: The content type of the artifact
-              type: string
-            Digest:
-              description: The content checksum (MD5) of the artifact
-              type: string
-            Content-Length:
-              description: The content length of the artifact
-              type: string
-        '401':
-          description: If the client does not provide credentials and anonymous access is disallowed.
-        '403':
-          description: If the client does not have permission.
-        '404':
-          description: If the artifact could not be found.
-        '500':
-          description: Internal error
-        '503':
-          description: Service busy
-    delete:
-      description: |
-        Delete the file identified by parameter artifact-uri.
-      tags:
-        - Artifact management
-      summary: Delete a file
-      schemes:
-        - https
-      responses:
-        '200':
-          description: Successful response 
-        '401':
-          description: If the client does not provide credentials and anonymous access is disallowed.
-        '403':
-          description: If the client does not have permission.
-        '404':
-          description: If the artifact could not be found.
-        '500':
-          description: Internal error
-        '503':
-          description: Service busy
-    post:
-      description: |
-        Set the metadata values for a file
-      tags:
-        - Artifact management
-      summary: Update the metadata of the file identified by parameter artifact-uri.
-      schemes:
-        - https
-      parameters:
-        - name: uri
-          in: query
-          type: string
-          description: The new URI for the file
-          required: false
-        - name: contentType
-          in: query
-          type: string
-          description: The new content type of the file
-          required: false
-        - name: contentEncoding
-          in: query
-          type: string
-          description: The new content encoding of the file
-          required: false
-      responses:
-        '200':
-          description: Successful response
+        '204':
+          description: No Content (successful x-put-txn-op=abort)
         '401':
           description: If the client does not provide credentials and anonymous access is disallowed.
         '403':

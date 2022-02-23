@@ -68,7 +68,6 @@
 
 package org.opencadc.inventory.storage.s3;
 
-import ca.nrc.cadc.net.ResourceNotFoundException;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -79,8 +78,6 @@ import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.storage.StorageMetadata;
 import software.amazon.awssdk.services.s3.model.Bucket;
-import software.amazon.awssdk.services.s3.model.DeleteBucketRequest;
-import software.amazon.awssdk.services.s3.model.NoSuchBucketException;
 
 /**
  * Implementation of a Storage Adapter using the Amazon S3 API. This implementation

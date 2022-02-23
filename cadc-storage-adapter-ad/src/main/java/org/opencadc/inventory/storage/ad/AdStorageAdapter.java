@@ -77,13 +77,11 @@ import ca.nrc.cadc.io.ByteLimitExceededException;
 import ca.nrc.cadc.io.MultiBufferIO;
 import ca.nrc.cadc.io.ReadException;
 import ca.nrc.cadc.io.WriteException;
-import ca.nrc.cadc.net.ExpectationFailedException;
 import ca.nrc.cadc.net.FileContent;
 import ca.nrc.cadc.net.HttpGet;
 import ca.nrc.cadc.net.HttpPost;
 import ca.nrc.cadc.net.IncorrectContentChecksumException;
 import ca.nrc.cadc.net.IncorrectContentLengthException;
-import ca.nrc.cadc.net.PreconditionFailedException;
 import ca.nrc.cadc.net.RangeNotSatisfiableException;
 import ca.nrc.cadc.net.ResourceAlreadyExistsException;
 import ca.nrc.cadc.net.ResourceNotFoundException;
@@ -119,6 +117,7 @@ import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.storage.ByteRange;
 import org.opencadc.inventory.storage.NewArtifact;
+import org.opencadc.inventory.storage.PutTransaction;
 import org.opencadc.inventory.storage.StorageAdapter;
 import org.opencadc.inventory.storage.StorageEngageException;
 import org.opencadc.inventory.storage.StorageMetadata;
@@ -200,7 +199,7 @@ public class AdStorageAdapter implements StorageAdapter {
     }
     
     @Override
-    public StorageMetadata put(NewArtifact newArtifact, InputStream source)
+    public StorageMetadata put(NewArtifact newArtifact, InputStream source, String transactionID)
         throws IncorrectContentChecksumException, IncorrectContentLengthException, ReadException,
             WriteException, StorageEngageException, TransientException {
         throw new UnsupportedOperationException("not supported");
@@ -210,6 +209,32 @@ public class AdStorageAdapter implements StorageAdapter {
     public void delete(StorageLocation storageLocation)
         throws ResourceNotFoundException, IOException, StorageEngageException, TransientException {
         throw new UnsupportedOperationException("not supported");
+    }
+
+    @Override
+    public PutTransaction startTransaction(URI uri, Long contentLength) throws StorageEngageException, TransientException {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public StorageMetadata commitTransaction(String string) throws StorageEngageException, TransientException {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public void abortTransaction(String string) throws StorageEngageException, TransientException {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public PutTransaction revertTransaction(String transactionID) 
+            throws IllegalArgumentException, StorageEngageException, TransientException, UnsupportedOperationException {
+        throw new UnsupportedOperationException();
+    }
+    
+    @Override
+    public PutTransaction getTransactionStatus(String string) throws StorageEngageException, TransientException {
+        throw new UnsupportedOperationException();
     }
     
     @Override

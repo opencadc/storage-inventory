@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2020.                            (c) 2020.
+*  (c) 2022.                            (c) 2022.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -65,107 +65,75 @@
 ************************************************************************
 */
 
-package org.opencadc.inventory.storage.swift;
+package org.opencadc.critwall;
 
-import ca.nrc.cadc.io.ByteLimitExceededException;
 import ca.nrc.cadc.util.Log4jInit;
-import java.io.InputStream;
+import java.io.File;
 import java.net.URI;
-import java.util.Iterator;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
-import org.junit.Before;
 import org.junit.Test;
-import org.opencadc.inventory.StorageLocation;
-import org.opencadc.inventory.storage.NewArtifact;
-import org.opencadc.inventory.storage.StorageMetadata;
-import org.opencadc.inventory.storage.test.StorageAdapterBasicTest;
-import org.opencadc.inventory.storage.test.TestUtil;
+import org.opencadc.inventory.Artifact;
+import org.opencadc.inventory.storage.PutTransaction;
 
 /**
  *
  * @author pdowler
  */
-public class SingleBucketSwiftStorageAdapterTest extends StorageAdapterBasicTest {
-    private static final Logger log = Logger.getLogger(SingleBucketSwiftStorageAdapterTest.class);
+public class FileSyncJobTest {
+    private static final Logger log = Logger.getLogger(FileSyncJobTest.class);
 
     static {
-        Log4jInit.setLevel("org.opencadc.inventory", Level.INFO);
-        Log4jInit.setLevel("org.javaswift.joss.client", Level.INFO);
+        Log4jInit.setLevel("org.opencadc.critwall", Level.INFO);
     }
     
-    final SwiftStorageAdapter swiftAdapter;
-    
-    public SingleBucketSwiftStorageAdapterTest() throws Exception {
-        super(new SwiftStorageAdapter(true, System.getProperty("user.name") + "-single-test", 2, false));
-        this.swiftAdapter = (SwiftStorageAdapter) super.adapter;
-    }
-    
-    @Before
-    public void cleanupBefore() throws Exception {
-        log.info("cleanupBefore: START");
-        Iterator<StorageMetadata> sbi = swiftAdapter.iterator();
-        while (sbi.hasNext()) {
-            StorageLocation loc = sbi.next().getStorageLocation();
-            swiftAdapter.delete(loc);
-            log.info("\tdeleted: " + loc);
-        }
-        log.info("cleanupBefore: DONE");        
+    public FileSyncJobTest() { 
     }
     
     @Test
-    public void testCleanupOnly() {
-        log.info("testCleanupOnly: no-op");
-    }
-    
-    @Test
-    public void testPutLargeStreamReject() {
-        URI artifactURI = URI.create("cadc:TEST/testPutLargeStreamReject");
-        
-        final NewArtifact na = new NewArtifact(artifactURI);
-        
-        // ceph limit of 5GiB
-        long numBytes = (long) 6 * 1024 * 1024 * 1024; 
-        na.contentLength = numBytes;
-            
+    public void testSegmentPlan() {
         try {
-            InputStream istream = TestUtil.getInputStreamThatFails();
-            log.info("testPutCheckDeleteLargeStreamReject put: " + artifactURI + " " + numBytes);
-            StorageMetadata sm = swiftAdapter.put(na, istream, null);
-            Assert.fail("expected ByteLimitExceededException, got: " + sm);
-        } catch (ByteLimitExceededException expected) {
-            log.info("caught: " + expected);
-        } catch (Exception ex) {
-            log.error("unexpected exception", ex);
-            Assert.fail("unexpected exception: " + ex);
+            
+            Artifact a = new Artifact(URI.create("cadc:TEST/foo"), 
+                new URI("md5:646d3c548ffb98244a0fc52b60556082"), new Date(), 1008000L);
+            
+            PutTransaction[] txns = new PutTransaction[] {
+                new PutTransaction("limit-none", 1L, null),
+                new PutTransaction("limit-mid", 256 * 1024L, 256 * 1024L),
+                new PutTransaction("limit-range", 256 * 1024L, 2 * a.getContentLength()),
+                new PutTransaction("limit-large", 2 * a.getContentLength(), 2 * a.getContentLength())
+            };
+            int[] expectedNumSegments = new int[] { 2, 4, 2, 1 };
+            
+            FileSyncJob.SEGMENT_SIZE_PREF = 512 * 1024L; // 512KiB
+            log.info("FileSyncJob pref: " + FileSyncJob.SEGMENT_SIZE_PREF);
+            
+            for (int i = 0; i < txns.length; i++) {
+                PutTransaction pt = txns[i];
+                int expnum = expectedNumSegments[i];
+                
+                log.info("txn: " + pt);
+                List<FileSyncJob.PutSegment> segs = FileSyncJob.getSegmentPlan(a, pt);
+                Assert.assertEquals("num segments", expnum, segs.size());
+                
+                long totLen = 0L;
+                for (FileSyncJob.PutSegment s : segs) {
+                    totLen += s.contentLength;
+                    log.info("length: " + s.contentLength + " range: " + s.getRangeHeaderVal());
+                }
+                Assert.assertEquals("total content length", a.getContentLength().longValue(), totLen);
+                log.info("txn: " + pt + " DONE");
+            }
+            
+        } catch (Exception unexpected) {
+            log.error("unexpected exception: " + unexpected);
+            Assert.fail("unexpected exception");
         }
     }
     
-    // normally disabled because this has to actually upload ~5GiB of garbage before it fails
-    //@Test
-    public void testPutLargeStreamFail() {
-        URI artifactURI = URI.create("cadc:TEST/testPutLargeStreamFail");
-        
-        final NewArtifact na = new NewArtifact(artifactURI);
-        
-        // ceph limit of 5GiB
-        long numBytes = (long) 6 * 1024 * 1024 * 1024; 
-            
-        try {
-            InputStream istream = TestUtil.getInputStreamOfRandomBytes(numBytes);
-            log.info("testPutCheckDeleteLargeStreamFail put: " + artifactURI + " " + numBytes);
-            StorageMetadata sm = swiftAdapter.put(na, istream, null);
-            
-            Assert.assertFalse("put should have failed, but object exists", swiftAdapter.exists(sm.getStorageLocation()));
-            
-            Assert.fail("expected ByteLimitExceededException, got: " + sm);
-        } catch (ByteLimitExceededException expected) {
-            log.info("caught: " + expected);
-        } catch (Exception ex) {
-            log.error("unexpected exception", ex);
-            Assert.fail("unexpected exception: " + ex);
-        }
-    }
-    
+
 }

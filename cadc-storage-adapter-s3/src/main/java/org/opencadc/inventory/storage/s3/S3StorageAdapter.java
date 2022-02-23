@@ -101,6 +101,7 @@ import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.storage.ByteRange;
 import org.opencadc.inventory.storage.NewArtifact;
+import org.opencadc.inventory.storage.PutTransaction;
 import org.opencadc.inventory.storage.StorageAdapter;
 import org.opencadc.inventory.storage.StorageEngageException;
 import org.opencadc.inventory.storage.StorageMetadata;
@@ -404,6 +405,7 @@ abstract class S3StorageAdapter implements StorageAdapter {
      *
      * @param newArtifact known information about the incoming artifact
      * @param source stream from which to read
+     * @param transactionID null for auto-commit or existing transactionID
      * @return storage metadata after write
      *
      * @throws IncorrectContentChecksumException checksum of the data stream did not match the value in newArtifact
@@ -413,7 +415,7 @@ abstract class S3StorageAdapter implements StorageAdapter {
      * @throws StorageEngageException If the adapter failed to interact with storage.
      */
     @Override
-    public StorageMetadata put(NewArtifact newArtifact, InputStream source)
+    public StorageMetadata put(NewArtifact newArtifact, InputStream source, String transactionID)
             throws ByteLimitExceededException, 
             IncorrectContentChecksumException, IncorrectContentLengthException, 
             ReadException, WriteException,
@@ -423,6 +425,10 @@ abstract class S3StorageAdapter implements StorageAdapter {
         
         if (newArtifact.contentChecksum == null || newArtifact.contentLength == null) {
             throw new UnsupportedOperationException("put requires contentChecksum and contentLength");
+        }
+        
+        if (transactionID != null) {
+            throw new UnsupportedOperationException("put with transaction");
         }
         
         final StorageLocation loc = generateStorageLocation();
@@ -552,6 +558,26 @@ abstract class S3StorageAdapter implements StorageAdapter {
             // jenkinsd 2020.01.20
             throw new WriteException(e.getMessage(), e);
         }
+    }
+
+    @Override
+    public PutTransaction startTransaction(URI uri) throws StorageEngageException, TransientException {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public StorageMetadata commitTransaction(String string) throws StorageEngageException, TransientException {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public void abortTransaction(String string) throws StorageEngageException, TransientException {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public PutTransaction getTransactionStatus(String string) throws StorageEngageException, TransientException {
+        throw new UnsupportedOperationException();
     }
 
     // used by intTest

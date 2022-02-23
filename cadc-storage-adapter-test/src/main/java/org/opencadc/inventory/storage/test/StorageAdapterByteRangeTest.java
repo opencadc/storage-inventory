@@ -136,7 +136,7 @@ public abstract class StorageAdapterByteRangeTest {
 
             log.info("put: " + mib + " MiB file...");
             long t1 = System.nanoTime();
-            StorageMetadata storageMetadata = adapter.put(newArtifact, istream);
+            StorageMetadata storageMetadata = adapter.put(newArtifact, istream, null);
             long t2 = System.nanoTime();
             final long putMicros = (t2 - t1) / 1024L;
             StringBuilder sb = new StringBuilder();
@@ -229,7 +229,7 @@ public abstract class StorageAdapterByteRangeTest {
 
             log.info("put: " + mib + " MiB file...");
             long t1 = System.nanoTime();
-            final StorageMetadata storageMetadata = adapter.put(newArtifact, istream);
+            final StorageMetadata storageMetadata = adapter.put(newArtifact, istream, null);
             long t2 = System.nanoTime();
             long micros = (t2 - t1) / 1024L;
             StringBuilder sb = new StringBuilder();

@@ -81,7 +81,6 @@ import org.opencadc.inventory.StorageLocation;
  *
  */
 public class StorageMetadata implements Comparable<StorageMetadata> {
-
     private final StorageLocation storageLocation;
     private final URI contentChecksum;
     private final Long contentLength;
@@ -169,6 +168,7 @@ public class StorageMetadata implements Comparable<StorageMetadata> {
 
     @Override
     public String toString() {
-        return "StorageMetadata[" + storageLocation + "," + artifactURI + "]";
+        return "StorageMetadata[" + storageLocation + "," + artifactURI + ","
+                + contentLength + "," + contentChecksum + "]";
     }
 }

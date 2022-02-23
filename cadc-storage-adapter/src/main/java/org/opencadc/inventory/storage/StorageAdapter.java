@@ -79,8 +79,8 @@ import ca.nrc.cadc.net.TransientException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.URI;
 import java.util.Iterator;
-import java.util.Set;
 import java.util.SortedSet;
 import org.opencadc.inventory.StorageLocation;
 
@@ -141,10 +141,12 @@ public interface StorageAdapter {
      * @param newArtifact The holds information about the incoming artifact.  if the contentChecksum
      *     and contentLength are set, they will be used to validate the bytes received.
      * @param source The stream from which to read.
-     * @return result StorageMetadata
+     * @param transactionID existing transactionID or null for auto-commit
+     * 
+     * @return current StorageMetadata
      * 
      * @throws ByteLimitExceededException if content length exceeds internal limit
-     * @throws IllegalArgumentException if the newArtifact.contentLength or length of stream is zero
+     * @throws IllegalArgumentException if the newArtifact is invalid or the transaction does not exist
      * @throws IncorrectContentChecksumException if the calculated checksum does not match the expected
      *     checksum as described in newArtifact.
      * @throws IncorrectContentLengthException if the calculated length does not match the expected
@@ -155,7 +157,7 @@ public interface StorageAdapter {
      * @throws StorageEngageException if the adapter failed to interact with storage.
      * @throws TransientException if an unexpected, temporary exception occurred.
      */
-    public StorageMetadata put(NewArtifact newArtifact, InputStream source)
+    public StorageMetadata put(NewArtifact newArtifact, InputStream source, String transactionID)
         throws ByteLimitExceededException, IllegalArgumentException, IncorrectContentChecksumException, IncorrectContentLengthException, 
             InterruptedException, ReadException, WriteException, StorageEngageException, TransientException;
         
@@ -172,6 +174,71 @@ public interface StorageAdapter {
     public void delete(StorageLocation storageLocation)
         throws ResourceNotFoundException, IOException, InterruptedException, StorageEngageException, TransientException;
     
+    /**
+     * Start a transaction for a PUT operation.
+     * 
+     * @param artifactURI artifact identifier
+     * @param contentLength complete length of the data
+     * @return transaction status
+     * 
+     * @throws StorageEngageException if the adapter failed to interact with storage
+     * @throws TransientException if an unexpected, temporary exception occurred 
+     */
+    PutTransaction startTransaction(URI artifactURI, Long contentLength) 
+        throws StorageEngageException, TransientException;
+    
+    /**
+     * Revert a transaction to a previous state.
+     * 
+     * @param transactionID existing transaction ID
+     * @return final storage metadata
+     * 
+     * @throws IllegalArgumentException if the specified transaction does not exist
+     * @throws StorageEngageException if the adapter failed to interact with storage
+     * @throws TransientException if an unexpected, temporary exception occurred 
+     * @throws UnsupportedOperationException if the transaction cannot be reverted
+     */
+    public PutTransaction revertTransaction(String transactionID)
+        throws IllegalArgumentException, StorageEngageException, TransientException, UnsupportedOperationException;
+    
+    /**
+     * Commit a transaction.
+     * 
+     * @param transactionID existing transaction ID
+     * @return current transaction status
+     * 
+     * @throws IllegalArgumentException if the specified transaction does not exist
+     * @throws StorageEngageException if the adapter failed to interact with storage
+     * @throws TransientException if an unexpected, temporary exception occurred 
+     */
+    public StorageMetadata commitTransaction(String transactionID)
+        throws IllegalArgumentException, StorageEngageException, TransientException;
+    
+    /**
+     * Abort a transaction.
+     * 
+     * @param transactionID existing transaction ID
+     * 
+     * @throws IllegalArgumentException if the specified transaction does not exist
+     * @throws StorageEngageException if the adapter failed to interact with storage
+     * @throws TransientException if an unexpected, temporary exception occurred 
+     */
+    public void abortTransaction(String transactionID) 
+        throws IllegalArgumentException, StorageEngageException, TransientException;
+    
+    /**
+     * Get current transaction status.
+     * 
+     * @param transactionID existing transaction ID
+     * @return transaction status with current storage metadata for bytes received and stored
+     * 
+     * @throws IllegalArgumentException if the specified transaction does not exist
+     * @throws StorageEngageException if the adapter failed to interact with storage
+     * @throws TransientException if an unexpected, temporary exception occurred 
+     */
+    public PutTransaction getTransactionStatus(String transactionID)
+        throws IllegalArgumentException, StorageEngageException, TransientException;
+            
     /**
      * Iterator of items ordered by StorageLocation.
      * 
@@ -194,13 +261,4 @@ public interface StorageAdapter {
      */
     public Iterator<StorageMetadata> iterator(String storageBucketPrefix)
         throws StorageEngageException, TransientException;
-    
-    // for a symbolic bucket scheme (eg AD or human-usable filesystem):
-    //public String[] getStorageBucketDelimiters();
-    // public int getMaxDepth();
-    //public SortedSet<String> getBuckets(int len);
-    
-    // for a programmatic prefixable bucket scheme:
-    // char set specified as lower case hex [0-9a-f]
-    //public int getMaxBucketLength();
 }

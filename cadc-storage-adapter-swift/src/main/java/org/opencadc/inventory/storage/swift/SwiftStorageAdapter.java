@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2020.                            (c) 2020.
+*  (c) 2022.                            (c) 2022.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -87,8 +87,6 @@ import java.io.OutputStream;
 import java.net.SocketException;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.security.DigestInputStream;
-import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -98,8 +96,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Properties;
-import java.util.Set;
-import java.util.SortedSet;
 import java.util.TreeMap;
 import java.util.UUID;
 import org.apache.log4j.Logger;
@@ -108,6 +104,7 @@ import org.javaswift.joss.client.factory.AccountFactory;
 import org.javaswift.joss.client.factory.AuthenticationMethod;
 import org.javaswift.joss.exception.CommandException;
 import org.javaswift.joss.exception.Md5ChecksumException;
+import org.javaswift.joss.headers.object.ObjectManifest;
 import org.javaswift.joss.instructions.DownloadInstructions;
 import org.javaswift.joss.instructions.UploadInstructions;
 import org.javaswift.joss.model.Account;
@@ -116,21 +113,29 @@ import org.javaswift.joss.model.StoredObject;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.storage.ByteRange;
+import org.opencadc.inventory.storage.DigestInputStream;
 import org.opencadc.inventory.storage.InvalidConfigException;
+import org.opencadc.inventory.storage.MessageDigestAPI;
 import org.opencadc.inventory.storage.NewArtifact;
+import org.opencadc.inventory.storage.PutTransaction;
 import org.opencadc.inventory.storage.StorageAdapter;
 import org.opencadc.inventory.storage.StorageEngageException;
 import org.opencadc.inventory.storage.StorageMetadata;
 
 /**
- *
+ * StorageAdapter implementation using the SWIFT API to store files in an
+ * object store. This has been developed and tested using a CEPH Object Store
+ * back end; correct operation may depend on behavior of CEPH (including  
+ * configuration and deployment details).
+ * 
  * @author pdowler
  */
 public class SwiftStorageAdapter  implements StorageAdapter {
     private static final Logger log = Logger.getLogger(SwiftStorageAdapter.class);
 
-    private static final long CEPH_UPLOAD_LIMIT = 5 * 1024L * 1024L * 1024L; // 5 GiB
-    private static final String CEPH_UPLOAD_LIMIT_MSG = "5 GiB";
+    static final long GIGABYTE = 1024L * 1024L * 1024L;
+    private static final long CEPH_OBJECT_SIZE_LIMIT = 5 * GIGABYTE;
+    private static final String CEPH_OBJECT_SIZE_LIMIT_MSG = "5 GiB";
     
     static final String CONFIG_FILENAME = "cadc-storage-adapter-swift.properties";
     
@@ -147,12 +152,24 @@ public class SwiftStorageAdapter  implements StorageAdapter {
     
     // ceph or swift does all kinds of mangling of metadata keys (char substitution, truncation, case changes)
     // javaswift lib seems to at least force keys in the Map to lower case to protect against some of it
-    private static final String ARTIFACT_ID_ATTR = "org.opencadc.artifactid";
-    private static final String CONTENT_CHECKSUM_ATTR = "org.opencadc.contentchecksum";
     
+    // config atributes stored on main bucket
     private static final String VERSION_ATTR = "org.opencadc.swift.version";
     private static final String BUCKETLENGTH_ATTR = "org.opencadc.swift.storagebucketlength";
     private static final String MULTIBUCKET_ATTR = "org.opencadc.swift.multibucket";
+    
+    // permanent object atributes
+    private static final String ARTIFACT_ID_ATTR = "org.opencadc.artifactid";
+    private static final String CONTENT_CHECKSUM_ATTR = "org.opencadc.contentchecksum";
+    private static final String DLO_ATTR = "org.opencadc.swift.dlo";
+    
+    // temporary object attributes
+    private static final String TRANSACTION_ATTR = "org.opencadc.swift.txn";
+    private static final String PT_MIN_ATTR = TRANSACTION_ATTR + ".minlen";
+    private static final String PT_MAX_ATTR = TRANSACTION_ATTR + ".maxlen";
+    private static final String CUR_DIGEST_ATTR = TRANSACTION_ATTR + ".curdigest";
+    private static final String PREV_DIGEST_ATTR = TRANSACTION_ATTR + ".prevdigest";
+    private static final String TOTAL_LENGTH_ATTR = TRANSACTION_ATTR + ".totallen";
     
     private static final int CIRC_BUFFERS = 3;
     private static final int CIRC_BUFFERSIZE = 64 * 1024;
@@ -160,12 +177,18 @@ public class SwiftStorageAdapter  implements StorageAdapter {
     // test code checks these
     final int storageBucketLength;
     final String storageBucket;
+    final String txnBucket;
     final boolean multiBucket;
+    long segmentMaxBytes = CEPH_OBJECT_SIZE_LIMIT;
+    long segmentMinBytes = segmentMaxBytes; // default: all files smaller than CEPH limit are simple objects
+    
     private final Account client;
+    private Container txnContainer;
     
     // ctor for unit tests that do not connect
     SwiftStorageAdapter(String storageBucket, int storageBucketLength, boolean multiBucket) {
         this.storageBucket = storageBucket;
+        this.txnBucket = storageBucket + "txn";
         this.storageBucketLength = storageBucketLength;
         this.multiBucket = multiBucket;
         this.client = null;
@@ -246,13 +269,6 @@ public class SwiftStorageAdapter  implements StorageAdapter {
                 throw new InvalidConfigException(sb.toString());
             }
            
-            // intTest sode provides overrides of these
-            if (storageBucketOverride != null) {
-                this.storageBucket = storageBucketOverride;
-            } else {
-                this.storageBucket = bn;
-            }
-            
             if (storageBucketLengthOverride != null) {
                 this.storageBucketLength = storageBucketLengthOverride; // unbox
             } else {
@@ -264,11 +280,18 @@ public class SwiftStorageAdapter  implements StorageAdapter {
             } else {
                 this.multiBucket = Boolean.parseBoolean(emb);
             }
-            
-            // work around because uvic ceph auth returns wrong storage url
-            //URL authURL = new URL(suri);
-            //ac.setAccessProvider(new AccessProviderImpl(authURL, user, key));
-            //ac.setAuthenticationMethod(AuthenticationMethod.EXTERNAL);
+
+            if (storageBucketOverride != null) {
+                this.txnBucket = storageBucketOverride;
+            } else {
+                this.txnBucket = bn;
+            }
+            if (multiBucket) {
+                this.storageBucket = txnBucket; // dynamic hex buckets appended
+            } else {
+                this.storageBucket = txnBucket + "-content";
+            }
+            log.info("txnBucket: " + txnBucket + " storageBucket: " + storageBucket);
             
             ac.setAuthenticationMethod(AuthenticationMethod.BASIC);
             ac.setUsername(user);
@@ -297,12 +320,12 @@ public class SwiftStorageAdapter  implements StorageAdapter {
             // base-name bucket to store transient content and config attributes
             log.debug("get base storageBucket...");
             t1 = System.currentTimeMillis();
-            Container c = client.getContainer(storageBucket);
+            this.txnContainer = client.getContainer(txnBucket);
             final long bucketTime = System.currentTimeMillis() - t1;
             log.debug("get base storageBucket: " + bucketTime);
             
             log.info("SwiftStorageAdapter.INIT authTime=" + authTime + " bucketTime=" + bucketTime);
-            init(c);
+            init(txnContainer);
             
         } catch (InvalidConfigException | StorageEngageException ex) {
             throw ex;
@@ -314,9 +337,8 @@ public class SwiftStorageAdapter  implements StorageAdapter {
     
     private void init(Container c) throws InvalidConfigException, StorageEngageException {
         if (!c.exists()) {
-            log.debug("creating: " + c.getName());
+            log.info("creating: " + c.getName());
             c.create();
-            log.debug("created: " + c.getName());
         }
         
         // check vs config
@@ -359,6 +381,18 @@ public class SwiftStorageAdapter  implements StorageAdapter {
                     log.info("exists: " + bucketName);
                 }
             }
+        } else {
+            Container mb = client.getContainer(storageBucket);
+            if (!mb.exists()) {
+                try {
+                    log.info("creating: " + storageBucket);
+                    mb.create();
+                } catch (CommandException ex) {
+                    throw new StorageEngageException("failed to create container: " + storageBucket, ex);
+                }
+            } else {
+                log.info("exists: " + storageBucket);
+            }
         }
         
         // init succeeeded: commit
@@ -384,15 +418,28 @@ public class SwiftStorageAdapter  implements StorageAdapter {
     }
     
     // internal storage model for multiBucket=true: 
-    //      {baseStorageBucket}-{StorageLocation.storageBucket}/{StorageLocation.storageID}
-    //      storageID is so:{uuid}
+    //      {baseStorageBucket} is created and used to store config and transactions
+    //      {baseStorageBucket}-{StorageLocation.storageBucket} are created at init and stores file objects
+    //      {baseStorageBucket}-{StorageLocation.storageBucket}/{StorageLocation.storageID} is a simple object or manifest of segmented object
+    //      {baseStorageBucket}-{StorageLocation.storageBucket}/{StorageLocation.storageID}:p:{sequence} is a part N of a segmented object, N in [1,M]
+    //      storageID is id:{uuid}
     //      storageBucket is {hex}
-    // internal storage model for multiBucket=false (compat): 
-    //      {baseStorageBucket}/{StorageLocation.storageID}
-    //      storageID is sb:{hex}:{uuid}
+    //      sequence is padded for correct alphabetic ordering required for dynamic large objects
+    //               0001 to 9999 segments: 9999 * 5GiB segments = ~50PiB object
+    
+    // internal storage model for multiBucket=false:
+    //      {baseStorageBucket} is created and used to store temporary transaction status in objects
+    //      {baseStorageBucket}-content stores file objects
+    //      {baseStorageBucket}-content/{StorageLocation.storageID}
+    //      storageID is id:{hex}:{uuid}
     //      storageBucket is {hex}
     StorageLocation generateStorageLocation() {
-        String id = UUID.randomUUID().toString();
+        UUID id = UUID.randomUUID();
+        return toStorageLocation(id);
+    }
+    
+    StorageLocation toStorageLocation(UUID uuid) {
+        String id = uuid.toString();
         if (multiBucket) {
             StorageLocation ret = new StorageLocation(URI.create(KEY_SCHEME + ":" + id));
             ret.storageBucket = InventoryUtil.computeBucket(URI.create(id), storageBucketLength);
@@ -459,40 +506,40 @@ public class SwiftStorageAdapter  implements StorageAdapter {
     }
     
     // get the swift container that would include the specified location
-    private Container getContainerImpl(StorageLocation loc, boolean createIfNotExists) throws ResourceNotFoundException {
+    private Container getContainerImpl(StorageLocation loc) {
         InternalBucket bucket = toInternalBucket(loc);
         Container sub = client.getContainer(bucket.name);
         if (!sub.exists()) {
-            if (createIfNotExists) {
-                sub.create();
-            } else {
-                throw new ResourceNotFoundException("not found: " + loc);
-            }
+            throw new RuntimeException("BUG: container not found: " + bucket.name);
         }
         return sub;
     }
+    
+    private StoredObject getStoredObject(StorageLocation loc, boolean inTxn) throws ResourceNotFoundException {
+        Container sub = getContainerImpl(loc);
+        String key = loc.getStorageID().toASCIIString();
+        StoredObject obj = sub.getObject(key);
+        if (!obj.exists()) {
+            throw new ResourceNotFoundException("not found: " + loc);
+        }
+        boolean objInTxn = !isIteratorVisible(obj);
+        if (!inTxn && !objInTxn) {
+            return obj;
+        }
+        if (inTxn && objInTxn) {
+            return obj;
+        }
+        
+        log.debug("skip object in transaction: " + obj.getName());
+        throw new ResourceNotFoundException("not found: " + loc);
+    }
 
-    /**
-     * Get from storage the artifact identified by storageLocation.
-     *
-     * @param storageLocation The storage location containing storageID and storageBucket.
-     * @param dest The destination stream.
-     * @throws ResourceNotFoundException If the artifact could not be found.
-     * @throws ReadException If the storage system failed to stream.
-     * @throws WriteException If writing failed.
-     * @throws StorageEngageException If the adapter failed to interact with storage.
-     */
     @Override
     public void get(StorageLocation storageLocation, OutputStream dest)
             throws ResourceNotFoundException, ReadException, WriteException, StorageEngageException {
         log.debug("get: " + storageLocation);
         
-        Container sub = getContainerImpl(storageLocation, false);
-        String key = storageLocation.getStorageID().toASCIIString();
-        StoredObject obj = sub.getObject(key);
-        if (!obj.exists()) {
-            throw new ResourceNotFoundException("not found: " + storageLocation);
-        }
+        StoredObject obj = getStoredObject(storageLocation, false);
         
         try (final InputStream source = obj.downloadObjectAsInputStream()) {
             MultiBufferIO io = new MultiBufferIO(CIRC_BUFFERS, CIRC_BUFFERSIZE);
@@ -512,12 +559,7 @@ public class SwiftStorageAdapter  implements StorageAdapter {
         throws ResourceNotFoundException, ReadException, WriteException, StorageEngageException, TransientException {
         log.debug("get: " + storageLocation);
         
-        Container sub = getContainerImpl(storageLocation, false);
-        String key = storageLocation.getStorageID().toASCIIString();
-        StoredObject obj = sub.getObject(key);
-        if (!obj.exists()) {
-            throw new ResourceNotFoundException("not found: " + storageLocation);
-        }
+        StoredObject obj = getStoredObject(storageLocation, false);
         
         DownloadInstructions di = new DownloadInstructions();
         if (byteRange != null) {
@@ -538,105 +580,241 @@ public class SwiftStorageAdapter  implements StorageAdapter {
         }
     }
 
-    /**
-     * Write an artifact to storage.
-     * The value of storageBucket in the returned StorageMetadata and StorageLocation can be used to
-     * retrieve batches of artifacts in some of the iterator signatures defined in this interface.
-     * Batches of artifacts can be listed by bucket in two of the iterator methods in this interface.
-     * If storageBucket is null then the caller will not be able perform bucket-based batch
-     * validation through the iterator methods.
-     *
-     * @param newArtifact known information about the incoming artifact
-     * @param source stream from which to read
-     * @return storage metadata after write
-     * @throws ca.nrc.cadc.io.ByteLimitExceededException if content length exceeds limit
-     * @throws IncorrectContentChecksumException checksum of the data stream did not match the value in newArtifact
-     * @throws IncorrectContentLengthException number bytes read did not match the value in newArtifact
-     * @throws ReadException If the client failed to read the stream.
-     * @throws WriteException If the storage system failed to stream.
-     * @throws StorageEngageException If the adapter failed to interact with storage.
-     */
     @Override
-    public StorageMetadata put(NewArtifact newArtifact, InputStream source)
+    public StorageMetadata put(NewArtifact newArtifact, InputStream source, String transactionID)
             throws ByteLimitExceededException, 
             IncorrectContentChecksumException, IncorrectContentLengthException, 
             ReadException, WriteException,
-            StorageEngageException {
-        InventoryUtil.assertNotNull(SwiftStorageAdapter.class, "newArtifact", newArtifact);
-        log.debug("put: " + newArtifact);
+            StorageEngageException, TransientException {
+        InventoryUtil.assertNotNull(SwiftStorageAdapter.class, "artifact", newArtifact);
+        InventoryUtil.assertNotNull(SwiftStorageAdapter.class, "source", source);
         
-        if (newArtifact.contentLength != null && newArtifact.contentLength > CEPH_UPLOAD_LIMIT) {
-            throw new ByteLimitExceededException("put exceeds size limit (" + CEPH_UPLOAD_LIMIT_MSG + ") for simple stream", CEPH_UPLOAD_LIMIT);
+        StorageLocation writeDataLocation;
+        MessageDigestAPI txnDigest = null;
+        String checksumAlg = DEFAULT_CHECKSUM_ALGORITHM;
+        if (newArtifact.contentChecksum != null) {
+            checksumAlg = newArtifact.contentChecksum.getScheme(); // TODO: try sha1 in here
         }
-        
-        final StorageLocation loc = generateStorageLocation();
-
+        SwiftPutTransaction txn = null;
         try {
-            String alg = DEFAULT_CHECKSUM_ALGORITHM;
-            if (newArtifact.contentChecksum != null) {
-                alg = newArtifact.contentChecksum.getScheme(); // TODO: try sha1 in here
+            if (transactionID != null) {
+                txn = getTransactionStatusImpl(transactionID);
+                // enforce segment size limits
+                if (newArtifact.contentLength == null) {
+                    throw new IllegalArgumentException("invalid put: must specify content-length of segment");
+                }
+                log.debug("enforce segment size limit: " + newArtifact.contentLength + " vs "
+                        + "[" + txn.getMinSegmentSize() + "," + txn.getMaxSegmentSize() + "]");
+                
+                if (txn.getMaxSegmentSize() < newArtifact.contentLength) {
+                    throw new IllegalArgumentException("invalid put: segment too large - expected content-length in "
+                            + "[" + txn.getMinSegmentSize() + "," + txn.getMaxSegmentSize() + "]");
+                }
+                
+                Long curLength = 0L; 
+                if (txn.storageMetadata != null) {
+                    curLength = txn.storageMetadata.getContentLength();
+                }
+                long elen = curLength + newArtifact.contentLength;
+                if (txn.totalLength != null) {
+                    if (elen == txn.totalLength) {
+                        log.debug("transaction " + transactionID + ": last segment, allowing content-length=" + newArtifact.contentLength);
+                    } else {
+                        if (newArtifact.contentLength < txn.getMinSegmentSize()) {
+                            throw new IllegalArgumentException("invalid put: segment too small - expected content-length in "
+                                    + "[" + txn.getMinSegmentSize() + "," + txn.getMaxSegmentSize() + "]");
+                        }
+                        
+                    }
+                } // else: currently don't allow segmented put of unknown length
+                
+                if (txn.dynamicLargeObject) {
+                    // allow segment put to proceed
+                    writeDataLocation = getNextTransactionStorageLocation(txn.getID());
+                } else {
+                    if (txn.storageMetadata != null) {
+                        throw new IllegalArgumentException("data already written: contentLength=" + txn.storageMetadata.getContentLength());
+                    }
+                    // allow single-segment put to proceed
+                    UUID id = UUID.fromString(transactionID);
+                    writeDataLocation = toStorageLocation(id);
+                }
+                String dstate = (String) txn.txnObject.getMetadata(CUR_DIGEST_ATTR);
+                if (dstate != null) {
+                    txnDigest = MessageDigestAPI.getDigest(dstate);
+                }
+                if (txnDigest == null) {
+                    throw new RuntimeException("BUG: failed to restore digest in transaction " + transactionID);
+                }
+                String auri = (String) txn.txnObject.getMetadata(ARTIFACT_ID_ATTR);
+                if (auri == null) {
+                    throw new RuntimeException("BUG: failed to restore uri attribute in transaction " + transactionID);
+                }
+                if (!newArtifact.getArtifactURI().toASCIIString().equals(auri)) {
+                    throw new IllegalArgumentException("incorrect Artifact.uri in transaction: " + transactionID
+                        + " expected: " + auri);
+                }
+            } else {
+                writeDataLocation = generateStorageLocation();
+                txnDigest = MessageDigestAPI.getInstance(checksumAlg);
             }
+
+        } catch (NoSuchAlgorithmException ex) {
+            throw new RuntimeException("failed to create MessageDigestAPI: " + checksumAlg, ex);
+        }
+        log.debug("write location: " + writeDataLocation + " transaction: " + transactionID);
+        
+        if (newArtifact.contentLength != null && newArtifact.contentLength > CEPH_OBJECT_SIZE_LIMIT) {
+            throw new ByteLimitExceededException("put exceeds size limit (" + CEPH_OBJECT_SIZE_LIMIT_MSG + ") for simple stream", CEPH_OBJECT_SIZE_LIMIT);
+        }
+
+        String prevDigestState = null;
+        Long prevLength = 0L;
+        
+        try {
+            prevDigestState = MessageDigestAPI.getEncodedState(txnDigest);
+            
             TrapFailInputStream trap = new TrapFailInputStream(source);
             ByteCountInputStream bcis = new ByteCountInputStream(trap);
-            DigestInputStream dis = new DigestInputStream(bcis, MessageDigest.getInstance(DEFAULT_CHECKSUM_ALGORITHM));
+            MessageDigestAPI md = txnDigest;
+            DigestInputStream dis = new DigestInputStream(bcis, txnDigest);
             
-            Container sub = getContainerImpl(loc, true);
-            StoredObject obj = sub.getObject(loc.getStorageID().toASCIIString());
+            Container sub = getContainerImpl(writeDataLocation);
+            StoredObject obj = sub.getObject(writeDataLocation.getStorageID().toASCIIString());
+            StoredObject metaObj = obj; // simple
             UploadInstructions up = new UploadInstructions(dis);
-            if (newArtifact.contentChecksum != null && "MD5".equalsIgnoreCase(newArtifact.contentChecksum.getScheme())) {
-                up.setMd5(newArtifact.contentChecksum.getSchemeSpecificPart());
+
+            if (txn != null) {
+                if (txn.dynamicLargeObject) {
+                    metaObj = txn.metaObject; // manifest created in startTransaction
+                }
+                try {
+                    if (txn.metaObject != null) {
+                        prevLength = metaObj.getContentLength();
+                    }
+                    obj.uploadObject(up);
+                    md = dis.getMessageDigest();
+                    log.debug("upload: " + writeDataLocation + " OK");
+                } catch (CommandException ex) {
+                    if (bcis.getByteCount() >= CEPH_OBJECT_SIZE_LIMIT && hasWriteFailSocketException(ex)) {
+                        abortTransaction(transactionID);
+                        throw new ByteLimitExceededException("put exceeds size limit (" + CEPH_OBJECT_SIZE_LIMIT_MSG + ")", 
+                                CEPH_OBJECT_SIZE_LIMIT);
+                    }
+                    if (trap.fail != null) { // read exception
+                        // rollback to prev state
+                        long len = metaObj.getContentLength();
+                        
+                        if (obj.exists()) {
+                            log.debug("revert from " + len + " to " + prevLength + " after " + trap.fail);
+                            obj.delete();
+                            len = metaObj.getContentLength();
+                            
+                        } else {
+                            log.debug("revert to " + len + "==" + prevLength + " not necessary after " + trap.fail);
+                        }
+                        md = MessageDigestAPI.getDigest(prevDigestState);
+                        log.debug("proceeding with transaction " + transactionID + " at offset " + len + " after failed input: " + ex);
+                        throw new ReadException("read input error", trap.fail);
+                    } else {
+                        // write exception
+                        log.debug("auto-abort transactionID " + transactionID + " after failed write to back end: " + ex);
+                        abortTransaction(transactionID);
+                        throw new WriteException("internal failure: " + ex);
+                    }
+                }
+            } else {
+                try {
+                    if (newArtifact.contentChecksum != null && "MD5".equalsIgnoreCase(newArtifact.contentChecksum.getScheme())) {
+                        up.setMd5(newArtifact.contentChecksum.getSchemeSpecificPart());
+                    }
+                    obj.uploadObject(up);
+                    md = dis.getMessageDigest();
+                } catch (Md5ChecksumException ex) {
+                    //swift detected
+                    throw new PreconditionFailedException("checksum mismatch: " + newArtifact.contentChecksum + " did not match content");
+                } catch (CommandException ex) {
+                    if (bcis.getByteCount() >= CEPH_OBJECT_SIZE_LIMIT && hasWriteFailSocketException(ex)) {
+                        throw new ByteLimitExceededException("put exceeds size limit (" + CEPH_OBJECT_SIZE_LIMIT_MSG + ")", 
+                                CEPH_OBJECT_SIZE_LIMIT);
+                    }
+                    if (trap.fail != null) {
+                        throw new ReadException("read from input stream failed", trap.fail);
+                    }
+                    throw new WriteException("internal failure: " + ex);
+                }
+            }
+                    
+            // clone so we can persist the current state for resume
+            String curDigestState = MessageDigestAPI.getEncodedState(md);
+            Long curLength = metaObj.getContentLength();
+            
+            String csVal = HexUtil.toHex(md.digest());
+            URI checksum = URI.create(checksumAlg.toLowerCase() + ":" + csVal);
+            log.debug("current checksum: " + checksum);
+            log.debug("current file size: " + curLength);
+            
+            if (txn != null) {
+                if (txn.totalLength != null && curLength < txn.totalLength) {
+                    // incomplete: no further content checks
+                    // TODO: could check that curLength increased by exactly newArtifact.contentLength
+                    log.debug("incomplete put in transaction: " + txn.getID() + " - not verifying checksum or length");
+                } else {
+                    // complete: do content checks
+                    if (newArtifact.contentChecksum != null && !checksum.equals(newArtifact.contentChecksum)) {
+                        // auto revert?
+                        throw new PreconditionFailedException("checksum mismatch: " + newArtifact.contentChecksum + " != " + checksum);
+                    }
+                    if (txn.totalLength != null && !curLength.equals(txn.totalLength)) {
+                        // auto revert?
+                        throw new PreconditionFailedException("length mismatch: " + txn.totalLength + " != " + curLength);
+                    }
+                }
+            } else {
+                // no txn: single put
+                if (newArtifact.contentChecksum != null && !checksum.equals(newArtifact.contentChecksum)) {
+                    obj.delete();
+                    throw new PreconditionFailedException("checksum mismatch: " + newArtifact.contentChecksum + " != " + checksum);
+                }
+
+                if (newArtifact.contentLength != null && !curLength.equals(newArtifact.contentLength)) {
+                    obj.delete();
+                    throw new PreconditionFailedException("length mismatch: " + newArtifact.contentLength + " != " + curLength);
+                }
             }
 
-            try {
-                obj.uploadObject(up);
-            } catch (Md5ChecksumException ex) {
-                //swift detected
-                throw new PreconditionFailedException("checksum mismatch: " + newArtifact.contentChecksum + " did not match content");
-            } catch (CommandException ex) {
-                if (bcis.getByteCount() >= CEPH_UPLOAD_LIMIT && hasWriteFailSocketException(ex)) {
-                    throw new ByteLimitExceededException("put exceeds size limit (" + CEPH_UPLOAD_LIMIT_MSG + ") for simple stream", CEPH_UPLOAD_LIMIT);
+            if (txn != null) {
+                log.debug("transaction uncommitted: " + txn + " " + writeDataLocation);
+                
+                if (!txn.dynamicLargeObject) {
+                    obj.setAndSaveMetadata(TRANSACTION_ATTR, "true");
                 }
-                if (trap.fail != null) {
-                    throw new ReadException("read from input stream failed", trap.fail);
-                }
-                throw new WriteException("internal failure: " + ex);
+                
+                txn.txnObject.setAndDoNotSaveMetadata(CUR_DIGEST_ATTR, curDigestState);
+                txn.txnObject.setAndDoNotSaveMetadata(PREV_DIGEST_ATTR, prevDigestState);
+                txn.txnObject.setAndDoNotSaveMetadata(ARTIFACT_ID_ATTR, newArtifact.getArtifactURI().toASCIIString());
+                txn.txnObject.setAndDoNotSaveMetadata(CONTENT_CHECKSUM_ATTR, checksum.toASCIIString());
+                txn.txnObject.saveMetadata();
+                
+                PutTransaction t = getTransactionStatus(transactionID);
+                return t.storageMetadata;
             }
-            
-            //String etag = obj.getEtag();
-            //String slm = obj.getLastModified();
-            //log.debug("after upload: etag=" + etag + " len=" + obj.getContentLength());
-                    
-            final URI contentChecksum = URI.create(DEFAULT_CHECKSUM_ALGORITHM + ":" + HexUtil.toHex(dis.getMessageDigest().digest()));
-            
-            if (newArtifact.contentChecksum != null && !contentChecksum.equals(newArtifact.contentChecksum)) {
-                obj.delete();
-                throw new PreconditionFailedException("checksum mismatch: " + newArtifact.contentChecksum + " != " + contentChecksum);
-            }
-            final Long contentLength = obj.getContentLength();
-            if (newArtifact.contentLength != null && !contentLength.equals(newArtifact.contentLength)) {
-                obj.delete();
-                throw new PreconditionFailedException("length mismatch: " + newArtifact.contentLength + " != " + contentLength);
-            }
-           
-            // force getting object last modified from server for consistency with iterator
-            obj.reload();
-            final Date lastModified = obj.getLastModifiedAsDate();
-            
-            Map<String,Object> metadata = new TreeMap<>();
-            metadata.put(ARTIFACT_ID_ATTR, newArtifact.getArtifactURI().toASCIIString());
-            metadata.put(CONTENT_CHECKSUM_ATTR, contentChecksum.toASCIIString());
-            obj.setMetadata(metadata); // commit 
-            
-            return toStorageMetadata(loc, contentChecksum, contentLength, newArtifact.getArtifactURI(), lastModified);
+
+            // create this before committing the file so constraints applied
+            StorageMetadata metadata = new StorageMetadata(writeDataLocation, checksum, curLength, obj.getLastModifiedAsDate());
+            metadata.artifactURI = newArtifact.getArtifactURI();
+            // contentLastModified assigned in commit
+            StorageMetadata ret = commit(metadata, obj);
+            return ret;
         } catch (NoSuchAlgorithmException ex) {
-            throw new RuntimeException("failed to create MessageDigest: " + DEFAULT_CHECKSUM_ALGORITHM);
-        } catch (ResourceNotFoundException ex) {
-            throw new RuntimeException("failed to find/create child container: " + loc.storageBucket, ex);
+            throw new RuntimeException("failed to create MessageDigestAPI: " + checksumAlg);
         } catch (CommandException ex) {
-            throw new StorageEngageException("internal failure: " + ex);
+            throw new StorageEngageException("internal failure: " + ex, ex);
         }
     }
     
+    // TODO: in order to resume a failed upload, we probably have to not throw the IOException so joss/swift/ceph don't
+    // invalidate/delete the partial object... TBD
     private static class TrapFailInputStream extends InputStream {
         IOException fail;
         final InputStream istream;
@@ -674,6 +852,368 @@ public class SwiftStorageAdapter  implements StorageAdapter {
                 throw ex;
             }
         }
+    }
+
+    // min segment size that does not increase number of segments
+    long calcMinSegmentSize(long contentLength) {
+        long num = (long) Math.ceil(((double)contentLength) / ((double) segmentMaxBytes));
+        long minSeg = (long) Math.ceil(((double)contentLength) / ((double) num));
+        return minSeg;
+    }
+    
+    @Override
+    public PutTransaction startTransaction(URI artifactURI, Long contentLength) 
+            throws StorageEngageException, TransientException {
+        InventoryUtil.assertNotNull(SwiftStorageAdapter.class, "artifactURI", artifactURI);
+        try {
+            UUID id = UUID.randomUUID();
+            final String transactionID = id.toString();
+            
+            // calculate segmentation
+            SwiftPutTransaction ret;
+            if (contentLength == null) {
+                // stream of unknown length: default to simple object
+                ret = new SwiftPutTransaction(transactionID, segmentMaxBytes, segmentMaxBytes);
+                
+                // stream of unknown length: assume dynamic large object
+                //ret.dynamicLargeObject = true;
+            } else if (contentLength <= segmentMinBytes) {
+                // normal object
+                ret = new SwiftPutTransaction(transactionID, segmentMaxBytes, segmentMaxBytes);
+            } else {
+                // dynamic large object
+                long minSeg = segmentMinBytes;
+                if (segmentMinBytes == segmentMaxBytes) {
+                    minSeg = calcMinSegmentSize(contentLength);
+                }
+                ret = new SwiftPutTransaction(transactionID, minSeg, segmentMaxBytes);
+                ret.dynamicLargeObject = true;
+            }
+            ret.totalLength = contentLength;
+            
+            // TODO: accept non-default checksum algorithm for txn?
+            MessageDigestAPI md = MessageDigestAPI.getInstance(DEFAULT_CHECKSUM_ALGORITHM);
+            String digestState = MessageDigestAPI.getEncodedState(md);
+            byte[] dig = md.digest();
+            String csVal = HexUtil.toHex(dig);
+            URI checksum = URI.create("md5:" + csVal);
+            
+            // create object to track txn status
+            StoredObject txn = txnContainer.getObject("txn:" + transactionID);
+            // need some bytes in getTransactionStatus object
+            
+            txn.uploadObject(dig);
+            txn.setAndDoNotSaveMetadata(CUR_DIGEST_ATTR, digestState);
+            txn.setAndDoNotSaveMetadata(ARTIFACT_ID_ATTR, artifactURI.toASCIIString());
+            txn.setAndDoNotSaveMetadata(CONTENT_CHECKSUM_ATTR, checksum.toASCIIString());
+            txn.setAndDoNotSaveMetadata(DLO_ATTR, ret.dynamicLargeObject);
+            if (ret.getMinSegmentSize() != null) {
+                txn.setAndDoNotSaveMetadata(PT_MIN_ATTR, ret.getMinSegmentSize().toString());
+            }
+            if (ret.getMaxSegmentSize() != null) {
+                txn.setAndDoNotSaveMetadata(PT_MAX_ATTR, ret.getMaxSegmentSize().toString());
+            }
+            if (ret.totalLength != null) {
+                txn.setAndDoNotSaveMetadata(TOTAL_LENGTH_ATTR, ret.totalLength.toString());
+            }
+            
+            txn.saveMetadata();
+            ret.txnObject = txn;
+
+            if (ret.dynamicLargeObject) {
+                // create large object manifest; each write (append) is a new object with this prefix
+                StorageLocation mloc = toStorageLocation(id);
+                log.debug("create manifest: " + mloc);
+                Container sub = getContainerImpl(mloc);
+                StoredObject mo = sub.getObject(mloc.getStorageID().toASCIIString());
+                ObjectManifest manifest = new ObjectManifest(sub.getName() + "/" + mloc.getStorageID().toASCIIString());
+                UploadInstructions up = new UploadInstructions(new byte[0]);
+                up.setObjectManifest(manifest);
+                mo.uploadObject(up);
+                mo.setAndDoNotSaveMetadata(DLO_ATTR, ret.dynamicLargeObject);
+                mo.setAndDoNotSaveMetadata(TRANSACTION_ATTR, true); // hide until commit
+                mo.saveMetadata();
+                ret.metaObject = mo;
+            }
+            log.debug("startTransaction: contentLength=" + contentLength + " " + ret);
+            return ret;
+        } catch (NoSuchAlgorithmException ex) {
+            throw new RuntimeException("BUG", ex);
+        } catch (Exception ex) {
+            throw new StorageEngageException("failed to create transaction", ex);
+        } 
+    }
+
+    @Override
+    public PutTransaction revertTransaction(String transactionID) 
+            throws IllegalArgumentException, StorageEngageException, TransientException, UnsupportedOperationException {
+        InventoryUtil.assertNotNull(SwiftStorageAdapter.class, "transactionID", transactionID);
+        UUID uuid = UUID.fromString(transactionID);
+        try {
+            log.debug("getTransactionStatus: " + transactionID);
+            StoredObject txn = txnContainer.getObject("txn:" + transactionID);
+            if (txn.exists()) {
+                Map<String,Object> meta = txn.getMetadata();
+                
+                String prevDigestState = (String) meta.get(PREV_DIGEST_ATTR);
+                if (prevDigestState == null) {
+                    throw new IllegalArgumentException("transaction not revertable: " + transactionID);
+                }
+
+                // revert: remove the last part
+                // manifest already exists
+                UUID id = UUID.fromString(transactionID);
+                StorageLocation manifest = toStorageLocation(id);
+                Container sub = getContainerImpl(manifest);
+                String prefix = manifest.getStorageID().toASCIIString() + ":p:";
+                Iterator<StoredObject> parts = new LargeObjectPartIterator(sub, prefix);
+                StoredObject last = null;
+                while (parts.hasNext()) {
+                    last = parts.next();
+                }
+                log.debug("delete part: " + last.getName());
+                last.delete();
+                
+                String curDigestState = prevDigestState;
+                MessageDigestAPI md = MessageDigestAPI.getDigest(curDigestState);
+                String md5Val = HexUtil.toHex(md.digest());
+                URI checksum = URI.create(md.getAlgorithmName() + ":" + md5Val);
+                
+                txn.setAndDoNotSaveMetadata(CUR_DIGEST_ATTR, curDigestState);
+                txn.setAndDoNotSaveMetadata(CONTENT_CHECKSUM_ATTR, checksum.toASCIIString());
+                txn.removeAndDoNotSaveMetadata(PREV_DIGEST_ATTR);
+                txn.saveMetadata();
+                
+                return getTransactionStatusImpl(transactionID);
+            }
+        } catch (NoSuchAlgorithmException ex) {
+            throw new RuntimeException("BUG: failed to restore digest", ex);
+        } catch (IllegalArgumentException | IllegalStateException ex) {
+            throw new RuntimeException("BUG: invalid object: " + transactionID, ex);
+        }
+        
+        throw new IllegalArgumentException("unknown transaction: " + transactionID);
+    }
+    
+    @Override
+    public StorageMetadata commitTransaction(String transactionID) 
+            throws IllegalArgumentException, StorageEngageException, TransientException {
+        InventoryUtil.assertNotNull(SwiftStorageAdapter.class, "transactionID", transactionID);
+        try {
+            SwiftPutTransaction pt = getTransactionStatusImpl(transactionID);
+            
+            StorageMetadata metadata = pt.storageMetadata;
+            log.debug("txn status: " + pt + " " + metadata.getStorageLocation());
+            log.debug("delete txn: " + pt.txnObject.getName());
+            pt.txnObject.delete();
+            StorageMetadata ret = commit(metadata, pt.metaObject);
+            return ret;
+        } catch (CommandException ex) {
+            throw new StorageEngageException("failed to commit transaction: " + transactionID, ex);
+        }
+    }
+    
+    private StorageMetadata commit(StorageMetadata sm, StoredObject obj) throws StorageEngageException {
+        try {
+            obj.setAndDoNotSaveMetadata(ARTIFACT_ID_ATTR, sm.artifactURI.toASCIIString());
+            obj.setAndDoNotSaveMetadata(CONTENT_CHECKSUM_ATTR, sm.getContentChecksum().toASCIIString());
+            obj.removeAndDoNotSaveMetadata(TRANSACTION_ATTR);
+            obj.saveMetadata();
+            
+            // force getting object last modified from server for consistency with iterator
+            obj.reload();
+            Date finalLastModified = obj.getLastModifiedAsDate();
+            if (finalLastModified.equals(sm.getContentLastModified())) {
+                log.debug("commit: lastModified **not changed** by attribute mod");
+                return sm;
+            }
+            log.debug("commit: lastModified **changed** by attribute mod");
+            StorageMetadata ret = new StorageMetadata(sm.getStorageLocation(), sm.getContentChecksum(), sm.getContentLength(), finalLastModified);
+            ret.artifactURI = sm.artifactURI;
+            return ret;
+        } catch (CommandException ex) {
+            throw new StorageEngageException("failed to persist attributes: " + sm.getStorageLocation(), ex);
+        }
+    }
+
+    @Override
+    public void abortTransaction(String transactionID) throws IllegalArgumentException, StorageEngageException, TransientException {
+        InventoryUtil.assertNotNull(SwiftStorageAdapter.class, "transactionID", transactionID);
+        // validate
+        UUID uuid = UUID.fromString(transactionID);
+        
+        try {
+            SwiftPutTransaction pt = getTransactionStatusImpl(transactionID);
+            log.debug("delete txn: " + pt);
+            pt.txnObject.delete();
+            pt.txnObject = null;
+            
+            if (pt.metaObject != null) { // simple or manifest
+                if (pt.dynamicLargeObject && pt.storageMetadata != null) {
+                    Container sub = getContainerImpl(pt.storageMetadata.getStorageLocation());
+                    String prefix = pt.metaObject.getName() + ":p:";
+                    LargeObjectPartIterator iter = new LargeObjectPartIterator(sub, prefix);
+                    while (iter.hasNext()) {
+                        StoredObject part = iter.next();
+                        log.debug("delete part: " + part.getName());
+                        part.delete();
+                    }
+                }
+                log.debug("delete obj: " + pt.metaObject.getName());
+                pt.metaObject.delete();
+                pt.metaObject = null;
+            }
+        } catch (CommandException ex) {
+            throw new StorageEngageException("failed to abort transaction: " + transactionID, ex);
+        }
+    }
+
+    @Override
+    public PutTransaction getTransactionStatus(String transactionID) throws IllegalArgumentException, StorageEngageException, TransientException {
+        return getTransactionStatusImpl(transactionID);
+    }
+    
+    // enable internal calls to avoid cast
+    private SwiftPutTransaction getTransactionStatusImpl(String transactionID) throws IllegalArgumentException, StorageEngageException, TransientException {
+        InventoryUtil.assertNotNull(SwiftStorageAdapter.class, "transactionID", transactionID);
+        UUID uuid = UUID.fromString(transactionID);
+        try {
+            log.debug("getTransactionStatus: " + transactionID);
+            StoredObject txn = txnContainer.getObject("txn:" + transactionID);
+            if (txn.exists()) {
+                Map<String,Object> meta = txn.getMetadata();
+                String smin = (String) meta.get(PT_MIN_ATTR);
+                String smax = (String) meta.get(PT_MAX_ATTR);
+                Long ptMin = null;
+                if (smin != null) { 
+                    ptMin = Long.parseLong(smin);
+                }
+                Long ptMax = null;
+                if (smax != null) {
+                    ptMax = Long.parseLong(smax);
+                }
+                
+                final SwiftPutTransaction ret = new SwiftPutTransaction(transactionID, ptMin, ptMax);
+                
+                String sdlo = (String) meta.get(DLO_ATTR);
+                ret.dynamicLargeObject = "true".equals(sdlo);
+                
+                String stot = (String) meta.get(TOTAL_LENGTH_ATTR);
+                if (stot != null) {
+                    ret.totalLength = Long.parseLong(stot);
+                }
+                ret.txnObject = txn;
+
+                String scs = (String) meta.get(CONTENT_CHECKSUM_ATTR);
+                String auri = (String) meta.get(ARTIFACT_ID_ATTR);
+                URI md5 = new URI(scs);
+                URI artifactURI = new URI(auri);
+                    
+                // need to get contentLength from the real object (simple or manifest)
+                StorageLocation loc = toStorageLocation(uuid);
+                Container sub = getContainerImpl(loc);
+                StoredObject obj = sub.getObject(loc.getStorageID().toASCIIString());
+                if (obj.exists()) {
+                    ret.metaObject = obj;
+                }
+                log.debug("getTransactionStatus: " + ret);
+                
+                if (ret.metaObject != null) {
+                    if (ret.metaObject.getContentLength() > 0L) {
+                        ret.storageMetadata = toStorageMetadata(loc, md5, 
+                                ret.metaObject.getContentLength(), 
+                                artifactURI, 
+                                ret.metaObject.getLastModifiedAsDate());
+                    }
+                }
+                return ret;
+            }
+        } catch (IllegalArgumentException | IllegalStateException | URISyntaxException ex) {
+            throw new RuntimeException("BUG: invalid object: " + transactionID, ex);
+        }
+        
+        throw new IllegalArgumentException("unknown transaction: " + transactionID);
+    }
+    
+    // used by SwiftPutTxnTest.cleanupBefore()
+    Iterator<String> listTransactions() {
+        return new TxnIterator(txnContainer.list().iterator()); // assume it's small
+    }
+    
+    private class TxnIterator implements Iterator<String> {
+
+        private final Iterator<StoredObject> cso;
+
+        public TxnIterator(Iterator<StoredObject> cso) {
+            this.cso = cso;
+        }
+        
+        @Override
+        public boolean hasNext() {
+            return cso.hasNext();
+        }
+
+        @Override
+        public String next() {
+            StoredObject so = cso.next();
+            URI uri = URI.create(so.getName());
+            if (!"txn".equals(uri.getScheme())) {
+                throw new IllegalStateException("unexpected object in txnContainer: " + so);
+            }
+            return uri.getSchemeSpecificPart();
+        }
+        
+    }
+    
+    private boolean isIteratorVisible(StoredObject obj) {
+        String val = (String) obj.getMetadata(TRANSACTION_ATTR);
+        if ("true".equals(val)) {
+            return false;
+        }
+        String name = obj.getName();
+        if (name.contains(":p:")) {
+            return false;
+        }
+        return true;
+    }
+    
+    // get destination to write bytes to
+    private StorageLocation getNextTransactionStorageLocation(String transactionID) 
+            throws IllegalArgumentException, StorageEngageException, TransientException {
+        InventoryUtil.assertNotNull(SwiftStorageAdapter.class, "transactionID", transactionID);
+        
+        // manifest already exists
+        UUID id = UUID.fromString(transactionID);
+        StorageLocation manifest = toStorageLocation(id);
+        Container sub = getContainerImpl(manifest);
+        String prefix = manifest.getStorageID().toASCIIString() + ":p:";
+        Iterator<StoredObject> parts = new LargeObjectPartIterator(sub, prefix);
+        String last = null;
+        while (parts.hasNext()) {
+            StoredObject p = parts.next();
+            last = p.getName();
+        }
+        String objectName = getNextPartName(prefix, last);
+        StorageLocation ret = new StorageLocation(URI.create(objectName));
+        ret.storageBucket = manifest.storageBucket;
+        log.debug("storageLocation for part: " + ret);
+        return ret;
+        
+    }
+    
+    String getNextPartName(String prefix, String prev) {
+        int p = 0;
+        if (prev != null) {
+            String s = prev.substring(prefix.length());
+            p = Integer.parseInt(s);
+        }
+        p++;
+        // %04d pads to 4 digits to max value is 9999
+        if (p > 9999) {
+            throw new IllegalArgumentException("LIMIT: reached limit of 9999 part names per object");
+        }
+        return String.format(prefix + "%04d", p);
+        
     }
     
     // main use: iterator
@@ -714,14 +1254,12 @@ public class SwiftStorageAdapter  implements StorageAdapter {
     boolean exists(StorageLocation storageLocation) throws StorageEngageException {
         log.debug("exists: " + storageLocation);
         try {
-            Container sub = getContainerImpl(storageLocation, false);
+            Container sub = getContainerImpl(storageLocation);
             String key = storageLocation.getStorageID().toASCIIString();
             StoredObject obj = sub.getObject(key);
             return obj.exists();
-        } catch (ResourceNotFoundException ex) {
-            return false; // no container
         } catch (Exception ex) {
-            throw new StorageEngageException("failed to delete: " + storageLocation, ex);
+            throw new StorageEngageException("failed to check exists: " + storageLocation, ex);
         }
     }
     
@@ -745,14 +1283,23 @@ public class SwiftStorageAdapter  implements StorageAdapter {
             key = key.replace("invalid:", "");
         }
         try {
-            Container sub = getContainerImpl(storageLocation, false);
+            Container sub = getContainerImpl(storageLocation);
             StoredObject obj = sub.getObject(key);
             if (obj.exists()) {
+                String dloAttr = (String) obj.getMetadata(DLO_ATTR);
+                if ("true".equals(dloAttr)) {
+                    String prefix = obj.getName() + ":p:";
+                    LargeObjectPartIterator iter = new LargeObjectPartIterator(sub, prefix);
+                    while (iter.hasNext()) {
+                        StoredObject part = iter.next();
+                        log.debug("delete part: " + part.getName());
+                        part.delete();
+                    }
+                }
+                log.debug("delete object: " + obj.getName());
                 obj.delete();
                 return;
             }
-        } catch (ResourceNotFoundException ex) {
-            throw ex;
         } catch (Exception ex) {
             throw new StorageEngageException("failed to delete: " + storageLocation, ex);
         }
@@ -855,64 +1402,75 @@ public class SwiftStorageAdapter  implements StorageAdapter {
         private InternalBucket icurBucket;
         
         private Iterator<StoredObject> objectIterator;
+        private StorageMetadata nextItem;
         private String nextMarkerKey;
 
         public MultiBucketStorageIterator(String bucketPrefix) {
             this.bucketIterator = new BucketIterator(bucketPrefix);
-            if (bucketIterator.hasNext()) {
-                this.currentBucket = bucketIterator.next();
-                this.icurBucket = new InternalBucket(currentBucket.getName());
-            } else {
-                bucketIterator = null; // no matching buckets
-            }
+            advance();
         }
         
         @Override
         public boolean hasNext() {
-            if (bucketIterator == null) {
-                return false;
-            }
-            
-            if (objectIterator == null || !objectIterator.hasNext()) {
-                Collection<StoredObject> list = currentBucket.list(null, nextMarkerKey, BATCH_SIZE);
-                log.debug("MultiBucketStorageIterator bucket=" + currentBucket.getName() 
-                        + " size=" + list.size() + " from=" + nextMarkerKey);
-                if (!list.isEmpty()) {
-                    objectIterator = list.iterator();
-                } else {
-                    // finished current bucket
-                    objectIterator = null;
-                }
-            }
-
-            if (objectIterator == null) {
-                if (bucketIterator.hasNext()) {
-                    currentBucket = bucketIterator.next();
-                    icurBucket = new InternalBucket(currentBucket.getName());
-                    nextMarkerKey = null;
-                    //log.debug("next bucket: " + currentBucket);
-                    return hasNext();
-                } else {
-                    //log.debug("next bucket: null");
-                    bucketIterator = null; // done
-                    return false;
-                }
-            }
-
-            return objectIterator.hasNext();
+            return (nextItem != null);
         }
 
         @Override
         public StorageMetadata next() {
-            if (objectIterator == null || !objectIterator.hasNext()) {
+            if (nextItem == null) {
                 throw new NoSuchElementException();
             }
-            StoredObject obj = objectIterator.next();
-            this.nextMarkerKey = obj.getName();
             
-            return objectToStorageMetadata(icurBucket, obj);
+            StorageMetadata ret = nextItem;
+            advance();
+            return ret;
         }
         
+        private void advance() {
+            this.nextItem = null;
+            while (true) {
+                // next bucket
+                if (currentBucket == null && bucketIterator.hasNext()) {
+                    currentBucket = bucketIterator.next();
+                    icurBucket = new InternalBucket(currentBucket.getName());
+                    nextMarkerKey = null;
+                }
+                if (currentBucket == null) {
+                    log.debug("MultiBucketStorageIterator: DONE");
+                    return;
+                }
+                
+                // next batch in current bucket
+                if (objectIterator == null || !objectIterator.hasNext()) {
+                    Collection<StoredObject> list = currentBucket.list(null, nextMarkerKey, BATCH_SIZE);
+                    log.debug("SingleBucketStorageIterator bucket=" + currentBucket.getName()
+                            + " size=" + list.size() + " from=" + nextMarkerKey);
+                    if (!list.isEmpty()) {
+                        objectIterator = list.iterator();
+                    } else {
+                        log.debug("MultiBucketStorageIterator: " + currentBucket.getName() + " DONE");
+                        currentBucket = null;
+                        icurBucket = null;
+                        objectIterator = null; // bucket done
+                    }
+                }
+                
+                // next object in current batch
+                if (objectIterator != null) {
+                    while (objectIterator.hasNext()) {
+                        StoredObject obj = objectIterator.next();
+                        this.nextMarkerKey = obj.getName();
+                        if (isIteratorVisible(obj)) {
+                            log.debug("MultiBucketStorageIterator.advance: next " + obj.getName() + " len=" + obj.getContentLength());
+                            this.nextItem = objectToStorageMetadata(icurBucket, obj);
+                            return; // nextItem staged
+                        } else {
+                            log.debug("MultiBucketStorageIterator.advance: skip " + obj.getName());
+                        }
+                    }
+                }
+            }
+        }
     }
     
     private class SingleBucketStorageIterator implements Iterator<StorageMetadata> {
@@ -920,10 +1478,10 @@ public class SwiftStorageAdapter  implements StorageAdapter {
         private static final int BATCH_SIZE = 1024;
         private Iterator<StoredObject> objectIterator;
         private final String bucketPrefix;
-        private Container swiftContainer;
+        private final Container swiftContainer;
         
+        private StorageMetadata nextItem;
         private String nextMarkerKey; // name of last item returned by next()
-        private boolean done = false;
 
         public SingleBucketStorageIterator(String bucketPrefix) {
             if (bucketPrefix != null) {
@@ -932,44 +1490,113 @@ public class SwiftStorageAdapter  implements StorageAdapter {
                 this.bucketPrefix = null;
             }
             this.swiftContainer = client.getContainer(storageBucket);
+            advance();
         }
         
         @Override
         public boolean hasNext() {
-            if (done) {
-                return false;
-            }
-            
-            if (objectIterator == null || !objectIterator.hasNext()) {
-                Collection<StoredObject> list = swiftContainer.list(bucketPrefix, nextMarkerKey, BATCH_SIZE);
-                log.debug("SingleBucketStorageIterator bucketPrefix=" + bucketPrefix + " size=" + list.size() + " from=" + nextMarkerKey);
-                if (!list.isEmpty()) {
-                    objectIterator = list.iterator();
-                } else {
-                    objectIterator = null;
-                    done = true;
-                    log.debug("SingleBucketStorageIterator: done");
-                }
-            }
-
-            if (objectIterator == null) {
-                return false;
-            }
-
-            return objectIterator.hasNext();
+            return (nextItem != null);
         }
 
         @Override
         public StorageMetadata next() {
-            if (objectIterator == null || !objectIterator.hasNext()) {
+            if (nextItem == null) {
                 throw new NoSuchElementException();
             }
-            StoredObject obj = objectIterator.next();
-            log.debug("next: name=" + obj.getName() + " len=" + obj.getContentLength());
-            this.nextMarkerKey = obj.getName();
             
-            return objectToStorageMetadata(null, obj);
+            StorageMetadata ret = nextItem;
+            advance();
+            return ret;
         }
         
+        private void advance() {
+            this.nextItem = null;
+            while (true) {
+                if (objectIterator == null || !objectIterator.hasNext()) {
+                    Collection<StoredObject> list = swiftContainer.list(bucketPrefix, nextMarkerKey, BATCH_SIZE);
+                    log.debug("SingleBucketStorageIterator bucketPrefix=" + bucketPrefix + " size=" + list.size() + " from=" + nextMarkerKey);
+                    if (!list.isEmpty()) {
+                        objectIterator = list.iterator();
+                    } else {
+                        log.debug("SingleBucketStorageIterator: DONE");
+                        objectIterator = null;
+                        return; // nextItem == null aka done
+                    }
+                }
+                if (objectIterator != null) {
+                    while (objectIterator.hasNext()) {
+                        StoredObject obj = objectIterator.next();
+                        this.nextMarkerKey = obj.getName();
+                        if (isIteratorVisible(obj)) {
+                            log.debug("SingleBucketStorageIterator.advance: next " + obj.getName() + " len=" + obj.getContentLength());
+                            this.nextItem = objectToStorageMetadata(null, obj);
+                            return; // nextItem staged
+                        } else {
+                            log.debug("SingleBucketStorageIterator.advance: skip " + obj.getName());
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    // iterator over all parts of a dynamic large object
+    private class LargeObjectPartIterator implements Iterator<StoredObject> {
+        
+        private final Container swiftContainer;
+        private final String prefix;
+        private static final int BATCH_SIZE = 1024;
+        private Iterator<StoredObject> objectIterator;
+        
+        private StoredObject nextItem;
+        private String nextMarkerKey; // name of last item returned by next()
+
+        public LargeObjectPartIterator(Container sub, String prefix) {
+            this.swiftContainer = sub;
+            this.prefix = prefix;
+            advance();
+        }
+
+        @Override
+        public boolean hasNext() {
+            return (nextItem != null);
+        }
+
+        @Override
+        public StoredObject next() {
+            if (nextItem == null) {
+                throw new NoSuchElementException();
+            }
+            
+            StoredObject ret = nextItem;
+            advance();
+            return ret;
+        }
+        
+        private void advance() {
+            this.nextItem = null;
+            while (true) {
+                if (objectIterator == null || !objectIterator.hasNext()) {
+                    Collection<StoredObject> list = swiftContainer.list(prefix, nextMarkerKey, BATCH_SIZE);
+                    log.debug("LargeObjectPartIterator prefix=" + prefix + " size=" + list.size() + " from=" + nextMarkerKey);
+                    if (!list.isEmpty()) {
+                        objectIterator = list.iterator();
+                    } else {
+                        log.debug("LargeObjectPartIterator: DONE");
+                        objectIterator = null;
+                        return; // nextItem == null aka done
+                    }
+                }
+                if (objectIterator != null) {
+                    while (objectIterator.hasNext()) {
+                        StoredObject obj = objectIterator.next();
+                        this.nextMarkerKey = obj.getName();
+                        log.debug("LargeObjectPartIterator.advance: next " + obj.getName() + " len=" + obj.getContentLength());
+                        this.nextItem = obj;
+                        return; // nextItem staged
+                    }
+                }
+            }
+        }
     }
 }

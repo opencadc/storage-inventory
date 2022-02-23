@@ -36,7 +36,7 @@ dependencies {
     compile 'org.opencadc:cadc-inventory-db:[0.13.0,1.0)'
     compile 'org.opencadc:cadc-inventory-server:[0.1.2,)'
     compile 'org.opencadc:cadc-soda-server:[1.2.0,2.0.0)'
-    compile 'org.opencadc:cadc-storage-adapter:[0.8,)'
+    compile 'org.opencadc:cadc-storage-adapter:[0.9,)'
     compile 'org.opencadc:cadc-permissions:[0.3.1,)'
     compile 'org.opencadc:cadc-permissions-client:[0.2,)'
     compile 'org.opencadc:cadc-gms:[1.0,)'
@@ -44,15 +44,15 @@ dependencies {
     compile 'org.opencadc:nom-tam-fits:1.16.4'
 
     testCompile 'junit:junit:[4.0,)'
-    testCompile 'org.opencadc:cadc-storage-adapter-fs:[0.7,)'
+    testCompile 'org.opencadc:cadc-storage-adapter-fs:[0.8,)'
 
     intTestCompile 'org.opencadc:cadc-test-vosi:[1.0.2,)'
 
     runtime 'org.opencadc:cadc-access-control:[1.1.1,2.0)'
     runtime 'org.opencadc:cadc-access-control-identity:[1.0.3,2.0)'
-    runtime 'org.opencadc:cadc-storage-adapter-fs:[0.7,)'
-    runtime 'org.opencadc:cadc-storage-adapter-ad:[0.4,)'
-    runtime 'org.opencadc:cadc-storage-adapter-swift:[0.6,)'
+    runtime 'org.opencadc:cadc-storage-adapter-fs:[0.8,)'
+    runtime 'org.opencadc:cadc-storage-adapter-ad:[0.5,)'
+    runtime 'org.opencadc:cadc-storage-adapter-swift:[0.7,)'
 }
 
 

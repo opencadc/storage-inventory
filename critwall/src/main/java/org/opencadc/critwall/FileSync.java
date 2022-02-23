@@ -197,9 +197,7 @@ public class FileSync implements Runnable {
         log.debug("FileSync ctor done");
     }
 
-    /**
-     * Spin up a Scheduler thread to renew the subject periodically.
-     */
+    // start a Scheduler thread to renew the subject periodically.
     public static void scheduleSubjectUpdates(final Subject subject) {
         log.debug("START: scheduleSubjectUpdates");
         final ScheduledExecutorService scheduledExecutorService = Executors.newSingleThreadScheduledExecutor();

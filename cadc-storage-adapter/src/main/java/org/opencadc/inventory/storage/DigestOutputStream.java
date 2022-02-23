@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2020.                            (c) 2020.
+*  (c) 2021.                            (c) 2021.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -65,107 +65,58 @@
 ************************************************************************
 */
 
-package org.opencadc.inventory.storage.swift;
+package org.opencadc.inventory.storage;
 
-import ca.nrc.cadc.io.ByteLimitExceededException;
-import ca.nrc.cadc.util.Log4jInit;
-import java.io.InputStream;
-import java.net.URI;
-import java.util.Iterator;
-import org.apache.log4j.Level;
+import java.io.FilterOutputStream;
+import java.io.IOException;
+import java.io.OutputStream;
 import org.apache.log4j.Logger;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Test;
-import org.opencadc.inventory.StorageLocation;
-import org.opencadc.inventory.storage.NewArtifact;
-import org.opencadc.inventory.storage.StorageMetadata;
-import org.opencadc.inventory.storage.test.StorageAdapterBasicTest;
-import org.opencadc.inventory.storage.test.TestUtil;
 
 /**
  *
  * @author pdowler
  */
-public class SingleBucketSwiftStorageAdapterTest extends StorageAdapterBasicTest {
-    private static final Logger log = Logger.getLogger(SingleBucketSwiftStorageAdapterTest.class);
+public class DigestOutputStream extends OutputStream {
+    private static final Logger log = Logger.getLogger(DigestOutputStream.class);
 
-    static {
-        Log4jInit.setLevel("org.opencadc.inventory", Level.INFO);
-        Log4jInit.setLevel("org.javaswift.joss.client", Level.INFO);
+    private final OutputStream ostream;
+    private final MessageDigestAPI md;
+    private final byte[] oneByte = new byte[1];
+    
+    public DigestOutputStream(OutputStream ostream, MessageDigestAPI md) { 
+        super();
+        this.ostream = ostream;
+        this.md = md;
+    }
+
+    @Override
+    public void write(byte[] b) throws IOException {
+        write(b, 0, b.length);
     }
     
-    final SwiftStorageAdapter swiftAdapter;
-    
-    public SingleBucketSwiftStorageAdapterTest() throws Exception {
-        super(new SwiftStorageAdapter(true, System.getProperty("user.name") + "-single-test", 2, false));
-        this.swiftAdapter = (SwiftStorageAdapter) super.adapter;
+    @Override
+    public void write(byte[] b, int off, int len) throws IOException {
+        ostream.write(b, off, len);
+        md.update(b, off, len);
+    }
+
+    @Override
+    public void write(int b) throws IOException {
+        oneByte[0] = (byte) b;
+        write(oneByte, 0, 1);
+    }
+
+    @Override
+    public void close() throws IOException {
+        ostream.close();
+    }
+
+    @Override
+    public void flush() throws IOException {
+        ostream.flush();
     }
     
-    @Before
-    public void cleanupBefore() throws Exception {
-        log.info("cleanupBefore: START");
-        Iterator<StorageMetadata> sbi = swiftAdapter.iterator();
-        while (sbi.hasNext()) {
-            StorageLocation loc = sbi.next().getStorageLocation();
-            swiftAdapter.delete(loc);
-            log.info("\tdeleted: " + loc);
-        }
-        log.info("cleanupBefore: DONE");        
+    public MessageDigestAPI getMessageDigest() {
+        return md;
     }
-    
-    @Test
-    public void testCleanupOnly() {
-        log.info("testCleanupOnly: no-op");
-    }
-    
-    @Test
-    public void testPutLargeStreamReject() {
-        URI artifactURI = URI.create("cadc:TEST/testPutLargeStreamReject");
-        
-        final NewArtifact na = new NewArtifact(artifactURI);
-        
-        // ceph limit of 5GiB
-        long numBytes = (long) 6 * 1024 * 1024 * 1024; 
-        na.contentLength = numBytes;
-            
-        try {
-            InputStream istream = TestUtil.getInputStreamThatFails();
-            log.info("testPutCheckDeleteLargeStreamReject put: " + artifactURI + " " + numBytes);
-            StorageMetadata sm = swiftAdapter.put(na, istream, null);
-            Assert.fail("expected ByteLimitExceededException, got: " + sm);
-        } catch (ByteLimitExceededException expected) {
-            log.info("caught: " + expected);
-        } catch (Exception ex) {
-            log.error("unexpected exception", ex);
-            Assert.fail("unexpected exception: " + ex);
-        }
-    }
-    
-    // normally disabled because this has to actually upload ~5GiB of garbage before it fails
-    //@Test
-    public void testPutLargeStreamFail() {
-        URI artifactURI = URI.create("cadc:TEST/testPutLargeStreamFail");
-        
-        final NewArtifact na = new NewArtifact(artifactURI);
-        
-        // ceph limit of 5GiB
-        long numBytes = (long) 6 * 1024 * 1024 * 1024; 
-            
-        try {
-            InputStream istream = TestUtil.getInputStreamOfRandomBytes(numBytes);
-            log.info("testPutCheckDeleteLargeStreamFail put: " + artifactURI + " " + numBytes);
-            StorageMetadata sm = swiftAdapter.put(na, istream, null);
-            
-            Assert.assertFalse("put should have failed, but object exists", swiftAdapter.exists(sm.getStorageLocation()));
-            
-            Assert.fail("expected ByteLimitExceededException, got: " + sm);
-        } catch (ByteLimitExceededException expected) {
-            log.info("caught: " + expected);
-        } catch (Exception ex) {
-            log.error("unexpected exception", ex);
-            Assert.fail("unexpected exception: " + ex);
-        }
-    }
-    
 }

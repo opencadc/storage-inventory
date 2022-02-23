@@ -72,6 +72,8 @@ import ca.nrc.cadc.profiler.Profiler;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.db.EntityNotFoundException;
+import org.opencadc.inventory.storage.PutTransaction;
+import org.opencadc.inventory.storage.StorageMetadata;
 import org.opencadc.permissions.WriteGrant;
 
 /**
@@ -98,6 +100,7 @@ public class PostAction extends ArtifactAction {
         checkWritable();
         initAndAuthorize(WriteGrant.class);
         initDAO();
+        initStorageAdapter();
     }
 
     /**
@@ -112,6 +115,41 @@ public class PostAction extends ArtifactAction {
         log.debug("new uri: " + newURI);
         log.debug("new contentType: " + newContentType);
         log.debug("new contentEncoding: " + newContentEncoding);
+        
+        String txnID = syncInput.getHeader(PUT_TXN_ID);
+        String txnOP = syncInput.getHeader(PUT_TXN_OP);
+        log.warn("transactionID: " + txnID + " " + txnOP);
+        if (txnID != null) {
+            if (PUT_TXN_OP_START.equalsIgnoreCase(txnOP) 
+                    || PUT_TXN_OP_COMMIT.equalsIgnoreCase(txnOP)) {
+                throw new IllegalArgumentException("invalid " + PUT_TXN_OP + "=" + txnOP + " must be done with PUT");
+            } 
+            if (PUT_TXN_OP_ABORT.equalsIgnoreCase(txnOP)) {
+                log.warn("abortTransaction: " + txnID);
+                storageAdapter.abortTransaction(txnID);
+                syncOutput.setCode(204);
+                return;
+            }
+            
+            PutTransaction t;
+            if (PUT_TXN_OP_REVERT.equalsIgnoreCase(txnOP)) {
+                t = storageAdapter.revertTransaction(txnID);
+                syncOutput.setCode(202);
+            } else if (txnOP == null) {
+                // POST without no OP:  no change or fail?
+                t = storageAdapter.getTransactionStatus(txnID);
+                syncOutput.setCode(204);
+            } else {
+                throw new IllegalArgumentException("invalid " + PUT_TXN_OP + "=" + txnOP);
+            }
+            
+            StorageMetadata sm = t.storageMetadata;
+            Artifact artifact = new Artifact(sm.artifactURI, sm.getContentChecksum(), sm.getContentLastModified(), sm.getContentLength());
+            HeadAction.setTransactionHeaders(t, syncOutput);
+            syncOutput.setDigest(artifact.getContentChecksum());
+            syncOutput.setHeader("content-length", 0);
+            return;
+        }
         
         final Profiler profiler = new Profiler(PostAction.class);
         Artifact existing = getArtifact(artifactURI);
@@ -151,6 +189,9 @@ public class PostAction extends ArtifactAction {
         
             txnMgr.commitTransaction();
             log.debug("commit txn: OK");
+            
+            syncOutput.setCode(202); // Accepted
+            HeadAction.setHeaders(existing, syncOutput);
         } catch (Exception e) {
             log.error("failed to persist " + artifactURI, e);
             txnMgr.rollbackTransaction();

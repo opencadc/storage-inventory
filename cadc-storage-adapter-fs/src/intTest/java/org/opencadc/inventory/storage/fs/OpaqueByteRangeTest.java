@@ -67,35 +67,19 @@
 
 package org.opencadc.inventory.storage.fs;
 
-import ca.nrc.cadc.io.ByteCountOutputStream;
-import ca.nrc.cadc.io.DiscardOutputStream;
-import ca.nrc.cadc.util.HexUtil;
 import ca.nrc.cadc.util.Log4jInit;
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
-import java.net.URI;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
-import java.security.DigestOutputStream;
-import java.security.MessageDigest;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Random;
-import java.util.SortedSet;
-import java.util.TreeSet;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.Before;
-import org.junit.Test;
-import org.opencadc.inventory.storage.ByteRange;
-import org.opencadc.inventory.storage.NewArtifact;
-import org.opencadc.inventory.storage.StorageMetadata;
+import org.opencadc.inventory.storage.InvalidConfigException;
 import org.opencadc.inventory.storage.test.StorageAdapterByteRangeTest;
 
 /**
@@ -107,19 +91,19 @@ import org.opencadc.inventory.storage.test.StorageAdapterByteRangeTest;
 public class OpaqueByteRangeTest extends StorageAdapterByteRangeTest {
     private static final Logger log = Logger.getLogger(OpaqueByteRangeTest.class);
 
-    static File root;
-    static int depth = 2;
+    static final int BUCKET_LEN = 2;
+    static final File ROOT_DIR;
     
     static {
         Log4jInit.setLevel("org.opencadc.inventory.storage", Level.INFO);
-        root = new File("build/tmp/opaque-int-tests");
-        root.mkdir();
+        ROOT_DIR = new File("build/tmp/opaque-int-tests");
+        ROOT_DIR.mkdir();
     }
     
     final OpaqueFileSystemStorageAdapter ofsAdapter;
     
-    public OpaqueByteRangeTest() { 
-        super(new OpaqueFileSystemStorageAdapter(root, depth));
+    public OpaqueByteRangeTest() throws InvalidConfigException {
+        super(new OpaqueFileSystemStorageAdapter(ROOT_DIR, BUCKET_LEN));
         this.ofsAdapter = (OpaqueFileSystemStorageAdapter) super.adapter;
 
         log.debug("    content path: " + ofsAdapter.contentPath);

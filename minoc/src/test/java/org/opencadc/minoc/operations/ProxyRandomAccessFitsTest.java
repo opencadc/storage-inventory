@@ -117,7 +117,7 @@ public class ProxyRandomAccessFitsTest {
             StorageAdapter sa = new OpaqueFileSystemStorageAdapter(rootDir, 1);
             NewArtifact na = new NewArtifact(URI.create("cadc:TEST/" + testFile.getName()));
             na.contentLength = testFile.length();
-            StorageMetadata sm = sa.put(na, fis);
+            StorageMetadata sm = sa.put(na, fis, null);
             ProxyRandomAccessFits in = new ProxyRandomAccessFits(sa, sm.getStorageLocation(), testFile.length());
             
             FitsOperations fop = new FitsOperations(in);
@@ -152,7 +152,7 @@ public class ProxyRandomAccessFitsTest {
             StorageAdapter sa = new OpaqueFileSystemStorageAdapter(rootDir, 1);
             NewArtifact na = new NewArtifact(URI.create("cadc:TEST/" + testFile.getName()));
             na.contentLength = testFile.length();
-            StorageMetadata sm = sa.put(na, fis);
+            StorageMetadata sm = sa.put(na, fis, null);
             ProxyRandomAccessFits in = new ProxyRandomAccessFits(sa, sm.getStorageLocation(), testFile.length());
 
             FitsOperations fop = new FitsOperations(in);
