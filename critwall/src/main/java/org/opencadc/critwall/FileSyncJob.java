@@ -211,9 +211,9 @@ public class FileSyncJob implements Runnable {
                     return;
                 }
             } catch (Exception ex) {
-                log.warn("transfer negotiation failed: " + artifactLabel, ex);
+                log.debug("transfer negotiation failed: " + artifactLabel, ex);
                 success = false;
-                msg = "reason=no-transfer-urls";
+                msg = "reason=transfer-negotiation-failed " + ex;
                 return;
             }
             
@@ -332,22 +332,22 @@ public class FileSyncJob implements Runnable {
                 }
             } catch (ByteLimitExceededException | IllegalStateException | EntityNotFoundException ex) {
                 log.debug("artifact sync aborted: " + artifactLabel, ex);
-                msg = " artifact sync aborted: " + artifactLabel + " (" + ex + ")";
+                msg = "reason=" + ex.getClass().getName() + " " + ex.getMessage();
             } catch (IllegalArgumentException | InterruptedException | StorageEngageException | WriteException ex) {
                 log.debug("artifact sync error: " + artifactLabel, ex);
-                msg = " artifact sync error: " + artifactLabel + " (" + ex + ")";
+                msg = "reason=" + ex.getClass().getName() + " " + ex.getMessage();
             } catch (Exception ex) {
                 log.debug("unexpected fail: " + artifactLabel, ex);
-                msg = " unexpected sync error: " + artifactLabel + " (" + ex + ")";
+                msg = "reason=" + ex.getClass().getName() + " " + ex.getMessage();
             }
         } finally {
             long dt = System.currentTimeMillis() - start;
             StringBuilder sb = new StringBuilder();
             sb.append("FileSyncJob.END ").append(artifactLabel);
             sb.append(" success=").append(success);
-            sb.append(" ").append(msg);
             sb.append(" duration=").append(dt);
             sb.append(" attempts=").append(syncArtifactAttempts);
+            sb.append(" ").append(msg);
             log.info(sb.toString());
         }
     }
@@ -593,7 +593,7 @@ public class FileSyncJob implements Runnable {
                 return ret;
             } catch (ByteLimitExceededException | StorageEngageException | WriteException ex) {
                 // IOException will capture this if not explicitly caught and rethrown
-                log.error("FileSyncJob.FAIL", ex);
+                log.debug("FileSyncJob.FAIL", ex);
                 log.error("FileSyncJob.FAIL " + artifactLabel + " reason=" + ex);
                 throw ex;
             } catch (MalformedURLException | ResourceNotFoundException | ResourceAlreadyExistsException
