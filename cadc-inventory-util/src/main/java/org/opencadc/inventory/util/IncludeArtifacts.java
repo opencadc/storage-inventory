@@ -71,21 +71,14 @@ package org.opencadc.inventory.util;
 
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.util.StringUtil;
-
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.LineNumberReader;
-import java.nio.file.Path;
-
 import org.apache.log4j.Logger;
-
 
 /**
  * Implementation of ArtifactSelector that includes artifacts via selective queries.
- * This class requires one or more fragments of SQL (a WHERE clause), each in a separate
- * file located in {user.home}/config/include and named {something}.sql -- see the
- * iterator() method for details.
  *
  * @author pdowler
  */
@@ -94,16 +87,25 @@ public class IncludeArtifacts implements ArtifactSelector {
     static final String COMMENT_PREFIX = "--";
     static final String SQL_FILTER_FILE_NAME = "artifact-filter.sql";
 
-    private final Path selectorConfigDir;
+    private final File filterFile;
 
     /**
-     * Empty constructor.
+     * Constructor for default filter file. The default filter file is
+     * {user.home}/config/artifact-filter.sql and must be readable.
      */
     public IncludeArtifacts() {
-        // Read in the configuration file, and create a usable Map from it.
-        final File homeConfigDirectory = new File(System.getProperty("user.home") + "/config");
-        selectorConfigDir = homeConfigDirectory.toPath();
-
+        String filePath = System.getProperty("user.home") + "/config/" + SQL_FILTER_FILE_NAME;
+        this.filterFile = new File(filePath);
+        checkFilterFile();
+    }
+    
+    /**
+     * Use specified file as source of filter conditions.
+     * 
+     * @param filterFile the partial sql file to use
+     */
+    public IncludeArtifacts(File filterFile) {
+        this.filterFile = filterFile;
         checkFilterFile();
     }
 
@@ -140,13 +142,10 @@ public class IncludeArtifacts implements ArtifactSelector {
      */
     @Override
     public String getConstraint() throws ResourceNotFoundException, IOException, IllegalStateException {
-        // Check for the filter file again in case
-        checkFilterFile();
-        final File f = new File(selectorConfigDir + File.separator + SQL_FILTER_FILE_NAME);
         boolean validWhereClauseFound = false;
         final StringBuilder clauseBuilder = new StringBuilder();
 
-        try (final LineNumberReader lineNumberReader = new LineNumberReader(new FileReader(f))) {
+        try (final LineNumberReader lineNumberReader = new LineNumberReader(new FileReader(filterFile))) {
             String line;
             while ((line = lineNumberReader.readLine()) != null) {
                 line = line.trim();
@@ -179,7 +178,7 @@ public class IncludeArtifacts implements ArtifactSelector {
                         if (validWhereClauseFound) {
                             clauseBuilder.append(" ").append(line);
                         } else {
-                            throw new IllegalStateException("The first clause found in " + f.getName()
+                            throw new IllegalStateException("The first clause found in " + filterFile.getName()
                                     + " (line " + lineNumberReader.getLineNumber()
                                     + ") MUST be start with the WHERE keyword.");
                         }
@@ -191,20 +190,17 @@ public class IncludeArtifacts implements ArtifactSelector {
         if ((clauseBuilder.length() > 0) && StringUtil.hasText(clauseBuilder.toString().trim())) {
             return clauseBuilder.toString();
         } else {
-            throw new IllegalStateException("No usable SQL in " + selectorConfigDir + "/" + SQL_FILTER_FILE_NAME);
+            throw new IllegalStateException("No usable SQL in " + filterFile);
         }
     }
 
-    void checkFilterFile() {
-        final File configurationDirFile = selectorConfigDir.toFile();
-        if (!configurationDirFile.isDirectory() || !configurationDirFile.canRead()) {
-            throw new IllegalStateException("Directory " + selectorConfigDir + " is not found or not readable.");
-        } else {
-            final File[] fileListing = configurationDirFile.listFiles((dir, name) -> name.equals(SQL_FILTER_FILE_NAME));
-            if (fileListing == null || fileListing.length != 1) {
-                throw new IllegalStateException("There should exist a single file called " + SQL_FILTER_FILE_NAME
-                                                + " in the " + selectorConfigDir + " folder.");
-            }
+    final void checkFilterFile() {
+        final File configurationDirFile = filterFile.getParentFile();
+        if (!configurationDirFile.exists() || !configurationDirFile.isDirectory() || !configurationDirFile.canRead()) {
+            throw new IllegalStateException("directory " + configurationDirFile + " is not found or not readable.");
+        } 
+        if (!filterFile.exists() || !filterFile.canRead()) {
+            throw new IllegalStateException("file " + filterFile + " is not found or not readable.");
         }
     }
 }
