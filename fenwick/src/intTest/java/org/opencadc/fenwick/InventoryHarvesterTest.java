@@ -118,7 +118,6 @@ public class InventoryHarvesterTest {
     private final DateFormat df = DateUtil.getDateFormat(DateUtil.IVOA_DATE_FORMAT, DateUtil.UTC);
 
     public InventoryHarvesterTest() throws Exception {
-
     }
 
     @Before
@@ -381,8 +380,7 @@ public class InventoryHarvesterTest {
      */
     @Test
     public void runIncludeArtifacts() throws Exception {
-        LOGGER.debug("Looking for includes in " + System.getProperty("user.home") + "/config");
-        final Path includePath = new File(System.getProperty("user.home") + "/config/").toPath();
+        final Path includePath = new File("build/tmp/config/").toPath();
         Files.createDirectories(includePath);
 
         final File includeFile = new File(includePath.toFile(), "artifact-filter.sql");
@@ -408,7 +406,7 @@ public class InventoryHarvesterTest {
         luskanEnvironment.artifactDAO.put(artifactTwo);
 
         final InventoryHarvester testSubject = new InventoryHarvester(inventoryEnvironment.daoConfig,
-                                                                      TestUtil.LUSKAN_URI, new IncludeArtifacts(),
+                                                                      TestUtil.LUSKAN_URI, new IncludeArtifacts(includeFile),
                                                                       false, 999);
         Subject.doAs(this.testUser, (PrivilegedExceptionAction<Object>) () -> {
             testSubject.doit();
