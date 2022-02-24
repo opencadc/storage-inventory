@@ -628,7 +628,11 @@ public class FileSyncJob implements Runnable {
             } finally {
                 if (txnID != null) {
                     // not comitted at end of try { }
-                    storageAdapter.abortTransaction(txnID);
+                    try {
+                        storageAdapter.abortTransaction(txnID);
+                    } catch (IllegalArgumentException ignore) {
+                        // txn already aborted by StorageAdapter
+                    }
                 }
             }
         }
