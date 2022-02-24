@@ -456,4 +456,59 @@ public class PutTransactionTest extends MinocTest {
         }
     }
 
+    @Test
+    public void testExplicitStartTransaction() {
+        try {
+            URI artifactURI = URI.create("cadc:TEST/testExplicitStartTransaction");
+            URL artifactURL = new URL(filesURL + "/" + artifactURI.toString());
+
+            byte[] data = new byte[0];
+
+            // delete to be safe
+            HttpDelete delete = new HttpDelete(artifactURL, false);
+            Subject.doAs(userSubject, new RunnableAction(delete));
+            
+            // put with txn
+            InputStream in = new ByteArrayInputStream(data);
+            HttpUpload put = new HttpUpload(in, artifactURL);
+            put.setRequestProperty(ArtifactAction.PUT_TXN_OP, ArtifactAction.PUT_TXN_OP_START);
+            put.setRequestProperty("content-length", "0");
+            Subject.doAs(userSubject, new RunnableAction(put));
+            Assert.assertNull(put.getThrowable());
+            Assert.assertEquals("Accepted", 202, put.getResponseCode());
+            String txnID = put.getResponseHeader(ArtifactAction.PUT_TXN_ID);
+            Assert.assertNotNull("txnID", txnID);
+            log.info("transactionID " + txnID);
+
+            // head in txn
+            HttpGet head = new HttpGet(artifactURL, true);
+            head.setHeadOnly(true);
+            head.setRequestProperty(ArtifactAction.PUT_TXN_ID, txnID);
+            Subject.doAs(userSubject, new RunnableAction(head));
+            Assert.assertEquals("found in txn", 200, head.getResponseCode());
+            Assert.assertEquals("txnID", txnID, head.getResponseHeader(ArtifactAction.PUT_TXN_ID));
+            Assert.assertEquals("content-length", 0L, head.getContentLength());
+            
+            // abort: POST
+            HttpPost post = new HttpPost(artifactURL, new TreeMap<String,Object>(), true);
+            post.setRequestProperty(ArtifactAction.PUT_TXN_ID, txnID);
+            post.setRequestProperty(ArtifactAction.PUT_TXN_OP, ArtifactAction.PUT_TXN_OP_ABORT);
+            Subject.doAs(userSubject, new RunnableAction(post));
+            Assert.assertNull(post.getThrowable());
+            Assert.assertEquals("no content", 204, post.getResponseCode());
+            
+            // head
+            head = new HttpGet(artifactURL, true);
+            head.setHeadOnly(true);
+            head.setRequestProperty(ArtifactAction.PUT_TXN_ID, txnID);
+            Subject.doAs(userSubject, new RunnableAction(head));
+            Assert.assertEquals("not found", 400, head.getResponseCode());
+            
+            
+        } catch (Exception t) {
+            log.error("unexpected throwable", t);
+            Assert.fail("unexpected throwable: " + t);
+        }
+    }
+
 }
