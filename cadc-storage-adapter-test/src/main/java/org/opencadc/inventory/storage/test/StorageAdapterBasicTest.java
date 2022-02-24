@@ -300,6 +300,39 @@ public abstract class StorageAdapterBasicTest {
     }
     
     @Test
+    public void testPutRejectZeroLengthFile() {
+        try {
+            byte[] data = new byte[0];
+            
+            URI artifactURI = URI.create("test:path/file");
+            MessageDigest md = MessageDigest.getInstance("MD5");
+            String md5Val = HexUtil.toHex(md.digest(data));
+            NewArtifact newArtifact = new NewArtifact(artifactURI);
+            
+            try {
+                newArtifact.contentLength = null;
+                ByteArrayInputStream bis = new ByteArrayInputStream(data);
+                StorageMetadata storageMetadata = adapter.put(newArtifact, bis, null);
+                Assert.fail("expected fail - got : " + storageMetadata);
+            } catch (IllegalArgumentException expected) {
+                log.info("caught expected: " + expected);
+            }
+            
+            try {
+                newArtifact.contentLength = 0L;
+                ByteArrayInputStream bis = new ByteArrayInputStream(data);
+                StorageMetadata storageMetadata = adapter.put(newArtifact, bis, null);
+                Assert.fail("expected fail - got : " + storageMetadata);
+            } catch (IllegalArgumentException expected) {
+                log.info("caught expected: " + expected);
+            }
+        } catch (Exception unexpected) {
+            log.error("unexpected exception", unexpected);
+            Assert.fail("unexpected exception: " + unexpected);
+        }
+    }
+    
+    @Test
     public void testIterator() {
         int iterNum = 13;
         long datalen = 8192L;
