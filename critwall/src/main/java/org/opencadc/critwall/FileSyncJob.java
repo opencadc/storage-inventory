@@ -116,9 +116,12 @@ import org.opencadc.inventory.storage.PutTransaction;
 import org.opencadc.inventory.storage.StorageAdapter;
 import org.opencadc.inventory.storage.StorageEngageException;
 import org.opencadc.inventory.storage.StorageMetadata;
-import org.springframework.transaction.TransactionStatus;
 
-
+/**
+ * Single file sync instance.
+ * 
+ * @author pdowler
+ */
 public class FileSyncJob implements Runnable {
     private static final Logger log = Logger.getLogger(FileSyncJob.class);
 
