@@ -111,18 +111,25 @@ public class HeadAction extends ArtifactAction {
     public void doAction() throws Exception {
         
         String txnID = syncInput.getHeader(PUT_TXN_ID);
-        log.warn("transactionID: " + txnID);
-        Artifact artifact;
+        log.debug("transactionID: " + txnID);
+        Artifact artifact = null;
         if (txnID != null) {
             PutTransaction t = storageAdapter.getTransactionStatus(txnID);
-            StorageMetadata sm = t.storageMetadata;
-            artifact = new Artifact(sm.artifactURI, sm.getContentChecksum(), sm.getContentLastModified(), sm.getContentLength());
             setTransactionHeaders(t, syncOutput);
+            StorageMetadata sm = t.storageMetadata;
+            if (sm.isValid()) {
+                artifact = new Artifact(sm.artifactURI, sm.getContentChecksum(), sm.getContentLastModified(), sm.getContentLength());
+            } else {
+                log.debug("invalid artifact in transaction " +  txnID + " -- assuming 0 bytes stored");
+                syncOutput.setHeader("Content-Length", "0");
+            }
             super.logInfo.setMessage("transaction: " + txnID);
         } else {
             artifact = getArtifact(artifactURI);
         }
-        setHeaders(artifact, syncOutput);
+        if (artifact != null) {
+            setHeaders(artifact, syncOutput);
+        }
     }
     
     /**
