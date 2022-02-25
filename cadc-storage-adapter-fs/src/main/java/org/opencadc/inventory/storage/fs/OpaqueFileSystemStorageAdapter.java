@@ -766,8 +766,10 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
                 StorageMetadata ret = new StorageMetadata(sloc, contentChecksum, contentLength, 
                         new Date(Files.getLastModifiedTime(p).toMillis()));
                 ret.artifactURI = new URI(aidAttr);
+                log.debug("createStorageMetadata: " + ret);
                 return ret;
             } catch (FileSystemException | IllegalArgumentException | URISyntaxException ex) {
+                log.debug("invalid stored object", ex);
                 return new StorageMetadata(sloc); // missing attrs: invalid stored object
             }
         } catch (IOException ex) {

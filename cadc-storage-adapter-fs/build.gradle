@@ -16,7 +16,7 @@ apply from: '../opencadc.gradle'
 
 group = 'org.opencadc'
 
-version = '0.8.0'
+version = '0.8.1'
 
 description = 'OpenCADC Storage Inventory FileSystem StorageAdapter implementation'
 def git_url = 'https://github.com/opencadc/storage-inventory'
