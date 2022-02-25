@@ -157,6 +157,18 @@ public class DeletedEventDAOTest {
             DeletedArtifactEvent fid = (DeletedArtifactEvent) daeDAO.get(expected.getID());
             Assert.assertNotNull(fid);
             
+            Assert.assertEquals("lastModified", expected.getLastModified(), fid.getLastModified());
+            
+            // idempotent put: create new instance with same state
+            DeletedArtifactEvent dupe = new DeletedArtifactEvent(expected.getID());
+            Thread.sleep(10L);
+            daeDAO.put(dupe);
+            
+            DeletedArtifactEvent fid2 = (DeletedArtifactEvent) daeDAO.get(expected.getID());
+            Assert.assertNotNull(fid2);
+            // idempotent includes not updating timestamp
+            Assert.assertEquals("lastModified", expected.getLastModified(), fid2.getLastModified());
+            
             // no delete
         } catch (Exception unexpected) {
             log.error("unexpected exception", unexpected);
@@ -185,6 +197,16 @@ public class DeletedEventDAOTest {
             // get by ID
             DeletedStorageLocationEvent fid = dslDAO.get(expected.getID());
             Assert.assertNotNull(fid);
+
+            // idempotent put: create new instance with same state            
+            DeletedStorageLocationEvent dupe = new DeletedStorageLocationEvent(expected.getID());
+            Thread.sleep(10L);
+            dslDAO.put(dupe);
+            
+            DeletedStorageLocationEvent fid2 = dslDAO.get(expected.getID());
+            Assert.assertNotNull(fid2);
+            // idempotent includes not updating timestamp
+            Assert.assertEquals("lastModified", expected.getLastModified(), fid2.getLastModified());
             
             // no delete
         } catch (Exception unexpected) {

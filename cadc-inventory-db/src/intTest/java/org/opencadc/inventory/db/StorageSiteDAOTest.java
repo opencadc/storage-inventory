@@ -175,6 +175,17 @@ public class StorageSiteDAOTest {
             URI mcs2 = a51.computeMetaChecksum(MessageDigest.getInstance("MD5"));
             Assert.assertEquals("round trip metachecksum", a51.getMetaChecksum(), mcs2);
             
+            // idempotent put: create new instance with same state
+            StorageSite dupe = new StorageSite(fid.getID(), fid.getResourceID(),
+                    fid.getName(), fid.getAllowRead(), fid.getAllowWrite());
+            Thread.sleep(10L);
+            dao.put(dupe);
+            StorageSite fid2 = dao.get(expected.getID());
+            Assert.assertNotNull(fid2);
+            Assert.assertEquals("round trip metachecksum", a51.getMetaChecksum(), fid2.getMetaChecksum());
+            // idempotent includes not updating timestamp
+            Assert.assertEquals("round trip metachecksum", a51.getLastModified(), fid2.getLastModified());
+            
             // delete
             dao.delete(expected.getID());
             StorageSite deleted = dao.get(expected.getID());

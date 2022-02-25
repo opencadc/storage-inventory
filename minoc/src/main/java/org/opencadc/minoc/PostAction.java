@@ -118,7 +118,7 @@ public class PostAction extends ArtifactAction {
         
         String txnID = syncInput.getHeader(PUT_TXN_ID);
         String txnOP = syncInput.getHeader(PUT_TXN_OP);
-        log.warn("transactionID: " + txnID + " " + txnOP);
+        log.debug("transactionID: " + txnID + " " + txnOP);
         if (txnID != null) {
             if (PUT_TXN_OP_START.equalsIgnoreCase(txnOP) 
                     || PUT_TXN_OP_COMMIT.equalsIgnoreCase(txnOP)) {
@@ -144,9 +144,10 @@ public class PostAction extends ArtifactAction {
             }
             
             StorageMetadata sm = t.storageMetadata;
-            Artifact artifact = new Artifact(sm.artifactURI, sm.getContentChecksum(), sm.getContentLastModified(), sm.getContentLength());
             HeadAction.setTransactionHeaders(t, syncOutput);
-            syncOutput.setDigest(artifact.getContentChecksum());
+            if (sm != null && sm.isValid()) {
+                syncOutput.setDigest(sm.getContentChecksum());
+            }
             syncOutput.setHeader("content-length", 0);
             return;
         }
