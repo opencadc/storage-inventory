@@ -389,6 +389,12 @@ public abstract class AbstractDAO<T extends Entity> {
             delta = !entity.getMetaChecksum().equals(cur.getMetaChecksum());
         }
         
+        if (cur != null && entity.getLastModified() == null) {
+            // preserve current timestamp: this happens when duplicate Deleted*Event are created
+            // and that should be idempotent
+            InventoryUtil.assignLastModified(entity, cur.getLastModified());
+        }
+        
         if ((origin && delta) || entity.getLastModified() == null || timestampUpdate) {
             InventoryUtil.assignLastModified(entity, now);
         }
