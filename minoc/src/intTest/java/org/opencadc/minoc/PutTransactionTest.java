@@ -301,6 +301,7 @@ public class PutTransactionTest extends MinocTest {
             HttpUpload put = new HttpUpload(in, artifactURL);
             put.setRequestProperty(ArtifactAction.PUT_TXN_OP, ArtifactAction.PUT_TXN_OP_START);
             Subject.doAs(userSubject, new RunnableAction(put));
+            log.info("put 1: " + put.getResponseCode() + " " + put.getThrowable());
             Assert.assertNull(put.getThrowable());
             Assert.assertEquals("Accepted", 202, put.getResponseCode());
             Assert.assertNotNull("digest", put.getResponseHeader(HttpTransfer.DIGEST));
@@ -338,12 +339,36 @@ public class PutTransactionTest extends MinocTest {
             Assert.assertEquals("contentChecksum", expectedChecksum1, actualChecksum);
             Assert.assertEquals("contentlength", expectedLength1, actualLength);
 
+            log.info("revert to zero-length");
+            HttpPost revert = new HttpPost(artifactURL, new TreeMap<>(), true);
+            revert.setRequestProperty(ArtifactAction.PUT_TXN_ID, txnID);
+            revert.setRequestProperty(ArtifactAction.PUT_TXN_OP, ArtifactAction.PUT_TXN_OP_REVERT);
+            Subject.doAs(userSubject, new RunnableAction(revert));
+            log.info("revert to zero-length: " + revert.getResponseCode() + " " + revert.getThrowable());
+            Assert.assertEquals(202, revert.getResponseCode());
+            // same as head in txn above
+            Assert.assertEquals("txnID", txnID, revert.getResponseHeader(ArtifactAction.PUT_TXN_ID));
+            Assert.assertNull("digest", revert.getResponseHeader(HttpTransfer.DIGEST));
+            
+            log.info("put part 1 again");
+            data = content1.getBytes();
+            in = new ByteArrayInputStream(data);
+            put = new HttpUpload(in, artifactURL);
+            put.setRequestProperty(ArtifactAction.PUT_TXN_ID, txnID);
+            Subject.doAs(userSubject, new RunnableAction(put));
+            log.info("put 1 again: " + put.getResponseCode() + " " + put.getThrowable());
+            Assert.assertNull(put.getThrowable());
+            Assert.assertEquals("Accepted", 202, put.getResponseCode());
+            Assert.assertNotNull("digest", put.getResponseHeader(HttpTransfer.DIGEST));
+            Assert.assertNotNull("length", put.getResponseHeader(HttpTransfer.CONTENT_LENGTH));
+            
             log.info("put part 2 with txn");
             data = content2.getBytes();
             in = new ByteArrayInputStream(data);
             put = new HttpUpload(in, artifactURL);
             put.setRequestProperty(ArtifactAction.PUT_TXN_ID, txnID);
             Subject.doAs(userSubject, new RunnableAction(put));
+            log.info("put 2: " + put.getResponseCode() + " " + put.getThrowable());
             Assert.assertNull(put.getThrowable());
             Assert.assertEquals("Accepted", 202, put.getResponseCode());
             Assert.assertNotNull("digest", put.getResponseHeader(HttpTransfer.DIGEST));
@@ -356,7 +381,7 @@ public class PutTransactionTest extends MinocTest {
             Assert.assertEquals("contentlength", 0, actualLength);
             
             log.info("revert to part 1 only");
-            HttpPost revert = new HttpPost(artifactURL, new TreeMap<>(), true);
+            revert = new HttpPost(artifactURL, new TreeMap<>(), true);
             revert.setRequestProperty(ArtifactAction.PUT_TXN_ID, txnID);
             revert.setRequestProperty(ArtifactAction.PUT_TXN_OP, ArtifactAction.PUT_TXN_OP_REVERT);
             

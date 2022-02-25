@@ -85,7 +85,6 @@ import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.DeletedArtifactEvent;
 import org.opencadc.inventory.db.DeletedArtifactEventDAO;
-import org.opencadc.inventory.db.EntityNotFoundException;
 import org.opencadc.inventory.db.ObsoleteStorageLocation;
 import org.opencadc.inventory.db.ObsoleteStorageLocationDAO;
 import org.opencadc.inventory.storage.NewArtifact;
