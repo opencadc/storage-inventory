@@ -120,7 +120,6 @@ public class ArtifactValidator {
      * @param resourceID    identifier for the remote query service
      * @param remoteSite    identifier for remote file service, null when local is a storage site
      * @param artifactSelector selection policy implementation
-     * @param raceConditionStart events from queries after this date subject to race conditions
      */
     public ArtifactValidator(ArtifactDAO artifactDAO, URI resourceID, StorageSite remoteSite,
                              ArtifactSelector artifactSelector) {
