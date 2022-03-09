@@ -230,7 +230,7 @@ minor differences if validating global L.
 *discrepancy*: artifact in L && artifact not in R
 
     explanation0: filter policy at L changed to exclude artifact in R
-    evidence: Artifact in R without filter
+    evidence: Artifact in R without filter && remoteArtifact.lastModified < remote-query-start
     action: if L==storage, check num_copies>1 in R, delete Artifact, create DeletedStorageLocationEvent
             if L==global, delete Artifact (no event)
 
