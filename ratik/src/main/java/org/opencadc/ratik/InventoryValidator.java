@@ -556,7 +556,7 @@ public class InventoryValidator implements Runnable {
                     + "FROM inventory.StorageSite";
                 log.debug("\nExecuting query '" + query + "'\n");
                 StorageSite storageSite = null;
-                ResourceIterator<StorageSite> results = tapClient.execute(query, new StorageSiteRowMapper());
+                ResourceIterator<StorageSite> results = tapClient.query(query, new StorageSiteRowMapper());
                 if (results.hasNext()) {
                     storageSite = results.next();
                     if (results.hasNext()) {
