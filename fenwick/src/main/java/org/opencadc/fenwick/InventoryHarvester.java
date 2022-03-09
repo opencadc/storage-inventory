@@ -123,10 +123,9 @@ public class InventoryHarvester implements Runnable {
 
     private static final Logger log = Logger.getLogger(InventoryHarvester.class);
     public static final String CERTIFICATE_FILE_LOCATION = System.getProperty("user.home") + "/.ssl/cadcproxy.pem";
-    public static final int INITIAL_SLEEP_TIMEOUT = 20;
+    private static final long LOOKBACK_TIME = 2 * 60 * 1000L;   // two minutes, unit: ms
+    private static final int INITIAL_SLEEP_TIMEOUT = (int) (LOOKBACK_TIME / 2000); // half of lookback, unit: sec
     
-    private static final long LOOKBACK_TIME = 2 * 60 * 1000L; // two minutes
-
     private final ArtifactDAO artifactDAO;
     private final URI resourceID;
     private final ArtifactSelector selector;
@@ -238,6 +237,7 @@ public class InventoryHarvester implements Runnable {
             }
 
             try {
+                log.info("InventoryHarvester.sleep duration=" + sleepSeconds);
                 Thread.sleep(sleepSeconds * 1000L);
             } catch (InterruptedException ex) {
                 logExit(ex.getMessage());
@@ -313,24 +313,25 @@ public class InventoryHarvester implements Runnable {
             numEventsTotal++;
         }
         if (lastSummaryTime == 0L) {
+            // first event in query result
             lastSummaryTime = System.currentTimeMillis();
             return;
         }
-        if (numEvents == 0L) {
-            return;
-        }
-        
-        long t2 = System.currentTimeMillis();
-        long dt = t2 - lastSummaryTime;
-        if (dt >= summaryInterval || doFinal) {
-            double minutes = ((double) dt) / (60L * 1000L);
-            long epm = Math.round(numEvents / minutes); 
-            String msg = "InventoryHarvester.summary%s numTotal=%d num=%d events-per-minute=%d eob=%b";
-            log.info(String.format(msg, c.getSimpleName(), numEventsTotal, numEvents, epm, doFinal));
-            this.lastSummaryTime = t2;
-            this.numEvents = 0L;
+        if (numEvents > 0L) {
+            long t2 = System.currentTimeMillis();
+            long dt = t2 - lastSummaryTime;
+            if (dt >= summaryInterval || doFinal) {
+                double minutes = ((double) dt) / (60L * 1000L);
+                long epm = Math.round(numEvents / minutes); 
+                String msg = "InventoryHarvester.summary%s numTotal=%d num=%d events-per-minute=%d eob=%b";
+                log.info(String.format(msg, c.getSimpleName(), numEventsTotal, numEvents, epm, doFinal));
+                this.lastSummaryTime = t2;
+                this.numEvents = 0L;
+            }
         }
         if (doFinal) {
+            this.lastSummaryTime = 0L;
+            this.numEvents = 0L;
             this.numEventsTotal = 0L;
         }
     }
@@ -355,10 +356,14 @@ public class InventoryHarvester implements Runnable {
 
         HarvestState hs = harvestStateDAO.get(DeletedStorageLocationEvent.class.getName(), resourceID);
         if (hs.curLastModified == null) { 
-            // first harvest: ignore old deleted events
-            hs.curLastModified = new Date();
-            harvestStateDAO.put(hs);
-            hs = harvestStateDAO.get(DeletedStorageLocationEvent.class.getName(), resourceID);
+            // first harvest: ignore old deleted events?
+            HarvestState artifactHS = harvestStateDAO.get(Artifact.class.getName(), resourceID);
+            if (artifactHS.curLastModified == null) {
+                // never artifacts harvested: ignore old deleted events
+                hs.curLastModified = new Date();
+                harvestStateDAO.put(hs);
+                hs = harvestStateDAO.get(hs.getID());
+            }
         }
         final HarvestState harvestState = hs;
         
@@ -462,10 +467,14 @@ public class InventoryHarvester implements Runnable {
         
         HarvestState hs = harvestStateDAO.get(DeletedArtifactEvent.class.getName(), resourceID);
         if (hs.curLastModified == null) { 
-            // first harvest: ignore old deleted events
-            hs.curLastModified = new Date();
-            harvestStateDAO.put(hs);
-            hs = harvestStateDAO.get(DeletedArtifactEvent.class.getName(), resourceID);
+            // first harvest: ignore old deleted events?
+            HarvestState artifactHS = harvestStateDAO.get(Artifact.class.getName(), resourceID);
+            if (artifactHS.curLastModified == null) {
+                // never artifacts harvested: ignore old deleted events
+                hs.curLastModified = new Date();
+                harvestStateDAO.put(hs);
+                hs = harvestStateDAO.get(hs.getID());
+            }
         }
         final HarvestState harvestState = hs;
         
