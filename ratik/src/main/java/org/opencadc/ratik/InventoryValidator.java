@@ -122,6 +122,9 @@ public class InventoryValidator implements Runnable {
     private final ArtifactValidator artifactValidator;
     private final MessageDigest messageDigest;
     
+    // package access so tests can reduce this
+    long raceConditionDelta = 5 * 60 * 60 * 1000L; // 5 min ago
+    
     private final long summaryLogInterval = 5 * 60L; // 5 minutes
     private long lastSummary = 0L;
     private long numLocalArtifacts = 0L;
@@ -312,6 +315,8 @@ public class InventoryValidator implements Runnable {
         throws ResourceNotFoundException, IOException, IllegalStateException, TransientException,
                InterruptedException {
         log.debug("processing bucket: " + bucket);
+        // set this before query
+        artifactValidator.setRaceConditionStart(new Date(System.currentTimeMillis() - raceConditionDelta));
         logSummary(true, true);
         try (final ResourceIterator<Artifact> localIterator = getLocalIterator(bucket);
             final ResourceIterator<Artifact> remoteIterator = getRemoteIterator(bucket)) {
@@ -551,7 +556,7 @@ public class InventoryValidator implements Runnable {
                     + "FROM inventory.StorageSite";
                 log.debug("\nExecuting query '" + query + "'\n");
                 StorageSite storageSite = null;
-                ResourceIterator<StorageSite> results = tapClient.execute(query, new StorageSiteRowMapper());
+                ResourceIterator<StorageSite> results = tapClient.query(query, new StorageSiteRowMapper());
                 if (results.hasNext()) {
                     storageSite = results.next();
                     if (results.hasNext()) {

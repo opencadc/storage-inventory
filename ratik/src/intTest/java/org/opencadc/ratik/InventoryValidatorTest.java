@@ -71,6 +71,7 @@ package org.opencadc.ratik;
 
 import ca.nrc.cadc.date.DateUtil;
 import ca.nrc.cadc.net.ResourceNotFoundException;
+import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.util.FileUtil;
 import ca.nrc.cadc.util.Log4jInit;
 import java.io.File;
@@ -221,6 +222,7 @@ public class InventoryValidatorTest {
                                                                     this.localEnvironment.daoConfig,
                                                                     TestUtil.LUSKAN_URI, new IncludeArtifacts(),
                                                                     null, trackSiteLocations);
+            testSubject.raceConditionDelta = 0L;
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
@@ -256,7 +258,7 @@ public class InventoryValidatorTest {
                                          new Date(), 1024L);
         this.localEnvironment.artifactDAO.put(metaOnly);
         
-        // case 1: no copies in remote
+        log.info("case 1: no copies in remote");
         try {
             System.setProperty("user.home", TMP_DIR);
             InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.inventoryConnectionConfig,
@@ -269,6 +271,7 @@ public class InventoryValidatorTest {
                     return ArtifactRowMapper.BASE_QUERY + " WHERE uri LIKE 'cadc:FOO/%'";
                 }
             };
+            testSubject.raceConditionDelta = 0L;
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
@@ -290,7 +293,7 @@ public class InventoryValidatorTest {
         dsle = this.localEnvironment.deletedStorageLocationEventDAO.get(metaOnly.getID());
         Assert.assertNull("no storageLocation: DeletedStorageLocationEvent not created", dsle);
         
-        // case 2: single copy in remote
+        log.info("case 2: single copy in remote");
         UUID remoteSiteID = this.remoteEnvironment.storageSiteDAO.list().iterator().next().getID();
         artifact.siteLocations.add(new SiteLocation(remoteSiteID));
         this.remoteEnvironment.globalArtifactDAO.put(artifact);
@@ -310,6 +313,7 @@ public class InventoryValidatorTest {
                     return ArtifactRowMapper.BASE_QUERY + " WHERE uri LIKE 'cadc:FOO/%'";
                 }
             };
+            testSubject.raceConditionDelta = 0L;
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
@@ -331,7 +335,7 @@ public class InventoryValidatorTest {
         dsle = this.localEnvironment.deletedStorageLocationEventDAO.get(metaOnly.getID());
         Assert.assertNull("no storageLocation: DeletedStorageLocationEvent not created", dsle);
         
-        // case 3: multiple copies in remote
+        log.info("case 3: multiple copies in remote");
         SiteLocation loc = new SiteLocation(UUID.randomUUID());
         this.remoteEnvironment.globalArtifactDAO.addSiteLocation(artifact, loc);
 
@@ -347,6 +351,7 @@ public class InventoryValidatorTest {
                     return ArtifactRowMapper.BASE_QUERY + " WHERE uri LIKE 'cadc:FOO/%'";
                 }
             };
+            testSubject.raceConditionDelta = 0L;
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
@@ -359,6 +364,44 @@ public class InventoryValidatorTest {
         // DeletedStorageLocationEvent should have been created
         dsle = this.localEnvironment.deletedStorageLocationEventDAO.get(artifact.getID());
         Assert.assertNotNull("multiple remote: DeletedStorageLocationEvent created", dsle);
+        
+        log.info("race-condition detection: raceConditionStart < remote.lastModified");
+        this.localEnvironment.artifactDAO.put(artifact);
+        
+        // set raceConditionStart by creating the validator
+        try {
+            Thread.sleep(2000L);
+            System.setProperty("user.home", TMP_DIR);
+            final InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.inventoryConnectionConfig,
+                                                                    this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
+                                                                    new IncludeArtifacts(),null,
+                                                                    false) {
+                // Override the remote query to not return the remote Artifact.
+                @Override
+                String buildRemoteQuery(final String bucket) throws ResourceNotFoundException, IOException {
+                    // this gets called after iterateBucket assigns raceConditionStart
+                    try {
+                        Thread.sleep(2000L);
+                        SiteLocation loc2 = new SiteLocation(UUID.randomUUID());
+                        remoteEnvironment.globalArtifactDAO.addSiteLocation(artifact, loc2);
+                        Thread.sleep(2000L);
+                    } catch (Exception ex) {
+                        throw new RuntimeException("FAIL setup test conditions", ex);
+                    }
+                    
+                    return ArtifactRowMapper.BASE_QUERY + " WHERE uri LIKE 'cadc:FOO/%'";
+                }
+
+            };
+            // no change to testSubject.raceConditionDelta
+            testSubject.run();
+        } finally {
+            System.setProperty("user.home", USER_HOME);
+        }
+        
+        // Local Artifact should not have been removed
+        localArtifact = this.localEnvironment.artifactDAO.get(artifact.getID());
+        Assert.assertNotNull("race condition: local artifact preserved", localArtifact);
     }
 
     @Test
@@ -385,6 +428,7 @@ public class InventoryValidatorTest {
                     return ArtifactRowMapper.BASE_QUERY + " WHERE uri LIKE 'cadc:FOO/%'";
                 }
             };
+            testSubject.raceConditionDelta = 0L;
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
@@ -438,6 +482,7 @@ public class InventoryValidatorTest {
                                                                     this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
                                                                     new IncludeArtifacts(),null,
                                                                     trackSiteLocations);
+            testSubject.raceConditionDelta = 0L;
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
@@ -492,6 +537,7 @@ public class InventoryValidatorTest {
                                                                     this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
                                                                     new IncludeArtifacts(),null,
                                                                     true);
+            testSubject.raceConditionDelta = 0L;
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
@@ -530,6 +576,7 @@ public class InventoryValidatorTest {
                                                                     this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
                                                                     new IncludeArtifacts(),null,
                                                                     true);
+            testSubject.raceConditionDelta = 0L;
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
@@ -579,6 +626,7 @@ public class InventoryValidatorTest {
                                                                     this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
                                                                     new IncludeArtifacts(),null,
                                                                     true);
+            testSubject.raceConditionDelta = 0L;
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
@@ -613,6 +661,7 @@ public class InventoryValidatorTest {
                                                                     this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
                                                                     new IncludeArtifacts(),null,
                                                                     true);
+            testSubject.raceConditionDelta = 0L;
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
@@ -647,6 +696,7 @@ public class InventoryValidatorTest {
                                                                     this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
                                                                     new IncludeArtifacts(),null,
                                                                     false);
+            testSubject.raceConditionDelta = 0L;
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
@@ -714,6 +764,7 @@ public class InventoryValidatorTest {
                                                                     this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
                                                                     new IncludeArtifacts(),null,
                                                                     trackSiteLocations);
+            testSubject.raceConditionDelta = 0L;
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
@@ -754,6 +805,7 @@ public class InventoryValidatorTest {
                                                                     this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
                                                                     new IncludeArtifacts(),null,
                                                                     false);
+            testSubject.raceConditionDelta = 0L;
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
@@ -787,6 +839,7 @@ public class InventoryValidatorTest {
                                                                     this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
                                                                     new IncludeArtifacts(),null,
                                                                     false);
+            testSubject.raceConditionDelta = 0L;
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
@@ -834,6 +887,7 @@ public class InventoryValidatorTest {
                                                                     this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
                                                                     new IncludeArtifacts(),null,
                                                                     true);
+            testSubject.raceConditionDelta = 0L;
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
@@ -896,6 +950,7 @@ public class InventoryValidatorTest {
                                                                     this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
                                                                     new IncludeArtifacts(),null,
                                                                     true);
+            testSubject.raceConditionDelta = 0L;
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
@@ -991,6 +1046,7 @@ public class InventoryValidatorTest {
                                                                     this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
                                                                     new IncludeArtifacts(),null,
                                                                     trackSiteLocations);
+            testSubject.raceConditionDelta = 0L;
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
@@ -1023,6 +1079,7 @@ public class InventoryValidatorTest {
                                                                     this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
                                                                     new IncludeArtifacts(),null,
                                                                     trackSiteLocations);
+            testSubject.raceConditionDelta = 0L;
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
@@ -1098,6 +1155,7 @@ public class InventoryValidatorTest {
                                                                     this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
                                                                     new IncludeArtifacts(),null,
                                                                     trackSiteLocations);
+            testSubject.raceConditionDelta = 0L;
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
@@ -1152,6 +1210,7 @@ public class InventoryValidatorTest {
                                                                     this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
                                                                     new IncludeArtifacts(),null,
                                                                     trackSiteLocations);
+            testSubject.raceConditionDelta = 0L;
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
@@ -1188,6 +1247,7 @@ public class InventoryValidatorTest {
                                                                     this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
                                                                     new IncludeArtifacts(),null,
                                                                     true);
+            testSubject.raceConditionDelta = 0L;
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);

@@ -30,6 +30,11 @@ sourceSets {
     }
 }
 
+tasks.withType(JavaCompile) {
+    options.deprecation = true
+    options.compilerArgs << "-Xlint:unchecked"
+}
+
 // Temporary work around for issue https://github.com/gradle/gradle/issues/881 - 
 // gradle not displaying fail build status when warnings reported -->
 
