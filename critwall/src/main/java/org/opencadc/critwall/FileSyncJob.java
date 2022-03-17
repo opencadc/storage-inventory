@@ -166,6 +166,8 @@ public class FileSyncJob implements Runnable {
         this.subject = subject;
         
         this.artifactLabel = "Artifact.id=" + artifactID + " Artifact.uri=" + artifact.getURI();
+        this.byteTransferTime = 0;
+        this.downloadURL = "";
     }
 
     @Override
@@ -191,8 +193,6 @@ public class FileSyncJob implements Runnable {
         long start = System.currentTimeMillis();
         boolean success = false;
         String msg = "";
-        downloadURL = "";
-        byteTransferTime = 0; 
         
         try {
             // get current artifact to sync
@@ -350,7 +350,7 @@ public class FileSyncJob implements Runnable {
             }
         } finally {
             long dt = System.currentTimeMillis() - start;
-            long overheadTime = byteTransferTime - dt;
+            long overheadTime = dt - byteTransferTime;
             StringBuilder sb = new StringBuilder();
             sb.append("FileSyncJob.END ").append(artifactLabel);
             sb.append(" success=").append(success);
