@@ -138,6 +138,8 @@ public class FileSyncJob implements Runnable {
     private final Subject subject;
     private final Subject anonSubject = AuthenticationUtil.getAnonSubject();
     
+    private String downloadURL;
+    private long byteTransferTime;
     private String artifactLabel;
     private final List<Exception> fails = new ArrayList<>();
     
@@ -189,6 +191,9 @@ public class FileSyncJob implements Runnable {
         long start = System.currentTimeMillis();
         boolean success = false;
         String msg = "";
+        downloadURL = "";
+        byteTransferTime = 0; 
+        
         try {
             // get current artifact to sync
             final Artifact artifact = artifactDAO.get(artifactID);
@@ -345,11 +350,14 @@ public class FileSyncJob implements Runnable {
             }
         } finally {
             long dt = System.currentTimeMillis() - start;
+            long overheadTime = byteTransferTime - dt;
             StringBuilder sb = new StringBuilder();
             sb.append("FileSyncJob.END ").append(artifactLabel);
             sb.append(" success=").append(success);
-            sb.append(" duration=").append(dt);
             sb.append(" attempts=").append(syncArtifactAttempts);
+            sb.append(" downloadURL=").append(downloadURL);
+            sb.append(" byteTransferTime=").append(byteTransferTime);
+            sb.append(" overheadTime=").append(overheadTime);
             sb.append(" ").append(msg);
             log.info(sb.toString());
         }
@@ -526,9 +534,7 @@ public class FileSyncJob implements Runnable {
             Protocol p = urlIterator.next();
             URL u = new URL(p.getEndpoint());
             final String logURL = getLoggableString(u, p.getSecurityMethod());
-            
-            
-            
+            downloadURL = logURL;
             String txnID = null;
             boolean postPrepare = false;
             try {
@@ -577,7 +583,10 @@ public class FileSyncJob implements Runnable {
                         na.contentLength = seg.contentLength;
                     }
                     
+                    // accumulate time spent on actual byte transfer
+                    long startTxn = System.currentTimeMillis();
                     StorageMetadata storageMeta = this.storageAdapter.put(na, get.getInputStream(), txnID);
+                    byteTransferTime = byteTransferTime + System.currentTimeMillis() - startTxn;
                     log.debug("put ok: " + storageMeta);
                     
                     if (txnID == null) {
