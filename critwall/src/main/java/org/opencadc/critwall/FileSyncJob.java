@@ -139,6 +139,7 @@ public class FileSyncJob implements Runnable {
     private final Subject anonSubject = AuthenticationUtil.getAnonSubject();
     
     private String downloadURL;
+    private String downloadAuth;
     private long byteTransferTime;
     private String artifactLabel;
     private final List<Exception> fails = new ArrayList<>();
@@ -168,6 +169,7 @@ public class FileSyncJob implements Runnable {
         this.artifactLabel = "Artifact.id=" + artifactID + " Artifact.uri=" + artifact.getURI();
         this.byteTransferTime = 0;
         this.downloadURL = "";
+        this.downloadAuth = "";
     }
 
     @Override
@@ -355,6 +357,7 @@ public class FileSyncJob implements Runnable {
             sb.append("FileSyncJob.END ").append(artifactLabel);
             sb.append(" success=").append(success);
             sb.append(" attempts=").append(syncArtifactAttempts);
+            sb.append(" downloadAuth=").append(downloadAuth);
             sb.append(" downloadURL=").append(downloadURL);
             sb.append(" byteTransferTime=").append(byteTransferTime);
             sb.append(" overheadTime=").append(overheadTime);
@@ -718,6 +721,7 @@ public class FileSyncJob implements Runnable {
         }
         sb.append("...");
         if (sm != null) {
+            downloadAuth = sm.getFragment();
             sb.append("[").append(sm.getFragment()).append("]");
         } else {
             sb.append("[anon]");
