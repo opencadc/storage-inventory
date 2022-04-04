@@ -138,8 +138,7 @@ public class FileSyncJob implements Runnable {
     private final Subject subject;
     private final Subject anonSubject = AuthenticationUtil.getAnonSubject();
     
-    private String downloadURL;
-    private String downloadAuth;
+    private String auth;
     private long byteTransferTime;
     private String artifactLabel;
     private final List<Exception> fails = new ArrayList<>();
@@ -168,8 +167,7 @@ public class FileSyncJob implements Runnable {
         
         this.artifactLabel = "Artifact.id=" + artifactID + " Artifact.uri=" + artifact.getURI();
         this.byteTransferTime = 0;
-        this.downloadURL = "";
-        this.downloadAuth = "";
+        this.auth = "";
     }
 
     @Override
@@ -357,10 +355,11 @@ public class FileSyncJob implements Runnable {
             sb.append("FileSyncJob.END ").append(artifactLabel);
             sb.append(" success=").append(success);
             sb.append(" attempts=").append(syncArtifactAttempts);
-            sb.append(" downloadAuth=").append(downloadAuth);
-            sb.append(" downloadURL=").append(downloadURL);
-            sb.append(" byteTransferTime=").append(byteTransferTime);
-            sb.append(" overheadTime=").append(overheadTime);
+            sb.append(" auth=").append(auth);
+            if (byteTransferTime > 0) {
+                sb.append(" byteTransferTime=").append(byteTransferTime);
+                sb.append(" overheadTime=").append(overheadTime);
+            }
             sb.append(" ").append(msg);
             log.info(sb.toString());
         }
@@ -458,20 +457,20 @@ public class FileSyncJob implements Runnable {
                      | PreconditionFailedException | RangeNotSatisfiableException 
                      | AccessControlException | NotAuthenticatedException ex) {
                 log.debug("FileSyncJob.ERROR remove=" + u, ex);
-                log.warn("FileSyncJob.ERROR " + artifactLabel + " remove=" + logURL + " reason=" + ex);
+                log.warn("FileSyncJob.ERROR " + artifactLabel + " remove=" + logURL + " auth=" + auth + "] reason=" + ex);
                 fails.add(ex);
                 urlIterator.remove();
             } catch (IOException | TransientException ex) {
                 // includes ReadException
                 // - prepare or put throwing this error
                 log.debug("FileSyncJob.ERROR keep=" + u, ex);
-                log.warn("FileSyncJob.ERROR " + artifactLabel + " keep=" + logURL + " reason=" + ex);
+                log.warn("FileSyncJob.ERROR " + artifactLabel + " keep=" + logURL + " auth=" + auth + "] reason=" + ex);
                 fails.add(ex);
             } catch (Exception ex) {
                 if (!postPrepare) {
                     // remote server 5xx response: discard
                     log.debug("FileSyncJob.ERROR remove=" + u, ex);
-                    log.warn("FileSyncJob.ERROR " + artifactLabel + " remove=" + logURL + " reason=" + ex);
+                    log.warn("FileSyncJob.ERROR " + artifactLabel + " remove=" + logURL + " auth=" + auth + "] reason=" + ex);
                     urlIterator.remove();
                     fails.add(ex);
                 } else {
@@ -537,7 +536,12 @@ public class FileSyncJob implements Runnable {
             Protocol p = urlIterator.next();
             URL u = new URL(p.getEndpoint());
             final String logURL = getLoggableString(u, p.getSecurityMethod());
-            downloadURL = logURL;
+            if (p.getSecurityMethod() == null) {
+                auth = "anon";
+            } else {
+                auth = p.getSecurityMethod().getFragment();
+            }
+
             String txnID = null;
             boolean postPrepare = false;
             try {
@@ -573,7 +577,7 @@ public class FileSyncJob implements Runnable {
                     postPrepare = true;
                     if (txnID != null && get.getResponseCode() != 206) {
                         // TODO have to fall back to complete download somehow
-                        throw new RuntimeException("OOPS: " + logURL + " does not support range requests");
+                        throw new RuntimeException("OOPS: " + logURL + " auth=" + auth + "] does not support range requests");
                     }
 
                     // when there is only one segment, pt==null but the seg.contentLength is correct
@@ -615,20 +619,20 @@ public class FileSyncJob implements Runnable {
                      | PreconditionFailedException | RangeNotSatisfiableException 
                      | AccessControlException | NotAuthenticatedException ex) {
                 log.error("FileSyncJob.ERROR remove=" + u, ex);
-                log.warn("FileSyncJob.ERROR " + artifactLabel + " remove=" + logURL + " reason=" + ex);
+                log.warn("FileSyncJob.ERROR " + artifactLabel + " remove=" + logURL + " auth=" + auth + "] reason=" + ex);
                 fails.add(ex);
                 urlIterator.remove();
             } catch (IOException | TransientException ex) {
                 // includes ReadException
                 // - prepare or put throwing this error
                 log.debug("FileSyncJob.ERROR keep=" + u, ex);
-                log.warn("FileSyncJob.ERROR " + artifactLabel + " keep=" + logURL + " reason=" + ex);
+                log.warn("FileSyncJob.ERROR " + artifactLabel + " keep=" + logURL + " auth=" + auth + "] reason=" + ex);
                 fails.add(ex);
             } catch (Exception ex) {
                 if (!postPrepare) {
                     // remote server 5xx response: discard
                     log.debug("FileSyncJob.ERROR remove=" + u, ex);
-                    log.warn("FileSyncJob.ERROR " + artifactLabel + " remove=" + logURL + " reason=" + ex);
+                    log.warn("FileSyncJob.ERROR " + artifactLabel + " remove=" + logURL + " auth=" + auth + "] reason=" + ex);
                     urlIterator.remove();
                     fails.add(ex);
                 } else {
@@ -720,12 +724,6 @@ public class FileSyncJob implements Runnable {
             sb.append(ss[2]).append("/");
         }
         sb.append("...");
-        if (sm != null) {
-            downloadAuth = sm.getFragment();
-            sb.append("[").append(sm.getFragment()).append("]");
-        } else {
-            sb.append("[anon]");
-        }
        
         return sb.toString();
     }
