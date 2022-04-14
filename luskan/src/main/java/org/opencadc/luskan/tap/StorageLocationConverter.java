@@ -3,7 +3,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2021.                            (c) 2021.
+ *  (c) 2020.                            (c) 2020.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -67,77 +67,84 @@
  ************************************************************************
  */
 
-package org.opencadc.luskan;
+package org.opencadc.luskan.tap;
 
+import ca.nrc.cadc.tap.parser.ParserUtil;
 import ca.nrc.cadc.tap.parser.navigator.ExpressionNavigator;
+import ca.nrc.cadc.tap.parser.navigator.FromItemNavigator;
+import ca.nrc.cadc.tap.parser.navigator.ReferenceNavigator;
+import ca.nrc.cadc.tap.parser.navigator.SelectNavigator;
 import java.util.ArrayList;
 import java.util.List;
 import net.sf.jsqlparser.expression.Expression;
-import net.sf.jsqlparser.expression.Function;
-import net.sf.jsqlparser.expression.operators.relational.ExpressionList;
+import net.sf.jsqlparser.expression.Parenthesis;
+import net.sf.jsqlparser.expression.operators.conditional.AndExpression;
+import net.sf.jsqlparser.expression.operators.relational.IsNullExpression;
 import net.sf.jsqlparser.schema.Column;
 import net.sf.jsqlparser.schema.Table;
+import net.sf.jsqlparser.statement.select.FromItem;
+import net.sf.jsqlparser.statement.select.Join;
+import net.sf.jsqlparser.statement.select.PlainSelect;
 import org.apache.log4j.Logger;
 
 /**
- * Class to change a num_copies() function to cardinality(inventory.Artifact.siteLocations).
+ * Injects a `inventory.storagelocation_storageid IS NOT NULL` into a WHERE clause.
  */
-public class InventoryFunctionConverter extends ExpressionNavigator {
-    private static final Logger log = Logger.getLogger(InventoryFunctionConverter.class);
+public class StorageLocationConverter extends SelectNavigator {
+    private static final Logger log = Logger.getLogger(StorageLocationConverter.class);
 
-    protected List<Table> fromTables;
-
-    public InventoryFunctionConverter() {
-        super();
-    }
-
-    public void setFromTables(List<Table> tables) {
-        this.fromTables = tables;
+    public StorageLocationConverter() {
+        super(new ExpressionNavigator(), new ReferenceNavigator(), new FromItemNavigator());
     }
 
     @Override
-    public void visit(Function function) {
-        log.debug("visit(function) " + function);
-        if (function.getName().equalsIgnoreCase("num_copies")) {
+    public void visit(PlainSelect ps) {
+        log.debug("visit(PlainSelect) " + ps);
+        super.visit(ps);
 
-            if (this.fromTables == null || this.fromTables.size() == 0) {
-                throw new IllegalArgumentException("num_copies() requires inventory.Artifact table in FROM statement, "
-                                                       + "no tables found");
-            }
-
-            List<Table> artifactTables = new ArrayList<>();
-            for (Table fromTable : this.fromTables) {
-                if (fromTable.getWholeTableName().equalsIgnoreCase("inventory.Artifact")) {
-                    artifactTables.add(fromTable);
-                    log.debug("found fromTable: ");
-                }
-            }
-            if (artifactTables.size() == 0) {
-                throw new IllegalArgumentException("num_copies() requires inventory.Artifact table in FROM statement, "
-                                                       + "table not found");
-            }
-            if (artifactTables.size() > 1) {
-                throw new IllegalArgumentException("num_copies() requires single inventory.Artifact table "
-                                                       + "in FROM statement, multiple tables found");
-            }
-
-            Table artifactTable = artifactTables.get(0);
-
-            Column column = new Column();
-            column.setColumnName("siteLocations");
-            if (artifactTable.getAlias() != null) {
-                column.setTable(new Table(null, artifactTable.getAlias()));
-            } else {
-                column.setTable(artifactTable);
-            }
-
-            List<Expression> expressions = new ArrayList<>();
-            expressions.add(column);
-            ExpressionList parameters = new ExpressionList();
-            parameters.setExpressions(expressions);
-            function.setName("cardinality");
-            function.setParameters(parameters);
+        Expression constraint = createConstraint(ps);
+        if (constraint == null) {
+            return;
         }
+
+        Expression where = ps.getWhere();
+        if (where == null) {
+            ps.setWhere(constraint);
+        } else {
+            ps.setWhere(new AndExpression(new Parenthesis(where), constraint));
+        }
+    }
+
+    private Expression createConstraint(PlainSelect ps) {
+        Expression constraint = null;
+        List<Table> tables = ParserUtil.getFromTableList(ps);
+        for (Table table : tables) {
+            // Only add the constraint to the inventory.artifact table
+            if (!table.getWholeTableName().equalsIgnoreCase("inventory.artifact")) {
+                continue;
+            }
+            Expression isNull = createIsNullConstraint(table);
+            if (constraint == null) {
+                constraint = isNull;
+            } else {
+                constraint = new AndExpression(constraint, isNull);
+            }
+        }
+        return constraint;
+    }
+
+    private Expression createIsNullConstraint(Table table) {
+        Table artifact;
+        if (table.getAlias() != null) {
+            artifact = new Table(null, table.getAlias());
+        } else {
+            artifact = table;
+        }
+        Column sitelocations = new Column(artifact, "storagelocation_storageid");
+        IsNullExpression isNullExpression = new IsNullExpression();
+        isNullExpression.setLeftExpression(sitelocations);
+        isNullExpression.setNot(true);
+        return new Parenthesis(isNullExpression);
     }
 
 }

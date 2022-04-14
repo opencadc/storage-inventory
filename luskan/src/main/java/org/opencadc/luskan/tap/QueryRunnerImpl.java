@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2020.                            (c) 2020.
+*  (c) 2019.                            (c) 2019.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -62,37 +62,44 @@
 *  <http://www.gnu.org/licenses/>.      pas le cas, consultez :
 *                                       <http://www.gnu.org/licenses/>.
 *
+*  $Revision: 5 $
+*
 ************************************************************************
-*/
+ */
 
-package org.opencadc.luskan;
+package org.opencadc.luskan.tap;
 
-import ca.nrc.cadc.tap.schema.FunctionDesc;
-import ca.nrc.cadc.tap.schema.TapDataType;
-import ca.nrc.cadc.tap.schema.TapSchemaDAO;
-import java.util.List;
+import ca.nrc.cadc.db.DBUtil;
+import ca.nrc.cadc.tap.QueryRunner;
+
+import javax.sql.DataSource;
+
 import org.apache.log4j.Logger;
 
 /**
  *
  * @author pdowler
  */
-public class TapSchemaDAOImpl  extends TapSchemaDAO {
-    private static final Logger log = Logger.getLogger(TapSchemaDAOImpl.class);
+public class QueryRunnerImpl extends QueryRunner {
+    private static final Logger log = Logger.getLogger(QueryRunnerImpl.class);
 
-    public TapSchemaDAOImpl() {
-        super();
+    public QueryRunnerImpl() {
     }
-    
+
     @Override
-    protected List<FunctionDesc> getFunctionDescs() {
-        List<FunctionDesc> ret = super.getFunctionDescs();
-
-        ret.add(new FunctionDesc("now", TapDataType.TIMESTAMP));
-        ret.add(new FunctionDesc("split_part", TapDataType.STRING));
-        ret.add(new FunctionDesc("num_copies", TapDataType.INTEGER));
-        ret.add(new FunctionDesc("date", TapDataType.TIMESTAMP));
-        
-        return ret;
+    protected DataSource getUploadDataSource() throws Exception {
+        return getQueryDataSource();
     }
+
+    @Override
+    protected DataSource getTapSchemaDataSource() throws Exception {
+        return getQueryDataSource();
+    }
+
+    @Override
+    protected DataSource getQueryDataSource() throws Exception {
+        log.debug("Data Source name: jdbc/tapuser");
+        return DBUtil.findJNDIDataSource("jdbc/tapuser");
+    }
+
 }

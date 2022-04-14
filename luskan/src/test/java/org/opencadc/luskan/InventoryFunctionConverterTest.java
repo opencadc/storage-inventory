@@ -69,6 +69,7 @@
 
 package org.opencadc.luskan;
 
+import org.opencadc.luskan.tap.AdqlQueryImpl;
 import java.util.ArrayList;
 import java.util.List;
 

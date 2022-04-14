@@ -85,6 +85,8 @@ import org.opencadc.permissions.ReadGrant;
 public class HeadAction extends ArtifactAction {
     
     private static final Logger log = Logger.getLogger(HeadAction.class);
+    
+    public static final String ARTIFACT_ID_HDR = "x-artifact-id";
 
     /**
      * Default, no-arg constructor.
@@ -138,6 +140,7 @@ public class HeadAction extends ArtifactAction {
      * @param syncOutput The target response
      */
     static void setHeaders(Artifact artifact, SyncOutput syncOutput) {
+        syncOutput.setHeader(ARTIFACT_ID_HDR, artifact.getID().toString());
         syncOutput.setDigest(artifact.getContentChecksum());
         syncOutput.setLastModified(artifact.getContentLastModified());
         syncOutput.setHeader("Content-Length", artifact.getContentLength());

@@ -3,7 +3,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2019.                            (c) 2019.
+ *  (c) 2021.                            (c) 2021.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -62,45 +62,82 @@
  *  <http://www.gnu.org/licenses/>.      pas le cas, consultez :
  *                                       <http://www.gnu.org/licenses/>.
  *
+ *  : 5 $
+ *
  ************************************************************************
  */
 
-package org.opencadc.luskan.ws;
+package org.opencadc.luskan.tap;
 
-import ca.nrc.cadc.auth.X500IdentityManager;
-import ca.nrc.cadc.uws.server.JobExecutor;
-import ca.nrc.cadc.uws.server.JobPersistence;
-import ca.nrc.cadc.uws.server.SimpleJobManager;
-import ca.nrc.cadc.uws.server.ThreadPoolExecutor;
-
+import ca.nrc.cadc.tap.parser.navigator.ExpressionNavigator;
+import java.util.ArrayList;
+import java.util.List;
+import net.sf.jsqlparser.expression.Expression;
+import net.sf.jsqlparser.expression.Function;
+import net.sf.jsqlparser.expression.operators.relational.ExpressionList;
+import net.sf.jsqlparser.schema.Column;
+import net.sf.jsqlparser.schema.Table;
 import org.apache.log4j.Logger;
-import org.opencadc.luskan.QueryRunnerImpl;
-
 
 /**
- * @author pdowler
+ * Class to change a num_copies() function to cardinality(inventory.Artifact.siteLocations).
  */
-public class QueryJobManager extends SimpleJobManager {
+public class InventoryFunctionConverter extends ExpressionNavigator {
+    private static final Logger log = Logger.getLogger(InventoryFunctionConverter.class);
 
-    private static final Logger log = Logger.getLogger(QueryJobManager.class);
+    protected List<Table> fromTables;
 
-    private static final Long MAX_EXEC_DURATION = 4 * 3600L;    // 4 hours to dump a catalog to vpsace
-    public static final Long MAX_DESTRUCTION = 7 * 24 * 60 * 60L; // 1 week
-    private static final Long MAX_QUOTE = 24 * 3600L; // 24 hours since we have a threadpool with queued jobs
-
-    public QueryJobManager() {
+    public InventoryFunctionConverter() {
         super();
-        // persist UWS jobs to PostgreSQL.
-        JobPersistence jobPersist = new AuthJobPersistence(new X500IdentityManager());
-
-        // max threads: 6 == number of simultaneously running async queries (per
-        // web server), plus sync queries, plus VOSI-tables queries
-        JobExecutor jobExec = new ThreadPoolExecutor(jobPersist, QueryRunnerImpl.class, 6);
-
-        super.setJobPersistence(jobPersist);
-        super.setJobExecutor(jobExec);
-        super.setMaxExecDuration(MAX_EXEC_DURATION);
-        super.setMaxDestruction(MAX_DESTRUCTION);
-        super.setMaxQuote(MAX_QUOTE);
     }
+
+    public void setFromTables(List<Table> tables) {
+        this.fromTables = tables;
+    }
+
+    @Override
+    public void visit(Function function) {
+        log.debug("visit(function) " + function);
+        if (function.getName().equalsIgnoreCase("num_copies")) {
+
+            if (this.fromTables == null || this.fromTables.size() == 0) {
+                throw new IllegalArgumentException("num_copies() requires inventory.Artifact table in FROM statement, "
+                                                       + "no tables found");
+            }
+
+            List<Table> artifactTables = new ArrayList<>();
+            for (Table fromTable : this.fromTables) {
+                if (fromTable.getWholeTableName().equalsIgnoreCase("inventory.Artifact")) {
+                    artifactTables.add(fromTable);
+                    log.debug("found fromTable: ");
+                }
+            }
+            if (artifactTables.size() == 0) {
+                throw new IllegalArgumentException("num_copies() requires inventory.Artifact table in FROM statement, "
+                                                       + "table not found");
+            }
+            if (artifactTables.size() > 1) {
+                throw new IllegalArgumentException("num_copies() requires single inventory.Artifact table "
+                                                       + "in FROM statement, multiple tables found");
+            }
+
+            Table artifactTable = artifactTables.get(0);
+
+            Column column = new Column();
+            column.setColumnName("siteLocations");
+            if (artifactTable.getAlias() != null) {
+                column.setTable(new Table(null, artifactTable.getAlias()));
+            } else {
+                column.setTable(artifactTable);
+            }
+
+            List<Expression> expressions = new ArrayList<>();
+            expressions.add(column);
+            ExpressionList parameters = new ExpressionList();
+            parameters.setExpressions(expressions);
+            function.setName("cardinality");
+            function.setParameters(parameters);
+        }
+    }
+
 }

@@ -69,55 +69,82 @@
 
 package org.opencadc.luskan;
 
-import ca.nrc.cadc.tap.parser.ParserUtil;
-import ca.nrc.cadc.tap.parser.navigator.FromItemNavigator;
-import ca.nrc.cadc.tap.parser.navigator.ReferenceNavigator;
-import ca.nrc.cadc.tap.parser.navigator.SelectNavigator;
+import ca.nrc.cadc.auth.AuthMethod;
+import ca.nrc.cadc.auth.AuthenticationUtil;
+import ca.nrc.cadc.auth.IdentityManager;
+import ca.nrc.cadc.auth.NotAuthenticatedException;
+import ca.nrc.cadc.cred.client.CredUtil;
+import ca.nrc.cadc.net.TransientException;
+import ca.nrc.cadc.reg.Standards;
+import ca.nrc.cadc.reg.client.LocalAuthority;
+import ca.nrc.cadc.util.MultiValuedProperties;
+import ca.nrc.cadc.uws.Job;
+import ca.nrc.cadc.uws.server.JobPersistenceException;
+import ca.nrc.cadc.uws.server.impl.PostgresJobPersistence;
+import java.net.URI;
+import java.security.AccessControlException;
+import java.security.cert.CertificateException;
+import java.util.ArrayList;
 import java.util.List;
-import net.sf.jsqlparser.expression.Expression;
-import net.sf.jsqlparser.statement.select.PlainSelect;
-import net.sf.jsqlparser.statement.select.SelectItem;
+import javax.security.auth.Subject;
 import org.apache.log4j.Logger;
+import org.opencadc.gms.GroupClient;
+import org.opencadc.gms.GroupURI;
+import org.opencadc.gms.GroupUtil;
+import org.opencadc.luskan.LuskanConfig;
 
-/**
- * Checks there is a single Artifact table in the FROM clause,
- * then applies the InventoryFunctionConverter to the SELECT, WHERE, and GROUP BY clauses.
- *
- */
-public class InventoryFunctionNavigator extends SelectNavigator {
-    private static final Logger log = Logger.getLogger(InventoryFunctionNavigator.class);
+public class AuthJobPersistence extends PostgresJobPersistence {
 
-    InventoryFunctionConverter inventoryFunctionConverter;
+    private static final Logger log = Logger.getLogger(AuthJobPersistence.class);
 
-    public InventoryFunctionNavigator() {
-        super(new InventoryFunctionConverter(), new ReferenceNavigator(), new FromItemNavigator());
-        this.inventoryFunctionConverter = (InventoryFunctionConverter) this.expressionNavigator;
+    public AuthJobPersistence(IdentityManager im) {
+        super(im);
     }
 
     @Override
-    public void visit(PlainSelect ps) {
-        log.debug("visit(PlainSelect) " + ps);
-        this.inventoryFunctionConverter.setFromTables(ParserUtil.getFromTableList(ps));
+    public Job put(Job job)
+        throws JobPersistenceException, TransientException {
+        checkPermission();
+        return super.put(job);
+    }
 
-        // select list
-        List<SelectItem> selectItems = ps.getSelectItems();
-        for (SelectItem selectItem : selectItems) {
-            selectItem.accept(inventoryFunctionConverter);
+    /**
+     *
+     */
+    private void checkPermission() {
+        Subject s = AuthenticationUtil.getCurrentSubject();
+        AuthMethod am = AuthenticationUtil.getAuthMethod(s);
+        if (am == null || AuthMethod.ANON.equals(am)) {
+            throw new NotAuthenticatedException("permission denied");
         }
+        try {
+            if (CredUtil.checkCredentials()) {
+                // better to get all the groups for the caller which could be a long list,
+                // or call isMember for each configured allowed group, which should be a short list.
+                // Or make it configurable.
+                LocalAuthority loc = new LocalAuthority();
+                URI resourceID = loc.getServiceURI(Standards.GMS_SEARCH_01.toString());
+                GroupClient client = GroupUtil.getGroupClient(resourceID);
+                List<GroupURI> memberships = client.getMemberships();
 
-        // where clause
-        Expression where = ps.getWhere();
-        if (where != null) {
-            where.accept(inventoryFunctionConverter);
-        }
+                MultiValuedProperties props = LuskanConfig.getConfig();
+                List<String> configGroups = props.getProperty(LuskanConfig.ALLOWED_GROUP);
+                List<GroupURI> allowedGroups = new ArrayList<>();
+                configGroups.forEach(group -> allowedGroups.add(new GroupURI(URI.create(group))));
 
-        // group by clause
-        List<Expression> groupBys = ps.getGroupByColumnReferences();
-        if (groupBys != null) {
-            for (Expression groupBy : groupBys) {
-                groupBy.accept(inventoryFunctionConverter);
+                for (GroupURI memberGroup : memberships) {
+                    for (GroupURI allowedGroup : allowedGroups) {
+                        if (memberGroup.equals(allowedGroup)) {
+                            log.debug("Allowed group: " + allowedGroup);
+                            return;
+                        }
+                    }
+                }
             }
+        } catch (CertificateException e) {
+            throw new AccessControlException("read permission denied (invalid delegated client certificate)");
         }
+        throw new AccessControlException("permission denied");
     }
 
 }
