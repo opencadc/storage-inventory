@@ -94,7 +94,6 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import org.apache.log4j.Logger;
-import org.opencadc.luskan.ws.QueryJobManager;
 
 /**
  * Basic temporary storage implementation for a tap service.

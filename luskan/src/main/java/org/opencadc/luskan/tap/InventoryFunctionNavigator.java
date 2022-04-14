@@ -67,8 +67,9 @@
  ************************************************************************
  */
 
-package org.opencadc.luskan;
+package org.opencadc.luskan.tap;
 
+import org.opencadc.luskan.tap.InventoryFunctionConverter;
 import ca.nrc.cadc.tap.parser.ParserUtil;
 import ca.nrc.cadc.tap.parser.navigator.FromItemNavigator;
 import ca.nrc.cadc.tap.parser.navigator.ReferenceNavigator;

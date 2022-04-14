@@ -65,7 +65,7 @@
 ************************************************************************
 */
 
-package org.opencadc.luskan;
+package org.opencadc.luskan.tap;
 
 import ca.nrc.cadc.tap.schema.FunctionDesc;
 import ca.nrc.cadc.tap.schema.TapDataType;

@@ -65,7 +65,7 @@
  ************************************************************************
  */
 
-package org.opencadc.luskan.ws;
+package org.opencadc.luskan;
 
 import ca.nrc.cadc.auth.X500IdentityManager;
 import ca.nrc.cadc.uws.server.JobExecutor;
@@ -74,7 +74,7 @@ import ca.nrc.cadc.uws.server.SimpleJobManager;
 import ca.nrc.cadc.uws.server.ThreadPoolExecutor;
 
 import org.apache.log4j.Logger;
-import org.opencadc.luskan.QueryRunnerImpl;
+import org.opencadc.luskan.tap.QueryRunnerImpl;
 
 
 /**

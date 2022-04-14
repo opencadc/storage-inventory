@@ -67,7 +67,7 @@
  ************************************************************************
  */
 
-package org.opencadc.luskan;
+package org.opencadc.luskan.tap;
 
 import ca.nrc.cadc.tap.parser.ParserUtil;
 import ca.nrc.cadc.tap.parser.navigator.ExpressionNavigator;

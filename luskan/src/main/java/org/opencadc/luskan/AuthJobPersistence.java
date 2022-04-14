@@ -67,7 +67,7 @@
  ************************************************************************
  */
 
-package org.opencadc.luskan.ws;
+package org.opencadc.luskan;
 
 import ca.nrc.cadc.auth.AuthMethod;
 import ca.nrc.cadc.auth.AuthenticationUtil;

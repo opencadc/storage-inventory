@@ -65,7 +65,7 @@
 ************************************************************************
 */
 
-package org.opencadc.luskan;
+package org.opencadc.luskan.tap;
 
 import ca.nrc.cadc.tap.AdqlQuery;
 import ca.nrc.cadc.tap.parser.BaseExpressionDeParser;
@@ -82,6 +82,7 @@ import ca.nrc.cadc.tap.parser.navigator.SelectNavigator;
 import ca.nrc.cadc.util.MultiValuedProperties;
 import net.sf.jsqlparser.util.deparser.SelectDeParser;
 import org.apache.log4j.Logger;
+import org.opencadc.luskan.LuskanConfig;
 
 /**
  * AdqlQuery implementation for PostgreSQL + pg-sphere and arbitrary catalogue tables.
