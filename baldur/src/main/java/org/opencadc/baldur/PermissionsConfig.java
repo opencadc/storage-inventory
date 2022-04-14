@@ -253,7 +253,7 @@ public class PermissionsConfig {
         if (groupList != null && !groupList.isEmpty()) {
             for (String group : groupList) {
                 try {
-                    targetList.add(new GroupURI(group));
+                    targetList.add(new GroupURI(URI.create(group)));
                 } catch (Exception e) {
                     throw new IllegalStateException("failed reading group uri: " + group
                         + "(" + e.getMessage() + ")");
