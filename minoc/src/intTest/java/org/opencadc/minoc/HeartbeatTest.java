@@ -181,7 +181,7 @@ public class HeartbeatTest extends MinocTest {
         }
 
         Document xml = XmlUtil.buildDocument(getState.getInputStream(), AVAIL_SCHEMA_MAP);
-        Availability availability = new Availability(xml);
+        Availability availability = Availability.fromXmlDocument(xml);
         String note = availability.note;
         String state = RestAction.STATE_READ_WRITE;
         if (note.contains("offline")) {
