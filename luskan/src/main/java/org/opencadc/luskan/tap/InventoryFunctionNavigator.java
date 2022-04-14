@@ -69,7 +69,6 @@
 
 package org.opencadc.luskan.tap;
 
-import org.opencadc.luskan.tap.InventoryFunctionConverter;
 import ca.nrc.cadc.tap.parser.ParserUtil;
 import ca.nrc.cadc.tap.parser.navigator.FromItemNavigator;
 import ca.nrc.cadc.tap.parser.navigator.ReferenceNavigator;
@@ -101,6 +100,7 @@ public class InventoryFunctionNavigator extends SelectNavigator {
         this.inventoryFunctionConverter.setFromTables(ParserUtil.getFromTableList(ps));
 
         // select list
+        @SuppressWarnings("unchecked")
         List<SelectItem> selectItems = ps.getSelectItems();
         for (SelectItem selectItem : selectItems) {
             selectItem.accept(inventoryFunctionConverter);
@@ -113,6 +113,7 @@ public class InventoryFunctionNavigator extends SelectNavigator {
         }
 
         // group by clause
+        @SuppressWarnings("unchecked")
         List<Expression> groupBys = ps.getGroupByColumnReferences();
         if (groupBys != null) {
             for (Expression groupBy : groupBys) {
