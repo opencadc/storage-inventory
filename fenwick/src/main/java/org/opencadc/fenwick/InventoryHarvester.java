@@ -670,7 +670,7 @@ public class InventoryHarvester implements Runnable {
 
                     boolean continueWithPut = true;
                     if (collidingArtifact != null && currentArtifact != null) {
-                        // resolve collision using Artifact.contentLastModified
+                        // resolve collision
                         if (isRemoteWinner(currentArtifact, artifact, (remoteSiteLocation != null))) {
                             DeletedArtifactEvent dae = new DeletedArtifactEvent(currentArtifact.getID());
                             log.info("InventoryHarvester.createDeletedArtifactEvent id=" + dae.getID()
@@ -745,12 +745,11 @@ public class InventoryHarvester implements Runnable {
     // true if remote is the winner, false if local is the winner
     // same logic in ratik ArtifactValidator
     boolean isRemoteWinner(Artifact local, Artifact remote, boolean remoteStorageSite) {
-        if (local.getContentLastModified().after(remote.getContentLastModified())) {
-            return false;
+        Boolean rem = InventoryUtil.isRemoteWinner(local, remote);
+        if (rem != null) {
+            return rem;
         }
-        if (remote.getContentLastModified().after(local.getContentLastModified())) {
-            return true;
-        }
+        
         // equal timestamps and different instances:
         // likely caused by poorly behaved storage site that ingests duplicates 
         // from external system
