@@ -138,6 +138,8 @@ public class FileSyncJob implements Runnable {
     private final Subject subject;
     private final Subject anonSubject = AuthenticationUtil.getAnonSubject();
     
+    private String auth;
+    private long byteTransferTime;
     private String artifactLabel;
     private final List<Exception> fails = new ArrayList<>();
     
@@ -164,6 +166,8 @@ public class FileSyncJob implements Runnable {
         this.subject = subject;
         
         this.artifactLabel = "Artifact.id=" + artifactID + " Artifact.uri=" + artifact.getURI();
+        this.byteTransferTime = 0;
+        this.auth = "";
     }
 
     @Override
@@ -189,6 +193,7 @@ public class FileSyncJob implements Runnable {
         long start = System.currentTimeMillis();
         boolean success = false;
         String msg = "";
+        
         try {
             // get current artifact to sync
             final Artifact artifact = artifactDAO.get(artifactID);
@@ -345,11 +350,17 @@ public class FileSyncJob implements Runnable {
             }
         } finally {
             long dt = System.currentTimeMillis() - start;
+            long overheadTime = dt - byteTransferTime;
             StringBuilder sb = new StringBuilder();
             sb.append("FileSyncJob.END ").append(artifactLabel);
             sb.append(" success=").append(success);
             sb.append(" duration=").append(dt);
             sb.append(" attempts=").append(syncArtifactAttempts);
+            sb.append(" auth=").append(auth);
+            if (byteTransferTime > 0) {
+                sb.append(" transfer=").append(byteTransferTime);
+                sb.append(" overhead=").append(overheadTime);
+            }
             sb.append(" ").append(msg);
             log.info(sb.toString());
         }
@@ -447,20 +458,20 @@ public class FileSyncJob implements Runnable {
                      | PreconditionFailedException | RangeNotSatisfiableException 
                      | AccessControlException | NotAuthenticatedException ex) {
                 log.debug("FileSyncJob.ERROR remove=" + u, ex);
-                log.warn("FileSyncJob.ERROR " + artifactLabel + " remove=" + logURL + " reason=" + ex);
+                log.warn("FileSyncJob.ERROR " + artifactLabel + " remove=" + logURL + " auth=" + auth + "] reason=" + ex);
                 fails.add(ex);
                 urlIterator.remove();
             } catch (IOException | TransientException ex) {
                 // includes ReadException
                 // - prepare or put throwing this error
                 log.debug("FileSyncJob.ERROR keep=" + u, ex);
-                log.warn("FileSyncJob.ERROR " + artifactLabel + " keep=" + logURL + " reason=" + ex);
+                log.warn("FileSyncJob.ERROR " + artifactLabel + " keep=" + logURL + " auth=" + auth + "] reason=" + ex);
                 fails.add(ex);
             } catch (Exception ex) {
                 if (!postPrepare) {
                     // remote server 5xx response: discard
                     log.debug("FileSyncJob.ERROR remove=" + u, ex);
-                    log.warn("FileSyncJob.ERROR " + artifactLabel + " remove=" + logURL + " reason=" + ex);
+                    log.warn("FileSyncJob.ERROR " + artifactLabel + " remove=" + logURL + " auth=" + auth + "] reason=" + ex);
                     urlIterator.remove();
                     fails.add(ex);
                 } else {
@@ -526,9 +537,12 @@ public class FileSyncJob implements Runnable {
             Protocol p = urlIterator.next();
             URL u = new URL(p.getEndpoint());
             final String logURL = getLoggableString(u, p.getSecurityMethod());
-            
-            
-            
+            if (p.getSecurityMethod() == null) {
+                auth = "anon";
+            } else {
+                auth = p.getSecurityMethod().getFragment();
+            }
+
             String txnID = null;
             boolean postPrepare = false;
             try {
@@ -544,6 +558,7 @@ public class FileSyncJob implements Runnable {
                     // proceed without txn
                 }
                 
+                long transferTime = 0;
                 for (PutSegment seg : segs) {
                     log.debug("get: " + seg);
                     postPrepare = false;
@@ -564,7 +579,7 @@ public class FileSyncJob implements Runnable {
                     postPrepare = true;
                     if (txnID != null && get.getResponseCode() != 206) {
                         // TODO have to fall back to complete download somehow
-                        throw new RuntimeException("OOPS: " + logURL + " does not support range requests");
+                        throw new RuntimeException("OOPS: " + logURL + " auth=" + auth + "] does not support range requests");
                     }
 
                     // when there is only one segment, pt==null but the seg.contentLength is correct
@@ -577,10 +592,14 @@ public class FileSyncJob implements Runnable {
                         na.contentLength = seg.contentLength;
                     }
                     
+                    // accumulate time spent on actual byte transfer
+                    long startPut = System.currentTimeMillis();
                     StorageMetadata storageMeta = this.storageAdapter.put(na, get.getInputStream(), txnID);
+                    transferTime = transferTime + System.currentTimeMillis() - startPut;
                     log.debug("put ok: " + storageMeta);
                     
                     if (txnID == null) {
+                        byteTransferTime = transferTime;
                         return storageMeta;
                     }
                     // TODO: verify partial put, maybe revert and try chunk again?
@@ -592,7 +611,7 @@ public class FileSyncJob implements Runnable {
                 log.debug("committing " + txnID);
                 StorageMetadata ret = storageAdapter.commitTransaction(txnID);
                 txnID = null;
-
+                byteTransferTime = transferTime;
                 return ret;
             } catch (ByteLimitExceededException | StorageEngageException | WriteException ex) {
                 // IOException will capture this if not explicitly caught and rethrown
@@ -603,20 +622,20 @@ public class FileSyncJob implements Runnable {
                      | PreconditionFailedException | RangeNotSatisfiableException 
                      | AccessControlException | NotAuthenticatedException ex) {
                 log.error("FileSyncJob.ERROR remove=" + u, ex);
-                log.warn("FileSyncJob.ERROR " + artifactLabel + " remove=" + logURL + " reason=" + ex);
+                log.warn("FileSyncJob.ERROR " + artifactLabel + " remove=" + logURL + " auth=" + auth + "] reason=" + ex);
                 fails.add(ex);
                 urlIterator.remove();
             } catch (IOException | TransientException ex) {
                 // includes ReadException
                 // - prepare or put throwing this error
                 log.debug("FileSyncJob.ERROR keep=" + u, ex);
-                log.warn("FileSyncJob.ERROR " + artifactLabel + " keep=" + logURL + " reason=" + ex);
+                log.warn("FileSyncJob.ERROR " + artifactLabel + " keep=" + logURL + " auth=" + auth + "] reason=" + ex);
                 fails.add(ex);
             } catch (Exception ex) {
                 if (!postPrepare) {
                     // remote server 5xx response: discard
                     log.debug("FileSyncJob.ERROR remove=" + u, ex);
-                    log.warn("FileSyncJob.ERROR " + artifactLabel + " remove=" + logURL + " reason=" + ex);
+                    log.warn("FileSyncJob.ERROR " + artifactLabel + " remove=" + logURL + " auth=" + auth + "] reason=" + ex);
                     urlIterator.remove();
                     fails.add(ex);
                 } else {
@@ -708,11 +727,6 @@ public class FileSyncJob implements Runnable {
             sb.append(ss[2]).append("/");
         }
         sb.append("...");
-        if (sm != null) {
-            sb.append("[").append(sm.getFragment()).append("]");
-        } else {
-            sb.append("[anon]");
-        }
        
         return sb.toString();
     }
