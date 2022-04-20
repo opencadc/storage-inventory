@@ -354,11 +354,12 @@ public class FileSyncJob implements Runnable {
             StringBuilder sb = new StringBuilder();
             sb.append("FileSyncJob.END ").append(artifactLabel);
             sb.append(" success=").append(success);
+            sb.append(" duration=").append(dt);
             sb.append(" attempts=").append(syncArtifactAttempts);
             sb.append(" auth=").append(auth);
             if (byteTransferTime > 0) {
-                sb.append(" byteTransferTime=").append(byteTransferTime);
-                sb.append(" overheadTime=").append(overheadTime);
+                sb.append(" transfer=").append(byteTransferTime);
+                sb.append(" overhead=").append(overheadTime);
             }
             sb.append(" ").append(msg);
             log.info(sb.toString());
@@ -557,6 +558,7 @@ public class FileSyncJob implements Runnable {
                     // proceed without txn
                 }
                 
+                long transferTime = 0;
                 for (PutSegment seg : segs) {
                     log.debug("get: " + seg);
                     postPrepare = false;
@@ -591,24 +593,26 @@ public class FileSyncJob implements Runnable {
                     }
                     
                     // accumulate time spent on actual byte transfer
-                    long startTxn = System.currentTimeMillis();
+                    long startPut = System.currentTimeMillis();
                     StorageMetadata storageMeta = this.storageAdapter.put(na, get.getInputStream(), txnID);
-                    byteTransferTime = byteTransferTime + System.currentTimeMillis() - startTxn;
+                    transferTime = transferTime + System.currentTimeMillis() - startPut;
                     log.debug("put ok: " + storageMeta);
                     
                     if (txnID == null) {
+                        byteTransferTime = transferTime;
                         return storageMeta;
                     }
                     // TODO: verify partial put, maybe revert and try chunk again?
                 }
                 
+                long startTxn = System.currentTimeMillis();
                 PutTransaction status = storageAdapter.getTransactionStatus(txnID);
                 verifyMetadata(a, status.storageMetadata);
 
                 log.debug("committing " + txnID);
                 StorageMetadata ret = storageAdapter.commitTransaction(txnID);
                 txnID = null;
-
+                byteTransferTime = transferTime + System.currentTimeMillis() - startTxn;
                 return ret;
             } catch (ByteLimitExceededException | StorageEngageException | WriteException ex) {
                 // IOException will capture this if not explicitly caught and rethrown
