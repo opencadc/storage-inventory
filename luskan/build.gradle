@@ -28,7 +28,7 @@ dependencies {
     compile 'org.jdom:jdom2:[2.0,)'
 
     compile 'org.opencadc:cadc-util:[1.5.6,)'
-    compile 'org.opencadc:cadc-vosi:[1.4.0,)'
+    compile 'org.opencadc:cadc-vosi:[1.4.3,2.0)'
     compile 'org.opencadc:cadc-adql:[1.1,)'
     compile 'org.opencadc:cadc-uws:[1.0.3,)'
     compile 'org.opencadc:cadc-uws-server:[1.2.9,)'
@@ -45,7 +45,7 @@ dependencies {
     testCompile 'junit:junit:[4.0,)'
 
     intTestCompile 'org.opencadc:cadc-tap:[1.0,)'
-    intTestCompile 'org.opencadc:cadc-test-vosi:[1.0.8,)'
+    intTestCompile 'org.opencadc:cadc-test-vosi:[1.0.11,)'
     intTestCompile 'org.opencadc:cadc-test-uws:[1.1.1,)'
     intTestCompile 'org.opencadc:cadc-test-tap:[1.1,)'
 }
