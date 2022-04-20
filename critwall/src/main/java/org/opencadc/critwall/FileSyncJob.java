@@ -605,14 +605,13 @@ public class FileSyncJob implements Runnable {
                     // TODO: verify partial put, maybe revert and try chunk again?
                 }
                 
-                long startTxn = System.currentTimeMillis();
                 PutTransaction status = storageAdapter.getTransactionStatus(txnID);
                 verifyMetadata(a, status.storageMetadata);
 
                 log.debug("committing " + txnID);
                 StorageMetadata ret = storageAdapter.commitTransaction(txnID);
                 txnID = null;
-                byteTransferTime = transferTime + System.currentTimeMillis() - startTxn;
+                byteTransferTime = transferTime;
                 return ret;
             } catch (ByteLimitExceededException | StorageEngageException | WriteException ex) {
                 // IOException will capture this if not explicitly caught and rethrown
