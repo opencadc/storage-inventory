@@ -83,6 +83,7 @@ import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.DeletedArtifactEvent;
 import org.opencadc.inventory.DeletedStorageLocationEvent;
+import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.SiteLocation;
 import org.opencadc.inventory.StorageSite;
 import org.opencadc.inventory.db.ArtifactDAO;
@@ -729,12 +730,11 @@ public class ArtifactValidator {
     // true if remote is the winner, false if local is the winner
     // same logic in fenwick InventoryHarvester
     boolean isRemoteWinner(Artifact local, Artifact remote) {
-        if (local.getContentLastModified().after(remote.getContentLastModified())) {
-            return false;
+        Boolean rem = InventoryUtil.isRemoteWinner(local, remote);
+        if (rem != null) {
+            return rem;
         }
-        if (remote.getContentLastModified().after(local.getContentLastModified())) {
-            return true;
-        }
+
         // equal timestamps and different instances:
         // likely caused by poorly behaved storage site that ingests duplicates 
         // from external system

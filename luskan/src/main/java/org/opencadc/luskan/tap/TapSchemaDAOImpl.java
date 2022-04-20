@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2019.                            (c) 2019.
+*  (c) 2020.                            (c) 2020.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -65,88 +65,34 @@
 ************************************************************************
 */
 
-package org.opencadc.luskan;
+package org.opencadc.luskan.tap;
 
-import ca.nrc.cadc.tap.AdqlQuery;
-import ca.nrc.cadc.tap.parser.BaseExpressionDeParser;
-import ca.nrc.cadc.tap.parser.PgsphereDeParser;
-import ca.nrc.cadc.tap.parser.converter.TableNameConverter;
-import ca.nrc.cadc.tap.parser.converter.TableNameReferenceConverter;
-import ca.nrc.cadc.tap.parser.converter.TopConverter;
-import ca.nrc.cadc.tap.parser.converter.postgresql.PgFunctionNameConverter;
-import ca.nrc.cadc.tap.parser.extractor.FunctionExpressionExtractor;
-import ca.nrc.cadc.tap.parser.navigator.ExpressionNavigator;
-import ca.nrc.cadc.tap.parser.navigator.FromItemNavigator;
-import ca.nrc.cadc.tap.parser.navigator.ReferenceNavigator;
-import ca.nrc.cadc.tap.parser.navigator.SelectNavigator;
-import ca.nrc.cadc.util.MultiValuedProperties;
-import net.sf.jsqlparser.util.deparser.SelectDeParser;
+import ca.nrc.cadc.tap.schema.FunctionDesc;
+import ca.nrc.cadc.tap.schema.TapDataType;
+import ca.nrc.cadc.tap.schema.TapSchemaDAO;
+import java.util.List;
 import org.apache.log4j.Logger;
 
 /**
- * AdqlQuery implementation for PostgreSQL + pg-sphere and arbitrary catalogue tables.
  *
  * @author pdowler
  */
-public class AdqlQueryImpl extends AdqlQuery {
+public class TapSchemaDAOImpl  extends TapSchemaDAO {
+    private static final Logger log = Logger.getLogger(TapSchemaDAOImpl.class);
 
-    private static Logger log = Logger.getLogger(AdqlQueryImpl.class);
-
-    public AdqlQueryImpl() {
+    public TapSchemaDAOImpl() {
+        super();
     }
-
+    
     @Override
-    protected void init() {
-        super.init();
+    protected List<FunctionDesc> getFunctionDescs() {
+        List<FunctionDesc> ret = super.getFunctionDescs();
 
-        // convert TOP -> LIMIT
-        super.navigatorList.add(new TopConverter(
-                new ExpressionNavigator(), new ReferenceNavigator(), new FromItemNavigator()));
-
-        super.navigatorList.add(new FunctionExpressionExtractor(
-                new PgFunctionNameConverter(), new ReferenceNavigator(), new FromItemNavigator()));
-
-        // convert num_copies() -> cardinality(inventory.artifact.sitelocations)
-        super.navigatorList.add(new InventoryFunctionNavigator());
-
-        // TAP-1.1 version of tap_schema
-        TableNameConverter tnc = new TableNameConverter(true);
-        tnc.put("tap_schema.schemas", "tap_schema.schemas11");
-        tnc.put("tap_schema.tables", "tap_schema.tables11");
-        tnc.put("tap_schema.columns", "tap_schema.columns11");
-        tnc.put("tap_schema.keys", "tap_schema.keys11");
-        tnc.put("tap_schema.key_columns", "tap_schema.key_columns11");
-        TableNameReferenceConverter tnrc = new TableNameReferenceConverter(tnc.map);
-        super.navigatorList.add(new SelectNavigator(new ExpressionNavigator(), tnrc, tnc));
-
-        // add IS NOT NULL constraint for artifact.storagelocation_storageid when querying storage sites
-        MultiValuedProperties properties = getProperties();
-        boolean isStorageSite = Boolean.parseBoolean(properties.getFirstPropertyValue(LuskanConfig.STORAGE_SITE_KEY));
-        if (isStorageSite) {
-            super.navigatorList.add(new StorageLocationConverter());
-        }
+        ret.add(new FunctionDesc("now", TapDataType.TIMESTAMP));
+        ret.add(new FunctionDesc("split_part", TapDataType.STRING));
+        ret.add(new FunctionDesc("num_copies", TapDataType.INTEGER));
+        ret.add(new FunctionDesc("date", TapDataType.TIMESTAMP));
         
-        // enable unfiltered diagnostics -- must be after StorageLocationConverter
-        TableNameConverter tnc2 = new TableNameConverter(true);
-        tnc2.put("inventory.ArtifactMetadata", "inventory.Artifact");
-        TableNameReferenceConverter tnrc2 = new TableNameReferenceConverter(tnc2.map);
-        super.navigatorList.add(new SelectNavigator(new ExpressionNavigator(), tnrc2, tnc2));
-    }
-
-    @Override
-    protected BaseExpressionDeParser getExpressionDeparser(SelectDeParser dep, StringBuffer sb) {
-        return new PgsphereDeParser(dep, sb);
-    }
-
-    @Override
-    public String getSQL() {
-        String sql = super.getSQL();
-        log.debug("SQL:\n" + sql);
-        return sql;
-    }
-
-    // Separate method to allow overriding in unit tests to pass in properties.
-    protected MultiValuedProperties getProperties() {
-        return LuskanConfig.getConfig();
+        return ret;
     }
 }

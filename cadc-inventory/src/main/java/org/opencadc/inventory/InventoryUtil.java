@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2019.                            (c) 2019.
+*  (c) 2022.                            (c) 2022.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -92,7 +92,32 @@ public abstract class InventoryUtil {
     
     private InventoryUtil() {
     }
-
+    
+    /**
+     * Chose between two artifacts to resolve a collision: two artifacts with same Artifact.uri
+     * but different Entity.id values. The winning artifact should be retained/used and the losing 
+     * artifact should be removed/ignored.
+     * 
+     * @param local the local artifact
+     * @param remote the remote artifact
+     * @return true if remote artifact wins, false if local artifact wins, null if tied
+     */
+    public static Boolean isRemoteWinner(Artifact local, Artifact remote) {
+        if (local.getID().equals(remote.getID())) {
+            throw new IllegalArgumentException("method called with same instances: "
+                    + local.getID() + " vs " + remote.getID());
+        }
+        if (local.getContentLastModified().after(remote.getContentLastModified())) {
+            return false;
+        }
+        if (remote.getContentLastModified().after(local.getContentLastModified())) {
+            return true;
+        }
+        
+        // tie
+        return null;
+    }
+    
     /**
      * Compute a short code based on the URI argument. The returned code is a hex
      * string of the specified length generated from the given URI.

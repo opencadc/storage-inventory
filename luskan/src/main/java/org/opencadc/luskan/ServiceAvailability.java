@@ -65,40 +65,32 @@
 ************************************************************************
  */
 
-package org.opencadc.luskan.ws;
+package org.opencadc.luskan;
 
 import ca.nrc.cadc.auth.AuthMethod;
-import ca.nrc.cadc.net.ResourceNotFoundException;
-import ca.nrc.cadc.reg.Capabilities;
-import ca.nrc.cadc.reg.Capability;
-import ca.nrc.cadc.reg.Interface;
 import ca.nrc.cadc.reg.Standards;
 import ca.nrc.cadc.reg.client.LocalAuthority;
 import ca.nrc.cadc.reg.client.RegistryClient;
 import ca.nrc.cadc.rest.RestAction;
+import ca.nrc.cadc.vosi.Availability;
 import ca.nrc.cadc.vosi.AvailabilityPlugin;
-import ca.nrc.cadc.vosi.AvailabilityStatus;
 import ca.nrc.cadc.vosi.avail.CheckCertificate;
 import ca.nrc.cadc.vosi.avail.CheckDataSource;
 import ca.nrc.cadc.vosi.avail.CheckException;
 import ca.nrc.cadc.vosi.avail.CheckResource;
 import ca.nrc.cadc.vosi.avail.CheckWebService;
-
 import java.io.File;
-import java.io.IOException;
 import java.net.URI;
-import java.util.NoSuchElementException;
+import java.net.URL;
 import org.apache.log4j.Logger;
-
-import org.opencadc.luskan.LuskanConfig;
 
 /**
  *
  * @author adriand
  */
-public class StorageTapService implements AvailabilityPlugin {
+public class ServiceAvailability implements AvailabilityPlugin {
 
-    private static final Logger log = Logger.getLogger(StorageTapService.class);
+    private static final Logger log = Logger.getLogger(ServiceAvailability.class);
     private static final File SERVOPS_PEM_FILE = new File(System.getProperty("user.home") + "/.ssl/cadcproxy.pem");
 
 
@@ -107,7 +99,7 @@ public class StorageTapService implements AvailabilityPlugin {
 
     private String appName;
 
-    public StorageTapService() {
+    public ServiceAvailability() {
     }
 
     @Override
@@ -116,7 +108,7 @@ public class StorageTapService implements AvailabilityPlugin {
     }
     
     @Override
-    public AvailabilityStatus getStatus() {
+    public Availability getStatus() {
         boolean isGood = true;
         String note = "service is accepting queries";
         try {
@@ -124,10 +116,10 @@ public class StorageTapService implements AvailabilityPlugin {
 
             String state = getState();
             if (RestAction.STATE_OFFLINE.equals(state)) {
-                return new AvailabilityStatus(false, null, null, null, RestAction.STATE_OFFLINE_MSG);
+                return new Availability(false, RestAction.STATE_OFFLINE_MSG);
             }
             if (RestAction.STATE_READ_ONLY.equals(state)) {
-                return new AvailabilityStatus(false, null, null, null, RestAction.STATE_READ_ONLY_MSG);
+                return new Availability(false, RestAction.STATE_READ_ONLY_MSG);
             }
 
             // check for a certficate needed to perform network ops
@@ -144,18 +136,29 @@ public class StorageTapService implements AvailabilityPlugin {
             cr = new CheckDataSource("jdbc/tapadm", UWS_TEST);
             cr.check();
 
-            // TODO - These do not work for intTest unless the testing environment deploys these services.
-            String url = getAvailabilityForLocal(Standards.CRED_PROXY_10);
-            CheckResource checkResource = new CheckWebService(url);
-            //checkResource.check();
+            // check other services we depend on
+            RegistryClient reg = new RegistryClient();
+            URL url;
+            CheckResource checkResource;
+            
+            LocalAuthority localAuthority = new LocalAuthority();
 
-            //url = getAvailabilityForLocal(Standards.UMS_USERS_01);
-            //checkResource = new CheckWebService(url);
-            //checkResource.check();
-
-            url = getAvailabilityForLocal(Standards.GMS_SEARCH_01);
+            URI credURI = localAuthority.getServiceURI(Standards.CRED_PROXY_10.toString());
+            url = reg.getServiceURL(credURI, Standards.VOSI_AVAILABILITY, AuthMethod.ANON);
             checkResource = new CheckWebService(url);
             checkResource.check();
+
+            URI usersURI = localAuthority.getServiceURI(Standards.UMS_USERS_01.toString());
+            url = reg.getServiceURL(usersURI, Standards.VOSI_AVAILABILITY, AuthMethod.ANON);
+            checkResource = new CheckWebService(url);
+            checkResource.check();
+            
+            URI groupsURI = localAuthority.getServiceURI(Standards.GMS_SEARCH_01.toString());
+            if (!groupsURI.equals(usersURI)) {
+                url = reg.getServiceURL(groupsURI, Standards.VOSI_AVAILABILITY, AuthMethod.ANON);
+                checkResource = new CheckWebService(url);
+                checkResource.check();
+            }
 
         } catch (CheckException ce) {
             // tests determined that the resource is not working
@@ -173,47 +176,7 @@ public class StorageTapService implements AvailabilityPlugin {
             isGood = false;
             note = sb.toString();
         }
-        return new AvailabilityStatus(isGood, null, null, null, note);
-    }
-
-    private String getAvailabilityForLocal(URI standardID)
-        throws ResourceNotFoundException {
-        LocalAuthority localAuthority = new LocalAuthority();
-        RegistryClient reg = new RegistryClient();
-
-        URI resourceID;
-        try {
-            resourceID = localAuthority.getServiceURI(standardID.toString());
-        } catch (NoSuchElementException e) {
-            String message = String.format("service URI not found in LocalAuthority for standardID %s", standardID);
-            throw new ResourceNotFoundException(message);
-        }
-
-        Capabilities capabilities;
-        try {
-            capabilities = reg.getCapabilities(resourceID);
-        } catch (IOException e) {
-            String message = String.format("io error getting capabilities for resourceID %s, standardID %s, because %s",
-                                           resourceID, standardID, e.getMessage());
-            throw new ResourceNotFoundException(message);
-        }
-
-        Capability capability = capabilities.findCapability(Standards.VOSI_AVAILABILITY);
-        if (capability == null) {
-            String message =
-                String.format("service %s not does not provide %s", resourceID, Standards.VOSI_AVAILABILITY);
-            throw new UnsupportedOperationException(message);
-        }
-
-        Interface anInterface = capability.findInterface(AuthMethod.ANON);
-        if (anInterface == null) {
-            String message = String.format(
-                "unexpected: service %s capability %s does not support auth: %s",
-                resourceID, capability, AuthMethod.ANON);
-            throw new RuntimeException(message);
-        }
-
-        return anInterface.getAccessURL().getURL().toExternalForm();
+        return new Availability(isGood, note);
     }
 
     @Override

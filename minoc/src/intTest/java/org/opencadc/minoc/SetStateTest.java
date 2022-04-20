@@ -114,7 +114,9 @@ public class SetStateTest extends MinocTest {
     private static final String INITIAL_STATE = RestAction.STATE_READ_WRITE;
     
     static {
+        Log4jInit.setLevel("ca.nrc.cadc.vosi", Level.INFO);
         Log4jInit.setLevel("org.opencadc.minoc", Level.INFO);
+        
         AVAIL_SCHEMA_MAP.putAll(XMLConstants.SCHEMA_MAP);
         String localURL = XmlUtil.getResourceUrlString(VOSI.AVAILABILITY_SCHEMA, XMLConstants.class);
         AVAIL_SCHEMA_MAP.put(VOSI.AVAILABILITY_NS_URI, localURL);
@@ -374,7 +376,7 @@ public class SetStateTest extends MinocTest {
         }
 
         Document xml = XmlUtil.buildDocument(getState.getInputStream(), AVAIL_SCHEMA_MAP);
-        Availability availability = new Availability(xml);
+        Availability availability = Availability.fromXmlDocument(xml);
         String note = availability.note;
         String state = RestAction.STATE_READ_WRITE;
         if (note.contains("offline")) {

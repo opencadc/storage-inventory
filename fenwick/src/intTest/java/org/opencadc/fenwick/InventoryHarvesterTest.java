@@ -425,7 +425,7 @@ public class InventoryHarvesterTest {
         StorageSite expectedSite = new StorageSite(URI.create("cadc:TEST/siteone"), "Test Site", true, false);
         luskanEnvironment.storageSiteDAO.put(expectedSite);
         
-        // create an Artifacty.uri collision where existing artifact is newer and harvested gets skipped
+        // create an Artifact.uri collision where existing artifact is newer and harvested gets skipped
         final Artifact artifactCollision1 = new Artifact(URI.create("cadc:TEST/collision1"), TestUtil.getRandomMD5(), new Date(), 78787L);
         artifactCollision1.storageLocation = new StorageLocation(URI.create("foo:bar/baz"));
         luskanEnvironment.artifactDAO.put(artifactCollision1);
@@ -435,7 +435,7 @@ public class InventoryHarvesterTest {
         inventoryEnvironment.artifactDAO.put(artifactCollisionKeeper1);
         Thread.sleep(20L);
         
-        // create an Artifacty.uri collision where existing artifact is nwewer and harvested gets skipped
+        // create an Artifact.uri collision where existing artifact is older and harvested gets applied
         final Artifact artifactCollisionKeeper2 = new Artifact(URI.create("cadc:TEST/collision2"), TestUtil.getRandomMD5(), new Date(), 78787L);
         artifactCollisionKeeper2.storageLocation = new StorageLocation(URI.create("foo:bar/baz2"));
         luskanEnvironment.artifactDAO.put(artifactCollisionKeeper2);

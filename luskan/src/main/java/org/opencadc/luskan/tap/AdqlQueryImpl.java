@@ -62,44 +62,92 @@
 *  <http://www.gnu.org/licenses/>.      pas le cas, consultez :
 *                                       <http://www.gnu.org/licenses/>.
 *
-*  $Revision: 5 $
-*
 ************************************************************************
- */
+*/
 
-package org.opencadc.luskan;
+package org.opencadc.luskan.tap;
 
-import ca.nrc.cadc.db.DBUtil;
-import ca.nrc.cadc.tap.QueryRunner;
-
-import javax.sql.DataSource;
-
+import ca.nrc.cadc.tap.AdqlQuery;
+import ca.nrc.cadc.tap.parser.BaseExpressionDeParser;
+import ca.nrc.cadc.tap.parser.PgsphereDeParser;
+import ca.nrc.cadc.tap.parser.converter.TableNameConverter;
+import ca.nrc.cadc.tap.parser.converter.TableNameReferenceConverter;
+import ca.nrc.cadc.tap.parser.converter.TopConverter;
+import ca.nrc.cadc.tap.parser.converter.postgresql.PgFunctionNameConverter;
+import ca.nrc.cadc.tap.parser.extractor.FunctionExpressionExtractor;
+import ca.nrc.cadc.tap.parser.navigator.ExpressionNavigator;
+import ca.nrc.cadc.tap.parser.navigator.FromItemNavigator;
+import ca.nrc.cadc.tap.parser.navigator.ReferenceNavigator;
+import ca.nrc.cadc.tap.parser.navigator.SelectNavigator;
+import ca.nrc.cadc.util.MultiValuedProperties;
+import net.sf.jsqlparser.util.deparser.SelectDeParser;
 import org.apache.log4j.Logger;
+import org.opencadc.luskan.LuskanConfig;
 
 /**
+ * AdqlQuery implementation for PostgreSQL + pg-sphere and arbitrary catalogue tables.
  *
  * @author pdowler
  */
-public class QueryRunnerImpl extends QueryRunner {
-    private static final Logger log = Logger.getLogger(QueryRunnerImpl.class);
+public class AdqlQueryImpl extends AdqlQuery {
 
-    public QueryRunnerImpl() {
+    private static Logger log = Logger.getLogger(AdqlQueryImpl.class);
+
+    public AdqlQueryImpl() {
     }
 
     @Override
-    protected DataSource getUploadDataSource() throws Exception {
-        return getQueryDataSource();
+    protected void init() {
+        super.init();
+
+        // convert TOP -> LIMIT
+        super.navigatorList.add(new TopConverter(
+                new ExpressionNavigator(), new ReferenceNavigator(), new FromItemNavigator()));
+
+        super.navigatorList.add(new FunctionExpressionExtractor(
+                new PgFunctionNameConverter(), new ReferenceNavigator(), new FromItemNavigator()));
+
+        // convert num_copies() -> cardinality(inventory.artifact.sitelocations)
+        super.navigatorList.add(new InventoryFunctionNavigator());
+
+        // TAP-1.1 version of tap_schema
+        TableNameConverter tnc = new TableNameConverter(true);
+        tnc.put("tap_schema.schemas", "tap_schema.schemas11");
+        tnc.put("tap_schema.tables", "tap_schema.tables11");
+        tnc.put("tap_schema.columns", "tap_schema.columns11");
+        tnc.put("tap_schema.keys", "tap_schema.keys11");
+        tnc.put("tap_schema.key_columns", "tap_schema.key_columns11");
+        TableNameReferenceConverter tnrc = new TableNameReferenceConverter(tnc.map);
+        super.navigatorList.add(new SelectNavigator(new ExpressionNavigator(), tnrc, tnc));
+
+        // add IS NOT NULL constraint for artifact.storagelocation_storageid when querying storage sites
+        MultiValuedProperties properties = getProperties();
+        boolean isStorageSite = Boolean.parseBoolean(properties.getFirstPropertyValue(LuskanConfig.STORAGE_SITE_KEY));
+        if (isStorageSite) {
+            super.navigatorList.add(new StorageLocationConverter());
+        }
+        
+        // enable unfiltered diagnostics -- must be after StorageLocationConverter
+        TableNameConverter tnc2 = new TableNameConverter(true);
+        tnc2.put("inventory.ArtifactMetadata", "inventory.Artifact");
+        TableNameReferenceConverter tnrc2 = new TableNameReferenceConverter(tnc2.map);
+        super.navigatorList.add(new SelectNavigator(new ExpressionNavigator(), tnrc2, tnc2));
     }
 
     @Override
-    protected DataSource getTapSchemaDataSource() throws Exception {
-        return getQueryDataSource();
+    protected BaseExpressionDeParser getExpressionDeparser(SelectDeParser dep, StringBuffer sb) {
+        return new PgsphereDeParser(dep, sb);
     }
 
     @Override
-    protected DataSource getQueryDataSource() throws Exception {
-        log.debug("Data Source name: jdbc/tapuser");
-        return DBUtil.findJNDIDataSource("jdbc/tapuser");
+    public String getSQL() {
+        String sql = super.getSQL();
+        log.debug("SQL:\n" + sql);
+        return sql;
     }
 
+    // Separate method to allow overriding in unit tests to pass in properties.
+    protected MultiValuedProperties getProperties() {
+        return LuskanConfig.getConfig();
+    }
 }

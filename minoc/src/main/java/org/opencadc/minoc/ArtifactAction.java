@@ -199,6 +199,11 @@ public abstract class ArtifactAction extends RestAction {
         this.publicKey = new File(System.getProperty("user.home") + "/config/" + pubkeyFileName);
     }
 
+    @Override
+    protected String getServerImpl() {
+        return "storage-inventory/minoc";
+    }
+
     /**
      * Default implementation.
      * @return No InlineContentHander
