@@ -300,19 +300,20 @@ public class NegotiationTest extends RavenTest {
                         URI artifactURI = URI.create("cadc:TEST/" + UUID.randomUUID() + ".fits");
 
                         try {
+                            log.debug("adding site1 (not writable)...");
                             siteDAO.put(site1); // not writable
 
                             Transfer transfer = new Transfer(artifactURI, Direction.pushToVoSpace);
                             transfer.getProtocols().add(p);
                             transfer.version = VOS.VOSPACE_21;
 
-                            // test that there's no place to put
+                            log.debug("test that there's no place to put...");
                             Transfer response = negotiate(transfer);
                             Assert.assertEquals(0, response.getAllEndpoints().size());
 
+                            log.debug("adding site2 (writable)...");
                             siteDAO.put(site2); // writable
                             
-                            // now one place to write
                             response = negotiate(transfer);
                             Assert.assertEquals(1, response.getProtocols().size());
                             Protocol actual = response.getProtocols().get(0);
@@ -346,6 +347,7 @@ public class NegotiationTest extends RavenTest {
                                 Assert.assertEquals("cadc:TEST", elems[2]);
                             }
                             
+                            log.debug("adding site3 (writable)...");
                             siteDAO.put(site3); // writable
                             response = negotiate(transfer);
                             Assert.assertEquals(2, response.getProtocols().size());
