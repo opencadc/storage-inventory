@@ -291,7 +291,7 @@ public class SwiftStorageAdapter  implements StorageAdapter {
             } else {
                 this.storageBucket = txnBucket + "-content";
             }
-            log.info("txnBucket: " + txnBucket + " storageBucket: " + storageBucket);
+            log.debug("txnBucket: " + txnBucket + " storageBucket: " + storageBucket);
             
             ac.setAuthenticationMethod(AuthenticationMethod.BASIC);
             ac.setUsername(user);
@@ -324,7 +324,7 @@ public class SwiftStorageAdapter  implements StorageAdapter {
             final long bucketTime = System.currentTimeMillis() - t1;
             log.debug("get base storageBucket: " + bucketTime);
             
-            log.info("SwiftStorageAdapter.INIT authTime=" + authTime + " bucketTime=" + bucketTime);
+            log.debug("SwiftStorageAdapter.INIT authTime=" + authTime + " bucketTime=" + bucketTime);
             init(txnContainer);
             
         } catch (InvalidConfigException | StorageEngageException ex) {
