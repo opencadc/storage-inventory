@@ -71,6 +71,7 @@ import ca.nrc.cadc.auth.AuthenticationUtil;
 import ca.nrc.cadc.auth.NotAuthenticatedException;
 import ca.nrc.cadc.auth.SSLUtil;
 import ca.nrc.cadc.date.DateUtil;
+import ca.nrc.cadc.db.ConnectionConfig;
 import ca.nrc.cadc.db.DBUtil;
 import ca.nrc.cadc.db.TransactionManager;
 import ca.nrc.cadc.io.ResourceIterator;
@@ -79,9 +80,6 @@ import ca.nrc.cadc.net.PreconditionFailedException;
 import ca.nrc.cadc.net.RemoteServiceException;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
-import ca.nrc.cadc.reg.Capabilities;
-import ca.nrc.cadc.reg.Capability;
-import ca.nrc.cadc.reg.Standards;
 import ca.nrc.cadc.reg.client.RegistryClient;
 import java.io.File;
 import java.io.IOException;
@@ -92,9 +90,9 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.PrivilegedAction;
 import java.text.DateFormat;
-import java.util.Calendar;
 import java.util.Date;
 import java.util.Map;
+import javax.naming.NamingException;
 import javax.security.auth.Subject;
 import javax.sql.DataSource;
 import org.apache.log4j.Logger;
@@ -106,7 +104,6 @@ import org.opencadc.inventory.SiteLocation;
 import org.opencadc.inventory.StorageSite;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.DeletedArtifactEventDAO;
-import org.opencadc.inventory.db.EntityNotFoundException;
 import org.opencadc.inventory.db.HarvestState;
 import org.opencadc.inventory.db.HarvestStateDAO;
 import org.opencadc.inventory.db.StorageSiteDAO;
@@ -123,7 +120,7 @@ public class InventoryHarvester implements Runnable {
 
     private static final Logger log = Logger.getLogger(InventoryHarvester.class);
     public static final String CERTIFICATE_FILE_LOCATION = System.getProperty("user.home") + "/.ssl/cadcproxy.pem";
-    private static final long LOOKBACK_TIME = 2 * 60 * 1000L;   // two minutes, unit: ms
+    private static final long LOOKBACK_TIME = 1 * 60 * 1000L;   // one minute, unit: ms
     private static final int INITIAL_SLEEP_TIMEOUT = (int) (LOOKBACK_TIME / 2000); // half of lookback, unit: sec
     
     private final ArtifactDAO artifactDAO;
@@ -142,8 +139,9 @@ public class InventoryHarvester implements Runnable {
      * @param trackSiteLocations Whether to track the remote storage site and add it to the Artifact being processed.
      * @param maxRetryInterval   max interval in seconds to sleep after an error during processing.
      */
-    public InventoryHarvester(Map<String, Object> daoConfig, URI resourceID, ArtifactSelector selector,
-                              boolean trackSiteLocations, int maxRetryInterval) {
+    public InventoryHarvester(Map<String, Object> daoConfig, ConnectionConfig cc,
+            URI resourceID, ArtifactSelector selector,
+            boolean trackSiteLocations, int maxRetryInterval) {
         InventoryUtil.assertNotNull(InventoryHarvester.class, "daoConfig", daoConfig);
         InventoryUtil.assertNotNull(InventoryHarvester.class, "resourceID", resourceID);
         InventoryUtil.assertNotNull(InventoryHarvester.class, "selector", selector);
@@ -154,6 +152,20 @@ public class InventoryHarvester implements Runnable {
         this.trackSiteLocations = trackSiteLocations;
         this.maxRetryInterval = maxRetryInterval;
         this.harvestStateDAO = new HarvestStateDAO(artifactDAO);
+        
+        
+        // create connection pool for event streams
+        try {
+            int nthreads = 1; // streams in parallel
+            String dsName = "jdbc/inventory";
+            daoConfig.put("jndiDataSourceName", dsName);
+            int poolSize = nthreads;
+            org.opencadc.inventory.util.DBUtil.PoolConfig pc = new org.opencadc.inventory.util.DBUtil.PoolConfig(cc, poolSize, 20000L, "select 123");
+            org.opencadc.inventory.util.DBUtil.createJNDIDataSource(dsName, pc);
+        } catch (NamingException ne) {
+            throw new IllegalStateException(String.format("Unable to access database: %s", cc.getURL()), ne);
+        }
+            
         
         try {
             String jndiDataSourceName = (String) daoConfig.get("jndiDataSourceName");
@@ -224,14 +236,15 @@ public class InventoryHarvester implements Runnable {
 
             // TODO: dynamic depending on how rapidly the remote content is changing
             // ... this value and the reprocess-last-N-seconds should be related
-            if (retry) {
+            if (retry && numEvents == 0) {
+                // action failed before processing any events: delay
                 retryCount++;
                 sleepSeconds *= 2;
                 if (sleepSeconds > this.maxRetryInterval) {
                     sleepSeconds = this.maxRetryInterval;
                 }
             } else {
-                // successful run, reset retry values
+                // successful run or failuren after processing some events, reset retry values
                 retryCount = 1;
                 sleepSeconds = INITIAL_SLEEP_TIMEOUT;
             }
@@ -273,7 +286,7 @@ public class InventoryHarvester implements Runnable {
      */
     void doit() throws ResourceNotFoundException, IOException, IllegalStateException, TransientException,
                        InterruptedException {
-        final TapClient tapClient = new TapClient(this.resourceID);
+
         final Date end = new Date();
         final Date lookBack = new Date(end.getTime() - LOOKBACK_TIME);
         
@@ -281,21 +294,30 @@ public class InventoryHarvester implements Runnable {
         if (trackSiteLocations) {
             
             final StorageSiteDAO storageSiteDAO = new StorageSiteDAO(this.artifactDAO);
-            final StorageSiteSync storageSiteSync = new StorageSiteSync(tapClient, storageSiteDAO);
+            final StorageSiteSync storageSiteSync = new StorageSiteSync(new TapClient<>(this.resourceID), storageSiteDAO);
             storageSite = storageSiteSync.doit();
             
-            syncDeletedStorageLocationEvents(tapClient, lookBack, end, storageSite);
-            logSummary(DeletedStorageLocationEvent.class, true);
+            try {
+                syncDeletedStorageLocationEvents(new TapClient<>(this.resourceID), lookBack, end, storageSite);
+            } finally {
+                logSummary(DeletedStorageLocationEvent.class, true);
+            }
             
         } else {
             storageSite = null;
         }
 
-        syncDeletedArtifactEvents(tapClient, lookBack, end);
-        logSummary(DeletedArtifactEvent.class, true);
+        try {
+            syncDeletedArtifactEvents(new TapClient<>(this.resourceID), lookBack, end);
+        } finally {
+            logSummary(DeletedArtifactEvent.class, true);
+        }
         
-        syncArtifacts(tapClient, lookBack, end, storageSite);
-        logSummary(Artifact.class, true);
+        try {
+            syncArtifacts(new TapClient<>(this.resourceID), lookBack, end, storageSite);
+        } finally {
+            logSummary(Artifact.class, true);
+        }
     }
 
     private long summaryInterval = 5 * 60 * 1000L; // 5 min
@@ -349,10 +371,10 @@ public class InventoryHarvester implements Runnable {
      * @throws TransientException        temporary failure of TAP service: same call could work in future
      * @throws InterruptedException      thread interrupted
      */
-    private void syncDeletedStorageLocationEvents(final TapClient tapClient, final Date lookBack, final Date endDate,
-                                                  final StorageSite storageSite)
-            throws ResourceNotFoundException, IOException, IllegalStateException, TransientException,
-                   InterruptedException {
+    private void syncDeletedStorageLocationEvents(final TapClient<DeletedStorageLocationEvent> tapClient, 
+            final Date lookBack, final Date endDate, final StorageSite storageSite)
+        throws ResourceNotFoundException, IOException, IllegalStateException, InterruptedException, 
+            TransientException {
 
         HarvestState hs = harvestStateDAO.get(DeletedStorageLocationEvent.class.getName(), resourceID);
         if (hs.curLastModified == null) { 
@@ -461,9 +483,10 @@ public class InventoryHarvester implements Runnable {
      * @throws TransientException        temporary failure of TAP service: same call could work in future
      * @throws InterruptedException      thread interrupted
      */
-    private void syncDeletedArtifactEvents(final TapClient tapClient, final Date lookBack, final Date endDate)
-            throws ResourceNotFoundException, IOException, IllegalStateException, TransientException,
-                   InterruptedException {
+    private void syncDeletedArtifactEvents(final TapClient<DeletedArtifactEvent> tapClient, 
+            final Date lookBack, final Date endDate)
+        throws ResourceNotFoundException, IOException, IllegalStateException, InterruptedException, 
+            TransientException {
         
         HarvestState hs = harvestStateDAO.get(DeletedArtifactEvent.class.getName(), resourceID);
         if (hs.curLastModified == null) { 
@@ -575,9 +598,10 @@ public class InventoryHarvester implements Runnable {
      * @throws TransientException        temporary failure of TAP service: same call could work in future
      * @throws InterruptedException      thread interrupted
      */
-    private void syncArtifacts(final TapClient tapClient, final Date lookBack, final Date endDate, final StorageSite storageSite)
-            throws ResourceNotFoundException, IOException, IllegalStateException, InterruptedException,
-                   TransientException {
+    private void syncArtifacts(final TapClient<Artifact> tapClient, 
+            final Date lookBack, final Date endDate, final StorageSite storageSite)
+        throws ResourceNotFoundException, IOException, IllegalStateException, InterruptedException, 
+            TransientException {
         final MessageDigest messageDigest;
         try {
             messageDigest = MessageDigest.getInstance("MD5");
