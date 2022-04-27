@@ -182,7 +182,7 @@ public class StorageSiteSync {
                                                              ByteLimitExceededException, NotAuthenticatedException,
                                                              IllegalArgumentException, TransientException, IOException,
                                                              InterruptedException {
-        return tapClient.execute(STORAGE_SITE_QUERY, row -> {
+        return tapClient.query(STORAGE_SITE_QUERY, row -> {
             int index = 0;
             // column order folllowing model declarations
             final URI resourceID = (URI) row.get(index++);

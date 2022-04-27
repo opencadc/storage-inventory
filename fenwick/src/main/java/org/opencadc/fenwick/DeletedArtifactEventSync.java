@@ -122,7 +122,7 @@ public class DeletedArtifactEventSync {
     public ResourceIterator<DeletedArtifactEvent> getEvents()
         throws InterruptedException, IOException, ResourceNotFoundException, TransientException {
 
-        return tapClient.execute(getTapQuery(), new DeletedArtifactEventRowMapper());
+        return tapClient.query(getTapQuery(), new DeletedArtifactEventRowMapper());
     }
 
     /**

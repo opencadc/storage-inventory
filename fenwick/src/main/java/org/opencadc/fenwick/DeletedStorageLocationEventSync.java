@@ -122,7 +122,7 @@ public class DeletedStorageLocationEventSync {
     public ResourceIterator<DeletedStorageLocationEvent> getEvents()
             throws InterruptedException, IOException, ResourceNotFoundException, TransientException {
 
-        return tapClient.execute(getTapQuery(), new DeletedStorageLocationEventRowMapper());
+        return tapClient.query(getTapQuery(), new DeletedStorageLocationEventRowMapper());
     }
 
     /**

@@ -92,13 +92,15 @@ public class InventoryEnvironment {
     final HarvestStateDAO harvestStateDAO = new HarvestStateDAO();
     final Map<String, Object> daoConfig = new TreeMap<>();
     final String jndiPath = "jdbc/InventoryEnvironment";
+    final ConnectionConfig connectionConfig;
 
     public InventoryEnvironment() throws Exception {
         final DBConfig dbrc = new DBConfig();
-        final ConnectionConfig inventoryConnectionConfig = dbrc.getConnectionConfig(TestUtil.INVENTORY_SERVER,
-                                                                                    TestUtil.INVENTORY_DATABASE);
-        DBUtil.createJNDIDataSource(jndiPath, inventoryConnectionConfig);
-
+        connectionConfig = dbrc.getConnectionConfig(TestUtil.INVENTORY_SERVER, TestUtil.INVENTORY_DATABASE);
+        
+        // single direct connection; InventoryHarvester creates it's own connection(s)
+        DBUtil.createJNDIDataSource(jndiPath, connectionConfig);
+        
         daoConfig.put(SQLGenerator.class.getName(), SQLGenerator.class);
         daoConfig.put("jndiDataSourceName", jndiPath);
         daoConfig.put("database", TestUtil.INVENTORY_DATABASE);

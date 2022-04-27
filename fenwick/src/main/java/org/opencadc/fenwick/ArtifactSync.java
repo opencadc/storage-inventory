@@ -130,7 +130,7 @@ public class ArtifactSync {
                    InterruptedException {
         final String query = buildQuery();
         LOGGER.debug("\nExecuting query '" + query + "'\n");
-        return tapClient.execute(query, new ArtifactRowMapper());
+        return tapClient.query(query, new ArtifactRowMapper());
     }
 
     /**
