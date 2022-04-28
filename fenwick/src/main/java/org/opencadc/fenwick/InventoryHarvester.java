@@ -134,25 +134,21 @@ public class InventoryHarvester implements Runnable {
      * Constructor.
      *
      * @param daoConfig          config map to pass to cadc-inventory-db DAO classes
+     * @param cc                 database connection info for creating DataSource(s)
      * @param resourceID         identifier for the remote query service
      * @param selector           selector implementation
      * @param trackSiteLocations Whether to track the remote storage site and add it to the Artifact being processed.
      * @param maxRetryInterval   max interval in seconds to sleep after an error during processing.
      */
     public InventoryHarvester(Map<String, Object> daoConfig, ConnectionConfig cc,
-            URI resourceID, ArtifactSelector selector,
-            boolean trackSiteLocations, int maxRetryInterval) {
+            URI resourceID, ArtifactSelector selector, boolean trackSiteLocations, int maxRetryInterval) {
         InventoryUtil.assertNotNull(InventoryHarvester.class, "daoConfig", daoConfig);
         InventoryUtil.assertNotNull(InventoryHarvester.class, "resourceID", resourceID);
         InventoryUtil.assertNotNull(InventoryHarvester.class, "selector", selector);
-        this.artifactDAO = new ArtifactDAO(false);
-        artifactDAO.setConfig(daoConfig);
         this.resourceID = resourceID;
         this.selector = selector;
         this.trackSiteLocations = trackSiteLocations;
         this.maxRetryInterval = maxRetryInterval;
-        this.harvestStateDAO = new HarvestStateDAO(artifactDAO);
-        
         
         // create connection pool for event streams
         try {
@@ -165,7 +161,10 @@ public class InventoryHarvester implements Runnable {
         } catch (NamingException ne) {
             throw new IllegalStateException(String.format("Unable to access database: %s", cc.getURL()), ne);
         }
-            
+
+        this.artifactDAO = new ArtifactDAO(false);
+        artifactDAO.setConfig(daoConfig);
+        this.harvestStateDAO = new HarvestStateDAO(artifactDAO);
         
         try {
             String jndiDataSourceName = (String) daoConfig.get("jndiDataSourceName");
@@ -190,6 +189,7 @@ public class InventoryHarvester implements Runnable {
         } catch (IOException ex) {
             throw new IllegalArgumentException("invalid config", ex);
         }
+        
     }
 
     // general behaviour is that this process runs continually and manages it's own schedule

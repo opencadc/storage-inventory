@@ -150,6 +150,7 @@ public abstract class DBUtil extends ca.nrc.cadc.db.DBUtil {
             objectPool.setTestOnBorrow(true);
             objectPool.setTestOnCreate(true);
             objectPool.setMaxWaitMillis(config.maxWait);
+            poolableConnectionFactory.setPool(objectPool);
             
             PoolingDataSource dataSource = new PoolingDataSource(objectPool);
             

@@ -68,7 +68,6 @@
 package org.opencadc.fenwick;
 
 import ca.nrc.cadc.db.ConnectionConfig;
-import ca.nrc.cadc.db.DBUtil;
 import ca.nrc.cadc.util.Log4jInit;
 import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.util.PropertiesReader;
@@ -79,7 +78,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
-import javax.naming.NamingException;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.InventoryUtil;

@@ -91,26 +91,33 @@ public class InventoryEnvironment {
     final DeletedStorageLocationEventDAO deletedStorageLocationEventDAO = new DeletedStorageLocationEventDAO();
     final HarvestStateDAO harvestStateDAO = new HarvestStateDAO();
     final Map<String, Object> daoConfig = new TreeMap<>();
-    final String jndiPath = "jdbc/InventoryEnvironment";
     final ConnectionConfig connectionConfig;
+    
+    private final String jndiPath = "jdbc/InventoryEnvironment";
 
     public InventoryEnvironment() throws Exception {
         final DBConfig dbrc = new DBConfig();
         connectionConfig = dbrc.getConnectionConfig(TestUtil.INVENTORY_SERVER, TestUtil.INVENTORY_DATABASE);
-        
-        // single direct connection; InventoryHarvester creates it's own connection(s)
-        DBUtil.createJNDIDataSource(jndiPath, connectionConfig);
-        
         daoConfig.put(SQLGenerator.class.getName(), SQLGenerator.class);
-        daoConfig.put("jndiDataSourceName", jndiPath);
         daoConfig.put("database", TestUtil.INVENTORY_DATABASE);
         daoConfig.put("schema", TestUtil.INVENTORY_SCHEMA);
+        // connectionCOnfig and daoConfig used by InventoryHarvester to create it's own datasource
+        
+        Map<String, Object> testConfig = new TreeMap<>();
+        
+        // single direct connection for test setup/verification
+        DBUtil.createJNDIDataSource(jndiPath, connectionConfig);
+        
+        testConfig.put(SQLGenerator.class.getName(), SQLGenerator.class);
+        testConfig.put("jndiDataSourceName", jndiPath);
+        testConfig.put("database", TestUtil.INVENTORY_DATABASE);
+        testConfig.put("schema", TestUtil.INVENTORY_SCHEMA);
 
-        storageSiteDAO.setConfig(daoConfig);
-        artifactDAO.setConfig(daoConfig);
-        deletedArtifactEventDAO.setConfig(daoConfig);
-        deletedStorageLocationEventDAO.setConfig(daoConfig);
-        harvestStateDAO.setConfig(daoConfig);
+        storageSiteDAO.setConfig(testConfig);
+        artifactDAO.setConfig(testConfig);
+        deletedArtifactEventDAO.setConfig(testConfig);
+        deletedStorageLocationEventDAO.setConfig(testConfig);
+        harvestStateDAO.setConfig(testConfig);
 
         new InitDatabase(DBUtil.findJNDIDataSource(jndiPath),
                          (String) daoConfig.get("database"),
