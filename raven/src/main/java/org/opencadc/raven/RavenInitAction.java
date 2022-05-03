@@ -100,6 +100,7 @@ public class RavenInitAction extends InitAction {
 
     // config keys
     private static final String RAVEN_KEY = "org.opencadc.raven";
+    private static final String RAVEN_CONSIST_KEY = "org.opencadc.raven.consistency";
 
     static final String JNDI_DATASOURCE = "jdbc/inventory"; // context.xml
     static final String JNDI_AVAILABILITY_NAME = ".availabilities";
@@ -110,6 +111,8 @@ public class RavenInitAction extends InitAction {
     static final String PRIVKEYFILE_KEY = RAVEN_KEY + ".privateKeyFile";
     static final String READ_GRANTS_KEY = RAVEN_KEY + ".readGrantProvider";
     static final String WRITE_GRANTS_KEY = RAVEN_KEY + ".writeGrantProvider";
+
+    static final String ARTIFACT_NOT_FOUND_DEFAULT_KEY = RAVEN_CONSIST_KEY + ".notFoundDefault";
 
     static final String DEV_AUTH_ONLY_KEY = RAVEN_KEY + ".authenticateOnly";
 

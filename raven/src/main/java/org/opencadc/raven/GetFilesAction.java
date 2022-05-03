@@ -67,19 +67,10 @@
 
 package org.opencadc.raven;
 
-import ca.nrc.cadc.net.ResourceNotFoundException;
-import ca.nrc.cadc.reg.Standards;
-import ca.nrc.cadc.vos.Direction;
-import ca.nrc.cadc.vos.Protocol;
-import ca.nrc.cadc.vos.Transfer;
-import ca.nrc.cadc.vos.VOS;
-import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.URLEncoder;
-import java.util.ArrayList;
 import java.util.Iterator;
-import java.util.List;
 import org.apache.log4j.Logger;
 
 /**
@@ -133,21 +124,4 @@ public class GetFilesAction extends FilesAction {
         syncOutput.setHeader("Location", redirectLocation);
     }
 
-
-    URI getFirstURL() throws ResourceNotFoundException, IOException {
-        Transfer transfer = new Transfer(artifactURI, Direction.pullFromVoSpace);
-        Protocol proto = new Protocol(VOS.PROTOCOL_HTTPS_GET);
-        proto.setSecurityMethod(Standards.SECURITY_METHOD_ANON);
-        transfer.getProtocols().add(proto);
-        
-        ProtocolsGenerator pg = new ProtocolsGenerator(this.artifactDAO, this.publicKeyFile, this.privateKeyFile,
-                                                       this.user, this.siteAvailabilities, this.siteRules);
-        List<Protocol> protos = pg.getProtocols(transfer);
-        if (protos.isEmpty()) {
-            throw new ResourceNotFoundException("not available: " + artifactURI);
-        }
-
-        // for now return the first URL in the list
-        return URI.create(protos.get(0).getEndpoint());
-    }
 }

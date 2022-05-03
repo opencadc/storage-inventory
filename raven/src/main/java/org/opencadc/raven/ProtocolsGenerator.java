@@ -67,6 +67,7 @@
 
 package org.opencadc.raven;
 
+import ca.nrc.cadc.net.HttpGet;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.reg.Capabilities;
 import ca.nrc.cadc.reg.Capability;
@@ -78,10 +79,10 @@ import ca.nrc.cadc.vos.Protocol;
 import ca.nrc.cadc.vos.Transfer;
 import ca.nrc.cadc.vos.VOS;
 import ca.nrc.cadc.vosi.Availability;
-
 import java.io.File;
 import java.io.IOException;
 import java.net.InetAddress;
+import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URL;
 import java.util.ArrayList;
@@ -92,12 +93,13 @@ import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.UUID;
-
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
+import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.SiteLocation;
 import org.opencadc.inventory.StorageSite;
 import org.opencadc.inventory.db.ArtifactDAO;
+import org.opencadc.inventory.db.DeletedArtifactEventDAO;
 import org.opencadc.inventory.db.StorageSiteDAO;
 import org.opencadc.permissions.ReadGrant;
 import org.opencadc.permissions.TokenTool;
@@ -112,22 +114,29 @@ public class ProtocolsGenerator {
 
     private static final Logger log = Logger.getLogger(ProtocolsGenerator.class);
 
+    public static final String ARTIFACT_ID_HDR = "x-artifact-id";  // matches minoc.HeadAction.ARTIFACT_ID_HDR
+
     private final ArtifactDAO artifactDAO;
+    private final DeletedArtifactEventDAO deletedArtifactEventDAO;
     private final String user;
     private final File publicKeyFile;
     private final File privateKeyFile;
     private final Map<URI, Availability> siteAvailabilities;
     private final Map<URI, StorageSiteRule> siteRules;
+    private final ArtifactNotFoundDefaultStrategy artifactNotFoundStrategy;
 
 
     public ProtocolsGenerator(ArtifactDAO artifactDAO, File publicKeyFile, File privateKeyFile, String user,
-                              Map<URI, Availability> siteAvailabilities, Map<URI, StorageSiteRule> siteRules) {
+                              Map<URI, Availability> siteAvailabilities, Map<URI, StorageSiteRule> siteRules,
+                              ArtifactNotFoundDefaultStrategy artifactNotFoundStrategy) {
         this.artifactDAO = artifactDAO;
+        this.deletedArtifactEventDAO = new DeletedArtifactEventDAO(this.artifactDAO);
         this.user = user;
         this.publicKeyFile = publicKeyFile;
         this.privateKeyFile = privateKeyFile;
         this.siteAvailabilities = siteAvailabilities;
         this.siteRules = siteRules;
+        this.artifactNotFoundStrategy = artifactNotFoundStrategy;
     }
 
     List<Protocol> getProtocols(Transfer transfer) throws ResourceNotFoundException, IOException {
@@ -156,6 +165,111 @@ public class ProtocolsGenerator {
         storageSites.sort((site1, site2) -> Boolean.compare(!site1.getAllowWrite(), !site2.getAllowWrite()));
     }
 
+    Artifact getRemoteArtifact(URL location, URI artifactURI) {
+        try {
+            HttpGet head = new HttpGet(location, true);
+            head.setHeadOnly(true);
+            head.setReadTimeout(10000);
+            head.run();
+            if (head.getResponseCode() != 200) {
+                // caught at the end of the method
+                throw new RuntimeException("Unsuccessful HEAD request: " + head.getResponseCode());
+            }
+            UUID id = UUID.fromString(head.getResponseHeader(ARTIFACT_ID_HDR));
+            Artifact result = new
+                    Artifact(id, artifactURI, head.getDigest(), head.getLastModified(), head.getContentLength());
+            result.contentType = head.getContentType();
+            result.contentEncoding = head.getContentEncoding();
+            return result;
+        } catch (Throwable t) {
+            log.debug("Could not retrieve artifact " + artifactURI.toASCIIString() + " from " + location, t);
+            return null;
+        }
+    }
+
+    private Capability getFilesCapability(StorageSite storageSite) {
+        if (!isAvailable(storageSite.getResourceID())) {
+            log.warn("storage site is offline: " + storageSite.getResourceID());
+            return null;
+        }
+        Capability filesCap = null;
+        try {
+            RegistryClient regClient = new RegistryClient();
+            Capabilities caps = regClient.getCapabilities(storageSite.getResourceID());
+            filesCap = caps.findCapability(Standards.SI_FILES);
+            if (filesCap == null) {
+                log.warn("service: " + storageSite.getResourceID() + " does not provide " + Standards.SI_FILES);
+            }
+        } catch (ResourceNotFoundException ex) {
+            log.warn("storage site not found: " + storageSite.getResourceID());
+        } catch (Exception ex) {
+            log.warn("storage site not responding (capabilities): " + storageSite.getResourceID(), ex);
+        }
+        return filesCap;
+    }
+
+    Artifact getUnsyncedArtifact(URI artifactURI, Transfer transfer, Set<StorageSite> storageSites) {
+        Artifact result = null;
+        for (StorageSite storageSite : storageSites) {
+            // check if site is currently offline
+            Capability filesCap = getFilesCapability(storageSite);
+            if (filesCap == null) {
+                log.warn("Capabilities not found for storage site " + storageSite.getResourceID());
+                continue;
+            }
+            TokenTool tk = new TokenTool(publicKeyFile, privateKeyFile);
+            String authToken = tk.generateToken(artifactURI, ReadGrant.class, user);
+
+            for (Protocol proto : transfer.getProtocols()) {
+                if (storageSite.getAllowRead()) {
+                    URI sec = proto.getSecurityMethod();
+                    if (sec == null) {
+                        sec = Standards.SECURITY_METHOD_ANON;
+                    }
+                    Interface iface = filesCap.findInterface(sec);
+                    if (iface != null) {
+                        URL baseURL = iface.getAccessURL().getURL();
+                        log.debug("base url for site " + storageSite.getResourceID() + ": " + baseURL);
+                        StringBuilder sb = new StringBuilder();
+                        sb.append(baseURL.toExternalForm()).append("/");
+                        if (authToken != null) {
+                            sb.append(authToken).append("/");
+                        }
+                        sb.append(artifactURI.toASCIIString());
+                        try {
+                            Artifact remoteArtifact = getRemoteArtifact(new URL(sb.toString()), artifactURI);
+                            if (remoteArtifact == null) {
+                                continue;
+                            }
+                            if (deletedArtifactEventDAO.get(remoteArtifact.getID()) != null) {
+                                // the artifact was already deleted from global
+                                log.debug("Artifact " + artifactURI + " already deleted from global");
+                                continue;
+                            }
+                            remoteArtifact.siteLocations.add(new SiteLocation(storageSite.getID()));
+                            if (result != null) {
+                                // there are two remote versions of the artifact that raven is not aware of
+                                // find the winner
+                                log.debug("Artifact " + artifactURI.toASCIIString() +
+                                        " - 2 remote copies that global is not aware of");
+                                if (!InventoryUtil.isRemoteWinner(result, remoteArtifact)) {
+                                    continue;
+                                }
+                            }
+                            result = remoteArtifact;
+                            log.debug("Artifact " + artifactURI.toASCIIString() + " use copy from " +
+                                      storageSite.getResourceID());
+                        } catch (MalformedURLException ex) {
+                            throw new RuntimeException("BUG: Malformd URL to the site", ex);
+                        }
+                    }
+                }
+            }
+
+        }
+        return result;
+    }
+
     List<Protocol> doPullFrom(URI artifactURI, Transfer transfer, String authToken) throws ResourceNotFoundException, IOException {
         RegistryClient regClient = new RegistryClient();
         StorageSiteDAO storageSiteDAO = new StorageSiteDAO(artifactDAO);
@@ -163,6 +277,17 @@ public class ProtocolsGenerator {
 
         List<Protocol> protos = new ArrayList<>();
         Artifact artifact = artifactDAO.get(artifactURI);
+        // produce URLs to each of the copies for each of the protocols
+        List<StorageSite> storageSites = new ArrayList<>();
+        if (artifact == null) {
+            log.debug("Not found strategy: " + this.artifactNotFoundStrategy.toString());
+            if (this.artifactNotFoundStrategy == ArtifactNotFoundDefaultStrategy.FIND) {
+                log.debug("Artifact not found strategy: " + this.artifactNotFoundStrategy);
+                // there's no artifact in global. Check each site directly
+                artifact = getUnsyncedArtifact(artifactURI, transfer, sites);
+            }
+        }
+
         if (artifact == null) {
             throw new ResourceNotFoundException("not found: " + artifactURI.toString());
         }
@@ -173,32 +298,14 @@ public class ProtocolsGenerator {
             throw new ResourceNotFoundException("not found: " + artifactURI.toString());
         }
 
-        // produce URLs to each of the copies for each of the protocols
-        List<StorageSite> storageSites = new ArrayList<>();
         for (SiteLocation site : artifact.siteLocations) {
             StorageSite storageSite = getSite(sites, site.getSiteID());
             storageSites.add(storageSite);
         }
+
         prioritizePullFromSites(storageSites);
         for (StorageSite storageSite : storageSites) {
-            // check if site is currently offline
-            if (!isAvailable(storageSite.getResourceID())) {
-                log.warn("storage site is offline: " + storageSite.getResourceID());
-                continue;
-            }
-            
-            Capability filesCap = null;
-            try {
-                Capabilities caps = regClient.getCapabilities(storageSite.getResourceID());
-                filesCap = caps.findCapability(Standards.SI_FILES);
-                if (filesCap == null) {
-                    log.warn("service: " + storageSite.getResourceID() + " does not provide " + Standards.SI_FILES);
-                }
-            } catch (ResourceNotFoundException ex) {
-                log.warn("storage site not found: " + storageSite.getResourceID());
-            } catch (Exception ex) {
-                log.warn("storage site not responding (capabilities): " + storageSite.getResourceID(), ex);
-            }
+            Capability filesCap = getFilesCapability(storageSite);
             if (filesCap != null) {
                 for (Protocol proto : transfer.getProtocols()) {
                     if (storageSite.getAllowRead()) {
@@ -243,6 +350,8 @@ public class ProtocolsGenerator {
                             log.debug("reject protocol: " + proto
                                     + " reason: unsupported security method: " + proto.getSecurityMethod());
                         }
+                    } else {
+                        log.debug("Storage not allowed read " + storageSite.getName());
                     }
                 }
             }

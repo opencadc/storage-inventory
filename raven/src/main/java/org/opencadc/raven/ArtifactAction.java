@@ -79,6 +79,7 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import javax.naming.Context;
@@ -89,7 +90,6 @@ import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.server.PermissionsCheck;
 import org.opencadc.permissions.ReadGrant;
 import org.opencadc.permissions.WriteGrant;
-
 
 /**
  * Abstract class for all that raven action classes have in common,
@@ -117,6 +117,8 @@ public abstract class ArtifactAction extends RestAction {
     protected Map<URI, Availability> siteAvailabilities;
     protected Map<URI, StorageSiteRule> siteRules;
 
+    protected final ArtifactNotFoundDefaultStrategy notFoundStrategy;
+
     // constructor for unit tests with no config/init
     ArtifactAction(boolean init) {
         super();
@@ -124,6 +126,7 @@ public abstract class ArtifactAction extends RestAction {
         this.publicKeyFile = null;
         this.privateKeyFile = null;
         this.artifactDAO = null;
+        this.notFoundStrategy = null;
     }
 
     protected ArtifactAction() {
@@ -185,6 +188,13 @@ public abstract class ArtifactAction extends RestAction {
       
         // get the storage site rules
         this.siteRules = RavenInitAction.getStorageSiteRules(props);
+        String cnf = props.getFirstPropertyValue(RavenInitAction.ARTIFACT_NOT_FOUND_DEFAULT_KEY);
+        if (cnf != null) {
+            this.notFoundStrategy = ArtifactNotFoundDefaultStrategy.valueOf(cnf.toUpperCase(Locale.ROOT));
+            log.debug("Using consistency strategy: " + this.notFoundStrategy);
+        } else {
+            this.notFoundStrategy = null;
+        }
     }
 
     protected void initAndAuthorize() throws Exception {
