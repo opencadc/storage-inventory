@@ -250,15 +250,15 @@ public class ProtocolsGenerator {
                             if (result != null) {
                                 // there are two remote versions of the artifact that raven is not aware of
                                 // find the winner
-                                log.debug("Artifact " + artifactURI.toASCIIString() +
-                                        " - 2 remote copies that global is not aware of");
+                                log.debug("Artifact " + artifactURI.toASCIIString()
+                                          + " - 2 remote copies that global is not aware of");
                                 if (!InventoryUtil.isRemoteWinner(result, remoteArtifact)) {
                                     continue;
                                 }
                             }
                             result = remoteArtifact;
-                            log.debug("Artifact " + artifactURI.toASCIIString() + " use copy from " +
-                                      storageSite.getResourceID());
+                            log.debug("Artifact " + artifactURI.toASCIIString() + " use copy from "
+                                      + storageSite.getResourceID());
                         } catch (MalformedURLException ex) {
                             throw new RuntimeException("BUG: Malformd URL to the site", ex);
                         }

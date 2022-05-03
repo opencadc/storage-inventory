@@ -98,7 +98,7 @@ public class ProtocolsGeneratorTest {
     public void testPrioritizePullFromSites() throws Exception {
         List<StorageSite> sites = new ArrayList<>();
         Random rd = new Random();
-        for (int i = 0; i < 10; i++ ) {
+        for (int i = 0; i < 10; i++) {
             sites.add(new StorageSite(URI.create("ivo://site" + i), "site1" + i, true, rd.nextBoolean()));
         }
         ProtocolsGenerator.prioritizePullFromSites(sites);
@@ -172,11 +172,6 @@ public class ProtocolsGeneratorTest {
 
     @Test
     public void testPrioritizePushToSites() throws Exception {
-
-        URI readWriteResourceID = URI.create("ivo://read-write-site");
-        URI readOnlyResourceID = URI.create("ivo://read-only-site");
-        URI writeOnlyResourceID = URI.create("ivo://write-only-site");
-
         List<Namespace> readWriteNamespaces = new ArrayList<>();
         readWriteNamespaces.add(new Namespace("readwrite:RW1/"));
         readWriteNamespaces.add(new Namespace("readwrite:RW2/"));
@@ -190,23 +185,24 @@ public class ProtocolsGeneratorTest {
         writeOnlyNamespaces.add(new Namespace("writeonly:WO1/"));
         writeOnlyNamespaces.add(new Namespace("writeonly:WO2/"));
 
-        StorageSite readWriteSite = new StorageSite(readWriteResourceID, "read-write-site", true, true);
-        StorageSite readOnlySite = new StorageSite(readOnlyResourceID, "read-only-site", true, false);
-        StorageSite writeOnlySite = new StorageSite(writeOnlyResourceID, "write-only-site", false, true);
-
         SortedSet<StorageSite> sites = new TreeSet<>();
         Map<URI, StorageSiteRule> siteRules = new HashMap<>();
 
         // empty set of StorageSite's
         SortedSet<StorageSite> actual = ProtocolsGenerator.prioritizePushToSites(sites, URI.create("other:SITE/file.ext"), siteRules);
         Assert.assertTrue(actual.isEmpty());
-
+        URI readWriteResourceID = URI.create("ivo://read-write-site");
+        StorageSite readWriteSite = new StorageSite(readWriteResourceID, "read-write-site", true, true);
         // single StorageSite
         sites.add(readWriteSite);
         actual = ProtocolsGenerator.prioritizePushToSites(sites, URI.create("other:SITE/file.ext"), siteRules);
         Assert.assertEquals(1, actual.size());
         actual.clear();
 
+        URI readOnlyResourceID = URI.create("ivo://read-only-site");
+        URI writeOnlyResourceID = URI.create("ivo://write-only-site");
+        StorageSite readOnlySite = new StorageSite(readOnlyResourceID, "read-only-site", true, false);
+        StorageSite writeOnlySite = new StorageSite(writeOnlyResourceID, "write-only-site", false, true);
         // artifact with no preferences in config, returns two read-write sites
         sites.add(readOnlySite);
         sites.add(writeOnlySite);
