@@ -65,6 +65,18 @@ The `putPreference` rules are optimizations; they do not restrict the destinatio
 where a namespace is intended to be stored only in some site(s) or where most or all PUTs come from systems that are near one 
 storage site. TODO: support for `GET` preferences? also use client IP address to prioritize?
 
+The following optional key configure raven behaviour when an artifact is not found.
+
+```
+org.opencad.raven.consistency.notFoundDefault=file|none
+```
+Due to eventual consistency, there is an inverval of time before raven becomes aware of a new artifact at one of
+the sites. This key configures the action that raven should take when the artifact is not found:
+- `none`: return not found to the caller
+- `file`: check all the sites and, if found, return the relevant information or redirect to the site. Note that while
+this strategy minimizes the effects of eventaul consistency, it introduces ian overhead when the artifact is not found.
+
+
 **For developer testing only:** To disable authorization checking (via `readGrantProvider` or `writeGrantProvider`
 services), add the following configuration entry to raven.properties:
 ```
