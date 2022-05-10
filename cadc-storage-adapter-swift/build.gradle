@@ -14,7 +14,7 @@ sourceCompatibility = 1.8
 
 group = 'org.opencadc'
 
-version = '0.7.1'
+version = '0.7.2'
 
 apply from: '../opencadc.gradle'
 
@@ -22,9 +22,8 @@ description = 'OpenCADC Storage Inventory SwiftStorageAdapter implementation'
 def git_url = 'https://github.com/opencadc/storage-inventory'
 
 dependencies {
-    compile 'log4j:log4j:[1.2,)'
     compile 'org.apache.commons:commons-pool2:[2.9,3.0)'
-    compile 'org.opencadc:cadc-util:[1.3.10,)'
+    compile 'org.opencadc:cadc-util:[1.6,2.0)'
     compile 'org.opencadc:cadc-inventory:[0.7,)'
     compile 'org.opencadc:cadc-storage-adapter:[0.9,)'
 
