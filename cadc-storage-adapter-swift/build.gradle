@@ -44,3 +44,4 @@ configurations {
   // slf4j work around to exclude log4j-1.x and use backwards compat api
   runtime.exclude group: 'log4j'
 }
+
