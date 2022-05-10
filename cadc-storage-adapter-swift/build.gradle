@@ -33,8 +33,14 @@ dependencies {
 
     //runtime 'org.slf4j:slf4j-nop:[1.6,)'
     runtime 'org.slf4j:slf4j-log4j12:[1.6,2.0)'
+    runtime 'org.apache.logging.log4j:log4j-slf4j-impl:[2.17.2,3.0)'
     
     testCompile 'junit:junit:[4.0,)'
     
     intTestCompile 'org.opencadc:cadc-storage-adapter-test:[0.4,)'
+}
+
+configurations {
+  // slf4j work around to exclude log4j-1.x and use backwards compat api
+  runtime.exclude group: 'log4j'
 }
