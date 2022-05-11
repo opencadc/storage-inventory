@@ -3,7 +3,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2020.                            (c) 2020.
+ *  (c) 2022.                            (c) 2022.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -124,7 +124,6 @@ public class StorageSiteSyncTest {
         LOGGER.info("intTestSiteSyncOK");
         
         final MessageDigest messageDigest = MessageDigest.getInstance("MD5");
-        final TapClient<StorageSite> tapClient = new TapClient<>(TestUtil.LUSKAN_URI);
 
         final StorageSite storageSite = new StorageSite(URI.create("cadc:TESTSITE/one"),
                                                         StorageSiteSyncTest.class.getSimpleName(), true, false);
@@ -132,8 +131,11 @@ public class StorageSiteSyncTest {
 
         Assert.assertTrue("Sites should be empty.", inventoryEnvironment.storageSiteDAO.list().isEmpty());
 
-        final StorageSiteSync storageSiteSync = new StorageSiteSync(tapClient, inventoryEnvironment.storageSiteDAO);
-        Subject.doAs(testUser, (PrivilegedExceptionAction<StorageSite>) storageSiteSync::doit);
+        final StorageSiteSync sync = new StorageSiteSync(inventoryEnvironment.storageSiteDAO, TestUtil.LUSKAN_URI, 6, 6);
+        Subject.doAs(this.testUser, (PrivilegedExceptionAction<Object>) () -> {
+            sync.doit();
+            return null;
+        });
 
         final Set<StorageSite> storageSiteSet = inventoryEnvironment.storageSiteDAO.list();
         Assert.assertEquals("Should be a single site.", 1, storageSiteSet.size());
@@ -151,7 +153,6 @@ public class StorageSiteSyncTest {
         LOGGER.info("intTestSiteSyncChecksumError");
         
         final MessageDigest messageDigest = MessageDigest.getInstance("MD5");
-        final TapClient<StorageSite> tapClient = new TapClient<>(TestUtil.LUSKAN_URI);
 
         Assert.assertTrue("Sites should be empty.", inventoryEnvironment.storageSiteDAO.list().isEmpty());
 
@@ -166,12 +167,15 @@ public class StorageSiteSyncTest {
                                               + "SET metaChecksum = '" + TestUtil.ZERO_BYTES_MD5 + "' WHERE resourceID = "
                                               + "'cadc:TESTSITE/one_1'") > 0);
 
-        final StorageSiteSync storageSiteSync = new StorageSiteSync(tapClient, inventoryEnvironment.storageSiteDAO);
+        final StorageSiteSync sync = new StorageSiteSync(inventoryEnvironment.storageSiteDAO, TestUtil.LUSKAN_URI, 6, 6);
 
         try {
             // Should throw an error.
             //
-            Subject.doAs(testUser, (PrivilegedExceptionAction<StorageSite>) storageSiteSync::doit);
+            Subject.doAs(this.testUser, (PrivilegedExceptionAction<Object>) () -> {
+                sync.doit();
+                return null;
+            });
             Assert.fail("Should throw IllegalStateException.");
         } catch (IllegalStateException e) {
             // Good.
@@ -186,9 +190,8 @@ public class StorageSiteSyncTest {
     @Test
     public void intTestSiteSyncMultiple() throws Exception {
         LOGGER.info("intTestSiteSyncMultiple");
-        final TapClient<StorageSite> tapClient = new TapClient<>(TestUtil.LUSKAN_URI);
-        final StorageSiteSync storageSiteSyncMultipleSitesError =
-                new StorageSiteSync(tapClient, inventoryEnvironment.storageSiteDAO);
+        final StorageSiteSync sync =
+                new StorageSiteSync(inventoryEnvironment.storageSiteDAO, TestUtil.LUSKAN_URI, 6, 6);
 
         final StorageSite storageSite = new StorageSite(URI.create("cadc:TESTSITE/one_1"),
                                                         StorageSiteSyncTest.class.getSimpleName(), true, false);
@@ -201,7 +204,10 @@ public class StorageSiteSyncTest {
         try {
             // Should throw an error.
             //
-            Subject.doAs(testUser, (PrivilegedExceptionAction<StorageSite>) storageSiteSyncMultipleSitesError::doit);
+            Subject.doAs(this.testUser, (PrivilegedExceptionAction<Object>) () -> {
+                sync.doit();
+                return null;
+            });
             Assert.fail("Should throw IllegalStateException.");
         } catch (IllegalStateException e) {
             // Good.
@@ -212,17 +218,19 @@ public class StorageSiteSyncTest {
     @Test
     public void intTestSiteSyncNoSitesFound() throws Exception {
         LOGGER.info("intTestSiteSyncNoSitesFound");
-        final TapClient<StorageSite> tapClient = new TapClient<>(TestUtil.LUSKAN_URI);
 
         Assert.assertTrue("Sites should be empty.", inventoryEnvironment.storageSiteDAO.list().isEmpty());
 
-        final StorageSiteSync storageSiteSyncEmptySitesError =
-                new StorageSiteSync(tapClient, inventoryEnvironment.storageSiteDAO);
+        final StorageSiteSync sync =
+                new StorageSiteSync(inventoryEnvironment.storageSiteDAO, TestUtil.LUSKAN_URI, 6, 6);
 
         try {
             // Should throw an error.
             //
-            Subject.doAs(testUser, (PrivilegedExceptionAction<StorageSite>) storageSiteSyncEmptySitesError::doit);
+            Subject.doAs(this.testUser, (PrivilegedExceptionAction<Object>) () -> {
+                sync.doit();
+                return null;
+            });
             Assert.fail("Should throw IllegalStateException.");
         } catch (IllegalStateException e) {
             // Good.

@@ -86,7 +86,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 
 
 public class LuskanEnvironment {
-    private static final Logger LOGGER = Logger.getLogger(LuskanEnvironment.class);
+    private static final Logger log = Logger.getLogger(LuskanEnvironment.class);
 
     // The local inventory database DAOs.
     final StorageSiteDAO storageSiteDAO = new StorageSiteDAO();
@@ -120,12 +120,15 @@ public class LuskanEnvironment {
     }
 
     void cleanTestEnvironment() throws Exception {
+        log.info("cleanTestEnvironment: " + LuskanEnvironment.class.getSimpleName() + " - START");
         final JdbcTemplate jdbcTemplate = new JdbcTemplate(DBUtil.findJNDIDataSource(jndiPath));
-        jdbcTemplate.execute("TRUNCATE TABLE " + TestUtil.LUSKAN_SCHEMA + ".deletedArtifactEvent");
-        jdbcTemplate.execute("TRUNCATE TABLE " + TestUtil.LUSKAN_SCHEMA + ".deletedStorageLocationEvent");
-        jdbcTemplate.execute("TRUNCATE TABLE " + TestUtil.LUSKAN_SCHEMA + ".storageSite");
-        jdbcTemplate.execute("TRUNCATE TABLE " + TestUtil.LUSKAN_SCHEMA + ".harvestState");
+        jdbcTemplate.execute("TRUNCATE TABLE " + TestUtil.LUSKAN_SCHEMA + ".DeletedArtifactEvent");
+        jdbcTemplate.execute("TRUNCATE TABLE " + TestUtil.LUSKAN_SCHEMA + ".DeletedStorageLocationEvent");
+        jdbcTemplate.execute("TRUNCATE TABLE " + TestUtil.LUSKAN_SCHEMA + ".StorageSite");
         jdbcTemplate.execute("TRUNCATE TABLE " + TestUtil.LUSKAN_SCHEMA + ".Artifact");
+        
+        jdbcTemplate.execute("TRUNCATE TABLE " + TestUtil.LUSKAN_SCHEMA + ".HarvestState");
+        log.info("cleanTestEnvironment: " + LuskanEnvironment.class.getSimpleName() + " - DONE");
     }
     
     
