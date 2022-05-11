@@ -71,12 +71,12 @@ import ca.nrc.cadc.auth.AuthenticationUtil;
 import ca.nrc.cadc.auth.SSLUtil;
 import ca.nrc.cadc.db.ConnectionConfig;
 import ca.nrc.cadc.io.ResourceIterator;
+import ca.nrc.cadc.thread.ThreadedRunnableExecutor;
 import ca.nrc.cadc.vosi.Availability;
 import ca.nrc.cadc.vosi.AvailabilityClient;
 
 import java.io.File;
 import java.net.URI;
-import java.security.PrivilegedAction;
 import java.util.Iterator;
 import java.util.Map;
 
@@ -115,7 +115,7 @@ public class FileSync implements Runnable {
     private final BucketSelector selector;
     private final int nthreads;
     private final StorageAdapter storageAdapter;
-    private final ThreadPool threadPool;
+    private final ThreadedRunnableExecutor threadPool;
     private final LinkedBlockingQueue<Runnable> jobQueue;
 
     // test usage only
@@ -190,7 +190,7 @@ public class FileSync implements Runnable {
         // consumer: ThreadPool uses jobQueue.take(); blocks if queue is empty
 
         this.jobQueue = new LinkedBlockingQueue<>(this.nthreads * 2);
-        this.threadPool = new ThreadPool(this.jobQueue, this.nthreads);
+        this.threadPool = new ThreadedRunnableExecutor(this.jobQueue, this.nthreads);
 
         this.storageAdapter = localStorage;
 
