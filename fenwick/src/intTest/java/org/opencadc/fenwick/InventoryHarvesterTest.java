@@ -70,6 +70,7 @@ package org.opencadc.fenwick;
 
 import ca.nrc.cadc.date.DateUtil;
 import ca.nrc.cadc.util.Log4jInit;
+import java.net.URI;
 import java.security.PrivilegedExceptionAction;
 import java.text.DateFormat;
 import javax.security.auth.Subject;
@@ -78,6 +79,7 @@ import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
+import org.opencadc.inventory.StorageSite;
 import org.opencadc.inventory.util.AllArtifacts;
 
 
@@ -115,33 +117,40 @@ public class InventoryHarvesterTest {
         final InventoryHarvester testSubject = new InventoryHarvester(inventoryEnvironment.daoConfig,
                 inventoryEnvironment.connectionConfig, TestUtil.LUSKAN_URI, new AllArtifacts(), true, 20);
         try {
+            // TODO: need to run this is separate thread so we can verify and terminate
             Subject.doAs(this.testUser, (PrivilegedExceptionAction<Object>) () -> {
                 testSubject.run();
                 return null;
             });
+            
             Assert.fail("Should throw IllegalArgumentException for missing storage site.");
         } catch (IllegalStateException expected) {
-            // verify that sync threads no longer running
+            // TODO: verify that sync threads no longer running
         } finally {
-            // kill threads just in case
+            // TODO: kill threads just in case
         }
     }
 
     
     //@Test
     public void testStartup() throws Exception {
+        // setup: create storage site
+        StorageSite storageSite = new StorageSite(URI.create("cadc:TESTSITE/one"), "one", true, false);
+        luskanEnvironment.storageSiteDAO.put(storageSite);
+        
         final InventoryHarvester testSubject = new InventoryHarvester(inventoryEnvironment.daoConfig,
                 inventoryEnvironment.connectionConfig, TestUtil.LUSKAN_URI, new AllArtifacts(), true, 20);
         try {
+            // TODO: need to run this is separate thread so we can verify and terminate
             Subject.doAs(this.testUser, (PrivilegedExceptionAction<Object>) () -> {
                 testSubject.run();
                 return null;
             });
             
-            // TODO: test to verify that InventoryHarvester.run() starts up all sync threads correctly
-            
+            // TODO: test to verify that InventoryHarvester.run() starts up all sync threads correctly??
+            // TODO: terminate thread
         } finally {
-            // kill threads just in case
+            // TODO: kill threads just in case
         }
         
         
