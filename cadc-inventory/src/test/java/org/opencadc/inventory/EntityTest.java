@@ -233,6 +233,24 @@ public class EntityTest {
     }
     
     @Test
+    public void testStorageLocationEvent() {
+        try {
+            StorageLocationEvent ok = new StorageLocationEvent(UUID.randomUUID());
+            log.info("created: " + ok);
+            
+            try {
+                StorageLocationEvent invalid = new StorageLocationEvent(null);
+                Assert.fail("created: " + invalid);
+            } catch (IllegalArgumentException expected) {
+                log.info("expected: " + expected);
+            }
+        } catch (Exception ex) {
+            log.error("unexpected exception", ex);
+            Assert.fail("unexpected exception: " + ex);
+        }
+    }
+    
+    @Test
     public void testDeletedStorageLocationEvent() {
         try {
             DeletedStorageLocationEvent ok = new DeletedStorageLocationEvent(UUID.randomUUID());

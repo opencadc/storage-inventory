@@ -63,23 +63,19 @@ Development starts with the UML diagrams and the current version may be ahead of
 VO-DML documentation. 
 
 <img alt="Storage System UML - development version" style="border-width:0" 
-src="https://github.com/opencadc/storage-inventory/raw/master/storage-inventory-dm/src/main/resources/storage-inventory-0.5.png" />
+src="src/main/resources/storage-inventory-0.6.png" />
 
 # Artifact.uri
 This URI is a globally unique logical identifier that is typically known to and may be defined by some other system 
 (e.g. an Artifact.uri in CAOM or storageID in a storage-system backed VOSpace like ivo://cadc.nrc.ca/vault). 
 
-{scheme}:{path}
+{scheme}:{relative-path}
 
-ivo://{authority}/{name}?{path}
-
-For all URIs, the filename would be the last component of {path}. There is no explicit namespace: arbitrary sets of files
+For all URIs, the filename would be the last component of the path. There is no explicit namespace: arbitrary sets of files
 can be defined with a prefix-pattern match on uri. Such sets of files would be used in validation and in site mirroring 
-policies.
+policies. Normal CADC practice is to use the scheme and first path component (archive name) as a namespace.
 
-For resolvable ivo URIs, the resourceID can be extracted by dropping the query string. The resourceID 
-can be found in a registry and allows clients to find data services. This form allows for generic tools to resolve
-and access files from external systems. Example usage of equivalent uri values:
+Example usage of uri values:
 
 **ad:{archive}/{filename}** *classic*
 
@@ -87,20 +83,14 @@ and access files from external systems. Example usage of equivalent uri values:
 
 **mast:{path}/{filename}** *in use now*
 
-ivo://cadc.nrc.ca/{archive}?{path}/{filename} *resolvable archive?*
-
-ivo://cadc.nrc.ca/{srv}?{path}/{filename} *resolvable multi-archive service?*
-
-The fully resolvable uri (ivo scheme) can be used to extract a resourceID (up to the ?) and perform a registry lookup.
-The resulting record would contain at least two capabilities: a transfer negotiation or a files endpoint and a permissions endpoint. Classic (ad) and proposed new (cadc scheme) usage is to use a shortcut scheme that is configured to be equivalent to the multi-archive data centre. The first form (with the archive in the resourceID) allows for changes from a common to a different permission service (for that archive); the second form is the resolvable version of current practice. The short forms (ad and cadc schemes) require configuration at storage sites to map the scheme (e.g. cadc -> ivo://cadc.nrc.ca/archive) for capability lookup. For externally harvested and sync'ed CAOM artifacts, we would use the URI as-is in the Artifact.uri field. For the simple form (e.g. mast:HST/path/to/file.fits) we would configure the scheme (mast) as a shortcut to the CAOM archive metadata service.
+Artifact.uri is a semantically meaningful identifier that remains unchanged when the Artifact is mirrored or synced to different sites. Local code/configuration is used to resolve this identifier to a URL for data access. For externally harvested and sync'ed CAOM artifacts, we would use the URI as-is in the Artifact.uri field.
 
 Validation of CAOM versus storage requires querying CAOM (1+ collections) and storage (single namespace) and 
 cross-matching URIs to look for anomalies.
 
-For vault (vospace), data nodes would have a generated identifier and use something like 
-ivo://cadc.nrc.ca/vault?{uuid}/{filename} or vault:{uuid}/{filename}. For the latter, storage sites would require
-configuration to support the shortcut (as would other instances). There should be no use of the "vos" scheme in a uri so paths within the vospace never get used in storage and move/rename operations (container or data nodes) do not effect the storage system.  Validation of vault versus storage requires querying vault (and building uri values programmatically unless
-vaultdb stores the full URI) and storage and cross-matching to look for anomalies.
+For vault (vospace), data nodes would have a generated identifier and use something like cadc:vault/{uuid} or vault:{uuid} 
+(but not containing the logical filename in VOSpace). There should be no use of the "vos" scheme in a uri so paths within the vospace never get used in storage and move/rename operations (container or data nodes) do not effect the storage system.  Validation of vault versus storage requires querying vault (and building uri values programmatically unless
+vault db stores the full URI) and storage and cross-matching to look for anomalies.
 
 Since we need to support mast and vault schemes (at least), it is assumed that we would use the "cadc" scheme going 
 forward and support (configure) the "ad" scheme for backwards compatibility. 
