@@ -78,6 +78,8 @@ import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.db.StorageSiteDAO;
+import org.opencadc.permissions.ReadGrant;
+import org.opencadc.permissions.TokenTool;
 
 /**
  * Interface with inventory to get the metadata of an artifact.
@@ -104,16 +106,18 @@ public class HeadFilesAction extends FilesAction {
         log.debug("Starting HEAD action for " + artifactURI.toASCIIString());
         Artifact artifact = artifactDAO.get(artifactURI);
         if (artifact == null) {
-            if (this.notFoundStrategy == ArtifactNotFoundDefaultStrategy.FIND) {
+            if (this.preventNotFound) {
                 // check the other sites
                 ProtocolsGenerator pg = new ProtocolsGenerator(this.artifactDAO, this.publicKeyFile, this.privateKeyFile,
-                        this.user, this.siteAvailabilities, this.siteRules, this.notFoundStrategy);
+                        this.user, this.siteAvailabilities, this.siteRules, this.preventNotFound);
                 StorageSiteDAO storageSiteDAO = new StorageSiteDAO(artifactDAO);
                 Transfer transfer = new Transfer(artifactURI, Direction.pullFromVoSpace);
                 Protocol proto = new Protocol(VOS.PROTOCOL_HTTPS_GET);
                 proto.setSecurityMethod(Standards.SECURITY_METHOD_ANON);
                 transfer.getProtocols().add(proto);
-                artifact = pg.getUnsyncedArtifact(artifactURI, transfer, storageSiteDAO.list());
+                TokenTool tk = new TokenTool(publicKeyFile, privateKeyFile);
+                String authToken = tk.generateToken(artifactURI, ReadGrant.class, user);
+                artifact = pg.getUnsyncedArtifact(artifactURI, transfer, storageSiteDAO.list(), authToken);
             }
 
         }

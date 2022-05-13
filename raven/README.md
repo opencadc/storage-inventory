@@ -29,8 +29,15 @@ org.opencadc.raven.inventory.schema={schema}
 
 org.opencadc.raven.publicKeyFile={public key file name}
 org.opencadc.raven.privateKeyFile={private key file name}
+
+# consistency settings
+org.opencad.raven.consistency.preventNotFound=true|false
 ```
 The key file names are relative (no path) and the files must be in the config directory.
+
+raven can be configured prevent artifact-not-found errors that might result due to the eventual consistency nature of
+the system by directly checking for the artifact at the sites (`preventNotFound=true`). This however introduces an
+overhead for the genuine not-found cases.
 
 The following optional keys configure raven to use external service(s) to obtain grant information in order
 to perform authorization checks:
@@ -67,14 +74,6 @@ storage site. TODO: support for `GET` preferences? also use client IP address to
 
 The following optional key configure raven behaviour when an artifact is not found.
 
-```
-org.opencad.raven.consistency.notFoundDefault=file|none
-```
-Due to eventual consistency, there is an inverval of time before raven becomes aware of a new artifact at one of
-the sites. This key configures the action that raven should take when the artifact is not found:
-- `none`: return not found to the caller
-- `file`: check all the sites and, if found, return the relevant information or redirect to the site. Note that while
-this strategy minimizes the effects of eventaul consistency, it introduces ian overhead when the artifact is not found.
 
 
 **For developer testing only:** To disable authorization checking (via `readGrantProvider` or `writeGrantProvider`

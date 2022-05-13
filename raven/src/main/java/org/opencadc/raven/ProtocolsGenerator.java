@@ -67,6 +67,7 @@
 
 package org.opencadc.raven;
 
+import ca.nrc.cadc.cred.client.CredUtil;
 import ca.nrc.cadc.net.HttpGet;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.reg.Capabilities;
@@ -87,6 +88,7 @@ import java.net.URI;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -123,12 +125,12 @@ public class ProtocolsGenerator {
     private final File privateKeyFile;
     private final Map<URI, Availability> siteAvailabilities;
     private final Map<URI, StorageSiteRule> siteRules;
-    private final ArtifactNotFoundDefaultStrategy artifactNotFoundStrategy;
+    private final boolean preventNotFound;
 
 
     public ProtocolsGenerator(ArtifactDAO artifactDAO, File publicKeyFile, File privateKeyFile, String user,
                               Map<URI, Availability> siteAvailabilities, Map<URI, StorageSiteRule> siteRules,
-                              ArtifactNotFoundDefaultStrategy artifactNotFoundStrategy) {
+                              boolean preventNotFound) {
         this.artifactDAO = artifactDAO;
         this.deletedArtifactEventDAO = new DeletedArtifactEventDAO(this.artifactDAO);
         this.user = user;
@@ -136,7 +138,7 @@ public class ProtocolsGenerator {
         this.privateKeyFile = privateKeyFile;
         this.siteAvailabilities = siteAvailabilities;
         this.siteRules = siteRules;
-        this.artifactNotFoundStrategy = artifactNotFoundStrategy;
+        this.preventNotFound = preventNotFound;
     }
 
     List<Protocol> getProtocols(Transfer transfer) throws ResourceNotFoundException, IOException {
@@ -208,7 +210,7 @@ public class ProtocolsGenerator {
         return filesCap;
     }
 
-    Artifact getUnsyncedArtifact(URI artifactURI, Transfer transfer, Set<StorageSite> storageSites) {
+    Artifact getUnsyncedArtifact(URI artifactURI, Transfer transfer, Set<StorageSite> storageSites, String authToken) {
         Artifact result = null;
         for (StorageSite storageSite : storageSites) {
             // check if site is currently offline
@@ -217,14 +219,24 @@ public class ProtocolsGenerator {
                 log.warn("Capabilities not found for storage site " + storageSite.getResourceID());
                 continue;
             }
-            TokenTool tk = new TokenTool(publicKeyFile, privateKeyFile);
-            String authToken = tk.generateToken(artifactURI, ReadGrant.class, user);
+            Iterator<Protocol> pi = transfer.getProtocols().iterator();
+            while (result == null && pi.hasNext()) {
+                Protocol proto = pi.next();
 
-            for (Protocol proto : transfer.getProtocols()) {
                 if (storageSite.getAllowRead()) {
                     URI sec = proto.getSecurityMethod();
                     if (sec == null) {
                         sec = Standards.SECURITY_METHOD_ANON;
+                    } else if (Standards.SECURITY_METHOD_CERT.equals(sec)) {
+                        try {
+                            if (!CredUtil.checkCredentials()) {
+                                // skip this protocol
+                                continue;
+                            }
+                        } catch (Exception e) {
+                            log.debug("Failed to check user credentials", e);
+                            continue;
+                        }
                     }
                     Interface iface = filesCap.findInterface(sec);
                     if (iface != null) {
@@ -232,12 +244,20 @@ public class ProtocolsGenerator {
                         log.debug("base url for site " + storageSite.getResourceID() + ": " + baseURL);
                         StringBuilder sb = new StringBuilder();
                         sb.append(baseURL.toExternalForm()).append("/");
-                        if (authToken != null) {
-                            sb.append(authToken).append("/");
-                        }
-                        sb.append(artifactURI.toASCIIString());
+                        List<URL> urls = new ArrayList<URL>();
                         try {
-                            Artifact remoteArtifact = getRemoteArtifact(new URL(sb.toString()), artifactURI);
+                            if (authToken != null && Standards.SECURITY_METHOD_ANON.equals(sec)) {
+                                // add the pre-auth url
+                                URL pa = new URL(sb.toString() + "/" + authToken + "/" + artifactURI.toASCIIString());
+                                urls.add(pa);
+                            }
+                            urls.add(new URL(sb.append(artifactURI.toASCIIString()).toString()));
+                        } catch (MalformedURLException ex) {
+                            throw new RuntimeException("BUG: Malformed URL to the site", ex);
+                        }
+                        Iterator<URL> ui = urls.iterator();
+                        while (result == null && ui.hasNext()){
+                            Artifact remoteArtifact = getRemoteArtifact(ui.next(), artifactURI);
                             if (remoteArtifact == null) {
                                 continue;
                             }
@@ -247,20 +267,13 @@ public class ProtocolsGenerator {
                                 continue;
                             }
                             remoteArtifact.siteLocations.add(new SiteLocation(storageSite.getID()));
-                            if (result != null) {
-                                // there are two remote versions of the artifact that raven is not aware of
-                                // find the winner
-                                log.debug("Artifact " + artifactURI.toASCIIString()
-                                          + " - 2 remote copies that global is not aware of");
-                                if (!InventoryUtil.isRemoteWinner(result, remoteArtifact)) {
-                                    continue;
-                                }
-                            }
-                            result = remoteArtifact;
-                            log.debug("Artifact " + artifactURI.toASCIIString() + " use copy from "
-                                      + storageSite.getResourceID());
-                        } catch (MalformedURLException ex) {
-                            throw new RuntimeException("BUG: Malformd URL to the site", ex);
+                            if (result != null && result.getID().equals(remoteArtifact.getID())) {
+                                result.siteLocations.addAll(remoteArtifact.siteLocations);
+                            } else if (result == null || InventoryUtil.isRemoteWinner(result, remoteArtifact)) {
+                                log.debug("Artifact " + artifactURI.toASCIIString() + " use copy from "
+                                        + storageSite.getResourceID());
+                                result = remoteArtifact;
+                            } // else: just retain current result
                         }
                     }
                 }
@@ -271,7 +284,6 @@ public class ProtocolsGenerator {
     }
 
     List<Protocol> doPullFrom(URI artifactURI, Transfer transfer, String authToken) throws ResourceNotFoundException, IOException {
-        RegistryClient regClient = new RegistryClient();
         StorageSiteDAO storageSiteDAO = new StorageSiteDAO(artifactDAO);
         Set<StorageSite> sites = storageSiteDAO.list(); // this set could be cached
 
@@ -280,11 +292,9 @@ public class ProtocolsGenerator {
         // produce URLs to each of the copies for each of the protocols
         List<StorageSite> storageSites = new ArrayList<>();
         if (artifact == null) {
-            log.debug("Not found strategy: " + this.artifactNotFoundStrategy.toString());
-            if (this.artifactNotFoundStrategy == ArtifactNotFoundDefaultStrategy.FIND) {
-                log.debug("Artifact not found strategy: " + this.artifactNotFoundStrategy);
-                // there's no artifact in global. Check each site directly
-                artifact = getUnsyncedArtifact(artifactURI, transfer, sites);
+            if (this.preventNotFound) {
+                log.debug("Artifact " + artifactURI.toASCIIString() + " not found in global. Check sites.");
+                artifact = getUnsyncedArtifact(artifactURI, transfer, sites, authToken);
             }
         }
 

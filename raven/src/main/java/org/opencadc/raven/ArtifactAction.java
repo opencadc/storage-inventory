@@ -79,7 +79,6 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import javax.naming.Context;
@@ -117,7 +116,7 @@ public abstract class ArtifactAction extends RestAction {
     protected Map<URI, Availability> siteAvailabilities;
     protected Map<URI, StorageSiteRule> siteRules;
 
-    protected final ArtifactNotFoundDefaultStrategy notFoundStrategy;
+    protected final boolean preventNotFound;
 
     // constructor for unit tests with no config/init
     ArtifactAction(boolean init) {
@@ -126,7 +125,7 @@ public abstract class ArtifactAction extends RestAction {
         this.publicKeyFile = null;
         this.privateKeyFile = null;
         this.artifactDAO = null;
-        this.notFoundStrategy = null;
+        this.preventNotFound = false;
     }
 
     protected ArtifactAction() {
@@ -188,12 +187,12 @@ public abstract class ArtifactAction extends RestAction {
       
         // get the storage site rules
         this.siteRules = RavenInitAction.getStorageSiteRules(props);
-        String cnf = props.getFirstPropertyValue(RavenInitAction.ARTIFACT_NOT_FOUND_DEFAULT_KEY);
-        if (cnf != null) {
-            this.notFoundStrategy = ArtifactNotFoundDefaultStrategy.valueOf(cnf.toUpperCase(Locale.ROOT));
-            log.debug("Using consistency strategy: " + this.notFoundStrategy);
+        String pnf = props.getFirstPropertyValue(RavenInitAction.PREVENT_NOT_FOUND_KEY);
+        if (pnf != null) {
+            this.preventNotFound = Boolean.valueOf(pnf);
+            log.debug("Using consistency strategy: " + this.preventNotFound);
         } else {
-            this.notFoundStrategy = null;
+            throw new IllegalStateException("invalid config: missing preventNotFound configuration");
         }
     }
 

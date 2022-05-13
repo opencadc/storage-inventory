@@ -141,7 +141,7 @@ public class GetFilesAction extends FilesAction {
 
         ProtocolsGenerator pg = new ProtocolsGenerator(this.artifactDAO, this.publicKeyFile, this.privateKeyFile,
                                                        this.user, this.siteAvailabilities, this.siteRules,
-                                                       this.notFoundStrategy);
+                                                       this.preventNotFound);
         List<Protocol> protos = pg.getProtocols(transfer);
         if (protos.isEmpty()) {
             throw new ResourceNotFoundException("not available: " + artifactURI);

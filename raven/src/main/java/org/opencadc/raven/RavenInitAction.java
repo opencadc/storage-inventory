@@ -112,7 +112,7 @@ public class RavenInitAction extends InitAction {
     static final String READ_GRANTS_KEY = RAVEN_KEY + ".readGrantProvider";
     static final String WRITE_GRANTS_KEY = RAVEN_KEY + ".writeGrantProvider";
 
-    static final String ARTIFACT_NOT_FOUND_DEFAULT_KEY = RAVEN_CONSIST_KEY + ".notFoundDefault";
+    static final String PREVENT_NOT_FOUND_KEY = RAVEN_CONSIST_KEY + ".preventNotFound";
 
     static final String DEV_AUTH_ONLY_KEY = RAVEN_KEY + ".authenticateOnly";
 
@@ -270,6 +270,15 @@ public class RavenInitAction extends InitAction {
         String priv = mvp.getFirstPropertyValue(RavenInitAction.PRIVKEYFILE_KEY);
         sb.append("\n\t").append(RavenInitAction.PRIVKEYFILE_KEY).append(": ");
         if (priv == null) {
+            sb.append("MISSING");
+            ok = false;
+        } else {
+            sb.append("OK");
+        }
+
+        String preventNotFound = mvp.getFirstPropertyValue(RavenInitAction.PREVENT_NOT_FOUND_KEY);
+        sb.append("\n\t").append(RavenInitAction.PREVENT_NOT_FOUND_KEY).append(": ");
+        if (preventNotFound == null) {
             sb.append("MISSING");
             ok = false;
         } else {
