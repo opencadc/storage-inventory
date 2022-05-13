@@ -73,9 +73,6 @@ where a namespace is intended to be stored only in some site(s) or where most or
 storage site. TODO: support for `GET` preferences? also use client IP address to prioritize?
 
 The following optional key configure raven behaviour when an artifact is not found.
-
-
-
 **For developer testing only:** To disable authorization checking (via `readGrantProvider` or `writeGrantProvider`
 services), add the following configuration entry to raven.properties:
 ```
