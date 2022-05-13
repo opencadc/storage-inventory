@@ -256,7 +256,7 @@ public class ProtocolsGenerator {
                             throw new RuntimeException("BUG: Malformed URL to the site", ex);
                         }
                         Iterator<URL> ui = urls.iterator();
-                        while (result == null && ui.hasNext()){
+                        while (result == null && ui.hasNext()) {
                             Artifact remoteArtifact = getRemoteArtifact(ui.next(), artifactURI);
                             if (remoteArtifact == null) {
                                 continue;
