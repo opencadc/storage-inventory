@@ -71,7 +71,6 @@ import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.rest.InlineContentException;
 import ca.nrc.cadc.rest.InlineContentHandler;
 import ca.nrc.cadc.vos.Direction;
-import ca.nrc.cadc.vos.Protocol;
 import ca.nrc.cadc.vos.Transfer;
 import ca.nrc.cadc.vos.TransferReader;
 import ca.nrc.cadc.vos.TransferWriter;
@@ -161,7 +160,8 @@ public class PostAction extends ArtifactAction {
         initAndAuthorize();
 
         ProtocolsGenerator pg = new ProtocolsGenerator(this.artifactDAO, this.publicKeyFile, this.privateKeyFile,
-                                                       this.user, this.siteAvailabilities, this.siteRules);
+                                                       this.user, this.siteAvailabilities, this.siteRules,
+                                                       this.preventNotFound);
         Transfer ret = new Transfer(artifactURI, transfer.getDirection());
         // TODO: change from pg.getProtocols(transfer) to pg.getResolvedTransfer(transfer)??
         ret.getProtocols().addAll(pg.getProtocols(transfer));

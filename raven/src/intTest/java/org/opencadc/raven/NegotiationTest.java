@@ -3,7 +3,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2020.                            (c) 2020.
+ *  (c) 2022.                            (c) 2022.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -68,6 +68,10 @@
 package org.opencadc.raven;
 
 import ca.nrc.cadc.auth.AuthMethod;
+import ca.nrc.cadc.auth.RunnableAction;
+import ca.nrc.cadc.net.HttpGet;
+import ca.nrc.cadc.net.HttpTransfer;
+import ca.nrc.cadc.net.HttpUpload;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.reg.Standards;
 import ca.nrc.cadc.reg.client.RegistryClient;
@@ -76,6 +80,8 @@ import ca.nrc.cadc.vos.Direction;
 import ca.nrc.cadc.vos.Protocol;
 import ca.nrc.cadc.vos.Transfer;
 import ca.nrc.cadc.vos.VOS;
+import java.io.ByteArrayInputStream;
+import java.io.InputStream;
 import java.net.URI;
 import java.net.URL;
 import java.security.PrivilegedExceptionAction;
@@ -91,9 +97,11 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.opencadc.inventory.Artifact;
+import org.opencadc.inventory.DeletedArtifactEvent;
 import org.opencadc.inventory.SiteLocation;
 import org.opencadc.inventory.StorageSite;
 import org.opencadc.inventory.db.ArtifactDAO;
+import org.opencadc.inventory.db.DeletedArtifactEventDAO;
 import org.opencadc.inventory.db.StorageSiteDAO;
 import org.opencadc.inventory.db.version.InitDatabase;
 
@@ -110,6 +118,8 @@ public class NegotiationTest extends RavenTest {
         Log4jInit.setLevel("org.opencadc.raven", Level.DEBUG);
         Log4jInit.setLevel("ca.nrc.cadc.db", Level.INFO);
     }
+
+    private static final URI CONSIST_RESOURCE_ID = URI.create("ivo://cadc.nrc.ca/minoc");
 
     ArtifactDAO artifactDAO;
     StorageSiteDAO siteDAO;
@@ -570,4 +580,89 @@ public class NegotiationTest extends RavenTest {
             Assert.fail("unexpected exception: " + e);
         }
     }
+
+    @Test
+    public void testConsistencyPreventNotFound() throws Exception {
+        // Tests raven finding artifacts before they are synced from a location.
+        // Requires raven to be configured with org.opencadc.raven.consistency.preventNotFound=true
+        StorageSite site1 = new StorageSite(CONSIST_RESOURCE_ID, "site1", true, true);
+        RegistryClient regClient = new RegistryClient();
+        siteDAO.put(site1);
+        final URL filesURL = regClient.getServiceURL(CONSIST_RESOURCE_ID, Standards.SI_FILES, AuthMethod.ANON);
+        URI artifactURI = URI.create("cadc:TEST/negotiate-test.txt");
+        URL artifactURL = new URL(filesURL.toString() + "/" + artifactURI.toString());
+
+        String content = "abcdefghijklmnopqrstuvwxyz1234567890";
+        String encoding = "test-encoding";
+        String type = "text/plain";
+        byte[] data = content.getBytes();
+        URI expectedChecksum = TestUtils.computeChecksumURI(data);
+
+        InputStream in = new ByteArrayInputStream(data);
+        HttpUpload put = new HttpUpload(in, artifactURL);
+        put.setRequestProperty(HttpTransfer.CONTENT_TYPE, type);
+        put.setRequestProperty(HttpTransfer.CONTENT_ENCODING, encoding);
+        put.setDigest(expectedChecksum);
+
+        Subject.doAs(userSubject, new RunnableAction(put));
+        log.info("put: " + put.getResponseCode() + " " + put.getThrowable());
+        log.info("headers: " + put.getResponseHeader("content-length") + " " + put.getResponseHeader("digest"));
+        Assert.assertNull(put.getThrowable());
+        Assert.assertEquals("Created", 201, put.getResponseCode());
+        // at this point the artifact is created on remote but it is unknown to raven
+
+        List<Protocol> protos = new ArrayList<>();
+        // https+anon
+        Protocol sa = new Protocol(VOS.PROTOCOL_HTTPS_GET);
+        protos.add(sa);
+        // https+cert
+        Protocol sc = new Protocol(VOS.PROTOCOL_HTTPS_GET);
+        sc.setSecurityMethod(Standards.SECURITY_METHOD_CERT);
+        protos.add(sc);
+
+        Subject.doAs(userSubject, new PrivilegedExceptionAction<Object>() {
+            public Object run() throws Exception {
+
+                Transfer transfer = new Transfer(artifactURI, Direction.pullFromVoSpace);
+                transfer.getProtocols().addAll(protos);
+                transfer.version = VOS.VOSPACE_21;
+
+                Transfer response = negotiate(transfer);
+                log.info("transfer: " + response);
+                // 3 URLs: pre-auth anon, anon and cert
+                Assert.assertEquals(3, response.getProtocols().size());
+                return null;
+            }
+        });
+
+        // add the artifact to the deleted artifact table. global should return "not found" in this case
+        HttpGet locationHead = new HttpGet(artifactURL, false);
+        locationHead.setHeadOnly(true);
+        locationHead.run();
+        UUID artifactID = UUID.fromString(locationHead.getResponseHeader(ProtocolsGenerator.ARTIFACT_ID_HDR));
+
+        DeletedArtifactEventDAO daeDAO = new DeletedArtifactEventDAO(false);
+        daeDAO.setConfig(config);
+        DeletedArtifactEvent dae = new DeletedArtifactEvent(artifactID);
+        daeDAO.put(dae);
+
+        Subject.doAs(userSubject, new PrivilegedExceptionAction<Object>() {
+            public Object run() throws Exception {
+
+                Transfer transfer = new Transfer(artifactURI, Direction.pullFromVoSpace);
+                transfer.getProtocols().addAll(protos);
+                transfer.version = VOS.VOSPACE_21;
+                try {
+                    negotiate(transfer);
+                    Assert.fail("should have received file not found exception");
+                } catch (ResourceNotFoundException e) {
+                    log.info("caught expected: " + e);
+                }
+                return null;
+            }
+        });
+
+
+    }
+
 }

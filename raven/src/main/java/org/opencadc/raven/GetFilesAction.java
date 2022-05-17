@@ -77,7 +77,6 @@ import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.URLEncoder;
-import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import org.apache.log4j.Logger;
@@ -139,9 +138,10 @@ public class GetFilesAction extends FilesAction {
         Protocol proto = new Protocol(VOS.PROTOCOL_HTTPS_GET);
         proto.setSecurityMethod(Standards.SECURITY_METHOD_ANON);
         transfer.getProtocols().add(proto);
-        
+
         ProtocolsGenerator pg = new ProtocolsGenerator(this.artifactDAO, this.publicKeyFile, this.privateKeyFile,
-                                                       this.user, this.siteAvailabilities, this.siteRules);
+                                                       this.user, this.siteAvailabilities, this.siteRules,
+                                                       this.preventNotFound);
         List<Protocol> protos = pg.getProtocols(transfer);
         if (protos.isEmpty()) {
             throw new ResourceNotFoundException("not available: " + artifactURI);

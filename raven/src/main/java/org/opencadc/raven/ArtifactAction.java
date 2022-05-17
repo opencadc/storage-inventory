@@ -90,7 +90,6 @@ import org.opencadc.inventory.server.PermissionsCheck;
 import org.opencadc.permissions.ReadGrant;
 import org.opencadc.permissions.WriteGrant;
 
-
 /**
  * Abstract class for all that raven action classes have in common,
  * including request parsing, authentication, and authentication.
@@ -117,6 +116,8 @@ public abstract class ArtifactAction extends RestAction {
     protected Map<URI, Availability> siteAvailabilities;
     protected Map<URI, StorageSiteRule> siteRules;
 
+    protected final boolean preventNotFound;
+
     // constructor for unit tests with no config/init
     ArtifactAction(boolean init) {
         super();
@@ -124,6 +125,7 @@ public abstract class ArtifactAction extends RestAction {
         this.publicKeyFile = null;
         this.privateKeyFile = null;
         this.artifactDAO = null;
+        this.preventNotFound = false;
     }
 
     protected ArtifactAction() {
@@ -185,6 +187,13 @@ public abstract class ArtifactAction extends RestAction {
       
         // get the storage site rules
         this.siteRules = RavenInitAction.getStorageSiteRules(props);
+        String pnf = props.getFirstPropertyValue(RavenInitAction.PREVENT_NOT_FOUND_KEY);
+        if (pnf != null) {
+            this.preventNotFound = Boolean.valueOf(pnf);
+            log.debug("Using consistency strategy: " + this.preventNotFound);
+        } else {
+            throw new IllegalStateException("invalid config: missing preventNotFound configuration");
+        }
     }
 
     protected void initAndAuthorize() throws Exception {
