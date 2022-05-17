@@ -29,8 +29,15 @@ org.opencadc.raven.inventory.schema={schema}
 
 org.opencadc.raven.publicKeyFile={public key file name}
 org.opencadc.raven.privateKeyFile={private key file name}
+
+# consistency settings
+org.opencadc.raven.consistency.preventNotFound=true|false
 ```
 The key file names are relative (no path) and the files must be in the config directory.
+
+raven can be configured prevent artifact-not-found errors that might result due to the eventual consistency nature of
+the system by directly checking for the artifact at the sites (`preventNotFound=true`). This however introduces an
+overhead for the genuine not-found cases.
 
 The following optional keys configure raven to use external service(s) to obtain grant information in order
 to perform authorization checks:
@@ -65,6 +72,7 @@ The `putPreference` rules are optimizations; they do not restrict the destinatio
 where a namespace is intended to be stored only in some site(s) or where most or all PUTs come from systems that are near one 
 storage site. TODO: support for `GET` preferences? also use client IP address to prioritize?
 
+The following optional key configure raven behaviour when an artifact is not found.
 **For developer testing only:** To disable authorization checking (via `readGrantProvider` or `writeGrantProvider`
 services), add the following configuration entry to raven.properties:
 ```
