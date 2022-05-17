@@ -3,7 +3,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2021.                            (c) 2021.
+ *  (c) 2022.                            (c) 2022.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -75,7 +75,6 @@ import ca.nrc.cadc.net.HttpTransfer;
 import ca.nrc.cadc.net.HttpUpload;
 import ca.nrc.cadc.reg.Standards;
 import ca.nrc.cadc.reg.client.RegistryClient;
-import ca.nrc.cadc.util.HexUtil;
 import ca.nrc.cadc.util.Log4jInit;
 import ca.nrc.cadc.vos.Direction;
 import ca.nrc.cadc.vos.Protocol;
@@ -83,14 +82,10 @@ import ca.nrc.cadc.vos.Transfer;
 import ca.nrc.cadc.vos.VOS;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
-import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URI;
 import java.net.URL;
-import java.security.DigestInputStream;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.security.PrivilegedExceptionAction;
 import java.util.Date;
 import java.util.Set;
@@ -296,21 +291,21 @@ public class FilesTest extends RavenTest {
     }
 
     @Test
-    public void testConsistencyHEAD() throws Exception {
+    public void testConsistencyPreventNotFound() throws Exception {
         // Tests raven finding artifacts before they are synced from a location.
-        // Requires raven to be configured with org.opencadc.raven.consistency.notFoundDefault=find
+        // Requires raven to be configured with org.opencadc.raven.consistency.preventNotFound=true
         StorageSite site1 = new StorageSite(CONSIST_RESOURCE_ID, "site1", true, true);
         RegistryClient regClient = new RegistryClient();
         siteDAO.put(site1);
         final URL filesURL = regClient.getServiceURL(CONSIST_RESOURCE_ID, Standards.SI_FILES, AuthMethod.ANON);
-        URI artifactURI = URI.create("cadc:TEST/file.txt");
+        URI artifactURI = URI.create("cadc:TEST/files-test.txt");
         URL artifactURL = new URL(filesURL.toString() + "/" + artifactURI.toString());
 
         String content = "abcdefghijklmnopqrstuvwxyz";
         String encoding = "test-encoding";
         String type = "text/plain";
         byte[] data = content.getBytes();
-        URI expectedChecksum = computeChecksumURI(data);
+        URI expectedChecksum = TestUtils.computeChecksumURI(data);
 
         InputStream in = new ByteArrayInputStream(data);
         HttpUpload put = new HttpUpload(in, artifactURL);
@@ -412,17 +407,5 @@ public class FilesTest extends RavenTest {
 
     }
 
-    protected static URI computeChecksumURI(byte[] input) throws NoSuchAlgorithmException, IOException {
-        MessageDigest md = MessageDigest.getInstance("MD5");
-        InputStream in = new ByteArrayInputStream(input);
-        DigestInputStream dis = new DigestInputStream(in, md);
-        int bytesRead = dis.read();
-        byte[] buf = new byte[512];
-        while (bytesRead > 0) {
-            bytesRead = dis.read(buf);
-        }
-        byte[] digest = md.digest();
-        return URI.create("md5:" + HexUtil.toHex(digest));
-    }
 }
 

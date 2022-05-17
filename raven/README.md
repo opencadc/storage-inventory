@@ -31,7 +31,7 @@ org.opencadc.raven.publicKeyFile={public key file name}
 org.opencadc.raven.privateKeyFile={private key file name}
 
 # consistency settings
-org.opencad.raven.consistency.preventNotFound=true|false
+org.opencadc.raven.consistency.preventNotFound=true|false
 ```
 The key file names are relative (no path) and the files must be in the config directory.
 
