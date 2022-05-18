@@ -2,7 +2,7 @@
 Storage Inventory components
 
 ## storage-inventory-dm
-This is the storage inventory data model and architecture documentation.
+This is the storage inventory data model and architecture documentation. TODO: Add an FAQ.
 
 ## cadc-*
 These are libraries used in multiple services and applications.
