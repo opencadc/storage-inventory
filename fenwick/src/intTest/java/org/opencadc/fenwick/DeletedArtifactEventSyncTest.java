@@ -99,7 +99,7 @@ public class DeletedArtifactEventSyncTest {
     static {
         Log4jInit.setLevel("org.opencadc.inventory", Level.INFO);
         Log4jInit.setLevel("ca.nrc.cadc.db", Level.INFO);
-        Log4jInit.setLevel("org.opencadc.fenwick", Level.DEBUG);
+        Log4jInit.setLevel("org.opencadc.fenwick", Level.INFO);
     }
 
     private final InventoryEnvironment inventoryEnvironment = new InventoryEnvironment();
@@ -111,15 +111,6 @@ public class DeletedArtifactEventSyncTest {
     public DeletedArtifactEventSyncTest() throws Exception {
     }
 
-    //@Before
-    public void setup() throws SQLException {
-        log.info("deleting source events...");
-        DataSource ds = luskanEnvironment.deletedArtifactEventDAO.getDataSource();
-        String sql = String.format("delete from %s.DeletedArtifactEvent", TestUtil.LUSKAN_SCHEMA);
-        ds.getConnection().createStatement().execute(sql);
-        log.info("deleting source events... OK");
-    }
-    
     @Before
     public void beforeTest() throws Exception {
         inventoryEnvironment.cleanTestEnvironment();

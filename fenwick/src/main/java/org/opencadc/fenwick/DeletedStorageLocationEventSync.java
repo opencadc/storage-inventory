@@ -225,6 +225,7 @@ public class DeletedStorageLocationEventSync extends AbstractSync {
                 logSummary(DeletedStorageLocationEvent.class);
             }
         }
+        logSummary(DeletedStorageLocationEvent.class, true);
     }
 
     ResourceIterator<DeletedStorageLocationEvent> getEventStream(Date startTime, Date endTime)

@@ -290,6 +290,7 @@ public class ArtifactSync extends AbstractSync {
                 logSummary(Artifact.class);
             }
         }
+        logSummary(Artifact.class, true);
     }
     
     // true if remote is the winner, false if local is the winner

@@ -254,7 +254,7 @@ abstract class AbstractSync implements Runnable {
                 double minutes = ((double) dt) / (60L * 1000L);
                 long epm = Math.round(numEvents / minutes); 
                 String msg = "%s.summary%s numTotal=%d num=%d events-per-minute=%d eob=%b";
-                log.info(String.format(this.getClass().getSimpleName(), msg, c.getSimpleName(), 
+                log.info(String.format(msg, this.getClass().getSimpleName(), c.getSimpleName(), 
                         numEventsTotal, numEvents, epm, doFinal));
                 this.lastSummaryTime = t2;
                 this.numEvents = 0L;

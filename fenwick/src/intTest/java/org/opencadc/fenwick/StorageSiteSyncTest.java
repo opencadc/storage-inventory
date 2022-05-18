@@ -71,7 +71,6 @@ package org.opencadc.fenwick;
 import ca.nrc.cadc.db.DBUtil;
 import ca.nrc.cadc.io.ResourceIterator;
 import ca.nrc.cadc.util.Log4jInit;
-
 import java.io.IOException;
 import java.net.URI;
 import java.security.MessageDigest;
@@ -82,7 +81,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 import javax.security.auth.Subject;
-
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
@@ -90,7 +88,6 @@ import org.junit.Before;
 import org.junit.Test;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.StorageSite;
-import org.opencadc.tap.TapClient;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 
@@ -102,7 +99,7 @@ public class StorageSiteSyncTest {
         Log4jInit.setLevel("org.opencadc.inventory", Level.INFO);
         Log4jInit.setLevel("ca.nrc.cadc.db", Level.INFO);
         Log4jInit.setLevel("org.opencadc.tap", Level.INFO);
-        Log4jInit.setLevel("org.opencadc.fenwick", Level.DEBUG);
+        Log4jInit.setLevel("org.opencadc.fenwick", Level.INFO);
     }
 
     private final InventoryEnvironment inventoryEnvironment = new InventoryEnvironment();
