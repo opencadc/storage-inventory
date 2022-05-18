@@ -214,6 +214,7 @@ public class DeletedArtifactEventSync extends AbstractSync {
                 logSummary(DeletedArtifactEvent.class);
             }
         }
+        logSummary(DeletedArtifactEvent.class, true);
     }
 
     ResourceIterator<DeletedArtifactEvent> getEventStream(Date startTime, Date endTime)
