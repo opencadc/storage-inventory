@@ -22,7 +22,8 @@ This is an implementation of the IVOA **TAP** service that enables querying the 
 both global inventory and storage sites.
 
 ## minoc
-This is an implementation of a **file** service that supports HEAD, GET, PUT, POST, DELETE operations.
+This is an implementation of the **file** service that supports HEAD, GET, PUT, POST, DELETE operations
+and IVOA SODA operations.
 
 ## raven
 This is an implementation of the global **locator** service that supports transfer negotiation.
@@ -37,4 +38,5 @@ local (fenwick) filter policy. This is used if the new fenwick policy excludes a
 synced.
 
 ## tantar
-This is an implementation of the **file-validate** process that compares the inventory database against a back end storage at a storage site.
+This is an implementation of the **file-validate** process that compares the inventory database against 
+the back end storage at a storage site.
