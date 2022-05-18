@@ -112,15 +112,6 @@ public class DeletedStorageLocationEventSyncTest {
     public DeletedStorageLocationEventSyncTest() throws Exception {
     }
 
-    //@Before
-    public void setup() throws SQLException {
-        log.info("deleting source events...");
-        DataSource ds = luskanEnvironment.deletedStorageLocationEventDAO.getDataSource();
-        String sql = String.format("delete from %s.deletedStorageLocationEvent", TestUtil.LUSKAN_SCHEMA);
-        ds.getConnection().createStatement().execute(sql);
-        log.info("deleting source events... OK");
-    }
-    
     @Before
     public void beforeTest() throws Exception {
         inventoryEnvironment.cleanTestEnvironment();

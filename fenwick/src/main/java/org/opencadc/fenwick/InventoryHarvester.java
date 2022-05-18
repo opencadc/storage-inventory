@@ -94,9 +94,6 @@ import org.opencadc.inventory.util.ArtifactSelector;
  */
 public class InventoryHarvester implements Runnable {
     private static final Logger log = Logger.getLogger(InventoryHarvester.class);
-    //public static final String CERTIFICATE_FILE_LOCATION = System.getProperty("user.home") + "/.ssl/cadcproxy.pem";
-    //private static final long LOOKBACK_TIME = 1 * 60 * 1000L;   // one minute, unit: ms
-    //private static final int INITIAL_SLEEP_TIMEOUT = (int) (LOOKBACK_TIME / 2000); // half of lookback, unit: sec
     
     private static final int WAIT_FOR_SITE_SLEEP = 6; // seconds
     private static final int MONITOR_SLEEP = 120;     // seconds

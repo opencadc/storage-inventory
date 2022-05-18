@@ -111,8 +111,6 @@ public class ArtifactSyncTest {
     private final LuskanEnvironment luskanEnvironment = new LuskanEnvironment();
     private final Subject testUser = TestUtil.getConfiguredSubject();
     
-    private final DateFormat df = DateUtil.getDateFormat(DateUtil.IVOA_DATE_FORMAT, DateUtil.UTC);
-    
     public ArtifactSyncTest() throws Exception { 
     }
     
@@ -137,8 +135,6 @@ public class ArtifactSyncTest {
     //
     // 
     private void doAllArtifacts(boolean track) throws Exception {
-        final Calendar calendar = Calendar.getInstance();
-
         final StorageSite site1 = new StorageSite(URI.create("cadc:TEST/site1"), "Test Site", true, false);
         final SiteLocation sloc1 = new SiteLocation(site1.getID());
         final SiteLocation sloc2 = new SiteLocation(UUID.randomUUID());
