@@ -96,8 +96,10 @@ import org.junit.Before;
 import org.junit.Test;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.StorageLocation;
+import org.opencadc.inventory.StorageLocationEvent;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.SQLGenerator;
+import org.opencadc.inventory.db.StorageLocationEventDAO;
 import org.opencadc.inventory.storage.StorageMetadata;
 import org.opencadc.inventory.storage.fs.OpaqueFileSystemStorageAdapter;
 
@@ -162,7 +164,7 @@ public class FileSyncJobTest {
         }
 
         if (deletedArtifacts > 0) {
-            log.info("deleted " + deletedArtifacts+ " artifacts");
+            log.info("deleted " + deletedArtifacts + " artifacts");
         }
     }
 
@@ -229,10 +231,10 @@ public class FileSyncJobTest {
         try {
             createTestDirectory(testDir);
 
-            OpaqueFileSystemStorageAdapter sa = new OpaqueFileSystemStorageAdapter(new File(testDir), 1);
+            final OpaqueFileSystemStorageAdapter sa = new OpaqueFileSystemStorageAdapter(new File(testDir), 1);
 
-            URI artifactID = new URI(TEST_ARTIFACT_URI);
-            URI resourceID = new URI(TEST_RESOURCE_ID);
+            final URI artifactID = new URI(TEST_ARTIFACT_URI);
+            final URI resourceID = new URI(TEST_RESOURCE_ID);
 
             // Set up an Artifact in the database to start.
             Artifact artifactToUpdate = new Artifact(artifactID,
@@ -245,15 +247,25 @@ public class FileSyncJobTest {
             FileSyncJob fsj = new FileSyncJob(artifactToUpdate, resourceID, sa, dao, testSubject);
             fsj.run();
 
-            // check job succeeded by trying to get artifact by location
+            // verify job succeeded by trying to get artifact by location
             Artifact storedArtifact = dao.get(artifactToUpdate.getID());
             Assert.assertNotNull("storage location of artifact should not be null.", storedArtifact.storageLocation);
 
-            // check for file on disk, throw away the bytes
+            // verify for file on disk, throw away the bytes
             FileOutputStream dest = new FileOutputStream("/dev/null");
             log.debug("shunting to /dev/null");
             sa.get(storedArtifact.storageLocation, dest);
-
+            
+            // verify that artifact.lastModified NOT changed
+            Artifact aa = dao.get(artifactToUpdate.getID());
+            Assert.assertNotNull(aa);
+            Assert.assertEquals(artifactToUpdate.getLastModified(), aa.getLastModified());
+            
+            // verify a StorageLocationEvent was created
+            StorageLocationEventDAO sleDAO = new StorageLocationEventDAO(dao);
+            StorageLocationEvent sle = sleDAO.get(artifactToUpdate.getID());
+            Assert.assertNotNull(sle);
+            
         } catch (Exception unexpected) {
             Assert.fail("unexpected exception: " + unexpected);
             log.debug(unexpected);
@@ -268,11 +280,11 @@ public class FileSyncJobTest {
         try {
             createTestDirectory(testDir);
 
-            OpaqueFileSystemStorageAdapter sa = new OpaqueFileSystemStorageAdapter(new File(TEST_ROOT), 1);
+            final OpaqueFileSystemStorageAdapter sa = new OpaqueFileSystemStorageAdapter(new File(TEST_ROOT), 1);
 
             // note: this tests that transfer negotiaiton failed with a ResourceNotFoundException
-            URI artifactID = new URI(TEST_ARTIFACT_NOT_FOUND);
-            URI resourceID = new URI(TEST_RESOURCE_ID);
+            final URI artifactID = new URI(TEST_ARTIFACT_NOT_FOUND);
+            final URI resourceID = new URI(TEST_RESOURCE_ID);
 
             // Set up an Artifact in the database to start.
             // Set checksum to the wrong value.
@@ -290,6 +302,11 @@ public class FileSyncJobTest {
             // check job failed by verifying that storage location not set
             Artifact storedArtifact = dao.get(artifactToUpdate.getID());
             Assert.assertNull(storedArtifact.storageLocation);
+            
+            // verify a StorageLocationEvent was not created
+            StorageLocationEventDAO sleDAO = new StorageLocationEventDAO(dao);
+            StorageLocationEvent sle = sleDAO.get(artifactToUpdate.getID());
+            Assert.assertNull(sle);
             
         } catch (Exception unexpected) {
             log.debug("unexpected exception: " + unexpected);
@@ -308,10 +325,10 @@ public class FileSyncJobTest {
         try {
             createTestDirectory(testDir);
 
-            OpaqueFileSystemStorageAdapter sa = new OpaqueFileSystemStorageAdapter(new File(TEST_ROOT), 1);
+            final OpaqueFileSystemStorageAdapter sa = new OpaqueFileSystemStorageAdapter(new File(TEST_ROOT), 1);
 
-            URI artifactID = new URI(TEST_ARTIFACT_URI);
-            URI resourceID = new URI(TEST_RESOURCE_ID);
+            final URI artifactID = new URI(TEST_ARTIFACT_URI);
+            final URI resourceID = new URI(TEST_RESOURCE_ID);
 
             // Set up an Artifact in the database to start.
             // Set checksum to the wrong value.
@@ -330,6 +347,11 @@ public class FileSyncJobTest {
             Artifact storedArtifact = dao.get(artifactToUpdate.getID());
             Assert.assertNull(storedArtifact.storageLocation);
             
+            // verify a StorageLocationEvent was not created
+            StorageLocationEventDAO sleDAO = new StorageLocationEventDAO(dao);
+            StorageLocationEvent sle = sleDAO.get(artifactToUpdate.getID());
+            Assert.assertNull(sle);
+            
         } catch (Exception unexpected) {
             log.debug("unexpected exception: " + unexpected);
             Assert.fail("unexpected exception");
@@ -344,10 +366,10 @@ public class FileSyncJobTest {
         try {
             createTestDirectory(testDir);
 
-            OpaqueFileSystemStorageAdapter sa = new OpaqueFileSystemStorageAdapter(new File(TEST_ROOT), 1);
+            final OpaqueFileSystemStorageAdapter sa = new OpaqueFileSystemStorageAdapter(new File(TEST_ROOT), 1);
 
-            URI artifactID = new URI(TEST_ARTIFACT_URI);
-            URI resourceID = new URI(TEST_RESOURCE_ID);
+            final URI artifactID = new URI(TEST_ARTIFACT_URI);
+            final URI resourceID = new URI(TEST_RESOURCE_ID);
 
             // Set up an Artifact in the database to start.
             // Set checksum to the wrong value.
@@ -365,6 +387,11 @@ public class FileSyncJobTest {
             // check job failed by verifying that storage location not set
             Artifact storedArtifact = dao.get(artifactToUpdate.getID());
             Assert.assertNull(storedArtifact.storageLocation);
+            
+            // verify a StorageLocationEvent was not created
+            StorageLocationEventDAO sleDAO = new StorageLocationEventDAO(dao);
+            StorageLocationEvent sle = sleDAO.get(artifactToUpdate.getID());
+            Assert.assertNull(sle);
 
         } catch (Exception unexpected) {
             log.debug("unexpected exception: " + unexpected);
@@ -381,10 +408,10 @@ public class FileSyncJobTest {
         try {
             createTestDirectory(testDir);
 
-            OpaqueFileSystemStorageAdapter sa = new OpaqueFileSystemStorageAdapter(new File(TEST_ROOT), 1);
+            final OpaqueFileSystemStorageAdapter sa = new OpaqueFileSystemStorageAdapter(new File(TEST_ROOT), 1);
 
-            URI artifactID = new URI(TEST_ARTIFACT_URI);
-            URI resourceID = new URI(TEST_RESOURCE_ID);
+            final URI artifactID = new URI(TEST_ARTIFACT_URI);
+            final URI resourceID = new URI(TEST_RESOURCE_ID);
 
             // Set up an Artifact in the database to start.
             Artifact artifactToUpdate = new Artifact(artifactID,
@@ -407,6 +434,11 @@ public class FileSyncJobTest {
             // check job did nothing to the storageLocation
             Artifact storedArtifact = dao.get(artifactToUpdate.getID());
             Assert.assertEquals(testLocation, storedArtifact.storageLocation);
+            
+            // verify a StorageLocationEvent was not created
+            StorageLocationEventDAO sleDAO = new StorageLocationEventDAO(dao);
+            StorageLocationEvent sle = sleDAO.get(artifactToUpdate.getID());
+            Assert.assertNull(sle);
 
         } catch (Exception unexpected) {
             log.debug("unexpected exception: " + unexpected);

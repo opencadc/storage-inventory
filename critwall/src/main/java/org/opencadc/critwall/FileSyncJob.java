@@ -107,10 +107,12 @@ import javax.security.auth.Subject;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.InventoryUtil;
+import org.opencadc.inventory.StorageLocationEvent;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.EntityNotFoundException;
 import org.opencadc.inventory.db.ObsoleteStorageLocation;
 import org.opencadc.inventory.db.ObsoleteStorageLocationDAO;
+import org.opencadc.inventory.db.StorageLocationEventDAO;
 import org.opencadc.inventory.storage.NewArtifact;
 import org.opencadc.inventory.storage.PutTransaction;
 import org.opencadc.inventory.storage.StorageAdapter;
@@ -282,7 +284,11 @@ public class FileSyncJob implements Runnable {
                                         locDAO.put(obsLoc);
                                     }
                                 }
+                                StorageLocationEventDAO sleDAO = new StorageLocationEventDAO(artifactDAO);
+                                StorageLocationEvent sle = new StorageLocationEvent(curArtifact.getID());
                                 artifactDAO.setStorageLocation(curArtifact, storageMeta.getStorageLocation());
+                                sleDAO.put(sle);
+                                
                                 success = true;
                                 msg += "bytes=" + storageMeta.getContentLength();
                             }
