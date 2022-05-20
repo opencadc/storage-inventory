@@ -71,15 +71,14 @@ package org.opencadc.fenwick;
 import ca.nrc.cadc.db.ConnectionConfig;
 import ca.nrc.cadc.db.DBConfig;
 import ca.nrc.cadc.db.DBUtil;
-
 import java.util.Map;
 import java.util.TreeMap;
-
 import org.apache.log4j.Logger;
+import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.DeletedArtifactEventDAO;
 import org.opencadc.inventory.db.DeletedStorageLocationEventDAO;
-import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.SQLGenerator;
+import org.opencadc.inventory.db.StorageLocationEventDAO;
 import org.opencadc.inventory.db.StorageSiteDAO;
 import org.opencadc.inventory.db.version.InitDatabase;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -91,6 +90,7 @@ public class LuskanEnvironment {
     // The local inventory database DAOs.
     final StorageSiteDAO storageSiteDAO = new StorageSiteDAO();
     final ArtifactDAO artifactDAO = new ArtifactDAO();
+    final StorageLocationEventDAO storageLocationEventDAO = new StorageLocationEventDAO();
     final DeletedArtifactEventDAO deletedArtifactEventDAO = new DeletedArtifactEventDAO();
     final DeletedStorageLocationEventDAO deletedStorageLocationEventDAO = new DeletedStorageLocationEventDAO();
     final String jndiPath = "jdbc/LuskanEnvironment";
@@ -111,6 +111,7 @@ public class LuskanEnvironment {
 
         storageSiteDAO.setConfig(daoConfig);
         artifactDAO.setConfig(daoConfig);
+        storageLocationEventDAO.setConfig(daoConfig);
         deletedArtifactEventDAO.setConfig(daoConfig);
         deletedStorageLocationEventDAO.setConfig(daoConfig);
 
@@ -126,6 +127,7 @@ public class LuskanEnvironment {
         jdbcTemplate.execute("TRUNCATE TABLE " + TestUtil.LUSKAN_SCHEMA + ".DeletedStorageLocationEvent");
         jdbcTemplate.execute("TRUNCATE TABLE " + TestUtil.LUSKAN_SCHEMA + ".StorageSite");
         jdbcTemplate.execute("TRUNCATE TABLE " + TestUtil.LUSKAN_SCHEMA + ".Artifact");
+        jdbcTemplate.execute("TRUNCATE TABLE " + TestUtil.LUSKAN_SCHEMA + ".StorageLocationEvent");
         
         jdbcTemplate.execute("TRUNCATE TABLE " + TestUtil.LUSKAN_SCHEMA + ".HarvestState");
         log.info("cleanTestEnvironment: " + LuskanEnvironment.class.getSimpleName() + " - DONE");
