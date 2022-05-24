@@ -189,10 +189,13 @@ How does delete file get propagated?
 
 ## lastModified updates
 How does global learn about copies at sites other than the original?
-- when a site file-sync completes (adds a local StorageLocation): update the Artifact.lastModified
-- when global metadata-sync from site(s) see this and tracks (add a SiteLocation): update Artifact.lastModified
+- WAS: when a site file-sync completes (adds a local StorageLocation): update the Artifact.lastModified
+- NOW: when a site file-sync completes (adds a local StorageLocation): create a
+StorageLocationEvent with the Artifact.id
+- when global metadata-sync from site(s) see this and tracks: add a SiteLocation
+- when global metadata-sync *first* sees an Artifact: update Artifact.lastModified to
+make sure the events in global are inserted at head of sequence
 - metadata-sync never modifies Entity metdata: id, metaChecksum never change during sync
-- eventually: Artifact.lastModified will be the latest change at all sites, but that doesn't stop metadata-sync from processing an "event" out of order and merging in the new SiteLocation
 
 ## cache site
 How would a temporary cache instance at a site be maintained?
@@ -276,7 +279,7 @@ minor differences if validating global L.
     evidence: artifact in L without siteLocation constraint
     action: resolve as ID collision
     
-    explanation5: L==global, new Artifact in R, pending/missed changed Artifact event in L
+    explanation5: L==global, new Artifact in R, pending/missed Artifact or StorageLocationEvent event in L
     evidence: ?
     action: insert Artifact and/or add siteLocation
     
@@ -331,6 +334,19 @@ What happens when a storage site detects that a Artifact.contentChecksum != stor
 ## should harvesting detect if site Artifact.lastModified stream is out of whack?
 - non-monotonic, except for volatile head of stack?
 - clock skew
+
+## known inefficiences
+- onced ratik validates artifacts up to timestamp T, fewnick continues to process the 
+sequence of artifacts as usual (redundantly for Artifact.lastModified < T)... investigate
+fenwick-time-skip
+- building a redundant global inventory for N storage sites currently requires
+N fenwick/ratik instances that know about all the sites... investigate global-hot-spare
+- global cannot filter (on Artifact.uri) when syncing DeletedArtifactEvent,
+DeletedStorageLocationEvent, and StorageLocationEvent(s), so a limited global with 
+a restrictive filter policy has to process all such events and ends up ignoring many
+- no mechanism to expunge old events from databases: DeletedArtifactEvent from all, 
+DeletedStorageLocationEvent and StorageLocationEvent from storage sites... investigate old-event-cleanup
+and revisit fenwick logic to skip deleted events when starting fresh
 
 # storage back end implementation notes
 The cadc-storage-adapter API places requirements on the implementation:
