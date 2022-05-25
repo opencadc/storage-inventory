@@ -71,10 +71,10 @@ package org.opencadc.inventory.storage.ad;
 
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.util.Arrays;
 import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Locale;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.StorageLocation;
@@ -92,7 +92,7 @@ public class AdStorageQuery {
     
     private static final String QTMPL = "SELECT uri, inventoryURI, contentMD5, fileSize, ingestDate,"
             + " contentEncoding, contentType"
-            + " FROM archive_files WHERE archiveName = '%s'"
+            + " FROM archive_files WHERE archiveName = '%s' %s"
             + " ORDER BY uri ASC, ingestDate DESC";
 
     static final String DISAMBIGUATE_PREFIX = "x-";
@@ -103,9 +103,30 @@ public class AdStorageQuery {
 
     AdStorageQuery(String storageBucket) {
         InventoryUtil.assertNotNull(AdStorageQuery.class, "storageBucket", storageBucket);
-        String archive = bucket2archive(storageBucket);
-        this.storagebucket = storageBucket;
-        this.query = String.format(this.QTMPL, archive);
+        this.storagebucket = bucket2archive(storageBucket).toLowerCase(Locale.ROOT);
+        String archive = this.storagebucket.contains("vault") ? "VOSpac" : this.storagebucket;
+        String vaultBucketConstraint = "";
+        if (this.storagebucket.contains(":")) {
+            String[] parts = this.storagebucket.split(":");
+            if (parts.length != 2) {
+                throw new IllegalArgumentException("Unexpected vault bucket format: " + storageBucket);
+            }
+            archive = parts[0];
+            // determine the bucket
+            try {
+                if ((parts[1].length() == 0) || (parts[1].length() > 3)) {
+                    throw new IllegalArgumentException("Bucket part must be between 1 and 3 digits: " + storagebucket);
+                }
+                Integer.decode("0x" + parts[1]);
+            } catch (IllegalArgumentException ex) {
+                throw new IllegalArgumentException("invalid checksum URI: "
+                        + parts[1] + " contains invalid hex value, expected hex value");
+            }
+            String minMD5Checksum = parts[1] + "0000000000000000".substring(0, 16 - parts[1].length());
+            String maxMD5Checksum = parts[1] + "ffffffffffffffff".substring(0, 16 - parts[1].length());
+            vaultBucketConstraint = " AND contentMD5 between '" + minMD5Checksum + "' AND '" + maxMD5Checksum + "'";
+        }
+        this.query = String.format(this.QTMPL, archive, vaultBucketConstraint);
     }
 
     public TapRowMapper<StorageMetadata> getRowMapper() {
@@ -161,6 +182,13 @@ public class AdStorageQuery {
                 log.warn(AdStorageMetadataRowMapper.class.getSimpleName() + ".SKIP uri=" + storageID + " reason=invalid=contentChecksum");
                 return null;
             }
+
+            StorageLocation storageLocation = new StorageLocation(storageID);
+            if (storagebucket.startsWith("vault:")) {
+                storageLocation.storageBucket = "vault:" + hex.substring(0, 3);  // vault bucket: vault:123
+            } else {
+                storageLocation.storageBucket = storagebucket;
+            }
             
             // archive_files.fileSize
             Long contentLength = (Long) i.next();
@@ -173,9 +201,6 @@ public class AdStorageQuery {
                 return null;
             }
 
-            StorageLocation storageLocation = new StorageLocation(storageID);
-            storageLocation.storageBucket = storagebucket;
-            
             Date contentLastModified = (Date) i.next();
             if (contentLastModified == null) {
                 // work-around for cases with NULL ingestDate:
