@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2020                            (c) 2020.
+*  (c) 2022.                            (c) 2022.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -71,16 +71,13 @@ import ca.nrc.cadc.db.ConnectionConfig;
 import ca.nrc.cadc.db.DBConfig;
 import ca.nrc.cadc.db.DBUtil;
 import ca.nrc.cadc.util.Log4jInit;
-
 import java.net.URI;
 import java.security.MessageDigest;
 import java.util.Date;
 import java.util.Map;
 import java.util.TreeMap;
-
 import java.util.UUID;
 import javax.sql.DataSource;
-
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
@@ -139,7 +136,7 @@ public class HarvestStateDAOTest {
     }
     
     @Test
-    public void testGetPutUpdateDelete() {
+    public void testPutGetUpdateDelete() {
         try {
             HarvestState expected = new HarvestState(HarvestStateDAOTest.class.getSimpleName(), RID);
             log.info("expected: " + expected);
@@ -226,6 +223,48 @@ public class HarvestStateDAOTest {
             
             dao.delete(expected.getID());
             HarvestState deleted = dao.get(expected.getID());
+            Assert.assertNull(deleted);
+            
+        } catch (Exception unexpected) {
+            log.error("unexpected exception", unexpected);
+            Assert.fail("unexpected exception: " + unexpected);
+        }
+    }
+    
+    @Test
+    public void testRenameSelf() {
+        try {
+            // orig: fully qualified class name
+            HarvestState orig = new HarvestState(HarvestStateDAOTest.class.getName(), RID);
+            log.info("expected: " + orig);
+            
+            HarvestState notFound = dao.get(HarvestState.class, orig.getID());
+            Assert.assertNull(notFound);
+            
+            orig.curID = UUID.randomUUID();
+            orig.curLastModified = new Date();
+            dao.put(orig);
+            
+            // get by ID
+            HarvestState hs1 = dao.get(orig.getID());
+            log.info("found by ID: " + hs1);
+            
+            // get by source,cname 
+            HarvestState hs2 = dao.get(orig.getName(), orig.getResourceID());
+            log.info("found by name: " + hs2);
+            
+            // update: simple class name
+            hs2.setName(HarvestStateDAOTest.class.getSimpleName());
+            dao.put(hs2);
+            
+            HarvestState hs3 = dao.get(hs2.getName(), hs2.getResourceID());
+            log.info("found by name: " + hs3);
+            Assert.assertNotNull(hs3);
+            Assert.assertEquals(orig.getID(), hs3.getID());
+            Assert.assertEquals(orig.curID, hs3.curID);
+            
+            dao.delete(hs3.getID());
+            HarvestState deleted = dao.get(hs3.getID());
             Assert.assertNull(deleted);
             
         } catch (Exception unexpected) {
