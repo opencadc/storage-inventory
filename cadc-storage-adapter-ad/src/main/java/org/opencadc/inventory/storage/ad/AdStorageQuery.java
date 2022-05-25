@@ -103,27 +103,28 @@ public class AdStorageQuery {
 
     AdStorageQuery(String storageBucket) {
         InventoryUtil.assertNotNull(AdStorageQuery.class, "storageBucket", storageBucket);
-        this.storagebucket = bucket2archive(storageBucket).toLowerCase(Locale.ROOT);
-        String archive = this.storagebucket.contains("vault") ? "VOSpac" : this.storagebucket;
+        this.storagebucket = storageBucket;
+        String archive = bucket2archive(this.storagebucket);
         String vaultBucketConstraint = "";
         if (this.storagebucket.contains(":")) {
             String[] parts = this.storagebucket.split(":");
             if (parts.length != 2) {
                 throw new IllegalArgumentException("Unexpected vault bucket format: " + storageBucket);
             }
-            archive = parts[0];
+            archive = "vault".equals(bucket2archive(parts[0])) ? "VOSpac" : bucket2archive(parts[0]);
+            String bucket = parts[1].toLowerCase(Locale.ROOT);
             // determine the bucket
             try {
-                if ((parts[1].length() == 0) || (parts[1].length() > 3)) {
+                if ((bucket.length() == 0) || (bucket.length() > 3)) {
                     throw new IllegalArgumentException("Bucket part must be between 1 and 3 digits: " + storagebucket);
                 }
-                Integer.decode("0x" + parts[1]);
+                Integer.decode("0x" + bucket);
             } catch (IllegalArgumentException ex) {
                 throw new IllegalArgumentException("invalid checksum URI: "
-                        + parts[1] + " contains invalid hex value, expected hex value");
+                        + bucket + " contains invalid hex value, expected hex value");
             }
-            String minMD5Checksum = parts[1] + "0000000000000000".substring(0, 16 - parts[1].length());
-            String maxMD5Checksum = parts[1] + "ffffffffffffffff".substring(0, 16 - parts[1].length());
+            String minMD5Checksum = bucket + "0000000000000000".substring(0, 16 - bucket.length());
+            String maxMD5Checksum = bucket + "ffffffffffffffff".substring(0, 16 - bucket.length());
             vaultBucketConstraint = " AND contentMD5 between '" + minMD5Checksum + "' AND '" + maxMD5Checksum + "'";
         }
         this.query = String.format(this.QTMPL, archive, vaultBucketConstraint);
@@ -184,7 +185,7 @@ public class AdStorageQuery {
             }
 
             StorageLocation storageLocation = new StorageLocation(storageID);
-            if (storagebucket.startsWith("vault:")) {
+            if (storagebucket.contains(":")) {
                 storageLocation.storageBucket = "vault:" + hex.substring(0, 3);  // vault bucket: vault:123
             } else {
                 storageLocation.storageBucket = storagebucket;
