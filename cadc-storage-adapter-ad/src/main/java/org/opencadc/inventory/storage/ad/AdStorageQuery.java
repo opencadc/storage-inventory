@@ -111,7 +111,6 @@ public class AdStorageQuery {
             if (parts.length != 2) {
                 throw new IllegalArgumentException("Unexpected vault bucket format: " + storageBucket);
             }
-            archive = "vault".equals(bucket2archive(parts[0])) ? "VOSpac" : bucket2archive(parts[0]);
             String bucket = parts[1].toLowerCase(Locale.ROOT);
             // determine the bucket
             try {
@@ -144,10 +143,17 @@ public class AdStorageQuery {
     //}
     
     private String bucket2archive(String sb) {
+        String result = sb;
         if (sb.startsWith(DISAMBIGUATE_PREFIX)) {
-            return sb.substring(DISAMBIGUATE_PREFIX.length());
+            result = sb.substring(DISAMBIGUATE_PREFIX.length());
         }
-        return sb;
+        if (result.contains(":")) {
+            result = result.split(":")[0];
+        }
+        if ("vault".equals(result)) {
+            result = "VOSpac";
+        }
+        return result;
     }
     
     class AdStorageMetadataRowMapper implements TapRowMapper<StorageMetadata> {
