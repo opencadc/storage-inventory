@@ -226,20 +226,28 @@ public class StorageLocationEventSyncTest {
             Assert.assertEquals(a1.siteLocations.size(), r1.siteLocations.size());
             Assert.assertTrue(r1.siteLocations.contains(sloc1));
             Assert.assertTrue(r1.siteLocations.contains(sloc2));
+            Assert.assertEquals(a1.getLastModified(), r1.getLastModified());
 
             Artifact r2 = inventoryEnvironment.artifactDAO.get(a2.getID());
             Assert.assertNotNull(r2);
             Assert.assertTrue(r2.siteLocations.contains(sloc1));
             Assert.assertTrue(r2.siteLocations.contains(sloc2));
+            // lastModified updated only on first copy
+            Assert.assertEquals(a2.getLastModified(), r2.getLastModified());
 
             Artifact r3 = inventoryEnvironment.artifactDAO.get(a3.getID());
             Assert.assertNotNull(r3);
             Assert.assertTrue(r3.siteLocations.contains(sloc2));
 
-            StorageLocationEvent actual = inventoryEnvironment.storageLocationEventDAO.get(sle2.getID());
-            Assert.assertNull(actual);
+            StorageLocationEvent sle;
+            sle = inventoryEnvironment.storageLocationEventDAO.get(sle1.getID());
+            Assert.assertNull(sle);
+            sle = inventoryEnvironment.storageLocationEventDAO.get(sle2.getID());
+            Assert.assertNull(sle);
+            sle = inventoryEnvironment.storageLocationEventDAO.get(sle3.getID());
+            Assert.assertNull(sle);
             
-            HarvestState hs = inventoryEnvironment.harvestStateDAO.get(StorageLocationEvent.class.getName(), TestUtil.LUSKAN_URI);
+            HarvestState hs = inventoryEnvironment.harvestStateDAO.get(StorageLocationEvent.class.getSimpleName(), TestUtil.LUSKAN_URI);
             Assert.assertNotNull(hs);
             log.info("found: " + hs);
             Assert.assertEquals(sle3.getLastModified(), hs.curLastModified);
@@ -250,7 +258,7 @@ public class StorageLocationEventSyncTest {
                 return null;
             });
             
-            hs = inventoryEnvironment.harvestStateDAO.get(StorageLocationEvent.class.getName(), TestUtil.LUSKAN_URI);
+            hs = inventoryEnvironment.harvestStateDAO.get(StorageLocationEvent.class.getSimpleName(), TestUtil.LUSKAN_URI);
             Assert.assertNotNull(hs);
             Assert.assertEquals(sle3.getLastModified(), hs.curLastModified);
         } catch (Exception ex) {

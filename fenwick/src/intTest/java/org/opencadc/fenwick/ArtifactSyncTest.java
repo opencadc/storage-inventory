@@ -187,6 +187,8 @@ public class ArtifactSyncTest {
             return null;
         });
         
+        final DateFormat df = DateUtil.getDateFormat(DateUtil.IVOA_DATE_FORMAT, DateUtil.UTC);
+        
         // verify: a1,a2,a3 synced
         // a2: merge new SiteLocation or preserve StorageLocation
         Artifact actual1 = inventoryEnvironment.artifactDAO.get(a1.getID());
@@ -196,8 +198,9 @@ public class ArtifactSyncTest {
             Assert.assertEquals(1, actual1.siteLocations.size());
             Assert.assertTrue(actual1.siteLocations.contains(sloc1));
             
-            // global increments lastModified
-            Assert.assertTrue(actual1.getLastModified().after(a1.getLastModified()));
+            // global increments lastModified for first copy only
+            log.info("a1: " + df.format(a1.getLastModified()) + " vs " + df.format(actual1.getLastModified()));
+            Assert.assertTrue(a1.getLastModified().before(actual1.getLastModified()));
         } else {
             Assert.assertTrue(actual1.siteLocations.isEmpty());
             
@@ -208,12 +211,14 @@ public class ArtifactSyncTest {
         Assert.assertNotNull(actual2);
         Assert.assertEquals(a2.getMetaChecksum(), actual2.getMetaChecksum());
         if (track) {
+            // check merge new site location
             Assert.assertEquals(2, actual2.siteLocations.size());
             Assert.assertTrue(actual2.siteLocations.contains(sloc1));
             Assert.assertTrue(actual2.siteLocations.contains(sloc2));
             
-            // global increments lastModified
-            Assert.assertTrue(actual2.getLastModified().after(a2.getLastModified()));
+            // global increments lastModified for first copy only so *equals* here
+            log.info("a2: " + df.format(a2.getLastModified()) + " vs " + df.format(actual2.getLastModified()));
+            Assert.assertTrue(a2.getLastModified().equals(actual2.getLastModified()));
         } else {
             Assert.assertTrue(actual2.siteLocations.isEmpty());
             Assert.assertEquals(storLoc2, actual2.storageLocation);
@@ -228,15 +233,16 @@ public class ArtifactSyncTest {
             Assert.assertEquals(1, actual3.siteLocations.size());
             Assert.assertTrue(actual3.siteLocations.contains(sloc1));
             
-            // global increments lastModified
-            Assert.assertTrue(actual3.getLastModified().after(a3.getLastModified()));
+            // global increments lastModified for first copy only
+            log.info("a3: " + df.format(a3.getLastModified()) + " vs " + df.format(actual3.getLastModified()));
+            Assert.assertTrue(a3.getLastModified().before(actual3.getLastModified()));
         } else {
             Assert.assertTrue(actual3.siteLocations.isEmpty());
             
             Assert.assertEquals(a3.getLastModified(), actual3.getLastModified());
         }
         
-        HarvestState hs = inventoryEnvironment.harvestStateDAO.get(Artifact.class.getName(), TestUtil.LUSKAN_URI);
+        HarvestState hs = inventoryEnvironment.harvestStateDAO.get(Artifact.class.getSimpleName(), TestUtil.LUSKAN_URI);
         Assert.assertNotNull(hs);
         Assert.assertEquals(a3.getID(), hs.curID);
         Assert.assertEquals(a3.getLastModified(), hs.curLastModified);
@@ -248,7 +254,7 @@ public class ArtifactSyncTest {
             return null;
         });
 
-        hs = inventoryEnvironment.harvestStateDAO.get(Artifact.class.getName(), TestUtil.LUSKAN_URI);
+        hs = inventoryEnvironment.harvestStateDAO.get(Artifact.class.getSimpleName(), TestUtil.LUSKAN_URI);
         Assert.assertNotNull(hs);
         Assert.assertEquals(a3.getID(), hs.curID);
         Assert.assertEquals(a3.getLastModified(), hs.curLastModified);

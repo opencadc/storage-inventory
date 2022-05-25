@@ -232,7 +232,7 @@ public class DeletedStorageLocationEventSyncTest {
             DeletedStorageLocationEvent actual = inventoryEnvironment.deletedStorageLocationEventDAO.get(dsle2.getID());
             Assert.assertNull(actual);
             
-            HarvestState hs = inventoryEnvironment.harvestStateDAO.get(DeletedStorageLocationEvent.class.getName(), TestUtil.LUSKAN_URI);
+            HarvestState hs = inventoryEnvironment.harvestStateDAO.get(DeletedStorageLocationEvent.class.getSimpleName(), TestUtil.LUSKAN_URI);
             Assert.assertNotNull(hs);
             Assert.assertEquals(dsle2.getLastModified(), hs.curLastModified);
             
@@ -242,7 +242,7 @@ public class DeletedStorageLocationEventSyncTest {
                 return null;
             });
             
-            hs = inventoryEnvironment.harvestStateDAO.get(DeletedStorageLocationEvent.class.getName(), TestUtil.LUSKAN_URI);
+            hs = inventoryEnvironment.harvestStateDAO.get(DeletedStorageLocationEvent.class.getSimpleName(), TestUtil.LUSKAN_URI);
             Assert.assertNotNull(hs);
             Assert.assertEquals(dsle2.getLastModified(), hs.curLastModified);
         } catch (Exception ex) {

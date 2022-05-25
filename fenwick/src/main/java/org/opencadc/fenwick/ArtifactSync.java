@@ -141,8 +141,18 @@ public class ArtifactSync extends AbstractSync {
 
         final SiteLocation remoteSiteLocation = (storageSite == null ? null : new SiteLocation(storageSite.getID()));
         
-        final HarvestState harvestState = this.harvestStateDAO.get(Artifact.class.getName(), resourceID);
-
+        HarvestState hs = this.harvestStateDAO.get(Artifact.class.getSimpleName(), resourceID);
+        if (hs.curLastModified == null) {
+            // TEMPORARY: check for pre-rename record and rename
+            HarvestState orig = harvestStateDAO.get(Artifact.class.getName(), resourceID);
+            if (orig.curLastModified != null) {
+                orig.setName(Artifact.class.getSimpleName());
+                harvestStateDAO.put(orig);
+                hs = orig;
+            }
+        }
+        final HarvestState harvestState = hs;
+        
         final Date endTime = new Date();
         final Date lookBack = new Date(endTime.getTime() - LOOKBACK_TIME);
         Date startTime = getQueryLowerBound(lookBack, harvestState.curLastModified);
