@@ -67,6 +67,7 @@
 
 package org.opencadc.inventory.db;
 
+import ca.nrc.cadc.date.DateUtil;
 import ca.nrc.cadc.db.ConnectionConfig;
 import ca.nrc.cadc.db.DBConfig;
 import ca.nrc.cadc.db.DBUtil;
@@ -76,6 +77,7 @@ import ca.nrc.cadc.util.HexUtil;
 import ca.nrc.cadc.util.Log4jInit;
 import java.net.URI;
 import java.security.MessageDigest;
+import java.text.DateFormat;
 import java.util.Comparator;
 import java.util.Date;
 import java.util.Iterator;
@@ -170,7 +172,7 @@ public class ArtifactDAOTest {
                     URI.create("cadc:ARCHIVE/filename"),
                     URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"),
                     new Date(),
-                    new Long(666L));
+                    666L);
             expected.contentType = "application/octet-stream";
             expected.contentEncoding = "gzip";
             log.info("expected: " + expected);
@@ -235,7 +237,7 @@ public class ArtifactDAOTest {
                     URI.create("cadc:ARCHIVE/filename"),
                     URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"),
                     new Date(),
-                    new Long(666L));
+                    666L);
             expected.contentType = "application/octet-stream";
             expected.contentEncoding = "gzip";
             log.info("  orig: " + expected);
@@ -282,7 +284,7 @@ public class ArtifactDAOTest {
                     URI.create("cadc:ARCHIVE/filename"),
                     URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"),
                     new Date(),
-                    new Long(666L));
+                    666L);
             expected.contentType = "application/octet-stream";
             expected.contentEncoding = "gzip";
             log.info("expected: " + expected);
@@ -317,7 +319,7 @@ public class ArtifactDAOTest {
                     URI.create("cadc:ARCHIVE/filename"),
                     URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"),
                     new Date(),
-                    new Long(666L));
+                    666L);
             log.info("expected: " + expected);
             
             
@@ -336,7 +338,7 @@ public class ArtifactDAOTest {
             Assert.assertNotNull(a2);
             URI mcs2 = a2.computeMetaChecksum(MessageDigest.getInstance("MD5"));
             Assert.assertEquals("round trip metachecksum unchanged", expected.getMetaChecksum(), mcs2);
-            Assert.assertTrue("lastModified incremented", a1.getLastModified().before(a2.getLastModified()));
+            Assert.assertTrue("lastModified not incremented", a1.getLastModified().equals(a2.getLastModified()));
             Assert.assertNotNull("set storageLocation", a2.storageLocation);
             Assert.assertEquals(expected.storageLocation.getStorageID(), a2.storageLocation.getStorageID());
             Assert.assertNull(a2.storageLocation.storageBucket);
@@ -349,7 +351,7 @@ public class ArtifactDAOTest {
             Assert.assertNotNull(a2);
             URI mcs3 = a3.computeMetaChecksum(MessageDigest.getInstance("MD5"));
             Assert.assertEquals("round trip metachecksum unchanged", expected.getMetaChecksum(), mcs3);
-            Assert.assertTrue(a2.getLastModified().before(a3.getLastModified()));
+            Assert.assertTrue("lastModified not incremented", a2.getLastModified().equals(a3.getLastModified()));
             Assert.assertNotNull("update storageLocation", a3.storageLocation);
             Assert.assertEquals(expected.storageLocation.getStorageID(), a3.storageLocation.getStorageID());
             Assert.assertEquals(expected.storageLocation.storageBucket, a3.storageLocation.storageBucket);
@@ -376,12 +378,13 @@ public class ArtifactDAOTest {
     @Test
     public void testGetPutDeleteSiteLocations() {
         long t1 = System.currentTimeMillis();
+        final DateFormat df = DateUtil.getDateFormat(DateUtil.IVOA_DATE_FORMAT, DateUtil.UTC);
         try {
             Artifact expected = new Artifact(
                     URI.create("cadc:ARCHIVE/filename"),
                     URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"),
                     new Date(),
-                    new Long(666L));
+                    666L);
             log.info("expected: " + expected);
             
             
@@ -407,21 +410,21 @@ public class ArtifactDAOTest {
             Assert.assertNotNull(a2);
             URI mcs2 = a2.computeMetaChecksum(MessageDigest.getInstance("MD5"));
             Assert.assertEquals("round trip metachecksum unchanged", expected.getMetaChecksum(), mcs2);
-            log.info("lastModified: " + a1.getLastModified() + " vs " + a2.getLastModified());
+            log.info("lastModified: " + df.format(a1.getLastModified()) + " vs " + df.format(a2.getLastModified()));
             Assert.assertTrue("lastModified changed", a1.getLastModified().before(a2.getLastModified()));
             Assert.assertEquals(1, a2.siteLocations.size());
             Thread.sleep(20L);
             
             log.info("adding " + loc2);
-            nonOriginDAO.addSiteLocation(expected, loc2);
+            nonOriginDAO.addSiteLocation(a2, loc2);
             log.info("adding " + loc3);
-            nonOriginDAO.addSiteLocation(expected, loc3);
+            nonOriginDAO.addSiteLocation(a2, loc3);
             Artifact a3 = nonOriginDAO.get(expected.getID());
             Assert.assertNotNull(a3);
             URI mcs3 = a3.computeMetaChecksum(MessageDigest.getInstance("MD5"));
             Assert.assertEquals("round trip metachecksum unchanged", expected.getMetaChecksum(), mcs3);
-            log.info("lastModified: " + a1.getLastModified() + " vs " + a3.getLastModified());
-            Assert.assertTrue("lastModified changed", a1.getLastModified().before(a3.getLastModified()));
+            log.info("lastModified: " + df.format(a2.getLastModified()) + " vs " + df.format(a3.getLastModified()));
+            Assert.assertTrue("lastModified not changed", a2.getLastModified().equals(a3.getLastModified()));
             Assert.assertEquals(3, a3.siteLocations.size());
             Thread.sleep(20L);
             
@@ -475,7 +478,7 @@ public class ArtifactDAOTest {
                     URI.create("cadc:ARCHIVE/filename"),
                     URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"),
                     new Date(),
-                    new Long(666L));
+                    666L);
             expected.contentType = "application/octet-stream";
             log.info("expected: " + expected);
             
@@ -524,7 +527,7 @@ public class ArtifactDAOTest {
                     URI.create("cadc:ARCHIVE/filename"),
                     URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"),
                     new Date(),
-                    new Long(666L));
+                    666L);
             expected.contentType = "application/octet-stream";
             log.info("expected: " + expected);
             
@@ -575,7 +578,7 @@ public class ArtifactDAOTest {
                         URI.create("cadc:ARCHIVE/filename" + i),
                         URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"),
                         new Date(),
-                        new Long(666L));
+                        666L);
                 a.contentType = "application/octet-stream";
                 a.contentEncoding = "gzip";
                 // no storage location
@@ -606,7 +609,7 @@ public class ArtifactDAOTest {
                         URI.create("cadc:ARCHIVE/filename" + i),
                         URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"),
                         new Date(),
-                        new Long(666L));
+                        666L);
                 a.storageLocation = new StorageLocation(URI.create("foo:" + UUID.randomUUID()));
                 a.storageLocation.storageBucket = InventoryUtil.computeBucket(a.storageLocation.getStorageID(), 3);
                 originDAO.put(a);
@@ -620,7 +623,7 @@ public class ArtifactDAOTest {
                         URI.create("cadc:ARCHIVE/filename" + i),
                         URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"),
                         new Date(),
-                        new Long(666L));
+                        666L);
                 a.storageLocation = new StorageLocation(URI.create("foo:" + UUID.randomUUID()));
                 // no bucket
                 originDAO.put(a);
@@ -634,7 +637,7 @@ public class ArtifactDAOTest {
                         URI.create("cadc:ARCHIVE/filename" + i),
                         URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"),
                         new Date(),
-                        new Long(666L));
+                        666L);
                 // no storageLocation
                 originDAO.put(a);
                 log.debug("put: " + a);
@@ -715,7 +718,7 @@ public class ArtifactDAOTest {
                         URI.create("cadc:ARCHIVE/filename" + i),
                         URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"),
                         new Date(),
-                        new Long(666L));
+                        666L);
                 a.contentType = "application/octet-stream";
                 a.contentEncoding = "gzip";
                 a.storageLocation = new StorageLocation(URI.create("foo:" + UUID.randomUUID()));
@@ -746,7 +749,7 @@ public class ArtifactDAOTest {
                         URI.create("cadc:ARCHIVE/filename" + i),
                         URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"),
                         new Date(),
-                        new Long(666L));
+                        666L);
                 a.storageLocation = new StorageLocation(URI.create("foo:" + UUID.randomUUID()));
                 a.storageLocation.storageBucket = InventoryUtil.computeBucket(a.storageLocation.getStorageID(), 3);
                 originDAO.put(a);
@@ -761,7 +764,7 @@ public class ArtifactDAOTest {
                         URI.create("cadc:ARCHIVE/filename" + i),
                         URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"),
                         new Date(),
-                        new Long(666L));
+                        666L);
                 a.storageLocation = new StorageLocation(URI.create("foo:" + UUID.randomUUID()));
                 // no bucket
                 originDAO.put(a);
@@ -776,7 +779,7 @@ public class ArtifactDAOTest {
                         URI.create("cadc:ARCHIVE/filename" + i),
                         URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"),
                         new Date(),
-                        new Long(666L));
+                        666L);
                 // no storageLocation
                 originDAO.put(a);
                 log.info("expected: " + a);
@@ -843,7 +846,7 @@ public class ArtifactDAOTest {
                         URI.create("cadc:ARCHIVE/filename" + i),
                         URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"),
                         new Date(),
-                        new Long(666L));
+                        666L);
                 originDAO.put(a);
                 log.info("expected: " + a);
                 Thread.sleep(1L);
@@ -899,7 +902,7 @@ public class ArtifactDAOTest {
                         URI.create("cadc:ARCHIVE/filename" + i),
                         URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"),
                         new Date(),
-                        new Long(666L));
+                        666L);
                 // no storageLocation
                 originDAO.put(a);
                 log.info("expected: " + a);
@@ -957,7 +960,7 @@ public class ArtifactDAOTest {
                         URI.create("cadc:" + collection + "/filename" + i),
                         URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"),
                         new Date(),
-                        new Long(666L));
+                        666L);
                 a.storageLocation = new StorageLocation(URI.create("foo:" + UUID.randomUUID()));
                 a.storageLocation.storageBucket = InventoryUtil.computeBucket(a.storageLocation.getStorageID(), 3);
                 originDAO.put(a);
@@ -977,7 +980,7 @@ public class ArtifactDAOTest {
                         URI.create("cadc:" + collection + "/filename" + i),
                         URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"),
                         new Date(),
-                        new Long(666L));
+                        666L);
                 // no storageLocation
                 originDAO.put(a);
                 log.debug("put: " + a);
@@ -998,7 +1001,7 @@ public class ArtifactDAOTest {
                         URI.create("cadc:" + collection + "/filename" + i),
                         URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"),
                         new Date(),
-                        new Long(666L));
+                        666L);
                 a.siteLocations.add(new SiteLocation(siteID));
                 originDAO.put(a);
                 log.debug("put: " + a);

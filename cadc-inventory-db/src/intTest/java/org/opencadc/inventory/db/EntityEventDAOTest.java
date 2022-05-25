@@ -84,14 +84,15 @@ import org.junit.Before;
 import org.junit.Test;
 import org.opencadc.inventory.DeletedArtifactEvent;
 import org.opencadc.inventory.DeletedStorageLocationEvent;
+import org.opencadc.inventory.StorageLocationEvent;
 import org.opencadc.inventory.db.version.InitDatabase;
 
 /**
  *
  * @author pdowler
  */
-public class DeletedEventDAOTest {
-    private static final Logger log = Logger.getLogger(DeletedEventDAOTest.class);
+public class EntityEventDAOTest {
+    private static final Logger log = Logger.getLogger(EntityEventDAOTest.class);
 
     static {
         Log4jInit.setLevel("org.opencadc.inventory", Level.DEBUG);
@@ -100,19 +101,21 @@ public class DeletedEventDAOTest {
     
     DeletedArtifactEventDAO daeDAO = new DeletedArtifactEventDAO();
     DeletedStorageLocationEventDAO dslDAO = new DeletedStorageLocationEventDAO();
+    StorageLocationEventDAO slDAO = new StorageLocationEventDAO();
     
-    public DeletedEventDAOTest() throws Exception {
+    public EntityEventDAOTest() throws Exception {
         DBConfig dbrc = new DBConfig();
         ConnectionConfig cc = dbrc.getConnectionConfig(TestUtil.SERVER, TestUtil.DATABASE);
-        DBUtil.createJNDIDataSource("jdbc/DeletedEventDAOTest", cc);
+        DBUtil.createJNDIDataSource("jdbc/EntityEventDAOTest", cc);
         
         Map<String,Object> config = new TreeMap<String,Object>();
         config.put(SQLGenerator.class.getName(), SQLGenerator.class);
-        config.put("jndiDataSourceName", "jdbc/DeletedEventDAOTest");
+        config.put("jndiDataSourceName", "jdbc/EntityEventDAOTest");
         config.put("database", TestUtil.DATABASE);
         config.put("schema", TestUtil.SCHEMA);
         daeDAO.setConfig(config);
         dslDAO.setConfig(config);
+        slDAO.setConfig(config);
     }
     
     @Before
@@ -127,7 +130,7 @@ public class DeletedEventDAOTest {
         log.info("clearing old content...");
         SQLGenerator gen = daeDAO.getSQLGenerator();
         DataSource ds = daeDAO.getDataSource();
-        for (Class c : new Class[] { DeletedArtifactEvent.class, DeletedStorageLocationEvent.class }) {
+        for (Class c : new Class[] { DeletedArtifactEvent.class, DeletedStorageLocationEvent.class, StorageLocationEvent.class }) {
             String sql = "delete from " + gen.getTable(c);
             log.info("pre-test cleanup: " + sql);
             ds.getConnection().createStatement().execute(sql);
@@ -204,6 +207,45 @@ public class DeletedEventDAOTest {
             dslDAO.put(dupe);
             
             DeletedStorageLocationEvent fid2 = dslDAO.get(expected.getID());
+            Assert.assertNotNull(fid2);
+            // idempotent includes not updating timestamp
+            Assert.assertEquals("lastModified", expected.getLastModified(), fid2.getLastModified());
+            
+            // no delete
+        } catch (Exception unexpected) {
+            log.error("unexpected exception", unexpected);
+            Assert.fail("unexpected exception: " + unexpected);
+        }
+    }
+    
+    @Test
+    public void testPutGetStorageLocationEvent() {
+        try {
+            StorageLocationEvent expected = new StorageLocationEvent(UUID.randomUUID());
+            log.info("expected: " + expected);
+            
+            StorageLocationEvent notFound = slDAO.get(expected.getID());
+            Assert.assertNull(notFound);
+            
+            slDAO.put(expected);
+            
+            // persistence assigns entity state before put
+            Assert.assertNotNull(expected.getLastModified());
+            Assert.assertNotNull(expected.getMetaChecksum());
+            
+            URI mcs0 = expected.computeMetaChecksum(MessageDigest.getInstance("MD5"));
+            Assert.assertEquals("put metachecksum", mcs0, expected.getMetaChecksum());
+            
+            // get by ID
+            StorageLocationEvent fid = slDAO.get(expected.getID());
+            Assert.assertNotNull(fid);
+
+            // idempotent put: create new instance with same state            
+            StorageLocationEvent dupe = new StorageLocationEvent(expected.getID());
+            Thread.sleep(10L);
+            slDAO.put(dupe);
+            
+            StorageLocationEvent fid2 = slDAO.get(expected.getID());
             Assert.assertNotNull(fid2);
             // idempotent includes not updating timestamp
             Assert.assertEquals("lastModified", expected.getLastModified(), fid2.getLastModified());

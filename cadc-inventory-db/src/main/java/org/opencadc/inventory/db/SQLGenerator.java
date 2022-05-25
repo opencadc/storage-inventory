@@ -96,6 +96,7 @@ import org.opencadc.inventory.Entity;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.SiteLocation;
 import org.opencadc.inventory.StorageLocation;
+import org.opencadc.inventory.StorageLocationEvent;
 import org.opencadc.inventory.StorageSite;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -142,6 +143,7 @@ public class SQLGenerator {
         this.tableMap.put(StorageSite.class, pref + StorageSite.class.getSimpleName());
         this.tableMap.put(DeletedArtifactEvent.class, pref + DeletedArtifactEvent.class.getSimpleName());
         this.tableMap.put(DeletedStorageLocationEvent.class, pref + DeletedStorageLocationEvent.class.getSimpleName());
+        this.tableMap.put(StorageLocationEvent.class, pref + StorageLocationEvent.class.getSimpleName());
         // internal
         this.tableMap.put(ObsoleteStorageLocation.class, pref + ObsoleteStorageLocation.class.getSimpleName());
         this.tableMap.put(HarvestState.class, pref + HarvestState.class.getSimpleName());
@@ -177,6 +179,8 @@ public class SQLGenerator {
         };
         this.columnMap.put(DeletedArtifactEvent.class, cols);
         this.columnMap.put(DeletedStorageLocationEvent.class, cols);
+        this.columnMap.put(StorageLocationEvent.class, cols);
+        
         this.columnMap.put(Entity.class, cols); // skeleton
         
         cols = new String[] {
@@ -240,6 +244,9 @@ public class SQLGenerator {
         if (DeletedStorageLocationEvent.class.equals(c)) {
             return new DeletedStorageLocationEventGet();
         }
+        if (StorageLocationEvent.class.equals(c)) {
+            return new StorageLocationEventGet();
+        }
         if (ObsoleteStorageLocation.class.equals(c)) {
             return new ObsoleteStorageLocationGet();
         }
@@ -283,10 +290,13 @@ public class SQLGenerator {
             return new StorageSitePut(update);
         }
         if (DeletedArtifactEvent.class.equals(c)) {
-            return new DeletedEventPut(update);
+            return new EntityEventPut(update);
         }
         if (DeletedStorageLocationEvent.class.equals(c)) {
-            return new DeletedEventPut(update);
+            return new EntityEventPut(update);
+        }
+        if (StorageLocationEvent.class.equals(c)) {
+            return new EntityEventPut(update);
         }
         if (ObsoleteStorageLocation.class.equals(c)) {
             return new ObsoleteStorageLocationPut(update);
@@ -387,6 +397,17 @@ public class SQLGenerator {
         @Override
         public Entity execute(JdbcTemplate jdbc) {
             return (Entity) jdbc.query(this, new DeletedStorageLocationEventExtractor());
+        }
+    }
+    
+    private class StorageLocationEventGet extends SkeletonGet {
+        StorageLocationEventGet() {
+            super(StorageLocationEvent.class);
+        }
+
+        @Override
+        public Entity execute(JdbcTemplate jdbc) {
+            return (Entity) jdbc.query(this, new StorageLocationEventExtractor());
         }
     }
     
@@ -992,12 +1013,12 @@ public class SQLGenerator {
         
     }
     
-    private class DeletedEventPut implements EntityPut<Entity> {
+    private class EntityEventPut implements EntityPut<Entity> {
         private final Calendar utc = Calendar.getInstance(DateUtil.UTC);
         private final boolean update;
         private Entity value;
         
-        DeletedEventPut(boolean update) {
+        EntityEventPut(boolean update) {
             this.update = update;
         }
 
@@ -1416,6 +1437,28 @@ public class SQLGenerator {
             final UUID id = Util.getUUID(rs, col++);
             
             DeletedStorageLocationEvent ret = new DeletedStorageLocationEvent(id);
+            InventoryUtil.assignLastModified(ret, lastModified);
+            InventoryUtil.assignMetaChecksum(ret, metaChecksum);
+            return ret;
+        }
+    }
+    
+    private class StorageLocationEventExtractor implements ResultSetExtractor<StorageLocationEvent> {
+
+        final Calendar utc = Calendar.getInstance(DateUtil.UTC);
+        
+        @Override
+        public StorageLocationEvent extractData(ResultSet rs) throws SQLException, DataAccessException {
+            if (!rs.next()) {
+                return null;
+            }
+            int col = 1;
+            
+            final Date lastModified = Util.getDate(rs, col++, utc);
+            final URI metaChecksum = Util.getURI(rs, col++);
+            final UUID id = Util.getUUID(rs, col++);
+            
+            StorageLocationEvent ret = new StorageLocationEvent(id);
             InventoryUtil.assignLastModified(ret, lastModified);
             InventoryUtil.assignMetaChecksum(ret, metaChecksum);
             return ret;

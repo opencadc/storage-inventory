@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2020.                            (c) 2020.
+*  (c) 2022.                            (c) 2022.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -65,54 +65,38 @@
 ************************************************************************
 */
 
-package org.opencadc.inventory.db.version;
+package org.opencadc.inventory.query;
 
-import java.net.URL;
-import javax.sql.DataSource;
+import java.net.URI;
+import java.util.Date;
+import java.util.List;
+import java.util.UUID;
 import org.apache.log4j.Logger;
+import org.opencadc.inventory.InventoryUtil;
+import org.opencadc.inventory.StorageLocationEvent;
+import org.opencadc.tap.TapRowMapper;
 
 /**
  *
  * @author pdowler
  */
-public class InitDatabase extends ca.nrc.cadc.db.version.InitDatabase {
-    private static final Logger log = Logger.getLogger(InitDatabase.class);
-    
-    public static final String MODEL_NAME = "storage-inventory";
-    public static final String MODEL_VERSION = "0.14";
-    public static final String PREV_MODEL_VERSION = "0.10";
-    //public static final String PREV_MODEL_VERSION = "DO-NOT_UPGRADE-BY-ACCIDENT";
+public class StorageLocationEventRowMapper implements TapRowMapper<StorageLocationEvent> {
+    private static final Logger log = Logger.getLogger(StorageLocationEventRowMapper.class);
 
-    static String[] CREATE_SQL = new String[] {
-        "inventory.ModelVersion.sql",
-        "inventory.Artifact.sql",
-        "inventory.StorageSite.sql",
-        "inventory.ObsoleteStorageLocation.sql",
-        "inventory.DeletedArtifactEvent.sql",
-        "inventory.DeletedStorageLocationEvent.sql",
-        "inventory.StorageLocationEvent.sql",
-        "inventory.HarvestState.sql",
-        "inventory.permissions.sql"
-    };
+    public static final String BASE_QUERY = "SELECT id, lastModified, metaChecksum "
+        + "FROM inventory.StorageLocationEvent";
     
-    static String[] UPGRADE_SQL = new String[] {
-        "inventory.StorageLocationEvent.sql",
-        "inventory.permissions.sql"
-    };
-    
-    public InitDatabase(DataSource ds, String database, String schema) { 
-        super(ds, database, schema, MODEL_NAME, MODEL_VERSION, PREV_MODEL_VERSION);
-        for (String s : CREATE_SQL) {
-            createSQL.add(s);
-        }
-        for (String s : UPGRADE_SQL) {
-            upgradeSQL.add(s);
-        }
+    public StorageLocationEventRowMapper() { 
     }
 
     @Override
-    protected URL findSQL(String fname) {
-        // SQL files are stored inside the jar file
-        return InitDatabase.class.getClassLoader().getResource(fname);
+    public StorageLocationEvent mapRow(List<Object> row) {
+        int index = 0;
+        final UUID id = (UUID) row.get(index++);
+
+        final StorageLocationEvent ret = new StorageLocationEvent(id);
+        InventoryUtil.assignLastModified(ret, (Date) row.get(index++));
+        InventoryUtil.assignMetaChecksum(ret, (URI) row.get(index));
+        return ret;
     }
 }

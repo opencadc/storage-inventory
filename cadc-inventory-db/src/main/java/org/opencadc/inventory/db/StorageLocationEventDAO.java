@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2020.                            (c) 2020.
+*  (c) 2022.                            (c) 2022.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -65,54 +65,29 @@
 ************************************************************************
 */
 
-package org.opencadc.inventory.db.version;
+package org.opencadc.inventory.db;
 
-import java.net.URL;
-import javax.sql.DataSource;
-import org.apache.log4j.Logger;
+import java.util.UUID;
+import org.opencadc.inventory.StorageLocationEvent;
 
 /**
  *
  * @author pdowler
  */
-public class InitDatabase extends ca.nrc.cadc.db.version.InitDatabase {
-    private static final Logger log = Logger.getLogger(InitDatabase.class);
-    
-    public static final String MODEL_NAME = "storage-inventory";
-    public static final String MODEL_VERSION = "0.14";
-    public static final String PREV_MODEL_VERSION = "0.10";
-    //public static final String PREV_MODEL_VERSION = "DO-NOT_UPGRADE-BY-ACCIDENT";
-
-    static String[] CREATE_SQL = new String[] {
-        "inventory.ModelVersion.sql",
-        "inventory.Artifact.sql",
-        "inventory.StorageSite.sql",
-        "inventory.ObsoleteStorageLocation.sql",
-        "inventory.DeletedArtifactEvent.sql",
-        "inventory.DeletedStorageLocationEvent.sql",
-        "inventory.StorageLocationEvent.sql",
-        "inventory.HarvestState.sql",
-        "inventory.permissions.sql"
-    };
-    
-    static String[] UPGRADE_SQL = new String[] {
-        "inventory.StorageLocationEvent.sql",
-        "inventory.permissions.sql"
-    };
-    
-    public InitDatabase(DataSource ds, String database, String schema) { 
-        super(ds, database, schema, MODEL_NAME, MODEL_VERSION, PREV_MODEL_VERSION);
-        for (String s : CREATE_SQL) {
-            createSQL.add(s);
-        }
-        for (String s : UPGRADE_SQL) {
-            upgradeSQL.add(s);
-        }
+public class StorageLocationEventDAO extends AbstractDAO<StorageLocationEvent> {
+    public StorageLocationEventDAO() { 
+        super(true);
     }
 
-    @Override
-    protected URL findSQL(String fname) {
-        // SQL files are stored inside the jar file
-        return InitDatabase.class.getClassLoader().getResource(fname);
+    public StorageLocationEventDAO(boolean origin) {
+        super(origin);
+    }
+
+    public StorageLocationEventDAO(AbstractDAO<?> dao) {
+        super(dao);
+    }
+    
+    public StorageLocationEvent get(UUID id) {
+        return super.get(StorageLocationEvent.class, id);
     }
 }

@@ -101,6 +101,7 @@ public class InventoryHarvester implements Runnable {
     
     private final StorageSiteDAO storageSiteDAO;
     private final ArtifactDAO artifactDAO;
+    private final ArtifactDAO sleArtifactDAO;
     private final ArtifactDAO daeArtifactDAO;
     private final ArtifactDAO dsleArtifactDAO;
     
@@ -160,6 +161,15 @@ public class InventoryHarvester implements Runnable {
             init.doInit();
             log.info("initDatabase: " + schema + " OK");
             
+            // connection 2: StorageLocationEventSync
+            dconf = new TreeMap<>();
+            dsname = "jdbc/StorageLocationEventSync";
+            DBUtil.createJNDIDataSource(dsname, connectionConfig);
+            dconf.putAll(daoConfig);
+            dconf.put("jndiDataSourceName", dsname);
+            this.sleArtifactDAO = new ArtifactDAO(false);
+            sleArtifactDAO.setConfig(dconf);
+            
             // connection 2: DeletedArtifactEventSync
             dconf = new TreeMap<>();
             dsname = "jdbc/DeletedArtifactEventSync";
@@ -201,17 +211,21 @@ public class InventoryHarvester implements Runnable {
             }
             
             // create thread for each entity sync
-            AbstractSync r0 = new DeletedStorageLocationEventSync(artifactDAO, resourceID, SYNC_SLEEP, maxRetryInterval, storageSite);
+            AbstractSync r0 = new DeletedStorageLocationEventSync(dsleArtifactDAO, resourceID, SYNC_SLEEP, maxRetryInterval, storageSite);
             tasks.add(r0);
             threads.add(createThread("dsle-thread", r0));
             
-            AbstractSync r1 = new DeletedArtifactEventSync(artifactDAO, resourceID, SYNC_SLEEP, maxRetryInterval);
+            AbstractSync r1 = new DeletedArtifactEventSync(daeArtifactDAO, resourceID, SYNC_SLEEP, maxRetryInterval);
             tasks.add(r1);
             threads.add(createThread("dae-thread", r1));
             
             AbstractSync r2 = new ArtifactSync(artifactDAO, resourceID, SYNC_SLEEP, maxRetryInterval, selector, storageSite);
             tasks.add(r2);
             threads.add(createThread("artifact-thread", r2));
+            
+            AbstractSync r3 = new StorageLocationEventSync(sleArtifactDAO, resourceID, SYNC_SLEEP, maxRetryInterval, storageSite);
+            tasks.add(r3);
+            threads.add(createThread("sle-thread", r3));
 
             while (true) {
                 Thread.sleep(MONITOR_SLEEP * 1000L);
