@@ -3,7 +3,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2020.                            (c) 2020.
+ *  (c) 2022.                            (c) 2022.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -69,16 +69,8 @@
 
 package org.opencadc.fenwick;
 
-import static org.opencadc.fenwick.TestUtil.LUSKAN_DATABASE;
-import static org.opencadc.fenwick.TestUtil.LUSKAN_SCHEMA;
-
-import ca.nrc.cadc.auth.SSLUtil;
-import ca.nrc.cadc.db.ConnectionConfig;
-import ca.nrc.cadc.db.DBConfig;
-import ca.nrc.cadc.db.DBUtil;
 import ca.nrc.cadc.io.ResourceIterator;
 import ca.nrc.cadc.util.Log4jInit;
-import java.io.File;
 import java.net.URI;
 import java.security.PrivilegedExceptionAction;
 import java.sql.SQLException;
@@ -86,8 +78,6 @@ import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
-import java.util.Map;
-import java.util.TreeMap;
 import java.util.UUID;
 import javax.security.auth.Subject;
 import javax.sql.DataSource;
@@ -96,9 +86,9 @@ import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
+import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.DeletedArtifactEvent;
-import org.opencadc.inventory.db.DeletedArtifactEventDAO;
-import org.opencadc.inventory.db.SQLGenerator;
+import org.opencadc.inventory.db.HarvestState;
 import org.opencadc.tap.TapClient;
 import org.opencadc.tap.TapRowMapper;
 
@@ -106,37 +96,25 @@ public class DeletedArtifactEventSyncTest {
 
     private static final Logger log = Logger.getLogger(DeletedArtifactEventSyncTest.class);
 
-    private static final File PROXY_PEM = new File(System.getProperty("user.home") + "/.ssl/cadcproxy.pem");
-
     static {
         Log4jInit.setLevel("org.opencadc.inventory", Level.INFO);
         Log4jInit.setLevel("ca.nrc.cadc.db", Level.INFO);
         Log4jInit.setLevel("org.opencadc.fenwick", Level.INFO);
     }
 
-    private final DeletedArtifactEventDAO deletedEventDAO = new DeletedArtifactEventDAO();
+    private final InventoryEnvironment inventoryEnvironment = new InventoryEnvironment();
+    private final LuskanEnvironment luskanEnvironment = new LuskanEnvironment();
+    private final Subject testUser = TestUtil.getConfiguredSubject();
+    
+    
 
     public DeletedArtifactEventSyncTest() throws Exception {
-        final DBConfig dbConfig = new DBConfig();
-        final ConnectionConfig cc = dbConfig.getConnectionConfig(TestUtil.LUSKAN_SERVER, LUSKAN_DATABASE);
-        DBUtil.createJNDIDataSource("jdbc/DeletedEventSyncTest", cc);
-
-        final Map<String, Object> config = new TreeMap<>();
-        config.put(SQLGenerator.class.getName(), SQLGenerator.class);
-        config.put("jndiDataSourceName", "jdbc/DeletedEventSyncTest");
-        config.put("database", LUSKAN_DATABASE);
-        config.put("schema", LUSKAN_SCHEMA);
-
-        deletedEventDAO.setConfig(config);
     }
 
     @Before
-    public void setup() throws SQLException {
-        log.info("deleting events...");
-        DataSource ds = deletedEventDAO.getDataSource();
-        String sql = String.format("delete from %s.DeletedArtifactEvent", LUSKAN_SCHEMA);
-        ds.getConnection().createStatement().execute(sql);
-        log.info("deleting events... OK");
+    public void beforeTest() throws Exception {
+        inventoryEnvironment.cleanTestEnvironment();
+        luskanEnvironment.cleanTestEnvironment();
     }
 
     @Test
@@ -168,34 +146,32 @@ public class DeletedArtifactEventSyncTest {
     }
 
     @Test
-    public void testGetEvents() {
+    public void testGetEventStream() {
         try {
-            log.info("testGetEvents");
-            Subject userSubject = SSLUtil.createSubject(PROXY_PEM);
-            
-            Subject.doAs(userSubject, new PrivilegedExceptionAction<Object>() {
+            log.info("testGetEventStream");
+            DeletedArtifactEventSync sync = 
+                    new DeletedArtifactEventSync(inventoryEnvironment.artifactDAO, TestUtil.LUSKAN_URI, 6, 6);
+            Subject.doAs(testUser, new PrivilegedExceptionAction<Object>() {
 
                 public Object run() throws Exception {
                     TapClient<DeletedArtifactEvent> tapClient = new TapClient<>(TestUtil.LUSKAN_URI);
                     Calendar now = Calendar.getInstance();
                     now.add(Calendar.DAY_OF_MONTH, -1);
                     Date startTime = now.getTime();
-                    DeletedArtifactEventSync sync = new DeletedArtifactEventSync(tapClient);
-                    sync.startTime = startTime;
 
                     // query with no results
-                    ResourceIterator<DeletedArtifactEvent> emptyIterator = sync.getEvents();
+                    ResourceIterator<DeletedArtifactEvent> emptyIterator = sync.getEventStream(startTime, null);
                     Assert.assertNotNull(emptyIterator);
                     Assert.assertFalse(emptyIterator.hasNext());
 
                     DeletedArtifactEvent expected1 = new DeletedArtifactEvent(UUID.randomUUID());
                     DeletedArtifactEvent expected2 = new DeletedArtifactEvent(UUID.randomUUID());
 
-                    deletedEventDAO.put(expected1);
-                    deletedEventDAO.put(expected2);
+                    luskanEnvironment.deletedArtifactEventDAO.put(expected1);
+                    luskanEnvironment.deletedArtifactEventDAO.put(expected2);
 
                     // query with multiple results
-                    ResourceIterator<DeletedArtifactEvent> iterator = sync.getEvents();
+                    ResourceIterator<DeletedArtifactEvent> iterator = sync.getEventStream(startTime, null);
                     Assert.assertNotNull(iterator);
 
                     Assert.assertTrue(iterator.hasNext());
@@ -214,10 +190,73 @@ public class DeletedArtifactEventSyncTest {
                 }
             });
         } catch (Exception ex) {
-            ex.printStackTrace();
             log.error("unexpected exception", ex);
             Assert.fail("unexpected exception: " + ex);
         }
     }
 
+    @Test
+    public void testEventApplied() {
+        try {
+            URI md5 = URI.create("md5:d41d8cd98f00b204e9800998ecf8427e");
+            long len = 1024L;
+            
+            // insert 3 artifacts in local inventory
+            Artifact a1 = new Artifact(URI.create("cadc:TEST/one"), md5, new Date(), len);
+            inventoryEnvironment.artifactDAO.put(a1);
+            Thread.sleep(10L);
+            Artifact a2 = new Artifact(URI.create("cadc:TEST/two"), md5, new Date(), len);
+            inventoryEnvironment.artifactDAO.put(a2);
+            Thread.sleep(10L);
+            Artifact a3 = new Artifact(URI.create("cadc:TEST/three"), md5, new Date(), len);
+            inventoryEnvironment.artifactDAO.put(a3);
+            Thread.sleep(10L);
+            
+            // insert 1 dae in luskan
+            DeletedArtifactEvent dae2 = new DeletedArtifactEvent(a2.getID());
+            luskanEnvironment.deletedArtifactEventDAO.put(dae2);
+            Thread.sleep(10L);
+            
+            // doit
+            DeletedArtifactEventSync sync = new DeletedArtifactEventSync(inventoryEnvironment.artifactDAO, TestUtil.LUSKAN_URI, 6, 6);
+            Subject.doAs(this.testUser, (PrivilegedExceptionAction<Object>) () -> {
+                sync.doit();
+                return null;
+            });
+
+            // verify: artifact a2 deleted, DAE stored
+            Artifact r1 = inventoryEnvironment.artifactDAO.get(a1.getID());
+            Assert.assertNotNull(r1);
+
+            Artifact d2 = inventoryEnvironment.artifactDAO.get(a2.getID());
+            Assert.assertNull(d2);
+
+            Artifact r3 = inventoryEnvironment.artifactDAO.get(a3.getID());
+            Assert.assertNotNull(r3);
+
+            DeletedArtifactEvent actual = inventoryEnvironment.deletedArtifactEventDAO.get(dae2.getID());
+            Assert.assertNotNull(actual);
+            Assert.assertEquals(dae2.getLastModified(), actual.getLastModified());
+            
+            HarvestState hs = inventoryEnvironment.harvestStateDAO.get(DeletedArtifactEvent.class.getName(), TestUtil.LUSKAN_URI);
+            Assert.assertNotNull(hs);
+            Assert.assertEquals(dae2.getLastModified(), hs.curLastModified);
+            Assert.assertEquals(dae2.getID(), hs.curID);
+            
+            // idempotent
+            Subject.doAs(this.testUser, (PrivilegedExceptionAction<Object>) () -> {
+                sync.doit();
+                return null;
+            });
+            
+            hs = inventoryEnvironment.harvestStateDAO.get(DeletedArtifactEvent.class.getName(), TestUtil.LUSKAN_URI);
+            Assert.assertNotNull(hs);
+            Assert.assertEquals(dae2.getLastModified(), hs.curLastModified);
+            Assert.assertEquals(dae2.getID(), hs.curID);
+            
+        } catch (Exception ex) {
+            log.error("unexpected exception", ex);
+            Assert.fail("unexpected exception: " + ex);
+        }
+    }
 }

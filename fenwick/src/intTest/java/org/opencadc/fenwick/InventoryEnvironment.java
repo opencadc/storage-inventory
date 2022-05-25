@@ -73,6 +73,7 @@ import ca.nrc.cadc.db.DBConfig;
 import ca.nrc.cadc.db.DBUtil;
 import java.util.Map;
 import java.util.TreeMap;
+import org.apache.log4j.Logger;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.DeletedArtifactEventDAO;
 import org.opencadc.inventory.db.DeletedStorageLocationEventDAO;
@@ -82,13 +83,13 @@ import org.opencadc.inventory.db.StorageSiteDAO;
 import org.opencadc.inventory.db.version.InitDatabase;
 import org.springframework.jdbc.core.JdbcTemplate;
 
-
-
 public class InventoryEnvironment {
+    private static final Logger log = Logger.getLogger(InventoryEnvironment.class);
+    
     final StorageSiteDAO storageSiteDAO = new StorageSiteDAO();
-    final ArtifactDAO artifactDAO = new ArtifactDAO();
-    final DeletedArtifactEventDAO deletedArtifactEventDAO = new DeletedArtifactEventDAO();
-    final DeletedStorageLocationEventDAO deletedStorageLocationEventDAO = new DeletedStorageLocationEventDAO();
+    final ArtifactDAO artifactDAO = new ArtifactDAO(false);
+    final DeletedArtifactEventDAO deletedArtifactEventDAO = new DeletedArtifactEventDAO(false);
+    final DeletedStorageLocationEventDAO deletedStorageLocationEventDAO = new DeletedStorageLocationEventDAO(false);
     final HarvestStateDAO harvestStateDAO = new HarvestStateDAO();
     final Map<String, Object> daoConfig = new TreeMap<>();
     final ConnectionConfig connectionConfig;
@@ -125,11 +126,14 @@ public class InventoryEnvironment {
     }
 
     void cleanTestEnvironment() throws Exception {
+        log.info("cleanTestEnvironment: " + InventoryEnvironment.class.getSimpleName() + " - START");
         final JdbcTemplate jdbcTemplate = new JdbcTemplate(DBUtil.findJNDIDataSource(jndiPath));
-        jdbcTemplate.execute("TRUNCATE TABLE " + TestUtil.INVENTORY_SCHEMA + ".deletedArtifactEvent");
-        jdbcTemplate.execute("TRUNCATE TABLE " + TestUtil.INVENTORY_SCHEMA + ".deletedStorageLocationEvent");
-        jdbcTemplate.execute("TRUNCATE TABLE " + TestUtil.INVENTORY_SCHEMA + ".storageSite");
-        jdbcTemplate.execute("TRUNCATE TABLE " + TestUtil.INVENTORY_SCHEMA + ".harvestState");
+        jdbcTemplate.execute("TRUNCATE TABLE " + TestUtil.INVENTORY_SCHEMA + ".DeletedArtifactEvent");
+        jdbcTemplate.execute("TRUNCATE TABLE " + TestUtil.INVENTORY_SCHEMA + ".DeletedStorageLocationEvent");
+        jdbcTemplate.execute("TRUNCATE TABLE " + TestUtil.INVENTORY_SCHEMA + ".StorageSite");
         jdbcTemplate.execute("TRUNCATE TABLE " + TestUtil.INVENTORY_SCHEMA + ".Artifact");
+        
+        jdbcTemplate.execute("TRUNCATE TABLE " + TestUtil.INVENTORY_SCHEMA + ".HarvestState");
+        log.info("cleanTestEnvironment: " + InventoryEnvironment.class.getSimpleName() + " - DONE");
     }
 }

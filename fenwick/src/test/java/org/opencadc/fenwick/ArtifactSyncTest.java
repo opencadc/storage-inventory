@@ -82,7 +82,7 @@ public class ArtifactSyncTest {
     @Test
     public void testBuildQueryNoLastModifiedDate() throws Exception {
         final ArtifactSync artifactSync = new ArtifactSync(null);
-        final String resultOne = artifactSync.buildQuery();
+        final String resultOne = artifactSync.buildQuery(null, null);
 
         Assert.assertEquals("Wrong query.",
                             "SELECT id, uri, contentChecksum, contentLastModified, contentLength, contentType, "
@@ -101,8 +101,7 @@ public class ArtifactSyncTest {
         calendar.set(Calendar.MILLISECOND, 0);
 
         final ArtifactSync artifactSync = new ArtifactSync(null);
-        artifactSync.startTime = calendar.getTime();
-        final String resultOne = artifactSync.buildQuery();
+        final String resultOne = artifactSync.buildQuery(calendar.getTime(), null);
 
         Assert.assertEquals("Wrong query.",
                             "SELECT id, uri, contentChecksum, contentLastModified, contentLength, contentType, "
@@ -117,11 +116,8 @@ public class ArtifactSyncTest {
         calendar.set(1977, Calendar.NOVEMBER, 25, 3, 12, 0);
         calendar.set(Calendar.MILLISECOND, 0);
 
-        final ArtifactSync artifactSync = new ArtifactSync(null);
-        artifactSync.startTime = calendar.getTime();
-        artifactSync.includeClause = "uri LIKE 'ad:CFHT%'";
-
-        final String resultOne = artifactSync.buildQuery();
+        final ArtifactSync artifactSync = new ArtifactSync("uri LIKE 'ad:CFHT%'");
+        final String resultOne = artifactSync.buildQuery(calendar.getTime(), null);
 
         Assert.assertEquals("Wrong query.",
                             "SELECT id, uri, contentChecksum, contentLastModified, contentLength, contentType, "
@@ -133,10 +129,8 @@ public class ArtifactSyncTest {
 
     @Test
     public void testBuildQueryWithNoLastModifiedAndInclude() throws Exception {
-        final ArtifactSync artifactSync = new ArtifactSync(null);
-        artifactSync.includeClause = "uri LIKE 'ad:CFHT%' OR uri LIKE 'ad:MEGA%'";
-
-        final String resultOne = artifactSync.buildQuery();
+        final ArtifactSync artifactSync = new ArtifactSync("uri LIKE 'ad:CFHT%' OR uri LIKE 'ad:MEGA%'");
+        final String resultOne = artifactSync.buildQuery(null, null);
 
         Assert.assertEquals("Wrong query.",
                             "SELECT id, uri, contentChecksum, contentLastModified, contentLength, contentType, "
