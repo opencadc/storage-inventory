@@ -73,14 +73,12 @@ import ca.nrc.cadc.io.ResourceIterator;
 import ca.nrc.cadc.util.Log4jInit;
 import java.net.URI;
 import java.security.PrivilegedExceptionAction;
-import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
 import java.util.UUID;
 import javax.security.auth.Subject;
-import javax.sql.DataSource;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
@@ -89,6 +87,7 @@ import org.junit.Test;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.DeletedArtifactEvent;
 import org.opencadc.inventory.db.HarvestState;
+import org.opencadc.inventory.query.DeletedArtifactEventRowMapper;
 import org.opencadc.tap.TapClient;
 import org.opencadc.tap.TapRowMapper;
 
@@ -115,34 +114,6 @@ public class DeletedArtifactEventSyncTest {
     public void beforeTest() throws Exception {
         inventoryEnvironment.cleanTestEnvironment();
         luskanEnvironment.cleanTestEnvironment();
-    }
-
-    @Test
-    public void testRowMapper() {
-        try {
-            log.info("testRowMapper");
-
-            UUID uuid = UUID.randomUUID();
-            Date lasModified = new Date();
-            URI metaChecksum = new URI(TestUtil.ZERO_BYTES_MD5);
-
-            List<Object> row = new ArrayList<>();
-            row.add(uuid);
-            row.add(lasModified);
-            row.add(metaChecksum);
-
-            TapRowMapper<DeletedArtifactEvent> mapper =
-                new DeletedArtifactEventSync.DeletedArtifactEventRowMapper();
-            DeletedArtifactEvent event = mapper.mapRow(row);
-
-            Assert.assertNotNull(event);
-            Assert.assertEquals(uuid, event.getID());
-            Assert.assertEquals(lasModified, event.getLastModified());
-            Assert.assertEquals(metaChecksum, event.getMetaChecksum());
-        } catch (Exception ex) {
-            log.error("unexpected exception", ex);
-            Assert.fail("unexpected exception: " + ex);
-        }
     }
 
     @Test

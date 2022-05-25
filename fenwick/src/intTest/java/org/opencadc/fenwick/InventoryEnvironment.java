@@ -79,6 +79,7 @@ import org.opencadc.inventory.db.DeletedArtifactEventDAO;
 import org.opencadc.inventory.db.DeletedStorageLocationEventDAO;
 import org.opencadc.inventory.db.HarvestStateDAO;
 import org.opencadc.inventory.db.SQLGenerator;
+import org.opencadc.inventory.db.StorageLocationEventDAO;
 import org.opencadc.inventory.db.StorageSiteDAO;
 import org.opencadc.inventory.db.version.InitDatabase;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -88,6 +89,7 @@ public class InventoryEnvironment {
     
     final StorageSiteDAO storageSiteDAO = new StorageSiteDAO();
     final ArtifactDAO artifactDAO = new ArtifactDAO(false);
+    final StorageLocationEventDAO storageLocationEventDAO = new StorageLocationEventDAO(false);
     final DeletedArtifactEventDAO deletedArtifactEventDAO = new DeletedArtifactEventDAO(false);
     final DeletedStorageLocationEventDAO deletedStorageLocationEventDAO = new DeletedStorageLocationEventDAO(false);
     final HarvestStateDAO harvestStateDAO = new HarvestStateDAO();
@@ -102,7 +104,7 @@ public class InventoryEnvironment {
         daoConfig.put(SQLGenerator.class.getName(), SQLGenerator.class);
         daoConfig.put("database", TestUtil.INVENTORY_DATABASE);
         daoConfig.put("schema", TestUtil.INVENTORY_SCHEMA);
-        // connectionCOnfig and daoConfig used by InventoryHarvester to create it's own datasource
+        // connectionConfig and daoConfig used by InventoryHarvester to create it's own datasource
         
         Map<String, Object> testConfig = new TreeMap<>();
         
@@ -116,6 +118,7 @@ public class InventoryEnvironment {
 
         storageSiteDAO.setConfig(testConfig);
         artifactDAO.setConfig(testConfig);
+        storageLocationEventDAO.setConfig(testConfig);
         deletedArtifactEventDAO.setConfig(testConfig);
         deletedStorageLocationEventDAO.setConfig(testConfig);
         harvestStateDAO.setConfig(testConfig);
@@ -132,6 +135,7 @@ public class InventoryEnvironment {
         jdbcTemplate.execute("TRUNCATE TABLE " + TestUtil.INVENTORY_SCHEMA + ".DeletedStorageLocationEvent");
         jdbcTemplate.execute("TRUNCATE TABLE " + TestUtil.INVENTORY_SCHEMA + ".StorageSite");
         jdbcTemplate.execute("TRUNCATE TABLE " + TestUtil.INVENTORY_SCHEMA + ".Artifact");
+        jdbcTemplate.execute("TRUNCATE TABLE " + TestUtil.INVENTORY_SCHEMA + ".StorageLocationEvent");
         
         jdbcTemplate.execute("TRUNCATE TABLE " + TestUtil.INVENTORY_SCHEMA + ".HarvestState");
         log.info("cleanTestEnvironment: " + InventoryEnvironment.class.getSimpleName() + " - DONE");

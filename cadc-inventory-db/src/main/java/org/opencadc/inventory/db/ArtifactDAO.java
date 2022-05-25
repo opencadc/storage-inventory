@@ -135,26 +135,27 @@ public class ArtifactDAO extends AbstractDAO<Artifact> {
         return super.lock(Artifact.class, id);
     }
     
+    // used by file-sync and file-validate to track local copy in storage
     public void setStorageLocation(Artifact a, StorageLocation loc) {
         if (!origin) {
             throw new IllegalStateException("cannot update Artifact.storageLocation with origin=false");
         }
         a.storageLocation = loc;
-        boolean timestampUpdate = loc != null;
-        if (timestampUpdate) {
-            log.debug("force lastModified update when assigning storageLocation");
-        }
-        put(a, true, timestampUpdate);
+        put(a, true, false);
     }
     
+    // used by metadata-sync in global when copy deleted at a storage site
     public void addSiteLocation(Artifact a, SiteLocation loc) {
         if (origin) {
             throw new IllegalStateException("cannot update Artifact.siteLocation(s) with origin=true");
         }
         if (!a.siteLocations.contains(loc)) {
             a.siteLocations.add(loc);
-            log.debug("force lastModified update when adding siteLocation");
-            put(a, true, true);
+            boolean timestampUpdate = a.siteLocations.size() == 1; // first copy in global
+            if (timestampUpdate) {
+                log.debug("force lastModified update when adding first siteLocation");
+            }
+            put(a, true, timestampUpdate);
         }
     }
     
@@ -177,7 +178,7 @@ public class ArtifactDAO extends AbstractDAO<Artifact> {
      * @param storageBucketPrefix null, prefix, or complete storageBucket string
      * @return iterator over artifacts with a StorageLocation
      */
-    public ResourceIterator storedIterator(String storageBucketPrefix) {
+    public ResourceIterator<Artifact> storedIterator(String storageBucketPrefix) {
         checkInit();
         long t = System.currentTimeMillis();
 
@@ -205,7 +206,7 @@ public class ArtifactDAO extends AbstractDAO<Artifact> {
      * @param uriBucketPrefix null, prefix, or complete Artifact.uriBucket string
      * @return iterator over artifacts without a StorageLocation
      */
-    public ResourceIterator unstoredIterator(String uriBucketPrefix) {
+    public ResourceIterator<Artifact> unstoredIterator(String uriBucketPrefix) {
         checkInit();
         long t = System.currentTimeMillis();
 
@@ -227,11 +228,13 @@ public class ArtifactDAO extends AbstractDAO<Artifact> {
     /**
      * Iterate over Artifacts.
      * 
+     * <p>Use case: implement metadata-validate
+     * 
      * @param uriBucketPrefix null, prefix, or complete Artifact.uriBucket string
      * @param ordered order by Artifact.uri (true) or not ordered (false)
      * @return iterator over artifacts
      */
-    public ResourceIterator iterator(String uriBucketPrefix, boolean ordered) {
+    public ResourceIterator<Artifact> iterator(String uriBucketPrefix, boolean ordered) {
         return iterator((String) null, uriBucketPrefix, ordered);
     }
     
@@ -247,7 +250,7 @@ public class ArtifactDAO extends AbstractDAO<Artifact> {
      * @param ordered order by Artifact.uri (true) or not ordered (false)
      * @return iterator over artifacts matching criteria
      */
-    public ResourceIterator iterator(String criteria, String uriBucketPrefix, boolean ordered) {
+    public ResourceIterator<Artifact> iterator(String criteria, String uriBucketPrefix, boolean ordered) {
         checkInit();
         long t = System.currentTimeMillis();
 
@@ -278,7 +281,7 @@ public class ArtifactDAO extends AbstractDAO<Artifact> {
      * @param ordered order by Artifact.uri (true) or not ordered (false)
      * @return iterator over artifacts matching criteria
      */
-    public ResourceIterator iterator(UUID siteID, String uriBucketPrefix, boolean ordered) {
+    public ResourceIterator<Artifact> iterator(UUID siteID, String uriBucketPrefix, boolean ordered) {
         checkInit();
         long t = System.currentTimeMillis();
 

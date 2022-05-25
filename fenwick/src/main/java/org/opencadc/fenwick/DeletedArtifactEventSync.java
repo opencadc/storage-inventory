@@ -81,17 +81,14 @@ import java.io.IOException;
 import java.net.URI;
 import java.text.DateFormat;
 import java.util.Date;
-import java.util.List;
-import java.util.UUID;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.DeletedArtifactEvent;
-import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.DeletedArtifactEventDAO;
 import org.opencadc.inventory.db.HarvestState;
+import org.opencadc.inventory.query.DeletedArtifactEventRowMapper;
 import org.opencadc.tap.TapClient;
-import org.opencadc.tap.TapRowMapper;
 
 /**
  * Class to query the DeletedArtifactEvent table using a TAP service
@@ -219,57 +216,25 @@ public class DeletedArtifactEventSync extends AbstractSync {
 
     ResourceIterator<DeletedArtifactEvent> getEventStream(Date startTime, Date endTime)
         throws InterruptedException, IOException, ResourceNotFoundException, TransientException {
-
-        return tapClient.query(getTapQuery(startTime, endTime), new DeletedArtifactEventRowMapper());
+        String adql = buildQuery(startTime, endTime);
+        log.debug("adql: " + adql);
+        return tapClient.query(adql, new DeletedArtifactEventRowMapper());
     }
 
-    String getTapQuery(Date startTime, Date endTime) {
+    String buildQuery(Date startTime, Date endTime) {
+        DateFormat df = DateUtil.getDateFormat(DateUtil.ISO_DATE_FORMAT, DateUtil.UTC);
         StringBuilder query = new StringBuilder();
-        query.append("SELECT id, lastModified, metaChecksum FROM inventory.DeletedArtifactEvent");
+        query.append(DeletedArtifactEventRowMapper.BASE_QUERY);
+        String pre = " WHERE";
         if (startTime != null) {
-            query.append(" WHERE lastModified >= '");
-            query.append(getDateFormat().format(startTime));
-            query.append("'");
-
-            if (endTime != null) {
-                query.append(" AND ").append("lastModified < '").append(
-                        getDateFormat().format(endTime)).append("'");
-            }
-        } else if (endTime != null) {
-            query.append(" WHERE ").append("lastModified < '").append(getDateFormat().format(endTime)).append("'");
+            query.append(pre).append(" lastModified >= '").append(df.format(startTime)).append("'");
+            pre = " AND";
+        }    
+        if (endTime != null) {
+            query.append(pre).append(" lastModified < '").append(df.format(endTime)).append("'");
         }
-        query.append(" order by lastModified");
-        log.debug("Tap query: " + query.toString());
+        query.append(" ORDER BY lastModified");
+
         return query.toString();
     }
-
-    /**
-     * Get a DateFormat instance.
-     *
-     * @return ISO DateFormat in UTC.
-     */
-    protected DateFormat getDateFormat() {
-        return DateUtil.getDateFormat(DateUtil.ISO_DATE_FORMAT, DateUtil.UTC);
-    }
-
-    /**
-     * Class to map the query results to a DeletedArtifactEvent.
-     */
-    static class DeletedArtifactEventRowMapper implements TapRowMapper<DeletedArtifactEvent> {
-
-        @Override
-        public DeletedArtifactEvent mapRow(List<Object> row) {
-            int index = 0;
-            final UUID id = (UUID) row.get(index++);
-            final Date lastModified = (Date) row.get(index++);
-            final URI metaChecksum = (URI) row.get(index);
-
-            final DeletedArtifactEvent deletedArtifactEvent = new DeletedArtifactEvent(id);
-            InventoryUtil.assignLastModified(deletedArtifactEvent, lastModified);
-            InventoryUtil.assignMetaChecksum(deletedArtifactEvent, metaChecksum);
-
-            return deletedArtifactEvent;
-        }
-    }
-
 }
