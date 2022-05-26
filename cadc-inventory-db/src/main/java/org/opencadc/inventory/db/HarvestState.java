@@ -82,7 +82,7 @@ import org.opencadc.inventory.InventoryUtil;
 public class HarvestState extends Entity {
     private static final Logger log = Logger.getLogger(HarvestState.class);
 
-    private final String name;
+    private String name;
     private URI resourceID;
     
     /**
@@ -116,6 +116,10 @@ public class HarvestState extends Entity {
         return name;
     }
 
+    public void setName(String name) {
+        this.name = name;
+    }
+    
     public URI getResourceID() {
         return resourceID;
     }

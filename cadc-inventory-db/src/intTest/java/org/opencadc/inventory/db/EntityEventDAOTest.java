@@ -95,8 +95,8 @@ public class EntityEventDAOTest {
     private static final Logger log = Logger.getLogger(EntityEventDAOTest.class);
 
     static {
-        Log4jInit.setLevel("org.opencadc.inventory", Level.DEBUG);
-        Log4jInit.setLevel("ca.nrc.cadc.db.version", Level.DEBUG);
+        Log4jInit.setLevel("org.opencadc.inventory", Level.INFO);
+        Log4jInit.setLevel("ca.nrc.cadc.db.version", Level.INFO);
     }
     
     DeletedArtifactEventDAO daeDAO = new DeletedArtifactEventDAO();

@@ -101,7 +101,8 @@ import org.opencadc.tantar.policy.StorageIsAlwaysRight;
  * @author pdowler
  */
 public class BucketValidatorTest {
-
+    private static final Logger log = Logger.getLogger(BucketValidatorTest.class);
+    
     static {
         Log4jInit.setLevel("org.opencadc.tantar", Level.INFO);
     }
@@ -114,9 +115,7 @@ public class BucketValidatorTest {
      */
     @Test
     public void validateInventoryIsAlwaysRight() throws Exception {
-        final ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
-
-        final Reporter reporter = new Reporter(getTestLogger(byteArrayOutputStream));
+        final Reporter reporter = new Reporter(log);
 
         // **** Create the Inventory content.
         final List<Artifact> testArtifactList = new ArrayList<>();
@@ -145,11 +144,13 @@ public class BucketValidatorTest {
         testStorageMetadataList.add(new StorageMetadata(new StorageLocation(URI.create("ad:123456")),
                                                         artifactOneContentChecksum, 88L, artifactOne.getContentLastModified()));
 
-        testStorageMetadataList.add(new StorageMetadata(new StorageLocation(URI.create("ceph:78787878")),
-                                                        URI.create("md5:" + random16Bytes()), 99L, new Date()));
+        StorageMetadata d1 = new StorageMetadata(new StorageLocation(URI.create("ceph:78787878")),
+                                                        URI.create("md5:" + random16Bytes()), 99L, new Date());
+        testStorageMetadataList.add(d1);
 
-        testStorageMetadataList.add(new StorageMetadata(new StorageLocation(URI.create("s3:CDEF00")),
-                                    URI.create("md5:" + random16Bytes()), 100L, new Date()));
+        StorageMetadata d2 = new StorageMetadata(new StorageLocation(URI.create("s3:CDEF00")),
+                                    URI.create("md5:" + random16Bytes()), 100L, new Date());
+        testStorageMetadataList.add(d2);
         testStorageMetadataList.sort(Comparator.comparing(StorageMetadata::getStorageLocation));
         // **** End Create the Storage Adapter content.
 
@@ -178,19 +179,15 @@ public class BucketValidatorTest {
 
         testSubject.validate();
 
-        /*
-        The two iterators only share a single file, which is located at ad:123456.  As a result, it should be left
-        alone.
-         */
-
-        final List<String> outputLines =
-                Arrays.asList(new String(byteArrayOutputStream.toByteArray()).split("\n"));
-        System.out.printf("Message lines are \n\n%s\n\n%n", outputLines);
-        assertListContainsMessage(outputLines, ".*deleteStorageLocation.*ceph:78787878.*");
-        assertListContainsMessage(outputLines, ".*clearStorageLocation.*ceph:7890AB.*");
-        assertListContainsMessage(outputLines, ".*clearStorageLocation.*s3:CDEF00.*");
-        assertListContainsMessage(outputLines, ".*deleteStorageLocation.*s3:CDEF00.*");
-        //assertListContainsMessage(outputLines, ".*valid.*ad:123456.*");
+        Assert.assertTrue(testEventListener.deletedStorage.contains(d1));
+        Assert.assertTrue(testEventListener.deletedStorage.contains(d2));
+        Assert.assertTrue(testEventListener.cleared.contains(artifactTwo));
+        Assert.assertTrue(testEventListener.cleared.contains(artifactThree));
+        
+        Assert.assertFalse(testEventListener.deleted.contains(artifactOne));
+        Assert.assertFalse(testEventListener.replaced.contains(artifactOne));
+        Assert.assertFalse(testEventListener.cleared.contains(artifactOne));
+        Assert.assertFalse(testEventListener.updated.contains(artifactOne));
     }
 
     /**
@@ -201,9 +198,7 @@ public class BucketValidatorTest {
      */
     @Test
     public void validateInventoryIsAlwaysRightEmptyStorage() throws Exception {
-        final ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
-
-        final Reporter reporter = new Reporter(getTestLogger(byteArrayOutputStream));
+        final Reporter reporter = new Reporter(log);
 
         // **** Create the Inventory content.
         final List<Artifact> testArtifactList = new ArrayList<>();
@@ -250,12 +245,9 @@ public class BucketValidatorTest {
 
         testSubject.validate();
 
-        final List<String> outputLines =
-                Arrays.asList(new String(byteArrayOutputStream.toByteArray()).split("\n"));
-        System.out.printf("Message lines are \n\n%s\n\n%n", outputLines);
-        assertListContainsMessage(outputLines, ".*clearStorageLocation.*ad:123456.*");
-        assertListContainsMessage(outputLines, ".*clearStorageLocation.*ceph:7890AB.*");
-        assertListContainsMessage(outputLines, ".*clearStorageLocation.*s3:CDEF00.*");
+        Assert.assertTrue(testEventListener.cleared.contains(artifactOne));
+        Assert.assertTrue(testEventListener.cleared.contains(artifactTwo));
+        Assert.assertTrue(testEventListener.cleared.contains(artifactThree));
     }
 
     /**
@@ -266,9 +258,7 @@ public class BucketValidatorTest {
      */
     @Test
     public void validateStorageIsAlwaysRight() throws Exception {
-        final ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
-
-        final Reporter reporter = new Reporter(getTestLogger(byteArrayOutputStream));
+        final Reporter reporter = new Reporter(log);
 
         // **** Create the Inventory content.
         final List<Artifact> testArtifactList = new ArrayList<>();
@@ -297,8 +287,9 @@ public class BucketValidatorTest {
         testStorageMetadataList.add(new StorageMetadata(new StorageLocation(URI.create("ad:123456")),
                                                         artifactOneContentChecksum, 88L, artifactOne.getContentLastModified()));
 
-        testStorageMetadataList.add(new StorageMetadata(new StorageLocation(URI.create("ceph:78787878")),
-                                                        URI.create("md5:" + random16Bytes()), 99L, new Date()));
+        StorageMetadata c1 = new StorageMetadata(new StorageLocation(URI.create("ceph:78787878")),
+                                                        URI.create("md5:" + random16Bytes()), 99L, new Date());
+        testStorageMetadataList.add(c1);
 
         testStorageMetadataList.add(
                 new StorageMetadata(new StorageLocation(URI.create("s3:CDEF00")),
@@ -330,21 +321,15 @@ public class BucketValidatorTest {
 
         testSubject.validate();
 
-        /*
-        The two iterators only share a single file, which is located at ad:123456.  As a result, it should be left
-        alone.
-         */
+        Assert.assertTrue(testEventListener.created.contains(c1));
+        Assert.assertTrue(testEventListener.deleted.contains(artifactTwo));
+        Assert.assertTrue(testEventListener.replaced.contains(artifactThree));
 
-        final List<String> outputLines =
-                Arrays.asList(new String(byteArrayOutputStream.toByteArray()).split("\n"));
-        System.out.printf("Message lines are \n\n%s\n\n%n", outputLines);
-        assertListContainsMessage(outputLines,
-                                  ".*createArtifact.*ceph:78787878.*");
-        assertListContainsMessage(outputLines,
-                                  ".*deleteArtifact.*uri=cadc:a/myfile99.fits.*");
-        assertListContainsMessage(outputLines,
-                                  ".*replaceArtifact.*uri=cadc:b/myfile100.fits.*s3:CDEF00.*");
-        //assertListContainsMessage(outputLines, ".*valid.*ad:123456.*");
+        // valid
+        Assert.assertFalse(testEventListener.deleted.contains(artifactOne));
+        Assert.assertFalse(testEventListener.replaced.contains(artifactOne));
+        Assert.assertFalse(testEventListener.cleared.contains(artifactOne));
+        Assert.assertFalse(testEventListener.updated.contains(artifactOne));
     }
 
     /**
@@ -355,9 +340,7 @@ public class BucketValidatorTest {
      */
     @Test
     public void validateStorageIsAlwaysRightEmptyInventory() throws Exception {
-        final ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
-
-        final Reporter reporter = new Reporter(getTestLogger(byteArrayOutputStream));
+        final Reporter reporter = new Reporter(log);
 
         // **** Create the Storage Adapter content.
         final List<StorageMetadata> testStorageMetadataList = new ArrayList<>();
@@ -397,15 +380,9 @@ public class BucketValidatorTest {
 
         testSubject.validate();
 
-        final List<String> outputLines =
-                Arrays.asList(new String(byteArrayOutputStream.toByteArray()).split("\n"));
-        System.out.printf("Message lines are \n\n%s\n\n%n", outputLines);
-        assertListContainsMessage(outputLines,
-                                  ".*createArtifact.*ad:123456.*");
-        assertListContainsMessage(outputLines,
-                                  ".*createArtifact.*ad:78787878.*");
-        assertListContainsMessage(outputLines,
-                                  ".*createArtifact.*ad:CDEF00.*");
+        for (StorageMetadata sm : testStorageMetadataList) {
+            Assert.assertTrue(testEventListener.created.contains(sm));
+        }
     }
 
     /**
@@ -416,9 +393,7 @@ public class BucketValidatorTest {
      */
     //@Test
     public void validateRecoverFromStoragePolicyEmptyInventory() throws Exception {
-        final ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
-
-        final Reporter reporter = new Reporter(getTestLogger(byteArrayOutputStream));
+        final Reporter reporter = new Reporter(log);
 
         // **** Create the Storage Adapter content.
         final List<StorageMetadata> testStorageMetadataList = new ArrayList<>();
@@ -458,31 +433,9 @@ public class BucketValidatorTest {
 
         testSubject.validate();
 
-        final List<String> outputLines =
-                Arrays.asList(new String(byteArrayOutputStream.toByteArray()).split("\n"));
-        System.out.printf("Message lines are \n\n%s\n\n%n", outputLines);
-        assertListContainsMessage(outputLines,
-                                  ".*createArtifact.*ad:123456.*");
-        assertListContainsMessage(outputLines,
-                                  ".*createArtifact.*ad:78787878.*");
-        assertListContainsMessage(outputLines,
-                                  ".*createArtifact.*ad:CDEF00.*");
-    }
-
-    private void assertListContainsMessage(final List<String> outputLines, final String regex) {
-        Assert.assertTrue(String.format("Output does not match %s", regex),
-                          outputLines.stream().anyMatch(s -> s.matches(regex)));
-    }
-
-    private Logger getTestLogger(final OutputStream outputStream) {
-        final Logger logger = Logger.getLogger(BucketValidatorTest.class);
-        final WriterAppender testAppender = new WriterAppender(new SimpleLayout(), outputStream);
-        testAppender.setName("Test Writer Appender");
-
-        logger.removeAllAppenders();
-        logger.addAppender(testAppender);
-
-        return logger;
+        for (StorageMetadata sm : testStorageMetadataList) {
+            Assert.assertTrue(testEventListener.created.contains(sm));
+        }
     }
 
     String random16Bytes() {
