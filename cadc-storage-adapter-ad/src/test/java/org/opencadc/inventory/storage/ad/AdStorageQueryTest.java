@@ -115,21 +115,21 @@ public class AdStorageQueryTest {
     public void testQueryVaultBuckets() throws Exception {
         AdStorageQuery asq = new AdStorageQuery("vault:fe");
         String query = asq.getQuery();
-        Assert.assertTrue("vault query constraints", query.contains("WHERE archiveName = 'VOSpac'  " +
-                "AND contentMD5 between 'fe00000000000000' AND 'feffffffffffffff'"));
+        Assert.assertTrue("vault query constraints", query.contains("WHERE archiveName = 'VOSpac'  "
+                + "AND contentMD5 between 'fe00000000000000' AND 'feffffffffffffff'"));
     }
 
     @Test
     public void testQueryArchiveBuckets() throws Exception {
         AdStorageQuery asq = new AdStorageQuery("archive:0");
         String query = asq.getQuery();
-        Assert.assertTrue("vault query constraints", query.contains("WHERE archiveName = 'archive'  " +
-                "AND contentMD5 between '0000000000000000' AND '0fffffffffffffff'"));
+        Assert.assertTrue("vault query constraints", query.contains("WHERE archiveName = 'archive'  "
+                + "AND contentMD5 between '0000000000000000' AND '0fffffffffffffff'"));
 
         asq = new AdStorageQuery("archive:FFF");
         query = asq.getQuery();
-        Assert.assertTrue("vault query constraints", query.contains("WHERE archiveName = 'archive'  " +
-                "AND contentMD5 between 'fff0000000000000' AND 'ffffffffffffffff'"));
+        Assert.assertTrue("vault query constraints", query.contains("WHERE archiveName = 'archive'  "
+                + "AND contentMD5 between 'fff0000000000000' AND 'ffffffffffffffff'"));
 
         // bucket size
         Assert.assertThrows(IllegalArgumentException.class, () -> new AdStorageQuery("archive:"));

@@ -105,8 +105,10 @@ public class AdStorageQuery {
         InventoryUtil.assertNotNull(AdStorageQuery.class, "storageBucket", storageBucket);
         this.storagebucket = storageBucket;
         String archive = bucket2archive(this.storagebucket);
-        String vaultBucketConstraint = "";
+        String bucketConstraint = "";
         if (this.storagebucket.contains(":")) {
+            // a bucket is a subset of an archive defined by the first digits of
+            // the checksumMD5 of the file
             String[] parts = this.storagebucket.split(":");
             if (parts.length != 2) {
                 throw new IllegalArgumentException("Unexpected vault bucket format: " + storageBucket);
@@ -124,9 +126,9 @@ public class AdStorageQuery {
             }
             String minMD5Checksum = bucket + "0000000000000000".substring(0, 16 - bucket.length());
             String maxMD5Checksum = bucket + "ffffffffffffffff".substring(0, 16 - bucket.length());
-            vaultBucketConstraint = " AND contentMD5 between '" + minMD5Checksum + "' AND '" + maxMD5Checksum + "'";
+            bucketConstraint = " AND contentMD5 between '" + minMD5Checksum + "' AND '" + maxMD5Checksum + "'";
         }
-        this.query = String.format(this.QTMPL, archive, vaultBucketConstraint);
+        this.query = String.format(this.QTMPL, archive, bucketConstraint);
     }
 
     public TapRowMapper<StorageMetadata> getRowMapper() {
@@ -190,13 +192,6 @@ public class AdStorageQuery {
                 return null;
             }
 
-            StorageLocation storageLocation = new StorageLocation(storageID);
-            if (storagebucket.contains(":")) {
-                storageLocation.storageBucket = "vault:" + hex.substring(0, 3);  // vault bucket: vault:123
-            } else {
-                storageLocation.storageBucket = storagebucket;
-            }
-            
             // archive_files.fileSize
             Long contentLength = (Long) i.next();
             if (contentLength == null) {
@@ -206,6 +201,15 @@ public class AdStorageQuery {
             if (contentLength == 0L) {
                 log.warn(AdStorageMetadataRowMapper.class.getSimpleName() + ".SKIP uri=" + storageID + " reason=zero-contentLength");
                 return null;
+            }
+
+            StorageLocation storageLocation = new StorageLocation(storageID);
+            if (storagebucket.contains(":")) {
+                // return the actual 3 digit "bucket" even if a 1 or 2 digit superbucket was specified
+                storageLocation.storageBucket = storagebucket.substring(0, storagebucket.indexOf(':') + 1)
+                        + hex.substring(0, 3);  // vault bucket: vault:123
+            } else {
+                storageLocation.storageBucket = storagebucket;
             }
 
             Date contentLastModified = (Date) i.next();
