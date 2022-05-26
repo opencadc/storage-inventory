@@ -209,7 +209,7 @@ public class DeletedArtifactEventSyncTest {
             Assert.assertNotNull(actual);
             Assert.assertEquals(dae2.getLastModified(), actual.getLastModified());
             
-            HarvestState hs = inventoryEnvironment.harvestStateDAO.get(DeletedArtifactEvent.class.getName(), TestUtil.LUSKAN_URI);
+            HarvestState hs = inventoryEnvironment.harvestStateDAO.get(DeletedArtifactEvent.class.getSimpleName(), TestUtil.LUSKAN_URI);
             Assert.assertNotNull(hs);
             Assert.assertEquals(dae2.getLastModified(), hs.curLastModified);
             Assert.assertEquals(dae2.getID(), hs.curID);
@@ -220,7 +220,7 @@ public class DeletedArtifactEventSyncTest {
                 return null;
             });
             
-            hs = inventoryEnvironment.harvestStateDAO.get(DeletedArtifactEvent.class.getName(), TestUtil.LUSKAN_URI);
+            hs = inventoryEnvironment.harvestStateDAO.get(DeletedArtifactEvent.class.getSimpleName(), TestUtil.LUSKAN_URI);
             Assert.assertNotNull(hs);
             Assert.assertEquals(dae2.getLastModified(), hs.curLastModified);
             Assert.assertEquals(dae2.getID(), hs.curID);

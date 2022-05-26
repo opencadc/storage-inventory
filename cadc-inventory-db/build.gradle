@@ -25,7 +25,7 @@ def git_url = 'https://github.com/opencadc/storage-inventory'
 mainClassName = 'org.opencadc.inventory.db.version.Main'
 
 dependencies {
-    compile 'org.opencadc:cadc-util:[1.6,2.0)'
+    compile 'org.opencadc:cadc-util:[1.6.2,2.0)'
     compile 'org.opencadc:cadc-inventory:[0.9,)'
 
     testCompile 'junit:junit:[4.0,)'

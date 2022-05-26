@@ -79,6 +79,8 @@ import ca.nrc.cadc.net.TransientException;
 import java.io.File;
 import java.io.IOException;
 import java.net.URI;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.text.DateFormat;
 import java.util.Date;
 import org.apache.log4j.Logger;
@@ -117,10 +119,26 @@ public class DeletedStorageLocationEventSync extends AbstractSync {
     @Override
     void doit() throws ResourceNotFoundException, IOException, IllegalStateException, 
             TransientException, InterruptedException {
-        HarvestState hs = harvestStateDAO.get(DeletedStorageLocationEvent.class.getName(), resourceID);
+        final MessageDigest messageDigest;
+        try {
+            messageDigest = MessageDigest.getInstance("MD5");
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException("BUG: failed to get instance of MD5", e);
+        }
+        
+        HarvestState hs = harvestStateDAO.get(DeletedStorageLocationEvent.class.getSimpleName(), resourceID);
+        if (hs.curLastModified == null) {
+            // TEMPORARY: check for pre-rename record and rename
+            HarvestState orig = harvestStateDAO.get(DeletedStorageLocationEvent.class.getName(), resourceID);
+            if (orig.curLastModified != null) {
+                orig.setName(DeletedStorageLocationEvent.class.getSimpleName());
+                harvestStateDAO.put(orig);
+                hs = orig;
+            }
+        }
         if (hs.curLastModified == null) { 
             // first harvest: ignore old deleted events?
-            HarvestState artifactHS = harvestStateDAO.get(Artifact.class.getName(), resourceID);
+            HarvestState artifactHS = harvestStateDAO.get(Artifact.class.getSimpleName(), resourceID);
             if (artifactHS.curLastModified == null) {
                 // never artifacts harvested: ignore old deleted events
                 hs.curLastModified = new Date();
@@ -161,24 +179,30 @@ public class DeletedStorageLocationEventSync extends AbstractSync {
             long dt = System.currentTimeMillis() - t1;
             log.info("DeletedStorageLocationEvent.QUERY start=" + start + " end=" + end + " duration=" + dt);
             while (deletedStorageLocationEventResourceIterator.hasNext()) {
-                final DeletedStorageLocationEvent deletedStorageLocationEvent =
+                final DeletedStorageLocationEvent syncEvent =
                         deletedStorageLocationEventResourceIterator.next();
                 if (first) {
                     
                     first = false;
                     
-                    if (deletedStorageLocationEvent.getID().equals(harvestState.curID)
-                        && deletedStorageLocationEvent.getLastModified().equals(harvestState.curLastModified)) {
-                        log.debug("SKIP: previously processed: " + deletedStorageLocationEvent.getID());
+                    if (syncEvent.getID().equals(harvestState.curID)
+                        && syncEvent.getLastModified().equals(harvestState.curLastModified)) {
+                        log.debug("SKIP: previously processed: " + syncEvent.getID());
                         // ugh but the skip is comprehensible: have to do this inside the loop when using
                         // try-with-resources
                         continue;
                     }
                 }
 
+                URI computedCS = syncEvent.computeMetaChecksum(messageDigest);
+                if (!computedCS.equals(syncEvent.getMetaChecksum())) {
+                    throw new IllegalStateException("checksum mismatch: " + syncEvent.getID()
+                            + " provided=" + syncEvent.getMetaChecksum() + " actual=" + computedCS);
+                }
+                
                 try {
                     transactionManager.startTransaction();
-                    Artifact cur = artifactDAO.lock(deletedStorageLocationEvent.getID());
+                    Artifact cur = artifactDAO.lock(syncEvent.getID());
                     if (cur != null) {
                         if (cur.siteLocations.contains(siteLocation)) {
                             // if siteLocations becomes empty, delete the artifact
@@ -188,19 +212,19 @@ public class DeletedStorageLocationEventSync extends AbstractSync {
                                 this.artifactDAO.delete(cur.getID());
                             } else {
                                 log.info("DeletedStorageLocationEventSync.removeSiteLocation id=" 
-                                        + deletedStorageLocationEvent.getID()
+                                        + syncEvent.getID()
                                         + " uri=" + cur.getURI()
-                                        + " lastModified=" + df.format(deletedStorageLocationEvent.getLastModified())
+                                        + " lastModified=" + df.format(syncEvent.getLastModified())
                                         + " reason=DeletedStorageLocationEvent"); 
                                 this.artifactDAO.removeSiteLocation(cur, siteLocation);
                             }
                         }
                     } else {
                         log.debug("DeletedStorageLocationEventSync.removeSiteLocation SKIP id=" 
-                                + deletedStorageLocationEvent.getID() + " reason=no-matching-artifact");
+                                + syncEvent.getID() + " reason=no-matching-artifact");
                     }
-                    harvestState.curLastModified = deletedStorageLocationEvent.getLastModified();
-                    harvestState.curID = deletedStorageLocationEvent.getID();
+                    harvestState.curLastModified = syncEvent.getLastModified();
+                    harvestState.curID = syncEvent.getID();
                     harvestStateDAO.put(harvestState);
                     transactionManager.commitTransaction();
                 } catch (Exception exception) {

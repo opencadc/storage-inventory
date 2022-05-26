@@ -79,6 +79,8 @@ import ca.nrc.cadc.net.TransientException;
 import java.io.File;
 import java.io.IOException;
 import java.net.URI;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.text.DateFormat;
 import java.util.Date;
 import org.apache.log4j.Logger;
@@ -115,10 +117,26 @@ public class DeletedArtifactEventSync extends AbstractSync {
     @Override
     void doit() throws ResourceNotFoundException, IOException, IllegalStateException, 
             TransientException, InterruptedException {
-        HarvestState hs = harvestStateDAO.get(DeletedArtifactEvent.class.getName(), resourceID);
-        if (hs.curLastModified == null) { 
+        final MessageDigest messageDigest;
+        try {
+            messageDigest = MessageDigest.getInstance("MD5");
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException("BUG: failed to get instance of MD5", e);
+        }
+        
+        HarvestState hs = harvestStateDAO.get(DeletedArtifactEvent.class.getSimpleName(), resourceID);
+        if (hs.curLastModified == null) {
+            // TEMPORARY: check for pre-rename record and rename
+            HarvestState orig = harvestStateDAO.get(DeletedArtifactEvent.class.getName(), resourceID);
+            if (orig.curLastModified != null) {
+                orig.setName(DeletedArtifactEvent.class.getSimpleName());
+                harvestStateDAO.put(orig);
+                hs = orig;
+            }
+        }
+        if (hs.curLastModified == null) {
             // first harvest: ignore old deleted events?
-            HarvestState artifactHS = harvestStateDAO.get(Artifact.class.getName(), resourceID);
+            HarvestState artifactHS = harvestStateDAO.get(Artifact.class.getSimpleName(), resourceID);
             if (artifactHS.curLastModified == null) {
                 // never artifacts harvested: ignore old deleted events
                 hs.curLastModified = new Date();
@@ -158,38 +176,44 @@ public class DeletedArtifactEventSync extends AbstractSync {
             long dt = System.currentTimeMillis() - t1;
             log.info("DeletedArtifactEvent.QUERY start=" + start + " end=" + end + " duration=" + dt);
             while (deletedArtifactEventResourceIterator.hasNext()) {
-                final DeletedArtifactEvent deletedArtifactEvent = deletedArtifactEventResourceIterator.next();
+                final DeletedArtifactEvent syncEvent = deletedArtifactEventResourceIterator.next();
                 if (first) {
                     first = false;
-                    if (deletedArtifactEvent.getID().equals(harvestState.curID)
-                        && deletedArtifactEvent.getLastModified().equals(harvestState.curLastModified)) {
-                        log.debug("SKIP: previously processed: " + deletedArtifactEvent.getID());
+                    if (syncEvent.getID().equals(harvestState.curID)
+                        && syncEvent.getLastModified().equals(harvestState.curLastModified)) {
+                        log.debug("SKIP: previously processed: " + syncEvent.getID());
                         // ugh but the skip is comprehensible: have to do this inside the loop when using
                         // try-with-resources
                         continue;
                     }
                 }
                 
+                URI computedCS = syncEvent.computeMetaChecksum(messageDigest);
+                if (!computedCS.equals(syncEvent.getMetaChecksum())) {
+                    throw new IllegalStateException("checksum mismatch: " + syncEvent.getID()
+                            + " provided=" + syncEvent.getMetaChecksum() + " actual=" + computedCS);
+                }
+                
                 try {
                     transactionManager.startTransaction();
-                    Artifact cur = artifactDAO.lock(deletedArtifactEvent.getID());
+                    Artifact cur = artifactDAO.lock(syncEvent.getID());
                     
                     String logURI = "";
                     if (cur != null) {
                         logURI = " uri=" + cur.getURI();
                         log.info("DeletedArtifactEventSync.deleteArtifact id=" + cur.getID()
                             + logURI
-                            + " lastModified=" + df.format(deletedArtifactEvent.getLastModified())
+                            + " lastModified=" + df.format(syncEvent.getLastModified())
                             + " reason=DeletedArtifactEvent");
-                        artifactDAO.delete(deletedArtifactEvent.getID());
+                        artifactDAO.delete(syncEvent.getID());
                     }
-                    log.info("DeletedArtifactEventSync.putDeletedArtifactEvent id=" + deletedArtifactEvent.getID()
+                    log.info("DeletedArtifactEventSync.putDeletedArtifactEvent id=" + syncEvent.getID()
                             + logURI
-                            + " lastModified=" + df.format(deletedArtifactEvent.getLastModified()));
-                    deletedDAO.put(deletedArtifactEvent);
+                            + " lastModified=" + df.format(syncEvent.getLastModified()));
+                    deletedDAO.put(syncEvent);
                     
-                    harvestState.curLastModified = deletedArtifactEvent.getLastModified();
-                    harvestState.curID = deletedArtifactEvent.getID();
+                    harvestState.curLastModified = syncEvent.getLastModified();
+                    harvestState.curID = syncEvent.getID();
                     harvestStateDAO.put(harvestState);
                     transactionManager.commitTransaction();
                 } catch (Exception exception) {
