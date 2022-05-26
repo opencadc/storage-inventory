@@ -119,16 +119,14 @@ public class StorageLocationEventSync extends AbstractSync {
             throw new RuntimeException("BUG: failed to get instance of MD5", e);
         }
 
-        final SiteLocation remoteSiteLocation = (storageSite == null ? null : new SiteLocation(storageSite.getID()));
-        
-        final HarvestState harvestState = this.harvestStateDAO.get(StorageLocationEvent.class.getName(), resourceID);
+        final HarvestState harvestState = this.harvestStateDAO.get(StorageLocationEvent.class.getSimpleName(), resourceID);
 
         final Date endTime = new Date();
         final Date lookBack = new Date(endTime.getTime() - LOOKBACK_TIME);
         Date startTime = getQueryLowerBound(lookBack, harvestState.curLastModified);
         
         DateFormat df = DateUtil.getDateFormat(DateUtil.IVOA_DATE_FORMAT, DateUtil.UTC);
-        if (lookBack != null && harvestState.curLastModified != null) {
+        if (harvestState.curLastModified != null) {
             log.debug("lookBack=" + df.format(lookBack) + " curLastModified=" + df.format(harvestState.curLastModified) 
                 + " -> " + df.format(startTime));
         }
@@ -136,10 +134,7 @@ public class StorageLocationEventSync extends AbstractSync {
         if (startTime != null) {
             start = df.format(startTime);
         }
-        String end = null;
-        if (endTime != null) {
-            end = df.format(endTime);
-        }
+        String end = df.format(endTime);
         log.info("StorageLocationEvent.QUERY start=" + start + " end=" + end);
         
         final TransactionManager transactionManager = artifactDAO.getTransactionManager();
@@ -152,35 +147,41 @@ public class StorageLocationEventSync extends AbstractSync {
             long dt = System.currentTimeMillis() - t1;
             log.info("StorageLocationEvent.QUERY start=" + start + " end=" + end + " duration=" + dt);
             while (resourceIterator.hasNext()) {
-                final StorageLocationEvent storageLocationEvent = resourceIterator.next();
+                final StorageLocationEvent syncEvent = resourceIterator.next();
                 if (first) {
                     
                     first = false;
                     
-                    if (storageLocationEvent.getID().equals(harvestState.curID)
-                        && storageLocationEvent.getLastModified().equals(harvestState.curLastModified)) {
-                        log.debug("SKIP: previously processed: " + storageLocationEvent.getID());
+                    if (syncEvent.getID().equals(harvestState.curID)
+                        && syncEvent.getLastModified().equals(harvestState.curLastModified)) {
+                        log.debug("SKIP: previously processed: " + syncEvent.getID());
                         // ugh but the skip is comprehensible: have to do this inside the loop when using
                         // try-with-resources
                         continue;
                     }
                 }
                 
+                URI computedCS = syncEvent.computeMetaChecksum(messageDigest);
+                if (!computedCS.equals(syncEvent.getMetaChecksum())) {
+                    throw new IllegalStateException("checksum mismatch: " + syncEvent.getID()
+                            + " provided=" + syncEvent.getMetaChecksum() + " actual=" + computedCS);
+                }
+                
                 try {
                     transactionManager.startTransaction();
-                    Artifact cur = artifactDAO.lock(storageLocationEvent.getID());
+                    Artifact cur = artifactDAO.lock(syncEvent.getID());
                     if (cur != null) {
                         log.info("StorageLocationEventSync.addSiteLocation id=" + cur.getID() 
                                 + " uri=" + cur.getURI() 
-                                + " lastModified=" + df.format(storageLocationEvent.getLastModified()));
+                                + " lastModified=" + df.format(syncEvent.getLastModified()));
                         artifactDAO.addSiteLocation(cur, siteLocation);
                     } else {
                         log.debug("StorageLocationEventSync.addSiteLocation SKIP id=" 
-                                + storageLocationEvent.getID() 
+                                + syncEvent.getID() 
                                 + " reason=no-matching-artifact");
                     }
-                    harvestState.curLastModified = storageLocationEvent.getLastModified();
-                    harvestState.curID = storageLocationEvent.getID();
+                    harvestState.curLastModified = syncEvent.getLastModified();
+                    harvestState.curID = syncEvent.getID();
                     harvestStateDAO.put(harvestState);
                     transactionManager.commitTransaction();
                 } catch (Exception exception) {
@@ -216,7 +217,6 @@ public class StorageLocationEventSync extends AbstractSync {
     private String buildQuery(Date startTime, Date endTime) {
         DateFormat df = DateUtil.getDateFormat(DateUtil.ISO_DATE_FORMAT, DateUtil.UTC);
         
-        StringBuilder sb = new StringBuilder();
         StringBuilder query = new StringBuilder();
         query.append(StorageLocationEventRowMapper.BASE_QUERY);
         String pre = " WHERE";

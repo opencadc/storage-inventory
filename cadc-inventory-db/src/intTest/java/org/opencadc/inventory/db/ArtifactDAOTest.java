@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2021.                            (c) 2021.
+*  (c) 2022.                            (c) 2022.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -348,7 +348,7 @@ public class ArtifactDAOTest {
             loc.storageBucket = "abc";
             originDAO.setStorageLocation(expected, loc);
             Artifact a3 = originDAO.get(expected.getID());
-            Assert.assertNotNull(a2);
+            Assert.assertNotNull(a3);
             URI mcs3 = a3.computeMetaChecksum(MessageDigest.getInstance("MD5"));
             Assert.assertEquals("round trip metachecksum unchanged", expected.getMetaChecksum(), mcs3);
             Assert.assertTrue("lastModified not incremented", a2.getLastModified().equals(a3.getLastModified()));
@@ -359,7 +359,7 @@ public class ArtifactDAOTest {
             
             originDAO.setStorageLocation(expected, null);
             Artifact a4 = originDAO.get(expected.getID());
-            Assert.assertNotNull(a2);
+            Assert.assertNotNull(a4);
             URI mcs4 = a4.computeMetaChecksum(MessageDigest.getInstance("MD5"));
             Assert.assertEquals("round trip metachecksum unchanged", expected.getMetaChecksum(), mcs4);
             Assert.assertTrue("lastModified unchanged", a3.getLastModified().equals(a4.getLastModified()));
@@ -446,10 +446,10 @@ public class ArtifactDAOTest {
             Assert.assertEquals("removed", 1, originDAO.get(expected.getID()).siteLocations.size());
             nonOriginDAO.removeSiteLocation(a3, loc2);
             Artifact a5 = nonOriginDAO.get(expected.getID());
-            Assert.assertNotNull(a1);
+            Assert.assertNotNull(a5);
             URI mcs5 = a5.computeMetaChecksum(MessageDigest.getInstance("MD5"));
             Assert.assertEquals("round trip metachecksum unchanged", expected.getMetaChecksum(), mcs5);
-            Assert.assertTrue("lastModified unchanged", a3.getLastModified().equals(a4.getLastModified()));
+            Assert.assertTrue("lastModified unchanged", a3.getLastModified().equals(a5.getLastModified()));
             Assert.assertEquals(0, a5.siteLocations.size());
             
             originDAO.delete(expected.getID());
