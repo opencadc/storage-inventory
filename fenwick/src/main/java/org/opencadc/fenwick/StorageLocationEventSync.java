@@ -80,6 +80,7 @@ import java.text.DateFormat;
 import java.util.Date;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
+import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.SiteLocation;
 import org.opencadc.inventory.StorageLocationEvent;
 import org.opencadc.inventory.StorageSite;
@@ -102,6 +103,7 @@ public class StorageLocationEventSync extends AbstractSync {
             int querySleepInterval, int maxRetryInterval, 
             StorageSite storageSite) {
         super(artifactDAO, resourceID, querySleepInterval, maxRetryInterval);
+        InventoryUtil.assertNotNull(StorageLocationEventSync.class, "storageSite", storageSite);
         this.storageSite = storageSite;
         try {
             this.tapClient = new TapClient<>(resourceID);
