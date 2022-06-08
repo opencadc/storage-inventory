@@ -68,18 +68,24 @@
 
 package org.opencadc.inventory.storage.ad;
 
+import ca.nrc.cadc.auth.SSLUtil;
 import ca.nrc.cadc.io.ByteCountOutputStream;
 import ca.nrc.cadc.net.ResourceNotFoundException;
+import ca.nrc.cadc.util.FileUtil;
 import ca.nrc.cadc.util.Log4jInit;
 import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.io.OutputStream;
 import java.math.BigInteger;
 import java.net.URI;
 import java.security.DigestOutputStream;
 import java.security.MessageDigest;
+import java.security.PrivilegedExceptionAction;
+import javax.security.auth.Subject;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
+import org.junit.Before;
 import org.junit.Test;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.storage.ByteRange;
@@ -89,9 +95,20 @@ public class AdStorageAdapterGetTest {
     private static final String DIGEST_ALGORITHM = "MD5";
     
     private static final URI TEST_URI = URI.create("ad:TEST/public_iris.fits");
+    private static final URI TEST_VOSPAC_URI = URI.create("ad:VOSpac/231950057");
 
     static {
         Log4jInit.setLevel("org.opencadc.inventory.storage", Level.INFO);
+    }
+
+    private static Subject testSubject;
+
+    @Before
+    public void initSSL() {
+        // This file should be a copy of or pointer to an individual's cadcproxy.pem file
+        String certFilename = System.getProperty("user.name") + ".pem";
+        File pem = FileUtil.getFileFromResource(certFilename, AdStorageAdapterIteratorTest.class);
+        testSubject = SSLUtil.createSubject(pem);
     }
 
     @Test
@@ -121,7 +138,7 @@ public class AdStorageAdapterGetTest {
             Assert.fail("Unexpected exception");
         }
     }
-    
+
     @Test
     public void testGetIgnoresStorageBucket() {
         final AdStorageAdapter testSubject = new AdStorageAdapter();
@@ -148,6 +165,30 @@ public class AdStorageAdapterGetTest {
             log.error("unexpected exception", unexpected);
             Assert.fail("Unexpected exception");
         }
+    }
+
+    @Test
+    public void testGetVOSpac() throws Exception {
+        final AdStorageAdapter testAdapter = new AdStorageAdapter();
+
+        final URI expectedVOSpacChecksum = URI.create("md5:e3922d47243563529f387ebdf00b66da");
+        Subject.doAs(testSubject, (PrivilegedExceptionAction<Object>) () -> {
+                final OutputStream outputStream = new ByteArrayOutputStream();
+                final DigestOutputStream digestOutputStream = new DigestOutputStream(outputStream, MessageDigest
+                        .getInstance(AdStorageAdapterGetTest.DIGEST_ALGORITHM));
+                final ByteCountOutputStream byteCountOutputStream = new ByteCountOutputStream(digestOutputStream);
+                final MessageDigest messageDigest = digestOutputStream.getMessageDigest();
+
+                final StorageLocation storageLocation = new StorageLocation(TEST_VOSPAC_URI);
+                storageLocation.storageBucket = AdStorageQuery.DISAMBIGUATE_PREFIX + "VOSpac:000";
+
+                testAdapter.get(storageLocation, byteCountOutputStream);
+
+                Assert.assertEquals("Wrong checksum.", expectedVOSpacChecksum,
+                        URI.create(String.format("%s:%s", messageDigest.getAlgorithm().toLowerCase(),
+                                new BigInteger(1, messageDigest.digest()).toString(16))));
+                return null;
+        });
     }
     
     @Test

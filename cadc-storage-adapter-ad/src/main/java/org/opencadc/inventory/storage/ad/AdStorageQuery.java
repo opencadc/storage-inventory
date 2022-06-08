@@ -74,7 +74,6 @@ import java.net.URISyntaxException;
 import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Locale;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.StorageLocation;
@@ -111,9 +110,9 @@ public class AdStorageQuery {
             // the checksumMD5 of the file
             String[] parts = this.storagebucket.split(":");
             if (parts.length != 2) {
-                throw new IllegalArgumentException("Unexpected vault bucket format: " + storageBucket);
+                throw new IllegalArgumentException("Unexpected bucket format: " + storageBucket);
             }
-            String bucket = parts[1].toLowerCase(Locale.ROOT);
+            String bucket = parts[1];
             // determine the bucket
             try {
                 if ((bucket.length() == 0) || (bucket.length() > 3)) {
@@ -151,9 +150,6 @@ public class AdStorageQuery {
         }
         if (result.contains(":")) {
             result = result.split(":")[0];
-        }
-        if ("vault".equals(result)) {
-            result = "VOSpac";
         }
         return result;
     }
@@ -207,7 +203,7 @@ public class AdStorageQuery {
             if (storagebucket.contains(":")) {
                 // return the actual 3 digit "bucket" even if a 1 or 2 digit superbucket was specified
                 storageLocation.storageBucket = storagebucket.substring(0, storagebucket.indexOf(':') + 1)
-                        + hex.substring(0, 3);  // vault bucket: vault:123
+                        + hex.substring(0, 3);
             } else {
                 storageLocation.storageBucket = storagebucket;
             }

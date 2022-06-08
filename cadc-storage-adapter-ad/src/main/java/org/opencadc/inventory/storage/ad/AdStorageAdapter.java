@@ -133,6 +133,7 @@ public class AdStorageAdapter implements StorageAdapter {
 
     private static final Logger log = Logger.getLogger(AdStorageAdapter.class);
     private static final URI DATA_RESOURCE_ID = URI.create("ivo://cadc.nrc.ca/data");
+    private static final URI VAULT_RESOURCE_ID = URI.create("ivo://cadc.nrc.ca/vault");
     private static final String TAP_SERVICE_URI = "ivo://cadc.nrc.ca/ad";
 
     // cache for repeated ByteRange requests
@@ -276,7 +277,7 @@ public class AdStorageAdapter implements StorageAdapter {
     }
 
     // negotiate a URL so we can potentially re-use it for multiple ByteRange requests
-    private URL toURL(URI uri) throws AccessControlException, NotAuthenticatedException, 
+    private URL toURL(URI uri) throws AccessControlException, NotAuthenticatedException,
             ByteLimitExceededException, ResourceNotFoundException, TransientException {
         try {
             Subject subject = AuthenticationUtil.getCurrentSubject();
@@ -286,25 +287,14 @@ public class AdStorageAdapter implements StorageAdapter {
             }
             RegistryClient rc = new RegistryClient();
             Capabilities caps = rc.getCapabilities(DATA_RESOURCE_ID);
-            
-            /*
-            Capability dataCap = caps.findCapability(Standards.DATA_10);
-            Interface ifc = dataCap.findInterface(authMethod);
-            if (ifc == null) {
-                throw new IllegalArgumentException("No interface for auth method " + authMethod);
-            }
-            String baseDataURL = ifc.getAccessURL().getURL().toString();
-            URL url = new URL(baseDataURL + "/" + uri.getSchemeSpecificPart());
-            log.debug(uri + " --> " + url);
-            return url;
-            */
-            
+
+            URI targetURI = uri;
             Capability negotiate = caps.findCapability(Standards.VOSPACE_SYNC_21);
             Interface ifc = negotiate.findInterface(authMethod);
             if (ifc == null) {
                 throw new IllegalArgumentException("No interface for auth method " + authMethod);
             }
-            Transfer request = new Transfer(uri, Direction.pullFromVoSpace);
+            Transfer request = new Transfer(targetURI, Direction.pullFromVoSpace);
             request.version = VOS.VOSPACE_21;
             request.getProtocols().add(new Protocol(VOS.PROTOCOL_HTTPS_GET));
             TransferWriter writer = new TransferWriter();
