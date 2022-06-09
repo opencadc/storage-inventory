@@ -280,7 +280,12 @@ public class InventoryValidator implements Runnable {
                         log.info(InventoryValidator.class.getSimpleName() + ".END bucket=" + bucket);
                         numValidBuckets++;
                         done = true;
-                    } catch (IOException | TransientException | RuntimeException ex) {
+                    } catch (IOException | TransientException ex) {
+                        log.error(InventoryValidator.class.getSimpleName() + ".FAIL bucket=" + bucket, ex);
+                        numFailedBuckets++;
+                        retries++;
+                    } catch (RuntimeException ex) {
+                        // TODO: probably not a great idea to retry on these...
                         log.error(InventoryValidator.class.getSimpleName() + ".FAIL bucket=" + bucket, ex);
                         numFailedBuckets++;
                         retries++;
