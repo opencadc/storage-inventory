@@ -86,6 +86,7 @@ import java.util.Date;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.DeletedStorageLocationEvent;
+import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.SiteLocation;
 import org.opencadc.inventory.StorageSite;
 import org.opencadc.inventory.db.ArtifactDAO;
@@ -107,6 +108,7 @@ public class DeletedStorageLocationEventSync extends AbstractSync {
     public DeletedStorageLocationEventSync(ArtifactDAO artifactDAO, URI resourceID, 
             int querySleepInterval, int maxRetryInterval, StorageSite storageSite) {
         super(artifactDAO, resourceID, querySleepInterval, maxRetryInterval);
+        InventoryUtil.assertNotNull(DeletedStorageLocationEventSync.class, "storageSite", storageSite);
         this.storageSite = storageSite;
         try {
             this.tapClient = new TapClient<>(resourceID);

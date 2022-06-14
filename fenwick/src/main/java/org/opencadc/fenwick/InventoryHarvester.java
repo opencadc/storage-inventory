@@ -208,12 +208,15 @@ public class InventoryHarvester implements Runnable {
                     Thread.sleep(WAIT_FOR_SITE_SLEEP * 1000L);
                     storageSite = siteSync.getCurrentStorageSite();
                 }
-            }
             
-            // create thread for each entity sync
-            AbstractSync r0 = new DeletedStorageLocationEventSync(dsleArtifactDAO, resourceID, SYNC_SLEEP, maxRetryInterval, storageSite);
-            tasks.add(r0);
-            threads.add(createThread("dsle-thread", r0));
+                AbstractSync r0 = new DeletedStorageLocationEventSync(dsleArtifactDAO, resourceID, SYNC_SLEEP, maxRetryInterval, storageSite);
+                tasks.add(r0);
+                threads.add(createThread("dsle-thread", r0));
+                
+                AbstractSync r3 = new StorageLocationEventSync(sleArtifactDAO, resourceID, SYNC_SLEEP, maxRetryInterval, storageSite);
+                tasks.add(r3);
+                threads.add(createThread("sle-thread", r3));
+            }
             
             AbstractSync r1 = new DeletedArtifactEventSync(daeArtifactDAO, resourceID, SYNC_SLEEP, maxRetryInterval);
             tasks.add(r1);
@@ -222,10 +225,6 @@ public class InventoryHarvester implements Runnable {
             AbstractSync r2 = new ArtifactSync(artifactDAO, resourceID, SYNC_SLEEP, maxRetryInterval, selector, storageSite);
             tasks.add(r2);
             threads.add(createThread("artifact-thread", r2));
-            
-            AbstractSync r3 = new StorageLocationEventSync(sleArtifactDAO, resourceID, SYNC_SLEEP, maxRetryInterval, storageSite);
-            tasks.add(r3);
-            threads.add(createThread("sle-thread", r3));
 
             while (true) {
                 Thread.sleep(MONITOR_SLEEP * 1000L);

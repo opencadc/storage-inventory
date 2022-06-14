@@ -250,7 +250,7 @@ abstract class AbstractSync implements Runnable {
         if (numEvents > 0L) {
             long t2 = System.currentTimeMillis();
             long dt = t2 - lastSummaryTime;
-            if (dt >= summaryInterval || doFinal) {
+            if (dt >= (summaryInterval * 1000L) || doFinal) {
                 double minutes = ((double) dt) / (60L * 1000L);
                 long epm = Math.round(numEvents / minutes); 
                 String msg = "%s.summary%s numTotal=%d num=%d events-per-minute=%d eob=%b";
