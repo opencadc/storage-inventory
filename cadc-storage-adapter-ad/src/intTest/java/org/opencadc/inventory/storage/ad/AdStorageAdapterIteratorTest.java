@@ -207,15 +207,26 @@ public class AdStorageAdapterIteratorTest {
     @Test
     public void testIteratorSubbucket() throws Exception {
         Subject.doAs(testSubject, new PrivilegedExceptionAction<Object>() {
+
+            // Should be VOSpac except that the buckets in that archive are too large
+            String storageBucket = "IRIS:0";
             public Object run() throws Exception {
-                final AdStorageAdapter adStorageAdapter = new AdStorageAdapter();
-                // Should be VOSpac except that the buckets in that archive are too large
-                String archiveName = "IRIS:0";
+                final AdStorageAdapter adStorageAdapter = new AdStorageAdapter() {
+                    @Override
+                    AdStorageQuery getAdStorageQuery(String storageBucket) {
+                        return new AdStorageQuery(storageBucket) {
+                            @Override
+                            String getVOSpac() {
+                                return "IRIS";
+                            }
+                        };
+                    }
+                };
 
                 // Get first version of iterator
                 SortedSet<StorageMetadata> sortedMeta = new TreeSet();
                 try {
-                    Iterator<StorageMetadata>  storageMetaIterator = adStorageAdapter.iterator(archiveName);
+                    Iterator<StorageMetadata>  storageMetaIterator = adStorageAdapter.iterator(storageBucket);
                     Assert.assertTrue("iterator has records", storageMetaIterator.hasNext());
 
                     // Create SortedSet for comparison
@@ -236,12 +247,12 @@ public class AdStorageAdapterIteratorTest {
 
                 Assert.assertFalse("found some records to compare", sortedMeta.isEmpty());
 
-                log.info("found: " + sortedMeta.size() + " in " + archiveName);
+                log.info("found: " + sortedMeta.size() + " in " + storageBucket);
 
                 // Get second version of iterator
                 Iterator<StorageMetadata> storageMeta = null;
                 try {
-                    storageMeta = adStorageAdapter.iterator(archiveName);
+                    storageMeta = adStorageAdapter.iterator(storageBucket);
                     Assert.assertTrue("iterator has records", storageMeta.hasNext());
                 } catch (Exception unexpected) {
                     log.error("unexpected exception getting iterator", unexpected);

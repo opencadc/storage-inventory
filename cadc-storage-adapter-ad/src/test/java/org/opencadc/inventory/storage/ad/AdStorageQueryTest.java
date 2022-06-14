@@ -112,30 +112,27 @@ public class AdStorageQueryTest {
     }
 
     @Test
-    public void testQueryVaultBuckets() throws Exception {
-        AdStorageQuery asq = new AdStorageQuery("VOSpac:fe");
+    public void testQueryVOSpacBuckets() throws Exception {
+        AdStorageQuery asq = new AdStorageQuery("VOSpac:0");
         String query = asq.getQuery();
-        Assert.assertTrue("vault query constraints", query.contains("WHERE archiveName = 'VOSpac'  "
-                + "AND contentMD5 between 'fe00000000000000' AND 'feffffffffffffff'"));
-    }
+        String expected =
+                "SELECT uri, inventoryURI, contentMD5, fileSize, ingestDate, contentEncoding, "
+                +      "contentType , convert('binary', convert('smallint', contentMD5)) as bucket "
+                + "FROM archive_files "
+                + "WHERE archiveName = 'VOSpac'  AND contentMD5 between '0000000000000000' AND "
+                +       "'0fffffffffffffff' ORDER BY bucket,  uri ASC, ingestDate DESC";
+        Assert.assertEquals("archive query constraints", expected, query);
 
-    @Test
-    public void testQueryArchiveBuckets() throws Exception {
-        AdStorageQuery asq = new AdStorageQuery("archive:0");
-        String query = asq.getQuery();
-        Assert.assertTrue("archive query constraints", query.contains("WHERE archiveName = 'archive'  "
-                + "AND contentMD5 between '0000000000000000' AND '0fffffffffffffff'"));
-
-        asq = new AdStorageQuery("archive:fff");
+        asq = new AdStorageQuery("VOSpac:fff");
         query = asq.getQuery();
-        Assert.assertTrue("archive query constraints", query.contains("WHERE archiveName = 'archive'  "
+        Assert.assertTrue("archive query constraints", query.contains("WHERE archiveName = 'VOSpac'  "
                 + "AND contentMD5 between 'fff0000000000000' AND 'ffffffffffffffff'"));
 
         // bucket size
-        Assert.assertThrows(IllegalArgumentException.class, () -> new AdStorageQuery("archive:"));
-        Assert.assertThrows(IllegalArgumentException.class, () -> new AdStorageQuery("archive:1234"));
+        Assert.assertThrows(IllegalArgumentException.class, () -> new AdStorageQuery("VOSpac:"));
+        Assert.assertThrows(IllegalArgumentException.class, () -> new AdStorageQuery("VOSpac:12345"));
         // bucket not hex
-        Assert.assertThrows(IllegalArgumentException.class, () -> new AdStorageQuery("archive:zzz"));
+        Assert.assertThrows(IllegalArgumentException.class, () -> new AdStorageQuery("VOSpac:zzz"));
 
     }
     
@@ -221,7 +218,7 @@ public class AdStorageQueryTest {
 
     @Test
     public void testRowMapperVault() throws Exception {
-        AdStorageQuery query = new AdStorageQuery("vault:12");
+        AdStorageQuery query = new AdStorageQuery("VOSpac:12");
         TapRowMapper mapper = query.getRowMapper();
 
         ArrayList<Object> row = new ArrayList<>(7);
@@ -236,6 +233,6 @@ public class AdStorageQueryTest {
         row.add("application/octet-stream");
 
         StorageMetadata metadata = (StorageMetadata) mapper.mapRow(row);
-        Assert.assertTrue("vault:123".equals(metadata.getStorageLocation().storageBucket));
+        Assert.assertTrue("VOSpac:1237".equals(metadata.getStorageLocation().storageBucket));
     }
 }

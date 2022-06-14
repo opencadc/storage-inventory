@@ -259,7 +259,7 @@ public class AdStorageAdapter implements StorageAdapter {
         } catch (ResourceNotFoundException rnfe) {
             throw new StorageEngageException("Unable to connect to tap client: ", rnfe);
         }
-        AdStorageQuery adQuery = new AdStorageQuery(storageBucket);
+        AdStorageQuery adQuery = getAdStorageQuery(storageBucket);
         Iterator<StorageMetadata> storageMetadataIterator = null;
 
         try {
@@ -274,6 +274,11 @@ public class AdStorageAdapter implements StorageAdapter {
 
         // AdStorageIterator ensures duplicates don't get sent out
         return new AdStorageIterator(storageMetadataIterator);
+    }
+
+    AdStorageQuery getAdStorageQuery(String storageBucket) {
+        // used for testing
+        return new AdStorageQuery(storageBucket);
     }
 
     // negotiate a URL so we can potentially re-use it for multiple ByteRange requests

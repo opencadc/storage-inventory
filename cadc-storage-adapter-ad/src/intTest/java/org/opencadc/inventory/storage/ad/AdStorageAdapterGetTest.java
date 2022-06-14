@@ -95,6 +95,8 @@ public class AdStorageAdapterGetTest {
     private static final String DIGEST_ALGORITHM = "MD5";
     
     private static final URI TEST_URI = URI.create("ad:TEST/public_iris.fits");
+    // the archive URI below corresponds to
+    // vos://cadc.nrc.ca~vault/CADCRegtest1/vospace-int-test/linktargets/batchtargets/file1
     private static final URI TEST_VOSPAC_URI = URI.create("ad:VOSpac/231950057");
 
     static {
@@ -171,7 +173,7 @@ public class AdStorageAdapterGetTest {
     public void testGetVOSpac() throws Exception {
         final AdStorageAdapter testAdapter = new AdStorageAdapter();
 
-        final URI expectedVOSpacChecksum = URI.create("md5:e3922d47243563529f387ebdf00b66da");
+        final URI expectedVOSpacChecksum = URI.create("md5:b05403212c66bdc8ccc597fedf6cd5fe");
         Subject.doAs(testSubject, (PrivilegedExceptionAction<Object>) () -> {
                 final OutputStream outputStream = new ByteArrayOutputStream();
                 final DigestOutputStream digestOutputStream = new DigestOutputStream(outputStream, MessageDigest

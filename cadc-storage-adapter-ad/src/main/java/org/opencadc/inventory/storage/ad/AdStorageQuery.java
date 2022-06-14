@@ -90,9 +90,9 @@ public class AdStorageQuery {
     private static final String MD5_ENCODING_SCHEME = "md5:";
     
     private static final String QTMPL = "SELECT uri, inventoryURI, contentMD5, fileSize, ingestDate,"
-            + " contentEncoding, contentType"
+            + " contentEncoding, contentType %s"
             + " FROM archive_files WHERE archiveName = '%s' %s"
-            + " ORDER BY uri ASC, ingestDate DESC";
+            + " ORDER BY %s uri ASC, ingestDate DESC";
 
     static final String DISAMBIGUATE_PREFIX = "x-";
     //private static final List<String> ARC_PREFIX_ARC = Arrays.asList("CFHT", "GEM", "JCMT");
@@ -103,11 +103,13 @@ public class AdStorageQuery {
     AdStorageQuery(String storageBucket) {
         InventoryUtil.assertNotNull(AdStorageQuery.class, "storageBucket", storageBucket);
         this.storagebucket = storageBucket;
+        String bucketSelect = "";
         String archive = bucket2archive(this.storagebucket);
         String bucketConstraint = "";
-        if (this.storagebucket.contains(":")) {
-            // a bucket is a subset of an archive defined by the first digits of
-            // the checksumMD5 of the file
+        String bucketOrder = "";
+        if (this.storagebucket.startsWith("VOSpac")) {
+            // VOSpac is a special archive that uses multiple storage buckets denoted by the first 4 digits of
+            // the contentMD5
             String[] parts = this.storagebucket.split(":");
             if (parts.length != 2) {
                 throw new IllegalArgumentException("Unexpected bucket format: " + storageBucket);
@@ -115,19 +117,21 @@ public class AdStorageQuery {
             String bucket = parts[1];
             // determine the bucket
             try {
-                if ((bucket.length() == 0) || (bucket.length() > 3)) {
-                    throw new IllegalArgumentException("Bucket part must be between 1 and 3 digits: " + storagebucket);
+                if ((bucket.length() == 0) || (bucket.length() > 4)) {
+                    throw new IllegalArgumentException("Bucket part must be between 1 and 4 digits: " + storagebucket);
                 }
                 Integer.decode("0x" + bucket);
             } catch (IllegalArgumentException ex) {
                 throw new IllegalArgumentException("invalid checksum URI: "
                         + bucket + " contains invalid hex value, expected hex value");
             }
+            bucketSelect = ", convert('binary', convert('smallint', contentMD5)) as bucket";
             String minMD5Checksum = bucket + "0000000000000000".substring(0, 16 - bucket.length());
             String maxMD5Checksum = bucket + "ffffffffffffffff".substring(0, 16 - bucket.length());
             bucketConstraint = " AND contentMD5 between '" + minMD5Checksum + "' AND '" + maxMD5Checksum + "'";
+            bucketOrder = "bucket, ";
         }
-        this.query = String.format(this.QTMPL, archive, bucketConstraint);
+        this.query = String.format(this.QTMPL, bucketSelect, archive, bucketConstraint, bucketOrder);
     }
 
     public TapRowMapper<StorageMetadata> getRowMapper() {
@@ -142,14 +146,19 @@ public class AdStorageQuery {
     //    }
     //    return arc;
     //}
-    
+
+    String getVOSpac() {
+        // required for testing
+        return "VOSpac";
+    }
+
     private String bucket2archive(String sb) {
         String result = sb;
         if (sb.startsWith(DISAMBIGUATE_PREFIX)) {
             result = sb.substring(DISAMBIGUATE_PREFIX.length());
         }
-        if (result.contains(":")) {
-            result = result.split(":")[0];
+        if (result.startsWith(getVOSpac())) {
+            result = getVOSpac();
         }
         return result;
     }
@@ -200,10 +209,10 @@ public class AdStorageQuery {
             }
 
             StorageLocation storageLocation = new StorageLocation(storageID);
-            if (storagebucket.contains(":")) {
-                // return the actual 3 digit "bucket" even if a 1 or 2 digit superbucket was specified
+            if (storagebucket.startsWith("VOSpac")) {
+                // return the actual 4 digit "bucket"
                 storageLocation.storageBucket = storagebucket.substring(0, storagebucket.indexOf(':') + 1)
-                        + hex.substring(0, 3);
+                        + hex.substring(0, 4);
             } else {
                 storageLocation.storageBucket = storagebucket;
             }
