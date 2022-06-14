@@ -182,7 +182,7 @@ public class AdStorageAdapterGetTest {
                 final MessageDigest messageDigest = digestOutputStream.getMessageDigest();
 
                 final StorageLocation storageLocation = new StorageLocation(TEST_VOSPAC_URI);
-                storageLocation.storageBucket = AdStorageQuery.DISAMBIGUATE_PREFIX + "VOSpac:000";
+                storageLocation.storageBucket = AdStorageQuery.DISAMBIGUATE_PREFIX + "VOSpac:b054";
 
                 testAdapter.get(storageLocation, byteCountOutputStream);
 

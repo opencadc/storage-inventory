@@ -205,7 +205,7 @@ public class AdStorageAdapterIteratorTest {
     }
 
     @Test
-    public void testIteratorSubbucket() throws Exception {
+    public void testIteratorVOSpac() throws Exception {
         Subject.doAs(testSubject, new PrivilegedExceptionAction<Object>() {
 
             // Should be VOSpac except that the buckets in that archive are too large
