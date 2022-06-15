@@ -151,7 +151,8 @@ public class AdStorageAdapterIteratorTest {
                 String archiveName = "IRIS";
 
                 // Get first version of iterator
-                SortedSet<StorageMetadata> sortedMeta = new TreeSet();
+                long t1 = System.currentTimeMillis();
+                SortedSet<StorageMetadata> sortedMeta = new TreeSet<>();
                 try {
                     Iterator<StorageMetadata>  storageMetaIterator = adStorageAdapter.iterator(archiveName);
                     Assert.assertTrue("iterator has records", storageMetaIterator.hasNext());
@@ -174,7 +175,8 @@ public class AdStorageAdapterIteratorTest {
                 
                 Assert.assertFalse("found some records to compare", sortedMeta.isEmpty());
                 
-                log.info("found: " + sortedMeta.size() + " in " + archiveName);
+                long dt = System.currentTimeMillis() - t1;
+                log.info("found: " + sortedMeta.size() + " in " + archiveName + " in " + dt + "ms");
 
                 // Get second version of iterator
                 Iterator<StorageMetadata> storageMeta = null;
@@ -212,7 +214,8 @@ public class AdStorageAdapterIteratorTest {
                 String storageBucket = "VOSpac:abcd";
 
                 // Get first version of iterator
-                SortedSet<StorageMetadata> sortedMeta = new TreeSet();
+                long t1 = System.currentTimeMillis();
+                SortedSet<StorageMetadata> sortedMeta = new TreeSet<>();
                 try {
                     Iterator<StorageMetadata>  storageMetaIterator = adStorageAdapter.iterator(storageBucket);
                     Assert.assertTrue("iterator has records", storageMetaIterator.hasNext());
@@ -231,8 +234,9 @@ public class AdStorageAdapterIteratorTest {
 
                 Assert.assertFalse("found some records to compare", sortedMeta.isEmpty());
 
-                log.info("found: " + sortedMeta.size() + " in " + storageBucket);
-
+                long dt = System.currentTimeMillis() - t1;
+                log.info("found: " + sortedMeta.size() + " in " + storageBucket + " in " + dt + "ms");
+                
                 // Get second version of iterator
                 Iterator<StorageMetadata> storageMeta = null;
                 try {
