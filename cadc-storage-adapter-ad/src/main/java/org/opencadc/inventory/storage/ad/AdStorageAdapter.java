@@ -276,7 +276,7 @@ public class AdStorageAdapter implements StorageAdapter {
     }
 
     // negotiate a URL so we can potentially re-use it for multiple ByteRange requests
-    private URL toURL(URI uri) throws AccessControlException, NotAuthenticatedException, 
+    private URL toURL(URI uri) throws AccessControlException, NotAuthenticatedException,
             ByteLimitExceededException, ResourceNotFoundException, TransientException {
         try {
             Subject subject = AuthenticationUtil.getCurrentSubject();
@@ -286,19 +286,7 @@ public class AdStorageAdapter implements StorageAdapter {
             }
             RegistryClient rc = new RegistryClient();
             Capabilities caps = rc.getCapabilities(DATA_RESOURCE_ID);
-            
-            /*
-            Capability dataCap = caps.findCapability(Standards.DATA_10);
-            Interface ifc = dataCap.findInterface(authMethod);
-            if (ifc == null) {
-                throw new IllegalArgumentException("No interface for auth method " + authMethod);
-            }
-            String baseDataURL = ifc.getAccessURL().getURL().toString();
-            URL url = new URL(baseDataURL + "/" + uri.getSchemeSpecificPart());
-            log.debug(uri + " --> " + url);
-            return url;
-            */
-            
+
             Capability negotiate = caps.findCapability(Standards.VOSPACE_SYNC_21);
             Interface ifc = negotiate.findInterface(authMethod);
             if (ifc == null) {

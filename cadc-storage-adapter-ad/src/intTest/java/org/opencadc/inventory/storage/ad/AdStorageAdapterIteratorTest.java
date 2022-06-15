@@ -69,7 +69,6 @@
 package org.opencadc.inventory.storage.ad;
 
 import ca.nrc.cadc.auth.SSLUtil;
-import ca.nrc.cadc.io.ResourceIterator;
 import ca.nrc.cadc.util.FileUtil;
 import ca.nrc.cadc.util.Log4jInit;
 import java.io.File;
@@ -84,7 +83,6 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.opencadc.inventory.storage.StorageMetadata;
-import org.opencadc.inventory.storage.ad.AdStorageAdapter;
 
 public class AdStorageAdapterIteratorTest {
 
@@ -106,22 +104,20 @@ public class AdStorageAdapterIteratorTest {
 
     @Test
     public void testEmptyIterator() throws Exception {
-        Subject.doAs(testSubject, new PrivilegedExceptionAction<Object>() {
-            public Object run() throws Exception {
-                final AdStorageAdapter adStorageAdapter = new AdStorageAdapter();
+        Subject.doAs(testSubject, (PrivilegedExceptionAction<Object>) () -> {
+            final AdStorageAdapter adStorageAdapter = new AdStorageAdapter();
 
-                // query should come back with 0
-                String archiveName = "NOT_IN_ARCHIVE";
-                try {
-                    Iterator<StorageMetadata> storageMetaIterator = adStorageAdapter.iterator(archiveName);
-                    Assert.assertTrue("iterator is not empty.", storageMetaIterator.hasNext() == false);
-                } catch (Exception unexpected) {
-                    log.error("unexpected exception", unexpected);
-                    Assert.fail("unexpected exception: " + unexpected.getMessage());
-                }
-
-                return null;
+            // query should come back with 0
+            String archiveName = "NOT_IN_ARCHIVE";
+            try {
+                Iterator<StorageMetadata> storageMetaIterator = adStorageAdapter.iterator(archiveName);
+                Assert.assertTrue("iterator is not empty.", storageMetaIterator.hasNext() == false);
+            } catch (Exception unexpected) {
+                log.error("unexpected exception", unexpected);
+                Assert.fail("unexpected exception: " + unexpected.getMessage());
             }
+
+            return null;
         });
     }
 
@@ -208,6 +204,62 @@ public class AdStorageAdapterIteratorTest {
         });
     }
 
+    @Test
+    public void testIteratorVOSpac() throws Exception {
+        Subject.doAs(testSubject, new PrivilegedExceptionAction<Object>() {
+            public Object run() throws Exception {
+                final AdStorageAdapter adStorageAdapter = new AdStorageAdapter();
+                String storageBucket = "VOSpac:abcd";
+
+                // Get first version of iterator
+                SortedSet<StorageMetadata> sortedMeta = new TreeSet();
+                try {
+                    Iterator<StorageMetadata>  storageMetaIterator = adStorageAdapter.iterator(storageBucket);
+                    Assert.assertTrue("iterator has records", storageMetaIterator.hasNext());
+
+                    // Create SortedSet for comparison
+                    while (storageMetaIterator.hasNext()) {
+                        StorageMetadata sm = storageMetaIterator.next();
+                        Assert.assertTrue("cadc".equals(sm.artifactURI.getScheme()));
+                        Assert.assertTrue("ad".equals(sm.getStorageLocation().getStorageID().getScheme()));
+                        sortedMeta.add(sm);
+                    }
+                } catch (Exception unexpected) {
+                    log.error("unexpected exception", unexpected);
+                    Assert.fail("unexpected exception: " + unexpected.getMessage());
+                }
+
+                Assert.assertFalse("found some records to compare", sortedMeta.isEmpty());
+
+                log.info("found: " + sortedMeta.size() + " in " + storageBucket);
+
+                // Get second version of iterator
+                Iterator<StorageMetadata> storageMeta = null;
+                try {
+                    storageMeta = adStorageAdapter.iterator(storageBucket);
+                    Assert.assertTrue("iterator has records", storageMeta.hasNext());
+                } catch (Exception unexpected) {
+                    log.error("unexpected exception getting iterator", unexpected);
+                    Assert.fail("unexpected exception getting iterator: " + unexpected.getMessage());
+                }
+
+                // Compare relative ordering of StorageMetadata objects
+                Iterator<StorageMetadata> sortedSetMeta = sortedMeta.iterator();
+
+                while (sortedSetMeta.hasNext()) {
+                    StorageMetadata expected = sortedSetMeta.next();
+                    StorageMetadata actual = storageMeta.next();
+                    log.info("compare: " + expected.getStorageLocation() + " vs " + actual.getStorageLocation());
+                    if (!expected.equals(actual)) {
+                        Assert.fail("ordering not correct.");
+                    }
+                }
+                Assert.assertFalse("AdStorageAdapter.iterator now empty", storageMeta.hasNext());
+
+                return null;
+            }
+        });
+    }
 
     //@Test
     public void testIteratorStream() throws Exception {

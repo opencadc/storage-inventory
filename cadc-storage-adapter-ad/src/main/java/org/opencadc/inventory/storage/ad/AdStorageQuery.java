@@ -71,7 +71,6 @@ package org.opencadc.inventory.storage.ad;
 
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.util.Arrays;
 import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
@@ -88,12 +87,13 @@ import org.opencadc.tap.TapRowMapper;
 public class AdStorageQuery {
     private static final Logger log = Logger.getLogger(AdStorageMetadataRowMapper.class); // intentional: log message are from nested class
 
+    public static final String VOSPAC = "VOSpac";  // Name of vault "archive" in AD
     private static final String MD5_ENCODING_SCHEME = "md5:";
     
     private static final String QTMPL = "SELECT uri, inventoryURI, contentMD5, fileSize, ingestDate,"
-            + " contentEncoding, contentType"
-            + " FROM archive_files WHERE archiveName = '%s'"
-            + " ORDER BY uri ASC, ingestDate DESC";
+            + " contentEncoding, contentType %s"
+            + " FROM archive_files WHERE archiveName = '%s' %s"
+            + " ORDER BY %s uri ASC, ingestDate DESC";
 
     static final String DISAMBIGUATE_PREFIX = "x-";
     //private static final List<String> ARC_PREFIX_ARC = Arrays.asList("CFHT", "GEM", "JCMT");
@@ -103,9 +103,36 @@ public class AdStorageQuery {
 
     AdStorageQuery(String storageBucket) {
         InventoryUtil.assertNotNull(AdStorageQuery.class, "storageBucket", storageBucket);
-        String archive = bucket2archive(storageBucket);
         this.storagebucket = storageBucket;
-        this.query = String.format(this.QTMPL, archive);
+        String bucketSelect = "";
+        String archive = bucket2archive(this.storagebucket);
+        String bucketConstraint = "";
+        String bucketOrder = "";
+        if (this.storagebucket.startsWith(VOSPAC)) {
+            // VOSpac is a special archive that uses multiple storage buckets denoted by the first 4 digits of
+            // the contentMD5
+            String[] parts = this.storagebucket.split(":");
+            if (parts.length != 2) {
+                throw new IllegalArgumentException("Unexpected bucket format: " + storageBucket);
+            }
+            String bucket = parts[1];
+            // determine the bucket
+            try {
+                if ((bucket.length() == 0) || (bucket.length() > 4)) {
+                    throw new IllegalArgumentException("Bucket part must be between 1 and 4 digits: " + storagebucket);
+                }
+                Integer.decode("0x" + bucket);
+            } catch (IllegalArgumentException ex) {
+                throw new IllegalArgumentException("invalid checksum URI: "
+                        + bucket + " contains invalid hex value, expected hex value");
+            }
+            bucketSelect = ", convert('binary', convert('smallint', contentMD5)) as bucket";
+            String minMD5Checksum = bucket + "0000000000000000".substring(0, 16 - bucket.length());
+            String maxMD5Checksum = bucket + "ffffffffffffffff".substring(0, 16 - bucket.length());
+            bucketConstraint = " AND contentMD5 between '" + minMD5Checksum + "' AND '" + maxMD5Checksum + "'";
+            bucketOrder = "bucket, ";
+        }
+        this.query = String.format(this.QTMPL, bucketSelect, archive, bucketConstraint, bucketOrder);
     }
 
     public TapRowMapper<StorageMetadata> getRowMapper() {
@@ -120,12 +147,16 @@ public class AdStorageQuery {
     //    }
     //    return arc;
     //}
-    
+
     private String bucket2archive(String sb) {
+        String result = sb;
         if (sb.startsWith(DISAMBIGUATE_PREFIX)) {
-            return sb.substring(DISAMBIGUATE_PREFIX.length());
+            result = sb.substring(DISAMBIGUATE_PREFIX.length());
         }
-        return sb;
+        if (result.startsWith(VOSPAC)) {
+            result = VOSPAC;
+        }
+        return result;
     }
     
     class AdStorageMetadataRowMapper implements TapRowMapper<StorageMetadata> {
@@ -161,7 +192,7 @@ public class AdStorageQuery {
                 log.warn(AdStorageMetadataRowMapper.class.getSimpleName() + ".SKIP uri=" + storageID + " reason=invalid=contentChecksum");
                 return null;
             }
-            
+
             // archive_files.fileSize
             Long contentLength = (Long) i.next();
             if (contentLength == null) {
@@ -174,8 +205,14 @@ public class AdStorageQuery {
             }
 
             StorageLocation storageLocation = new StorageLocation(storageID);
-            storageLocation.storageBucket = storagebucket;
-            
+            if (storagebucket.startsWith(VOSPAC)) {
+                // return the actual 4 digit "bucket"
+                storageLocation.storageBucket = storagebucket.substring(0, storagebucket.indexOf(':') + 1)
+                        + hex.substring(0, 4);
+            } else {
+                storageLocation.storageBucket = storagebucket;
+            }
+
             Date contentLastModified = (Date) i.next();
             if (contentLastModified == null) {
                 // work-around for cases with NULL ingestDate:

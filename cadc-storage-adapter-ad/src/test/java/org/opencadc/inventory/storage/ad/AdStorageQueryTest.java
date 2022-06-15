@@ -110,6 +110,31 @@ public class AdStorageQueryTest {
         Assert.assertNotNull(query);
         Assert.assertTrue(query.contains("archiveName = 'ARC'"));
     }
+
+    @Test
+    public void testQueryVOSpacBuckets() throws Exception {
+        AdStorageQuery asq = new AdStorageQuery("VOSpac:0");
+        String query = asq.getQuery();
+        String expected =
+                "SELECT uri, inventoryURI, contentMD5, fileSize, ingestDate, contentEncoding, "
+                +      "contentType , convert('binary', convert('smallint', contentMD5)) as bucket "
+                + "FROM archive_files "
+                + "WHERE archiveName = 'VOSpac'  AND contentMD5 between '0000000000000000' AND "
+                +       "'0fffffffffffffff' ORDER BY bucket,  uri ASC, ingestDate DESC";
+        Assert.assertEquals("archive query constraints", expected, query);
+
+        asq = new AdStorageQuery("VOSpac:fff");
+        query = asq.getQuery();
+        Assert.assertTrue("archive query constraints", query.contains("WHERE archiveName = 'VOSpac'  "
+                + "AND contentMD5 between 'fff0000000000000' AND 'ffffffffffffffff'"));
+
+        // bucket size
+        Assert.assertThrows(IllegalArgumentException.class, () -> new AdStorageQuery("VOSpac:"));
+        Assert.assertThrows(IllegalArgumentException.class, () -> new AdStorageQuery("VOSpac:12345"));
+        // bucket not hex
+        Assert.assertThrows(IllegalArgumentException.class, () -> new AdStorageQuery("VOSpac:zzz"));
+
+    }
     
     @Test
     public void testRowMapper() throws Exception {
@@ -189,5 +214,25 @@ public class AdStorageQueryTest {
         Assert.assertEquals(now, metadata.getContentLastModified());
         Assert.assertTrue(metadata.contentEncoding.equals("gzip"));
         Assert.assertTrue(metadata.contentType.equals("application/fits"));
+    }
+
+    @Test
+    public void testRowMapperVault() throws Exception {
+        AdStorageQuery query = new AdStorageQuery("VOSpac:12");
+        TapRowMapper mapper = query.getRowMapper();
+
+        ArrayList<Object> row = new ArrayList<>(7);
+        //  work-around: archive_files.uri scheme is gemini
+        row.add(new URI("ad:VOSpac/foo"));
+        row.add(new URI("cadc:vault/foo"));
+        row.add("1237e2ecea45e78822eb68294566e6a1");
+        row.add(new Long(33));
+        Date now = new Date();
+        row.add(now);
+        row.add("");
+        row.add("application/octet-stream");
+
+        StorageMetadata metadata = (StorageMetadata) mapper.mapRow(row);
+        Assert.assertTrue("VOSpac:1237".equals(metadata.getStorageLocation().storageBucket));
     }
 }
