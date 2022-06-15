@@ -207,21 +207,9 @@ public class AdStorageAdapterIteratorTest {
     @Test
     public void testIteratorVOSpac() throws Exception {
         Subject.doAs(testSubject, new PrivilegedExceptionAction<Object>() {
-
-            // Should be VOSpac except that the buckets in that archive are too large
-            String storageBucket = "IRIS:0";
             public Object run() throws Exception {
-                final AdStorageAdapter adStorageAdapter = new AdStorageAdapter() {
-                    @Override
-                    AdStorageQuery getAdStorageQuery(String storageBucket) {
-                        return new AdStorageQuery(storageBucket) {
-                            @Override
-                            String getVOSpac() {
-                                return "IRIS";
-                            }
-                        };
-                    }
-                };
+                final AdStorageAdapter adStorageAdapter = new AdStorageAdapter();
+                String storageBucket = "VOSpac:abcd";
 
                 // Get first version of iterator
                 SortedSet<StorageMetadata> sortedMeta = new TreeSet();
@@ -232,12 +220,8 @@ public class AdStorageAdapterIteratorTest {
                     // Create SortedSet for comparison
                     while (storageMetaIterator.hasNext()) {
                         StorageMetadata sm = storageMetaIterator.next();
-                        // check that for IRIS storageID and artifact URI are different in scheme (ad vs cadc)
                         Assert.assertTrue("cadc".equals(sm.artifactURI.getScheme()));
                         Assert.assertTrue("ad".equals(sm.getStorageLocation().getStorageID().getScheme()));
-                        Assert.assertTrue(
-                                sm.artifactURI.getSchemeSpecificPart().equals(
-                                        sm.getStorageLocation().getStorageID().getSchemeSpecificPart()));
                         sortedMeta.add(sm);
                     }
                 } catch (Exception unexpected) {

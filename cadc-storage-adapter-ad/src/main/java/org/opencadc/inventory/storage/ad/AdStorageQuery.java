@@ -87,6 +87,7 @@ import org.opencadc.tap.TapRowMapper;
 public class AdStorageQuery {
     private static final Logger log = Logger.getLogger(AdStorageMetadataRowMapper.class); // intentional: log message are from nested class
 
+    public static final String VOSPAC = "VOSpac";  // Name of vault "archive" in AD
     private static final String MD5_ENCODING_SCHEME = "md5:";
     
     private static final String QTMPL = "SELECT uri, inventoryURI, contentMD5, fileSize, ingestDate,"
@@ -107,7 +108,7 @@ public class AdStorageQuery {
         String archive = bucket2archive(this.storagebucket);
         String bucketConstraint = "";
         String bucketOrder = "";
-        if (this.storagebucket.startsWith("VOSpac")) {
+        if (this.storagebucket.startsWith(VOSPAC)) {
             // VOSpac is a special archive that uses multiple storage buckets denoted by the first 4 digits of
             // the contentMD5
             String[] parts = this.storagebucket.split(":");
@@ -147,18 +148,13 @@ public class AdStorageQuery {
     //    return arc;
     //}
 
-    String getVOSpac() {
-        // required for testing
-        return "VOSpac";
-    }
-
     private String bucket2archive(String sb) {
         String result = sb;
         if (sb.startsWith(DISAMBIGUATE_PREFIX)) {
             result = sb.substring(DISAMBIGUATE_PREFIX.length());
         }
-        if (result.startsWith(getVOSpac())) {
-            result = getVOSpac();
+        if (result.startsWith(VOSPAC)) {
+            result = VOSPAC;
         }
         return result;
     }
@@ -209,7 +205,7 @@ public class AdStorageQuery {
             }
 
             StorageLocation storageLocation = new StorageLocation(storageID);
-            if (storagebucket.startsWith("VOSpac")) {
+            if (storagebucket.startsWith(VOSPAC)) {
                 // return the actual 4 digit "bucket"
                 storageLocation.storageBucket = storagebucket.substring(0, storagebucket.indexOf(':') + 1)
                         + hex.substring(0, 4);
