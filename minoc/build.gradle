@@ -62,5 +62,8 @@ dependencies {
     runtime 'org.slf4j:slf4j-log4j12:1.7.36'
 }
 
+configurations {
+  runtime.exclude group: 'org.slf4j', module: 'slf4j-reload4j'
+}
 
 
