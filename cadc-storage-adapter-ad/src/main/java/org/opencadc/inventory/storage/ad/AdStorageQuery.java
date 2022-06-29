@@ -74,7 +74,6 @@ import java.net.URISyntaxException;
 import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
-
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.StorageLocation;
@@ -83,99 +82,161 @@ import org.opencadc.tap.TapRowMapper;
 
 /**
  * Provide query and RowMapper instance for grabbing data from ad.
- * RowMapper maps from ad's archive_files table to a StorageMetadata object.
+ * RowMapper maps from the AD archive_files table to a StorageMetadata object.
  */
 public class AdStorageQuery {
-    private static final Logger log = Logger.getLogger(AdStorageQuery.class);
-    // Query to use that will pull data in the order required by the mapRow function
-    private String queryTemplate = "select archiveName, inventoryURI, contentMD5, fileSize,"
-            + " uri, contentEncoding, contentType, ingestDate"
-            + " from archive_files where archiveName='%s' order by uri asc, ingestDate desc";
-    private String query = "";
+    private static final Logger log = Logger.getLogger(AdStorageMetadataRowMapper.class); // intentional: log message are from nested class
 
-    private static String MD5_ENCODING_SCHEME = "md5:";
+    public static final String VOSPAC = "VOSpac";  // Name of vault "archive" in AD
+    private static final String MD5_ENCODING_SCHEME = "md5:";
+    
+    private static final String QTMPL = "SELECT uri, inventoryURI, contentMD5, fileSize, ingestDate,"
+            + " contentEncoding, contentType %s"
+            + " FROM archive_files WHERE archiveName = '%s' %s"
+            + " ORDER BY %s uri ASC, ingestDate DESC";
+
+    static final String DISAMBIGUATE_PREFIX = "x-";
+    //private static final List<String> ARC_PREFIX_ARC = Arrays.asList("CFHT", "GEM", "JCMT");
+    
+    private final String storagebucket;
+    private final String query;
 
     AdStorageQuery(String storageBucket) {
         InventoryUtil.assertNotNull(AdStorageQuery.class, "storageBucket", storageBucket);
-        setQuery(storageBucket);
+        this.storagebucket = storageBucket;
+        String bucketSelect = "";
+        String archive = bucket2archive(this.storagebucket);
+        String bucketConstraint = "";
+        String bucketOrder = "";
+        if (this.storagebucket.startsWith(VOSPAC)) {
+            // VOSpac is a special archive that uses multiple storage buckets denoted by the first 4 digits of
+            // the contentMD5
+            String[] parts = this.storagebucket.split(":");
+            if (parts.length != 2) {
+                throw new IllegalArgumentException("Unexpected bucket format: " + storageBucket);
+            }
+            String bucket = parts[1];
+            // determine the bucket
+            try {
+                if ((bucket.length() == 0) || (bucket.length() > 4)) {
+                    throw new IllegalArgumentException("Bucket part must be between 1 and 4 digits: " + storagebucket);
+                }
+                Integer.decode("0x" + bucket);
+            } catch (IllegalArgumentException ex) {
+                throw new IllegalArgumentException("invalid checksum URI: "
+                        + bucket + " contains invalid hex value, expected hex value");
+            }
+            bucketSelect = ", convert('binary', convert('smallint', contentMD5)) as bucket";
+            String minMD5Checksum = bucket + "0000000000000000".substring(0, 16 - bucket.length());
+            String maxMD5Checksum = bucket + "ffffffffffffffff".substring(0, 16 - bucket.length());
+            bucketConstraint = " AND contentMD5 between '" + minMD5Checksum + "' AND '" + maxMD5Checksum + "'";
+            bucketOrder = "bucket, ";
+        }
+        this.query = String.format(this.QTMPL, bucketSelect, archive, bucketConstraint, bucketOrder);
     }
 
     public TapRowMapper<StorageMetadata> getRowMapper() {
         return new AdStorageMetadataRowMapper();
     }
 
-    class AdStorageMetadataRowMapper implements TapRowMapper<StorageMetadata> {
+    //private String archive2bucket(String arc) {
+    //    for (String pre : ARC_PREFIX_ARC) {
+    //        if (!arc.equals(pre) && arc.startsWith(pre)) {
+    //            return DISAMBIGUATE_PREFIX + arc;
+    //        }
+    //    }
+    //    return arc;
+    //}
 
+    private String bucket2archive(String sb) {
+        String result = sb;
+        if (sb.startsWith(DISAMBIGUATE_PREFIX)) {
+            result = sb.substring(DISAMBIGUATE_PREFIX.length());
+        }
+        if (result.startsWith(VOSPAC)) {
+            result = VOSPAC;
+        }
+        return result;
+    }
+    
+    class AdStorageMetadataRowMapper implements TapRowMapper<StorageMetadata> {
         public AdStorageMetadataRowMapper() { }
 
         @Override
         public StorageMetadata mapRow(List<Object> row) {
             Iterator i = row.iterator();
 
-            // archive_files.archiveName
-            String storageBucket = (String) i.next();
-
-            // archive_files.inventoryURI
-            URI artifactID = (URI) i.next();
-
-            // check for null uri(storageID) and log error
-            if (artifactID == null) {
-                String sb = "ERROR: uri=null in ad.archive_files for archiveName=" + storageBucket;
-                log.error(sb);
+            URI storageID = (URI) i.next();
+            if (storageID == null) {
+                log.warn(AdStorageMetadataRowMapper.class.getSimpleName() + ".SKIP reason=null-uri");
                 return null;
             }
-
+            if (storageID.getScheme().equals("gemini")) {
+                // hack to preserve previously generated storageID values for GEM
+                storageID = URI.create("ad:" + storageID.getSchemeSpecificPart());
+            }
+            
+            URI artifactURI = (URI) i.next();
+            if (artifactURI == null) {
+                log.warn(AdStorageMetadataRowMapper.class.getSimpleName() + ".SKIP uri=" + storageID + " reason=null-artifactURI");
+                return null;
+            }
+            
             // archive_files.contentMD5 is just the hex value
             URI contentChecksum = null;
+            String hex = (String) i.next();
             try {
-                contentChecksum = new URI(MD5_ENCODING_SCHEME + i.next());
-            } catch (URISyntaxException u) {
-                log.debug("checksum error: " + artifactID.toString() + ": " + u.getMessage());
+                contentChecksum = new URI(MD5_ENCODING_SCHEME + hex);
+                InventoryUtil.assertValidChecksumURI(AdStorageQuery.class, "contentChecksum", contentChecksum);
+            } catch (IllegalArgumentException | URISyntaxException u) {
+                log.warn(AdStorageMetadataRowMapper.class.getSimpleName() + ".SKIP uri=" + storageID + " reason=invalid=contentChecksum");
+                return null;
             }
 
             // archive_files.fileSize
             Long contentLength = (Long) i.next();
             if (contentLength == null) {
-                log.debug("content length error (null): " + artifactID.toString());
+                log.warn(AdStorageMetadataRowMapper.class.getSimpleName() + ".SKIP uri=" + storageID + " reason=null-contentLength");
+                return null;
+            }
+            if (contentLength == 0L) {
+                log.warn(AdStorageMetadataRowMapper.class.getSimpleName() + ".SKIP uri=" + storageID + " reason=zero-contentLength");
+                return null;
             }
 
-            // archive_files.uri
-            URI storageID = (URI) i.next();
-
-            // Set up StorageLocation object first
             StorageLocation storageLocation = new StorageLocation(storageID);
-            storageLocation.storageBucket = storageBucket;
-
-            // Build StorageMetadata object
-            StorageMetadata storageMetadata;
-            if (contentChecksum == null || (contentLength == null || contentLength == 0)) {
-                storageMetadata = new StorageMetadata(storageLocation);
+            if (storagebucket.startsWith(VOSPAC)) {
+                // return the actual 4 digit "bucket"
+                storageLocation.storageBucket = storagebucket.substring(0, storagebucket.indexOf(':') + 1)
+                        + hex.substring(0, 4);
             } else {
-                storageMetadata = new StorageMetadata(storageLocation, contentChecksum, contentLength);
+                storageLocation.storageBucket = storagebucket;
             }
-            storageMetadata.artifactURI = artifactID;
 
-            // Set optional values into ret at this point - allowed to be null
+            Date contentLastModified = (Date) i.next();
+            if (contentLastModified == null) {
+                // work-around for cases with NULL ingestDate:
+                // select archiveName, count(*) from archive_files where ingestDate=Null group by archiveName;
+                // JCMT   30525
+                // XDSS 1696503
+                // CFHT   22286
+                contentLastModified = new Date();
+            }
+
+            StorageMetadata storageMetadata = new StorageMetadata(storageLocation, contentChecksum, contentLength, contentLastModified);
+            storageMetadata.artifactURI = artifactURI;
+
+            // optional values
             storageMetadata.contentEncoding = (String) i.next();
             storageMetadata.contentType = (String) i.next();
-            storageMetadata.contentLastModified = (Date) i.next();
+            
 
-            log.debug("StorageMetadata: " + storageMetadata);
             return storageMetadata;
         }
     }
 
-    // Getters & Setters
-
     public String getQuery() {
         return this.query;
-    }
-
-    public void setQuery(String storageBucket) {
-        if (storageBucket == null || storageBucket.length() == 0) {
-            throw new IllegalArgumentException("Storage bucket (archive) an not be null.");
-        }
-        this.query = String.format(this.queryTemplate, storageBucket);
     }
 }
 

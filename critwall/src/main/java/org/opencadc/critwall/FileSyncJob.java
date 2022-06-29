@@ -3,7 +3,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2020.                            (c) 2020.
+ *  (c) 2022.                            (c) 2022.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -69,6 +69,7 @@ package org.opencadc.critwall;
 
 import ca.nrc.cadc.auth.AuthMethod;
 import ca.nrc.cadc.auth.AuthenticationUtil;
+import ca.nrc.cadc.auth.NotAuthenticatedException;
 import ca.nrc.cadc.auth.RunnableAction;
 import ca.nrc.cadc.db.TransactionManager;
 import ca.nrc.cadc.io.ByteLimitExceededException;
@@ -77,6 +78,7 @@ import ca.nrc.cadc.net.FileContent;
 import ca.nrc.cadc.net.HttpGet;
 import ca.nrc.cadc.net.HttpPost;
 import ca.nrc.cadc.net.PreconditionFailedException;
+import ca.nrc.cadc.net.RangeNotSatisfiableException;
 import ca.nrc.cadc.net.ResourceAlreadyExistsException;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
@@ -94,6 +96,9 @@ import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URL;
+import java.security.AccessControlException;
+import java.security.PrivilegedActionException;
+import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -102,48 +107,69 @@ import javax.security.auth.Subject;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.InventoryUtil;
+import org.opencadc.inventory.StorageLocationEvent;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.EntityNotFoundException;
 import org.opencadc.inventory.db.ObsoleteStorageLocation;
 import org.opencadc.inventory.db.ObsoleteStorageLocationDAO;
+import org.opencadc.inventory.db.StorageLocationEventDAO;
 import org.opencadc.inventory.storage.NewArtifact;
+import org.opencadc.inventory.storage.PutTransaction;
 import org.opencadc.inventory.storage.StorageAdapter;
 import org.opencadc.inventory.storage.StorageEngageException;
 import org.opencadc.inventory.storage.StorageMetadata;
 
-
+/**
+ * Single file sync instance.
+ * 
+ * @author pdowler
+ */
 public class FileSyncJob implements Runnable {
     private static final Logger log = Logger.getLogger(FileSyncJob.class);
 
     private static final long[] RETRY_DELAY = new long[] { 6000L, 12000L };
+    // adjustable by test code
+    static long SEGMENT_SIZE_PREF = 2 * 1024L * 1024L * 1024L; // 2 GiB
 
+    private int syncArtifactAttempts = 0; // total count of attempted download
+    
     private final ArtifactDAO artifactDAO;
     private final UUID artifactID;
     private final URI locatorService;
     private final StorageAdapter storageAdapter;
     private final Subject subject;
+    private final Subject anonSubject = AuthenticationUtil.getAnonSubject();
+    
+    private String auth;
+    private long byteTransferTime;
+    private String artifactLabel;
+    private final List<Exception> fails = new ArrayList<>();
     
     /**
      * Construct a job to sync the specified artifact.
      * 
-     * @param artifactID entity ID of artifact to sync
+     * @param artifact artifact to sync
      * @param locatorServiceID locator service to use
      * @param storageAdapter back end storage
      * @param artifactDAO database persistence
      * @param subject caller with credentials for downloads
      */
-    public FileSyncJob(UUID artifactID, URI locatorServiceID, StorageAdapter storageAdapter, ArtifactDAO artifactDAO, Subject subject) {
-        InventoryUtil.assertNotNull(FileSyncJob.class, "artifactID", artifactID);
+    public FileSyncJob(Artifact artifact, URI locatorServiceID, StorageAdapter storageAdapter, ArtifactDAO artifactDAO, Subject subject) {
+        InventoryUtil.assertNotNull(FileSyncJob.class, "artifact", artifact);
         InventoryUtil.assertNotNull(FileSyncJob.class, "locatorServiceID", locatorServiceID);
         InventoryUtil.assertNotNull(FileSyncJob.class, "storageAdapter", storageAdapter);
         InventoryUtil.assertNotNull(FileSyncJob.class, "artifactDAO", artifactDAO);
 
-        this.artifactID = artifactID;
+        this.artifactID = artifact.getID();
         this.locatorService = locatorServiceID;
         this.storageAdapter = storageAdapter;
 
         this.artifactDAO = artifactDAO;
         this.subject = subject;
+        
+        this.artifactLabel = "Artifact.id=" + artifactID + " Artifact.uri=" + artifact.getURI();
+        this.byteTransferTime = 0;
+        this.auth = "";
     }
 
     @Override
@@ -160,38 +186,44 @@ public class FileSyncJob implements Runnable {
 
     // approach here is conservative: if the input artifact changed|deleted in the database, 
     // the job will abort
-    // in cases where the artifact changed, it will be picked up again and syn'ed later
+    // in cases where the artifact changed, it will be picked up again and sync'ed later
     // - note: we only have to worry about changes in Artifact.uri because it may be made mutable in future
     //         Artifact.contentChecksum and Artifact.contentLength are immutable      
     private void doSync() {
         
-        log.info("FileSyncJob.START " + artifactID);
+        log.info("FileSyncJob.START " + artifactLabel);
         long start = System.currentTimeMillis();
         boolean success = false;
         String msg = "";
         
-        
         try {
             // get current artifact to sync
             final Artifact artifact = artifactDAO.get(artifactID);
-            if (artifact == null || artifact.storageLocation != null) {
-                msg = "artifact " + artifactID + " changed|deleted since job created";
+            if (artifact == null) {
+                success = false;
+                msg = "reason=obsolete-artifact";
                 return;
             }
-            // from here on we care about URI change since that's the only potentially mutable metadata 
-            // that could get persisted in the back end
-            String artifactLabel = artifact.getID().toString() + "|" + artifact.getURI().toASCIIString();
-            List<URL> urlList;
+            if  (artifact.storageLocation != null) {
+                success = false;
+                msg = "reason=artifact-already-synced";
+                return;
+            }
             
+            this.artifactLabel = "Artifact.id=" + artifactID + " Artifact.uri=" + artifact.getURI();            
+
+            List<Protocol> urlList;
             try {
                 urlList = getDownloadURLs(this.locatorService, artifact.getURI());
                 if (urlList.isEmpty()) {
-                    msg = " locator returned 0 URLs";
+                    success = false;
+                    msg = "reason=no-transfer-urls";
                     return;
                 }
             } catch (Exception ex) {
                 log.debug("transfer negotiation failed: " + artifactLabel, ex);
-                msg = " transfer negotiation failed: " + artifactLabel + " (" + ex + ")";
+                success = false;
+                msg = "reason=transfer-negotiation-failed " + ex;
                 return;
             }
             
@@ -199,17 +231,26 @@ public class FileSyncJob implements Runnable {
             try {
                 while (!success && !urlList.isEmpty() && retryCount < RETRY_DELAY.length) {
                     Artifact curArtifact = artifactDAO.get(artifactID);
-                    if (curArtifact == null 
-                            || !curArtifact.getURI().equals(artifact.getURI())
-                            || curArtifact.storageLocation != null) {
-                        msg = "artifact " + artifactID + " changed|deleted since job started [before sync]";
+                    if (curArtifact == null) {
+                        success = false;
+                        msg = "reason=obsolete-artifact";
+                        return;
+                    }
+                    if  (artifact.storageLocation != null) {
+                        success = false;
+                        msg = "reason=artifact-already-synced";
+                        return;
+                    }
+                    if (!curArtifact.getURI().equals(artifact.getURI())) {
+                        success = false;
+                        msg = "reason=artifact-change-since-job-started";
                         return;
                     }
                     
                     // attempt to sync file
-                    log.info("FileSyncJob.SYNC " + artifactLabel + " urls=" + urlList.size() + " attempts=" + retryCount);
-                    StorageMetadata storageMeta = syncArtifact(curArtifact, urlList);
-
+                    log.debug("FileSyncJob.SYNC " + artifactLabel + " urls=" + urlList.size() + " attempts=" + retryCount);
+                    StorageMetadata storageMeta = syncArtifactTxn(curArtifact, urlList);
+                    
                     // sync succeeded: update inventory
                     if (storageMeta != null) {
                         ObsoleteStorageLocationDAO locDAO = new ObsoleteStorageLocationDAO(artifactDAO);
@@ -220,8 +261,7 @@ public class FileSyncJob implements Runnable {
                             txnMgr.startTransaction();
                             log.debug("start txn: OK");
                             
-                            artifactDAO.lock(artifact);
-                            curArtifact = artifactDAO.get(artifactID);
+                            curArtifact = artifactDAO.lock(artifact);
                             
                             ObsoleteStorageLocation prevOSL = locDAO.get(storageMeta.getStorageLocation());
                             if (prevOSL != null) {
@@ -231,20 +271,26 @@ public class FileSyncJob implements Runnable {
 
                             ObsoleteStorageLocation obsLoc = null;
                             if (curArtifact == null || !curArtifact.getURI().equals(artifact.getURI())) {
-                                msg = "artifact " + artifactID + " changed|deleted since job started [after sync]";
+                                // newly written object is obsolete
+                                success = false;
+                                msg = "reason=change-since-job-started";
                                 obsLoc = new ObsoleteStorageLocation(storageMeta.getStorageLocation());
                                 locDAO.put(obsLoc);
                             } else {
-                                // just in case someone else assigned a StorageLocation: one is now obsolete
+                                // previous (~simultaneous) written object is obsolete
                                 if (curArtifact.storageLocation != null) {
                                     if (!artifact.storageLocation.equals(curArtifact.storageLocation)) {
                                         obsLoc = new ObsoleteStorageLocation(curArtifact.storageLocation);
                                         locDAO.put(obsLoc);
                                     }
                                 }
+                                StorageLocationEventDAO sleDAO = new StorageLocationEventDAO(artifactDAO);
+                                StorageLocationEvent sle = new StorageLocationEvent(curArtifact.getID());
                                 artifactDAO.setStorageLocation(curArtifact, storageMeta.getStorageLocation());
+                                sleDAO.put(sle);
+                                
                                 success = true;
-                                msg = "uri=" + artifact.getURI();
+                                msg += "bytes=" + storageMeta.getContentLength();
                             }
 
                             txnMgr.commitTransaction();
@@ -276,40 +322,61 @@ public class FileSyncJob implements Runnable {
                         }
                     }
                     
-                    if (!success) {
+                    if (!success && !urlList.isEmpty()) {
                         log.info("FileSyncJob.SLEEP dt=" + RETRY_DELAY[retryCount]);
                         Thread.sleep(RETRY_DELAY[retryCount++]);
                     }
                 }
-                if (!success) {
-                    msg = " all URLs tried, retryCount=" + retryCount;
+                if (!success && urlList.isEmpty()) {
+                    Exception commonFail = null;
+                    for (Exception e : fails) {
+                        if (commonFail == null) {
+                            commonFail = e;
+                        }
+                        if (!commonFail.getClass().equals(e.getClass())) {
+                            commonFail = null;
+                            break;
+                        }
+                    }
+                    if (commonFail != null) {
+                        msg = "reason=" + commonFail;
+                    } else {
+                        msg = "reason=no-remaining-urls";
+                    }
                 }
-            } catch (IllegalStateException | EntityNotFoundException ex) {
+            } catch (ByteLimitExceededException | IllegalStateException | EntityNotFoundException ex) {
                 log.debug("artifact sync aborted: " + artifactLabel, ex);
-                msg = " artifact sync aborted: " + artifactLabel + " (" + ex + ")";
+                msg = "reason=" + ex.getClass().getName() + " " + ex.getMessage();
             } catch (IllegalArgumentException | InterruptedException | StorageEngageException | WriteException ex) {
                 log.debug("artifact sync error: " + artifactLabel, ex);
-                msg = " artifact sync error: " + artifactLabel + " (" + ex + ")";
+                msg = "reason=" + ex.getClass().getName() + " " + ex.getMessage();
             } catch (Exception ex) {
                 log.debug("unexpected fail: " + artifactLabel, ex);
-                msg = " unexpected sync error: " + artifactLabel + " (" + ex + ")";
+                msg = "reason=" + ex.getClass().getName() + " " + ex.getMessage();
             }
         } finally {
             long dt = System.currentTimeMillis() - start;
+            long overheadTime = dt - byteTransferTime;
             StringBuilder sb = new StringBuilder();
-            sb.append("FileSyncJob.END ").append(artifactID);
-            sb.append(" dt=").append(dt);
+            sb.append("FileSyncJob.END ").append(artifactLabel);
             sb.append(" success=").append(success);
+            sb.append(" duration=").append(dt);
+            sb.append(" attempts=").append(syncArtifactAttempts);
+            sb.append(" auth=").append(auth);
+            if (byteTransferTime > 0) {
+                sb.append(" transfer=").append(byteTransferTime);
+                sb.append(" overhead=").append(overheadTime);
+            }
             sb.append(" ").append(msg);
             log.info(sb.toString());
         }
     }
 
     // Use transfer negotiation at resource URI to get list of download URLs for the artifact.
-    private List<URL> getDownloadURLs(URI resource, URI artifact)
-        throws IOException, InterruptedException,
-        ResourceAlreadyExistsException, ResourceNotFoundException,
-        TransientException, TransferParsingException {
+    private List<Protocol> getDownloadURLs(URI resource, URI artifact)
+        throws IOException, InterruptedException, 
+               ResourceAlreadyExistsException, ResourceNotFoundException,
+               TransientException, TransferParsingException {
 
         RegistryClient regClient = new RegistryClient();
         Subject subject = AuthenticationUtil.getCurrentSubject();
@@ -331,94 +398,342 @@ public class FileSyncJob implements Runnable {
             protocolList.add(httpsAuth);
         }
 
-        Transfer transfer = new Transfer(artifact, Direction.pullFromVoSpace, protocolList);
+        Transfer transfer = new Transfer(artifact, Direction.pullFromVoSpace);
         transfer.version = VOS.VOSPACE_21;
+        transfer.getProtocols().addAll(protocolList);
 
         TransferWriter writer = new TransferWriter();
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         writer.write(transfer, out);
         FileContent content = new FileContent(out.toByteArray(), "text/xml");
-        log.debug("xml file content to be posted: " + transfer);
+        log.debug("transfer request to be posted: " + transfer);
 
         log.debug("artifact path: " + artifact.getPath());
         HttpPost post = new HttpPost(transferURL, content, true);
+        post.setConnectionTimeout(6000); // ms
+        post.setReadTimeout(60000);      // ms
         post.prepare();
         log.debug("post prepare done");
 
         TransferReader reader = new TransferReader();
         Transfer t = reader.read(post.getInputStream(), null);
-        List<String> urlStrList = t.getAllEndpoints();
-        log.debug("endpoints returned: " + urlStrList);
-
-        List<URL> urlList = new ArrayList<>();
-
-        // Create URL list to return
-        for (final String s : urlStrList) {
-            try {
-                urlList.add(new URL(s));
-            } catch (MalformedURLException mue) {
-                log.info("malformed URL returned from transfer negotiation: " + s + " skipping... ");
-            }
-        }
-
-        return urlList;
+        return t.getProtocols();
     }
 
-    private StorageMetadata syncArtifact(Artifact a, List<URL> urls)
-        throws ByteLimitExceededException, StorageEngageException, InterruptedException, WriteException, IllegalArgumentException {
-
+    // no longer used but kept for reference: see syncArtifactTxn
+    private StorageMetadata syncArtifact(Artifact a, List<Protocol> urls) throws Exception {
         StorageMetadata storageMeta = null;
-        Iterator<URL> urlIterator = urls.iterator();
+        Iterator<Protocol> urlIterator = urls.iterator();
 
         while (urlIterator.hasNext()) {
-            URL u = urlIterator.next();
-            log.debug("trying " + u);
-
+            Protocol p = urlIterator.next();
+            URL u = new URL(p.getEndpoint());
+            final String logURL = getLoggableString(u, p.getSecurityMethod());
+            boolean postPrepare = false;
             try {
-                ByteArrayOutputStream dest = new ByteArrayOutputStream();
-                HttpGet get = new HttpGet(u, dest);
-                get.prepare();
-
-                // Note: the storage adapter 'put' below does checksum and content length
-                // checks, but only after downloading the entire file.
-                // Making the checks here is more efficient.
-                String getContentMD5 = get.getContentMD5();
-                if (getContentMD5 != null
-                    && !getContentMD5.equals(a.getContentChecksum().getSchemeSpecificPart())) {
-                    throw new PreconditionFailedException("contentChecksum mismatch: " + a.getURI());
+                syncArtifactAttempts++;
+                HttpGet get = new HttpGet(u, true);
+                get.setConnectionTimeout(6000); // ms
+                get.setReadTimeout(60000);      // ms
+                if (p.getSecurityMethod() == null || p.getSecurityMethod().equals(Standards.getSecurityMethod(AuthMethod.ANON))) {
+                    log.debug("download: " + u + " as " + anonSubject);
+                    doPrepareAnon(get);
+                } else {
+                    log.debug("download: " + u + " as " + AuthenticationUtil.getCurrentSubject());
+                    get.prepare();
                 }
-
-                long getContentLen = get.getContentLength();
-                if (getContentLen != -1
-                    && getContentLen != a.getContentLength()) {
-                    throw new PreconditionFailedException("contentLength mismatch: " + a.getURI()
-                        + " artifact: " + a.getContentLength() + " header: " + getContentLen);
-                }
+                
+                postPrepare = true;
+                
+                verifyMetadata(a, get, null);
 
                 NewArtifact na = new NewArtifact(a.getURI());
                 na.contentChecksum = a.getContentChecksum();
                 na.contentLength = a.getContentLength();
 
-                storageMeta = this.storageAdapter.put(na, get.getInputStream());
+                storageMeta = this.storageAdapter.put(na, get.getInputStream(), null);
                 log.debug("storage meta returned: " + storageMeta.getStorageLocation());
                 return storageMeta;
 
-            } catch (ByteLimitExceededException | WriteException ex) {
+            } catch (ByteLimitExceededException | StorageEngageException | WriteException ex) {
                 // IOException will capture this if not explicitly caught and rethrown
-                log.error("FileSyncJob.FAIL fatal: " + ex);
+                log.debug("FileSyncJob.FAIL", ex);
+                log.error("FileSyncJob.FAIL " + artifactLabel + " reason=" + ex);
                 throw ex;
+            } catch (MalformedURLException | ResourceNotFoundException | ResourceAlreadyExistsException
+                     | PreconditionFailedException | RangeNotSatisfiableException 
+                     | AccessControlException | NotAuthenticatedException ex) {
+                log.debug("FileSyncJob.ERROR remove=" + u, ex);
+                log.warn("FileSyncJob.ERROR " + artifactLabel + " remove=" + logURL + " auth=" + auth + "] reason=" + ex);
+                fails.add(ex);
+                urlIterator.remove();
             } catch (IOException | TransientException ex) {
                 // includes ReadException
                 // - prepare or put throwing this error
-                // - will move to next url
-                log.error("FileSyncJob.FAIL transient: " + ex);
-            } catch (ResourceNotFoundException | ResourceAlreadyExistsException | PreconditionFailedException ex) {
-                log.error("FileSyncJob.FAIL remove " + u + " reason: " + ex);
-                urlIterator.remove();
+                log.debug("FileSyncJob.ERROR keep=" + u, ex);
+                log.warn("FileSyncJob.ERROR " + artifactLabel + " keep=" + logURL + " auth=" + auth + "] reason=" + ex);
+                fails.add(ex);
+            } catch (Exception ex) {
+                if (!postPrepare) {
+                    // remote server 5xx response: discard
+                    log.debug("FileSyncJob.ERROR remove=" + u, ex);
+                    log.warn("FileSyncJob.ERROR " + artifactLabel + " remove=" + logURL + " auth=" + auth + "] reason=" + ex);
+                    urlIterator.remove();
+                    fails.add(ex);
+                } else {
+                    // StorageAdapter.put internal fail: abort
+                    log.debug("FileSyncJob.FAIL", ex);
+                    log.warn("FileSyncJob.FAIL " + artifactLabel + " reason=" + ex);
+                    throw ex;
+                }
             }
         }
         
         return null;
     }
+    
+    static class PutSegment {
+        long start;
+        long end;
+        long contentLength;
+        
+        public String getRangeHeaderVal() {
+            return "bytes=" + start + "-" + end; 
+        }
 
+        @Override
+        public String toString() {
+            return PutSegment.class.getSimpleName() + "[" + start + "," + end + "," + contentLength + "]";
+        }
+    }
+    
+    static List<PutSegment> getSegmentPlan(Artifact a, PutTransaction pt) {
+        List<FileSyncJob.PutSegment> segs = new ArrayList<>();
+        
+        long segmentSize = Math.min(SEGMENT_SIZE_PREF, a.getContentLength()); // client preference
+        if (pt.getMinSegmentSize() != null) {
+            segmentSize = Math.max(segmentSize, pt.getMinSegmentSize());
+        }
+        if (pt.getMaxSegmentSize() != null) {
+            segmentSize = Math.min(segmentSize, pt.getMaxSegmentSize());
+        }
+        
+        long numWholeSegments = a.getContentLength() / segmentSize;
+        long lastSegment = a.getContentLength() - (segmentSize * numWholeSegments);
+        long numSegments = (lastSegment > 0L ? numWholeSegments + 1 : numWholeSegments);
+
+        for (int i = 0; i < numSegments; i++) {
+            FileSyncJob.PutSegment s = new FileSyncJob.PutSegment();
+
+            s.start = i * segmentSize;
+            s.end = s.start + segmentSize - 1;
+            s.contentLength = segmentSize;
+            if (i + 1 == numSegments && lastSegment > 0L) {
+                s.end = s.start + lastSegment - 1;
+                s.contentLength = lastSegment;
+            }
+            segs.add(s);
+        }
+        return segs;
+    }
+    
+    private StorageMetadata syncArtifactTxn(Artifact a, List<Protocol> urls) throws Exception {
+        Iterator<Protocol> urlIterator = urls.iterator();
+        while (urlIterator.hasNext()) {
+            Protocol p = urlIterator.next();
+            URL u = new URL(p.getEndpoint());
+            final String logURL = getLoggableString(u, p.getSecurityMethod());
+            if (p.getSecurityMethod() == null) {
+                auth = "anon";
+            } else {
+                auth = p.getSecurityMethod().getFragment();
+            }
+
+            String txnID = null;
+            boolean postPrepare = false;
+            try {
+                syncArtifactAttempts++;
+                
+                // figure out txn params
+                PutTransaction pt = storageAdapter.startTransaction(a.getURI(), a.getContentLength());
+                txnID = pt.getID();
+                List<PutSegment> segs = FileSyncJob.getSegmentPlan(a, pt);
+                if (segs.size() == 1) {
+                    storageAdapter.abortTransaction(pt.getID());
+                    txnID = null;
+                    // proceed without txn
+                }
+                
+                long transferTime = 0;
+                for (PutSegment seg : segs) {
+                    log.debug("get: " + seg);
+                    postPrepare = false;
+                    HttpGet get = new HttpGet(u, true);
+                    get.setConnectionTimeout(6000); // ms
+                    get.setReadTimeout(60000);      // ms
+                    if (txnID != null) {
+                        get.setRequestProperty("range", seg.getRangeHeaderVal());
+                    }
+
+                    if (p.getSecurityMethod() == null || p.getSecurityMethod().equals(Standards.getSecurityMethod(AuthMethod.ANON))) {
+                        log.debug("download: " + u + " as " + anonSubject);
+                        doPrepareAnon(get);
+                    } else {
+                        log.debug("download: " + u + " as " + AuthenticationUtil.getCurrentSubject());
+                        get.prepare();
+                    }
+                    postPrepare = true;
+                    if (txnID != null && get.getResponseCode() != 206) {
+                        // TODO have to fall back to complete download somehow
+                        throw new RuntimeException("OOPS: " + logURL + " auth=" + auth + "] does not support range requests");
+                    }
+
+                    // when there is only one segment, pt==null but the seg.contentLength is correct
+                    verifyMetadata(a, get, seg);
+
+                    NewArtifact na = new NewArtifact(a.getURI());
+                    na.contentChecksum = a.getContentChecksum();
+                    na.contentLength = a.getContentLength();
+                    if (txnID != null) {
+                        na.contentLength = seg.contentLength;
+                    }
+                    
+                    // accumulate time spent on actual byte transfer
+                    long startPut = System.currentTimeMillis();
+                    StorageMetadata storageMeta = this.storageAdapter.put(na, get.getInputStream(), txnID);
+                    transferTime = transferTime + System.currentTimeMillis() - startPut;
+                    log.debug("put ok: " + storageMeta);
+                    
+                    if (txnID == null) {
+                        byteTransferTime = transferTime;
+                        return storageMeta;
+                    }
+                    // TODO: verify partial put, maybe revert and try chunk again?
+                }
+                
+                PutTransaction status = storageAdapter.getTransactionStatus(txnID);
+                verifyMetadata(a, status.storageMetadata);
+
+                log.debug("committing " + txnID);
+                StorageMetadata ret = storageAdapter.commitTransaction(txnID);
+                txnID = null;
+                byteTransferTime = transferTime;
+                return ret;
+            } catch (ByteLimitExceededException | StorageEngageException | WriteException ex) {
+                // IOException will capture this if not explicitly caught and rethrown
+                log.debug("FileSyncJob.FAIL", ex);
+                log.error("FileSyncJob.FAIL " + artifactLabel + " reason=" + ex);
+                throw ex;
+            } catch (MalformedURLException | ResourceNotFoundException | ResourceAlreadyExistsException
+                     | PreconditionFailedException | RangeNotSatisfiableException 
+                     | AccessControlException | NotAuthenticatedException ex) {
+                log.error("FileSyncJob.ERROR remove=" + u, ex);
+                log.warn("FileSyncJob.ERROR " + artifactLabel + " remove=" + logURL + " auth=" + auth + "] reason=" + ex);
+                fails.add(ex);
+                urlIterator.remove();
+            } catch (IOException | TransientException ex) {
+                // includes ReadException
+                // - prepare or put throwing this error
+                log.debug("FileSyncJob.ERROR keep=" + u, ex);
+                log.warn("FileSyncJob.ERROR " + artifactLabel + " keep=" + logURL + " auth=" + auth + "] reason=" + ex);
+                fails.add(ex);
+            } catch (Exception ex) {
+                if (!postPrepare) {
+                    // remote server 5xx response: discard
+                    log.debug("FileSyncJob.ERROR remove=" + u, ex);
+                    log.warn("FileSyncJob.ERROR " + artifactLabel + " remove=" + logURL + " auth=" + auth + "] reason=" + ex);
+                    urlIterator.remove();
+                    fails.add(ex);
+                } else {
+                    // StorageAdapter.put internal fail: abort
+                    log.debug("FileSyncJob.FAIL", ex);
+                    log.warn("FileSyncJob.FAIL " + artifactLabel + " reason=" + ex);
+                    throw ex;
+                }
+            } finally {
+                if (txnID != null) {
+                    // not comitted at end of try { }
+                    try {
+                        storageAdapter.abortTransaction(txnID);
+                    } catch (IllegalArgumentException ignore) {
+                        // txn already aborted by StorageAdapter
+                    }
+                }
+            }
+        }
+        
+        return null;
+    }
+    
+    private void doPrepareAnon(final HttpGet get) throws Exception {
+        try {
+            Subject.doAs(anonSubject, (PrivilegedExceptionAction<Void>) () -> {
+                get.prepare();
+                return null;
+            });
+        } catch (PrivilegedActionException pex) {
+            throw pex.getException();
+        }
+    }
+    
+    private void verifyMetadata(Artifact a, HttpGet get, PutSegment seg) throws PreconditionFailedException {
+        log.debug("verify artifact: " + a);
+        log.debug("verify headers: " + get.getContentLength() + " " + get.getDigest());
+        log.debug("verify seg: " + seg);
+        URI hdrContentChecksum = get.getDigest();
+        if (hdrContentChecksum != null
+            && !hdrContentChecksum.equals(a.getContentChecksum())) {
+            throw new PreconditionFailedException("contentChecksum artifact: " 
+                + a.getContentChecksum() + " header: " + hdrContentChecksum);
+        }
+
+        long hdrContentLen = get.getContentLength();
+        if (hdrContentLen != -1) {
+            if (seg != null) {
+                if (hdrContentLen != seg.contentLength) {
+                    throw new PreconditionFailedException("contentLength segment: " 
+                        + seg.contentLength + " header: " + hdrContentLen);
+                }
+            } else if (hdrContentLen != a.getContentLength()) {
+                throw new PreconditionFailedException("contentLength artifact: " 
+                    + a.getContentLength() + " header: " + hdrContentLen);
+            }
+        }
+    }
+    
+    private void verifyMetadata(Artifact a, StorageMetadata sm) throws PreconditionFailedException {
+        log.debug("verify artifact: " + a);
+        log.debug("verify storageMetadata: " + sm);
+        if (!sm.getContentChecksum().equals(a.getContentChecksum())) {
+            throw new PreconditionFailedException("contentChecksum artifact: " 
+                + a.getContentChecksum() + " storage: " + sm.getContentChecksum());
+        }
+
+        if (!sm.getContentLength().equals(a.getContentLength())) {
+            throw new PreconditionFailedException("contentLength artifact: " 
+                + a.getContentLength() + " storage: " + sm.getContentLength());
+        }
+    }
+    
+    private String getLoggableString(URL url, URI sm) {
+        String surl = url.toExternalForm();
+        String path = url.getPath();
+        int i = surl.indexOf(path);
+        String[] ss = path.split("/");
+        
+        StringBuilder sb = new StringBuilder();
+        sb.append(surl.substring(0, i));
+        
+        // leading / means ss[0] is empty string
+        sb.append("/");
+        if (ss.length > 1) {
+            sb.append(ss[1]).append("/");
+        }
+        if (ss.length > 2) {
+            sb.append(ss[2]).append("/");
+        }
+        sb.append("...");
+       
+        return sb.toString();
+    }
 }

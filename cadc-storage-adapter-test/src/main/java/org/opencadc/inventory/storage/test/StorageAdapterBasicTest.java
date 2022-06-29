@@ -131,7 +131,7 @@ public abstract class StorageAdapterBasicTest {
             log.debug("testPutGetDelete random data: " + data.length + " " + expectedChecksum);
             
             log.debug("testPutGetDelete put: " + artifactURI);
-            StorageMetadata storageMetadata = adapter.put(newArtifact, new ByteArrayInputStream(data));
+            StorageMetadata storageMetadata = adapter.put(newArtifact, new ByteArrayInputStream(data), null);
             log.info("testPutGetDelete put: " + artifactURI + " to " + storageMetadata.getStorageLocation());
             log.info("put: " + storageMetadata.getStorageLocation());
             Assert.assertNotNull(storageMetadata);
@@ -139,7 +139,7 @@ public abstract class StorageAdapterBasicTest {
             Assert.assertEquals(newArtifact.contentChecksum, storageMetadata.getContentChecksum());
             Assert.assertEquals(newArtifact.contentLength, storageMetadata.getContentLength());
             Assert.assertEquals("artifactURI",  artifactURI, storageMetadata.artifactURI);
-            Assert.assertNotNull(storageMetadata.contentLastModified);
+            Assert.assertNotNull(storageMetadata.getContentLastModified());
             
             // verify data stored
             log.debug("testPutGetDelete get: " + artifactURI);
@@ -185,7 +185,7 @@ public abstract class StorageAdapterBasicTest {
             log.debug("testPutGetDeleteMinimal random data: " + data.length + " " + expectedChecksum);
             
             log.debug("testPutGetDeleteMinimal put: " + artifactURI);
-            StorageMetadata storageMetadata = adapter.put(na, new ByteArrayInputStream(data));
+            StorageMetadata storageMetadata = adapter.put(na, new ByteArrayInputStream(data), null);
             log.info("testPutGetDeleteMinimal put: " + artifactURI + " to " + storageMetadata.getStorageLocation());
             
             // verify data
@@ -218,7 +218,7 @@ public abstract class StorageAdapterBasicTest {
         try {
             URI artifactURI = URI.create("cadc:TEST/testPutReadFail");
             NewArtifact na = new NewArtifact(artifactURI);
-            adapter.put(na, TestUtil.getInputStreamThatFails(true)); // provoke IOException
+            adapter.put(na, TestUtil.getInputStreamThatFails(true), null); // provoke IOException
             Assert.fail("expected ReadException: call succeeded");
         } catch (ReadException expected) {
             log.info("caught expected: " + expected);
@@ -233,7 +233,7 @@ public abstract class StorageAdapterBasicTest {
         try {
             URI artifactURI = URI.create("cadc:TEST/testPutReadFail");
             NewArtifact na = new NewArtifact(artifactURI);
-            StorageMetadata sm = adapter.put(na, TestUtil.getInputStreamOfRandomBytes(8192));
+            StorageMetadata sm = adapter.put(na, TestUtil.getInputStreamOfRandomBytes(8192), null);
             Assert.assertNotNull(sm);
             
             adapter.get(sm.getStorageLocation(), TestUtil.getOutputStreamThatFails(true)); // provoke IOException
@@ -266,7 +266,7 @@ public abstract class StorageAdapterBasicTest {
             try {
                 newArtifact.contentLength = data.length - 1L;
                 ByteArrayInputStream bis = new ByteArrayInputStream(data);
-                StorageMetadata storageMetadata = adapter.put(newArtifact, bis);
+                StorageMetadata storageMetadata = adapter.put(newArtifact, bis, null);
                 Assert.fail("expected fail - got : " + storageMetadata);
             } catch (PreconditionFailedException expected) {
                 log.info("caught expected: " + expected);
@@ -276,7 +276,7 @@ public abstract class StorageAdapterBasicTest {
             try {
                 newArtifact.contentLength = data.length + 1L;
                 ByteArrayInputStream bis = new ByteArrayInputStream(data);
-                StorageMetadata storageMetadata = adapter.put(newArtifact, bis);
+                StorageMetadata storageMetadata = adapter.put(newArtifact, bis, null);
                 Assert.fail("expected fail - got : " + storageMetadata);
             } catch (PreconditionFailedException expected) {
                 log.info("caught expected: " + expected);
@@ -286,13 +286,46 @@ public abstract class StorageAdapterBasicTest {
             try {
                 newArtifact.contentChecksum = wrongChecksum;
                 ByteArrayInputStream bis = new ByteArrayInputStream(data);
-                StorageMetadata storageMetadata = adapter.put(newArtifact, bis);
+                StorageMetadata storageMetadata = adapter.put(newArtifact, bis, null);
                 Assert.fail("expected fail - got : " + storageMetadata);
             } catch (PreconditionFailedException expected) {
                 log.info("caught expected: " + expected);
             }
             newArtifact.contentChecksum = null;
             
+        } catch (Exception unexpected) {
+            log.error("unexpected exception", unexpected);
+            Assert.fail("unexpected exception: " + unexpected);
+        }
+    }
+    
+    @Test
+    public void testPutRejectZeroLengthFile() {
+        try {
+            byte[] data = new byte[0];
+            
+            URI artifactURI = URI.create("test:path/file");
+            MessageDigest md = MessageDigest.getInstance("MD5");
+            String md5Val = HexUtil.toHex(md.digest(data));
+            NewArtifact newArtifact = new NewArtifact(artifactURI);
+            
+            try {
+                newArtifact.contentLength = null;
+                ByteArrayInputStream bis = new ByteArrayInputStream(data);
+                StorageMetadata storageMetadata = adapter.put(newArtifact, bis, null);
+                Assert.fail("expected fail - got : " + storageMetadata);
+            } catch (IllegalArgumentException expected) {
+                log.info("caught expected: " + expected);
+            }
+            
+            try {
+                newArtifact.contentLength = 0L;
+                ByteArrayInputStream bis = new ByteArrayInputStream(data);
+                StorageMetadata storageMetadata = adapter.put(newArtifact, bis, null);
+                Assert.fail("expected fail - got : " + storageMetadata);
+            } catch (IllegalArgumentException expected) {
+                log.info("caught expected: " + expected);
+            }
         } catch (Exception unexpected) {
             log.error("unexpected exception", unexpected);
             Assert.fail("unexpected exception: " + unexpected);
@@ -309,7 +342,7 @@ public abstract class StorageAdapterBasicTest {
                 URI artifactURI = URI.create("cadc:TEST/testIterator-" + i);
                 NewArtifact na = new NewArtifact(artifactURI);
                 na.contentLength = (long) datalen;
-                StorageMetadata sm = adapter.put(na, TestUtil.getInputStreamOfRandomBytes(datalen));
+                StorageMetadata sm = adapter.put(na, TestUtil.getInputStreamOfRandomBytes(datalen), null);
                 Assert.assertNotNull(sm.artifactURI);
                 //Assert.assertNotNull(sm.contentLastModified);
                 log.debug("testIterator put: " + artifactURI + " to " + sm.getStorageLocation());
@@ -321,7 +354,7 @@ public abstract class StorageAdapterBasicTest {
                 URI uri = URI.create(suri);
                 NewArtifact na = new NewArtifact(uri);
                 na.contentLength = (long) datalen;
-                StorageMetadata meta = adapter.put(na, TestUtil.getInputStreamOfRandomBytes(datalen));
+                StorageMetadata meta = adapter.put(na, TestUtil.getInputStreamOfRandomBytes(datalen), null);
                 adapter.delete(meta.getStorageLocation());
                 log.info("extra storageBucket: " + meta.getStorageLocation().storageBucket);
             }
@@ -344,14 +377,15 @@ public abstract class StorageAdapterBasicTest {
                 StorageMetadata am = ai.next();
                 log.debug("compare: " + em.getStorageLocation() + " vs " + am.getStorageLocation());
                 Assert.assertEquals("order", em, am);
+                Assert.assertTrue("valid", am.isValid());
                 Assert.assertEquals("length", em.getContentLength(), am.getContentLength());
                 Assert.assertEquals("checksum", em.getContentChecksum(), am.getContentChecksum());
                 
-                Assert.assertNotNull("artifactUIRI", am.artifactURI);
+                Assert.assertNotNull("artifactURI", am.artifactURI);
                 Assert.assertEquals("artifactURI", em.artifactURI, am.artifactURI);
                 
-                Assert.assertNotNull("contentLastModified", am.contentLastModified);
-                //Assert.assertEquals("contentLastModified", em.contentLastModified, am.contentLastModified);
+                Assert.assertNotNull("contentLastModified", am.getContentLastModified());
+                Assert.assertEquals("contentLastModified", em.getContentLastModified(), am.getContentLastModified());
             }
             
             // rely on cleanup()
@@ -371,7 +405,7 @@ public abstract class StorageAdapterBasicTest {
                 URI artifactURI = URI.create("cadc:TEST/testIteratorBucketPrefix-" + i);
                 NewArtifact na = new NewArtifact(artifactURI);
                 na.contentLength = (long) datalen;
-                StorageMetadata sm = adapter.put(na,  TestUtil.getInputStreamOfRandomBytes(datalen));
+                StorageMetadata sm = adapter.put(na,  TestUtil.getInputStreamOfRandomBytes(datalen), null);
                 log.debug("testList put: " + artifactURI + " to " + sm.getStorageLocation());
                 expected.add(sm);
             }
@@ -381,7 +415,7 @@ public abstract class StorageAdapterBasicTest {
                 URI uri = URI.create(suri);
                 NewArtifact na = new NewArtifact(uri);
                 na.contentLength = (long) datalen;
-                StorageMetadata meta = adapter.put(na, TestUtil.getInputStreamOfRandomBytes(datalen));
+                StorageMetadata meta = adapter.put(na, TestUtil.getInputStreamOfRandomBytes(datalen), null);
                 adapter.delete(meta.getStorageLocation());
                 log.info("extra storageBucket: " + meta.getStorageLocation().storageBucket);
             }

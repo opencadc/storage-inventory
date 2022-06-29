@@ -71,7 +71,6 @@ import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.rest.InlineContentException;
 import ca.nrc.cadc.rest.InlineContentHandler;
 import ca.nrc.cadc.vos.Direction;
-import ca.nrc.cadc.vos.Protocol;
 import ca.nrc.cadc.vos.Transfer;
 import ca.nrc.cadc.vos.TransferReader;
 import ca.nrc.cadc.vos.TransferWriter;
@@ -124,7 +123,11 @@ public class PostAction extends ArtifactAction {
         if (!Direction.pullFromVoSpace.equals(direction) && !Direction.pushToVoSpace.equals(direction)) {
             throw new IllegalArgumentException("direction not supported: " + transfer.getDirection());
         }
-        artifactURI = transfer.getTarget();
+        List<URI> targets = transfer.getTargets();
+        if (targets.isEmpty() || targets.size() > 1) {
+            throw new IllegalArgumentException("expected 1 target URI, found: " + targets.size());
+        }
+        artifactURI = targets.get(0);
         InventoryUtil.validateArtifactURI(PostAction.class, artifactURI);
     }
 
@@ -156,14 +159,12 @@ public class PostAction extends ArtifactAction {
     public void doAction() throws Exception {
         initAndAuthorize();
 
-        ProtocolsGenerator pg = new ProtocolsGenerator(artifactDAO, publicKeyFile, privateKeyFile, user);
-        List<Protocol> protos = pg.getProtocols(transfer);
-
-        // TODO: sort protocols as caller will try them in order until success
-        // - depends on client and site proximity
-        // - sort pre-auth before non-pre-auth because we already did the permission check
-        
-        Transfer ret = new Transfer(artifactURI, transfer.getDirection(), protos);
+        ProtocolsGenerator pg = new ProtocolsGenerator(this.artifactDAO, this.publicKeyFile, this.privateKeyFile,
+                                                       this.user, this.siteAvailabilities, this.siteRules,
+                                                       this.preventNotFound);
+        Transfer ret = new Transfer(artifactURI, transfer.getDirection());
+        // TODO: change from pg.getProtocols(transfer) to pg.getResolvedTransfer(transfer)??
+        ret.getProtocols().addAll(pg.getProtocols(transfer));
         ret.version = VOS.VOSPACE_21;
                         
         TransferWriter transferWriter = new TransferWriter();

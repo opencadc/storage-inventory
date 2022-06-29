@@ -1,6 +1,6 @@
 <a rel="license" href="http://creativecommons.org/licenses/by-sa/4.0/">
 <img alt="Creative Commons License" style="border-width:0" src="https://i.creativecommons.org/l/by-sa/4.0/88x31.png" /></a>
-<br />The Common Archive Observation Model is licensed under the
+<br />The Storage Inventory data model is licensed under the
 <a rel="license" href="http://creativecommons.org/licenses/by-sa/4.0/">
 Creative Commons Attribution-ShareAlike 4.0 International License</a>.
 
@@ -63,23 +63,19 @@ Development starts with the UML diagrams and the current version may be ahead of
 VO-DML documentation. 
 
 <img alt="Storage System UML - development version" style="border-width:0" 
-src="https://github.com/opencadc/storage-inventory/raw/master/storage-inventory-dm/src/main/resources/storage-inventory-0.5.png" />
+src="src/main/resources/storage-inventory-0.6.png" />
 
 # Artifact.uri
 This URI is a globally unique logical identifier that is typically known to and may be defined by some other system 
 (e.g. an Artifact.uri in CAOM or storageID in a storage-system backed VOSpace like ivo://cadc.nrc.ca/vault). 
 
-{scheme}:{path}
+{scheme}:{relative-path}
 
-ivo://{authority}/{name}?{path}
-
-For all URIs, the filename would be the last component of {path}. There is no explicit namespace: arbitrary sets of files
+For all URIs, the filename would be the last component of the path. There is no explicit namespace: arbitrary sets of files
 can be defined with a prefix-pattern match on uri. Such sets of files would be used in validation and in site mirroring 
-policies.
+policies. Normal CADC practice is to use the scheme and first path component (archive name) as a namespace.
 
-For resolvable ivo URIs, the resourceID can be extracted by dropping the query string. The resourceID 
-can be found in a registry and allows clients to find data services. This form allows for generic tools to resolve
-and access files from external systems. Example usage of equivalent uri values:
+Example usage of uri values:
 
 **ad:{archive}/{filename}** *classic*
 
@@ -87,20 +83,14 @@ and access files from external systems. Example usage of equivalent uri values:
 
 **mast:{path}/{filename}** *in use now*
 
-ivo://cadc.nrc.ca/{archive}?{path}/{filename} *resolvable archive?*
-
-ivo://cadc.nrc.ca/{srv}?{path}/{filename} *resolvable multi-archive service?*
-
-The fully resolvable uri (ivo scheme) can be used to extract a resourceID (up to the ?) and perform a registry lookup.
-The resulting record would contain at least two capabilities: a transfer negotiation or a files endpoint and a permissions endpoint. Classic (ad) and proposed new (cadc scheme) usage is to use a shortcut scheme that is configured to be equivalent to the multi-archive data centre. The first form (with the archive in the resourceID) allows for changes from a common to a different permission service (for that archive); the second form is the resolvable version of current practice. The short forms (ad and cadc schemes) require configuration at storage sites to map the scheme (e.g. cadc -> ivo://cadc.nrc.ca/archive) for capability lookup. For externally harvested and sync'ed CAOM artifacts, we would use the URI as-is in the Artifact.uri field. For the simple form (e.g. mast:HST/path/to/file.fits) we would configure the scheme (mast) as a shortcut to the CAOM archive metadata service.
+Artifact.uri is a semantically meaningful identifier that remains unchanged when the Artifact is mirrored or synced to different sites. Local code/configuration is used to resolve this identifier to a URL for data access. For externally harvested and sync'ed CAOM artifacts, we would use the URI as-is in the Artifact.uri field.
 
 Validation of CAOM versus storage requires querying CAOM (1+ collections) and storage (single namespace) and 
 cross-matching URIs to look for anomalies.
 
-For vault (vospace), data nodes would have a generated identifier and use something like 
-ivo://cadc.nrc.ca/vault?{uuid}/{filename} or vault:{uuid}/{filename}. For the latter, storage sites would require
-configuration to support the shortcut (as would other instances). There should be no use of the "vos" scheme in a uri so paths within the vospace never get used in storage and move/rename operations (container or data nodes) do not effect the storage system.  Validation of vault versus storage requires querying vault (and building uri values programmatically unless
-vaultdb stores the full URI) and storage and cross-matching to look for anomalies.
+For vault (vospace), data nodes would have a generated identifier and use something like cadc:vault/{uuid} or vault:{uuid} 
+(but not containing the logical filename in VOSpace). There should be no use of the "vos" scheme in a uri so paths within the vospace never get used in storage and move/rename operations (container or data nodes) do not effect the storage system.  Validation of vault versus storage requires querying vault (and building uri values programmatically unless
+vault db stores the full URI) and storage and cross-matching to look for anomalies.
 
 Since we need to support mast and vault schemes (at least), it is assumed that we would use the "cadc" scheme going 
 forward and support (configure) the "ad" scheme for backwards compatibility. 
@@ -199,18 +189,21 @@ How does delete file get propagated?
 
 ## lastModified updates
 How does global learn about copies at sites other than the original?
-- when a site syncs a file (adds a local StorageLocation): update the Artifact.lastModified
-- global metadata-sync from site(s) will see this and add a SiteLocation
-- metadata-sync never modifies Entity metdata: id, metaChecksum, lastModified never change during sync
-- eventually: Artifact.lastModified will be the latest change at all sites, but that doesn't stop metadata-sync from processing an "event" out of order and merging in the new SiteLocation
+- WAS: when a site file-sync completes (adds a local StorageLocation): update the Artifact.lastModified
+- NOW: when a site file-sync completes (adds a local StorageLocation): create a
+StorageLocationEvent with the Artifact.id
+- when global metadata-sync from site(s) see this and tracks: add a SiteLocation
+- when global metadata-sync *first* sees an Artifact: update Artifact.lastModified to
+make sure the events in global are inserted at head of sequence
+- metadata-sync never modifies Entity metdata: id, metaChecksum never change during sync
 
 ## cache site
 How would a temporary cache instance at a site be maintained?
 - site could accept writes to a "cache" instance for Artifact(s) that do not match local policy
-- site could delete once global has other SiteLocation(s), update Artifact.lastModified so global will detect 
-  and remove SiteLocation
+- site metadata-validate can delete once the artifact+file are synced to sites where it does match policy: global has multiple SiteLocation(s)
+- metadata-validate removed the Artifact and creates a DeletedStorageLocationEvent; file-validate cleans up local copy of file
 - files could sit there orphaned if no one else wants/copies them
-- this feature is not planned, just speculation
+- a pure cache site is simply a site with local policy of "no files" and does not need to run metadata-sync w/ global
 
 ## metadata-validate
 How does global inventory validate vs a storage site?  how does a storage site validate vs global?
@@ -219,20 +212,20 @@ How does global inventory validate vs a storage site?  how does a storage site v
 - validate subsets of artifacts (in parallel) using Artifact.uriBucket prefix
 - validate ordered streams to minimise memory requirements (large sets)
 
-**Local L** If L is global, then this set has artifacts where Artifact.siteLocations includes remote siteID.
-If L is a storage site, then this set is all artifacts in the database.
+**Local L** L is the set of artifacts in the local database; if L is global, it is the subset that
+should match R.
 
 **Remote R**: This set is the artifacts in the remote site that match the current filter policy.
 
 The approach is to iterate through sets L and R, look for discrepancies, and fix L. There are only 
-minor differences if validating global L. Note: Except for explanation0 which are strictly local effects, 
-the explanation #s match -- they are the same explanation seen from both sides.
+minor differences if validating global L.
 
 *discrepancy*: artifact in L && artifact not in R
 
     explanation0: filter policy at L changed to exclude artifact in R
-    evidence: Artifact in R without filter
-    action: delete Artifact, if (L==storage) create DeletedStorageLocationEvent 
+    evidence: Artifact in R without filter && remoteArtifact.lastModified < remote-query-start
+    action: if L==storage, check num_copies>1 in R, delete Artifact, create DeletedStorageLocationEvent
+            if L==global, delete Artifact (no event)
 
     explanation1: deleted from R, pending/missed DeletedArtifactEvent in L
     evidence: DeletedArtifactEvent in R 
@@ -240,33 +233,35 @@ the explanation #s match -- they are the same explanation seen from both sides.
     
     explanation2: L==global, deleted from R, pending/missed DeletedStorageLocationEvent in L
     evidence: DeletedStorageLocationEvent in R 
-    action: remove siteID from Artifact.storageLocations (see below)
+    action: remove siteID from Artifact.siteLocations (see below)
 
     explanation3: L==global, new Artifact in L, pending/missed Artifact or sync in R
     evidence: ?
-    action: remove siteID from Artifact.storageLocations (see below)
+    action: remove siteID from Artifact.siteLocations (see below)
     
     explanation4: L==storage, new Artifact in L, pending/missed new Artifact event in R
     evidence: ?
     action: none
+    
+    explanation5: TBD
 
     explanation6: deleted from R, lost DeletedArtifactEvent
     evidence: ?
-    action: assume explanation3
+    action: if L==global, assume explanation3
     
     explanation7: L==global, lost DeletedStorageLocationEvent
     evidence: ?
     action: assume explanation3
     
-    note: when removing siteID from Artifact.storageLocations in global, if the Artifact.siteLocations becomes empty
+    note: when removing siteID from Artifact.storageLocations in global, if the Artifact.siteLocations becomes empty:
         the artifact should be deleted (metadata-sync needs to also do this in response to a DeletedStorageLocationEvent)
-        TBD: must this also create a DeletedArtifactEvent?
+        Deletion when siteLocations becomes empty due to DeletedStorageLocationEvent must not generate a DeletedArtifactEvent.
 
 *discrepancy*: artifact not in L && artifact in R
 
     explantion0: filter policy at L changed to include artifact in R
     evidence: ?
-    action: equivalent to missed Artifact event (explanation3 below)
+    action: equivalent to missed Artifact event (explanation3/4 below)
     
     explanation1: deleted from L, pending/missed DeletedArtifactEvent in R
     evidence: DeletedArtifactEvent in L
@@ -280,13 +275,17 @@ the explanation #s match -- they are the same explanation seen from both sides.
     evidence: ?
     action: insert Artifact
     
-    explanation4: L==global, new Artifact in R, pending/missed changed Artifact event in L
-    evidence: Artifact in local db but siteLocations does not include remote siteID
-    action: add siteID to Artifact.siteLocations
+    explanation4: L==global, new Artifact in L, stale Artifact in R
+    evidence: artifact in L without siteLocation constraint
+    action: resolve as ID collision
+    
+    explanation5: L==global, new Artifact in R, pending/missed Artifact or StorageLocationEvent event in L
+    evidence: ?
+    action: insert Artifact and/or add siteLocation
     
     explanation6: deleted from L, lost DeletedArtifactEvent
     evidence: ?
-    action: assume explanation3
+    action: assume explanation3 or 5
     
     explanation7: L==storage, deleted from L, lost DeletedStorageLocationEvent
     evidence: ?
@@ -301,12 +300,18 @@ the explanation #s match -- they are the same explanation seen from both sides.
 *discrepancy*: artifact in both && valid metaChecksum mismatch
 
     explanation1: pending/missed artifact update in L
-    evidence: ??
+    evidence: local artifact has older Entity.lastModified indicating an update to optional metadata at remote
     action: put Artifact
     
     explanation2: pending/missed artifact update in R
-    evidence: ??
+    evidence: local artifact has newer Entity.lastModified indicating the update happened locally
     action: do nothing
+    
+*discrepancy*: artifact in both && siteLocations does not include R (L==global)
+
+    explanation: pending/missed new Artifact event from storage site (after file-sync)
+    evidence: remote siteID not in local Artifact.siteLocations
+    action: add siteID to Artifact.siteLocations
 
 ## file-validate
 How does a storage site validate vs local storage system?
@@ -329,6 +334,19 @@ What happens when a storage site detects that a Artifact.contentChecksum != stor
 ## should harvesting detect if site Artifact.lastModified stream is out of whack?
 - non-monotonic, except for volatile head of stack?
 - clock skew
+
+## known inefficiences
+- onced ratik validates artifacts up to timestamp T, fewnick continues to process the 
+sequence of artifacts as usual (redundantly for Artifact.lastModified < T)... investigate
+fenwick-time-skip
+- building a redundant global inventory for N storage sites currently requires
+N fenwick/ratik instances that know about all the sites... investigate global-hot-spare
+- global cannot filter (on Artifact.uri) when syncing DeletedArtifactEvent,
+DeletedStorageLocationEvent, and StorageLocationEvent(s), so a limited global with 
+a restrictive filter policy has to process all such events and ends up ignoring many
+- no mechanism to expunge old events from databases: DeletedArtifactEvent from all, 
+DeletedStorageLocationEvent and StorageLocationEvent from storage sites... investigate old-event-cleanup
+and revisit fenwick logic to skip deleted events when starting fresh
 
 # storage back end implementation notes
 The cadc-storage-adapter API places requirements on the implementation:

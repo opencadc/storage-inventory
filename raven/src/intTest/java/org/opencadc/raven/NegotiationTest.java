@@ -3,7 +3,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2020.                            (c) 2020.
+ *  (c) 2022.                            (c) 2022.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -67,13 +67,21 @@
 
 package org.opencadc.raven;
 
+import ca.nrc.cadc.auth.AuthMethod;
+import ca.nrc.cadc.auth.RunnableAction;
+import ca.nrc.cadc.net.HttpGet;
+import ca.nrc.cadc.net.HttpTransfer;
+import ca.nrc.cadc.net.HttpUpload;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.reg.Standards;
+import ca.nrc.cadc.reg.client.RegistryClient;
 import ca.nrc.cadc.util.Log4jInit;
 import ca.nrc.cadc.vos.Direction;
 import ca.nrc.cadc.vos.Protocol;
 import ca.nrc.cadc.vos.Transfer;
 import ca.nrc.cadc.vos.VOS;
+import java.io.ByteArrayInputStream;
+import java.io.InputStream;
 import java.net.URI;
 import java.net.URL;
 import java.security.PrivilegedExceptionAction;
@@ -89,9 +97,11 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.opencadc.inventory.Artifact;
+import org.opencadc.inventory.DeletedArtifactEvent;
 import org.opencadc.inventory.SiteLocation;
 import org.opencadc.inventory.StorageSite;
 import org.opencadc.inventory.db.ArtifactDAO;
+import org.opencadc.inventory.db.DeletedArtifactEventDAO;
 import org.opencadc.inventory.db.StorageSiteDAO;
 import org.opencadc.inventory.db.version.InitDatabase;
 
@@ -105,12 +115,12 @@ public class NegotiationTest extends RavenTest {
     private static final Logger log = Logger.getLogger(NegotiationTest.class);
     
     static {
-        Log4jInit.setLevel("org.opencadc.raven", Level.INFO);
+        Log4jInit.setLevel("org.opencadc.raven", Level.DEBUG);
         Log4jInit.setLevel("ca.nrc.cadc.db", Level.INFO);
     }
-    
-    
-    
+
+    private static final URI CONSIST_RESOURCE_ID = URI.create("ivo://cadc.nrc.ca/minoc");
+
     ArtifactDAO artifactDAO;
     StorageSiteDAO siteDAO;
     
@@ -169,10 +179,8 @@ public class NegotiationTest extends RavenTest {
                             final SiteLocation location1 = new SiteLocation(site1.getID());
                             final SiteLocation location2 = new SiteLocation(site2.getID());
 
-                            List<Protocol> protos = new ArrayList<>();
-                            protos.add(p);
-                            
-                            Transfer transfer = new Transfer(artifactURI, Direction.pullFromVoSpace, protos);
+                            Transfer transfer = new Transfer(artifactURI, Direction.pullFromVoSpace);
+                            transfer.getProtocols().add(p);
                             transfer.version = VOS.VOSPACE_21;
 
                             artifactDAO.put(artifact);
@@ -189,27 +197,53 @@ public class NegotiationTest extends RavenTest {
                             artifactDAO.addSiteLocation(artifact, location1);
                             artifact = artifactDAO.get(artifact.getID());
 
-                            // test that there's one copy
+                            // test that there's one copy * 2 URLs per copy
                             Transfer response = negotiate(transfer);
-                            Assert.assertEquals(1, response.getProtocols().size());
-                            Protocol actual = response.getProtocols().get(0);
-                            log.info("actual: " + actual);
-                            
-                            Assert.assertNotNull(actual.getEndpoint());
-                            Assert.assertEquals(p.getUri(), actual.getUri());
-                            Assert.assertEquals(p.getSecurityMethod(), actual.getSecurityMethod());
+                            log.info("transfer: " + response);
                             if (p.getSecurityMethod() == null || p.getSecurityMethod().equals(Standards.SECURITY_METHOD_ANON)) {
-                                // verify that pre-auth is present in URL, sort of
+                                // anon: pre-auth URL and plain
+                                Assert.assertEquals(2, response.getProtocols().size());
+                            } else {
+                                // cert: one URL
+                                Assert.assertEquals(1, response.getProtocols().size());
+                            }
+                            
+                            Protocol actual = response.getProtocols().get(0);
+                            log.info("first: " + actual);
+                            
+                            
+                            if (p.getSecurityMethod() == null || p.getSecurityMethod().equals(Standards.SECURITY_METHOD_ANON)) {
+                                Assert.assertNotNull(actual.getEndpoint());
+                                Assert.assertEquals(p.getUri(), actual.getUri());
+                                Assert.assertEquals(p.getSecurityMethod(), actual.getSecurityMethod());
+                            
+                                // path: minoc/endpoint/{pre-auth}/cadc:TEST/{uuid}.fits == 5
+                                // verify that pre-auth chunk is present in URL
                                 String surl = actual.getEndpoint();
                                 URL url = new URL(surl);
                                 String path = url.getPath().substring(1);
                                 log.debug("path: " + path);
 
                                 String[] elems = path.split("/");
-                                // path: minoc/endpoint/{pre-auth}/cadc:TEST/{uuid}.fits == 5
+                                
                                 Assert.assertEquals(5, elems.length);
                                 Assert.assertEquals("cadc:TEST", elems[3]);
+                                
+                                // path: minoc/endpoint/cadc:TEST/{uuid}.fits == 4
+                                // verify that pre-auth is NOT present in the second anon URL
+                                actual = response.getProtocols().get(1);
+                                log.info("second: " + actual);
+                                surl = actual.getEndpoint();
+                                url = new URL(surl);
+                                path = url.getPath().substring(1);
+                                log.debug("path: " + path);
+
+                                elems = path.split("/");
+                                Assert.assertEquals(4, elems.length);
+                                Assert.assertEquals("cadc:TEST", elems[2]);
+                                
                             } else {
+                                // path: minoc/endpoint/cadc:TEST/{uuid}.fits == 4
                                 // verify that pre-auth is NOT present in URL
                                 String surl = actual.getEndpoint();
                                 URL url = new URL(surl);
@@ -217,7 +251,7 @@ public class NegotiationTest extends RavenTest {
                                 log.debug("path: " + path);
 
                                 String[] elems = path.split("/");
-                                // path: minoc/endpoint/cadc:TEST/{uuid}.fits == 5
+                                
                                 Assert.assertEquals(4, elems.length);
                                 Assert.assertEquals("cadc:TEST", elems[2]);
                             }
@@ -228,7 +262,11 @@ public class NegotiationTest extends RavenTest {
 
                             // test that there are now two copies
                             response = negotiate(transfer);
-                            Assert.assertEquals(2, response.getAllEndpoints().size());
+                            if (p.getSecurityMethod() == null || p.getSecurityMethod().equals(Standards.SECURITY_METHOD_ANON)) {
+                                Assert.assertEquals(4, response.getAllEndpoints().size());
+                            } else {
+                                Assert.assertEquals(2, response.getAllEndpoints().size());
+                            }
 
                             return null;
 
@@ -272,21 +310,20 @@ public class NegotiationTest extends RavenTest {
                         URI artifactURI = URI.create("cadc:TEST/" + UUID.randomUUID() + ".fits");
 
                         try {
+                            log.debug("adding site1 (not writable)...");
                             siteDAO.put(site1); // not writable
 
-                            List<Protocol> protos = new ArrayList<>();
-                            protos.add(p);
-
-                            Transfer transfer = new Transfer(artifactURI, Direction.pushToVoSpace, protos);
+                            Transfer transfer = new Transfer(artifactURI, Direction.pushToVoSpace);
+                            transfer.getProtocols().add(p);
                             transfer.version = VOS.VOSPACE_21;
 
-                            // test that there's no place to put
+                            log.debug("test that there's no place to put...");
                             Transfer response = negotiate(transfer);
                             Assert.assertEquals(0, response.getAllEndpoints().size());
 
+                            log.debug("adding site2 (writable)...");
                             siteDAO.put(site2); // writable
                             
-                            // now one place to write
                             response = negotiate(transfer);
                             Assert.assertEquals(1, response.getProtocols().size());
                             Protocol actual = response.getProtocols().get(0);
@@ -320,6 +357,7 @@ public class NegotiationTest extends RavenTest {
                                 Assert.assertEquals("cadc:TEST", elems[2]);
                             }
                             
+                            log.debug("adding site3 (writable)...");
                             siteDAO.put(site3); // writable
                             response = negotiate(transfer);
                             Assert.assertEquals(2, response.getProtocols().size());
@@ -386,7 +424,8 @@ public class NegotiationTest extends RavenTest {
                     try {
                         siteDAO.put(site1);
 
-                        Transfer transfer = new Transfer(artifactURI, Direction.pullFromVoSpace, protos);
+                        Transfer transfer = new Transfer(artifactURI, Direction.pullFromVoSpace);
+                        transfer.getProtocols().addAll(protos);
                         transfer.version = VOS.VOSPACE_21;
 
                         artifactDAO.put(artifact);
@@ -396,9 +435,11 @@ public class NegotiationTest extends RavenTest {
 
                         Transfer response = negotiate(transfer);
                         
-                        // expect: 3 https supported, no http
-                        Assert.assertEquals("protos supported", 3, response.getAllEndpoints().size());
+                        // expect: 4 https supported, no http
+                        Assert.assertEquals("protos supported", 4, response.getAllEndpoints().size());
                         
+                        boolean foundPreAuthAnon = false;
+                        boolean foundPlainAnon = false;
                         for (Protocol ap : response.getProtocols()) {
                             String surl = ap.getEndpoint();
                             log.info("endpoint: " + surl + " " + ap.getSecurityMethod());
@@ -417,14 +458,23 @@ public class NegotiationTest extends RavenTest {
                             // path: minoc/endpoint/{pre-auth}/cadc:TEST/{uuid}.fits == 5
                             
                             if (ap.getSecurityMethod() == null) {
-                                Assert.assertEquals("pre-auth required", 5, elems.length); // pre-auth required
-                                Assert.assertEquals("cadc:TEST", elems[3]);
+                                if (elems.length == 5) {
+                                    foundPreAuthAnon = true;
+                                    Assert.assertEquals("cadc:TEST", elems[3]);
+                                } else if (elems.length == 4) {
+                                    foundPlainAnon = true;
+                                    Assert.assertEquals("cadc:TEST", elems[2]);
+                                } else {
+                                    Assert.fail("wrong number of path elements: " + elems.length);
+                                }
                             } else {
                                 Assert.assertEquals("pre-auth absent", 4, elems.length); // pre-auth absent: caller authenticates to files service
                                 Assert.assertEquals("cadc:TEST", elems[2]);
                             }
                         }
-
+                        Assert.assertTrue("pre-auth+anon found", foundPreAuthAnon);
+                        Assert.assertTrue("plain+anon found", foundPlainAnon);
+                        
                         return null;
 
                     } finally {
@@ -439,4 +489,180 @@ public class NegotiationTest extends RavenTest {
             Assert.fail("unexpected exception: " + e);
         }
     }
+
+    @Test
+    public void testPrioritizedSites() throws Exception {
+        /**
+         * org.opencadc.raven.putPreference=@SITE1
+         * @SITE1.resourceID=ivo://negotiation-test-site1
+         * @SITE1.namespaces=cadc:TEST/
+         *
+         * org.opencadc.raven.putPreference=@SITE2
+         * @SITE2.resourceID=ivo://negotiation-test-site2
+         * @SITE2.namespaces=cadc:INT-TEST/
+         *
+         * org.opencadc.raven.putPreference=@SITE3
+         * @SITE3.resourceID=ivo://negotiation-test-site3
+         * @SITE3.namespaces=cadc:TEST/
+         */
+
+        URI testSite1ID = URI.create("ivo://negotiation-test-site1");
+        URI testSite2ID = URI.create("ivo://negotiation-test-site2");
+        URI testSite3ID = URI.create("ivo://negotiation-test-site3");
+
+        // testSite1 is readonly, testSite1&2 are read write
+        StorageSite testSite1 = new StorageSite(testSite1ID, "testSite1", true, false);
+        StorageSite testSite2 = new StorageSite(testSite2ID, "testSite2", true, true);
+        StorageSite testSite3 = new StorageSite(testSite3ID, "testSite3", true, true);
+
+        RegistryClient registryClient = new RegistryClient();
+        URL testSite2URL = registryClient.getServiceURL(testSite2ID, Standards.SI_FILES, AuthMethod.CERT);
+        URL testSite3URL = registryClient.getServiceURL(testSite3ID, Standards.SI_FILES, AuthMethod.CERT);
+
+        try {
+            Subject.doAs(userSubject, new PrivilegedExceptionAction<Object>() {
+                public Object run() throws Exception {
+
+                    URI artifactURI = URI.create("cadc:TEST/" + UUID.randomUUID() + ".fits");
+
+                    try {
+                        // add readonly storage site
+                        siteDAO.put(testSite1);
+
+                        Protocol p = new Protocol(VOS.PROTOCOL_HTTPS_GET);
+                        p.setSecurityMethod(Standards.SECURITY_METHOD_CERT);
+
+                        Transfer transfer = new Transfer(artifactURI, Direction.pushToVoSpace);
+                        transfer.getProtocols().add(p);
+                        transfer.version = VOS.VOSPACE_21;
+                        Transfer response = negotiate(transfer);
+
+                        // read only storage site should not return an PUT endpoints
+                        Assert.assertEquals(0, response.getAllEndpoints().size());
+
+                        // add read write storage site
+                        siteDAO.put(testSite2);
+                        response = negotiate(transfer);
+
+                        // read write storage site should return a single endpoint
+                        Assert.assertEquals(1, response.getProtocols().size());
+                        Protocol actual = response.getProtocols().get(0);
+                        log.debug("single rw endpoint: " + actual.getEndpoint());
+                        Assert.assertNotNull(actual.getEndpoint());
+                        Assert.assertEquals(p.getUri(), actual.getUri());
+                        Assert.assertTrue(actual.getEndpoint().startsWith(testSite2URL.toString()));
+
+                        // add read write and preferred site
+                        siteDAO.put(testSite3);
+                        response = negotiate(transfer);
+
+                        // preferred storage site should be first in the list of endpoints
+                        Assert.assertEquals(2, response.getAllEndpoints().size());
+                        Protocol preferred = response.getProtocols().get(0);
+                        Protocol other = response.getProtocols().get(1);
+                        log.debug("preferred: " + preferred.getEndpoint());
+                        log.debug("other: " + other.getEndpoint());
+                        Assert.assertTrue(preferred.getEndpoint().startsWith(testSite3URL.toString()));
+                        Assert.assertTrue(other.getEndpoint().startsWith(testSite2URL.toString()));
+
+                        return null;
+
+                    } finally {
+                        // cleanup sites
+                        siteDAO.delete(testSite1.getID());
+                        siteDAO.delete(testSite2.getID());
+                        siteDAO.delete(testSite3.getID());
+                    }
+                }
+           });
+        } catch (Exception e) {
+            log.error("unexpected exception", e);
+            Assert.fail("unexpected exception: " + e);
+        }
+    }
+
+    @Test
+    public void testConsistencyPreventNotFound() throws Exception {
+        // Tests raven finding artifacts before they are synced from a location.
+        // Requires raven to be configured with org.opencadc.raven.consistency.preventNotFound=true
+        StorageSite site1 = new StorageSite(CONSIST_RESOURCE_ID, "site1", true, true);
+        RegistryClient regClient = new RegistryClient();
+        siteDAO.put(site1);
+        final URL filesURL = regClient.getServiceURL(CONSIST_RESOURCE_ID, Standards.SI_FILES, AuthMethod.ANON);
+        URI artifactURI = URI.create("cadc:TEST/negotiate-test.txt");
+        URL artifactURL = new URL(filesURL.toString() + "/" + artifactURI.toString());
+
+        String content = "abcdefghijklmnopqrstuvwxyz1234567890";
+        String encoding = "test-encoding";
+        String type = "text/plain";
+        byte[] data = content.getBytes();
+        URI expectedChecksum = TestUtils.computeChecksumURI(data);
+
+        InputStream in = new ByteArrayInputStream(data);
+        HttpUpload put = new HttpUpload(in, artifactURL);
+        put.setRequestProperty(HttpTransfer.CONTENT_TYPE, type);
+        put.setRequestProperty(HttpTransfer.CONTENT_ENCODING, encoding);
+        put.setDigest(expectedChecksum);
+
+        Subject.doAs(userSubject, new RunnableAction(put));
+        log.info("put: " + put.getResponseCode() + " " + put.getThrowable());
+        log.info("headers: " + put.getResponseHeader("content-length") + " " + put.getResponseHeader("digest"));
+        Assert.assertNull(put.getThrowable());
+        Assert.assertEquals("Created", 201, put.getResponseCode());
+        // at this point the artifact is created on remote but it is unknown to raven
+
+        List<Protocol> protos = new ArrayList<>();
+        // https+anon
+        Protocol sa = new Protocol(VOS.PROTOCOL_HTTPS_GET);
+        protos.add(sa);
+        // https+cert
+        Protocol sc = new Protocol(VOS.PROTOCOL_HTTPS_GET);
+        sc.setSecurityMethod(Standards.SECURITY_METHOD_CERT);
+        protos.add(sc);
+
+        Subject.doAs(userSubject, new PrivilegedExceptionAction<Object>() {
+            public Object run() throws Exception {
+
+                Transfer transfer = new Transfer(artifactURI, Direction.pullFromVoSpace);
+                transfer.getProtocols().addAll(protos);
+                transfer.version = VOS.VOSPACE_21;
+
+                Transfer response = negotiate(transfer);
+                log.info("transfer: " + response);
+                // 3 URLs: pre-auth anon, anon and cert
+                Assert.assertEquals(3, response.getProtocols().size());
+                return null;
+            }
+        });
+
+        // add the artifact to the deleted artifact table. global should return "not found" in this case
+        HttpGet locationHead = new HttpGet(artifactURL, false);
+        locationHead.setHeadOnly(true);
+        locationHead.run();
+        UUID artifactID = UUID.fromString(locationHead.getResponseHeader(ProtocolsGenerator.ARTIFACT_ID_HDR));
+
+        DeletedArtifactEventDAO daeDAO = new DeletedArtifactEventDAO(false);
+        daeDAO.setConfig(config);
+        DeletedArtifactEvent dae = new DeletedArtifactEvent(artifactID);
+        daeDAO.put(dae);
+
+        Subject.doAs(userSubject, new PrivilegedExceptionAction<Object>() {
+            public Object run() throws Exception {
+
+                Transfer transfer = new Transfer(artifactURI, Direction.pullFromVoSpace);
+                transfer.getProtocols().addAll(protos);
+                transfer.version = VOS.VOSPACE_21;
+                try {
+                    negotiate(transfer);
+                    Assert.fail("should have received file not found exception");
+                } catch (ResourceNotFoundException e) {
+                    log.info("caught expected: " + e);
+                }
+                return null;
+            }
+        });
+
+
+    }
+
 }

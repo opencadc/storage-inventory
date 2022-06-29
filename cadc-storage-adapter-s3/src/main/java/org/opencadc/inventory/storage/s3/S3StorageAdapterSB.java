@@ -69,7 +69,6 @@
 package org.opencadc.inventory.storage.s3;
 
 import ca.nrc.cadc.net.ResourceAlreadyExistsException;
-import ca.nrc.cadc.net.ResourceNotFoundException;
 import java.net.URI;
 import java.util.Iterator;
 import java.util.NoSuchElementException;

@@ -51,7 +51,13 @@ org.opencadc.luskan.resultsDir={absolute path to directory for async results}
 # true if luskan is running on a storage site, false or not set if
 # running on a global site
 org.opencadc.luskan.isStorageSite={true|false}
+
+# groups whose members have authorization to query luskan 
+org.opencadc.luskan.allowedGroup={authorized group}
 ```
+
+`org.opencadc.luskan.allowedGroup` specifies the group(s) whose members have authorization to make calls to the service. 
+The value is a list of group identifiers (e.g. ivo://cadc.nrc.ca/gms?CADC), one line per group.
 
 ### LocalAuthority.properties
 The LocalAuthority.properties file specifies which local service is authoritative for various site-wide functions. The keys

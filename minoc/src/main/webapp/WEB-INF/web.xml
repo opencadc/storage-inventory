@@ -19,6 +19,7 @@
       <param-name>logLevelPackages</param-name>
       <param-value>
             org.opencadc.inventory
+            org.opencadc.fits
             org.opencadc.minoc
             ca.nrc.cadc.rest
             ca.nrc.cadc.util
@@ -80,6 +81,10 @@
             <param-value>ca.nrc.cadc.vosi.CapInitAction</param-value>
         </init-param>
         <init-param>
+            <param-name>head</param-name>
+            <param-value>ca.nrc.cadc.vosi.CapHeadAction</param-value>
+        </init-param>
+        <init-param>
             <param-name>get</param-name>
             <param-value>ca.nrc.cadc.vosi.CapGetAction</param-value>
         </init-param>
@@ -97,6 +102,10 @@
         <init-param>
             <param-name>ca.nrc.cadc.vosi.AvailabilityPlugin</param-name>
             <param-value>org.opencadc.minoc.ServiceAvailability</param-value>
+        </init-param>
+        <init-param>
+            <param-name>availabilityProperties</param-name>
+            <param-value>minoc-availability.properties</param-value>
         </init-param>
         <load-on-startup>4</load-on-startup>
     </servlet>

@@ -79,8 +79,8 @@ public class InitDatabase extends ca.nrc.cadc.db.version.InitDatabase {
     private static final Logger log = Logger.getLogger(InitDatabase.class);
     
     public static final String MODEL_NAME = "storage-inventory";
-    public static final String MODEL_VERSION = "0.10";
-    public static final String PREV_MODEL_VERSION = "0.9";
+    public static final String MODEL_VERSION = "0.14";
+    public static final String PREV_MODEL_VERSION = "0.10";
     //public static final String PREV_MODEL_VERSION = "DO-NOT_UPGRADE-BY-ACCIDENT";
 
     static String[] CREATE_SQL = new String[] {
@@ -90,12 +90,13 @@ public class InitDatabase extends ca.nrc.cadc.db.version.InitDatabase {
         "inventory.ObsoleteStorageLocation.sql",
         "inventory.DeletedArtifactEvent.sql",
         "inventory.DeletedStorageLocationEvent.sql",
+        "inventory.StorageLocationEvent.sql",
         "inventory.HarvestState.sql",
         "inventory.permissions.sql"
     };
     
     static String[] UPGRADE_SQL = new String[] {
-        "inventory.upgrade-0.10.sql",
+        "inventory.StorageLocationEvent.sql",
         "inventory.permissions.sql"
     };
     

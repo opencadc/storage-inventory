@@ -69,6 +69,7 @@
 
 package org.opencadc.luskan;
 
+import org.opencadc.luskan.tap.AdqlQueryImpl;
 import ca.nrc.cadc.tap.TapQuery;
 import ca.nrc.cadc.tap.schema.TapSchema;
 import ca.nrc.cadc.util.Log4jInit;

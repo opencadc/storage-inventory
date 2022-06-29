@@ -29,8 +29,15 @@ org.opencadc.raven.inventory.schema={schema}
 
 org.opencadc.raven.publicKeyFile={public key file name}
 org.opencadc.raven.privateKeyFile={private key file name}
+
+# consistency settings
+org.opencadc.raven.consistency.preventNotFound=true|false
 ```
 The key file names are relative (no path) and the files must be in the config directory.
+
+raven can be configured prevent artifact-not-found errors that might result due to the eventual consistency nature of
+the system by directly checking for the artifact at the sites (`preventNotFound=true`). This however introduces an
+overhead for the genuine not-found cases.
 
 The following optional keys configure raven to use external service(s) to obtain grant information in order
 to perform authorization checks:
@@ -42,6 +49,30 @@ Multiple values of the permission granting service resourceID(s) may be provided
 settings. All services will be consulted but a single positive result is sufficient to grant permission for an 
 action.
 
+The following optional keys configure raven to prioritize sites returned in transfer negotiation, with higher priority
+sites first in the list of transfer URL's. Multiple values of `namespace` may be specified for a single `resourceID`. 
+The `namespace` value(s) must end with a colon (:) or slash (/) so one namespace cannot accidentally match (be a 
+prefix of) another namepsace.
+
+```
+org.opencadc.raven.putPreference={entry name}
+{entry name}.resourceID={storage site resourceID}
+{entry name}.namespace={storage site namespace}
+```
+
+Example `putPreference` config:
+```
+org.opencadc.raven.putPreference=CADC
+CADC.resourceID=ivo://cadc.nrc.ca/cadc/minoc
+CADC.namespace=cadc:IRIS/
+CADC.namespace=cadc:CGPS/
+```
+
+The `putPreference` rules are optimizations; they do not restrict the destination of a PUT. They are useful in cases 
+where a namespace is intended to be stored only in some site(s) or where most or all PUTs come from systems that are near one 
+storage site. TODO: support for `GET` preferences? also use client IP address to prioritize?
+
+The following optional key configure raven behaviour when an artifact is not found.
 **For developer testing only:** To disable authorization checking (via `readGrantProvider` or `writeGrantProvider`
 services), add the following configuration entry to raven.properties:
 ```
@@ -49,6 +80,21 @@ org.opencadc.raven.authenticateOnly=true
 ```
 With `authenticateOnly=true`, any authenticated user will be able to read/write/delete files and anonymous users
 will be able to read files.
+
+### LocalAuthority.properties
+The LocalAuthority.properties file specifies which local service is authoritative for various site-wide functions. The keys
+are standardID values for the functions and the values are resourceID values for the service that implements that standard 
+feature.
+
+Example:
+```
+ivo://ivoa.net/std/GMS#search-0.1 = ivo://cadc.nrc.ca/gms           
+ivo://ivoa.net/std/UMS#users-0.1 = ivo://cadc.nrc.ca/gms    
+ivo://ivoa.net/std/UMS#login-0.1 = ivo://cadc.nrc.ca/gms           
+
+ivo://ivoa.net/std/CDP#delegate-1.0 = ivo://cadc.nrc.ca/cred
+ivo://ivoa.net/std/CDP#proxy-1.0 = ivo://cadc.nrc.ca/cred
+```
 
 ### cadcproxy.pem
 This client certificate is used to make server-to-server calls for system-level A&A purposes.

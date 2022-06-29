@@ -70,22 +70,15 @@
 package org.opencadc.tantar.policy;
 
 
+import ca.nrc.cadc.util.Log4jInit;
+import java.io.OutputStream;
+import java.util.List;
+import java.util.UUID;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.apache.log4j.SimpleLayout;
 import org.apache.log4j.WriterAppender;
 import org.junit.Assert;
-import org.opencadc.inventory.Artifact;
-import org.opencadc.inventory.storage.StorageMetadata;
-import org.opencadc.tantar.BucketValidatorTest;
-import org.opencadc.tantar.ValidateEventListener;
-
-import ca.nrc.cadc.util.Log4jInit;
-
-import java.io.OutputStream;
-import java.util.List;
-import java.util.UUID;
-
 
 public class AbstractResolutionPolicyTest<T extends ResolutionPolicy> {
 
@@ -101,7 +94,7 @@ public class AbstractResolutionPolicyTest<T extends ResolutionPolicy> {
     }
 
     Logger getTestLogger(final OutputStream outputStream) {
-        final Logger logger = Logger.getLogger(BucketValidatorTest.class);
+        final Logger logger = Logger.getLogger(AbstractResolutionPolicyTest.class);
         final WriterAppender testAppender = new WriterAppender(new SimpleLayout(), outputStream);
         testAppender.setName(String.format("%s appender", StorageIsAlwaysRightTest.class));
 
@@ -113,45 +106,5 @@ public class AbstractResolutionPolicyTest<T extends ResolutionPolicy> {
 
     String random16Bytes() {
         return UUID.randomUUID().toString().replaceAll("-", "");
-    }
-
-    protected static final class TestEventListener implements ValidateEventListener {
-
-        protected boolean addArtifactCalled = false;
-        protected boolean deleteStorageMetadataCalled = false;
-        protected boolean deleteArtifactCalled = false;
-        protected boolean resetArtifactCalled = false;
-        protected boolean replaceArtifactCalled = false;
-        protected boolean updateArtifactCalled = false;
-
-        @Override
-        public void createArtifact(StorageMetadata storageMetadata) throws Exception {
-            addArtifactCalled = true;
-        }
-
-        @Override
-        public void delete(StorageMetadata storageMetadata) throws Exception {
-            deleteStorageMetadataCalled = true;
-        }
-
-        @Override
-        public void delete(Artifact artifact) throws Exception {
-            deleteArtifactCalled = true;
-        }
-
-        @Override
-        public void clearStorageLocation(Artifact artifact) throws Exception {
-            resetArtifactCalled = true;
-        }
-
-        @Override
-        public void replaceArtifact(Artifact artifact, StorageMetadata storageMetadata) throws Exception {
-            replaceArtifactCalled = true;
-        }
-
-        @Override
-        public void updateArtifact(Artifact artifact, StorageMetadata storageMetadata) throws Exception {
-            updateArtifactCalled = true;
-        }
     }
 }

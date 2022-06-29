@@ -74,6 +74,7 @@ import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.SiteLocation;
 import org.opencadc.inventory.StorageLocation;
+import org.springframework.jdbc.BadSqlGrammarException;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
@@ -114,10 +115,13 @@ public class ArtifactDAO extends AbstractDAO<Artifact> {
             get.setURI(uri);
             Artifact a = get.execute(jdbc);
             return a;
+        } catch (BadSqlGrammarException ex) {
+            handleInternalFail(ex);
         } finally {
             long dt = System.currentTimeMillis() - t;
             log.debug("get: " + uri + " " + dt + "ms");
         }
+        throw new RuntimeException("BUG: should be unreachable");
     }
 
     // delete an artifact, all SiteLocation(s), and StorageLocation
@@ -127,22 +131,31 @@ public class ArtifactDAO extends AbstractDAO<Artifact> {
         super.delete(Artifact.class, id);
     }
     
+    public Artifact lock(UUID id) {
+        return super.lock(Artifact.class, id);
+    }
+    
+    // used by file-sync and file-validate to track local copy in storage
     public void setStorageLocation(Artifact a, StorageLocation loc) {
         if (!origin) {
             throw new IllegalStateException("cannot update Artifact.storageLocation with origin=false");
         }
         a.storageLocation = loc;
-        boolean timestampUpdate = loc != null;
-        put(a, true, timestampUpdate);
+        put(a, true, false);
     }
     
+    // used by metadata-sync in global when copy deleted at a storage site
     public void addSiteLocation(Artifact a, SiteLocation loc) {
         if (origin) {
             throw new IllegalStateException("cannot update Artifact.siteLocation(s) with origin=true");
         }
         if (!a.siteLocations.contains(loc)) {
             a.siteLocations.add(loc);
-            put(a, true, false);
+            boolean timestampUpdate = a.siteLocations.size() == 1; // first copy in global
+            if (timestampUpdate) {
+                log.debug("force lastModified update when adding first siteLocation");
+            }
+            put(a, true, timestampUpdate);
         }
     }
     
@@ -165,7 +178,7 @@ public class ArtifactDAO extends AbstractDAO<Artifact> {
      * @param storageBucketPrefix null, prefix, or complete storageBucket string
      * @return iterator over artifacts with a StorageLocation
      */
-    public ResourceIterator storedIterator(String storageBucketPrefix) {
+    public ResourceIterator<Artifact> storedIterator(String storageBucketPrefix) {
         checkInit();
         long t = System.currentTimeMillis();
 
@@ -175,10 +188,13 @@ public class ArtifactDAO extends AbstractDAO<Artifact> {
             iter.setOrderedOutput(true);
             iter.setPrefix(storageBucketPrefix);
             return iter.query(dataSource);
+        } catch (BadSqlGrammarException ex) {
+            handleInternalFail(ex);
         } finally {
             long dt = System.currentTimeMillis() - t;
             log.debug("iterator: " + storageBucketPrefix + " " + dt + "ms");
         }
+        throw new RuntimeException("BUG: should be unreachable");
     }
     
     /**
@@ -190,7 +206,7 @@ public class ArtifactDAO extends AbstractDAO<Artifact> {
      * @param uriBucketPrefix null, prefix, or complete Artifact.uriBucket string
      * @return iterator over artifacts without a StorageLocation
      */
-    public ResourceIterator unstoredIterator(String uriBucketPrefix) {
+    public ResourceIterator<Artifact> unstoredIterator(String uriBucketPrefix) {
         checkInit();
         long t = System.currentTimeMillis();
 
@@ -200,10 +216,26 @@ public class ArtifactDAO extends AbstractDAO<Artifact> {
             iter.setOrderedOutput(true);
             iter.setPrefix(uriBucketPrefix);
             return iter.query(dataSource);
+        } catch (BadSqlGrammarException ex) {
+            handleInternalFail(ex);
         } finally {
             long dt = System.currentTimeMillis() - t;
             log.debug("iterator: " + dt + "ms");
         }
+        throw new RuntimeException("BUG: should be unreachable");
+    }
+    
+    /**
+     * Iterate over Artifacts.
+     * 
+     * <p>Use case: implement metadata-validate
+     * 
+     * @param uriBucketPrefix null, prefix, or complete Artifact.uriBucket string
+     * @param ordered order by Artifact.uri (true) or not ordered (false)
+     * @return iterator over artifacts
+     */
+    public ResourceIterator<Artifact> iterator(String uriBucketPrefix, boolean ordered) {
+        return iterator((String) null, uriBucketPrefix, ordered);
     }
     
     /**
@@ -211,27 +243,60 @@ public class ArtifactDAO extends AbstractDAO<Artifact> {
      * conditions on fields of the Artifact using the field names for column references.
      * Example: <code>uri like 'ad:bar/%'</code>. The result is currently not ordered.
      * 
-     * <p>Use case: to implement metadata-validate (cleanup) after a local filter policy was changed.
+     * <p>Use case: local cleanup by arbitrary criteria
      * 
      * @param criteria conditions for selecting artifacts
      * @param uriBucketPrefix null, prefix, or complete Artifact.uriBucket string
      * @param ordered order by Artifact.uri (true) or not ordered (false)
      * @return iterator over artifacts matching criteria
      */
-    public ResourceIterator iterator(String criteria, String uriBucketPrefix, boolean ordered) {
+    public ResourceIterator<Artifact> iterator(String criteria, String uriBucketPrefix, boolean ordered) {
         checkInit();
         long t = System.currentTimeMillis();
 
         try {
             SQLGenerator.ArtifactIteratorQuery iter = (SQLGenerator.ArtifactIteratorQuery) gen.getEntityIteratorQuery(Artifact.class);
-            //iter.setStorageLocationRequired(null); // null aka all artifacts
             iter.setPrefix(uriBucketPrefix);
             iter.setCriteria(criteria);
             iter.setOrderedOutput(ordered);
             return iter.query(dataSource);
+        } catch (BadSqlGrammarException ex) {
+            handleInternalFail(ex);
         } finally {
             long dt = System.currentTimeMillis() - t;
             log.debug("iterator: " + dt + "ms");
         }
+        throw new RuntimeException("BUG: should be unreachable");
+    }
+    
+    /**
+     * Iterate over Artifacts from a specific site. If a siteID is specified, only artifacts where 
+     * artifact.siteLocations includes that siteID are returned; this is only applicable in a global
+     * inventory that tracks site locations.
+     * 
+     * <p>Use case: to implement metadata-validate
+     * 
+     * @param siteID null or siteID to select only artifacts from the specified site (validate global vs site)
+     * @param uriBucketPrefix null, prefix, or complete Artifact.uriBucket string
+     * @param ordered order by Artifact.uri (true) or not ordered (false)
+     * @return iterator over artifacts matching criteria
+     */
+    public ResourceIterator<Artifact> iterator(UUID siteID, String uriBucketPrefix, boolean ordered) {
+        checkInit();
+        long t = System.currentTimeMillis();
+
+        try {
+            SQLGenerator.ArtifactIteratorQuery iter = (SQLGenerator.ArtifactIteratorQuery) gen.getEntityIteratorQuery(Artifact.class);
+            iter.setPrefix(uriBucketPrefix);
+            iter.setSiteID(siteID);
+            iter.setOrderedOutput(ordered);
+            return iter.query(dataSource);
+        } catch (BadSqlGrammarException ex) {
+            handleInternalFail(ex);
+        } finally {
+            long dt = System.currentTimeMillis() - t;
+            log.debug("iterator: " + dt + "ms");
+        }
+        throw new RuntimeException("BUG: should be unreachable");
     }
 }

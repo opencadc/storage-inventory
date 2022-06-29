@@ -69,45 +69,66 @@
 
 package org.opencadc.tantar;
 
+import java.net.URI;
+import java.util.ArrayList;
+import java.util.List;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.storage.StorageMetadata;
 
-
 public class TestEventListener implements ValidateEventListener {
-    protected boolean addArtifactCalled = false;
-    protected boolean deleteStorageMetadataCalled = false;
-    protected boolean deleteArtifactCalled = false;
-    protected boolean resetArtifactCalled = false;
-    protected boolean replaceArtifactCalled = false;
-    protected boolean updateeArtifactCalled = false;
+    public boolean createArtifactCalled = false;
+    public boolean deleteStorageMetadataCalled = false;
+    public boolean deleteArtifactCalled = false;
+    public boolean clearStorageLocationCalled = false;
+    public boolean replaceArtifactCalled = false;
+    public boolean updateArtifactCalled = false;
+    
+    public final List<StorageMetadata> created = new ArrayList<>();
+    public final List<Artifact> cleared = new ArrayList<>();
+    public final List<Artifact> deleted = new ArrayList<>();
+    public final List<Artifact> replaced = new ArrayList<>();
+    public final List<Artifact> updated = new ArrayList<>();
+    
+    public final List<StorageMetadata> deletedStorage = new ArrayList<>();
 
     @Override
     public void createArtifact(StorageMetadata storageMetadata) throws Exception {
-        addArtifactCalled = true;
+        createArtifactCalled = true;
+        created.add(storageMetadata);
     }
 
     @Override
     public void delete(StorageMetadata storageMetadata) throws Exception {
         deleteStorageMetadataCalled = true;
+        deletedStorage.add(storageMetadata);
     }
 
     @Override
     public void delete(Artifact artifact) throws Exception {
         deleteArtifactCalled = true;
+        deleted.add(artifact);
     }
 
     @Override
     public void clearStorageLocation(Artifact artifact) throws Exception {
-        resetArtifactCalled = true;
+        clearStorageLocationCalled = true;
+        cleared.add(artifact);
     }
 
     @Override
     public void replaceArtifact(Artifact artifact, StorageMetadata storageMetadata) throws Exception {
         replaceArtifactCalled = true;
+        replaced.add(artifact);
     }
 
     @Override
     public void updateArtifact(Artifact artifact, StorageMetadata storageMetadata) throws Exception {
-        updateeArtifactCalled = true;
+        updateArtifactCalled = true;
+        updated.add(artifact);
+    }
+
+    @Override
+    public void delayAction() {
+        // noop
     }
 }

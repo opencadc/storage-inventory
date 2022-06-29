@@ -102,11 +102,12 @@ public class PermissionsConfig {
     private static final String PERMISSIONS_PROPERTIES = "baldur.properties";
     private static final String KEY_ALLOWED_USER = "org.opencadc.baldur.allowedUser";
     private static final String KEY_ENTRY = "org.opencadc.baldur.entry";
+    private static final String KEY_PATTERN = ".pattern";
     private static final String KEY_ANON_READ = ".anon";
     private static final String KEY_READONLY_GROUP = ".readOnlyGroup";
     private static final String KEY_READWRITE_GROUP = ".readWriteGroup";
     private static final String KEY_GRANT_EXPIRY = "org.opencadc.baldur.grantExpiry";
-    
+
     private Set<Principal> authPrincipals;
     private List<PermissionEntry> entries;
     private Date expiryDate;
@@ -162,45 +163,65 @@ public class PermissionsConfig {
         }
         log.debug("reading permissions config with " + entryConfig.size() + " entries.");
 
-        this.entries = new ArrayList<PermissionEntry>();
-        PermissionEntry next = null;
-        String name = null;
-        Pattern pattern = null;
+        // check for duplicate entry names
+        StringBuilder sb = new StringBuilder();
+        Set<String> entrySet = new HashSet<>();
         for (String entry : entryConfig) {
-            // entry has format:  entry = name pattern
+            if (!entrySet.add(entry)) {
+                sb.append(entry).append(" ");
+            }
+        }
+        if (sb.length() > 0) {
+            throw new IllegalStateException(String.format("duplicate %s values found for %s in %s",
+                                                          KEY_ENTRY, sb, PERMISSIONS_PROPERTIES));
+        }
+
+        this.entries = new ArrayList<PermissionEntry>();
+        for (String entry : entryConfig) {
             log.debug("reading permission entry: " + entry);
-            String[] namePattern = entry.split(" ");
-            if (namePattern.length != 2) {
-                throw new IllegalStateException("invalid config line in " + PERMISSIONS_PROPERTIES
-                    + ": " + entry);
+            String[] entryName = entry.split(" ");
+            if (entryName.length > 1) {
+                throw new IllegalStateException(String.format("multiple values found for %s = %s in %s",
+                                                              KEY_ENTRY, entry, PERMISSIONS_PROPERTIES));
             }
-            name = namePattern[0];
+            String name = entryName[0];
+
             // compile the pattern
-            try {
-                pattern = Pattern.compile(namePattern[1]);
-            } catch (Exception e) {
-                throw new IllegalStateException("invalid uri matching pattern in " + PERMISSIONS_PROPERTIES
-                    + ": " + namePattern[1] + "(" + e.getMessage() + ")");
+            List<String> entryPattern = allProps.getProperty(name + KEY_PATTERN);
+            if (entryPattern.size() != 1) {
+                throw new IllegalStateException(String.format("zero or multiple pattern values found for %s in %s",
+                                                              entry + KEY_PATTERN, PERMISSIONS_PROPERTIES));
             }
-            next = new PermissionEntry(name, pattern);
-            if (this.entries.contains(next)) {
-                throw new IllegalStateException("duplicate entry name [" + name + "] in " + PERMISSIONS_PROPERTIES);
+
+            Pattern pattern;
+            try {
+                pattern = Pattern.compile(entryPattern.get(0));
+            } catch (Exception e) {
+                throw new IllegalStateException(String.format("invalid pattern for %s = %s in %s: %s",
+                                                              name + KEY_PATTERN, entryPattern.get(0),
+                                                              PERMISSIONS_PROPERTIES, e.getMessage()));
+            }
+            PermissionEntry permissionEntry = new PermissionEntry(name, pattern);
+            if (this.entries.contains(permissionEntry)) {
+                throw new IllegalStateException(String.format("duplicate entry name %s in %s",
+                                                              name, PERMISSIONS_PROPERTIES));
             }
 
             // get other properties for this entry
-            List<String> anonRead = allProps.getProperty(next.getName() + KEY_ANON_READ);
+            List<String> anonRead = allProps.getProperty(permissionEntry.getName() + KEY_ANON_READ);
             if (anonRead != null && !anonRead.isEmpty()) {
                 if (anonRead.size() > 1) {
-                    throw new IllegalStateException("too many entries for " + next.getName() + KEY_ANON_READ);
+                    throw new IllegalStateException(String.format("multiple entries for %s",
+                                                                  permissionEntry.getName() + KEY_ANON_READ));
                 }
-                next.anonRead = Boolean.parseBoolean(anonRead.get(0));
+                permissionEntry.anonRead = Boolean.parseBoolean(anonRead.get(0));
             }
-            List<String> readOnlyGroups = allProps.getProperty(next.getName() + KEY_READONLY_GROUP);
-            initAddGroups(readOnlyGroups, next.readOnlyGroups);
-            List<String> readWriteGroups = allProps.getProperty(next.getName() + KEY_READWRITE_GROUP);
-            initAddGroups(readWriteGroups, next.readWriteGroups);
-            this.entries.add(next);
-            log.debug("Added permission entry: " + next);
+            List<String> readOnlyGroups = allProps.getProperty(permissionEntry.getName() + KEY_READONLY_GROUP);
+            initAddGroups(readOnlyGroups, permissionEntry.readOnlyGroups);
+            List<String> readWriteGroups = allProps.getProperty(permissionEntry.getName() + KEY_READWRITE_GROUP);
+            initAddGroups(readWriteGroups, permissionEntry.readWriteGroups);
+            this.entries.add(permissionEntry);
+            log.debug("Added permission entry: " + permissionEntry);
         }
 
         // get the Grant timeout
@@ -232,7 +253,7 @@ public class PermissionsConfig {
         if (groupList != null && !groupList.isEmpty()) {
             for (String group : groupList) {
                 try {
-                    targetList.add(new GroupURI(group));
+                    targetList.add(new GroupURI(URI.create(group)));
                 } catch (Exception e) {
                     throw new IllegalStateException("failed reading group uri: " + group
                         + "(" + e.getMessage() + ")");

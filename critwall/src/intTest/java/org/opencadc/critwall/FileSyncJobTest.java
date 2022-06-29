@@ -3,7 +3,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2020.                            (c) 2020.
+ *  (c) 2021.                            (c) 2021.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -68,9 +68,11 @@
 package org.opencadc.critwall;
 
 import ca.nrc.cadc.auth.AuthenticationUtil;
+import ca.nrc.cadc.auth.SSLUtil;
 import ca.nrc.cadc.db.ConnectionConfig;
 import ca.nrc.cadc.db.DBConfig;
 import ca.nrc.cadc.db.DBUtil;
+import ca.nrc.cadc.util.FileUtil;
 import ca.nrc.cadc.util.Log4jInit;
 import java.io.File;
 import java.io.FileOutputStream;
@@ -94,16 +96,20 @@ import org.junit.Before;
 import org.junit.Test;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.StorageLocation;
+import org.opencadc.inventory.StorageLocationEvent;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.SQLGenerator;
+import org.opencadc.inventory.db.StorageLocationEventDAO;
 import org.opencadc.inventory.storage.StorageMetadata;
 import org.opencadc.inventory.storage.fs.OpaqueFileSystemStorageAdapter;
 
 public class FileSyncJobTest {
     private static final Logger log = Logger.getLogger(FileSyncJobTest.class);
     private static final String TEST_ROOT = "build/tmp/fsroot/critwallTests";
-    private static final String TEST_ARTIFACT_URI = "ad:IRIS/I212B2H0.fits";
-    private static final String TEST_RESOURCE_ID = "ivo://cadc.nrc.ca/data";
+    private static final String TEST_ARTIFACT_URI = "cadc:IRIS/I212B2H0.fits";
+    private static final String TEST_ARTIFACT_NOT_FOUND = "cadc:IRIS/NotFound.fits";
+    private static final String TEST_RESOURCE_ID = "ivo://cadc.nrc.ca/global/raven";
+    private static final String CERTIFICATE_FILE = "critwall-test.pem";
 
     private OpaqueFileSystemStorageAdapter oa = null;
 
@@ -158,7 +164,7 @@ public class FileSyncJobTest {
         }
 
         if (deletedArtifacts > 0) {
-            log.info("deleted " + deletedArtifacts+ " artifacts");
+            log.info("deleted " + deletedArtifacts + " artifacts");
         }
     }
 
@@ -196,16 +202,39 @@ public class FileSyncJobTest {
     }
 
     @Test
-    public void testValidJob() {
-        String testDir = TEST_ROOT + File.separator + "testValidJob";
-
+    public void testValidJobWithAnonSubject() {
+        String testDir = TEST_ROOT + File.separator + "testValidJobWithAnonSubject";
+        testValidJob(testDir, anonSubject);
+    }
+    
+    @Test
+    public void testValidJobWithCertSubject() {
+        String testDir = TEST_ROOT + File.separator + "testValidJobWithCertSubject";
+        final File certificateFile = FileUtil.getFileFromResource(CERTIFICATE_FILE, FileSyncJobTest.class);
+        testValidJob(testDir, SSLUtil.createSubject(certificateFile));
+    }
+    
+    @Test
+    public void testValidJobPutTransaction() {
+        // reduce pref size to cause multi-segment put (FS adapter allows any size)
+        long prev = FileSyncJob.SEGMENT_SIZE_PREF;
+        try {
+            String testDir = TEST_ROOT + File.separator + "testValidJobPutTransaction";
+            FileSyncJob.SEGMENT_SIZE_PREF = 512 * 1024L; // 512KiB or 2 segments
+            testValidJob(testDir, anonSubject);
+        } finally {
+            FileSyncJob.SEGMENT_SIZE_PREF = prev;
+        }
+    }
+    
+    public void testValidJob(String testDir, Subject testSubject) {
         try {
             createTestDirectory(testDir);
 
-            OpaqueFileSystemStorageAdapter sa = new OpaqueFileSystemStorageAdapter(new File(testDir), 1);
+            final OpaqueFileSystemStorageAdapter sa = new OpaqueFileSystemStorageAdapter(new File(testDir), 1);
 
-            URI artifactID = new URI(TEST_ARTIFACT_URI);
-            URI resourceID = new URI(TEST_RESOURCE_ID);
+            final URI artifactID = new URI(TEST_ARTIFACT_URI);
+            final URI resourceID = new URI(TEST_RESOURCE_ID);
 
             // Set up an Artifact in the database to start.
             Artifact artifactToUpdate = new Artifact(artifactID,
@@ -215,18 +244,28 @@ public class FileSyncJobTest {
             log.debug("putting test artifact to database");
             dao.put(artifactToUpdate);
 
-            FileSyncJob fsj = new FileSyncJob(artifactToUpdate.getID(), resourceID, sa, dao, anonSubject);
+            FileSyncJob fsj = new FileSyncJob(artifactToUpdate, resourceID, sa, dao, testSubject);
             fsj.run();
 
-            // check job succeeded by trying to get artifact by location
+            // verify job succeeded by trying to get artifact by location
             Artifact storedArtifact = dao.get(artifactToUpdate.getID());
             Assert.assertNotNull("storage location of artifact should not be null.", storedArtifact.storageLocation);
 
-            // check for file on disk, throw away the bytes
+            // verify for file on disk, throw away the bytes
             FileOutputStream dest = new FileOutputStream("/dev/null");
             log.debug("shunting to /dev/null");
             sa.get(storedArtifact.storageLocation, dest);
-
+            
+            // verify that artifact.lastModified NOT changed
+            Artifact aa = dao.get(artifactToUpdate.getID());
+            Assert.assertNotNull(aa);
+            Assert.assertEquals(artifactToUpdate.getLastModified(), aa.getLastModified());
+            
+            // verify a StorageLocationEvent was created
+            StorageLocationEventDAO sleDAO = new StorageLocationEventDAO(dao);
+            StorageLocationEvent sle = sleDAO.get(artifactToUpdate.getID());
+            Assert.assertNotNull(sle);
+            
         } catch (Exception unexpected) {
             Assert.fail("unexpected exception: " + unexpected);
             log.debug(unexpected);
@@ -235,16 +274,17 @@ public class FileSyncJobTest {
     }
 
     @Test
-    public void testInvalidJobBadChecksum() {
-        final String testDir = TEST_ROOT + File.separator + "testValidJobBadChecksum";
+    public void testResourceNotFoundException() {
+        final String testDir = TEST_ROOT + File.separator + "ResourceNotFoundException";
 
         try {
             createTestDirectory(testDir);
 
-            OpaqueFileSystemStorageAdapter sa = new OpaqueFileSystemStorageAdapter(new File(TEST_ROOT), 1);
+            final OpaqueFileSystemStorageAdapter sa = new OpaqueFileSystemStorageAdapter(new File(TEST_ROOT), 1);
 
-            URI artifactID = new URI(TEST_ARTIFACT_URI);
-            URI resourceID = new URI(TEST_RESOURCE_ID);
+            // note: this tests that transfer negotiaiton failed with a ResourceNotFoundException
+            final URI artifactID = new URI(TEST_ARTIFACT_NOT_FOUND);
+            final URI resourceID = new URI(TEST_RESOURCE_ID);
 
             // Set up an Artifact in the database to start.
             // Set checksum to the wrong value.
@@ -255,13 +295,62 @@ public class FileSyncJobTest {
             log.debug("putting test artifact to database");
             dao.put(artifactToUpdate);
 
-            FileSyncJob fsj = new FileSyncJob(artifactToUpdate.getID(), resourceID, sa, dao, anonSubject);
+            FileSyncJob fsj = new FileSyncJob(artifactToUpdate, resourceID, sa, dao, anonSubject);
             fsj.run();
 
             log.debug("finished run in failure test.");
             // check job failed by verifying that storage location not set
             Artifact storedArtifact = dao.get(artifactToUpdate.getID());
             Assert.assertNull(storedArtifact.storageLocation);
+            
+            // verify a StorageLocationEvent was not created
+            StorageLocationEventDAO sleDAO = new StorageLocationEventDAO(dao);
+            StorageLocationEvent sle = sleDAO.get(artifactToUpdate.getID());
+            Assert.assertNull(sle);
+            
+        } catch (Exception unexpected) {
+            log.debug("unexpected exception: " + unexpected);
+            Assert.fail("unexpected exception");
+        }
+        log.info("testResourceNotFoundException - DONE");
+    }
+    
+    // TODO: craft a test that will fail in the anonymous part of syncArtifact so
+    // unwrap PrivilegedActionException isn't removed by accident again
+    
+    @Test
+    public void testInvalidJobBadChecksum() {
+        final String testDir = TEST_ROOT + File.separator + "testValidJobBadChecksum";
+
+        try {
+            createTestDirectory(testDir);
+
+            final OpaqueFileSystemStorageAdapter sa = new OpaqueFileSystemStorageAdapter(new File(TEST_ROOT), 1);
+
+            final URI artifactID = new URI(TEST_ARTIFACT_URI);
+            final URI resourceID = new URI(TEST_RESOURCE_ID);
+
+            // Set up an Artifact in the database to start.
+            // Set checksum to the wrong value.
+            Artifact artifactToUpdate = new Artifact(artifactID,
+                new URI("md5:0123456789abcdef0123456789abcdef"), new Date(),
+                1008000L);
+
+            log.debug("putting test artifact to database");
+            dao.put(artifactToUpdate);
+
+            FileSyncJob fsj = new FileSyncJob(artifactToUpdate, resourceID, sa, dao, anonSubject);
+            fsj.run();
+
+            log.debug("finished run in failure test.");
+            // check job failed by verifying that storage location not set
+            Artifact storedArtifact = dao.get(artifactToUpdate.getID());
+            Assert.assertNull(storedArtifact.storageLocation);
+            
+            // verify a StorageLocationEvent was not created
+            StorageLocationEventDAO sleDAO = new StorageLocationEventDAO(dao);
+            StorageLocationEvent sle = sleDAO.get(artifactToUpdate.getID());
+            Assert.assertNull(sle);
             
         } catch (Exception unexpected) {
             log.debug("unexpected exception: " + unexpected);
@@ -277,10 +366,10 @@ public class FileSyncJobTest {
         try {
             createTestDirectory(testDir);
 
-            OpaqueFileSystemStorageAdapter sa = new OpaqueFileSystemStorageAdapter(new File(TEST_ROOT), 1);
+            final OpaqueFileSystemStorageAdapter sa = new OpaqueFileSystemStorageAdapter(new File(TEST_ROOT), 1);
 
-            URI artifactID = new URI(TEST_ARTIFACT_URI);
-            URI resourceID = new URI(TEST_RESOURCE_ID);
+            final URI artifactID = new URI(TEST_ARTIFACT_URI);
+            final URI resourceID = new URI(TEST_RESOURCE_ID);
 
             // Set up an Artifact in the database to start.
             // Set checksum to the wrong value.
@@ -291,13 +380,18 @@ public class FileSyncJobTest {
             log.debug("putting test artifact to database");
             dao.put(artifactToUpdate);
 
-            FileSyncJob fsj = new FileSyncJob(artifactToUpdate.getID(), resourceID, sa, dao, anonSubject);
+            FileSyncJob fsj = new FileSyncJob(artifactToUpdate, resourceID, sa, dao, anonSubject);
             fsj.run();
 
             log.debug("finished run in failure test.");
             // check job failed by verifying that storage location not set
             Artifact storedArtifact = dao.get(artifactToUpdate.getID());
             Assert.assertNull(storedArtifact.storageLocation);
+            
+            // verify a StorageLocationEvent was not created
+            StorageLocationEventDAO sleDAO = new StorageLocationEventDAO(dao);
+            StorageLocationEvent sle = sleDAO.get(artifactToUpdate.getID());
+            Assert.assertNull(sle);
 
         } catch (Exception unexpected) {
             log.debug("unexpected exception: " + unexpected);
@@ -314,10 +408,10 @@ public class FileSyncJobTest {
         try {
             createTestDirectory(testDir);
 
-            OpaqueFileSystemStorageAdapter sa = new OpaqueFileSystemStorageAdapter(new File(TEST_ROOT), 1);
+            final OpaqueFileSystemStorageAdapter sa = new OpaqueFileSystemStorageAdapter(new File(TEST_ROOT), 1);
 
-            URI artifactID = new URI(TEST_ARTIFACT_URI);
-            URI resourceID = new URI(TEST_RESOURCE_ID);
+            final URI artifactID = new URI(TEST_ARTIFACT_URI);
+            final URI resourceID = new URI(TEST_RESOURCE_ID);
 
             // Set up an Artifact in the database to start.
             Artifact artifactToUpdate = new Artifact(artifactID,
@@ -332,7 +426,7 @@ public class FileSyncJobTest {
             dao.put(artifactToUpdate);
             
 
-            FileSyncJob fsj = new FileSyncJob(artifactToUpdate.getID(), resourceID, sa, dao, anonSubject);
+            FileSyncJob fsj = new FileSyncJob(artifactToUpdate, resourceID, sa, dao, anonSubject);
             fsj.run();
 
             log.debug("successfully finished FileSyncJob run in test.");
@@ -340,6 +434,11 @@ public class FileSyncJobTest {
             // check job did nothing to the storageLocation
             Artifact storedArtifact = dao.get(artifactToUpdate.getID());
             Assert.assertEquals(testLocation, storedArtifact.storageLocation);
+            
+            // verify a StorageLocationEvent was not created
+            StorageLocationEventDAO sleDAO = new StorageLocationEventDAO(dao);
+            StorageLocationEvent sle = sleDAO.get(artifactToUpdate.getID());
+            Assert.assertNull(sle);
 
         } catch (Exception unexpected) {
             log.debug("unexpected exception: " + unexpected);

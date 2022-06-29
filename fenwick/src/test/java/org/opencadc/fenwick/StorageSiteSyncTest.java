@@ -95,7 +95,7 @@ public class StorageSiteSyncTest {
         storageSiteList.add(new StorageSite(URI.create("test:org.opencadc/SITE1"), "Site One", true, false));
         storageSiteList.add(new StorageSite(URI.create("test:org.opencadc/SITE2"), "Site Two", true, true));
 
-        final StorageSiteSync testSubject = new StorageSiteSync(null, null) {
+        final StorageSiteSync testSubject = new StorageSiteSync() {
             /**
              * Override this method in tests to avoid recreating a TapClient.
              *
@@ -132,7 +132,7 @@ public class StorageSiteSyncTest {
 
     @Test
     public void testStorageSiteNotFound() throws Exception {
-        final StorageSiteSync testSubject = new StorageSiteSync(null, null) {
+        final StorageSiteSync testSubject = new StorageSiteSync() {
             /**
              * Override this method in tests to avoid recreating a TapClient.
              *

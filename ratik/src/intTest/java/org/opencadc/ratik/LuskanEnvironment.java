@@ -92,6 +92,7 @@ public class LuskanEnvironment {
     // The local inventory database DAOs.
     final StorageSiteDAO storageSiteDAO = new StorageSiteDAO();
     final ArtifactDAO artifactDAO = new ArtifactDAO();
+    final ArtifactDAO globalArtifactDAO = new ArtifactDAO(false);
     final DeletedArtifactEventDAO deletedArtifactEventDAO = new DeletedArtifactEventDAO();
     final DeletedStorageLocationEventDAO deletedStorageLocationEventDAO = new DeletedStorageLocationEventDAO();
     final String jndiPath = "jdbc/LuskanEnvironment";
@@ -114,6 +115,8 @@ public class LuskanEnvironment {
         artifactDAO.setConfig(daoConfig);
         deletedArtifactEventDAO.setConfig(daoConfig);
         deletedStorageLocationEventDAO.setConfig(daoConfig);
+        
+        globalArtifactDAO.setConfig(daoConfig);
 
         new InitDatabase(DBUtil.findJNDIDataSource(jndiPath),
                          (String) daoConfig.get("database"),

@@ -93,21 +93,137 @@ public class SwiftStorageAdapterTest {
         Log4jInit.setLevel("org.opencadc.inventory", Level.INFO);
     }
     
+    private static final long GB = 1024L * 1024L * 1024L;
+    private static final long HALF_GB = 512L * 1024L * 1024L;
     
     public SwiftStorageAdapterTest() { 
         
     }
     
     @Test
+    public void testCalcMinSegmentSize() throws Exception {
+        SwiftStorageAdapter ssa = new SwiftStorageAdapter("test-bucket", 0, false);
+        
+        // small object
+        long contentLength = HALF_GB;
+        long min = ssa.calcMinSegmentSize(contentLength);
+        int num = 0;
+        long rem = contentLength;
+        while (rem >= min) {
+            rem -= min;
+            num++;
+        }
+        if (rem > 0) {
+            num++;
+        }
+        log.info("contentLength " + contentLength + " min " + min + " last " + rem);
+        Assert.assertEquals("small-object min", contentLength, min);
+        Assert.assertEquals("small-object num", 1, num);
+        Assert.assertEquals("small-object rem", 0, rem);
+        
+        // largest simple object
+        contentLength = 5 * GB;
+        min = ssa.calcMinSegmentSize(contentLength);
+        rem = contentLength;
+        num = 0;
+        while (rem >= min) {
+            rem -= min;
+            num++;
+        }
+        if (rem > 0) {
+            num++;
+        }
+        log.info("contentLength " + contentLength + " min " + min + " last " + rem);
+        Assert.assertEquals("object-5G min", contentLength, min);
+        Assert.assertEquals("object-5G num", 1, num);
+        Assert.assertEquals("object-5G rem", 0, rem);
+        
+        // typical segmented object
+        contentLength = 12 * GB;
+        min = ssa.calcMinSegmentSize(contentLength);
+        rem = contentLength;
+        num = 0;
+        while (rem >= min) {
+            rem -= min;
+            num++;
+        }
+        if (rem > 0) {
+            num++;
+        }
+        log.info("contentLength " + contentLength + " min " + min + " last " + rem);
+        Assert.assertEquals("object-12G min", 4 * GB, min);
+        Assert.assertEquals("object-12G num", 3, num);
+        Assert.assertEquals("object-12G rem", 0, rem);
+        
+        // smallest segmented object, odd size with rem
+        contentLength = 5 * GB + 1;
+        min = ssa.calcMinSegmentSize(contentLength);
+        rem = contentLength;
+        num = 0;
+        while (rem >= min) {
+            rem -= min;
+            num++;
+        }
+        if (rem > 0) {
+            num++;
+        }
+        log.info("contentLength " + contentLength + " min " + min + " last " + rem);
+        Assert.assertEquals("object 5G+1 num", 2, num);
+        Assert.assertEquals("object 5G+1 min", (2 * GB + HALF_GB + 1), min);
+        Assert.assertEquals("object 5G+1 rem", (2 * GB + HALF_GB), rem);
+        
+        // first prime after 5GiB
+        contentLength = 5368709131L;
+        min = ssa.calcMinSegmentSize(contentLength);
+        rem = contentLength;
+        num = 0;
+        while (rem >= min) {
+            rem -= min;
+            num++;
+        }
+        if (rem > 0) {
+            num++;
+        }
+        log.info("contentLength " + contentLength + " min " + min + " last " + rem);
+        Assert.assertEquals("object >5G prime num", 2, num);
+        Assert.assertEquals("object >5G prime min+rem", contentLength, (min + rem));
+    }
+    
+    @Test
+    public void testGetNextPartName() throws Exception {
+        SwiftStorageAdapter swiftAdapter = new SwiftStorageAdapter("test-bucket", 0, false);
+        
+        String prefix = "id:uuid:p:";
+        
+        String e1 = prefix + "0001";
+        String a1 = swiftAdapter.getNextPartName(prefix, null);
+        log.info(null + " -> " + a1);
+        Assert.assertEquals(e1, a1);
+        
+        String e2 = prefix + "0002";
+        String a2 = swiftAdapter.getNextPartName(prefix, a1);
+        log.info(a1 + " -> " + a2);
+        Assert.assertEquals(e2, a2);
+        
+        try {
+            String a3 = prefix + "9999";
+            String a4 = swiftAdapter.getNextPartName(prefix, a3);
+            Assert.fail("expected IllegalArgumentException, got: " + a4);
+        } catch (IllegalArgumentException ex) {
+            log.info("caught expected: " + ex);
+        }
+    }
+    
+    @Test
     public void testGenerateID() throws Exception {
-        SwiftStorageAdapter swiftAdapter = new SwiftStorageAdapter("test-bucket", 3, false);
+        SwiftStorageAdapter swiftAdapter = new SwiftStorageAdapter("test-bucket", 0, false);
         // enough to verify that randomness in the scheme doesn't create invalid URI?
         for (int i = 0; i < 20; i++) {
             StorageLocation loc = swiftAdapter.generateStorageLocation();
             log.info("testGenerateID (single-bucket): " + loc);
         }
         
-        swiftAdapter = new SwiftStorageAdapter("test-bucket", 3, true);
+        swiftAdapter = new SwiftStorageAdapter("test-bucket", 1, true);
         // enough to verify that randomness in the scheme doesn't create invalid URI?
         for (int i = 0; i < 20; i++) {
             StorageLocation loc = swiftAdapter.generateStorageLocation();
@@ -117,7 +233,7 @@ public class SwiftStorageAdapterTest {
     
     @Test
     public void testBucketeeringSingle() throws Exception {
-        SwiftStorageAdapter swiftAdapter = new SwiftStorageAdapter("test-bucket", 3, false);
+        SwiftStorageAdapter swiftAdapter = new SwiftStorageAdapter("test-bucket", 0, false);
         StorageLocation loc = swiftAdapter.generateStorageLocation();
         log.info("testBucketeering created: " + loc);
         
@@ -128,7 +244,7 @@ public class SwiftStorageAdapterTest {
         Assert.assertEquals(loc, actual);
     }
     
-     @Test
+    @Test
     public void testBucketeeringMulti() throws Exception {
         SwiftStorageAdapter swiftAdapter = new SwiftStorageAdapter("test-bucket", 3, true);
         StorageLocation loc = swiftAdapter.generateStorageLocation();

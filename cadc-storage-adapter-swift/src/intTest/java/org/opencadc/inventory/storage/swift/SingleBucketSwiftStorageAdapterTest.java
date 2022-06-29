@@ -74,7 +74,6 @@ import java.net.URI;
 import java.util.Iterator;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
-import org.javaswift.joss.model.Container;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
@@ -99,9 +98,8 @@ public class SingleBucketSwiftStorageAdapterTest extends StorageAdapterBasicTest
     final SwiftStorageAdapter swiftAdapter;
     
     public SingleBucketSwiftStorageAdapterTest() throws Exception {
-        super(new SwiftStorageAdapter());
+        super(new SwiftStorageAdapter(true, System.getProperty("user.name") + "-single-test", 2, false));
         this.swiftAdapter = (SwiftStorageAdapter) super.adapter;
-        swiftAdapter.multiBucket = false; // override config
     }
     
     @Before
@@ -134,7 +132,7 @@ public class SingleBucketSwiftStorageAdapterTest extends StorageAdapterBasicTest
         try {
             InputStream istream = TestUtil.getInputStreamThatFails();
             log.info("testPutCheckDeleteLargeStreamReject put: " + artifactURI + " " + numBytes);
-            StorageMetadata sm = swiftAdapter.put(na, istream);
+            StorageMetadata sm = swiftAdapter.put(na, istream, null);
             Assert.fail("expected ByteLimitExceededException, got: " + sm);
         } catch (ByteLimitExceededException expected) {
             log.info("caught: " + expected);
@@ -157,7 +155,7 @@ public class SingleBucketSwiftStorageAdapterTest extends StorageAdapterBasicTest
         try {
             InputStream istream = TestUtil.getInputStreamOfRandomBytes(numBytes);
             log.info("testPutCheckDeleteLargeStreamFail put: " + artifactURI + " " + numBytes);
-            StorageMetadata sm = swiftAdapter.put(na, istream);
+            StorageMetadata sm = swiftAdapter.put(na, istream, null);
             
             Assert.assertFalse("put should have failed, but object exists", swiftAdapter.exists(sm.getStorageLocation()));
             

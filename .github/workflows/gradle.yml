@@ -17,61 +17,61 @@ jobs:
         java-version: 1.8
         
     - name: build and test storage-inventory-dm
-      run: cd storage-inventory-dm && gradle --info clean build xslt
+      run: cd storage-inventory-dm && ../gradlew --info clean build xslt
       
     - name: build and test cadc-inventory
-      run: cd cadc-inventory && gradle --info clean build javadoc checkstyleMain install
+      run: cd cadc-inventory && ../gradlew --info clean build javadoc checkstyleMain install
       
     - name: build and test cadc-inventory-db
-      run: cd cadc-inventory-db && gradle --info clean build javadoc checkstyleMain install
+      run: cd cadc-inventory-db && ../gradlew --info clean build javadoc checkstyleMain install
       
     - name: build and test cadc-inventory-util
-      run: cd cadc-inventory-util && gradle --info clean build javadoc checkstyleMain install
+      run: cd cadc-inventory-util && ../gradlew --info clean build javadoc checkstyleMain install
       
     - name: build and test cadc-inventory-server
-      run: cd cadc-inventory-server && gradle --info clean build javadoc checkstyleMain install
+      run: cd cadc-inventory-server && ../gradlew --info clean build javadoc checkstyleMain install
       
     - name: build and test cadc-storage-adapter
-      run: cd cadc-storage-adapter && gradle --info clean build javadoc checkstyleMain install
+      run: cd cadc-storage-adapter && ../gradlew --info clean build javadoc checkstyleMain install
       
     - name: build and test cadc-storage-adapter-test
-      run: cd cadc-storage-adapter-test && gradle --info clean build javadoc checkstyleMain install
+      run: cd cadc-storage-adapter-test && ../gradlew --info clean build javadoc checkstyleMain install
       
     - name: build and test cadc-storage-adapter-fs
-      run: cd cadc-storage-adapter-fs && gradle --info clean build javadoc checkstyleMain install
+      run: cd cadc-storage-adapter-fs && ../gradlew --info clean build javadoc checkstyleMain install
 
     - name: build and test cadc-storage-adapter-ad
-      run: cd cadc-storage-adapter-ad && gradle --info clean build javadoc checkstyleMain install
+      run: cd cadc-storage-adapter-ad && ../gradlew --info clean build javadoc checkstyleMain install
 
-    - name: build and test cadc-storage-adapter-s3
-      run: cd cadc-storage-adapter-s3 && gradle --info clean build javadoc checkstyleMain install
+#    - name: build and test cadc-storage-adapter-s3
+#      run: cd cadc-storage-adapter-s3 && ../gradlew --info clean build javadoc checkstyleMain install
       
     - name: build and test cadc-storage-adapter-swift
-      run: cd cadc-storage-adapter-swift && gradle --info clean build javadoc checkstyleMain install
+      run: cd cadc-storage-adapter-swift && ../gradlew --info clean build javadoc checkstyleMain install
 
     - name: java build -- baldur
-      run: cd baldur && gradle --info clean build javadoc checkstyleMain
+      run: cd baldur && ../gradlew --info clean build javadoc checkstyleMain
 
     - name: java build -- critwall 
-      run: cd critwall && gradle --info clean build javadoc checkstyleMain
+      run: cd critwall && ../gradlew --info clean build javadoc checkstyleMain
       
     - name: java build -- fenwick
-      run: cd fenwick && gradle --info clean build javadoc checkstyleMain
+      run: cd fenwick && ../gradlew --info clean build javadoc checkstyleMain
       
     - name: java build -- minoc 
-      run: cd minoc && gradle --info clean build javadoc checkstyleMain
+      run: cd minoc && ../gradlew --info clean build javadoc checkstyleMain
       
     - name: java build -- luskan
-      run: cd luskan && gradle --info clean build javadoc checkstyleMain
+      run: cd luskan && ../gradlew --info clean build javadoc checkstyleMain
       
     - name: java build -- raven
-      run: cd raven && gradle --info clean build javadoc checkstyleMain
+      run: cd raven && ../gradlew --info clean build javadoc checkstyleMain
       
     - name: java build -- ringhold
-      run: cd ringhold && gradle --info clean build javadoc checkstyleMain
+      run: cd ringhold && ../gradlew --info clean build javadoc checkstyleMain
 
     - name: java build -- ratik
-      run: cd ratik && gradle --info clean build javadoc checkstyleMain
+      run: cd ratik && ../gradlew --info clean build javadoc checkstyleMain
 
 ## TODO: docker build depends on cadc-tomcat base image from docker-base.git
 #    - name: docker build -- baldur

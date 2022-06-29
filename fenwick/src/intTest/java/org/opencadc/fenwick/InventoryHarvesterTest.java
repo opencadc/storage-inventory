@@ -3,7 +3,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2020.                            (c) 2020.
+ *  (c) 2022.                            (c) 2022.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -70,31 +70,17 @@ package org.opencadc.fenwick;
 
 import ca.nrc.cadc.date.DateUtil;
 import ca.nrc.cadc.util.Log4jInit;
-import java.io.File;
-import java.io.FileWriter;
 import java.net.URI;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.security.PrivilegedExceptionAction;
 import java.text.DateFormat;
-import java.util.Calendar;
-import java.util.Date;
 import javax.security.auth.Subject;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
-import org.opencadc.inventory.Artifact;
-import org.opencadc.inventory.DeletedArtifactEvent;
-import org.opencadc.inventory.DeletedStorageLocationEvent;
-import org.opencadc.inventory.SiteLocation;
-import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.StorageSite;
-import org.opencadc.inventory.db.HarvestState;
 import org.opencadc.inventory.util.AllArtifacts;
-import org.opencadc.inventory.util.IncludeArtifacts;
-import org.springframework.jdbc.core.JdbcTemplate;
 
 
 /**
@@ -108,7 +94,7 @@ public class InventoryHarvesterTest {
         Log4jInit.setLevel("org.opencadc.inventory", Level.INFO);
         Log4jInit.setLevel("org.opencadc.inventory.db", Level.INFO);
         Log4jInit.setLevel("ca.nrc.cadc.db", Level.INFO);
-        Log4jInit.setLevel("org.opencadc.fenwick", Level.DEBUG);
+        Log4jInit.setLevel("org.opencadc.fenwick", Level.INFO);
     }
 
     private final InventoryEnvironment inventoryEnvironment = new InventoryEnvironment();
@@ -118,7 +104,6 @@ public class InventoryHarvesterTest {
     private final DateFormat df = DateUtil.getDateFormat(DateUtil.IVOA_DATE_FORMAT, DateUtil.UTC);
 
     public InventoryHarvesterTest() throws Exception {
-
     }
 
     @Before
@@ -127,354 +112,47 @@ public class InventoryHarvesterTest {
         luskanEnvironment.cleanTestEnvironment();
     }
 
-    @Test
+    //@Test
     public void testMissingStorageSiteSync() throws Exception {
         final InventoryHarvester testSubject = new InventoryHarvester(inventoryEnvironment.daoConfig,
-                                                                      TestUtil.LUSKAN_URI, new AllArtifacts(),
-                                                                      true);
+                inventoryEnvironment.connectionConfig, TestUtil.LUSKAN_URI, new AllArtifacts(), true, 20);
         try {
+            // TODO: need to run this is separate thread so we can verify and terminate
             Subject.doAs(this.testUser, (PrivilegedExceptionAction<Object>) () -> {
-                testSubject.doit();
+                testSubject.run();
                 return null;
             });
+            
             Assert.fail("Should throw IllegalArgumentException for missing storage site.");
-        } catch (IllegalStateException illegalStateException) {
-            // Good.
-            Assert.assertEquals("Wrong message.", "No storage sites available to sync.",
-                                illegalStateException.getMessage());
+        } catch (IllegalStateException expected) {
+            // TODO: verify that sync threads no longer running
+        } finally {
+            // TODO: kill threads just in case
         }
     }
 
-    /**
-     * Test scenario:
-     * - One Artifact in the inventory database.
-     * - Two Artifacts in the Luskan database.
-     * - One Deleted Artifact Event in the Luskan database to delete the one Artifact in the inventory database.
-     *
-     * @throws Exception Any errors.
-     */
-    @Test
-    public void runAllArtifactsNoTrackSiteLocations() throws Exception {
-        doAllArtifacts(false);
-    }
-
-    /**
-     * Test scenario:
-     * - One Artifact in the inventory database.
-     * - Two Artifacts in the Luskan database.
-     * - One Deleted Artifact Event in the Luskan database to delete the one Artifact in the inventory database.
-     * - One Deleted Storage Location event in the Luskan database to remove a storage location for an Artifact.
-     *
-     * @throws Exception Any errors.
-     */
-    @Test
-    public void runAllArtifactsTrackSiteLocations() throws Exception {
-        doAllArtifacts(true);
-    }
     
-    // track==true: harvest site to global  -- site setup, global asserts
-    // track==false: harvest global to site -- global setup, site asserts
-    private void doAllArtifacts(boolean track) throws Exception {
-        final Calendar calendar = Calendar.getInstance();
-
-        StorageSite expectedSite = new StorageSite(URI.create("cadc:TEST/siteone"), "Test Site", true, false);
-        luskanEnvironment.storageSiteDAO.put(expectedSite);
+    //@Test
+    public void testStartup() throws Exception {
+        // setup: create storage site
+        StorageSite storageSite = new StorageSite(URI.create("cadc:TESTSITE/one"), "one", true, false);
+        luskanEnvironment.storageSiteDAO.put(storageSite);
         
-        // normal artifact at site1
-        calendar.set(2007, Calendar.SEPTEMBER, 18, 1, 13, 0);
-        final Artifact artifactOne = new Artifact(URI.create("cadc:TEST/fileone.ext"), TestUtil.getRandomMD5(), calendar.getTime(), 8989L);
-        if (track) {
-            artifactOne.storageLocation = new StorageLocation(URI.create("cadc:TEST/location/1"));
-        }
-
-        luskanEnvironment.artifactDAO.put(artifactOne);
-        Thread.sleep(20L);
-        
-        // normal artifact at site1
-        calendar.set(2019, Calendar.AUGUST, 9, 15, 13, 0);
-        final Artifact artifactTwo = new Artifact(URI.create("cadc:TEST/filetwo.ext"), TestUtil.getRandomMD5(), calendar.getTime(), 89898L);
-        if (track) {
-            artifactTwo.storageLocation = new StorageLocation(URI.create("cadc:TEST/location/2"));
-        }
-        luskanEnvironment.artifactDAO.put(artifactTwo);
-        Thread.sleep(20L);
-
-        LOGGER.warn(artifactOne.getURI() + " " + df.format(artifactOne.getLastModified()));
-        LOGGER.warn(artifactTwo.getURI() + " " + df.format(artifactTwo.getLastModified()));
-        
-        // artifact that gets deleted
-        calendar.set(2010, Calendar.JULY, 9, 0, 22, 0);
-        final Artifact artifactThree = new Artifact(URI.create("cadc:TEST/filethree.ext"), TestUtil.getRandomMD5(), calendar.getTime(), 98989L);
-        inventoryEnvironment.artifactDAO.put(artifactThree);
-        Thread.sleep(20L);
-
-        final DeletedArtifactEvent deletedArtifactEvent = new DeletedArtifactEvent(artifactThree.getID());
-        luskanEnvironment.deletedArtifactEventDAO.put(deletedArtifactEvent);
-        Thread.sleep(20L);
-        
-        Artifact artifactFour = null;
-        DeletedStorageLocationEvent deletedStorageLocationEvent = null;
-        if (track) {
-            // artifact in global inventory that has site removed
-            calendar.set(2015, Calendar.OCTOBER, 9, 1, 2, 3);
-            artifactFour = new Artifact(URI.create("cadc:TEST/filefour.ext"), TestUtil.getRandomMD5(), calendar.getTime(), 98989L);
-            artifactFour.siteLocations.add(new SiteLocation(expectedSite.getID()));
-            //artifactFour.siteLocations.add(new SiteLocation(UUID.randomUUID())); // another site so the artifact is not removed??
-            inventoryEnvironment.artifactDAO.put(artifactFour);
-            Thread.sleep(20L);
-
-            deletedStorageLocationEvent =  new DeletedStorageLocationEvent(artifactFour.getID());
-            luskanEnvironment.deletedStorageLocationEventDAO.put(deletedStorageLocationEvent);
-            Thread.sleep(20L);
-        }
-
-        // Should not appear in the results ever.
-        final Artifact artifactFive = new Artifact(URI.create("cadc:TEST/filefive.ext"), TestUtil.getRandomMD5(), calendar.getTime(), 78787L);
-        luskanEnvironment.artifactDAO.put(artifactFive);
-        
-        // Put the artifactFive's lastModified in the future to exclude it.
-        final JdbcTemplate jdbcTemplate = new JdbcTemplate(luskanEnvironment.artifactDAO.getDataSource());
-        jdbcTemplate.execute("UPDATE " + TestUtil.LUSKAN_SCHEMA
-                             + ".Artifact SET lastModified = (SELECT now() + '12 hours'::interval) WHERE uri = 'cadc:TEST/filefive.ext'");
-        Thread.sleep(20L);
-        
-        // Run it.
-
-        final InventoryHarvester testSubject = new InventoryHarvester(inventoryEnvironment.daoConfig, TestUtil.LUSKAN_URI, new AllArtifacts(), track);
-        Subject.doAs(this.testUser, (PrivilegedExceptionAction<Object>) () -> {
-            testSubject.doit();
-            return null;
-        });
-
-        // End run.
-
-        final SiteLocation expectedSiteLocation = new SiteLocation(expectedSite.getID());
-        
-        final Artifact a1 = inventoryEnvironment.artifactDAO.get(artifactOne.getID());
-        Assert.assertNotNull(a1);
-        Assert.assertEquals("Artifact.uri", artifactOne.getURI(), a1.getURI());
-        Assert.assertEquals("Artifact.metaChecksum", artifactOne.getMetaChecksum(), a1.getMetaChecksum());
-        if (track) {
-            Assert.assertTrue("Artifact.siteLocations", a1.siteLocations.contains(expectedSiteLocation));
-        } else {
-            Assert.assertTrue("Artifact.siteLocations", a1.siteLocations.isEmpty());
-        }
-        Assert.assertNull("Artifact.storageLocation", a1.storageLocation);
-        
-        final Artifact a2 = inventoryEnvironment.artifactDAO.get(artifactTwo.getID());
-        Assert.assertEquals("Artifact.uri", artifactTwo.getURI(), a2.getURI());
-        Assert.assertEquals("Artifact.metaChecksum", artifactTwo.getMetaChecksum(), a2.getMetaChecksum());
-        if (track) {
-            Assert.assertTrue("Artifact.siteLocations", a2.siteLocations.contains(expectedSiteLocation));
-        } else {
-            Assert.assertTrue("Artifact.siteLocations", a1.siteLocations.isEmpty());
-        }
-        Assert.assertNull("Artifact.storageLocation", a2.storageLocation);
-        
-        LOGGER.warn(" src: " + artifactOne.getURI() + " " + df.format(artifactOne.getLastModified()));
-        LOGGER.warn("dest: " + a1.getURI() + " " + df.format(a1.getLastModified()));
-        LOGGER.warn(" src: " + artifactTwo.getURI() + " " + df.format(artifactTwo.getLastModified()));
-        LOGGER.warn("dest: " + a2.getURI() + " " + df.format(a2.getLastModified()));
-        
-        Assert.assertNull("Artifact three should not exist.", inventoryEnvironment.artifactDAO.get(artifactThree.getID()));
-        final DeletedArtifactEvent d3 = inventoryEnvironment.deletedArtifactEventDAO.get(artifactThree.getID());
-        Assert.assertNotNull("DeletedArtifactEvent", d3);
-        
-        Artifact a4 = null;
-        if (track) {
-            a4 = inventoryEnvironment.artifactDAO.get(artifactFour.getID());
-            Assert.assertNotNull(a4);
-            Assert.assertEquals("Artifact.uri", artifactFour.getURI(), a4.getURI());
-            Assert.assertEquals("Artifact.metaChecksum", artifactFour.getMetaChecksum(), a4.getMetaChecksum());
-            Assert.assertTrue("Artifact.siteLocations", a4.siteLocations.isEmpty());
-            Assert.assertNull("Artifact.storageLocation", a4.storageLocation);
-        }
-
-        Assert.assertNull("Artifact five should be missing as it's too far in the future.",
-                          inventoryEnvironment.artifactDAO.get(artifactFive.getID()));
-        
-        final HarvestState artifactHarvestState = inventoryEnvironment.harvestStateDAO.get(Artifact.class.getName(), TestUtil.LUSKAN_URI);
-        Assert.assertEquals("Artifact HarvestState.curlastModified", 
-                artifactTwo.getLastModified(), artifactHarvestState.curLastModified);
-
-        final HarvestState deletedArtifactEventState = inventoryEnvironment.harvestStateDAO.get(DeletedArtifactEvent.class.getName(), TestUtil.LUSKAN_URI);
-        Assert.assertNotNull(deletedArtifactEventState);
-        Assert.assertEquals("DeletedArtifactEventState HarvestState.curlastModified", 
-                deletedArtifactEvent.getLastModified(), deletedArtifactEventState.curLastModified);
-
-        HarvestState deletedStorageLocationEventState = null;
-        if (track) {
-            deletedStorageLocationEventState = 
-                    inventoryEnvironment.harvestStateDAO.get(DeletedStorageLocationEvent.class.getName(), TestUtil.LUSKAN_URI);
-            Assert.assertNotNull(deletedStorageLocationEventState);
-            Assert.assertEquals("DeletedStorageLocationEvent HarvestState.curlastModified", 
-                    deletedStorageLocationEvent.getLastModified(), deletedStorageLocationEventState.curLastModified);
-        }
-        
-        LOGGER.info("Run it again.  It should be idempotent...");
-
-        Subject.doAs(this.testUser, (PrivilegedExceptionAction<Object>) () -> {
-            testSubject.doit();
-            return null;
-        });
-
-        final Artifact a1b = inventoryEnvironment.artifactDAO.get(artifactOne.getID());
-        Assert.assertNotNull(a1b);
-        Assert.assertEquals("Artifact.uri", artifactOne.getURI(), a1b.getURI());
-        Assert.assertEquals("Artifact.metaChecksum", artifactOne.getMetaChecksum(), a1b.getMetaChecksum());
-        if (track) {
-            Assert.assertTrue("Artifact.siteLocations.", a1b.siteLocations.contains(expectedSiteLocation));
-        } else {
-            Assert.assertTrue("Artifact.siteLocations", a1.siteLocations.isEmpty());
-        }
-        Assert.assertNull("Artifact.storageLocation", a1b.storageLocation);
-
-        final Artifact a2b = inventoryEnvironment.artifactDAO.get(artifactTwo.getID());
-        Assert.assertEquals("Artifact.uri", artifactTwo.getURI(), a2b.getURI());
-        Assert.assertEquals("Artifact.metaChecksum", artifactTwo.getMetaChecksum(), a2b.getMetaChecksum());
-        if (track) {
-            Assert.assertTrue("Artifact.siteLocations.", a2b.siteLocations.contains(expectedSiteLocation));
-        } else {
-            Assert.assertTrue("Artifact.siteLocations", a1.siteLocations.isEmpty());
-        }
-        Assert.assertNull("Artifact.storageLocation", a2b.storageLocation);
-
-        Assert.assertNull("Artifact three should not exist.", inventoryEnvironment.artifactDAO.get(artifactThree.getID()));
-        final DeletedArtifactEvent d3b = inventoryEnvironment.deletedArtifactEventDAO.get(artifactThree.getID());
-        Assert.assertNotNull("DeletedArtifactEvent", d3b);
-        
-        if (track) {
-            Artifact a4b = inventoryEnvironment.artifactDAO.get(artifactFour.getID());
-            Assert.assertNotNull(a4);
-            Assert.assertEquals("Artifact.uri", artifactFour.getURI(), a4b.getURI());
-            Assert.assertEquals("Artifact.metaChecksum", artifactFour.getMetaChecksum(), a4b.getMetaChecksum());
-            Assert.assertTrue("Artifact.siteLocations.", a4b.siteLocations.isEmpty());
-            Assert.assertNull("Artifact.storageLocation", a4b.storageLocation);
-        }
-
-        // verify that harvest state did not change again
-        
-        final HarvestState artifactHarvestState2 =
-                inventoryEnvironment.harvestStateDAO.get(Artifact.class.getName(), TestUtil.LUSKAN_URI);
-        Assert.assertEquals("Artifact HarvestState.curlastModified", 
-                artifactHarvestState.curLastModified, artifactHarvestState2.curLastModified);
-
-        final HarvestState deletedArtifactEventHarvestState2 =
-                inventoryEnvironment.harvestStateDAO.get(DeletedArtifactEvent.class.getName(), TestUtil.LUSKAN_URI);
-        Assert.assertEquals("DeletedArtifactEvent HarvestState.curLastModified", 
-                deletedArtifactEventState.curLastModified, deletedArtifactEventHarvestState2.curLastModified);
-        
-        if (track) {
-            final HarvestState deletedStorageLocationEventState2 = 
-                inventoryEnvironment.harvestStateDAO.get(DeletedStorageLocationEvent.class.getName(), TestUtil.LUSKAN_URI);
-            Assert.assertEquals("DeletedStorageLocationEvent HarvestState.curLastModified", 
-                    deletedStorageLocationEventState.curLastModified, deletedStorageLocationEventState2.curLastModified);
-        }
-    }
-
-    /**
-     * Scenario
-     *  - Write an include SQL file
-     *  - Add two artifacts to Luskan database
-     *  - Include SQL filter should ignore one of the Artifacts.
-     * @throws Exception    Any unexpected errors.
-     */
-    @Test
-    public void runIncludeArtifacts() throws Exception {
-        LOGGER.debug("Looking for includes in " + System.getProperty("user.home") + "/config");
-        final Path includePath = new File(System.getProperty("user.home") + "/config/").toPath();
-        Files.createDirectories(includePath);
-
-        final File includeFile = new File(includePath.toFile(), "artifact-filter.sql");
-        includeFile.deleteOnExit();
-
-        final FileWriter fileWriter = new FileWriter(includeFile);
-        fileWriter.write("WHERE uri LIKE 'cadc:INTTEST%'");
-        fileWriter.flush();
-        fileWriter.close();
-
-        final Calendar calendar = Calendar.getInstance();
-        calendar.set(2007, Calendar.SEPTEMBER, 18, 1, 13, 0);
-        final Artifact artifactOne = new Artifact(URI.create("cadc:TEST/fileone.ext"), 
-                TestUtil.getRandomMD5(), calendar.getTime(), 8989L);
-        artifactOne.storageLocation = new StorageLocation(URI.create("cadc:TEST/location/1"));
-        luskanEnvironment.artifactDAO.put(artifactOne);
-        Thread.sleep(50L);
-
-        calendar.set(2012, Calendar.NOVEMBER, 17, 8, 13, 0);
-        final Artifact artifactTwo = new Artifact(URI.create("cadc:INTTEST/filetwo.ext"), 
-                TestUtil.getRandomMD5(), calendar.getTime(), 89898L);
-        artifactTwo.storageLocation = new StorageLocation(URI.create("cadc:INTTEST/location/2"));
-        luskanEnvironment.artifactDAO.put(artifactTwo);
-
         final InventoryHarvester testSubject = new InventoryHarvester(inventoryEnvironment.daoConfig,
-                                                                      TestUtil.LUSKAN_URI, new IncludeArtifacts(),
-                                                                      false);
-        Subject.doAs(this.testUser, (PrivilegedExceptionAction<Object>) () -> {
-            testSubject.doit();
-            return null;
-        });
-
-        Assert.assertNull("not included", inventoryEnvironment.artifactDAO.get(artifactOne.getID()));
-
-        Assert.assertNotNull("included", inventoryEnvironment.artifactDAO.get(artifactTwo.getID()));
-    }
-    
-    @Test
-    public void testCollisions() throws Exception {
-        LOGGER.info("testCollisions - START");
+                inventoryEnvironment.connectionConfig, TestUtil.LUSKAN_URI, new AllArtifacts(), true, 20);
+        try {
+            // TODO: need to run this is separate thread so we can verify and terminate
+            Subject.doAs(this.testUser, (PrivilegedExceptionAction<Object>) () -> {
+                testSubject.run();
+                return null;
+            });
+            
+            // TODO: test to verify that InventoryHarvester.run() starts up all sync threads correctly??
+            // TODO: terminate thread
+        } finally {
+            // TODO: kill threads just in case
+        }
         
-        StorageSite expectedSite = new StorageSite(URI.create("cadc:TEST/siteone"), "Test Site", true, false);
-        luskanEnvironment.storageSiteDAO.put(expectedSite);
         
-        // create an Artifacty.uri collision where existing artifact is newer and harvested gets skipped
-        final Artifact artifactCollision1 = new Artifact(URI.create("cadc:TEST/collision1"), TestUtil.getRandomMD5(), new Date(), 78787L);
-        artifactCollision1.storageLocation = new StorageLocation(URI.create("foo:bar/baz"));
-        luskanEnvironment.artifactDAO.put(artifactCollision1);
-        
-        Date newerCLM = new Date(artifactCollision1.getContentLastModified().getTime() + 20000L);
-        final Artifact artifactCollisionKeeper1 = new Artifact(URI.create("cadc:TEST/collision1"), TestUtil.getRandomMD5(), newerCLM, 78787L);
-        inventoryEnvironment.artifactDAO.put(artifactCollisionKeeper1);
-        Thread.sleep(20L);
-        
-        // create an Artifacty.uri collision where existing artifact is nwewer and harvested gets skipped
-        final Artifact artifactCollisionKeeper2 = new Artifact(URI.create("cadc:TEST/collision2"), TestUtil.getRandomMD5(), new Date(), 78787L);
-        artifactCollisionKeeper2.storageLocation = new StorageLocation(URI.create("foo:bar/baz2"));
-        luskanEnvironment.artifactDAO.put(artifactCollisionKeeper2);
-        
-        Date olderCLM = new Date(artifactCollisionKeeper2.getContentLastModified().getTime() - 20000L);
-        final Artifact artifactCollision2 = new Artifact(URI.create("cadc:TEST/collision2"), TestUtil.getRandomMD5(), olderCLM, 78787L);
-        luskanEnvironment.artifactDAO.put(artifactCollisionKeeper2);
-        inventoryEnvironment.artifactDAO.put(artifactCollision2);
-        Thread.sleep(20L);
-        
-        final InventoryHarvester testSubject = new InventoryHarvester(inventoryEnvironment.daoConfig, TestUtil.LUSKAN_URI, new AllArtifacts(), true);
-        Subject.doAs(this.testUser, (PrivilegedExceptionAction<Object>) () -> {
-            testSubject.doit();
-            return null;
-        });
-        
-        // artifactCollision1 vs artifactCollisionKeeper1
-        Assert.assertNull("artifactCollision1 should have been skipped", 
-                inventoryEnvironment.artifactDAO.get(artifactCollision1.getID()));
-        Assert.assertNotNull("artifactCollisionKeeper1 should have been retained", 
-                inventoryEnvironment.artifactDAO.get(artifactCollisionKeeper1.getID()));
-        
-        // artifactCollision2 vs artifactCollisionKeeper2
-        Assert.assertNull("artifactCollision2 should have been removed", 
-                inventoryEnvironment.artifactDAO.get(artifactCollision2.getID()));
-        Assert.assertNotNull("artifactCollision2 DeletedArtifactEvent should have been created", 
-                inventoryEnvironment.deletedArtifactEventDAO.get(artifactCollision2.getID()));
-        Assert.assertNotNull("artifactCollisionKeeper2 should have been retained", 
-                inventoryEnvironment.artifactDAO.get(artifactCollisionKeeper2.getID()));
-        
-        LOGGER.info("testCollisions - IDEMPOTENT");
-        
-        Subject.doAs(this.testUser, (PrivilegedExceptionAction<Object>) () -> {
-            testSubject.doit();
-            return null;
-        });
-        
-        LOGGER.info("testCollisions - DONE");
     }
 }

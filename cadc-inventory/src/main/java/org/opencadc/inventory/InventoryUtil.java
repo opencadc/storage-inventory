@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2019.                            (c) 2019.
+*  (c) 2022.                            (c) 2022.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -88,9 +88,36 @@ import org.apache.log4j.Logger;
 public abstract class InventoryUtil {
     private static final Logger log = Logger.getLogger(InventoryUtil.class);
 
+    public static final String BUCKET_CHARS = "0123456789abcdef";
+    
     private InventoryUtil() {
     }
-
+    
+    /**
+     * Chose between two artifacts to resolve a collision: two artifacts with same Artifact.uri
+     * but different Entity.id values. The winning artifact should be retained/used and the losing 
+     * artifact should be removed/ignored.
+     * 
+     * @param local the local artifact
+     * @param remote the remote artifact
+     * @return true if remote artifact wins, false if local artifact wins, null if tied
+     */
+    public static Boolean isRemoteWinner(Artifact local, Artifact remote) {
+        if (local.getID().equals(remote.getID())) {
+            throw new IllegalArgumentException("method called with same instances: "
+                    + local.getID() + " vs " + remote.getID());
+        }
+        if (local.getContentLastModified().after(remote.getContentLastModified())) {
+            return false;
+        }
+        if (remote.getContentLastModified().after(local.getContentLastModified())) {
+            return true;
+        }
+        
+        // tie
+        return null;
+    }
+    
     /**
      * Compute a short code based on the URI argument. The returned code is a hex
      * string of the specified length generated from the given URI.
@@ -146,12 +173,16 @@ public abstract class InventoryUtil {
         try {
             Class<?> c = Class.forName(cname);
             return (T) c.getDeclaredConstructor().newInstance();
-        } catch (InvocationTargetException ex) {
-            throw new IllegalStateException("CONFIG: " + cnameProp + " implementation crashed during creation.", ex);
         } catch (ClassNotFoundException ex) {
             throw new IllegalStateException("CONFIG: " + cnameProp + " implementation not found in classpath: " + cname, ex);
         } catch (InstantiationException | NoSuchMethodException ex) {
             throw new IllegalStateException("CONFIG: " + cnameProp + " implementation " + cname + " does not have a no-arg constructor", ex);
+        } catch (InvocationTargetException ex) {
+            Throwable cause = ex.getCause();
+            if (cause != null) { // it has to be, but just to be safe
+                throw new IllegalStateException("CONFIG: " + cnameProp + " init failed: " + cause.getMessage(), cause);
+            }
+            throw new IllegalStateException("CONFIG: " + cnameProp + " init failed: " + ex.getMessage(), ex);
         } catch (IllegalAccessException ex) {
             throw new IllegalStateException("CONFIG: failed to instantiate " + cname, ex);
         }
@@ -184,16 +215,19 @@ public abstract class InventoryUtil {
                     return (T) constructor.newInstance(constructorArgs);
                 }
             }
-
             throw new IllegalStateException("No matching constructor found.");
-        } catch (InvocationTargetException ex) {
-            throw new IllegalStateException("CONFIG: " + implementationClassName + " implementation crashed during creation.", ex);
         } catch (ClassNotFoundException ex) {
             throw new IllegalStateException("CONFIG: " + implementationClassName + " implementation not found in classpath: " + implementationClassName,
                                             ex);
         } catch (InstantiationException ex) {
             throw new IllegalStateException(
                     "CONFIG: " + implementationClassName + " implementation " + implementationClassName + " does not have a matching constructor", ex);
+        } catch (InvocationTargetException ex) {
+            Throwable cause = ex.getCause();
+            if (cause != null) { // it has to be, but just to be safe
+                throw new IllegalStateException("CONFIG: " + implementationClassName + " init failed: " + cause.getMessage(), cause);
+            }
+            throw new IllegalStateException("CONFIG: " + implementationClassName + " init failed: " + ex.getMessage(), ex);
         } catch (IllegalAccessException ex) {
             throw new IllegalStateException("CONFIG: failed to instantiate " + implementationClassName, ex);
         }
@@ -320,7 +354,7 @@ public abstract class InventoryUtil {
 
     /**
      * A valid path component cannot have: space ( ), slash (/), escape (\), percent (%),
-     * semi-colon (;), ampersand (&amp;), or dollar ($) characters.
+     * semi-colon (;), ampersand (&amp;), dollar ($), or question (?) characters.
      *
      * @param caller class doing test
      * @param name field name being checked
@@ -338,15 +372,17 @@ public abstract class InventoryUtil {
         boolean amp = (test.indexOf('&') >= 0);
         boolean dollar = (test.indexOf('$') >= 0);
         boolean question = (test.indexOf('?') >= 0);
+        boolean sqopen = (test.indexOf('[') >= 0);
+        boolean sqclose = (test.indexOf(']') >= 0);
 
-        if (space || slash || escape || percent || semic || amp || dollar || question) {
+        if (space || slash || escape || percent || semic || amp || dollar || question || sqopen || sqclose) {
             String s = "invalid ";
             if (caller != null) {
                 s += caller.getSimpleName() + ".";
             }
             throw new IllegalArgumentException(s + name + ": " + test
                     + " reason: path component may not contain space ( ), slash (/), escape (\\), percent (%),"
-                    + " semi-colon (;), ampersand (&), or dollar ($)");
+                    + " semi-colon (;), ampersand (&), or dollar ($), question (?), or square brackets ([])");
         }
     }
 

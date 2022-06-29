@@ -72,6 +72,8 @@ import ca.nrc.cadc.profiler.Profiler;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.db.EntityNotFoundException;
+import org.opencadc.inventory.storage.PutTransaction;
+import org.opencadc.inventory.storage.StorageMetadata;
 import org.opencadc.permissions.WriteGrant;
 
 /**
@@ -89,14 +91,23 @@ public class PostAction extends ArtifactAction {
     public PostAction() {
         super();
     }
+    
+    /**
+     * Perform auth checks and initialize resources.
+     */
+    @Override
+    public void initAction() throws Exception {
+        checkWritable();
+        initAndAuthorize(WriteGrant.class);
+        initDAO();
+        initStorageAdapter();
+    }
 
     /**
      * Update artifact metadata.
      */
     @Override
     public void doAction() throws Exception {
-        
-        initAndAuthorize(WriteGrant.class);
         
         String newURI = syncInput.getParameter("uri");
         String newContentType = syncInput.getParameter("contentType");
@@ -105,8 +116,43 @@ public class PostAction extends ArtifactAction {
         log.debug("new contentType: " + newContentType);
         log.debug("new contentEncoding: " + newContentEncoding);
         
-        final Profiler profiler = new Profiler(PostAction.class);
+        String txnID = syncInput.getHeader(PUT_TXN_ID);
+        String txnOP = syncInput.getHeader(PUT_TXN_OP);
+        log.debug("transactionID: " + txnID + " " + txnOP);
+        if (txnID != null) {
+            if (PUT_TXN_OP_START.equalsIgnoreCase(txnOP) 
+                    || PUT_TXN_OP_COMMIT.equalsIgnoreCase(txnOP)) {
+                throw new IllegalArgumentException("invalid " + PUT_TXN_OP + "=" + txnOP + " must be done with PUT");
+            } 
+            if (PUT_TXN_OP_ABORT.equalsIgnoreCase(txnOP)) {
+                log.warn("abortTransaction: " + txnID);
+                storageAdapter.abortTransaction(txnID);
+                syncOutput.setCode(204);
+                return;
+            }
+            
+            PutTransaction t;
+            if (PUT_TXN_OP_REVERT.equalsIgnoreCase(txnOP)) {
+                t = storageAdapter.revertTransaction(txnID);
+                syncOutput.setCode(202);
+            } else if (txnOP == null) {
+                // POST without no OP:  no change or fail?
+                t = storageAdapter.getTransactionStatus(txnID);
+                syncOutput.setCode(204);
+            } else {
+                throw new IllegalArgumentException("invalid " + PUT_TXN_OP + "=" + txnOP);
+            }
+            
+            StorageMetadata sm = t.storageMetadata;
+            HeadAction.setTransactionHeaders(t, syncOutput);
+            if (sm != null && sm.isValid()) {
+                syncOutput.setDigest(sm.getContentChecksum());
+            }
+            syncOutput.setHeader("content-length", 0);
+            return;
+        }
         
+        final Profiler profiler = new Profiler(PostAction.class);
         Artifact existing = getArtifact(artifactURI);
         profiler.checkpoint("artifactDAO.get.ok");
         
@@ -118,13 +164,13 @@ public class PostAction extends ArtifactAction {
             
             boolean locked = false;
             while (existing != null && !locked) {
-                try { 
-                    artifactDAO.lock(existing);
-                    profiler.checkpoint("artifactDAO.lock.ok");
+                existing = artifactDAO.lock(existing);
+                profiler.checkpoint("artifactDAO.lock.ok");
+                if (existing != null) {
                     locked = true;
-                } catch (EntityNotFoundException ex) {
+                } else {
                     profiler.checkpoint("artifactDAO.lock.fail");
-                    // entity deleted
+                    // try again via uri
                     existing = artifactDAO.get(artifactURI);
                     profiler.checkpoint("artifactDAO.get.ok");
                 }
@@ -144,6 +190,9 @@ public class PostAction extends ArtifactAction {
         
             txnMgr.commitTransaction();
             log.debug("commit txn: OK");
+            
+            syncOutput.setCode(202); // Accepted
+            HeadAction.setHeaders(existing, syncOutput);
         } catch (Exception e) {
             log.error("failed to persist " + artifactURI, e);
             txnMgr.rollbackTransaction();

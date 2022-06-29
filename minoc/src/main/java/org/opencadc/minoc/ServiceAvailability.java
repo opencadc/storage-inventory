@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2019.                            (c) 2019.
+*  (c) 2022.                            (c) 2022.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -68,27 +68,23 @@
 package org.opencadc.minoc;
 
 import ca.nrc.cadc.auth.AuthMethod;
-import ca.nrc.cadc.db.DBUtil;
 import ca.nrc.cadc.reg.Standards;
 import ca.nrc.cadc.reg.client.LocalAuthority;
 import ca.nrc.cadc.reg.client.RegistryClient;
+import ca.nrc.cadc.rest.RestAction;
 import ca.nrc.cadc.util.MultiValuedProperties;
+import ca.nrc.cadc.vosi.Availability;
 import ca.nrc.cadc.vosi.AvailabilityPlugin;
-import ca.nrc.cadc.vosi.AvailabilityStatus;
 import ca.nrc.cadc.vosi.avail.CheckCertificate;
 import ca.nrc.cadc.vosi.avail.CheckException;
 import ca.nrc.cadc.vosi.avail.CheckResource;
 import ca.nrc.cadc.vosi.avail.CheckWebService;
-
 import java.io.File;
 import java.net.URI;
+import java.net.URL;
 import java.util.Map;
-
-import javax.sql.DataSource;
-
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.db.ArtifactDAO;
-import org.opencadc.inventory.db.version.InitDatabase;
 
 /**
  * This class performs the work of determining if the executing artifact
@@ -100,6 +96,8 @@ public class ServiceAvailability implements AvailabilityPlugin {
 
     private static final Logger log = Logger.getLogger(ServiceAvailability.class);
     private static final File SERVOPS_PEM_FILE = new File(System.getProperty("user.home") + "/.ssl/cadcproxy.pem");
+    
+    private String appName;
 
     /**
      * Default, no-arg constructor.
@@ -111,8 +109,8 @@ public class ServiceAvailability implements AvailabilityPlugin {
      * Sets the name of the application.
      */
     @Override
-    public void setAppName(String string) {
-        //no-op
+    public void setAppName(String name) {
+        this.appName = name;
     }
 
     /**
@@ -121,7 +119,12 @@ public class ServiceAvailability implements AvailabilityPlugin {
      */
     @Override
     public boolean heartbeat() {
-        return true;
+        String state = getState();
+        if (RestAction.STATE_READ_ONLY.equals(state) || RestAction.STATE_READ_WRITE.equals(state)) {
+            return true;
+        }
+
+        return false;
     }
 
     /**
@@ -129,7 +132,7 @@ public class ServiceAvailability implements AvailabilityPlugin {
      * @return Information of the availability check.
      */
     @Override
-    public AvailabilityStatus getStatus() {
+    public Availability getStatus() {
         boolean isGood = true;
         String note = "service is accepting requests";
         
@@ -138,33 +141,42 @@ public class ServiceAvailability implements AvailabilityPlugin {
             Map<String,Object> config = MinocInitAction.getDaoConfig(props);
             ArtifactDAO dao = new ArtifactDAO();
             dao.setConfig(config); // connectivity tested
+
+            String state = getState();
+            if (RestAction.STATE_OFFLINE.equals(state)) {
+                return new Availability(false, RestAction.STATE_OFFLINE_MSG);
+            }
+            if (RestAction.STATE_READ_ONLY.equals(state)) {
+                return new Availability(false, RestAction.STATE_READ_ONLY_MSG);
+            }
             
             // check for a certficate needed to perform network ops
             CheckCertificate checkCert = new CheckCertificate(SERVOPS_PEM_FILE);
             checkCert.check();
-            log.info("cert check ok");
 
             // check other services we depend on
             RegistryClient reg = new RegistryClient();
-            String url;
+            URL url;
             CheckResource checkResource;
             
             LocalAuthority localAuthority = new LocalAuthority();
 
             URI credURI = localAuthority.getServiceURI(Standards.CRED_PROXY_10.toString());
-            url = reg.getServiceURL(credURI, Standards.VOSI_AVAILABILITY, AuthMethod.ANON).toExternalForm();
+            url = reg.getServiceURL(credURI, Standards.VOSI_AVAILABILITY, AuthMethod.ANON);
             checkResource = new CheckWebService(url);
             checkResource.check();
 
             URI usersURI = localAuthority.getServiceURI(Standards.UMS_USERS_01.toString());
-            url = reg.getServiceURL(usersURI, Standards.VOSI_AVAILABILITY, AuthMethod.ANON).toExternalForm();
+            url = reg.getServiceURL(usersURI, Standards.VOSI_AVAILABILITY, AuthMethod.ANON);
             checkResource = new CheckWebService(url);
             checkResource.check();
             
             URI groupsURI = localAuthority.getServiceURI(Standards.GMS_SEARCH_01.toString());
-            url = reg.getServiceURL(groupsURI, Standards.VOSI_AVAILABILITY, AuthMethod.ANON).toExternalForm();
-            checkResource = new CheckWebService(url);
-            checkResource.check();
+            if (!groupsURI.equals(usersURI)) {
+                url = reg.getServiceURL(groupsURI, Standards.VOSI_AVAILABILITY, AuthMethod.ANON);
+                checkResource = new CheckWebService(url);
+                checkResource.check();
+            }
             
         } catch (CheckException ce) {
             // tests determined that the resource is not working
@@ -177,7 +189,7 @@ public class ServiceAvailability implements AvailabilityPlugin {
             note = "test failed, reason: " + t;
         }
 
-        return new AvailabilityStatus(isGood, null, null, null, note);
+        return new Availability(isGood, note);
     }
 
     /**
@@ -185,7 +197,28 @@ public class ServiceAvailability implements AvailabilityPlugin {
      */
     @Override
     public void setState(String state) {
-        // ignore
+        String key = appName + RestAction.STATE_MODE_KEY;
+        if (RestAction.STATE_OFFLINE.equalsIgnoreCase(state)) {
+            System.setProperty(key, RestAction.STATE_OFFLINE);
+        } else if (RestAction.STATE_READ_ONLY.equalsIgnoreCase(state)) {
+            System.setProperty(key, RestAction.STATE_READ_ONLY);
+        } else if (RestAction.STATE_READ_WRITE.equalsIgnoreCase(state)) {
+            System.setProperty(key, RestAction.STATE_READ_WRITE);
+        } else {
+            throw new IllegalArgumentException("invalid state: " + state
+                + " expected: " + RestAction.STATE_READ_WRITE + "|" 
+                + RestAction.STATE_OFFLINE + "|" + RestAction.STATE_READ_ONLY);
+        }
+        log.info("WebService state changed: " + key + "=" + state + " [OK]");
+    }
+
+    private String getState() {
+        String key = appName + RestAction.STATE_MODE_KEY;
+        String ret = System.getProperty(key);
+        if (ret == null) {
+            return RestAction.STATE_READ_WRITE;
+        }
+        return ret;
     }
 
 }

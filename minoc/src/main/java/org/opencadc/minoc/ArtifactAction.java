@@ -69,10 +69,12 @@ package org.opencadc.minoc;
 
 import ca.nrc.cadc.auth.AuthenticationUtil;
 import ca.nrc.cadc.auth.HttpPrincipal;
+import ca.nrc.cadc.log.WebServiceLogInfo;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.rest.InlineContentHandler;
 import ca.nrc.cadc.rest.RestAction;
+import ca.nrc.cadc.rest.SyncInput;
 import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.util.PropertiesReader;
 import java.io.File;
@@ -109,24 +111,42 @@ import org.opencadc.permissions.WriteGrant;
 public abstract class ArtifactAction extends RestAction {
     private static final Logger log = Logger.getLogger(ArtifactAction.class);
     
+    static final String PUT_TXN_ID = "x-put-txn-id"; // request/response header
+    static final String PUT_TXN_OP = "x-put-txn-op"; // request header
+    static final String PUT_TXN_MIN_SIZE = "x-put-segment-minbytes"; // response header
+    static final String PUT_TXN_MAX_SIZE = "x-put-segment-maxbytes"; // response header
+    
+    // PUT_TXN_OP values
+    static final String PUT_TXN_OP_ABORT = "abort"; // request header
+    static final String PUT_TXN_OP_COMMIT = "commit"; // request header
+    static final String PUT_TXN_OP_REVERT = "revert"; // request header
+    static final String PUT_TXN_OP_START = "start"; // request header
+    
     // The target artifact
     URI artifactURI;
     
     // The (possibly null) authentication token.
     String authToken;
+
+    // servlet path minus the auth token
+    String loggablePath;
     
     // immutable state set in constructor
-    protected final ArtifactDAO artifactDAO;
-    protected final StorageAdapter storageAdapter;
+    protected final MultiValuedProperties config;
     protected final File publicKey;
     protected final List<URI> readGrantServices = new ArrayList<>();
     protected final List<URI> writeGrantServices = new ArrayList<>();
+    
+    // lazy init
+    protected ArtifactDAO artifactDAO;
+    protected StorageAdapter storageAdapter;
     
     private final boolean authenticateOnly;
 
     // constructor for unit tests with no config/init
     ArtifactAction(boolean init) {
         super();
+        this.config = null;
         this.artifactDAO = null;
         this.storageAdapter = null;
         this.authenticateOnly = false;
@@ -135,53 +155,53 @@ public abstract class ArtifactAction extends RestAction {
 
     protected ArtifactAction() {
         super();
-        MultiValuedProperties props = MinocInitAction.getConfig();
+        this.config = MinocInitAction.getConfig();
 
-        List<String> readGrants = props.getProperty(MinocInitAction.READ_GRANTS_KEY);
+        List<String> readGrants = config.getProperty(MinocInitAction.READ_GRANTS_KEY);
         if (readGrants != null) {
             for (String s : readGrants) {
                 try {
                     URI u = new URI(s);
                     readGrantServices.add(u);
                 } catch (URISyntaxException ex) {
-                    throw new IllegalStateException("invalid config: " + MinocInitAction.READ_GRANTS_KEY + "=" + s + " must be a valid URI");
+                    throw new IllegalStateException("invalid config: " + MinocInitAction.READ_GRANTS_KEY + "=" + s + " INVALID", ex);
                 }
             }
         }
 
-        List<String> writeGrants = props.getProperty(MinocInitAction.WRITE_GRANTS_KEY);
+        List<String> writeGrants = config.getProperty(MinocInitAction.WRITE_GRANTS_KEY);
         if (writeGrants != null) {
             for (String s : writeGrants) {
                 try {
                     URI u = new URI(s);
                     writeGrantServices.add(u);
                 } catch (URISyntaxException ex) {
-                    throw new IllegalStateException("invalid config: " + MinocInitAction.WRITE_GRANTS_KEY + "=" + s + " must be a valid URI");
+                    throw new IllegalStateException("invalid config: " + MinocInitAction.WRITE_GRANTS_KEY + "=" + s + " INVALID", ex);
                 }
             }
         }
         
-        String ao = props.getFirstPropertyValue(MinocInitAction.DEV_AUTH_ONLY_KEY);
+        String ao = config.getFirstPropertyValue(MinocInitAction.DEV_AUTH_ONLY_KEY);
         if (ao != null) {
             try {
                 this.authenticateOnly = Boolean.valueOf(ao);
-                log.warn("(configuration) authenticateOnly = " + authenticateOnly);
+                if (authenticateOnly) {
+                    log.warn("(configuration) authenticateOnly = " + authenticateOnly);
+                }
             } catch (Exception ex) {
                 throw new IllegalStateException("invalid config: " + MinocInitAction.DEV_AUTH_ONLY_KEY + "=" + ao + " must be true|false or not set");
             }
         } else {
             authenticateOnly = false;
         }
-        
-        
-        Map<String, Object> config = MinocInitAction.getDaoConfig(props);
-        this.artifactDAO = new ArtifactDAO();
-        artifactDAO.setConfig(config); // connectivity tested
 
-        this.storageAdapter = InventoryUtil.loadPlugin(props.getFirstPropertyValue(MinocInitAction.SA_KEY));
-        
-        String pubkeyFileName = props.getFirstPropertyValue(MinocInitAction.PUBKEYFILE_KEY);
+        String pubkeyFileName = config.getFirstPropertyValue(MinocInitAction.PUBKEYFILE_KEY);
         this.publicKey = new File(System.getProperty("user.home") + "/config/" + pubkeyFileName);
+    }
+
+    @Override
+    protected String getServerImpl() {
+        return "storage-inventory/minoc";
     }
 
     /**
@@ -192,83 +212,116 @@ public abstract class ArtifactAction extends RestAction {
     protected InlineContentHandler getInlineContentHandler() {
         return null;
     }
-    
+
+    @Override
+    public void setLogInfo(WebServiceLogInfo logInfo) {
+        super.setLogInfo(logInfo);
+        if (this.artifactURI != null && this.loggablePath != null) {
+            this.logInfo.setPath(this.loggablePath + "/" + this.artifactURI.toASCIIString());
+        }
+    }
+
+    @Override
+    public void setSyncInput(SyncInput syncInput) {
+        super.setSyncInput(syncInput);
+        this.loggablePath = syncInput.getComponentPath();
+        parsePath();
+        if (this.artifactURI != null && this.logInfo != null) {
+            this.logInfo.setPath(this.loggablePath + "/" + this.artifactURI.toASCIIString());
+        }
+    }
+
     protected void initAndAuthorize(Class<? extends Grant> grantClass)
         throws AccessControlException, CertificateException, IOException,
                ResourceNotFoundException, TransientException {
-        
+        initAndAuthorize(grantClass, false);
+    }
+    
+    protected void initAndAuthorize(Class<? extends Grant> grantClass, boolean allowReadWithWriteGrant)
+        throws AccessControlException, CertificateException, IOException,
+               ResourceNotFoundException, TransientException {
+
         init();
-        
+
         // do authorization (with token or subject)
         Subject subject = AuthenticationUtil.getCurrentSubject();
         if (authToken != null) {
             TokenTool tk = new TokenTool(publicKey);
-            String tokenUser = tk.validateToken(authToken, artifactURI, grantClass);
+            String tokenUser;
+            if (allowReadWithWriteGrant && ReadGrant.class.isAssignableFrom(grantClass)) {
+                // treat a WriteGrant as also granting read permission
+                tokenUser = tk.validateToken(authToken, artifactURI, grantClass, WriteGrant.class);
+            } else {
+                tokenUser = tk.validateToken(authToken, artifactURI, grantClass);
+            }
             subject.getPrincipals().clear();
-            subject.getPrincipals().add(new HttpPrincipal(tokenUser));
+            if (tokenUser != null) {
+                subject.getPrincipals().add(new HttpPrincipal(tokenUser));
+            }
             logInfo.setSubject(subject);
         } else {
-            // augment subject (minoc is configured so augment
-            // is not done in rest library)
+            // augment subject (minoc is configured so augment is not done in rest library)
             AuthenticationUtil.augmentSubject(subject);
-            PermissionsCheck permissionsCheck = new PermissionsCheck(this.artifactURI, this.authenticateOnly,
-                                                                     this.logInfo);
+            logInfo.setSubject(subject);
+            PermissionsCheck permissionsCheck = new PermissionsCheck(artifactURI, authenticateOnly, logInfo);
+            // TODO: allowReadWithWriteGrant could be implemented here, but grant services are probably configured
+            // that way already so it's complexity that probably won't allow/enable any actions
             if (ReadGrant.class.isAssignableFrom(grantClass)) {
-                permissionsCheck.checkReadPermission(this.readGrantServices);
+                permissionsCheck.checkReadPermission(readGrantServices);
             } else if (WriteGrant.class.isAssignableFrom(grantClass)) {
-                permissionsCheck.checkWritePermission(this.writeGrantServices);
+                permissionsCheck.checkWritePermission(writeGrantServices);
             } else {
                 throw new IllegalStateException("Unsupported grant class: " + grantClass);
             }
         }
     }
-    
+
     void init() {
-        parsePath();
+        if (this.artifactURI == null) {
+            throw new IllegalArgumentException("missing or invalid artifact URI");
+        }
+    }
+
+    protected void initDAO() {
+        if (artifactDAO == null) {
+            Map<String, Object> configMap = MinocInitAction.getDaoConfig(config);
+            this.artifactDAO = new ArtifactDAO();
+            artifactDAO.setConfig(configMap); // connectivity tested
+        }
+    }
+    
+    protected void initStorageAdapter() {
+        if (storageAdapter == null) {
+            this.storageAdapter = InventoryUtil.loadPlugin(config.getFirstPropertyValue(MinocInitAction.SA_KEY));
+        }
     }
 
     /**
      * Parse the request path.
      */
     void parsePath() {
-        String path = syncInput.getPath();
+        String path = this.syncInput.getPath();
         log.debug("path: " + path);
-        if (path == null) {
-            throw new IllegalArgumentException("missing artifact URI");
-        }
-        int colonIndex = path.indexOf(":");
-        int firstSlashIndex = path.indexOf("/");
-        
-        if (colonIndex < 0) {
-            if (firstSlashIndex > 0 && path.length() > firstSlashIndex + 1) {
-                throw new IllegalArgumentException(
-                    "missing scheme in artifact URI: "
-                        + path.substring(firstSlashIndex + 1));
-            } else {
-                throw new IllegalArgumentException(
-                    "missing artifact URI in path: " + path);
+        if (path != null) {
+            int colonIndex = path.indexOf(":");
+            int firstSlashIndex = path.indexOf("/");
+            if (colonIndex != -1) {
+                if (firstSlashIndex < 0 || firstSlashIndex > colonIndex) {
+                    // no auth token--artifact URI is complete path
+                    this.artifactURI = createArtifactURI(path);
+                } else {
+                    this.artifactURI = createArtifactURI(path.substring(firstSlashIndex + 1));
+                    this.authToken = path.substring(0, firstSlashIndex);
+                    log.debug("authToken: " + this.authToken);
+                }
             }
         }
-        
-        if (firstSlashIndex < 0 || firstSlashIndex > colonIndex) {
-            // no auth token--artifact URI is complete path
-            artifactURI = createArtifactURI(path);
-            return;
-        }
-        
-        artifactURI = createArtifactURI(path.substring(firstSlashIndex + 1));
-        
-        authToken = path.substring(0, firstSlashIndex);
-        log.debug("authToken: " + authToken);
     }
     
     Artifact getArtifact(URI artifactURI) throws ResourceNotFoundException {
         Artifact artifact = artifactDAO.get(artifactURI);
-        if (artifact == null) {
+        if (artifact == null || artifact.storageLocation == null) {
             throw new ResourceNotFoundException("not found: " + artifactURI);
-        }
-        if (artifact.storageLocation == null) {
-            throw new ResourceNotFoundException("not available: " + artifactURI);
         }
         return artifact;
     }
@@ -279,37 +332,16 @@ public abstract class ArtifactAction extends RestAction {
      * @return The artifact uri object.
      */
     private URI createArtifactURI(String uri) {
+        log.debug("artifact URI: " + uri);
+        URI ret;
         try {
-            log.debug("artifactURI: " + uri);
-            artifactURI = new URI(uri);
-            InventoryUtil.validateArtifactURI(ArtifactAction.class, artifactURI);
-            return artifactURI;
-        } catch (URISyntaxException e) {
-            String message = "illegal artifact URI: " + uri;
-            log.debug(message, e);
-            throw new IllegalArgumentException(message);
+            ret = new URI(uri);
+            InventoryUtil.validateArtifactURI(ArtifactAction.class, ret);
+        } catch (URISyntaxException | IllegalArgumentException e) {
+            ret = null;
+            log.debug("illegal artifact URI: " + uri, e);
         }
-    }
-
-    static StorageAdapter getStorageAdapter(MultiValuedProperties config) {
-        // lazy init
-        String adapterKey = StorageAdapter.class.getName();
-        List<String> adapterList = config.getProperty(adapterKey);
-        String adapterClass = null;
-        if (adapterList != null && adapterList.size() > 0) {
-            adapterClass = adapterList.get(0);
-        } else {
-            throw new IllegalStateException("no storage adapter specified in minoc.properties");
-        }
-        try {
-            Class c = Class.forName(adapterClass);
-            Object o = c.newInstance();
-            StorageAdapter sa = (StorageAdapter) o;
-            log.debug("StorageAdapter: " + sa);
-            return sa;
-        } catch (Throwable t) {
-            throw new IllegalStateException("failed to load storage adapter: " + adapterClass, t);
-        }
+        return ret;
     }
 
     protected List<String> getReadGrantServices(MultiValuedProperties props) {
@@ -373,4 +405,5 @@ public abstract class ArtifactAction extends RestAction {
 
         return config;
     }
+
 }

@@ -3,7 +3,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2020.                            (c) 2020.
+ *  (c) 2022.                            (c) 2022.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -68,7 +68,6 @@
 package org.opencadc.fenwick;
 
 import ca.nrc.cadc.db.ConnectionConfig;
-import ca.nrc.cadc.db.DBUtil;
 import ca.nrc.cadc.util.Log4jInit;
 import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.util.PropertiesReader;
@@ -79,7 +78,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
-import javax.naming.NamingException;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.InventoryUtil;
@@ -106,6 +104,8 @@ public class Main {
     private static final String QUERY_SERVICE_CONFIG_KEY = CONFIG_PREFIX + ".queryService";
     private static final String TRACK_SITE_LOCATIONS_CONFIG_KEY = CONFIG_PREFIX + ".trackSiteLocations";
     private static final String ARTIFACT_SELECTOR_CONFIG_KEY = CONFIG_PREFIX + ".artifactSelector";
+    private static final String MAX_RETRY_INTERVAL_CONFIG_KEY = CONFIG_PREFIX + ".maxRetryInterval";
+
 
     // Used to verify configuration items.  See the README for descriptions.
     private static final String[] MANDATORY_PROPERTY_KEYS = {
@@ -117,7 +117,8 @@ public class Main {
         LOGGING_CONFIG_KEY,
         QUERY_SERVICE_CONFIG_KEY,
         SQLGENERATOR_CONFIG_KEY,
-        TRACK_SITE_LOCATIONS_CONFIG_KEY
+        TRACK_SITE_LOCATIONS_CONFIG_KEY,
+        MAX_RETRY_INTERVAL_CONFIG_KEY
     };
 
     private static final Map<String, String> selectorMap;
@@ -160,18 +161,9 @@ public class Main {
             final String dbUrl = props.getFirstPropertyValue(DB_URL_CONFIG_KEY);
 
             daoConfig.put("schema", props.getFirstPropertyValue(DB_SCHEMA_CONFIG_KEY));
-            //daoConfig.put("database", null);
 
             final ConnectionConfig cc = new ConnectionConfig(null, null, username, password,
                                                              "org.postgresql.Driver", dbUrl);
-
-            try {
-                DBUtil.createJNDIDataSource("jdbc/inventory", cc);
-            } catch (NamingException ne) {
-                throw new IllegalStateException(String.format("Unable to access database: %s", dbUrl), ne);
-            }
-
-            daoConfig.put("jndiDataSourceName", "jdbc/inventory");
 
             final String configuredSQLGenerator = props.getFirstPropertyValue(SQLGENERATOR_CONFIG_KEY);
             daoConfig.put(SQLGENERATOR_CONFIG_KEY, Class.forName(configuredSQLGenerator));
@@ -187,7 +179,12 @@ public class Main {
             final String configuredTrackSiteLocations = props.getFirstPropertyValue(TRACK_SITE_LOCATIONS_CONFIG_KEY);
             final boolean trackSiteLocations = Boolean.parseBoolean(configuredTrackSiteLocations);
 
-            final InventoryHarvester doit = new InventoryHarvester(daoConfig, resourceID, selector, trackSiteLocations);
+            final String configuredMaxRetryInterval = props.getFirstPropertyValue(MAX_RETRY_INTERVAL_CONFIG_KEY);
+            final int maxRetryInterval = Integer.parseInt(configuredMaxRetryInterval);
+
+
+            final InventoryHarvester doit = new InventoryHarvester(daoConfig, cc, 
+                    resourceID, selector, trackSiteLocations, maxRetryInterval);
             doit.run();
         } catch (Throwable unexpected) {
             log.fatal("Unexpected failure", unexpected);

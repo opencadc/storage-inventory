@@ -73,42 +73,55 @@ import ca.nrc.cadc.db.DBConfig;
 import ca.nrc.cadc.db.DBUtil;
 import java.util.Map;
 import java.util.TreeMap;
+import org.apache.log4j.Logger;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.DeletedArtifactEventDAO;
 import org.opencadc.inventory.db.DeletedStorageLocationEventDAO;
 import org.opencadc.inventory.db.HarvestStateDAO;
 import org.opencadc.inventory.db.SQLGenerator;
+import org.opencadc.inventory.db.StorageLocationEventDAO;
 import org.opencadc.inventory.db.StorageSiteDAO;
 import org.opencadc.inventory.db.version.InitDatabase;
 import org.springframework.jdbc.core.JdbcTemplate;
 
-
-
 public class InventoryEnvironment {
+    private static final Logger log = Logger.getLogger(InventoryEnvironment.class);
+    
     final StorageSiteDAO storageSiteDAO = new StorageSiteDAO();
-    final ArtifactDAO artifactDAO = new ArtifactDAO();
-    final DeletedArtifactEventDAO deletedArtifactEventDAO = new DeletedArtifactEventDAO();
-    final DeletedStorageLocationEventDAO deletedStorageLocationEventDAO = new DeletedStorageLocationEventDAO();
+    final ArtifactDAO artifactDAO = new ArtifactDAO(false);
+    final StorageLocationEventDAO storageLocationEventDAO = new StorageLocationEventDAO(false);
+    final DeletedArtifactEventDAO deletedArtifactEventDAO = new DeletedArtifactEventDAO(false);
+    final DeletedStorageLocationEventDAO deletedStorageLocationEventDAO = new DeletedStorageLocationEventDAO(false);
     final HarvestStateDAO harvestStateDAO = new HarvestStateDAO();
     final Map<String, Object> daoConfig = new TreeMap<>();
-    final String jndiPath = "jdbc/InventoryEnvironment";
+    final ConnectionConfig connectionConfig;
+    
+    private final String jndiPath = "jdbc/InventoryEnvironment";
 
     public InventoryEnvironment() throws Exception {
         final DBConfig dbrc = new DBConfig();
-        final ConnectionConfig inventoryConnectionConfig = dbrc.getConnectionConfig(TestUtil.INVENTORY_SERVER,
-                                                                                    TestUtil.INVENTORY_DATABASE);
-        DBUtil.createJNDIDataSource(jndiPath, inventoryConnectionConfig);
-
+        connectionConfig = dbrc.getConnectionConfig(TestUtil.INVENTORY_SERVER, TestUtil.INVENTORY_DATABASE);
         daoConfig.put(SQLGenerator.class.getName(), SQLGenerator.class);
-        daoConfig.put("jndiDataSourceName", jndiPath);
         daoConfig.put("database", TestUtil.INVENTORY_DATABASE);
         daoConfig.put("schema", TestUtil.INVENTORY_SCHEMA);
+        // connectionConfig and daoConfig used by InventoryHarvester to create it's own datasource
+        
+        Map<String, Object> testConfig = new TreeMap<>();
+        
+        // single direct connection for test setup/verification
+        DBUtil.createJNDIDataSource(jndiPath, connectionConfig);
+        
+        testConfig.put(SQLGenerator.class.getName(), SQLGenerator.class);
+        testConfig.put("jndiDataSourceName", jndiPath);
+        testConfig.put("database", TestUtil.INVENTORY_DATABASE);
+        testConfig.put("schema", TestUtil.INVENTORY_SCHEMA);
 
-        storageSiteDAO.setConfig(daoConfig);
-        artifactDAO.setConfig(daoConfig);
-        deletedArtifactEventDAO.setConfig(daoConfig);
-        deletedStorageLocationEventDAO.setConfig(daoConfig);
-        harvestStateDAO.setConfig(daoConfig);
+        storageSiteDAO.setConfig(testConfig);
+        artifactDAO.setConfig(testConfig);
+        storageLocationEventDAO.setConfig(testConfig);
+        deletedArtifactEventDAO.setConfig(testConfig);
+        deletedStorageLocationEventDAO.setConfig(testConfig);
+        harvestStateDAO.setConfig(testConfig);
 
         new InitDatabase(DBUtil.findJNDIDataSource(jndiPath),
                          (String) daoConfig.get("database"),
@@ -116,11 +129,15 @@ public class InventoryEnvironment {
     }
 
     void cleanTestEnvironment() throws Exception {
+        log.info("cleanTestEnvironment: " + InventoryEnvironment.class.getSimpleName() + " - START");
         final JdbcTemplate jdbcTemplate = new JdbcTemplate(DBUtil.findJNDIDataSource(jndiPath));
-        jdbcTemplate.execute("TRUNCATE TABLE " + TestUtil.INVENTORY_SCHEMA + ".deletedArtifactEvent");
-        jdbcTemplate.execute("TRUNCATE TABLE " + TestUtil.INVENTORY_SCHEMA + ".deletedStorageLocationEvent");
-        jdbcTemplate.execute("TRUNCATE TABLE " + TestUtil.INVENTORY_SCHEMA + ".storageSite");
-        jdbcTemplate.execute("TRUNCATE TABLE " + TestUtil.INVENTORY_SCHEMA + ".harvestState");
+        jdbcTemplate.execute("TRUNCATE TABLE " + TestUtil.INVENTORY_SCHEMA + ".DeletedArtifactEvent");
+        jdbcTemplate.execute("TRUNCATE TABLE " + TestUtil.INVENTORY_SCHEMA + ".DeletedStorageLocationEvent");
+        jdbcTemplate.execute("TRUNCATE TABLE " + TestUtil.INVENTORY_SCHEMA + ".StorageSite");
         jdbcTemplate.execute("TRUNCATE TABLE " + TestUtil.INVENTORY_SCHEMA + ".Artifact");
+        jdbcTemplate.execute("TRUNCATE TABLE " + TestUtil.INVENTORY_SCHEMA + ".StorageLocationEvent");
+        
+        jdbcTemplate.execute("TRUNCATE TABLE " + TestUtil.INVENTORY_SCHEMA + ".HarvestState");
+        log.info("cleanTestEnvironment: " + InventoryEnvironment.class.getSimpleName() + " - DONE");
     }
 }

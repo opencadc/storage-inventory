@@ -57,7 +57,7 @@
         
         <init-param>
             <param-name>ca.nrc.cadc.uws.server.JobManager</param-name>
-            <param-value>org.opencadc.luskan.ws.QueryJobManager</param-value>
+            <param-value>org.opencadc.luskan.QueryJobManager</param-value>
         </init-param>
         <init-param>
             <param-name>ca.nrc.cadc.rest.InlineContentHandler</param-name>
@@ -81,7 +81,7 @@
 
         <init-param>
             <param-name>ca.nrc.cadc.uws.server.JobManager</param-name>
-            <param-value>org.opencadc.luskan.ws.QueryJobManager</param-value>
+            <param-value>org.opencadc.luskan.QueryJobManager</param-value>
         </init-param>
         <init-param>
             <param-name>ca.nrc.cadc.rest.InlineContentHandler</param-name>
@@ -113,6 +113,10 @@
             <param-value>ca.nrc.cadc.vosi.CapInitAction</param-value>
         </init-param>
         <init-param>
+            <param-name>head</param-name>
+            <param-value>ca.nrc.cadc.vosi.CapHeadAction</param-value>
+        </init-param>
+        <init-param>
             <param-name>get</param-name>
             <param-value>ca.nrc.cadc.vosi.CapGetAction</param-value>
         </init-param>
@@ -120,6 +124,10 @@
             <param-name>input</param-name>
             <param-value>/capabilities.xml</param-value>
         </init-param>
+        <init-param>
+            <param-name>authRequired</param-name>
+            <param-value>false</param-value>
+	</init-param>
         <load-on-startup>3</load-on-startup>
     </servlet>
 
@@ -130,7 +138,7 @@
         <description>
         </description>
             <param-name>ca.nrc.cadc.vosi.AvailabilityPlugin</param-name>
-            <param-value>org.opencadc.luskan.ws.StorageTapService</param-value>
+            <param-value>org.opencadc.luskan.ServiceAvailability</param-value>
         </init-param>
         <load-on-startup>3</load-on-startup>
     </servlet>

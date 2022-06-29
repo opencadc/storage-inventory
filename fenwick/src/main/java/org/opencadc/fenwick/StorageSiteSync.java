@@ -69,19 +69,19 @@
 package org.opencadc.fenwick;
 
 import ca.nrc.cadc.auth.NotAuthenticatedException;
+import ca.nrc.cadc.date.DateUtil;
 import ca.nrc.cadc.io.ByteLimitExceededException;
 import ca.nrc.cadc.io.ResourceIterator;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
-
 import java.io.IOException;
 import java.net.URI;
 import java.security.AccessControlException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.text.DateFormat;
 import java.util.Date;
 import java.util.UUID;
-
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.StorageSite;
@@ -93,48 +93,60 @@ import org.opencadc.tap.TapClient;
  * Class to pull a single StorageSite from a remote TAP (Luskan) service.  This class is enabled by the
  * org.opencadc.fenwick.trackSiteLocations property in the fenwick.properties file.
  */
-public class StorageSiteSync {
+public class StorageSiteSync extends AbstractSync {
     private static final Logger log = Logger.getLogger(StorageSiteSync.class);
 
     // column order folllowing model declarations
     private static final String STORAGE_SITE_QUERY =
-            "SELECT resourceid, name, allowRead, allowWrite, id, lastmodified, metachecksum FROM inventory.storagesite";
+            "SELECT resourceID, name, allowRead, allowWrite, id, lastModified, metaChecksum FROM inventory.StorageSite";
 
     private final TapClient<StorageSite> tapClient;
     private final StorageSiteDAO storageSiteDAO;
+    private final MessageDigest messageDigest;
+    
+    private StorageSite currentStorageSite;
 
-    /**
-     * Constructor that accepts a TapClient to query Storage Sites to sync.  Useful for testing.
-     *
-     * @param tapClient The TapClient to use.
-     * @param storageSiteDAO    The DAO for the StorageSite table.  Used for PUTs.
-     */
-    public StorageSiteSync(final TapClient<StorageSite> tapClient, final StorageSiteDAO storageSiteDAO) {
-        this.tapClient = tapClient;
+    public StorageSiteSync(final StorageSiteDAO storageSiteDAO, URI resourceID, 
+            int querySleepInterval, int maxRetryInterval) {
+        super(resourceID, querySleepInterval, maxRetryInterval);
         this.storageSiteDAO = storageSiteDAO;
+        try {
+            this.tapClient = new TapClient<>(resourceID);
+        } catch (ResourceNotFoundException ex) {
+            throw new IllegalArgumentException("invalid config: query service not found: " + resourceID);
+        }
+        try {
+            this.messageDigest = MessageDigest.getInstance("MD5");
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException("BUG: " + e.getMessage(), e);
+        }
     }
 
-    /**
-     * Query for a Storage Site from a remote TAP (Luskan) service.  This method is expected to return a single
-     * StorageSite instance.  The result will typically be used to set to an Artifact's site locations during metadata
-     * synchronization.
-     *
-     * @return StorageSite  There should be a single StorageSite found.
-     * @throws AccessControlException permission denied
-     * @throws NotAuthenticatedException authentication attempt failed or rejected
-     * @throws ByteLimitExceededException input or output limit exceeded
-     * @throws IllegalArgumentException null method arguments or invalid query
-     * @throws ResourceNotFoundException remote resource not found
-     * @throws TransientException temporary failure of TAP service: same call could work in future
-     * @throws IOException failure to send or read data stream
-     * @throws InterruptedException thread interrupted
-     */
-    public StorageSite doit() throws AccessControlException, ResourceNotFoundException,
-                                     ByteLimitExceededException, NotAuthenticatedException,
-                                     IllegalArgumentException, TransientException, IOException,
-                                     InterruptedException {
+    // ctor for unit tests
+    
+    StorageSiteSync() {
+        super(true);
+        this.tapClient = null;
+        this.storageSiteDAO = null;
+        try {
+            this.messageDigest = MessageDigest.getInstance("MD5");
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException("BUG: " + e.getMessage(), e);
+        }
+    }
+
+    public StorageSite getCurrentStorageSite() {
+        return currentStorageSite;
+    }
+    
+    @Override
+    public void doit() throws AccessControlException, ResourceNotFoundException, NotAuthenticatedException, 
+            IllegalArgumentException, TransientException, IOException, InterruptedException {
         StorageSite storageSite;
+        long t1 = System.currentTimeMillis();
         try (final ResourceIterator<StorageSite> storageSiteIterator = queryStorageSites()) {
+            long dt = System.currentTimeMillis() - t1;
+            log.info("StorageSite.QUERY dt=" + dt);
             if (storageSiteIterator.hasNext()) {
                 storageSite = storageSiteIterator.next();
                 // Ensure there is only one returned.
@@ -146,24 +158,34 @@ public class StorageSiteSync {
             }
         }
 
-        try {
-            final MessageDigest messageDigest = MessageDigest.getInstance("MD5");
-            final URI metaChecksum = storageSite.getMetaChecksum();
-            final URI computedMetaChecksum = storageSite.computeMetaChecksum(messageDigest);
+        final URI metaChecksum = storageSite.getMetaChecksum();
+        final URI computedMetaChecksum = storageSite.computeMetaChecksum(messageDigest);
 
-            if (!metaChecksum.equals(computedMetaChecksum)) {
-                throw new IllegalStateException(
-                        String.format("Discovered Storage Site checksum (%s) does not match computed value (%s).",
-                                      metaChecksum, computedMetaChecksum));
-            }
-
-            log.debug("Found Storage Site " + storageSite.getResourceID());
-            // Update the local inventory database values for this Storage Site.
-            storageSiteDAO.put(storageSite);
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException(e.getMessage(), e);
+        if (!metaChecksum.equals(computedMetaChecksum)) {
+            throw new IllegalStateException(
+                    String.format("Discovered Storage Site checksum (%s) does not match computed value (%s).",
+                            metaChecksum, computedMetaChecksum));
         }
-        return storageSite;
+
+        if (currentStorageSite != null && !currentStorageSite.getID().equals(storageSite.getID())) {
+            throw new IllegalStateException(
+                "StorageSiteSync: entity changed during sync - was: "
+                + currentStorageSite.getID() + " aka " + currentStorageSite.getResourceID()
+                + " now: " 
+                + storageSite.getID() + " aka " + storageSite.getResourceID());
+        }
+        
+        // StorageSite only changes if read/write config changes so optimise to keep logging tidy
+        if (currentStorageSite == null 
+            || !currentStorageSite.getMetaChecksum().equals(storageSite.getMetaChecksum())) {
+            DateFormat df = DateUtil.getDateFormat(DateUtil.IVOA_DATE_FORMAT, DateUtil.UTC);
+            log.info("StorageSiteSync.putStorageSite id=" + storageSite.getID()
+                + " resourceID=" + storageSite.getResourceID()
+                + " lastModified=" + df.format(storageSite.getLastModified()));
+
+            storageSiteDAO.put(storageSite);
+            this.currentStorageSite = storageSite;
+        }
     }
 
     /**
@@ -182,16 +204,16 @@ public class StorageSiteSync {
                                                              ByteLimitExceededException, NotAuthenticatedException,
                                                              IllegalArgumentException, TransientException, IOException,
                                                              InterruptedException {
-        return tapClient.execute(STORAGE_SITE_QUERY, row -> {
+        return tapClient.query(STORAGE_SITE_QUERY, row -> {
             int index = 0;
             // column order folllowing model declarations
-            final URI resourceID = (URI) row.get(index++);
+            final URI rid = (URI) row.get(index++);
             final String name = row.get(index++).toString();
             final boolean allowRead = (Boolean) row.get(index++);
             final boolean allowWrite = (Boolean) row.get(index++);
             final UUID id = (UUID) row.get(index++);
 
-            final StorageSite storageSite = new StorageSite(id, resourceID, name, allowRead, allowWrite);
+            final StorageSite storageSite = new StorageSite(id, rid, name, allowRead, allowWrite);
 
             InventoryUtil.assignLastModified(storageSite, (Date) row.get(index++));
             InventoryUtil.assignMetaChecksum(storageSite, (URI) row.get(index));

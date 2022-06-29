@@ -68,12 +68,19 @@
 
 package org.opencadc.minoc.operations;
 
+import ca.nrc.cadc.dali.Interval;
+import ca.nrc.cadc.dali.PolarizationState;
+import ca.nrc.cadc.dali.Shape;
+import ca.nrc.cadc.dali.util.IntervalFormat;
+import ca.nrc.cadc.dali.util.PolarizationStateListFormat;
+import ca.nrc.cadc.dali.util.ShapeFormat;
 import ca.nrc.cadc.util.StringUtil;
 
 import java.util.List;
 
 import org.opencadc.soda.ExtensionSlice;
 import org.opencadc.soda.PixelRange;
+import org.opencadc.soda.server.Cutout;
 
 
 /**
@@ -89,14 +96,70 @@ public class CutoutFileNameFormat {
     }
 
     /**
-     * Obtain a new file name based on the provided slices.  This is done by replacing values with underscores, and then
-     * inserting this underscore value into the file name after the last period.
-     * @param slices    The slices to use as format elements.
+     * Obtain a new file name based on the provided cutout.  This is done by replacing values with underscores, and then
+     * inserting this underscore value into the file name after the last period, and adding the input parameters.
+     * @param cutout    The cutout instance.
      * @return      New filename String.  Never null.
      */
-    public String format(final List<ExtensionSlice> slices) {
+    public String format(final Cutout cutout) {
         final StringBuilder appendage = new StringBuilder();
 
+        if (cutout.pixelCutouts != null) {
+            appendPixelCutouts(cutout.pixelCutouts, appendage);
+        }
+
+        if (cutout.pos != null) {
+            appendShapeCutout(cutout.pos, appendage);
+        }
+
+        if (cutout.band != null) {
+            appendIntervalCutout(cutout.band, appendage);
+        }
+
+        if (cutout.time != null) {
+            appendIntervalCutout(cutout.time, appendage);
+        }
+
+        if (cutout.pol != null) {
+            appendPolarizationCutout(cutout.pol, appendage);
+        }
+
+        // Strip off last underscore.
+        while (appendage.lastIndexOf(OUTPUT_DELIMITER) == (appendage.length() - 1)) {
+            appendage.deleteCharAt(appendage.lastIndexOf(OUTPUT_DELIMITER));
+        }
+
+        final StringBuilder fileBuilder = new StringBuilder(originalFileName);
+        fileBuilder.insert(fileBuilder.lastIndexOf(".") + 1,
+                           appendage.toString().replaceAll("\\.", OUTPUT_DELIMITER) + ".");
+
+        return fileBuilder.toString();
+    }
+
+    private void appendIntervalCutout(final Interval<?> interval, final StringBuilder appendage) {
+        final IntervalFormat intervalFormat = new IntervalFormat();
+        final String formattedInterval = intervalFormat.format(interval);
+        appendage.append(formattedInterval.replaceAll(" ", OUTPUT_DELIMITER)).append(OUTPUT_DELIMITER)
+                 .append(OUTPUT_DELIMITER);
+    }
+
+    private void appendShapeCutout(final Shape shape, final StringBuilder appendage) {
+        final ShapeFormat shapeFormat = new ShapeFormat();
+        final String formattedShape = shapeFormat.format(shape);
+        appendage.append(formattedShape.replaceAll(" ", OUTPUT_DELIMITER))
+                 .append(OUTPUT_DELIMITER).append(OUTPUT_DELIMITER);
+    }
+
+    private void appendPolarizationCutout(final List<PolarizationState> polarizationStates,
+                                          final StringBuilder appendage) {
+        final PolarizationStateListFormat polarizationStateListFormat = new PolarizationStateListFormat();
+        final String formattedPolarizationStates = polarizationStateListFormat.format(polarizationStates);
+        appendage.append(formattedPolarizationStates.replaceAll(" ", OUTPUT_DELIMITER)
+                                                    .replaceAll("\\|", OUTPUT_DELIMITER))
+                 .append(OUTPUT_DELIMITER).append(OUTPUT_DELIMITER);
+    }
+
+    private void appendPixelCutouts(final List<ExtensionSlice> slices, final StringBuilder appendage) {
         for (final ExtensionSlice slice : slices) {
             if (slice.extensionIndex != null) {
                 appendage.append(slice.extensionIndex);
@@ -107,7 +170,7 @@ public class CutoutFileNameFormat {
                 }
             } else {
                 // Assume the default extension, which is zero.
-                appendage.append(0);
+                appendage.append("0");
             }
 
             // Double underscore to separate extension from pixel ranges.
@@ -126,15 +189,5 @@ public class CutoutFileNameFormat {
 
             appendage.append(OUTPUT_DELIMITER).append(OUTPUT_DELIMITER);
         }
-
-        // Strip off last underscore.
-        while (appendage.lastIndexOf(OUTPUT_DELIMITER) == (appendage.length() - 1)) {
-            appendage.deleteCharAt(appendage.lastIndexOf(OUTPUT_DELIMITER));
-        }
-
-        final StringBuilder fileBuilder = new StringBuilder(originalFileName);
-        fileBuilder.insert(fileBuilder.lastIndexOf(".") + 1, appendage.toString() + ".");
-
-        return fileBuilder.toString();
     }
 }

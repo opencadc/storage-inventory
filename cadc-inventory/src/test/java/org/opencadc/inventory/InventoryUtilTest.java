@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2019.                            (c) 2019.
+*  (c) 2022.                            (c) 2022.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -73,6 +73,7 @@ import ca.nrc.cadc.util.Log4jInit;
 import java.net.URI;
 import java.security.MessageDigest;
 import java.util.Comparator;
+import java.util.Date;
 import java.util.Random;
 import java.util.UUID;
 
@@ -107,6 +108,54 @@ public class InventoryUtilTest {
     }
     */
 
+    @Test
+    public void testCollisionResolver() {
+        URI md5 = URI.create("md5:d41d8cd98f00b204e9800998ecf8427e");
+        long asize = 2014L;
+        long t = System.currentTimeMillis();
+        try {
+            final Artifact aold = new Artifact(URI.create("cadc:TEST/a1"), md5, new Date(t - 100), asize);
+            final Artifact anew = new Artifact(URI.create("cadc:TEST/a1"), md5, new Date(t + 100), asize);
+            final Artifact asame = new Artifact(URI.create("cadc:TEST/a1"), md5, new Date(t + 100), asize);
+            
+            Boolean win;
+            
+            // remote newer
+            win = InventoryUtil.isRemoteWinner(aold, anew);
+            Assert.assertTrue(win);
+            win = InventoryUtil.isRemoteWinner(aold, anew);
+            Assert.assertTrue(win);
+            
+            // local newer
+            win = InventoryUtil.isRemoteWinner(anew, aold);
+            Assert.assertFalse(win);
+            win = InventoryUtil.isRemoteWinner(anew, aold);
+            Assert.assertFalse(win);
+            
+            // ties
+            win = InventoryUtil.isRemoteWinner(anew, asame);
+            Assert.assertNull(win);
+            win = InventoryUtil.isRemoteWinner(asame, anew);
+            Assert.assertNull(win);
+            
+            final Artifact sameInstance = new Artifact(aold.getID(), URI.create("cadc:TEST/a1"), md5, new Date(t), asize);
+            try {
+                InventoryUtil.isRemoteWinner(aold, sameInstance);
+            } catch (IllegalArgumentException expected) {
+                log.info("caught expected: " + expected);
+            }
+            try {
+                InventoryUtil.isRemoteWinner(aold, sameInstance);
+            } catch (IllegalArgumentException expected) {
+                log.info("caught expected: " + expected);
+            }
+            
+        } catch (Exception unexpected) {
+            log.error("unexpected exception", unexpected);
+            Assert.fail("unexpected exception: " + unexpected);
+        }
+    }
+    
     @Test
     public void testValidateArtifactURI() {
         try {
@@ -195,6 +244,22 @@ public class InventoryUtilTest {
 
             try {
                 URI u = URI.create("cadc:foo$bar");
+                InventoryUtil.validateArtifactURI(InventoryUtilTest.class, u);
+                Assert.fail("expected invalid: " + u);
+            } catch (IllegalArgumentException expected) {
+                log.info("caught expected: " + expected);
+            }
+            
+            try {
+                URI u = URI.create("cadc:foo[bar");
+                InventoryUtil.validateArtifactURI(InventoryUtilTest.class, u);
+                Assert.fail("expected invalid: " + u);
+            } catch (IllegalArgumentException expected) {
+                log.info("caught expected: " + expected);
+            }
+            
+            try {
+                URI u = URI.create("cadc:foo]bar");
                 InventoryUtil.validateArtifactURI(InventoryUtilTest.class, u);
                 Assert.fail("expected invalid: " + u);
             } catch (IllegalArgumentException expected) {

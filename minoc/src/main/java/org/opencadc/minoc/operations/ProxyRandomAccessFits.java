@@ -146,18 +146,18 @@ public class ProxyRandomAccessFits implements RandomAccessDataObject {
                 return -1;
             }
             ByteRange range = new ByteRange(curpos, avail);
-            SortedSet<ByteRange> ranges = new TreeSet<>();
-            ranges.add(range);
             ByteArrayOutputStream bos = new ByteArrayOutputStream(len);
-            //log.debug("calling  StorageAdapter.get: curpos=" + curpos + " len=" + len);
-            adapter.get(sloc, bos, ranges);
+            adapter.get(sloc, bos, range);
             byte[] result = bos.toByteArray();
 
             int ret = bos.size();
             System.arraycopy(result, 0, bytes, off, ret);
             curpos += ret;
-            log.debug("ProxyRandomAccess.read(" + off + "," + len + " read " + ret + " (new curpos:" + curpos + ")");
+            //log.debug("ProxyRandomAccess.read(" + off + "," + len + " read " + ret + " (new curpos:" + curpos + ")");
             return ret;
+        } catch (UnsupportedOperationException ex) {
+            // storage adapter doesn't support byte ranges
+            throw ex;
         } catch (Exception ex) {
             throw new IOException("read failed", ex);
         }

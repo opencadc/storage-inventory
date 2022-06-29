@@ -93,15 +93,23 @@ public class DeleteAction extends ArtifactAction {
     public DeleteAction() {
         super();
     }
+    
+    /**
+     * Perform auth checks and initialize resources.
+     */
+    @Override
+    public void initAction() throws Exception {
+        checkWritable();
+        initAndAuthorize(WriteGrant.class);
+        initDAO();
+        initStorageAdapter();
+    }
 
     /**
      * Delete the artifact. 
      */
     @Override
     public void doAction() throws Exception {
-        
-        initAndAuthorize(WriteGrant.class);
-        
         Artifact existing = artifactDAO.get(artifactURI);
         if (existing == null) {
             throw new ResourceNotFoundException("not found: " + artifactURI);
@@ -117,11 +125,11 @@ public class DeleteAction extends ArtifactAction {
             
             boolean locked = false;
             while (existing != null && !locked) {
-                try { 
-                    artifactDAO.lock(existing);
+                existing = artifactDAO.lock(existing);
+                if (existing != null) {
                     locked = true;
-                } catch (EntityNotFoundException ex) {
-                    // entity deleted
+                } else {
+                    // try again by uri
                     existing = artifactDAO.get(artifactURI);
                 }
             }
@@ -143,6 +151,8 @@ public class DeleteAction extends ArtifactAction {
             log.debug("committing transaction");
             txnMgr.commitTransaction();
             log.debug("commit txn: OK");
+            
+            syncOutput.setCode(204); // no content
             
             // this block could be passed off to a thread so request completes
             if (dsl != null) {

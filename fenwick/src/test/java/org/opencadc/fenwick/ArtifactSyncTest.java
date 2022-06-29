@@ -69,23 +69,29 @@
 package org.opencadc.fenwick;
 
 import ca.nrc.cadc.date.DateUtil;
+import ca.nrc.cadc.util.Log4jInit;
+import java.util.Calendar;
+import java.util.Date;
+import org.apache.log4j.Level;
 import org.junit.Assert;
 import org.junit.Test;
-
-import java.util.Calendar;
 
 
 public class ArtifactSyncTest {
 
     @Test
     public void testBuildQueryNoLastModifiedDate() throws Exception {
-        final ArtifactSync artifactSync = new ArtifactSync(null, null);
-        final String resultOne = artifactSync.buildQuery();
+        final ArtifactSync artifactSync = new ArtifactSync(null);
+        final String resultOne = artifactSync.buildQuery(null, null);
 
         Assert.assertEquals("Wrong query.",
                             "SELECT id, uri, contentChecksum, contentLastModified, contentLength, contentType, "
                             + "contentEncoding, lastModified, metaChecksum FROM inventory.Artifact "
                             + "ORDER BY lastModified", resultOne);
+    }
+    
+    static {
+        Log4jInit.setLevel("org.opencadc.fenwick", Level.INFO);
     }
 
     @Test
@@ -94,8 +100,8 @@ public class ArtifactSyncTest {
         calendar.set(1977, Calendar.NOVEMBER, 25, 3, 12, 0);
         calendar.set(Calendar.MILLISECOND, 0);
 
-        final ArtifactSync artifactSync = new ArtifactSync(null, calendar.getTime());
-        final String resultOne = artifactSync.buildQuery();
+        final ArtifactSync artifactSync = new ArtifactSync(null);
+        final String resultOne = artifactSync.buildQuery(calendar.getTime(), null);
 
         Assert.assertEquals("Wrong query.",
                             "SELECT id, uri, contentChecksum, contentLastModified, contentLength, contentType, "
@@ -110,10 +116,8 @@ public class ArtifactSyncTest {
         calendar.set(1977, Calendar.NOVEMBER, 25, 3, 12, 0);
         calendar.set(Calendar.MILLISECOND, 0);
 
-        final ArtifactSync artifactSync = new ArtifactSync(null, calendar.getTime());
-        artifactSync.includeClause = "uri LIKE 'ad:CFHT%'";
-
-        final String resultOne = artifactSync.buildQuery();
+        final ArtifactSync artifactSync = new ArtifactSync("uri LIKE 'ad:CFHT%'");
+        final String resultOne = artifactSync.buildQuery(calendar.getTime(), null);
 
         Assert.assertEquals("Wrong query.",
                             "SELECT id, uri, contentChecksum, contentLastModified, contentLength, contentType, "
@@ -125,10 +129,8 @@ public class ArtifactSyncTest {
 
     @Test
     public void testBuildQueryWithNoLastModifiedAndInclude() throws Exception {
-        final ArtifactSync artifactSync = new ArtifactSync(null, null);
-        artifactSync.includeClause = "uri LIKE 'ad:CFHT%' OR uri LIKE 'ad:MEGA%'";
-
-        final String resultOne = artifactSync.buildQuery();
+        final ArtifactSync artifactSync = new ArtifactSync("uri LIKE 'ad:CFHT%' OR uri LIKE 'ad:MEGA%'");
+        final String resultOne = artifactSync.buildQuery(null, null);
 
         Assert.assertEquals("Wrong query.",
                             "SELECT id, uri, contentChecksum, contentLastModified, contentLength, contentType, "

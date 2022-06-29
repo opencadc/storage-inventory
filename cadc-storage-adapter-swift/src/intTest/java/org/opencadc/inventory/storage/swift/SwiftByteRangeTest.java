@@ -72,6 +72,7 @@ import java.util.Iterator;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Before;
+import org.junit.Test;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.storage.StorageMetadata;
 import org.opencadc.inventory.storage.test.StorageAdapterByteRangeTest;
@@ -93,9 +94,8 @@ public class SwiftByteRangeTest extends StorageAdapterByteRangeTest {
     final SwiftStorageAdapter swiftAdapter;
     
     public SwiftByteRangeTest() throws Exception {
-        super(new SwiftStorageAdapter());
+        super(new SwiftStorageAdapter(true, System.getProperty("user.name") + "-single-test", 3, false)); // single-bucket adapter for this
         this.swiftAdapter = (SwiftStorageAdapter) super.adapter;
-        swiftAdapter.multiBucket = false; // override config
     }
     
     @Before
@@ -108,5 +108,10 @@ public class SwiftByteRangeTest extends StorageAdapterByteRangeTest {
             log.info("\tdeleted: " + loc);
         }
         log.info("cleanupBefore: DONE");        
+    }
+    
+    @Test
+    public void testCleanupOnly() {
+        log.info("testCleanupOnly: no-op");
     }
 }    

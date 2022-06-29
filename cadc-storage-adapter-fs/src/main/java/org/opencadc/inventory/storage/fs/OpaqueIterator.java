@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2020.                            (c) 2020.
+*  (c) 2022.                            (c) 2022.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -193,36 +193,6 @@ class OpaqueIterator implements Iterator<StorageMetadata> {
     }
     
     private StorageMetadata createStorageMetadata(Path p) {
-        Path rel = contentPath.relativize(p);
-        
-        URI storageID = URI.create("uuid:" + rel.getFileName());
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < rel.getNameCount() - 1; i++) {
-            sb.append(rel.getName(i));
-        }
-        String storageBucket = sb.toString();
-        log.debug("createStorageMetadata: " + storageBucket + "," + storageID);
-        
-        try {
-            StorageLocation sloc = new StorageLocation(storageID);
-            sloc.storageBucket = storageBucket;
-            try {
-                String csAttr = OpaqueFileSystemStorageAdapter.getFileAttribute(p, OpaqueFileSystemStorageAdapter.CHECKSUM_ATTR);
-                String aidAttr = OpaqueFileSystemStorageAdapter.getFileAttribute(p, OpaqueFileSystemStorageAdapter.ARTIFACTID_ATTR);
-            
-                URI contentChecksum = new URI(csAttr);
-                long contentLength = Files.size(p);
-                StorageMetadata ret = new StorageMetadata(sloc, contentChecksum, contentLength);
-            
-                // optional
-                ret.artifactURI = new URI(aidAttr);
-                ret.contentLastModified = new Date(Files.getLastModifiedTime(p).toMillis());
-                return ret;
-            } catch (FileSystemException | IllegalArgumentException | URISyntaxException ex) {
-                return new StorageMetadata(sloc); // missing attrs: invalid stored object
-            }
-        } catch (IOException ex) {
-            throw new RuntimeException("failed to recreate StorageMetadata: " + storageBucket + "," + storageID, ex);
-        }
+        return OpaqueFileSystemStorageAdapter.createStorageMetadata(contentPath, p);
     }
 }

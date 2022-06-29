@@ -67,10 +67,19 @@
 
 package org.opencadc.raven;
 
+import ca.nrc.cadc.net.ResourceNotFoundException;
+import ca.nrc.cadc.reg.Standards;
 import ca.nrc.cadc.rest.SyncOutput;
+import ca.nrc.cadc.vos.Direction;
+import ca.nrc.cadc.vos.Protocol;
+import ca.nrc.cadc.vos.Transfer;
+import ca.nrc.cadc.vos.VOS;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.InventoryUtil;
+import org.opencadc.inventory.db.StorageSiteDAO;
+import org.opencadc.permissions.ReadGrant;
+import org.opencadc.permissions.TokenTool;
 
 /**
  * Interface with inventory to get the metadata of an artifact.
@@ -96,6 +105,26 @@ public class HeadFilesAction extends FilesAction {
         initAndAuthorize();
         log.debug("Starting HEAD action for " + artifactURI.toASCIIString());
         Artifact artifact = artifactDAO.get(artifactURI);
+        if (artifact == null) {
+            if (this.preventNotFound) {
+                // check the other sites
+                ProtocolsGenerator pg = new ProtocolsGenerator(this.artifactDAO, this.publicKeyFile, this.privateKeyFile,
+                        this.user, this.siteAvailabilities, this.siteRules, this.preventNotFound);
+                StorageSiteDAO storageSiteDAO = new StorageSiteDAO(artifactDAO);
+                Transfer transfer = new Transfer(artifactURI, Direction.pullFromVoSpace);
+                Protocol proto = new Protocol(VOS.PROTOCOL_HTTPS_GET);
+                proto.setSecurityMethod(Standards.SECURITY_METHOD_ANON);
+                transfer.getProtocols().add(proto);
+                TokenTool tk = new TokenTool(publicKeyFile, privateKeyFile);
+                String authToken = tk.generateToken(artifactURI, ReadGrant.class, user);
+                artifact = pg.getUnsyncedArtifact(artifactURI, transfer, storageSiteDAO.list(), authToken);
+            }
+
+        }
+        if (artifact == null) {
+            // message not actually output for a head request
+            throw new ResourceNotFoundException(artifactURI.toASCIIString());
+        }
         setHeaders(artifact, syncOutput);
     }
     
@@ -105,8 +134,8 @@ public class HeadFilesAction extends FilesAction {
      * @param syncOutput The target response
      */
     public static void setHeaders(Artifact artifact, SyncOutput syncOutput) {
-        syncOutput.setHeader("Content-MD5", artifact.getContentChecksum().getSchemeSpecificPart());
-        syncOutput.setHeader("Digest", "md5=" + artifact.getContentChecksum().getSchemeSpecificPart());
+        syncOutput.setDigest(artifact.getContentChecksum());
+        syncOutput.setLastModified(artifact.getContentLastModified());
         syncOutput.setHeader("Content-Length", artifact.getContentLength());
         String filename = InventoryUtil.computeArtifactFilename(artifact.getURI());
         syncOutput.setHeader("Content-Disposition", "attachment; filename=\"" + filename + "\"");

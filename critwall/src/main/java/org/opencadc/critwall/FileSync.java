@@ -71,12 +71,12 @@ import ca.nrc.cadc.auth.AuthenticationUtil;
 import ca.nrc.cadc.auth.SSLUtil;
 import ca.nrc.cadc.db.ConnectionConfig;
 import ca.nrc.cadc.io.ResourceIterator;
+import ca.nrc.cadc.thread.ThreadedRunnableExecutor;
 import ca.nrc.cadc.vosi.Availability;
 import ca.nrc.cadc.vosi.AvailabilityClient;
 
 import java.io.File;
 import java.net.URI;
-import java.security.PrivilegedAction;
 import java.util.Iterator;
 import java.util.Map;
 
@@ -115,7 +115,7 @@ public class FileSync implements Runnable {
     private final BucketSelector selector;
     private final int nthreads;
     private final StorageAdapter storageAdapter;
-    private final ThreadPool threadPool;
+    private final ThreadedRunnableExecutor threadPool;
     private final LinkedBlockingQueue<Runnable> jobQueue;
 
     // test usage only
@@ -190,16 +190,14 @@ public class FileSync implements Runnable {
         // consumer: ThreadPool uses jobQueue.take(); blocks if queue is empty
 
         this.jobQueue = new LinkedBlockingQueue<>(this.nthreads * 2);
-        this.threadPool = new ThreadPool(this.jobQueue, this.nthreads);
+        this.threadPool = new ThreadedRunnableExecutor(this.jobQueue, this.nthreads);
 
         this.storageAdapter = localStorage;
 
         log.debug("FileSync ctor done");
     }
 
-    /**
-     * Spin up a Scheduler thread to renew the subject periodically.
-     */
+    // start a Scheduler thread to renew the subject periodically.
     public static void scheduleSubjectUpdates(final Subject subject) {
         log.debug("START: scheduleSubjectUpdates");
         final ScheduledExecutorService scheduledExecutorService = Executors.newSingleThreadScheduledExecutor();
@@ -220,14 +218,11 @@ public class FileSync implements Runnable {
                                 : AuthenticationUtil.getAnonSubject();
 
         scheduleSubjectUpdates(subject);
-
-        Subject.doAs(subject, (PrivilegedAction<Void>) () -> {
-            doit();
-            return null;
-        });
+        doit(subject);
     }
 
-    public void doit() {
+    // package access for test code
+    void doit(final Subject currentUser) {
         // poll time while watching job queue to empty
         long poll = 30 * 1000L; // 30 sec
         if (testRunLoops > 0) {
@@ -253,7 +248,6 @@ public class FileSync implements Runnable {
                 long startQ = System.currentTimeMillis();
                 long num = 0L;
                 log.info("FileSync.QUERY START");
-                final Subject currentUser = AuthenticationUtil.getCurrentSubject();
                 Iterator<String> bi = selector.getBucketIterator();
                 while (bi.hasNext()) {
                     String bucket = bi.next();
@@ -264,11 +258,12 @@ public class FileSync implements Runnable {
                             // are available from the cadc-inventory-db API
                             Artifact curArtifact = unstoredArtifacts.next();
                             log.debug("create job: " + curArtifact.getURI());
-                            FileSyncJob fsj = new FileSyncJob(curArtifact.getID(), this.locatorService,
+                            FileSyncJob fsj = new FileSyncJob(curArtifact, this.locatorService,
                                                               this.storageAdapter, this.jobArtifactDAO, currentUser);
 
                             jobQueue.put(fsj); // blocks when queue capacity is reached
-                            log.info("FileSync.CREATE: " + curArtifact.getURI());
+                            log.info("FileSync.CREATE: Artifact.id=" + curArtifact.getID()
+                                    + " Artifact.uri=" + curArtifact.getURI());
                             num++;
                         }
                     } catch (Exception qex) {
@@ -316,6 +311,9 @@ public class FileSync implements Runnable {
                     ok = false;
                 }
             }
+        }
+        if (testRunLoops > 0) {
+            log.warn("TEST MODE: testRunLoops=" + testRunLoops + " ... threadPool.terminate");
         }
         this.threadPool.terminate();
     }

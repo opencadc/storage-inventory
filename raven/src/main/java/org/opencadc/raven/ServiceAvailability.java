@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2019.                            (c) 2019.
+*  (c) 2022.                            (c) 2022.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -71,14 +71,15 @@ import ca.nrc.cadc.auth.AuthMethod;
 import ca.nrc.cadc.reg.Standards;
 import ca.nrc.cadc.reg.client.LocalAuthority;
 import ca.nrc.cadc.reg.client.RegistryClient;
+import ca.nrc.cadc.vosi.Availability;
 import ca.nrc.cadc.vosi.AvailabilityPlugin;
-import ca.nrc.cadc.vosi.AvailabilityStatus;
 import ca.nrc.cadc.vosi.avail.CheckCertificate;
 import ca.nrc.cadc.vosi.avail.CheckException;
 import ca.nrc.cadc.vosi.avail.CheckResource;
 import ca.nrc.cadc.vosi.avail.CheckWebService;
 import java.io.File;
 import java.net.URI;
+import java.net.URL;
 import org.apache.log4j.Logger;
 
 /**
@@ -100,6 +101,7 @@ public class ServiceAvailability implements AvailabilityPlugin {
 
     /**
      * Sets the name of the application.
+     * @param string unique application name
      */
     @Override
     public void setAppName(String string) {
@@ -120,36 +122,39 @@ public class ServiceAvailability implements AvailabilityPlugin {
      * @return Information of the availability check.
      */
     @Override
-    public AvailabilityStatus getStatus() {
+    public Availability getStatus() {
         boolean isGood = true;
         String note = "service is accepting requests";
         
         try {
-            // check other services we depend on
-            RegistryClient reg = new RegistryClient();
-            String url;
-            LocalAuthority localAuthority = new LocalAuthority();
-
             // check for a certficate needed to perform network ops
             CheckCertificate checkCert = new CheckCertificate(SERVOPS_PEM_FILE);
             checkCert.check();
             log.info("cert check ok");
 
+            // check other services we depend on
+            RegistryClient reg = new RegistryClient();
+            URL url;
             CheckResource checkResource;
+            
+            LocalAuthority localAuthority = new LocalAuthority();
+
             URI credURI = localAuthority.getServiceURI(Standards.CRED_PROXY_10.toString());
-            url = reg.getServiceURL(credURI, Standards.VOSI_AVAILABILITY, AuthMethod.ANON).toExternalForm();
+            url = reg.getServiceURL(credURI, Standards.VOSI_AVAILABILITY, AuthMethod.ANON);
             checkResource = new CheckWebService(url);
             checkResource.check();
 
             URI usersURI = localAuthority.getServiceURI(Standards.UMS_USERS_01.toString());
-            url = reg.getServiceURL(usersURI, Standards.VOSI_AVAILABILITY, AuthMethod.ANON).toExternalForm();
+            url = reg.getServiceURL(usersURI, Standards.VOSI_AVAILABILITY, AuthMethod.ANON);
             checkResource = new CheckWebService(url);
             checkResource.check();
             
             URI groupsURI = localAuthority.getServiceURI(Standards.GMS_SEARCH_01.toString());
-            url = reg.getServiceURL(groupsURI, Standards.VOSI_AVAILABILITY, AuthMethod.ANON).toExternalForm();
-            checkResource = new CheckWebService(url);
-            checkResource.check();
+            if (!groupsURI.equals(usersURI)) {
+                url = reg.getServiceURL(groupsURI, Standards.VOSI_AVAILABILITY, AuthMethod.ANON);
+                checkResource = new CheckWebService(url);
+                checkResource.check();
+            }
             
         } catch (CheckException ce) {
             // tests determined that the resource is not working
@@ -162,7 +167,7 @@ public class ServiceAvailability implements AvailabilityPlugin {
             note = "test failed, reason: " + t;
         }
 
-        return new AvailabilityStatus(isGood, null, null, null, note);
+        return new Availability(isGood, note);
     }
 
     /**

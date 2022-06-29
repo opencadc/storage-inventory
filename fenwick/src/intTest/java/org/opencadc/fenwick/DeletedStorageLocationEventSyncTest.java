@@ -3,7 +3,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2020.                            (c) 2020.
+ *  (c) 2022.                            (c) 2022.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -69,41 +69,32 @@
 
 package org.opencadc.fenwick;
 
-import ca.nrc.cadc.auth.SSLUtil;
-import ca.nrc.cadc.db.ConnectionConfig;
-import ca.nrc.cadc.db.DBConfig;
-import ca.nrc.cadc.db.DBUtil;
 import ca.nrc.cadc.io.ResourceIterator;
 import ca.nrc.cadc.util.Log4jInit;
-import java.io.File;
 import java.net.URI;
 import java.security.PrivilegedExceptionAction;
-import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
-import java.util.Map;
-import java.util.TreeMap;
 import java.util.UUID;
 import javax.security.auth.Subject;
-import javax.sql.DataSource;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
+import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.DeletedStorageLocationEvent;
-import org.opencadc.inventory.db.DeletedStorageLocationEventDAO;
-import org.opencadc.inventory.db.SQLGenerator;
-import org.opencadc.tap.TapClient;
+import org.opencadc.inventory.SiteLocation;
+import org.opencadc.inventory.StorageSite;
+import org.opencadc.inventory.db.HarvestState;
+import org.opencadc.inventory.query.DeletedStorageLocationEventRowMapper;
 import org.opencadc.tap.TapRowMapper;
 
 public class DeletedStorageLocationEventSyncTest {
 
     private static final Logger log = Logger.getLogger(DeletedStorageLocationEventSyncTest.class);
-
-    private static final File PROXY_PEM = new File(System.getProperty("user.home") + "/.ssl/cadcproxy.pem");
 
     static {
         Log4jInit.setLevel("org.opencadc.inventory", Level.INFO);
@@ -111,90 +102,49 @@ public class DeletedStorageLocationEventSyncTest {
         Log4jInit.setLevel("org.opencadc.fenwick", Level.INFO);
     }
 
-    private final DeletedStorageLocationEventDAO deletedEventDAO = new DeletedStorageLocationEventDAO();
-
+    private final InventoryEnvironment inventoryEnvironment = new InventoryEnvironment();
+    private final LuskanEnvironment luskanEnvironment = new LuskanEnvironment();
+    private final Subject testUser = TestUtil.getConfiguredSubject();
+    
     public DeletedStorageLocationEventSyncTest() throws Exception {
-        final DBConfig dbConfig = new DBConfig();
-        final ConnectionConfig cc = dbConfig.getConnectionConfig(TestUtil.LUSKAN_SERVER,
-                                                                 TestUtil.LUSKAN_DATABASE);
-        DBUtil.createJNDIDataSource("jdbc/DeletedEventSyncTest", cc);
-
-        final Map<String, Object> config = new TreeMap<>();
-        config.put(SQLGenerator.class.getName(), SQLGenerator.class);
-        config.put("jndiDataSourceName", "jdbc/DeletedEventSyncTest");
-        config.put("database", TestUtil.LUSKAN_DATABASE);
-        config.put("schema", TestUtil.LUSKAN_SCHEMA);
-
-        deletedEventDAO.setConfig(config);
     }
 
     @Before
-    public void setup() throws SQLException {
-        log.info("deleting events...");
-        DataSource ds = deletedEventDAO.getDataSource();
-        String sql = String.format("delete from %s.deletedStorageLocationEvent", TestUtil.LUSKAN_SCHEMA);
-        ds.getConnection().createStatement().execute(sql);
-        log.info("deleting events... OK");
+    public void beforeTest() throws Exception {
+        inventoryEnvironment.cleanTestEnvironment();
+        luskanEnvironment.cleanTestEnvironment();
     }
 
     @Test
-    public void testRowMapper() {
+    public void testGetEventStream() {
         try {
-            log.info("testRowMapper");
-
-            UUID uuid = UUID.randomUUID();
-            Date lasModified = new Date();
-            URI metaChecksum = new URI(TestUtil.ZERO_BYTES_MD5);
-
-            List<Object> row = new ArrayList<>();
-            row.add(uuid);
-            row.add(lasModified);
-            row.add(metaChecksum);
-
-            TapRowMapper<DeletedStorageLocationEvent> mapper =
-                new DeletedStorageLocationEventSync.DeletedStorageLocationEventRowMapper();
-            DeletedStorageLocationEvent event = mapper.mapRow(row);
-
-            Assert.assertNotNull(event);
-            Assert.assertEquals(uuid, event.getID());
-            Assert.assertEquals(lasModified, event.getLastModified());
-            Assert.assertEquals(metaChecksum, event.getMetaChecksum());
-        } catch (Exception ex) {
-            log.error("unexpected exception", ex);
-            Assert.fail("unexpected exception: " + ex);
-        }
-    }
-
-    @Test
-    public void testGetEvents() {
-        try {
-            log.info("testGetEventsNoneFound");
-            Subject userSubject = SSLUtil.createSubject(PROXY_PEM);
-            TapClient<DeletedStorageLocationEvent> tapClient = new TapClient<>(TestUtil.LUSKAN_URI);
-
-            Calendar now = Calendar.getInstance();
-            now.add(Calendar.DAY_OF_MONTH, -1);
-            Date startTime = now.getTime();
-            DeletedStorageLocationEventSync sync = new DeletedStorageLocationEventSync(tapClient);
-            sync.startTime = startTime;
-
-            Subject.doAs(userSubject, new PrivilegedExceptionAction<Object>() {
+            log.info("testGetEventStream");
+            
+            Subject.doAs(testUser, new PrivilegedExceptionAction<Object>() {
 
                 public Object run() throws Exception {
 
+                    StorageSite site1 = new StorageSite(URI.create("cadc:TEST/siteone"), "Test Site", true, false);
+                    final DeletedStorageLocationEventSync sync = new DeletedStorageLocationEventSync(
+                        inventoryEnvironment.artifactDAO, TestUtil.LUSKAN_URI, 6, 6, site1);
+                    
+                    Calendar now = Calendar.getInstance();
+                    now.add(Calendar.DAY_OF_MONTH, -1);
+                    Date startTime = now.getTime();
+                    
                     // query with no results
-                    ResourceIterator<DeletedStorageLocationEvent> emptyIterator = sync.getEvents();
+                    ResourceIterator<DeletedStorageLocationEvent> emptyIterator = sync.getEventStream(startTime, null);
                     Assert.assertNotNull(emptyIterator);
                     Assert.assertFalse(emptyIterator.hasNext());
 
                     DeletedStorageLocationEvent expected1 = new DeletedStorageLocationEvent(UUID.randomUUID());
                     DeletedStorageLocationEvent expected2 = new DeletedStorageLocationEvent(UUID.randomUUID());
 
-                    deletedEventDAO.put(expected1);
-                    deletedEventDAO.put(expected2);
+                    luskanEnvironment.deletedStorageLocationEventDAO.put(expected1);
+                    luskanEnvironment.deletedStorageLocationEventDAO.put(expected2);
 
                     // query with multiple results
-                    ResourceIterator<DeletedStorageLocationEvent> iterator = sync.getEvents();
+                    ResourceIterator<DeletedStorageLocationEvent> iterator = sync.getEventStream(startTime, null);
                     Assert.assertNotNull(iterator);
 
                     Assert.assertTrue(iterator.hasNext());
@@ -205,7 +155,7 @@ public class DeletedStorageLocationEventSyncTest {
                     DeletedStorageLocationEvent actual2 = iterator.next();
                     Date lastModified2 = actual2.getLastModified();
 
-                    // newest date should be returned first.
+                    // chronological order
                     Assert.assertTrue(lastModified1.before(lastModified2));
                     Assert.assertFalse(iterator.hasNext());
 
@@ -218,4 +168,86 @@ public class DeletedStorageLocationEventSyncTest {
         }
     }
 
+    @Test
+    public void testEventApplied() {
+        try {
+            URI md5 = URI.create("md5:d41d8cd98f00b204e9800998ecf8427e");
+            long len = 1024L;
+
+            StorageSite site1 = new StorageSite(URI.create("cadc:TEST/siteone"), "Test Site", true, false);
+            StorageSite site2 = new StorageSite(URI.create("cadc:TEST/sitetwo"), "Test Site", true, false);
+            
+            // this is a site -> global sync
+            
+            // insert 3 artifacts in local inventory
+            Artifact a1 = new Artifact(URI.create("cadc:TEST/one"), md5, new Date(), len);
+            a1.siteLocations.add(new SiteLocation(site1.getID()));
+            a1.siteLocations.add(new SiteLocation(site2.getID()));
+            inventoryEnvironment.artifactDAO.put(a1);
+            
+            Thread.sleep(10L);
+
+            Artifact a2 = new Artifact(URI.create("cadc:TEST/two"), md5, new Date(), len);
+            a2.siteLocations.add(new SiteLocation(site1.getID()));
+            inventoryEnvironment.artifactDAO.put(a2);
+            
+            Thread.sleep(10L);
+            
+            Artifact a3 = new Artifact(URI.create("cadc:TEST/three"), md5, new Date(), len);
+            a3.siteLocations.add(new SiteLocation(site1.getID()));
+            inventoryEnvironment.artifactDAO.put(a3);
+            Thread.sleep(10L);
+            
+            // insert 2 dsle in luskan
+            DeletedStorageLocationEvent dsle1 = new DeletedStorageLocationEvent(a1.getID());
+            luskanEnvironment.deletedStorageLocationEventDAO.put(dsle1);
+            DeletedStorageLocationEvent dsle2 = new DeletedStorageLocationEvent(a2.getID());
+            luskanEnvironment.deletedStorageLocationEventDAO.put(dsle2);
+            Thread.sleep(10L);
+            
+            // doit
+            DeletedStorageLocationEventSync sync = new DeletedStorageLocationEventSync(
+                    inventoryEnvironment.artifactDAO, TestUtil.LUSKAN_URI, 6, 6, site1);
+            Subject.doAs(this.testUser, (PrivilegedExceptionAction<Object>) () -> {
+                sync.doit();
+                return null;
+            });
+
+            // verify: 
+            // artifact a1 removed site location
+            // artifact a2: removed
+            // artifact a3: no change
+            // DLSE not stored
+            Artifact r1 = inventoryEnvironment.artifactDAO.get(a1.getID());
+            Assert.assertNotNull(r1);
+            Assert.assertEquals(a1.siteLocations.size() - 1, r1.siteLocations.size());
+
+            Artifact d2 = inventoryEnvironment.artifactDAO.get(a2.getID());
+            Assert.assertNull(d2);
+
+            Artifact r3 = inventoryEnvironment.artifactDAO.get(a3.getID());
+            Assert.assertNotNull(r3);
+            Assert.assertEquals(a3.siteLocations.size(), r3.siteLocations.size());
+
+            DeletedStorageLocationEvent actual = inventoryEnvironment.deletedStorageLocationEventDAO.get(dsle2.getID());
+            Assert.assertNull(actual);
+            
+            HarvestState hs = inventoryEnvironment.harvestStateDAO.get(DeletedStorageLocationEvent.class.getSimpleName(), TestUtil.LUSKAN_URI);
+            Assert.assertNotNull(hs);
+            Assert.assertEquals(dsle2.getLastModified(), hs.curLastModified);
+            
+            // idempotent
+            Subject.doAs(this.testUser, (PrivilegedExceptionAction<Object>) () -> {
+                sync.doit();
+                return null;
+            });
+            
+            hs = inventoryEnvironment.harvestStateDAO.get(DeletedStorageLocationEvent.class.getSimpleName(), TestUtil.LUSKAN_URI);
+            Assert.assertNotNull(hs);
+            Assert.assertEquals(dsle2.getLastModified(), hs.curLastModified);
+        } catch (Exception ex) {
+            log.error("unexpected exception", ex);
+            Assert.fail("unexpected exception: " + ex);
+        }
+    }
 }

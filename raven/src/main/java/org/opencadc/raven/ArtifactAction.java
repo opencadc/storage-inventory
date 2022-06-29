@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2021.                            (c) 2021.
+*  (c) 2022.                            (c) 2022.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -74,6 +74,7 @@ import ca.nrc.cadc.rest.RestAction;
 import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.vos.Direction;
 import ca.nrc.cadc.vos.Transfer;
+import ca.nrc.cadc.vosi.Availability;
 import java.io.File;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -82,12 +83,14 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import javax.naming.Context;
+import javax.naming.InitialContext;
+import javax.naming.NamingException;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.server.PermissionsCheck;
 import org.opencadc.permissions.ReadGrant;
 import org.opencadc.permissions.WriteGrant;
-
 
 /**
  * Abstract class for all that raven action classes have in common,
@@ -113,6 +116,10 @@ public abstract class ArtifactAction extends RestAction {
     protected final Map<String, StorageResolver> storageResolvers = new HashMap<>();
 
     protected final boolean authenticateOnly;
+    protected Map<URI, Availability> siteAvailabilities;
+    protected Map<URI, StorageSiteRule> siteRules;
+
+    protected final boolean preventNotFound;
 
     // constructor for unit tests with no config/init
     ArtifactAction(boolean init) {
@@ -121,6 +128,7 @@ public abstract class ArtifactAction extends RestAction {
         this.publicKeyFile = null;
         this.privateKeyFile = null;
         this.artifactDAO = null;
+        this.preventNotFound = false;
     }
 
     protected ArtifactAction() {
@@ -181,15 +189,42 @@ public abstract class ArtifactAction extends RestAction {
         Map<String, Object> config = RavenInitAction.getDaoConfig(props);
         this.artifactDAO = new ArtifactDAO();
         artifactDAO.setConfig(config); // connectivity tested
+      
+        // get the storage site rules
+        this.siteRules = RavenInitAction.getStorageSiteRules(props);
+        String pnf = props.getFirstPropertyValue(RavenInitAction.PREVENT_NOT_FOUND_KEY);
+        if (pnf != null) {
+            this.preventNotFound = Boolean.valueOf(pnf);
+            log.debug("Using consistency strategy: " + this.preventNotFound);
+        } else {
+            throw new IllegalStateException("invalid config: missing preventNotFound configuration");
+        }
+    }
 
+    protected void initAndAuthorize() throws Exception {
+        init();
+        
         // set the user for logging
-        user = AuthMethod.ANON.toString();
         AuthMethod authMethod = AuthenticationUtil.getAuthMethod(AuthenticationUtil.getCurrentSubject());
         if (authMethod != null && !authMethod.equals(AuthMethod.ANON)) {
             Set<String> userids = AuthenticationUtil.getUseridsFromSubject();
             if (userids.size() > 0) {
                 user = userids.iterator().next();
             }
+        }
+
+        Class grantClass = ReadGrant.class;
+        if ((transfer != null) && (transfer.getDirection().equals(Direction.pushToVoSpace))) {
+            grantClass = WriteGrant.class;
+        }
+        PermissionsCheck permissionsCheck = new PermissionsCheck(this.artifactURI, this.authenticateOnly,
+                                                                 this.logInfo);
+        if (ReadGrant.class.isAssignableFrom(grantClass)) {
+            permissionsCheck.checkReadPermission(this.readGrantServices);
+        } else if (WriteGrant.class.isAssignableFrom(grantClass)) {
+            permissionsCheck.checkWritePermission(this.writeGrantServices);
+        } else {
+            throw new IllegalStateException("Unsupported grant class: " + grantClass);
         }
     }
 
@@ -214,34 +249,30 @@ public abstract class ArtifactAction extends RestAction {
         }
     }
 
-    protected void initAndAuthorize() throws Exception {
-        init();
-
-        Class grantClass = ReadGrant.class;
-        if ((transfer != null) && (transfer.getDirection().equals(Direction.pushToVoSpace))) {
-            grantClass = WriteGrant.class;
-        }
-        PermissionsCheck permissionsCheck = new PermissionsCheck(this.artifactURI, this.authenticateOnly,
-                                                                 this.logInfo);
-        if (ReadGrant.class.isAssignableFrom(grantClass)) {
-            permissionsCheck.checkReadPermission(this.readGrantServices);
-        } else if (WriteGrant.class.isAssignableFrom(grantClass)) {
-            permissionsCheck.checkWritePermission(this.writeGrantServices);
-        } else {
-            throw new IllegalStateException("Unsupported grant class: " + grantClass);
-        }
-    }
-
     /**
      * Method to set the artifactURI of the request as well as other attributes. Information might be in URL path
      * or sent in the request message (negotiation)
      */
     abstract void parseRequest() throws Exception;
     
+    @SuppressWarnings("unchecked")
     void init() throws Exception {
         parseRequest();
         if (artifactURI == null) {
             throw new IllegalArgumentException("Missing artifact URI from path or request content");
+        }
+
+        String siteAvailabilitiesKey = this.appName + RavenInitAction.JNDI_AVAILABILITY_NAME;
+        log.debug("siteAvailabilitiesKey: " + siteAvailabilitiesKey);
+        try {
+            Context initContext = new InitialContext();
+            this.siteAvailabilities = (Map<URI, Availability>) initContext.lookup(siteAvailabilitiesKey);
+            log.debug("found siteAvailabilities in JNDI: " + siteAvailabilitiesKey + " = " + siteAvailabilities);
+            for (Map.Entry<URI, Availability> me: siteAvailabilities.entrySet()) {
+                log.debug("found: " + me.getKey() + " = " + me.getValue());
+            }
+        } catch (NamingException e) {
+            throw new IllegalStateException("JNDI lookup error", e);
         }
     }
 

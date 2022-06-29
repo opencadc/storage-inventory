@@ -76,10 +76,8 @@ import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.Test;
-
 import org.opencadc.inventory.storage.StorageMetadata;
 import org.opencadc.tap.TapRowMapper;
-
 
 public class AdStorageQueryTest {
 
@@ -90,78 +88,151 @@ public class AdStorageQueryTest {
     }
 
     @Test
-    public void testStorageURI() throws Exception {
-        // Gemini cadc scheme
-        AdStorageQuery query = new AdStorageQuery("Gemini");
-        TapRowMapper mapper = query.getRowMapper();
-        ArrayList<Object> row = new ArrayList<>(7);
-        row.add("Gemini");
-        row.add(new URI("cadc:Gemini/foo_th.jpg"));
-        row.add(new URI("abc"));
-        row.add(new Long(33));
-        row.add(new URI("ad:GEM/foo_th.jpg"));
-        row.add("");
-        row.add("application/fits");
-        Date now = new Date(System.currentTimeMillis());
-        row.add(now);
-        StorageMetadata metadata = (StorageMetadata) mapper.mapRow(row);
-        Assert.assertTrue("cadc:Gemini/foo_th.jpg".equals(metadata.artifactURI.toString()));
-        Assert.assertTrue("ad:GEM/foo_th.jpg".equals(metadata.getStorageLocation().getStorageID().toString()));
-        Assert.assertTrue(metadata.getStorageLocation().storageBucket.equals("Gemini"));
-        Assert.assertTrue(metadata.getContentChecksum().toString().equals("md5:abc"));
-        Assert.assertEquals(33, metadata.getContentLength().longValue());
-        Assert.assertTrue(metadata.contentEncoding.equals(""));
-        Assert.assertTrue(metadata.contentType.equals("application/fits"));
-        Assert.assertEquals(now, metadata.contentLastModified);
-        Assert.assertTrue(metadata.artifactURI.toString().equals("cadc:Gemini/foo_th.jpg"));
-
-        // Gemini gemini scheme
-        query = new AdStorageQuery("Gemini");
-        mapper = query.getRowMapper();
-        row = new ArrayList<>(7);
-        row.add("Gemini");
-        row.add(new URI("gemini:Gemini/foo.fits"));
-        row.add(new URI("md5:abc"));
-        row.add(new Long(33));
-        row.add(new URI("gemini:GEM/foo.fits"));
-        row.add("");
-        row.add("application/fits");
-        row.add(new Date(System.currentTimeMillis()));
-        metadata = (StorageMetadata) mapper.mapRow(row);
-        Assert.assertTrue("gemini:Gemini/foo.fits".equals(metadata.artifactURI.toString()));
-        Assert.assertTrue("gemini:GEM/foo.fits".equals(metadata.getStorageLocation().getStorageID().toString()));
-
-        // MAST
-        query = new AdStorageQuery("HST");
-        mapper = query.getRowMapper();
-        row = new ArrayList<>(7);
-        row.add("HST");
-        row.add(new URI("mast:HST/foo.fits"));
-        row.add(new URI("md5:abc"));
-        row.add(new Long(33));
-        row.add(new URI("mast:HST/foo.fits"));
-        row.add("");
-        row.add("application/fits");
-        row.add(new Date(System.currentTimeMillis()));
-        metadata = (StorageMetadata) mapper.mapRow(row);
-        Assert.assertTrue("mast:HST/foo.fits".equals(metadata.artifactURI.toString()));
-        Assert.assertTrue("mast:HST/foo.fits".equals(metadata.getStorageLocation().getStorageID().toString()));
-
-        // CFHT
-        query = new AdStorageQuery("CFHT");
-        mapper = query.getRowMapper();
-        row = new ArrayList<>(7);
-        row.add("CFHT");
-        row.add(new URI("cadc:CFHT/foo.fits"));
-        row.add(new URI("md5:abc"));
-        row.add(new Long(33));
-        row.add(new URI("ad:CFHT/foo.fits"));
-        row.add("");
-        row.add("application/fits");
-        row.add(new Date(System.currentTimeMillis()));
-        metadata = (StorageMetadata) mapper.mapRow(row);
-        Assert.assertTrue("cadc:CFHT/foo.fits".equals(metadata.artifactURI.toString()));
-        Assert.assertTrue("ad:CFHT/foo.fits".equals(metadata.getStorageLocation().getStorageID().toString()));
+    public void testQuery() throws Exception {
+        AdStorageQuery asq = new AdStorageQuery("FOO");
+        String query = asq.getQuery();
+        Assert.assertNotNull(query);
+        Assert.assertTrue(query.contains("archiveName = 'FOO'"));
+    }
+    
+    @Test
+    public void testQueryDisambiguateBucket() throws Exception {
+        AdStorageQuery asq = new AdStorageQuery(AdStorageQuery.DISAMBIGUATE_PREFIX + "DIS");
+        String query = asq.getQuery();
+        Assert.assertNotNull(query);
+        Assert.assertTrue(query.contains("archiveName = 'DIS'"));
+    }
+    
+    @Test
+    public void testQueryArchive() throws Exception {
+        AdStorageQuery asq = new AdStorageQuery("ARC");
+        String query = asq.getQuery();
+        Assert.assertNotNull(query);
+        Assert.assertTrue(query.contains("archiveName = 'ARC'"));
     }
 
+    @Test
+    public void testQueryVOSpacBuckets() throws Exception {
+        AdStorageQuery asq = new AdStorageQuery("VOSpac:0");
+        String query = asq.getQuery();
+        String expected =
+                "SELECT uri, inventoryURI, contentMD5, fileSize, ingestDate, contentEncoding, "
+                +      "contentType , convert('binary', convert('smallint', contentMD5)) as bucket "
+                + "FROM archive_files "
+                + "WHERE archiveName = 'VOSpac'  AND contentMD5 between '0000000000000000' AND "
+                +       "'0fffffffffffffff' ORDER BY bucket,  uri ASC, ingestDate DESC";
+        Assert.assertEquals("archive query constraints", expected, query);
+
+        asq = new AdStorageQuery("VOSpac:fff");
+        query = asq.getQuery();
+        Assert.assertTrue("archive query constraints", query.contains("WHERE archiveName = 'VOSpac'  "
+                + "AND contentMD5 between 'fff0000000000000' AND 'ffffffffffffffff'"));
+
+        // bucket size
+        Assert.assertThrows(IllegalArgumentException.class, () -> new AdStorageQuery("VOSpac:"));
+        Assert.assertThrows(IllegalArgumentException.class, () -> new AdStorageQuery("VOSpac:12345"));
+        // bucket not hex
+        Assert.assertThrows(IllegalArgumentException.class, () -> new AdStorageQuery("VOSpac:zzz"));
+
+    }
+    
+    @Test
+    public void testRowMapper() throws Exception {
+        AdStorageQuery query = new AdStorageQuery("FOO");
+        TapRowMapper mapper = query.getRowMapper();
+        
+        ArrayList<Object> row = new ArrayList<>(7);
+        row.add(new URI("ad:FOO/foo.fits.gz"));
+        row.add(new URI("cadc:FOO/foo.fits.gz"));
+        row.add("e687e2ecea45e78822eb68294566e6a1");
+        row.add(new Long(33));
+        Date now = new Date();
+        row.add(now);
+        row.add("gzip");
+        row.add("application/fits");
+       
+        StorageMetadata metadata = (StorageMetadata) mapper.mapRow(row);
+        Assert.assertTrue("cadc:FOO/foo.fits.gz".equals(metadata.artifactURI.toString()));
+        Assert.assertTrue("ad:FOO/foo.fits.gz".equals(metadata.getStorageLocation().getStorageID().toString()));
+        Assert.assertTrue(metadata.getStorageLocation().storageBucket.equals("FOO"));
+        Assert.assertTrue(metadata.getContentChecksum().toString().equals("md5:e687e2ecea45e78822eb68294566e6a1"));
+        Assert.assertEquals(33, metadata.getContentLength().longValue());
+        Assert.assertEquals(now, metadata.getContentLastModified());
+        Assert.assertTrue(metadata.contentEncoding.equals("gzip"));
+        Assert.assertTrue(metadata.contentType.equals("application/fits"));
+    }
+    
+    @Test
+    public void testRowMapperDisambiguate() throws Exception {
+        AdStorageQuery query = new AdStorageQuery("x-FOO");
+        TapRowMapper mapper = query.getRowMapper();
+        
+        ArrayList<Object> row = new ArrayList<>(7);
+        row.add(new URI("ad:FOO/foo.fits.gz"));
+        row.add(new URI("cadc:FOO/foo.fits.gz"));
+        row.add("e687e2ecea45e78822eb68294566e6a1");
+        row.add(new Long(33));
+        Date now = new Date();
+        row.add(now);
+        row.add("gzip");
+        row.add("application/fits");
+       
+        StorageMetadata metadata = (StorageMetadata) mapper.mapRow(row);
+        Assert.assertTrue("cadc:FOO/foo.fits.gz".equals(metadata.artifactURI.toString()));
+        Assert.assertTrue("ad:FOO/foo.fits.gz".equals(metadata.getStorageLocation().getStorageID().toString()));
+        Assert.assertTrue(metadata.getStorageLocation().storageBucket.equals("x-FOO"));
+        Assert.assertTrue(metadata.getContentChecksum().toString().equals("md5:e687e2ecea45e78822eb68294566e6a1"));
+        Assert.assertEquals(33, metadata.getContentLength().longValue());
+        Assert.assertEquals(now, metadata.getContentLastModified());
+        Assert.assertTrue(metadata.contentEncoding.equals("gzip"));
+        Assert.assertTrue(metadata.contentType.equals("application/fits"));
+    }
+    
+    @Test
+    public void testRowMapperGeminiWorkaround() throws Exception {
+        AdStorageQuery query = new AdStorageQuery("FOO");
+        TapRowMapper mapper = query.getRowMapper();
+        
+        ArrayList<Object> row = new ArrayList<>(7);
+        //  work-around: archive_files.uri scheme is gemini
+        row.add(new URI("gemini:FOO/foo.fits.gz"));
+        row.add(new URI("cadc:FOO/foo.fits.gz"));
+        row.add("e687e2ecea45e78822eb68294566e6a1");
+        row.add(new Long(33));
+        Date now = new Date();
+        row.add(now);
+        row.add("gzip");
+        row.add("application/fits");
+       
+        StorageMetadata metadata = (StorageMetadata) mapper.mapRow(row);
+        Assert.assertTrue("cadc:FOO/foo.fits.gz".equals(metadata.artifactURI.toString()));
+        // work-around: storageID scheme is ad
+        Assert.assertTrue("ad:FOO/foo.fits.gz".equals(metadata.getStorageLocation().getStorageID().toString()));
+        Assert.assertTrue(metadata.getStorageLocation().storageBucket.equals("FOO"));
+        Assert.assertTrue(metadata.getContentChecksum().toString().equals("md5:e687e2ecea45e78822eb68294566e6a1"));
+        Assert.assertEquals(33, metadata.getContentLength().longValue());
+        Assert.assertEquals(now, metadata.getContentLastModified());
+        Assert.assertTrue(metadata.contentEncoding.equals("gzip"));
+        Assert.assertTrue(metadata.contentType.equals("application/fits"));
+    }
+
+    @Test
+    public void testRowMapperVault() throws Exception {
+        AdStorageQuery query = new AdStorageQuery("VOSpac:12");
+        TapRowMapper mapper = query.getRowMapper();
+
+        ArrayList<Object> row = new ArrayList<>(7);
+        //  work-around: archive_files.uri scheme is gemini
+        row.add(new URI("ad:VOSpac/foo"));
+        row.add(new URI("cadc:vault/foo"));
+        row.add("1237e2ecea45e78822eb68294566e6a1");
+        row.add(new Long(33));
+        Date now = new Date();
+        row.add(now);
+        row.add("");
+        row.add("application/octet-stream");
+
+        StorageMetadata metadata = (StorageMetadata) mapper.mapRow(row);
+        Assert.assertTrue("VOSpac:1237".equals(metadata.getStorageLocation().storageBucket));
+    }
 }

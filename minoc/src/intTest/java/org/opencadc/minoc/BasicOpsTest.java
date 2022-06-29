@@ -73,9 +73,9 @@ import ca.nrc.cadc.net.HttpGet;
 import ca.nrc.cadc.net.HttpPost;
 import ca.nrc.cadc.net.HttpTransfer;
 import ca.nrc.cadc.net.HttpUpload;
+import ca.nrc.cadc.net.RangeNotSatisfiableException;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.util.Log4jInit;
-
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
@@ -83,11 +83,11 @@ import java.io.OutputStream;
 import java.net.URI;
 import java.net.URL;
 import java.security.PrivilegedExceptionAction;
+import java.util.Date;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
-
 import javax.security.auth.Subject;
-
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
@@ -111,12 +111,110 @@ public class BasicOpsTest extends MinocTest {
     }
     
     @Test
-    public void testAllMethodsSimple() {
+    public void testPutGetUpdateHeadDelete() {
         try {
             URI artifactURI = URI.create("cadc:TEST/file.txt");
             URL artifactURL = new URL(filesURL + "/" + artifactURI.toString());
 
             String content = "abcdefghijklmnopqrstuvwxyz";
+            String encoding = "test-encoding";
+            String type = "text/plain";
+            byte[] data = content.getBytes();
+            URI expectedChecksum = computeChecksumURI(data);
+
+            // put: no length or checksum
+            InputStream in = new ByteArrayInputStream(data);
+            HttpUpload put = new HttpUpload(in, artifactURL);
+            put.setRequestProperty(HttpTransfer.CONTENT_TYPE, type);
+            put.setRequestProperty(HttpTransfer.CONTENT_ENCODING, encoding);
+            put.setDigest(expectedChecksum);
+
+            Subject.doAs(userSubject, new RunnableAction(put));
+            log.info("put: " + put.getResponseCode() + " " + put.getThrowable());
+            log.info("headers: " + put.getResponseHeader("content-length") + " " + put.getResponseHeader("digest"));
+            Assert.assertNull(put.getThrowable());
+            Assert.assertEquals("Created", 201, put.getResponseCode());
+
+            // get
+            OutputStream out = new ByteArrayOutputStream();
+            HttpGet get = new HttpGet(artifactURL, out);
+            Subject.doAs(userSubject, new RunnableAction(get));
+            log.info("get: " + get.getResponseCode() + " " + get.getThrowable());
+            log.info("headers: " + get.getResponseHeader("content-length") + " " + get.getResponseHeader("digest"));
+            Assert.assertNull(get.getThrowable());
+            URI checksumURI = get.getDigest();
+            long contentLength = get.getContentLength();
+            String contentType = get.getContentType();
+            String contentEncoding = get.getContentEncoding();
+            Assert.assertEquals(computeChecksumURI(data), checksumURI);
+            Assert.assertEquals(data.length, contentLength);
+            Assert.assertEquals(type, contentType);
+            Assert.assertEquals(encoding, contentEncoding);
+            Date lastModified = get.getLastModified(); 
+            Assert.assertNotNull(lastModified);
+
+            // update
+            // TODO: add update to artifactURI when functionality available
+            String newEncoding = "test-encoding-2";
+            String newType = "application/x-text-message";
+            Map<String,Object> params = new HashMap<String,Object>(2);
+            params.put("contentEncoding", newEncoding);
+            params.put("contentType", newType);
+            HttpPost post = new HttpPost(artifactURL, params, false);
+            post.setDigest(computeChecksumURI(data));
+            Subject.doAs(userSubject, new RunnableAction(post));
+            log.info("post: " + post.getResponseCode() + " " + post.getThrowable());
+            log.info("headers: " + post.getResponseHeader("content-length") + " " + post.getResponseHeader("digest"));
+            Assert.assertNull(post.getThrowable());
+            Assert.assertEquals("Accepted", 202, post.getResponseCode());
+
+            // head
+            ByteArrayOutputStream bos = new ByteArrayOutputStream();
+            HttpGet head = new HttpGet(artifactURL, bos);
+            head.setHeadOnly(true);
+            Subject.doAs(userSubject, new RunnableAction(head));
+            log.info("head: " + head.getResponseCode() + " " + head.getThrowable());
+            log.info("headers: " + head.getResponseHeader("content-length") + " " + head.getResponseHeader("digest"));
+            log.warn("head output: " + bos.toString());
+            Assert.assertNull(head.getThrowable());
+            checksumURI = head.getDigest();
+            contentLength = head.getContentLength();
+            contentType = head.getContentType();
+            contentEncoding = head.getContentEncoding();
+            Assert.assertEquals(computeChecksumURI(data), checksumURI);
+            Assert.assertEquals(data.length, contentLength);
+            Assert.assertEquals(newType, contentType);
+            Assert.assertEquals(newEncoding, contentEncoding);
+            lastModified = head.getLastModified(); 
+            Assert.assertNotNull(lastModified);
+
+            // delete
+            HttpDelete delete = new HttpDelete(artifactURL, false);
+            Subject.doAs(userSubject, new RunnableAction(delete));
+            log.info("delete: " + delete.getResponseCode() + " " + delete.getThrowable());
+            Assert.assertNull(delete.getThrowable());
+            Assert.assertEquals("no content", 204, delete.getResponseCode());
+            
+            // get
+            get = new HttpGet(artifactURL, out);
+            Subject.doAs(userSubject, new RunnableAction(get));
+            Throwable throwable = get.getThrowable();
+            Assert.assertNotNull(throwable);
+            Assert.assertTrue(throwable instanceof ResourceNotFoundException);
+            
+        } catch (Exception t) {
+            log.error("unexpected throwable", t);
+            Assert.fail("unexpected throwable: " + t);
+        }
+    }
+
+    @Test
+    public void testGetRanges() {
+        try {
+            URI artifactURI = URI.create("cadc:TEST/testGetRanges.txt");
+            URL artifactURL = new URL(filesURL + "/" + artifactURI.toString());
+
+            String content = "abcdefghijklmnopqrstuvwxyz\n";
             String encoding = "test-encoding";
             String type = "text/plain";
             byte[] data = content.getBytes();
@@ -131,66 +229,108 @@ public class BasicOpsTest extends MinocTest {
             Subject.doAs(userSubject, new RunnableAction(put));
             Assert.assertNull(put.getThrowable());
 
-            // get
+            // get to check the presence of "Range" header in the response
             OutputStream out = new ByteArrayOutputStream();
             HttpGet get = new HttpGet(artifactURL, out);
             Subject.doAs(userSubject, new RunnableAction(get));
             Assert.assertNull(get.getThrowable());
-            URI checksumURI = get.getDigest();
-            long contentLength = get.getContentLength();
-            String contentType = get.getContentType();
-            String contentEncoding = get.getContentEncoding();
-            Assert.assertEquals(computeChecksumURI(data), checksumURI);
-            Assert.assertEquals(data.length, contentLength);
-            Assert.assertEquals(type, contentType);
-            Assert.assertEquals(encoding, contentEncoding);
+            List<String> range = get.getResponseHeaderValues("Accept-Ranges");
+            Assert.assertEquals(1, range.size());
+            Assert.assertEquals("bytes", range.get(0));
 
-            // update
-            // TODO: add update to artifactURI when functionality available
-            String newEncoding = "test-encoding-2";
-            String newType = "application/x-text-message";
-            Map<String,Object> params = new HashMap<String,Object>(2);
-            params.put("contentEncoding", newEncoding);
-            params.put("contentType", newType);
-            HttpPost post = new HttpPost(artifactURL, params, false);
-            post.setDigest(computeChecksumURI(data));
-            Subject.doAs(userSubject, new RunnableAction(post));
-            Assert.assertNull(post.getThrowable());
-
-            // head
+            // repeat for head
             ByteArrayOutputStream bos = new ByteArrayOutputStream();
             HttpGet head = new HttpGet(artifactURL, bos);
             head.setHeadOnly(true);
             Subject.doAs(userSubject, new RunnableAction(head));
             log.warn("head output: " + bos.toString());
             Assert.assertNull(head.getThrowable());
-            checksumURI = head.getDigest();
-            contentLength = head.getContentLength();
-            contentType = head.getContentType();
-            contentEncoding = head.getContentEncoding();
+            range = get.getResponseHeaderValues("Accept-Ranges");
+            Assert.assertEquals(1, range.size());
+            Assert.assertEquals("bytes", range.get(0));
+
+            // get mid range
+            out = new ByteArrayOutputStream();
+            get = new HttpGet(artifactURL, out);
+            get.setRequestProperty("Range", "bytes=1-3");
+            Subject.doAs(userSubject, new RunnableAction(get));
+            Assert.assertNull(get.getThrowable());
+            Assert.assertEquals(206, get.getResponseCode());
+            URI checksumURI = get.getDigest();
+            long contentLength = get.getContentLength();
+            String contentType = get.getContentType();
+            String contentEncoding = get.getContentEncoding();
+            Assert.assertEquals(computeChecksumURI(data), checksumURI);
+            Assert.assertEquals(3, contentLength);
+            Assert.assertEquals("bcd", out.toString());
+            Assert.assertEquals(type, contentType);
+            Assert.assertEquals(encoding, contentEncoding);
+            Date lastModified = get.getLastModified();
+            Assert.assertNotNull(lastModified);
+            List<String> contentRange = get.getResponseHeaderValues("Content-Range");
+            Assert.assertEquals(1, contentRange.size());
+            Assert.assertEquals("bytes 1-3/" + data.length, contentRange.get(0));
+
+            // get first 3 bytes
+            out = new ByteArrayOutputStream();
+            get = new HttpGet(artifactURL, out);
+            get.setRequestProperty("Range", "bytes=-2");
+            Subject.doAs(userSubject, new RunnableAction(get));
+            Assert.assertNull(get.getThrowable());
+            Assert.assertEquals(206, get.getResponseCode());
+            contentLength = get.getContentLength();
+            Assert.assertEquals(3, contentLength);
+            Assert.assertEquals("abc", out.toString());
+            contentRange = get.getResponseHeaderValues("Content-Range");
+            Assert.assertEquals(1, contentRange.size());
+            Assert.assertEquals("bytes 0-2/" + data.length, contentRange.get(0));
+
+            // get last 3 bytes
+            out = new ByteArrayOutputStream();
+            get = new HttpGet(artifactURL, out);
+            get.setRequestProperty("Range", "bytes=" + (data.length - 3) + "-");
+            Subject.doAs(userSubject, new RunnableAction(get));
+            Assert.assertNull(get.getThrowable());
+            Assert.assertEquals(206, get.getResponseCode());
+            contentLength = get.getContentLength();
+            Assert.assertEquals(3, contentLength);
+            Assert.assertEquals("yz\n", out.toString());
+            contentRange = get.getResponseHeaderValues("Content-Range");
+            Assert.assertEquals(1, contentRange.size());
+            Assert.assertEquals("bytes 24-26/" + data.length, contentRange.get(0));
+
+            // in case of an incorrect Range attribute, ignore and return a 200 with the content of
+            // the entire file
+            out = new ByteArrayOutputStream();
+            get = new HttpGet(artifactURL, out);
+            get.setRequestProperty("Range", "incorrect=1-3");  // incorrect unit
+            Subject.doAs(userSubject, new RunnableAction(get));
+            Assert.assertNull(get.getThrowable());
+            Assert.assertEquals(200, get.getResponseCode());
+            checksumURI = get.getDigest();
+            contentLength = get.getContentLength();
             Assert.assertEquals(computeChecksumURI(data), checksumURI);
             Assert.assertEquals(data.length, contentLength);
-            Assert.assertEquals(newType, contentType);
-            Assert.assertEquals(newEncoding, contentEncoding);
+
+            // request a unsatisfiable range
+            out = new ByteArrayOutputStream();
+            get = new HttpGet(artifactURL, out);
+            get.setRequestProperty("Range", "bytes=" + data.length + "-");  // offset = content length
+            Subject.doAs(userSubject, new RunnableAction(get));
+            Assert.assertEquals(416, get.getResponseCode());
+            Assert.assertEquals(RangeNotSatisfiableException.class, get.getThrowable().getClass());
 
             // delete
-            HttpDelete delete = new HttpDelete(artifactURL, false);
-            Subject.doAs(userSubject, new RunnableAction(delete));
-            Assert.assertNull(delete.getThrowable());
+            //HttpDelete delete = new HttpDelete(artifactURL, false);
+            //Subject.doAs(userSubject, new RunnableAction(delete));
+            //Assert.assertNull(delete.getThrowable());
 
-            // get
-            get = new HttpGet(artifactURL, out);
-            Subject.doAs(userSubject, new RunnableAction(get));
-            Throwable throwable = get.getThrowable();
-            Assert.assertNotNull(throwable);
-            Assert.assertTrue(throwable instanceof ResourceNotFoundException);
-            
         } catch (Exception t) {
             log.error("unexpected throwable", t);
             Assert.fail("unexpected throwable: " + t);
         }
     }
-    
+
     @Test
     public void testGetNotFound() {
         try {
@@ -275,5 +415,4 @@ public class BasicOpsTest extends MinocTest {
             Assert.fail("unexpected throwable: " + t);
         }
     }
-    
 }

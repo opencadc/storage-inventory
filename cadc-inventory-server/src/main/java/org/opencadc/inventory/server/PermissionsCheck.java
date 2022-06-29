@@ -118,7 +118,7 @@ public class PermissionsCheck {
      *
      * @param readGrantServices list of read granting services.
      * @throws AccessControlException if read permission is denied.
-     * @throws TransientException
+     * @throws TransientException if call to permission service fails with transient status code
      */
     public void checkReadPermission(List<URI> readGrantServices)
         throws AccessControlException, TransientException {
@@ -169,10 +169,10 @@ public class PermissionsCheck {
                 }
             }
         } catch (CertificateException ex) {
-            throw new AccessControlException("read permission denied (invalid delegated client certificate)");
+            throw new AccessControlException("permission denied (invalid delegated client certificate)");
         }
         
-        throw new AccessControlException("read permission denied");
+        throw new AccessControlException("permission denied");
     }
 
     /**
@@ -180,7 +180,7 @@ public class PermissionsCheck {
      *
      * @param writeGrantServices list of write granting services.
      * @throws AccessControlException if write permission is denied.
-     * @throws TransientException
+     * @throws TransientException if call to permission service fails with transient status code
      */
     public void checkWritePermission(List<URI> writeGrantServices)
         throws AccessControlException, TransientException {
@@ -233,10 +233,10 @@ public class PermissionsCheck {
                 }
             }
         } catch (CertificateException ex) {
-            throw new AccessControlException("read permission denied (invalid delegated client certificate)");
+            throw new AccessControlException("permission denied (invalid delegated client certificate)");
         }
 
-        throw new AccessControlException("read permission denied");
+        throw new AccessControlException("permission denied");
     }
 
     private class GetReadGrantsAction implements PrivilegedExceptionAction<List<ReadGrant>> {

@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2021.                            (c) 2021.
+*  (c) 2022.                            (c) 2022.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -67,14 +67,17 @@
 
 package org.opencadc.inventory.db;
 
+import ca.nrc.cadc.date.DateUtil;
 import ca.nrc.cadc.db.ConnectionConfig;
 import ca.nrc.cadc.db.DBConfig;
 import ca.nrc.cadc.db.DBUtil;
+import ca.nrc.cadc.db.TransactionManager;
 import ca.nrc.cadc.io.ResourceIterator;
 import ca.nrc.cadc.util.HexUtil;
 import ca.nrc.cadc.util.Log4jInit;
 import java.net.URI;
 import java.security.MessageDigest;
+import java.text.DateFormat;
 import java.util.Comparator;
 import java.util.Date;
 import java.util.Iterator;
@@ -105,7 +108,7 @@ public class ArtifactDAOTest {
 
     static {
         Log4jInit.setLevel("org.opencadc.inventory", Level.INFO);
-        Log4jInit.setLevel("org.opencadc.inventory.db", Level.DEBUG);
+        Log4jInit.setLevel("org.opencadc.inventory.db", Level.INFO);
         Log4jInit.setLevel("ca.nrc.cadc.db", Level.INFO);
     }
     
@@ -163,12 +166,13 @@ public class ArtifactDAOTest {
     
     @Test
     public void testGetPutDelete() {
+        long t1 = System.currentTimeMillis();
         try {
             Artifact expected = new Artifact(
                     URI.create("cadc:ARCHIVE/filename"),
                     URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"),
                     new Date(),
-                    new Long(666L));
+                    666L);
             expected.contentType = "application/octet-stream";
             expected.contentEncoding = "gzip";
             log.info("expected: " + expected);
@@ -211,6 +215,65 @@ public class ArtifactDAOTest {
         } catch (Exception unexpected) {
             log.error("unexpected exception", unexpected);
             Assert.fail("unexpected exception: " + unexpected);
+        } finally {
+            long t2 = System.currentTimeMillis();
+            long dt = t2 - t1;
+            log.info("testGetPutDelete: " + dt + "ms");
+        }
+    }
+    
+    @Test
+    public void testGetWithLock() {
+        // to verify locking  and release by getWithLocks
+        // - set this to an amount of time in milliseconds so the test sleeps before and after rollback
+        // - run the query in sql/pg-locks.sql manually to check for locks
+        // note: assumes this test is the only user of the database
+        final long sleep = 0L;
+        
+        TransactionManager txn = originDAO.getTransactionManager();
+        
+        try {
+            Artifact expected = new Artifact(
+                    URI.create("cadc:ARCHIVE/filename"),
+                    URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"),
+                    new Date(),
+                    666L);
+            expected.contentType = "application/octet-stream";
+            expected.contentEncoding = "gzip";
+            log.info("  orig: " + expected);
+            
+            
+            Artifact notFound = originDAO.get(expected.getURI());
+            Assert.assertNull(notFound);
+            
+            originDAO.put(expected);
+            log.info("   put: " + expected);
+            
+            txn.startTransaction();
+            
+            Artifact fid = originDAO.lock(expected);
+            Assert.assertNotNull(fid);
+            
+            log.info("lock(Artifact): " + fid + " -- sleeping for " + sleep);
+            Thread.sleep(sleep);
+            
+            Artifact fid2 = originDAO.lock(expected.getID());
+            Assert.assertNotNull(fid2);
+            
+            log.info("lock(UUID): " + fid2 + " -- sleeping for " + sleep);
+            Thread.sleep(sleep);
+            
+            txn.rollbackTransaction();
+            log.info("rollback: -- sleeping for " + sleep);
+            Thread.sleep(sleep);
+            
+            originDAO.delete(expected.getID());
+            Artifact deleted = originDAO.get(expected.getID());
+            Assert.assertNull(deleted);
+            
+        } catch (Exception unexpected) {
+            log.error("unexpected exception", unexpected);
+            Assert.fail("unexpected exception: " + unexpected);
         }
     }
     
@@ -221,7 +284,7 @@ public class ArtifactDAOTest {
                     URI.create("cadc:ARCHIVE/filename"),
                     URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"),
                     new Date(),
-                    new Long(666L));
+                    666L);
             expected.contentType = "application/octet-stream";
             expected.contentEncoding = "gzip";
             log.info("expected: " + expected);
@@ -256,7 +319,7 @@ public class ArtifactDAOTest {
                     URI.create("cadc:ARCHIVE/filename"),
                     URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"),
                     new Date(),
-                    new Long(666L));
+                    666L);
             log.info("expected: " + expected);
             
             
@@ -275,7 +338,7 @@ public class ArtifactDAOTest {
             Assert.assertNotNull(a2);
             URI mcs2 = a2.computeMetaChecksum(MessageDigest.getInstance("MD5"));
             Assert.assertEquals("round trip metachecksum unchanged", expected.getMetaChecksum(), mcs2);
-            Assert.assertTrue("lastModified incremented", a1.getLastModified().before(a2.getLastModified()));
+            Assert.assertTrue("lastModified not incremented", a1.getLastModified().equals(a2.getLastModified()));
             Assert.assertNotNull("set storageLocation", a2.storageLocation);
             Assert.assertEquals(expected.storageLocation.getStorageID(), a2.storageLocation.getStorageID());
             Assert.assertNull(a2.storageLocation.storageBucket);
@@ -285,10 +348,10 @@ public class ArtifactDAOTest {
             loc.storageBucket = "abc";
             originDAO.setStorageLocation(expected, loc);
             Artifact a3 = originDAO.get(expected.getID());
-            Assert.assertNotNull(a2);
+            Assert.assertNotNull(a3);
             URI mcs3 = a3.computeMetaChecksum(MessageDigest.getInstance("MD5"));
             Assert.assertEquals("round trip metachecksum unchanged", expected.getMetaChecksum(), mcs3);
-            Assert.assertTrue(a2.getLastModified().before(a3.getLastModified()));
+            Assert.assertTrue("lastModified not incremented", a2.getLastModified().equals(a3.getLastModified()));
             Assert.assertNotNull("update storageLocation", a3.storageLocation);
             Assert.assertEquals(expected.storageLocation.getStorageID(), a3.storageLocation.getStorageID());
             Assert.assertEquals(expected.storageLocation.storageBucket, a3.storageLocation.storageBucket);
@@ -296,7 +359,7 @@ public class ArtifactDAOTest {
             
             originDAO.setStorageLocation(expected, null);
             Artifact a4 = originDAO.get(expected.getID());
-            Assert.assertNotNull(a2);
+            Assert.assertNotNull(a4);
             URI mcs4 = a4.computeMetaChecksum(MessageDigest.getInstance("MD5"));
             Assert.assertEquals("round trip metachecksum unchanged", expected.getMetaChecksum(), mcs4);
             Assert.assertTrue("lastModified unchanged", a3.getLastModified().equals(a4.getLastModified()));
@@ -314,12 +377,14 @@ public class ArtifactDAOTest {
     
     @Test
     public void testGetPutDeleteSiteLocations() {
+        long t1 = System.currentTimeMillis();
+        final DateFormat df = DateUtil.getDateFormat(DateUtil.IVOA_DATE_FORMAT, DateUtil.UTC);
         try {
             Artifact expected = new Artifact(
                     URI.create("cadc:ARCHIVE/filename"),
                     URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"),
                     new Date(),
-                    new Long(666L));
+                    666L);
             log.info("expected: " + expected);
             
             
@@ -339,23 +404,39 @@ public class ArtifactDAOTest {
             Assert.assertEquals("round trip metachecksum unchanged", expected.getMetaChecksum(), mcs1);
             Assert.assertTrue("no siteLocations", a1.siteLocations.isEmpty());
             
+            log.info("adding " + loc1);
             nonOriginDAO.addSiteLocation(expected, loc1);
             Artifact a2 = nonOriginDAO.get(expected.getID());
             Assert.assertNotNull(a2);
             URI mcs2 = a2.computeMetaChecksum(MessageDigest.getInstance("MD5"));
             Assert.assertEquals("round trip metachecksum unchanged", expected.getMetaChecksum(), mcs2);
-            Assert.assertTrue("lastModified unchanged", a1.getLastModified().equals(a2.getLastModified()));
+            log.info("lastModified: " + df.format(a1.getLastModified()) + " vs " + df.format(a2.getLastModified()));
+            Assert.assertTrue("lastModified changed", a1.getLastModified().before(a2.getLastModified()));
             Assert.assertEquals(1, a2.siteLocations.size());
             Thread.sleep(20L);
             
-            nonOriginDAO.addSiteLocation(expected, loc2);
-            nonOriginDAO.addSiteLocation(expected, loc3);
+            log.info("adding " + loc2);
+            nonOriginDAO.addSiteLocation(a2, loc2);
+            log.info("adding " + loc3);
+            nonOriginDAO.addSiteLocation(a2, loc3);
             Artifact a3 = nonOriginDAO.get(expected.getID());
             Assert.assertNotNull(a3);
             URI mcs3 = a3.computeMetaChecksum(MessageDigest.getInstance("MD5"));
             Assert.assertEquals("round trip metachecksum unchanged", expected.getMetaChecksum(), mcs3);
-            Assert.assertTrue("lastModified unchanged", a1.getLastModified().equals(a3.getLastModified()));
+            log.info("lastModified: " + df.format(a2.getLastModified()) + " vs " + df.format(a3.getLastModified()));
+            Assert.assertTrue("lastModified not changed", a2.getLastModified().equals(a3.getLastModified()));
             Assert.assertEquals(3, a3.siteLocations.size());
+            Thread.sleep(20L);
+            
+            log.info("adding again: " + loc1);
+            nonOriginDAO.addSiteLocation(expected, loc1);
+            Artifact a4 = nonOriginDAO.get(expected.getID());
+            Assert.assertNotNull(a4);
+            URI mcs4 = a4.computeMetaChecksum(MessageDigest.getInstance("MD5"));
+            Assert.assertEquals("round trip metachecksum unchanged", expected.getMetaChecksum(), mcs4);
+            log.info("lastModified: " + a3.getLastModified() + " vs " + a4.getLastModified());
+            Assert.assertTrue("lastModified unchanged", a3.getLastModified().equals(a4.getLastModified()));
+            Assert.assertEquals(3, a4.siteLocations.size());
             Thread.sleep(20L);
             
             // must remove from the persisted artifact that contains them
@@ -364,11 +445,12 @@ public class ArtifactDAOTest {
             nonOriginDAO.removeSiteLocation(a3, loc1);
             Assert.assertEquals("removed", 1, originDAO.get(expected.getID()).siteLocations.size());
             nonOriginDAO.removeSiteLocation(a3, loc2);
-            Artifact a4 = nonOriginDAO.get(expected.getID());
-            Assert.assertNotNull(a1);
-            URI mcs4 = a4.computeMetaChecksum(MessageDigest.getInstance("MD5"));
-            Assert.assertEquals("round trip metachecksum unchanged", expected.getMetaChecksum(), mcs3);
-            Assert.assertTrue(a1.getLastModified().equals(a4.getLastModified()));
+            Artifact a5 = nonOriginDAO.get(expected.getID());
+            Assert.assertNotNull(a5);
+            URI mcs5 = a5.computeMetaChecksum(MessageDigest.getInstance("MD5"));
+            Assert.assertEquals("round trip metachecksum unchanged", expected.getMetaChecksum(), mcs5);
+            Assert.assertTrue("lastModified unchanged", a3.getLastModified().equals(a5.getLastModified()));
+            Assert.assertEquals(0, a5.siteLocations.size());
             
             originDAO.delete(expected.getID());
             Artifact deleted = originDAO.get(expected.getID());
@@ -376,6 +458,114 @@ public class ArtifactDAOTest {
             
         } catch (Exception unexpected) {
             log.error("unexpected exception", unexpected);
+            Assert.fail("unexpected exception: " + unexpected);
+        } finally {
+            long t2 = System.currentTimeMillis();
+            long dt = t2 - t1;
+            log.info("testGetPutDeleteSiteLocations: " + dt + "ms");
+        }
+    }
+    
+    @Test
+    public void testMetadataSyncSequenceNew() {
+
+        ArtifactDAO dao = nonOriginDAO;
+        final TransactionManager transactionManager = dao.getTransactionManager();
+        
+        
+        try {
+            Artifact expected = new Artifact(
+                    URI.create("cadc:ARCHIVE/filename"),
+                    URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"),
+                    new Date(),
+                    666L);
+            expected.contentType = "application/octet-stream";
+            log.info("expected: " + expected);
+            
+            final long t1 = System.currentTimeMillis();
+            
+            // get by uri
+            Artifact notFound = originDAO.get(expected.getURI());
+            Assert.assertNull(notFound);
+            
+            transactionManager.startTransaction();
+
+            Artifact cur = dao.lock(expected);
+            Assert.assertNull(cur);
+            
+            dao.put(expected);
+            dao.addSiteLocation(expected, new SiteLocation(UUID.randomUUID()));
+            
+            transactionManager.commitTransaction();
+            
+            long t2 = System.currentTimeMillis();
+            long dt = t2 - t1;
+            log.info("testMetadataSyncSequenceNew: " + dt + "ms");
+            
+            originDAO.delete(expected.getID());
+            Artifact deleted = originDAO.get(expected.getID());
+            Assert.assertNull(deleted);
+            
+        } catch (Exception unexpected) {
+            log.error("unexpected exception", unexpected);
+            if (transactionManager != null && transactionManager.isOpen()) {
+                transactionManager.rollbackTransaction();
+            }
+            
+            Assert.fail("unexpected exception: " + unexpected);
+        }
+    }
+    
+    @Test
+    public void testMetadataSyncSequenceMerge() {
+
+        ArtifactDAO dao = nonOriginDAO;
+        final TransactionManager transactionManager = dao.getTransactionManager();
+        
+        try {
+            Artifact expected = new Artifact(
+                    URI.create("cadc:ARCHIVE/filename"),
+                    URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"),
+                    new Date(),
+                    666L);
+            expected.contentType = "application/octet-stream";
+            log.info("expected: " + expected);
+            
+            dao.put(expected);
+            dao.addSiteLocation(expected, new SiteLocation(UUID.randomUUID()));
+            
+            long t1 = System.currentTimeMillis();
+            
+            // get by uri
+            Artifact collider = originDAO.get(expected.getURI());
+            Assert.assertNotNull(collider);
+            // not a collider, so ignore
+            
+            transactionManager.startTransaction();
+            
+            Artifact cur = dao.lock(expected);
+            Assert.assertNotNull(cur);
+            
+            expected.siteLocations.addAll(cur.siteLocations);
+            dao.put(expected);
+            dao.addSiteLocation(expected, new SiteLocation(UUID.randomUUID()));
+            
+            transactionManager.commitTransaction();
+            
+            long t2 = System.currentTimeMillis();
+            long dt = t2 - t1;
+            log.info("testMetadataSyncSequenceMerge: " + dt + "ms");
+            
+            originDAO.delete(expected.getID());
+            Artifact deleted = originDAO.get(expected.getID());
+            Assert.assertNull(deleted);
+            
+        } catch (Exception unexpected) {
+            log.error("unexpected exception", unexpected);
+            if (transactionManager != null && transactionManager.isOpen()) {
+                transactionManager.rollbackTransaction();
+            }
+            
             Assert.fail("unexpected exception: " + unexpected);
         }
     }
@@ -388,7 +578,7 @@ public class ArtifactDAOTest {
                         URI.create("cadc:ARCHIVE/filename" + i),
                         URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"),
                         new Date(),
-                        new Long(666L));
+                        666L);
                 a.contentType = "application/octet-stream";
                 a.contentEncoding = "gzip";
                 // no storage location
@@ -419,7 +609,7 @@ public class ArtifactDAOTest {
                         URI.create("cadc:ARCHIVE/filename" + i),
                         URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"),
                         new Date(),
-                        new Long(666L));
+                        666L);
                 a.storageLocation = new StorageLocation(URI.create("foo:" + UUID.randomUUID()));
                 a.storageLocation.storageBucket = InventoryUtil.computeBucket(a.storageLocation.getStorageID(), 3);
                 originDAO.put(a);
@@ -433,7 +623,7 @@ public class ArtifactDAOTest {
                         URI.create("cadc:ARCHIVE/filename" + i),
                         URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"),
                         new Date(),
-                        new Long(666L));
+                        666L);
                 a.storageLocation = new StorageLocation(URI.create("foo:" + UUID.randomUUID()));
                 // no bucket
                 originDAO.put(a);
@@ -447,7 +637,7 @@ public class ArtifactDAOTest {
                         URI.create("cadc:ARCHIVE/filename" + i),
                         URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"),
                         new Date(),
-                        new Long(666L));
+                        666L);
                 // no storageLocation
                 originDAO.put(a);
                 log.debug("put: " + a);
@@ -528,7 +718,7 @@ public class ArtifactDAOTest {
                         URI.create("cadc:ARCHIVE/filename" + i),
                         URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"),
                         new Date(),
-                        new Long(666L));
+                        666L);
                 a.contentType = "application/octet-stream";
                 a.contentEncoding = "gzip";
                 a.storageLocation = new StorageLocation(URI.create("foo:" + UUID.randomUUID()));
@@ -559,7 +749,7 @@ public class ArtifactDAOTest {
                         URI.create("cadc:ARCHIVE/filename" + i),
                         URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"),
                         new Date(),
-                        new Long(666L));
+                        666L);
                 a.storageLocation = new StorageLocation(URI.create("foo:" + UUID.randomUUID()));
                 a.storageLocation.storageBucket = InventoryUtil.computeBucket(a.storageLocation.getStorageID(), 3);
                 originDAO.put(a);
@@ -574,7 +764,7 @@ public class ArtifactDAOTest {
                         URI.create("cadc:ARCHIVE/filename" + i),
                         URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"),
                         new Date(),
-                        new Long(666L));
+                        666L);
                 a.storageLocation = new StorageLocation(URI.create("foo:" + UUID.randomUUID()));
                 // no bucket
                 originDAO.put(a);
@@ -589,7 +779,7 @@ public class ArtifactDAOTest {
                         URI.create("cadc:ARCHIVE/filename" + i),
                         URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"),
                         new Date(),
-                        new Long(666L));
+                        666L);
                 // no storageLocation
                 originDAO.put(a);
                 log.info("expected: " + a);
@@ -656,7 +846,7 @@ public class ArtifactDAOTest {
                         URI.create("cadc:ARCHIVE/filename" + i),
                         URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"),
                         new Date(),
-                        new Long(666L));
+                        666L);
                 originDAO.put(a);
                 log.info("expected: " + a);
                 Thread.sleep(1L);
@@ -698,10 +888,10 @@ public class ArtifactDAOTest {
     
     @Test
     public void testIteratorClose() {
-         // to verify locking  and release of locks by ArtifactIterator.close():
-         // - set this to an amount of time in milliseconds so the test sleeps before and after close
-         // - run the query in sql/pg-locks.sql manually to check for locks
-         // note: assumes this test is the only user of the database
+        // to verify locking  and release of locks by ArtifactIterator.close():
+        // - set this to an amount of time in milliseconds so the test sleeps before and after close
+        // - run the query in sql/pg-locks.sql manually to check for locks
+        // note: assumes this test is the only user of the database
         final long sleep = 0L;
         
         int num = 10;
@@ -712,7 +902,7 @@ public class ArtifactDAOTest {
                         URI.create("cadc:ARCHIVE/filename" + i),
                         URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"),
                         new Date(),
-                        new Long(666L));
+                        666L);
                 // no storageLocation
                 originDAO.put(a);
                 log.info("expected: " + a);
@@ -759,7 +949,7 @@ public class ArtifactDAOTest {
         int num = 10;
         try {
             int numArtifacts = 0;
-            int numExpected = 0;
+            int numStuffExpected = 0;
             // artifacts with storageLocation
             String collection = "STUFF";
             for (int i = 0; i < num; i++) {
@@ -770,14 +960,14 @@ public class ArtifactDAOTest {
                         URI.create("cadc:" + collection + "/filename" + i),
                         URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"),
                         new Date(),
-                        new Long(666L));
+                        666L);
                 a.storageLocation = new StorageLocation(URI.create("foo:" + UUID.randomUUID()));
                 a.storageLocation.storageBucket = InventoryUtil.computeBucket(a.storageLocation.getStorageID(), 3);
                 originDAO.put(a);
                 log.debug("put: " + a);
                 numArtifacts++;
                 if (collection.equals("STUFF")) {
-                    numExpected++;
+                    numStuffExpected++;
                 }
             }
             // some artifacts with no storageLocation
@@ -790,20 +980,42 @@ public class ArtifactDAOTest {
                         URI.create("cadc:" + collection + "/filename" + i),
                         URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"),
                         new Date(),
-                        new Long(666L));
+                        666L);
                 // no storageLocation
                 originDAO.put(a);
                 log.debug("put: " + a);
                 numArtifacts++;
                 if (collection.equals("STUFF")) {
-                    numExpected++;
+                    numStuffExpected++;
+                }
+            }
+            // some artifacts with siteLocations
+            UUID siteID = UUID.randomUUID();
+            int numSiteExpected = 0;
+            collection = "STUFF";
+            for (int i = 2 * num; i < 3 * num; i++) {
+                if (i == num + num / 2) {
+                    collection = "NONSENSE";
+                }
+                Artifact a = new Artifact(
+                        URI.create("cadc:" + collection + "/filename" + i),
+                        URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"),
+                        new Date(),
+                        666L);
+                a.siteLocations.add(new SiteLocation(siteID));
+                originDAO.put(a);
+                log.debug("put: " + a);
+                numArtifacts++;
+                numSiteExpected++;
+                if (collection.equals("STUFF")) {
+                    numStuffExpected++;
                 }
             }
             log.info("added: " + numArtifacts);
             
             log.info("count all...");
             int count = 0;
-            try (ResourceIterator<Artifact> iter = originDAO.iterator(null, null, false)) {
+            try (ResourceIterator<Artifact> iter = originDAO.iterator(null, false)) {
                 while (iter.hasNext()) {
                     Artifact actual = iter.next();
                     count++;
@@ -822,14 +1034,27 @@ public class ArtifactDAOTest {
                     Assert.assertTrue("STUFF", actual.getURI().toASCIIString().startsWith("cadc:STUFF/"));
                 }
             }
-            Assert.assertEquals("count", numExpected, count);
+            Assert.assertEquals("count", numStuffExpected, count);
+            
+            log.info("count vs siteID...");
+            count = 0;
+            try (ResourceIterator<Artifact> iter = originDAO.iterator(siteID, null, false)) {
+                while (iter.hasNext()) {
+                    Artifact actual = iter.next();
+                    count++;
+                    log.info("found: " + actual.getURI());
+                    Assert.assertFalse("siteID", actual.siteLocations.isEmpty());
+                    Assert.assertEquals("siteID", siteID, actual.siteLocations.iterator().next().getSiteID());
+                }
+            }
+            Assert.assertEquals("count", numSiteExpected, count);
             
             log.info("count in buckets...");
             count = 0;
             for (byte b = 0; b < 16; b++) {
                 String bpre = HexUtil.toHex(b).substring(1);
                 log.debug("bucket prefix: " + bpre);
-                try (ResourceIterator<Artifact> iter = originDAO.iterator(null, bpre, false)) {
+                try (ResourceIterator<Artifact> iter = originDAO.iterator(bpre, false)) {
                     while (iter.hasNext()) {
                         Artifact actual = iter.next();
                         count++;
@@ -853,7 +1078,7 @@ public class ArtifactDAOTest {
                     }
                 }
             }
-            Assert.assertEquals("count", numExpected, count);
+            Assert.assertEquals("count", numStuffExpected, count);
             
         } catch (Exception unexpected) {
             log.error("unexpected exception", unexpected);

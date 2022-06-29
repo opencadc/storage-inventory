@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2020.                            (c) 2020.
+*  (c) 2022.                            (c) 2022.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -69,94 +69,289 @@
 package org.opencadc.fenwick;
 
 import ca.nrc.cadc.date.DateUtil;
+import ca.nrc.cadc.db.TransactionManager;
 import ca.nrc.cadc.io.ResourceIterator;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.util.StringUtil;
-
 import java.io.IOException;
 import java.net.URI;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.text.DateFormat;
 import java.util.Date;
-import java.util.List;
-import java.util.TimeZone;
-import java.util.UUID;
-
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
+import org.opencadc.inventory.DeletedArtifactEvent;
 import org.opencadc.inventory.InventoryUtil;
+import org.opencadc.inventory.SiteLocation;
+import org.opencadc.inventory.StorageSite;
+import org.opencadc.inventory.db.ArtifactDAO;
+import org.opencadc.inventory.db.DeletedArtifactEventDAO;
+import org.opencadc.inventory.db.HarvestState;
+import org.opencadc.inventory.query.ArtifactRowMapper;
+import org.opencadc.inventory.util.ArtifactSelector;
 import org.opencadc.tap.TapClient;
-import org.opencadc.tap.TapRowMapper;
-
 
 /**
  * Artifact sync class.  This class is responsible for querying a remote TAP (Luskan) site to obtain desired Artifact
  * instances to then be used to store in the local inventory.
  */
-public class ArtifactSync {
+public class ArtifactSync extends AbstractSync {
 
-    private static final Logger LOGGER = Logger.getLogger(ArtifactSync.class);
+    private static final Logger log = Logger.getLogger(ArtifactSync.class);
 
+    private final StorageSite storageSite;
     private final TapClient<Artifact> tapClient;
-    private final Date currLastModified;
+    private final String includeClause;
 
-    // Mutable field to use in the query.  Will be AND'd to the query but isolated in parentheses.
-    public String includeClause;
-    public Date endTime;
+    public ArtifactSync(ArtifactDAO artifactDAO, URI resourceID, 
+            int querySleepInterval, int maxRetryInterval, 
+            ArtifactSelector selector, StorageSite storageSite) {
+        super(artifactDAO, resourceID, querySleepInterval, maxRetryInterval);
+        this.storageSite = storageSite;
+        try {
+            this.tapClient = new TapClient<>(resourceID);
+        } catch (ResourceNotFoundException ex) {
+            throw new IllegalArgumentException("invalid config: query service not found: " + resourceID);
+        }
+        try {
+            this.includeClause = selector.getConstraint();
+        } catch (IOException | ResourceNotFoundException ex) {
+            throw new IllegalArgumentException("invalid config: failed to read artifact selector config: " + ex);
+        }
+    }
+    
+    // unit test ctor
+    ArtifactSync(String includeClause) {
+        super(true);
+        this.storageSite = null;
+        this.tapClient = null;
+        this.includeClause = includeClause;
+    }
+    
+    @Override
+    void doit() throws ResourceNotFoundException, IOException, IllegalStateException, TransientException, InterruptedException {
+        final MessageDigest messageDigest;
+        try {
+            messageDigest = MessageDigest.getInstance("MD5");
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException("BUG: failed to get instance of MD5", e);
+        }
 
-    /**
-     * Complete constructor.
-     *
-     * @param tapClient        The TapClient to interface with a site's TAP (Luskan) service.
-     * @param currLastModified The last modified date to start the query at.  First run this will be null.
-     */
-    public ArtifactSync(final TapClient<Artifact> tapClient, final Date currLastModified) {
-        this.tapClient = tapClient;
-        this.currLastModified = currLastModified;
+        final SiteLocation remoteSiteLocation = (storageSite == null ? null : new SiteLocation(storageSite.getID()));
+        
+        HarvestState hs = this.harvestStateDAO.get(Artifact.class.getSimpleName(), resourceID);
+        if (hs.curLastModified == null) {
+            // TEMPORARY: check for pre-rename record and rename
+            HarvestState orig = harvestStateDAO.get(Artifact.class.getName(), resourceID);
+            if (orig.curLastModified != null) {
+                orig.setName(Artifact.class.getSimpleName());
+                harvestStateDAO.put(orig);
+                hs = orig;
+            }
+        }
+        final HarvestState harvestState = hs;
+        
+        final Date endTime = new Date();
+        final Date lookBack = new Date(endTime.getTime() - LOOKBACK_TIME);
+        Date startTime = getQueryLowerBound(lookBack, harvestState.curLastModified);
+        
+        DateFormat df = DateUtil.getDateFormat(DateUtil.IVOA_DATE_FORMAT, DateUtil.UTC);
+        if (lookBack != null && harvestState.curLastModified != null) {
+            log.debug("lookBack=" + df.format(lookBack) + " curLastModified=" + df.format(harvestState.curLastModified) 
+                + " -> " + df.format(startTime));
+        }
+        String start = null;
+        if (startTime != null) {
+            start = df.format(startTime);
+        }
+        String end = null;
+        if (endTime != null) {
+            end = df.format(endTime);
+        }
+        log.info("Artifact.QUERY start=" + start + " end=" + end);
+        
+        final TransactionManager transactionManager = artifactDAO.getTransactionManager();
+        final DeletedArtifactEventDAO daeDAO = new DeletedArtifactEventDAO(artifactDAO);
+        
+        boolean first = true;
+        long t1 = System.currentTimeMillis();
+        try (final ResourceIterator<Artifact> artifactResourceIterator = getEventStream(startTime, endTime)) {
+            while (artifactResourceIterator.hasNext()) {
+                final Artifact artifact = artifactResourceIterator.next();
+                if (first) {
+                    long dt = System.currentTimeMillis() - t1;
+                    log.info("Artifact.QUERY start=" + start + " end=" + end + " duration=" + dt);
+                    first = false;
+                    if (artifact.getID().equals(harvestState.curID)
+                        && artifact.getLastModified().equals(harvestState.curLastModified)) {
+                        log.debug("SKIP PUT: previously processed: " + artifact.getID() + " " + artifact.getURI());
+                        // ugh but the skip is comprehensible: have to do this inside the loop when using
+                        // try-with-resources
+                        continue;
+                    }
+                }
+
+                log.debug("START: Process Artifact " + artifact.getID() + " " + artifact.getURI());
+
+                final URI computedChecksum = artifact.computeMetaChecksum(messageDigest);
+                if (!artifact.getMetaChecksum().equals(computedChecksum)) {
+                    throw new IllegalStateException("checksum mismatch: " + artifact.getID() + " " + artifact.getURI()
+                            + " provided=" + artifact.getMetaChecksum() + " actual=" + computedChecksum);
+                }
+
+                // check if the artifact already deleted (sync from stale site)
+                DeletedArtifactEvent ev = daeDAO.get(artifact.getID());
+                if (ev != null) {
+                    log.info("ArtifactSync.skipArtifact id=" + artifact.getID() 
+                            + " uri=" + artifact.getURI() + " lastModified=" + df.format(artifact.getLastModified())
+                            + " reason=DeletedArtifactEvent");
+                    continue;
+                }
+                        
+                Artifact collidingArtifact = artifactDAO.get(artifact.getURI());
+                if (collidingArtifact != null && collidingArtifact.getID().equals(artifact.getID())) {
+                    // same ID: not a collision
+                    collidingArtifact = null;
+                }
+
+                try {
+                    transactionManager.startTransaction();
+
+                    // since Artifact.id and Artifact.uri are both unique keys, there is only ever one "current artifact"
+                    // it normally has the same ID but may be the colliding artifact
+                    Artifact currentArtifact = null;
+                    if (collidingArtifact == null) {
+                        currentArtifact = artifactDAO.lock(artifact);
+                    } else {
+                        currentArtifact = artifactDAO.lock(collidingArtifact);
+                    }
+
+                    boolean continueWithPut = true;
+                    if (collidingArtifact != null && currentArtifact != null) {
+                        // resolve collision
+                        if (isRemoteWinner(currentArtifact, artifact, (remoteSiteLocation != null))) {
+                            DeletedArtifactEvent dae = new DeletedArtifactEvent(currentArtifact.getID());
+                            log.info("ArtifactSync.createDeletedArtifactEvent id=" + dae.getID()
+                                    + " uri=" + currentArtifact.getURI()
+                                    + " reason=resolve-collision");
+                            daeDAO.put(new DeletedArtifactEvent(currentArtifact.getID()));
+                            log.info("ArtifactSync.deleteArtifact id=" + currentArtifact.getID()
+                                    + " uri=" + currentArtifact.getURI()
+                                    + " contentLastModified=" + df.format(currentArtifact.getContentLastModified())
+                                    + " reason=resolve-collision");
+                            artifactDAO.delete(currentArtifact.getID());
+                        } else {
+                            log.info("ArtifactSync.skipArtifact id=" + artifact.getID() 
+                                    + " uri=" + artifact.getURI() 
+                                    + " contentLastModified=" + df.format(currentArtifact.getContentLastModified())
+                                    + " reason=uri-collision");
+                            continueWithPut = false;
+                        }
+                    }
+
+                    // addSiteLocation may modify lastModified so capture real value here
+                    final Date harvestedLastModified = artifact.getLastModified();
+                    
+                    if (continueWithPut) {
+                        // merge existing non-entity state
+                        if (currentArtifact != null) {
+                            if (remoteSiteLocation != null) {
+                                // trackSiteLocations: keep SiteLocation(s)
+                                artifact.siteLocations.addAll(currentArtifact.siteLocations);
+                            } else {
+                                // storage site: keep StorageLocation
+                                artifact.storageLocation = currentArtifact.storageLocation;
+                            }
+                        }
+
+                        log.info("ArtifactSync.putArtifact id=" + artifact.getID() 
+                                + " uri=" + artifact.getURI() 
+                                + " lastModified=" + df.format(artifact.getLastModified()));
+                        artifactDAO.put(artifact);
+                        if (remoteSiteLocation != null) {
+                            // explicit so addSiteLocation can force lastModified update in global
+                            artifactDAO.addSiteLocation(artifact, remoteSiteLocation);
+                        }
+                    }
+                    
+                    harvestState.curLastModified = harvestedLastModified;
+                    harvestState.curID = artifact.getID();
+                    harvestStateDAO.put(harvestState);
+                    transactionManager.commitTransaction();
+                    log.debug("END: Process Artifact " + artifact.getID() + " " + artifact.getURI());
+                } catch (Exception exception) {
+                    if (transactionManager.isOpen()) {
+                        log.error("Exception in transaction.  Rolling back...");
+                        transactionManager.rollbackTransaction();
+                        log.error("Rollback: OK");
+                    }
+
+                    throw exception;
+                } finally {
+                    if (transactionManager.isOpen()) {
+                        log.error("BUG: transaction open in finally. Rolling back...");
+                        transactionManager.rollbackTransaction();
+                        log.error("Rollback: OK");
+                        throw new RuntimeException("BUG: transaction open in finally");
+                    }
+                }
+                logSummary(Artifact.class);
+            }
+        }
+        logSummary(Artifact.class, true);
+    }
+    
+    // true if remote is the winner, false if local is the winner
+    // same logic in ratik ArtifactValidator
+    private boolean isRemoteWinner(Artifact local, Artifact remote, boolean remoteStorageSite) {
+        Boolean rem = InventoryUtil.isRemoteWinner(local, remote);
+        if (rem != null) {
+            return rem;
+        }
+        
+        // equal timestamps and different instances:
+        // likely caused by poorly behaved storage site that ingests duplicates 
+        // from external system
+        if (remoteStorageSite) {
+            // declare the artifact in global as the winner
+            return false;
+        }
+        // this is storage site: remote is global
+        return true;
     }
 
-    /**
-     * Execute the query and return the iterator back.
-     *
-     * @return ResourceIterator over Artifact instances matching this sync's constraint(s).
-     *
-     * @throws ResourceNotFoundException For any missing required configuration that is missing.
-     * @throws IOException               For unreadable configuration files.
-     * @throws IllegalStateException     For any invalid configuration.
-     * @throws TransientException        temporary failure of TAP service: same call could work in future
-     * @throws InterruptedException      thread interrupted
-     */
-    public ResourceIterator<Artifact> iterator()
+    ResourceIterator<Artifact> getEventStream(Date start, Date end)
             throws ResourceNotFoundException, IOException, IllegalStateException, TransientException,
                    InterruptedException {
-        final String query = buildQuery();
-        LOGGER.debug("\nExecuting query '" + query + "'\n");
-        return tapClient.execute(query, new ArtifactRowMapper());
+        final String query = buildQuery(start, end);
+        log.debug("\nExecuting query '" + query + "'\n");
+        return tapClient.query(query, new ArtifactRowMapper());
     }
 
     /**
      * Assemble the WHERE clause and return the full query.  Very useful for testing separately.
      * @return  String query.  Never null.
      */
-    String buildQuery() {
+    String buildQuery(Date startTime, Date endTime) {
         final StringBuilder query = new StringBuilder();
-        query.append("SELECT id, uri, contentChecksum, contentLastModified, contentLength, contentType, ")
-                   .append("contentEncoding, lastModified, metaChecksum FROM inventory.Artifact");
+        query.append(ArtifactRowMapper.BASE_QUERY);
 
-        if (this.currLastModified != null) {
-            LOGGER.debug("\nInjecting lastModified date compare '" + this.currLastModified + "'\n");
-            query.append(" WHERE lastModified >= '").append(getDateFormat().format(this.currLastModified)).append("'");
+        DateFormat df = DateUtil.getDateFormat(DateUtil.ISO_DATE_FORMAT, DateUtil.UTC);
+        if (startTime != null) {
+            log.debug("\nInjecting lastModified date compare '" + startTime + "'\n");
+            query.append(" WHERE lastModified >= '").append(df.format(startTime)).append("'");
 
-            if (this.endTime != null) {
-                query.append(" AND ").append("lastModified < '").append(
-                        getDateFormat().format(this.endTime)).append("'");
+            if (endTime != null) {
+                query.append(" AND ").append("lastModified < '").append(df.format(endTime)).append("'");
             }
-        } else if (this.endTime != null) {
-            query.append(" WHERE ").append("lastModified < '").append(getDateFormat().format(this.endTime)).append("'");
+        } else if (endTime != null) {
+            query.append(" WHERE ").append("lastModified < '").append(df.format(endTime)).append("'");
         }
-
-        if (StringUtil.hasText(this.includeClause)) {
-            LOGGER.debug("\nInjecting clause '" + this.includeClause + "'\n");
+        
+        if (StringUtil.hasText(includeClause)) {
+            log.debug("\nInjecting clause '" + includeClause + "'\n");
 
             if (query.indexOf("WHERE") < 0) {
                 query.append(" WHERE ");
@@ -164,53 +359,11 @@ public class ArtifactSync {
                 query.append(" AND ");
             }
 
-            query.append("(").append(this.includeClause.trim()).append(")");
+            query.append("(").append(includeClause.trim()).append(")");
         }
 
         query.append(" ORDER BY lastModified");
 
         return query.toString();
-    }
-
-    /**
-     * Get a DateFormat instance.
-     *
-     * @return ISO DateFormat in UTC.
-     */
-    protected DateFormat getDateFormat() {
-        return DateUtil.getDateFormat(DateUtil.ISO_DATE_FORMAT, DateUtil.UTC);
-    }
-
-    private static final class ArtifactRowMapper implements TapRowMapper<Artifact> {
-
-        /**
-         * Map raw row data into a domain object. The values in the row (list) will
-         * already be converted from text or binary into suitable immutable value objects,
-         * such as Double, Integer, String... or extended types (DALI xtypes) (Point,
-         * Circle, Date, etc.) or custom xtypes (URI, UUID, etc.) supported by the cadc-dali
-         * library. The presence of null values is allowed and depends entirely on the TAP
-         * table that was queried. The number and order of values is consistent with the
-         * list of items in the select clause of the ADQL query.
-         *
-         * @param row list of values for one row
-         * @return domain-specific value object created for single row
-         */
-        @Override
-        public Artifact mapRow(final List<Object> row) {
-            int index = 0;
-            final Artifact artifact = new Artifact((UUID) row.get(index++),
-                                                   (URI) row.get(index++),
-                                                   (URI) row.get(index++),
-                                                   (Date) row.get(index++),
-                                                   (Long) row.get(index++));
-
-            artifact.contentType = (String) row.get(index++);
-            artifact.contentEncoding = (String) row.get(index++);
-
-            InventoryUtil.assignLastModified(artifact, (Date) row.get(index++));
-            InventoryUtil.assignMetaChecksum(artifact, (URI) row.get(index));
-
-            return artifact;
-        }
     }
 }

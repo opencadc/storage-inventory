@@ -69,6 +69,9 @@
 
 package org.opencadc.ratik;
 
+import ca.nrc.cadc.date.DateUtil;
+import ca.nrc.cadc.net.ResourceNotFoundException;
+import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.util.FileUtil;
 import ca.nrc.cadc.util.Log4jInit;
 import java.io.File;
@@ -79,6 +82,10 @@ import java.io.IOException;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
+import java.text.DateFormat;
+import java.util.Calendar;
 import java.util.Date;
 import java.util.MissingResourceException;
 import java.util.Properties;
@@ -87,11 +94,16 @@ import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.Before;
+import org.junit.BeforeClass;
 import org.junit.Test;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.DeletedArtifactEvent;
 import org.opencadc.inventory.DeletedStorageLocationEvent;
 import org.opencadc.inventory.SiteLocation;
+import org.opencadc.inventory.StorageLocation;
+import org.opencadc.inventory.StorageSite;
+import org.opencadc.inventory.db.ArtifactDAO;
+import org.opencadc.inventory.query.ArtifactRowMapper;
 import org.opencadc.inventory.util.IncludeArtifacts;
 
 public class InventoryValidatorTest {
@@ -101,7 +113,9 @@ public class InventoryValidatorTest {
         Log4jInit.setLevel("org.opencadc.ratik", Level.INFO);
         Log4jInit.setLevel("org.opencadc.inventory", Level.INFO);
         Log4jInit.setLevel("org.opencadc.inventory.db", Level.INFO);
+        Log4jInit.setLevel("org.opencadc.inventory.query", Level.INFO);
         Log4jInit.setLevel("ca.nrc.cadc.db", Level.INFO);
+        Log4jInit.setLevel("ca.nrc.cadc.tap", Level.INFO);
     }
 
     static String INVENTORY_SERVER = "RATIK_TEST";
@@ -111,6 +125,8 @@ public class InventoryValidatorTest {
     static String USER_HOME = System.getProperty("user.home");
     static URI REMOTE_STORAGE_SITE = URI.create("ivo://cadc.nrc.ca/minoc");
 
+    private final DateFormat df = DateUtil.getDateFormat(DateUtil.IVOA_DATE_FORMAT, DateUtil.UTC);
+    
     static {
         try {
             File opt = FileUtil.getFileFromResource("intTest.properties", InventoryValidatorTest.class);
@@ -144,15 +160,26 @@ public class InventoryValidatorTest {
 
     }
 
+    @BeforeClass
+    public static void setup() throws Exception {
+        Path dest = Paths.get(TMP_DIR + "/.ssl");
+        if (!Files.exists(dest)) {
+            Files.createDirectories(dest);
+        }
+        Path src = Paths.get(InventoryValidator.CERTIFICATE_FILE_LOCATION);
+        Files.copy(src, dest.resolve(src.getFileName()), StandardCopyOption.REPLACE_EXISTING);
+    }
+
     @Before
     public void beforeTest() throws Exception {
         writeConfig();
         this.localEnvironment.cleanTestEnvironment();
         this.remoteEnvironment.cleanTestEnvironment();
+        this.remoteEnvironment.initStorageSite(REMOTE_STORAGE_SITE);
     }
 
     private void writeConfig() throws IOException {
-        final Path includePath = new File(TMP_DIR + "/config").toPath();
+        final Path includePath = Paths.get(TMP_DIR + "/config");
         Files.createDirectories(includePath);
         final File includeFile = new File(includePath.toFile(), "artifact-filter.sql");
 
@@ -162,7 +189,7 @@ public class InventoryValidatorTest {
         fileWriter.close();
     }
 
-    /**
+    /*
      * discrepancy: none
      * before: Artifact in L & R
      * after: Artifact in L & R
@@ -173,79 +200,250 @@ public class InventoryValidatorTest {
     }
 
     @Test
-    public void noDiscrepancyL_LocalIsGlobal() throws Exception {
+    public void noDiscrepancy_LocalIsGlobal() throws Exception {
         noDiscrepancy(true);
     }
 
     public void noDiscrepancy(boolean trackSiteLocations) throws Exception {
+        // Put the same Artifact into local and remote.
         Artifact artifact = new Artifact(URI.create("cadc:INTTEST/one.ext"), TestUtil.getRandomMD5(),
                                          new Date(), 1024L);
-        this.localEnvironment.artifactDAO.put(artifact);
         this.remoteEnvironment.artifactDAO.put(artifact);
+        if (trackSiteLocations) {
+            UUID remoteSiteID = this.remoteEnvironment.storageSiteDAO.list().iterator().next().getID();
+            artifact.siteLocations.add(new SiteLocation(remoteSiteID));
+        }
+        this.localEnvironment.artifactDAO.put(artifact);
+
 
         try {
             System.setProperty("user.home", TMP_DIR);
-            InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.daoConfig,
+            InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.inventoryConnectionConfig, 
+                                                                    this.localEnvironment.daoConfig,
                                                                     TestUtil.LUSKAN_URI, new IncludeArtifacts(),
                                                                     null, trackSiteLocations);
+            testSubject.raceConditionDelta = 0L;
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
         }
 
+        // Local Artifact should be unchanged.
         Artifact localArtifact = this.localEnvironment.artifactDAO.get(artifact.getID());
         Assert.assertNotNull("local artifact not found", localArtifact);
         Assert.assertEquals("metaChecksum mismatch", artifact.getMetaChecksum(), localArtifact.getMetaChecksum());
     }
 
-    /** discrepancy: artifact in L && artifact not in R
+    /* discrepancy: artifact in L && artifact not in R
      *
      * explanation0: filter policy at L changed to exclude artifact in R
-     * evidence: Artifact in R without filter
-     * action: delete Artifact, if (L==storage) create DeletedStorageLocationEvent
+     * evidence: R uses a filter policy AND Artifact in R without filter
+     * action: if (L==global) delete Artifact, if (L==storage) delete Artifact only if
+     *         remote has multiple copies and create DeletedStorageLocationEvent
      *
      * before: Artifact in L & R, filter policy to exclude Artifact in R
      * after: Artifact not in L, DeletedStorageLocationEvent in L
      */
     @Test
     public void explanation0_ArtifactInLocal_LocalIsStorage() throws Exception {
-        explanation0_ArtifactInLocal(false);
-    }
 
-    @Test
-    public void explanation0_ArtifactInLocal_LocalIsGlobal() throws Exception {
-        explanation0_ArtifactInLocal(true);
-    }
-
-    public void explanation0_ArtifactInLocal(boolean trackSiteLocations) throws Exception {
-        Artifact artifact = new Artifact(URI.create("cadc:TEST/one.ext"), TestUtil.getRandomMD5(),
+        // Put the same Artifact into local
+        Artifact artifact = new Artifact(URI.create("cadc:INTTEST/one.ext"), TestUtil.getRandomMD5(),
                                          new Date(), 1024L);
         this.localEnvironment.artifactDAO.put(artifact);
-        this.remoteEnvironment.artifactDAO.put(artifact);
+        // needs a storageLocation for delayed delete to apply
+        this.localEnvironment.artifactDAO.setStorageLocation(artifact, new StorageLocation(URI.create("foo:bar")));
 
+        Artifact metaOnly = new Artifact(URI.create("cadc:INTTEST/meta.ext"), TestUtil.getRandomMD5(),
+                                         new Date(), 1024L);
+        this.localEnvironment.artifactDAO.put(metaOnly);
+        
+        log.info("case 1: no copies in remote");
         try {
             System.setProperty("user.home", TMP_DIR);
-            InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
+            InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.inventoryConnectionConfig,
+                                                                    this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
                                                                     new IncludeArtifacts(),null,
-                                                                    trackSiteLocations);
+                                                                    false) {
+                // Override the remote query to not return the remote Artifact.
+                @Override
+                String buildRemoteQuery(final String bucket) throws ResourceNotFoundException, IOException {
+                    return ArtifactRowMapper.BASE_QUERY + " WHERE uri LIKE 'cadc:FOO/%'";
+                }
+            };
+            testSubject.raceConditionDelta = 0L;
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
         }
 
+        // Local Artifact should not have been removed
+        Artifact localArtifact = this.localEnvironment.artifactDAO.get(artifact.getID());
+        Assert.assertNotNull("no remote: local artifact preserved", localArtifact);
+
+        // DeletedStorageLocationEvent should not have been created
+        DeletedStorageLocationEvent dsle = this.localEnvironment.deletedStorageLocationEventDAO.get(artifact.getID());
+        Assert.assertNull("no remote: DeletedStorageLocationEvent not created", dsle);
+
+        // metaOnly should not have been removed (this could change in future)
+        Artifact notDeleted = this.localEnvironment.artifactDAO.get(metaOnly.getID());
+        Assert.assertNotNull("no storageLocation: local not deleted", notDeleted);
+        
+        // DeletedStorageLocationEvent should not have been created
+        dsle = this.localEnvironment.deletedStorageLocationEventDAO.get(metaOnly.getID());
+        Assert.assertNull("no storageLocation: DeletedStorageLocationEvent not created", dsle);
+        
+        log.info("case 2: single copy in remote");
+        UUID remoteSiteID = this.remoteEnvironment.storageSiteDAO.list().iterator().next().getID();
+        artifact.siteLocations.add(new SiteLocation(remoteSiteID));
+        this.remoteEnvironment.globalArtifactDAO.put(artifact);
+        
+        metaOnly.siteLocations.add(new SiteLocation(remoteSiteID));
+        this.remoteEnvironment.globalArtifactDAO.put(metaOnly);
+
+        try {
+            System.setProperty("user.home", TMP_DIR);
+            InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.inventoryConnectionConfig,
+                                                                    this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
+                                                                    new IncludeArtifacts(),null,
+                                                                    false) {
+                // Override the remote query to not return the remote Artifact.
+                @Override
+                String buildRemoteQuery(final String bucket) throws ResourceNotFoundException, IOException {
+                    return ArtifactRowMapper.BASE_QUERY + " WHERE uri LIKE 'cadc:FOO/%'";
+                }
+            };
+            testSubject.raceConditionDelta = 0L;
+            testSubject.run();
+        } finally {
+            System.setProperty("user.home", USER_HOME);
+        }
+
+        // Local Artifact should not have been removed
+        localArtifact = this.localEnvironment.artifactDAO.get(artifact.getID());
+        Assert.assertNotNull("single remote: local artifact preserved", localArtifact);
+
+        // DeletedStorageLocationEvent should not have been created
+        dsle = this.localEnvironment.deletedStorageLocationEventDAO.get(artifact.getID());
+        Assert.assertNull("single remote: DeletedStorageLocationEvent not created", dsle);
+
+        // metaOnly should have been removed
+        Artifact deleted = this.localEnvironment.artifactDAO.get(metaOnly.getID());
+        Assert.assertNull("no storageLocation: local deleted", deleted);
+        
+        // DeletedStorageLocationEvent should not have been created
+        dsle = this.localEnvironment.deletedStorageLocationEventDAO.get(metaOnly.getID());
+        Assert.assertNull("no storageLocation: DeletedStorageLocationEvent not created", dsle);
+        
+        log.info("case 3: multiple copies in remote");
+        SiteLocation loc = new SiteLocation(UUID.randomUUID());
+        this.remoteEnvironment.globalArtifactDAO.addSiteLocation(artifact, loc);
+
+        try {
+            System.setProperty("user.home", TMP_DIR);
+            InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.inventoryConnectionConfig,
+                                                                    this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
+                                                                    new IncludeArtifacts(),null,
+                                                                    false) {
+                // Override the remote query to not return the remote Artifact.
+                @Override
+                String buildRemoteQuery(final String bucket) throws ResourceNotFoundException, IOException {
+                    return ArtifactRowMapper.BASE_QUERY + " WHERE uri LIKE 'cadc:FOO/%'";
+                }
+            };
+            testSubject.raceConditionDelta = 0L;
+            testSubject.run();
+        } finally {
+            System.setProperty("user.home", USER_HOME);
+        }
+
+        // Local Artifact should be deleted
+        localArtifact = this.localEnvironment.artifactDAO.get(artifact.getID());
+        Assert.assertNull("multiple remote: local artifact removed", localArtifact);
+
+        // DeletedStorageLocationEvent should have been created
+        dsle = this.localEnvironment.deletedStorageLocationEventDAO.get(artifact.getID());
+        Assert.assertNotNull("multiple remote: DeletedStorageLocationEvent created", dsle);
+        
+        log.info("race-condition detection: raceConditionStart < remote.lastModified");
+        this.localEnvironment.artifactDAO.put(artifact);
+        
+        // set raceConditionStart by creating the validator
+        try {
+            Thread.sleep(2000L);
+            System.setProperty("user.home", TMP_DIR);
+            final InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.inventoryConnectionConfig,
+                                                                    this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
+                                                                    new IncludeArtifacts(),null,
+                                                                    false) {
+                // Override the remote query to not return the remote Artifact.
+                @Override
+                String buildRemoteQuery(final String bucket) throws ResourceNotFoundException, IOException {
+                    // this gets called after iterateBucket assigns raceConditionStart
+                    try {
+                        Thread.sleep(2000L);
+                        SiteLocation loc2 = new SiteLocation(UUID.randomUUID());
+                        remoteEnvironment.globalArtifactDAO.addSiteLocation(artifact, loc2);
+                        Thread.sleep(2000L);
+                    } catch (Exception ex) {
+                        throw new RuntimeException("FAIL setup test conditions", ex);
+                    }
+                    
+                    return ArtifactRowMapper.BASE_QUERY + " WHERE uri LIKE 'cadc:FOO/%'";
+                }
+
+            };
+            // no change to testSubject.raceConditionDelta
+            testSubject.run();
+        } finally {
+            System.setProperty("user.home", USER_HOME);
+        }
+        
+        // Local Artifact should not have been removed
+        localArtifact = this.localEnvironment.artifactDAO.get(artifact.getID());
+        Assert.assertNotNull("race condition: local artifact preserved", localArtifact);
+    }
+
+    @Test
+    public void explanation0_ArtifactInLocal_LocalIsGlobal() throws Exception {
+        // Put the same Artifact into local and remote.
+        Artifact artifact = new Artifact(URI.create("cadc:INTTEST/one.ext"), TestUtil.getRandomMD5(),
+                                         new Date(), 1024L);
+        this.remoteEnvironment.artifactDAO.put(artifact);
+
+        UUID remoteSiteID = this.remoteEnvironment.storageSiteDAO.list().iterator().next().getID();
+        artifact.siteLocations.add(new SiteLocation(remoteSiteID));
+        this.localEnvironment.artifactDAO.put(artifact);
+
+
+        try {
+            System.setProperty("user.home", TMP_DIR);
+            InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.inventoryConnectionConfig,
+                                                                    this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
+                                                                    new IncludeArtifacts(),null,
+                                                                    true) {
+                // Override the remote query to not return the remote Artifact.
+                @Override
+                String buildRemoteQuery(final String bucket) throws ResourceNotFoundException, IOException {
+                    return ArtifactRowMapper.BASE_QUERY + " WHERE uri LIKE 'cadc:FOO/%'";
+                }
+            };
+            testSubject.raceConditionDelta = 0L;
+            testSubject.run();
+        } finally {
+            System.setProperty("user.home", USER_HOME);
+        }
+
+        // Local Artifact should have been removed.
         Artifact localArtifact = this.localEnvironment.artifactDAO.get(artifact.getID());
         Assert.assertNull("local artifact found", localArtifact);
 
         // L == storage should create a local DeletedStorageLocationEvent, L == global should not.
         DeletedStorageLocationEvent dsle = this.localEnvironment.deletedStorageLocationEventDAO.get(artifact.getID());
-        if (trackSiteLocations) {
-            Assert.assertNull("DeletedStorageLocationEvent found", dsle);
-        } else {
-            Assert.assertNotNull("DeletedStorageLocationEvent not found", dsle);
-        }
+        Assert.assertNull("DeletedStorageLocationEvent found", dsle);
     }
 
-    /** discrepancy: artifact in L && artifact not in R
+    /* discrepancy: artifact in L && artifact not in R
      *
      * explanation1: deleted from R, pending/missed DeletedArtifactEvent in L
      * evidence: DeletedArtifactEvent in R
@@ -265,8 +463,14 @@ public class InventoryValidatorTest {
     }
 
     public void explanation1_ArtifactInLocal(boolean trackSiteLocations) throws Exception {
+        // Put a local Artifact only and put a DeletedArtifactEvent for the Artifact in remote.
+
         Artifact artifact = new Artifact(URI.create("cadc:INTTEST/one.ext"), TestUtil.getRandomMD5(),
                                          new Date(), 1024L);
+        if (trackSiteLocations) {
+            UUID remoteSiteID = this.remoteEnvironment.storageSiteDAO.list().iterator().next().getID();
+            artifact.siteLocations.add(new SiteLocation(remoteSiteID));
+        }
         this.localEnvironment.artifactDAO.put(artifact);
 
         DeletedArtifactEvent deletedArtifactEvent = new DeletedArtifactEvent(artifact.getID());
@@ -274,14 +478,17 @@ public class InventoryValidatorTest {
 
         try {
             System.setProperty("user.home", TMP_DIR);
-            InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
+            InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.inventoryConnectionConfig, 
+                                                                    this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
                                                                     new IncludeArtifacts(),null,
                                                                     trackSiteLocations);
+            testSubject.raceConditionDelta = 0L;
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
         }
 
+        // The local Artifact should have been deleted and there should be a local DeletedArtifactEvent.
         Artifact localArtifact = this.localEnvironment.artifactDAO.get(artifact.getID());
         Assert.assertNull("local artifact found", localArtifact);
 
@@ -289,7 +496,7 @@ public class InventoryValidatorTest {
         Assert.assertNotNull("DeletedArtifactEvent not found", dae);
     }
 
-    /** discrepancy: artifact in L && artifact not in R
+    /* discrepancy: artifact in L && artifact not in R
      *
      * explanation2: L==global, deleted from R, pending/missed DeletedStorageLocationEvent in L
      * evidence: DeletedStorageLocationEvent in R
@@ -297,7 +504,6 @@ public class InventoryValidatorTest {
      *
      * note: when removing siteID from Artifact.storageLocations in global, if the Artifact.siteLocations becomes empty
      * the artifact should be deleted (metadata-sync needs to also do this in response to a DeletedStorageLocationEvent)
-     * TBD: must this also create a DeletedArtifactEvent?
      *
      * L == global
      * case 1
@@ -310,9 +516,9 @@ public class InventoryValidatorTest {
      */
     @Test
     public void explanation2_ArtifactInLocal_LocalIsGlobal() throws Exception {
-        this.remoteEnvironment.initStorageSite(REMOTE_STORAGE_SITE);
-
         // case 1
+        // Put a local Artifact with remote and random SiteLocation's, and put a
+        // DeletedStorageLocationEvent for the Artifact in remote.
         UUID remoteSiteID = this.remoteEnvironment.storageSiteDAO.list().iterator().next().getID();
         UUID randomSiteID = UUID.randomUUID();
 
@@ -327,14 +533,18 @@ public class InventoryValidatorTest {
 
         try {
             System.setProperty("user.home", TMP_DIR);
-            InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
+            InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.inventoryConnectionConfig, 
+                                                                    this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
                                                                     new IncludeArtifacts(),null,
                                                                     true);
+            testSubject.raceConditionDelta = 0L;
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
         }
 
+        // Local Artifact and the random SiteLocation should not have been deleted,
+        // the remote SiteLocation should have been deleted.
         Artifact localArtifact = this.localEnvironment.artifactDAO.get(artifact.getID());
         Assert.assertNotNull("local artifact not found", localArtifact);
         Assert.assertEquals("metaChecksum mismatch", artifact.getMetaChecksum(), localArtifact.getMetaChecksum());
@@ -349,6 +559,8 @@ public class InventoryValidatorTest {
         this.remoteEnvironment.initStorageSite(REMOTE_STORAGE_SITE);
 
         // case 2
+        // Put a local Artifact with a single remote SiteLocation, and put a
+        // DeletedStorageLocationEvent for the Artifact in remote.
         remoteSiteID = this.remoteEnvironment.storageSiteDAO.list().iterator().next().getID();
         artifact = new Artifact(URI.create("cadc:INTTEST/two.ext"), TestUtil.getRandomMD5(),
                                 new Date(), 1024L);
@@ -360,19 +572,23 @@ public class InventoryValidatorTest {
 
         try {
             System.setProperty("user.home", TMP_DIR);
-            InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
+            InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.inventoryConnectionConfig, 
+                                                                    this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
                                                                     new IncludeArtifacts(),null,
                                                                     true);
+            testSubject.raceConditionDelta = 0L;
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
         }
 
+        // The Artifact's remote SiteLocation should have been deleted,
+        // and since Artifact.siteLocations in now empty the Artifact should have been deleted.
         localArtifact = this.localEnvironment.artifactDAO.get(artifact.getID());
         Assert.assertNull("local artifact found", localArtifact);
     }
 
-    /** discrepancy: artifact in L && artifact not in R
+    /* discrepancy: artifact in L && artifact not in R
      *
      * explanation3: L==global, new Artifact in L, pending/missed Artifact or sync in R
      * evidence: ?
@@ -393,9 +609,8 @@ public class InventoryValidatorTest {
      */
     @Test
     public void explanation3_ArtifactInLocal_LocalIsGlobal() throws Exception {
-        this.remoteEnvironment.initStorageSite(REMOTE_STORAGE_SITE);
-
         // case 1
+        // Put a local Artifact with remote and random SiteLocation's.
         UUID remoteSiteID = this.remoteEnvironment.storageSiteDAO.list().iterator().next().getID();
         UUID randomSiteID = UUID.randomUUID();
 
@@ -407,14 +622,18 @@ public class InventoryValidatorTest {
 
         try {
             System.setProperty("user.home", TMP_DIR);
-            InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
+            InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.inventoryConnectionConfig, 
+                                                                    this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
                                                                     new IncludeArtifacts(),null,
                                                                     true);
+            testSubject.raceConditionDelta = 0L;
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
         }
 
+        // Local Artifact and the random SiteLocation should not have been deleted,
+        // the remote SiteLocation should have been deleted.
         Artifact localArtifact = this.localEnvironment.artifactDAO.get(artifact.getID());
         Assert.assertNotNull("local artifact not found", localArtifact);
         Assert.assertEquals("metaChecksum mismatch", artifact.getMetaChecksum(), localArtifact.getMetaChecksum());
@@ -429,6 +648,7 @@ public class InventoryValidatorTest {
         this.remoteEnvironment.initStorageSite(REMOTE_STORAGE_SITE);
 
         // case 2
+        // Put a local Artifact with a single remote SiteLocation.
         remoteSiteID = this.remoteEnvironment.storageSiteDAO.list().iterator().next().getID();
         artifact = new Artifact(URI.create("cadc:INTTEST/two.ext"), TestUtil.getRandomMD5(),
                                 new Date(), 1024L);
@@ -437,14 +657,18 @@ public class InventoryValidatorTest {
 
         try {
             System.setProperty("user.home", TMP_DIR);
-            InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
+            InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.inventoryConnectionConfig, 
+                                                                    this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
                                                                     new IncludeArtifacts(),null,
                                                                     true);
+            testSubject.raceConditionDelta = 0L;
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
         }
 
+        // The Artifact's remote SiteLocation should have been deleted,
+        // and since Artifact.siteLocations in now empty the Artifact should have been deleted.
         localArtifact = this.localEnvironment.artifactDAO.get(artifact.getID());
         Assert.assertNull("local artifact found", localArtifact);
     }
@@ -461,25 +685,29 @@ public class InventoryValidatorTest {
      */
     @Test
     public void explanation4_ArtifactInLocal_LocalIsStorage() throws Exception {
+        // Put Artifact in local.
         Artifact artifact = new Artifact(URI.create("cadc:INTTEST/one.ext"), TestUtil.getRandomMD5(),
                                          new Date(), 1024L);
         this.localEnvironment.artifactDAO.put(artifact);
 
         try {
             System.setProperty("user.home", TMP_DIR);
-            InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
+            InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.inventoryConnectionConfig, 
+                                                                    this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
                                                                     new IncludeArtifacts(),null,
                                                                     false);
+            testSubject.raceConditionDelta = 0L;
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
         }
 
+        // Local Artifact should not have been deleted.
         Artifact localArtifact = this.localEnvironment.artifactDAO.get(artifact.getID());
-        Assert.assertNull("local artifact found", localArtifact);
+        Assert.assertNotNull("local artifact not found", localArtifact);
     }
 
-    /** discrepancy: artifact in L && artifact not in R
+    /* discrepancy: artifact in L && artifact not in R
      *
      * explanation6: deleted from R, lost DeletedArtifactEvent
      * evidence: ?
@@ -489,23 +717,20 @@ public class InventoryValidatorTest {
      * evidence: ?
      * action: assume explanation3
      *
-     * explanations 6 and 7 are covered by explanation 3
-     * (explanation6 requires that R == storage and hence L == global because
-     * at least right now only storage generates DeletedArtifactEvent).
+     * explanations 2, 6, 7 are covered by explanation 3
      * The short hand there is that when it says evidence: ? that means with no evidence you
      * cannot tell the difference between the explanations with no evidence: any of them could be true.
      * But the correct action can be taken because it only depends on trackSiteLocations.
      */
 
-    /**
-     * explantion0: filter policy at L changed to include artifact in R
-     * evidence: ?
-     * action: equivalent to missed Artifact event (explanation3 below)
+    /* discrepancy: artifact not in L && artifact in R
      *
-     * explanation 0 is covered by explanation 3.
+     * explanation0: filter policy at L changed to include artifact in R
+     * evidence: ?
+     * action: equivalent to missed Artifact event (explanation3/4 below)
      */
 
-    /** discrepancy: artifact not in L && artifact in R
+    /* discrepancy: artifact not in L && artifact in R
      *
      * explanation1: deleted from L, pending/missed DeletedArtifactEvent in R
      * evidence: DeletedArtifactEvent in L
@@ -525,6 +750,7 @@ public class InventoryValidatorTest {
     }
 
     public void explanation1_ArtifactNotInLocal(boolean trackSiteLocations) throws Exception {
+        // Put Artifact in remote, put DeletedArtifactEvent for remote Artifact in local.
         Artifact artifact = new Artifact(URI.create("cadc:INTTEST/one.ext"), TestUtil.getRandomMD5(),
                                          new Date(), 1024L);
         this.remoteEnvironment.artifactDAO.put(artifact);
@@ -534,22 +760,26 @@ public class InventoryValidatorTest {
 
         try {
             System.setProperty("user.home", TMP_DIR);
-            InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
+            InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.inventoryConnectionConfig, 
+                                                                    this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
                                                                     new IncludeArtifacts(),null,
                                                                     trackSiteLocations);
+            testSubject.raceConditionDelta = 0L;
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
         }
 
+        // Local Artifact should have been deleted,
+        // and there should be a DeletedArtifactEvent for the Artifact in local.
         Artifact localArtifact = this.localEnvironment.artifactDAO.get(artifact.getID());
         Assert.assertNull("local artifact found", localArtifact);
 
         DeletedArtifactEvent localDeletedArtifactEvent = this.localEnvironment.deletedArtifactEventDAO.get(artifact.getID());
-        Assert.assertNull("found DeletedArtifactEvent", localDeletedArtifactEvent);
+        Assert.assertNotNull("DeletedArtifactEvent not found", localDeletedArtifactEvent);
     }
 
-    /** discrepancy: artifact not in L && artifact in R
+    /* discrepancy: artifact not in L && artifact in R
      *
      * explanation2: L==storage, deleted from L, pending/missed DeletedStorageLocationEvent in R
      * evidence: DeletedStorageLocationEvent in L
@@ -561,6 +791,7 @@ public class InventoryValidatorTest {
      */
     @Test
     public void explanation2_ArtifactNotInLocal_LocalIsStorage() throws Exception {
+        // Put Artifact in remote, and put a DeletedStorageLocationEvent for the remote Artifact in local.
         Artifact artifact = new Artifact(URI.create("cadc:INTTEST/one.ext"), TestUtil.getRandomMD5(),
                                          new Date(), 1024L);
         this.remoteEnvironment.artifactDAO.put(artifact);
@@ -570,19 +801,22 @@ public class InventoryValidatorTest {
 
         try {
             System.setProperty("user.home", TMP_DIR);
-            InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
+            InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.inventoryConnectionConfig, 
+                                                                    this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
                                                                     new IncludeArtifacts(),null,
                                                                     false);
+            testSubject.raceConditionDelta = 0L;
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
         }
 
+        // Local Artifact should have been deleted.
         Artifact localArtifact = this.localEnvironment.artifactDAO.get(artifact.getID());
         Assert.assertNull("local artifact not found", localArtifact);
     }
 
-    /** discrepancy: artifact not in L && artifact in R
+    /* discrepancy: artifact not in L && artifact in R
      *
      * explanation3: L==storage, new Artifact in R, pending/missed new Artifact event in L
      * evidence: ?
@@ -594,84 +828,176 @@ public class InventoryValidatorTest {
      */
     @Test
     public void explanation3_ArtifactNotInLocal_LocalIsStorage() throws Exception {
+        // Put Artifact in remote.
         Artifact artifact = new Artifact(URI.create("cadc:INTTEST/one.ext"), TestUtil.getRandomMD5(),
                                          new Date(), 1024L);
         this.remoteEnvironment.artifactDAO.put(artifact);
 
         try {
             System.setProperty("user.home", TMP_DIR);
-            InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
+            InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.inventoryConnectionConfig, 
+                                                                    this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
                                                                     new IncludeArtifacts(),null,
                                                                     false);
+            testSubject.raceConditionDelta = 0L;
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
         }
 
+        // Remote Artifact should be in local.
         Artifact localArtifact = this.localEnvironment.artifactDAO.get(artifact.getID());
         Assert.assertNotNull("local artifact not found", localArtifact);
         Assert.assertEquals("metaChecksum mismatch", artifact.getMetaChecksum(), localArtifact.getMetaChecksum());
     }
 
-    /** discrepancy: artifact not in L && artifact in R
+    /* discrepancy: artifact not in L && artifact in R
      *
-     * explanation4: L==global, new Artifact in R, pending/missed changed Artifact event in L
-     * evidence: Artifact in local db but siteLocations does not include remote siteID
-     * action: add siteID to Artifact.siteLocations
+     * explanation4: L==global, new Artifact in L, stale Artifact in R
+     * evidence: Artifact in local db without siteLocations constraint (get-by-uri)
+     * action: resolve local vs remote
      *
      * L == global
-     * before: Artifact in L & R, R siteID not in L Artifact.siteLocations
-     * after:  Artifact in L and R siteID in Artifact.siteLocations
+     * before: Artifact1 in L & R, R siteID not in L Artifact.siteLocations
+     *         Artifact2 in R
+     * after:  Artifact1 in L and R siteID in Artifact.siteLocations
+     *         Artifact2 in L and R siteID in Artifact.siteLocations
      */
     @Test
-    public void explanation4_ArtifactNotInL_LocalIsGlobal() throws Exception {
-        this.remoteEnvironment.initStorageSite(REMOTE_STORAGE_SITE);
-        UUID remoteSiteID = this.remoteEnvironment.storageSiteDAO.list().iterator().next().getID();
-        UUID randomSiteID = UUID.randomUUID();
+    public void explanation4_ArtifactNotInLocal_LocalIsGlobal() throws Exception {
+        
+        URI artifactURI = URI.create("cadc:INTTEST/one.ext");
+        URI contentCheckSum = TestUtil.getRandomMD5();
+        Date nowDate = new Date();
+        Date olderDate = new Date(nowDate.getTime() - 5000);
 
-        Artifact artifact = new Artifact(URI.create("cadc:INTTEST/one.ext"), TestUtil.getRandomMD5(),
-                                         new Date(), 1024L);
-        this.remoteEnvironment.artifactDAO.put(artifact);
-        this.localEnvironment.artifactDAO.put(artifact);
-        this.localEnvironment.artifactDAO.addSiteLocation(artifact, new SiteLocation(randomSiteID));
+        // stale artifact in remote
+        Artifact remoteArtifact = new Artifact(artifactURI, contentCheckSum, olderDate, 1024L);
+        this.remoteEnvironment.artifactDAO.put(remoteArtifact);
+        
+        // correct artifact in local
+        Artifact localArtifact = new Artifact(artifactURI, contentCheckSum, nowDate, 1024L);
+        SiteLocation sloc = new SiteLocation(UUID.randomUUID());
+        localArtifact.siteLocations.add(sloc);
+        this.localEnvironment.artifactDAO.put(localArtifact);
 
         try {
             System.setProperty("user.home", TMP_DIR);
-            InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
+            InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.inventoryConnectionConfig, 
+                                                                    this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
                                                                     new IncludeArtifacts(),null,
                                                                     true);
+            testSubject.raceConditionDelta = 0L;
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
         }
 
-        Artifact localArtifact = this.localEnvironment.artifactDAO.get(artifact.getID());
-        Assert.assertNotNull("local artifact not found", localArtifact);
-        Assert.assertEquals("metaChecksum mismatch", artifact.getMetaChecksum(), localArtifact.getMetaChecksum());
-        Assert.assertTrue("artifact does not contains remote site location",
-                          localArtifact.siteLocations.contains(new SiteLocation(remoteSiteID)));
-        Assert.assertTrue("artifact does not contains local site location",
-                          localArtifact.siteLocations.contains(new SiteLocation(randomSiteID)));
+        // local Artifact should not have been deleted,
+        // should not be a DeletedArtifactEvent for the local Artifact
+        // should be a DeletedArtifactEvent for the remote Artifact
+        Artifact actualLocal = this.localEnvironment.artifactDAO.get(localArtifact.getID());
+        Assert.assertNotNull("local artifact not found", actualLocal);
+        Assert.assertEquals(1, actualLocal.siteLocations.size());
+        Assert.assertTrue(actualLocal.siteLocations.contains(sloc));
+
+        DeletedArtifactEvent deletedArtifactEvent = this.localEnvironment.deletedArtifactEventDAO.get(localArtifact.getID());
+        Assert.assertNull("DeletedArtifactEvent-local", deletedArtifactEvent);
+        
+        deletedArtifactEvent = this.localEnvironment.deletedArtifactEventDAO.get(remoteArtifact.getID());
+        Assert.assertNotNull("DeletedArtifactEvent-remote", deletedArtifactEvent);
     }
 
-    /**
+    /* discrepancy: artifact not in L && artifact in R
+     *
+     * explanation5: L==global, new Artifact in R, pending/missed changed Artifact event in L
+     * evidence: Artifact instance not in local db or Artifact instance in local db but siteLocations 
+     *           does not include remote siteID (get-by-id)
+     * action: insert Artifact or add siteID to existing Artifact.siteLocations
+     *
+     * L == global
+     * before: Artifact1 in L & R, R siteID not in L Artifact.siteLocations
+     *         Artifact2 in R
+     * after:  Artifact1 in L and R siteID in Artifact.siteLocations
+     *         Artifact2 in L and R siteID in Artifact.siteLocations
+     */
+    @Test
+    public void explanation5_ArtifactNotInLocal_LocalIsGlobal() throws Exception {
+        // Put Artifact in remote.
+        final UUID remoteSiteID = this.remoteEnvironment.storageSiteDAO.list().iterator().next().getID();
+        final UUID randomSiteID = UUID.randomUUID();
+        
+        log.info("remote site: " + remoteSiteID);
+        log.info("random site: " + randomSiteID);
+
+        // resolve with addSiteLocation
+        Artifact artifact1 = new Artifact(URI.create("cadc:INTTEST/one.ext"), TestUtil.getRandomMD5(),
+                                         new Date(), 1024L);
+        this.remoteEnvironment.artifactDAO.put(artifact1);
+        
+        this.localEnvironment.nonOriginArtifactDAO.put(artifact1);
+        this.localEnvironment.nonOriginArtifactDAO.addSiteLocation(artifact1, new SiteLocation(randomSiteID));
+        
+        // resolve with put Artifact
+        Artifact artifact2 = new Artifact(URI.create("cadc:INTTEST/two.ext"), TestUtil.getRandomMD5(),
+                                         new Date(), 1024L);
+        this.remoteEnvironment.artifactDAO.put(artifact2);
+        
+        Log4jInit.setLevel(ArtifactDAO.class.getPackage().getName(), Level.DEBUG);
+        try {
+            System.setProperty("user.home", TMP_DIR);
+            InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.inventoryConnectionConfig, 
+                                                                    this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
+                                                                    new IncludeArtifacts(),null,
+                                                                    true);
+            testSubject.raceConditionDelta = 0L;
+            testSubject.run();
+        } finally {
+            System.setProperty("user.home", USER_HOME);
+        }
+        
+        
+        // Local Artifact should not have been deleted and Artifact.siteLocations should
+        // contain the remote and random SiteLocation's.
+        Artifact localArtifact1 = this.localEnvironment.artifactDAO.get(artifact1.getID());
+        Assert.assertNotNull("local artifact1 not found", localArtifact1);
+        Assert.assertEquals("metaChecksum mismatch", artifact1.getMetaChecksum(), localArtifact1.getMetaChecksum());
+        for (SiteLocation loc : localArtifact1.siteLocations) {
+            log.info("artifact: " + localArtifact1.getID() + " site: " + loc);
+        }
+        Assert.assertTrue("artifact1 does not contains remote site location " + remoteSiteID,
+                          localArtifact1.siteLocations.contains(new SiteLocation(remoteSiteID)));
+        Assert.assertTrue("artifact1 does not contains other site location " + randomSiteID,
+                          localArtifact1.siteLocations.contains(new SiteLocation(randomSiteID)));
+        
+        Artifact localArtifact2 = this.localEnvironment.artifactDAO.get(artifact2.getID());
+        Assert.assertNotNull("local artifact2 not found", localArtifact2);
+        Assert.assertEquals("metaChecksum mismatch", artifact2.getMetaChecksum(), localArtifact2.getMetaChecksum());
+        Assert.assertTrue("artifact2 does not contains remote site location " + remoteSiteID,
+                          localArtifact2.siteLocations.contains(new SiteLocation(remoteSiteID)));
+        Assert.assertFalse("artifact2 contains other site location " + randomSiteID,
+                          localArtifact2.siteLocations.contains(new SiteLocation(randomSiteID)));
+    }
+    
+    /*
      * explanation6: deleted from L, lost DeletedArtifactEvent
      * evidence: ?
-     * action: assume explanation3
+     * action: assume explanation3 or 5
      *
      * explanation7: L==storage, deleted from L, lost DeletedStorageLocationEvent
      * evidence: ?
      * action: assume explanation3
      *
-     * explanations 6 and 7 are covered by explanation 3
+     * explanations 6, 7 are covered by explanation 3
      */
 
-    /**
+    /*
      * discrepancy: artifact.uri in both && artifact.id mismatch
      *
      * explanation1: same ID collision due to race condition that metadata-sync has to handle
      * evidence: no more evidence needed
-     * action: pick winner, create DeletedArtifactEvent for loser, delete loser if it is in L
+     * action: pick winner, create DeletedArtifactEvent for loser, delete loser if it is in L,
+     *         insert winner if winner was in R
      *
      * case 1:
      * local Artifact contentModifiedDate before remote Artifact contentModifiedDate, delete local Artifact.
@@ -697,12 +1023,18 @@ public class InventoryValidatorTest {
 
     public void artifactUriCollision(boolean trackSiteLocations) throws Exception {
         // case 1: local contentModifiedDate before remote contentModifiedDate
+        // Put the same Artifact in local as remote,
+        // except the local contentModifiedDate is older than the remote contentModifiedDate.
         URI artifactURI = URI.create("cadc:INTTEST/one.ext");
         URI contentCheckSum = TestUtil.getRandomMD5();
         Date nowDate = new Date();
         Date olderDate = new Date(nowDate.getTime() - 5000);
 
         Artifact localArtifact = new Artifact(artifactURI, contentCheckSum, olderDate, 1024L);
+        if (trackSiteLocations) {
+            UUID remoteSiteID = this.remoteEnvironment.storageSiteDAO.list().iterator().next().getID();
+            localArtifact.siteLocations.add(new SiteLocation(remoteSiteID));
+        }
         this.localEnvironment.artifactDAO.put(localArtifact);
 
         Artifact remoteArtifact = new Artifact(artifactURI, contentCheckSum, nowDate, 1024L);
@@ -710,22 +1042,31 @@ public class InventoryValidatorTest {
 
         try {
             System.setProperty("user.home", TMP_DIR);
-            InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
+            InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.inventoryConnectionConfig, 
+                                                                    this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
                                                                     new IncludeArtifacts(),null,
                                                                     trackSiteLocations);
+            testSubject.raceConditionDelta = 0L;
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
         }
 
-        localArtifact = this.localEnvironment.artifactDAO.get(localArtifact.getID());
-        Assert.assertNotNull("local artifact not found", localArtifact);
-        Assert.assertEquals("local artifact id != remote artifact id", remoteArtifact.getID(), localArtifact.getID());
-
+        // The local Artifact should have been deleted,
+        // and there should be a DeletedArtifactEvent for the Artifact in local.
         DeletedArtifactEvent deletedArtifactEvent = this.localEnvironment.deletedArtifactEventDAO.get(localArtifact.getID());
         Assert.assertNotNull("DeletedArtifactEvent not found", deletedArtifactEvent);
 
+        localArtifact = this.localEnvironment.artifactDAO.get(localArtifact.getID());
+        Assert.assertNull("local artifact found", localArtifact);
+
+        // cleanup between tests
+        this.localEnvironment.cleanTestEnvironment();
+        this.remoteEnvironment.cleanTestEnvironment();
+
         // case 2: local contentModifiedDate after remote contentModifiedDate
+        // Put the same Artifact in local as remote,
+        // except the local contentModifiedDate is newer than the remote contentModifiedDate.
         remoteArtifact = new Artifact(artifactURI, contentCheckSum, olderDate, 1024L);
         this.remoteEnvironment.artifactDAO.put(remoteArtifact);
 
@@ -734,14 +1075,18 @@ public class InventoryValidatorTest {
 
         try {
             System.setProperty("user.home", TMP_DIR);
-            InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
+            InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.inventoryConnectionConfig, 
+                                                                    this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
                                                                     new IncludeArtifacts(),null,
                                                                     trackSiteLocations);
+            testSubject.raceConditionDelta = 0L;
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
         }
 
+        // The local Artifact should not have been deleted,
+        // and there should not be a DeletedArtifactEvent for the Artifact in local.
         localArtifact = this.localEnvironment.artifactDAO.get(localArtifact.getID());
         Assert.assertNotNull("local artifact not found", localArtifact);
 
@@ -749,18 +1094,19 @@ public class InventoryValidatorTest {
         Assert.assertNull("DeletedArtifactEvent found", deletedArtifactEvent);
     }
 
-    /**
+    /*
      * discrepancy: artifact in both && valid metaChecksum mismatch
      *
      * explanation1: pending/missed artifact update in L
-     * evidence: ??
+     * evidence: local artifact has older Entity.lastModified
+     *           indicating an update to optional metadata at remote
      * action: put Artifact
      *
      * before: Artifact in L & R, update Artifact in R
      * after: R Artifact in L
      *
      * explanation2: pending/missed artifact update in R
-     * evidence: ??
+     * evidence: local artifact has newer Entity.lastModified indicating the update happened locally
      * action: do nothing
      *
      * before: Artifact in L & R, update Artifact in L
@@ -777,32 +1123,60 @@ public class InventoryValidatorTest {
     }
 
     public void artifactChecksumMismatch_Explanation1(boolean trackSiteLocations) throws Exception {
+        // Put Artifact in local, if local is a global site
+        // add the remote site ID and a random site ID to siteLocations.
+        // Pause before putting the Artifact in remote, it will have a later lastModified date
+        // and the Artifact will have a different metadata checksum than the local Artifact.
+        UUID remoteSiteID = this.remoteEnvironment.storageSiteDAO.list().iterator().next().getID();
+        UUID randomSiteID = UUID.randomUUID();
+
         UUID artifactID = UUID.randomUUID();
         URI artifactURI = URI.create("cadc:INTTEST/one.ext");
 
-        Artifact artifact = new Artifact(artifactID, artifactURI, TestUtil.getRandomMD5(),
-                                              new Date(), 1024L);
-        this.localEnvironment.artifactDAO.put(artifact);
-        Thread.sleep(50);   // increase entity lastModified delta
-        this.remoteEnvironment.artifactDAO.put(artifact);
+        Calendar now = Calendar.getInstance();
 
-        artifact.contentType = "image/fits";
-        this.remoteEnvironment.artifactDAO.put(artifact);
+        Artifact localArtifact = new Artifact(artifactID, artifactURI, TestUtil.getRandomMD5(), now.getTime(), 1024L);
+        if (trackSiteLocations) {
+            localArtifact.siteLocations.add(new SiteLocation(remoteSiteID));
+            localArtifact.siteLocations.add(new SiteLocation(randomSiteID));
+        }
+        this.localEnvironment.artifactDAO.put(localArtifact);
+
+        // remote Artifact with same ID and immutable metadata, different mutable metadata, and nedwer Entity.lastModified
+        Thread.sleep(20L)
+                ;
+        Artifact remoteArtifact = new Artifact(artifactID, artifactURI, TestUtil.getRandomMD5(), now.getTime(), 1024L);
+        remoteArtifact.contentType = "image/fits";
+        this.remoteEnvironment.artifactDAO.put(remoteArtifact);
 
         try {
             System.setProperty("user.home", TMP_DIR);
-            InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
+            InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.inventoryConnectionConfig, 
+                                                                    this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
                                                                     new IncludeArtifacts(),null,
                                                                     trackSiteLocations);
+            testSubject.raceConditionDelta = 0L;
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
         }
 
-        Artifact localArtifact = this.localEnvironment.artifactDAO.get(artifact.getID());
-        Assert.assertNotNull("local artifact not found", localArtifact);
+        // Local Artifact should not have been deleted, and the local and remote metadata checksums should match.
+        // If local is a global site the Artifact.siteLocations should contain the remote and random SiteLocations.
+        Artifact currentArtifact = this.localEnvironment.artifactDAO.get(artifactID);
+        Assert.assertNotNull("local artifact not found", currentArtifact);
         Assert.assertEquals("local artifact is right and remote is wrong so discrepancy not be fixed",
-                            artifact.getMetaChecksum(), localArtifact.getMetaChecksum());
+                            remoteArtifact.getMetaChecksum(), currentArtifact.getMetaChecksum());
+
+        if (trackSiteLocations) {
+            Assert.assertTrue("artifact does not contains remote site location",
+                              currentArtifact.siteLocations.contains(new SiteLocation(remoteSiteID)));
+            Assert.assertTrue("artifact does not contains remote random site location",
+                              currentArtifact.siteLocations.contains(new SiteLocation(randomSiteID)));
+        } else {
+            Assert.assertEquals("artifact does not contain the StorageLocation",
+                                localArtifact.storageLocation, currentArtifact.storageLocation);
+        }
     }
 
     @Test
@@ -816,6 +1190,8 @@ public class InventoryValidatorTest {
     }
 
     public void artifactChecksumMismatch_Explanation2(boolean trackSiteLocations) throws Exception {
+        // Put the same Artifact in local and global, then update the local Artifact
+        // to give it a different last modified date.
         UUID artifactID = UUID.randomUUID();
         URI artifactURI = URI.create("cadc:INTTEST/one.ext");
 
@@ -824,23 +1200,64 @@ public class InventoryValidatorTest {
         this.localEnvironment.artifactDAO.put(artifact);
         this.remoteEnvironment.artifactDAO.put(artifact);
 
+        Thread.sleep(20L);
         artifact.contentType = "image/fits";
         this.localEnvironment.artifactDAO.put(artifact);
 
         try {
             System.setProperty("user.home", TMP_DIR);
-            InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
+            InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.inventoryConnectionConfig, 
+                                                                    this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
                                                                     new IncludeArtifacts(),null,
                                                                     trackSiteLocations);
+            testSubject.raceConditionDelta = 0L;
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
         }
 
+        // Local Artifact not deleted and meta checksum has not changed.
         Artifact localArtifact = this.localEnvironment.artifactDAO.get(artifact.getID());
         Assert.assertNotNull("local artifact not found", localArtifact);
         Assert.assertEquals("local artifact is right and remote is wrong so discrepancy not be fixed",
                             artifact.getMetaChecksum(), localArtifact.getMetaChecksum());
     }
 
+    /* discrepancy: artifact in both but siteLocations does not include remote
+     *
+     * explanation: pending/missed new Artifact event from storage site (after file-sync)
+     * evidence: remote siteID not in local Artifact.siteLocations
+     * action: add siteID to Artifact.siteLocations
+     */
+    @Test
+    public void artifactSiteLocationMissing_LocalIsGlobal() throws Exception {
+        UUID remoteSiteID = this.remoteEnvironment.storageSiteDAO.list().iterator().next().getID();
+        final SiteLocation sloc = new SiteLocation(remoteSiteID);
+        
+        UUID artifactID = UUID.randomUUID();
+        URI artifactURI = URI.create("cadc:INTTEST/one.ext");
+
+        Artifact artifact = new Artifact(artifactID, artifactURI, TestUtil.getRandomMD5(), new Date(), 1024L);
+        this.localEnvironment.artifactDAO.put(artifact);
+        this.remoteEnvironment.artifactDAO.put(artifact);
+        
+        try {
+            System.setProperty("user.home", TMP_DIR);
+            InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.inventoryConnectionConfig, 
+                                                                    this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
+                                                                    new IncludeArtifacts(),null,
+                                                                    true);
+            testSubject.raceConditionDelta = 0L;
+            testSubject.run();
+        } finally {
+            System.setProperty("user.home", USER_HOME);
+        }
+        
+        // Local Artifact.siteLocations updated
+        Artifact localArtifact = this.localEnvironment.artifactDAO.get(artifact.getID());
+        Assert.assertNotNull("local artifact", localArtifact);
+        
+        Assert.assertTrue("contains siteLocation", localArtifact.siteLocations.contains(sloc));
+        
+    }
 }

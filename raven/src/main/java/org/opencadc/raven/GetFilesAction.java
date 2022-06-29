@@ -75,8 +75,9 @@ import ca.nrc.cadc.vos.Transfer;
 import ca.nrc.cadc.vos.VOS;
 import java.io.IOException;
 import java.net.HttpURLConnection;
-import java.net.URL;
-import java.util.ArrayList;
+import java.net.URI;
+import java.net.URLEncoder;
+import java.util.Iterator;
 import java.util.List;
 import org.apache.log4j.Logger;
 
@@ -102,31 +103,51 @@ public class GetFilesAction extends FilesAction {
     @Override
     public void doAction() throws Exception {
         initAndAuthorize();
-        URL redirect = getFirstURL();
-        
-        // TODO: append optional params from syncInput
-        
-        log.debug("redirect: " + redirect.toExternalForm());
+        URI redirect = getFirstURL();
+
+        StringBuilder sb = new StringBuilder();
+        for (String param : syncInput.getParameterNames()) {
+            Iterator<String> values = syncInput.getParameters(param).iterator();
+            while (values.hasNext()) {
+                if (sb.length() > 0) {
+                    sb.append("&");
+                }
+                sb.append(param);
+                sb.append("=");
+                sb.append(URLEncoder.encode(values.next(), "UTF-8"));
+            }
+        }
+        String redirectLocation = redirect.toASCIIString();
+        if (sb.length() > 0) {
+            if (redirect.getQuery() != null) {
+                redirectLocation += "&";
+            } else {
+                redirectLocation += "?";
+            }
+            redirectLocation += sb.toString();
+        }
+        log.debug("params: " + sb.toString());
+        log.debug("redirect: " + redirectLocation);
         syncOutput.setCode(HttpURLConnection.HTTP_SEE_OTHER);
-        syncOutput.setHeader("Location", redirect.toExternalForm());
+        syncOutput.setHeader("Location", redirectLocation);
     }
 
 
-    private URL getFirstURL() throws ResourceNotFoundException, IOException {
-        List<Protocol> plist = new ArrayList<Protocol>();
+    URI getFirstURL() throws ResourceNotFoundException, IOException {
+        Transfer transfer = new Transfer(artifactURI, Direction.pullFromVoSpace);
         Protocol proto = new Protocol(VOS.PROTOCOL_HTTPS_GET);
-        // request already authorized, hence ask for anon security to get a pre-authorized URL
         proto.setSecurityMethod(Standards.SECURITY_METHOD_ANON);
-        plist.add(proto);
-        Transfer transfer = new Transfer(artifactURI, Direction.pullFromVoSpace, plist);
+        transfer.getProtocols().add(proto);
 
-        ProtocolsGenerator pg = new ProtocolsGenerator(artifactDAO, publicKeyFile, privateKeyFile, user);
+        ProtocolsGenerator pg = new ProtocolsGenerator(this.artifactDAO, this.publicKeyFile, this.privateKeyFile,
+                                                       this.user, this.siteAvailabilities, this.siteRules,
+                                                       this.preventNotFound);
         List<Protocol> protos = pg.getProtocols(transfer);
         if (protos.isEmpty()) {
             throw new ResourceNotFoundException("not available: " + artifactURI);
         }
 
         // for now return the first URL in the list
-        return new URL(protos.get(0).getEndpoint());
+        return URI.create(protos.get(0).getEndpoint());
     }
 }

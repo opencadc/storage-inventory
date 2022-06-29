@@ -3,7 +3,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2020.                            (c) 2020.
+ *  (c) 2022.                            (c) 2022.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -88,6 +88,7 @@ import javax.sql.DataSource;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Entity;
 import org.opencadc.inventory.InventoryUtil;
+import org.springframework.jdbc.BadSqlGrammarException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 
@@ -113,7 +114,7 @@ public abstract class AbstractDAO<T extends Entity> {
      * Copy configuration from argument DAO. This uses the same DataSource and TransactionManager
      * so calls to this and another DAO participate in the same transaction.
      * 
-     * @param dao another DAO to copy/share configuration
+     * @param dao another DAO to share configuration and datasource
      */
     protected AbstractDAO(AbstractDAO dao) {
         this(dao.origin);
@@ -121,12 +122,38 @@ public abstract class AbstractDAO<T extends Entity> {
         this.dataSource = dao.getDataSource();
     }
 
+    /**
+     * Copy configuration but override origin setting. This is for HarvestStateDAO which is
+     * always origin=true.
+     * 
+     * @param dao another DAO to share configuration and datasource
+     * @param origin origin flag for lastModified update
+     */
+    protected AbstractDAO(AbstractDAO dao, boolean origin) {
+        this(origin);
+        this.gen = dao.getSQLGenerator();
+        this.dataSource = dao.getDataSource();
+    }
+    
     protected MessageDigest getDigest() {
         try {
             return MessageDigest.getInstance("MD5");
         } catch (NoSuchAlgorithmException ex) {
             throw new RuntimeException("FATAL: no MD5 digest algorithm available", ex);
         }
+    }
+    
+    // try to unwrap spring jdbc exception consistently and throw a RuntimeException with
+    // a decent message
+    protected void handleInternalFail(BadSqlGrammarException ex) throws RuntimeException {
+        Throwable cause = ex.getCause();
+        if (cause != null) {
+            if (cause.getMessage().contains("permission")) {
+                throw new RuntimeException("CONFIG: " + cause.getMessage(), cause);
+            }
+            throw new RuntimeException("BUG: " + cause.getMessage(), cause);
+        }
+        throw new RuntimeException("BUG: " + ex.getMessage(), ex);
     }
     
     /**
@@ -223,9 +250,9 @@ public abstract class AbstractDAO<T extends Entity> {
         String tsSQL = gen.getCurrentTimeSQL();
         JdbcTemplate jdbc = new JdbcTemplate(dataSource);
 
-        Date now = (Date) jdbc.queryForObject(tsSQL, new RowMapper() {
+        Date now = jdbc.queryForObject(tsSQL, new RowMapper<Date>() {
             @Override
-            public Object mapRow(ResultSet rs, int i) throws SQLException {
+            public Date mapRow(ResultSet rs, int i) throws SQLException {
                 return Util.getDate(rs, 1, Calendar.getInstance(DateUtil.LOCAL));
             }
         });
@@ -244,35 +271,51 @@ public abstract class AbstractDAO<T extends Entity> {
             get.setID(id);
             T e = (T) get.execute(jdbc);
             return e;
+        } catch (BadSqlGrammarException ex) {
+            handleInternalFail(ex);
         } finally {
             long dt = System.currentTimeMillis() - t;
             log.debug("GET: " + id + " " + dt + "ms");
         }
+        throw new RuntimeException("BUG: handleInternalFail did not throw");
     }
     
     /**
      * Acquire a write lock on the existing entity. This is used as the first action
      * in a transaction in order to avoid race conditions and deadlocks.
      * @param val entity value to lock
-     * @throws EntityNotFoundException if the specified entity does not exist
+     * @return the current entity
      */
-    public void lock(T val) throws EntityNotFoundException {
+    public T lock(T val) {
         if (val == null) {
             throw new IllegalArgumentException("entity cannot be null");
         }
+        return lock(val.getClass(), val.getID());
+    }
+    
+    protected T lock(Class<? extends Entity> clz, UUID id) {
+        if (clz == null || id == null) {
+            throw new IllegalArgumentException("entity cannot be null");
+        }
         checkInit();
-        log.debug("LOCK: " + val.getID());
+        log.debug("LOCK: " + id);
         long t = System.currentTimeMillis();
 
         try {
             JdbcTemplate jdbc = new JdbcTemplate(dataSource);
-            EntityLock lock = gen.getEntityLock(val.getClass());
-            lock.setID(val.getID());
-            lock.execute(jdbc);
+            //EntityLock lock = gen.getEntityLock(val.getClass());
+            //lock.setID(val.getID());
+            //lock.execute(jdbc);
+            EntityGet<T> get = (EntityGet<T>) gen.getEntityGet(clz, true);
+            get.setID(id);
+            return get.execute(jdbc);
+        } catch (BadSqlGrammarException ex) {
+            handleInternalFail(ex);
         } finally {
             long dt = System.currentTimeMillis() - t;
-            log.debug("PUT: " + val.getID() + " " + dt + "ms");
+            log.debug("LOCK: " + id + " " + dt + "ms");
         }
+        throw new RuntimeException("BUG: handleInternalFail did not throw");
     }
     
     public void put(T val) {
@@ -302,6 +345,8 @@ public abstract class AbstractDAO<T extends Entity> {
             } else {
                 log.debug("no change: " + cur);
             }
+        } catch (BadSqlGrammarException ex) {
+            handleInternalFail(ex);
         } finally {
             long dt = System.currentTimeMillis() - t;
             log.debug("PUT: " + val.getID() + " " + dt + "ms");
@@ -321,6 +366,8 @@ public abstract class AbstractDAO<T extends Entity> {
             EntityDelete del = gen.getEntityDelete(entityClass);
             del.setID(id);
             del.execute(jdbc);
+        } catch (BadSqlGrammarException ex) {
+            handleInternalFail(ex);
         } finally {
             long dt = System.currentTimeMillis() - t;
             log.debug("DELETE: " + id + " " + dt + "ms");
@@ -342,7 +389,13 @@ public abstract class AbstractDAO<T extends Entity> {
             delta = !entity.getMetaChecksum().equals(cur.getMetaChecksum());
         }
         
-        if ((origin && delta) || (origin && timestampUpdate) || entity.getLastModified() == null) {
+        if (cur != null && entity.getLastModified() == null) {
+            // preserve current timestamp: this happens when duplicate Deleted*Event are created
+            // and that should be idempotent
+            InventoryUtil.assignLastModified(entity, cur.getLastModified());
+        }
+        
+        if ((origin && delta) || entity.getLastModified() == null || timestampUpdate) {
             InventoryUtil.assignLastModified(entity, now);
         }
         

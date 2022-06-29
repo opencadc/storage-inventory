@@ -118,10 +118,10 @@ public class PermissionsConfigTest {
             Assert.assertTrue(entry.anonRead);
             Assert.assertEquals(2, entry.readOnlyGroups.size());
             Assert.assertEquals(2, entry.readWriteGroups.size());
-            GroupURI readGroup1 = new GroupURI("ivo://cadc.nrc.ca/gms?group1");
-            GroupURI readGroup2 = new GroupURI("ivo://cadc.nrc.ca/gms?group2");
-            GroupURI readWriteGroup1 = new GroupURI("ivo://cadc.nrc.ca/gms?group3");
-            GroupURI readWriteGroup2 = new GroupURI("ivo://cadc.nrc.ca/gms?group4");
+            GroupURI readGroup1 = new GroupURI(URI.create("ivo://cadc.nrc.ca/gms?group1"));
+            GroupURI readGroup2 = new GroupURI(URI.create("ivo://cadc.nrc.ca/gms?group2"));
+            GroupURI readWriteGroup1 = new GroupURI(URI.create("ivo://cadc.nrc.ca/gms?group3"));
+            GroupURI readWriteGroup2 = new GroupURI(URI.create("ivo://cadc.nrc.ca/gms?group4"));
             Assert.assertTrue(entry.readOnlyGroups.contains(readGroup1));
             Assert.assertTrue(entry.readOnlyGroups.contains(readGroup2));
             Assert.assertTrue(entry.readWriteGroups.contains(readWriteGroup1));
@@ -214,10 +214,10 @@ public class PermissionsConfigTest {
             Assert.assertNotNull(entries);
             Assert.assertEquals(2, entries.size());
             
-            GroupURI readGroup1 = new GroupURI("ivo://cadc.nrc.ca/gms?group1");
-            GroupURI readGroup2 = new GroupURI("ivo://cadc.nrc.ca/gms?group3");
-            GroupURI readWriteGroup1 = new GroupURI("ivo://cadc.nrc.ca/gms?group2");
-            GroupURI readWriteGroup2 = new GroupURI("ivo://cadc.nrc.ca/gms?group4");
+            GroupURI readGroup1 = new GroupURI(URI.create("ivo://cadc.nrc.ca/gms?group1"));
+            GroupURI readGroup2 = new GroupURI(URI.create("ivo://cadc.nrc.ca/gms?group3"));
+            GroupURI readWriteGroup1 = new GroupURI(URI.create("ivo://cadc.nrc.ca/gms?group2"));
+            GroupURI readWriteGroup2 = new GroupURI(URI.create("ivo://cadc.nrc.ca/gms?group4"));
             
             final GetAction action = new GetAction();
             
@@ -321,7 +321,7 @@ public class PermissionsConfigTest {
                 Assert.fail("should have received IllegalStateException");
             } catch (IllegalStateException e) {
                 // expected
-                Assert.assertTrue(e.getMessage(), e.getMessage().toLowerCase().contains("too many"));
+                Assert.assertTrue(e.getMessage(), e.getMessage().toLowerCase().contains("multiple entries"));
             }
         } catch (Exception unexpected) {
             log.error("unexpected exception", unexpected);
