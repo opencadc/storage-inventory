@@ -109,7 +109,7 @@ public class HeadFilesAction extends FilesAction {
             if (this.preventNotFound) {
                 // check the other sites
                 ProtocolsGenerator pg = new ProtocolsGenerator(this.artifactDAO, this.publicKeyFile, this.privateKeyFile,
-                        this.user, this.siteAvailabilities, this.siteRules, this.preventNotFound);
+                        this.user, this.siteAvailabilities, this.siteRules, this.preventNotFound, this.storageResolvers);
                 StorageSiteDAO storageSiteDAO = new StorageSiteDAO(artifactDAO);
                 Transfer transfer = new Transfer(artifactURI, Direction.pullFromVoSpace);
                 Protocol proto = new Protocol(VOS.PROTOCOL_HTTPS_GET);

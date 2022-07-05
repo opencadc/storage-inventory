@@ -86,7 +86,8 @@ public class StorageResolverTest {
     private static final String DEFAULT_RAVEN_CONFIG =
             "org.opencadc.raven.inventory.schema=inventory\n" +
             "org.opencadc.raven.publicKeyFile=raven-pub.key\n" +
-            "org.opencadc.raven.privateKeyFile=raven-priv.key";
+            "org.opencadc.raven.privateKeyFile=raven-priv.key\n" +
+            "org.opencadc.raven.consistency.preventNotFound=true";
     static {
         Log4jInit.setLevel("org.opencadc.raven", Level.DEBUG);
     }

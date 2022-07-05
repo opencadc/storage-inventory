@@ -236,7 +236,8 @@ public abstract class ArtifactAction extends RestAction {
             for (String sr : stResolvers) {
                 String[] comp = sr.split(" ");
                 if (comp.length != 2) {
-                    throw new IllegalStateException("invalid config: " + RavenInitAction.RESOLVER_ENTRY + "=" + sr + " must be of form <scheme> <handling class> or not set");
+                    throw new IllegalStateException("invalid config: " + RavenInitAction.RESOLVER_ENTRY + "=" + sr
+                            + " must be of form <scheme> <handling class> or not set");
                 }
                 try {
                     log.debug("Setting storage resolver " + comp[1] + " for scheme " + comp[0]);

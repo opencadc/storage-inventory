@@ -161,7 +161,7 @@ public class PostAction extends ArtifactAction {
 
         ProtocolsGenerator pg = new ProtocolsGenerator(this.artifactDAO, this.publicKeyFile, this.privateKeyFile,
                                                        this.user, this.siteAvailabilities, this.siteRules,
-                                                       this.preventNotFound);
+                                                       this.preventNotFound, this.storageResolvers);
         Transfer ret = new Transfer(artifactURI, transfer.getDirection());
         // TODO: change from pg.getProtocols(transfer) to pg.getResolvedTransfer(transfer)??
         ret.getProtocols().addAll(pg.getProtocols(transfer));
