@@ -363,7 +363,11 @@ public class ProtocolsGenerator {
         }
         if ((storageResolvers != null) && storageResolvers.containsKey(artifactURI.getScheme())) {
             URL externalURL = storageResolvers.get(artifactURI.getScheme()).toURL(artifactURI);
-            for (Protocol proto : transfer.getProtocols()) {
+            for (Protocol p : transfer.getProtocols()) {
+                Protocol proto = new Protocol(p.getUri());
+                if (transfer.version == VOS.VOSPACE_21) {
+                    proto.setSecurityMethod(p.getSecurityMethod());
+                }
                 proto.setEndpoint(externalURL.toString());
                 protos.add(proto);
                 log.debug("added external " + proto);

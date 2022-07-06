@@ -72,7 +72,15 @@ The `putPreference` rules are optimizations; they do not restrict the destinatio
 where a namespace is intended to be stored only in some site(s) or where most or all PUTs come from systems that are near one 
 storage site. TODO: support for `GET` preferences? also use client IP address to prioritize?
 
-The following optional key configure raven behaviour when an artifact is not found.
+For requests to externally mirrored artifacts (artifacts with a definitive copy at an external data provider identified
+by the artifact URI with a schema not `cadc`), `raven` can be configured to return URLs to the external sites. For each
+such case, an entry like the one below with the value of the data provider schema and the resolver class that turns
+the artifact URI into corresponding external URLs is needed.
+
+```
+org.opencadc.raven.storageResolver.entry=mast ca.nrc.cadc.caom2.artifact.resolvers.MastResolver
+```
+
 **For developer testing only:** To disable authorization checking (via `readGrantProvider` or `writeGrantProvider`
 services), add the following configuration entry to raven.properties:
 ```
@@ -80,6 +88,7 @@ org.opencadc.raven.authenticateOnly=true
 ```
 With `authenticateOnly=true`, any authenticated user will be able to read/write/delete files and anonymous users
 will be able to read files.
+
 
 ### LocalAuthority.properties
 The LocalAuthority.properties file specifies which local service is authoritative for various site-wide functions. The keys

@@ -92,7 +92,7 @@ public class ArtifactReaderWriterTest {
     }
 
     @Test
-    public void testRoundTrip() throws Exception{
+    public void testRoundTrip() throws Exception {
         URI artifactURI = URI.create("cadc:ARCHIVE/foo");
         URI contentChecksum = URI.create("md5:d41d8cd98f00b204e9800998ecf8427e");
         Date contentLastModified = new Date(System.currentTimeMillis());

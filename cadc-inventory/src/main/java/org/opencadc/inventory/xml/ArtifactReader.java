@@ -96,9 +96,7 @@ public class ArtifactReader {
     static enum ENAMES {
         artifact(),
         uri(),
-        //uriBucket(),
         contentChecksum(),
-        //releaseType(),
         contentLastModified(),
         contentLength(),
         contentType(),
@@ -179,23 +177,5 @@ public class ArtifactReader {
         artifact.contentType = ae.getChildTextTrim(ENAMES.contentType.name());
         artifact.contentEncoding = ae.getChildTextTrim(ENAMES.contentEncoding.name());
         return artifact;
-    }
-    
-    private void getReadGroups(Set<URI> fill, String ename, List<Element> elements) {
-        if (elements == null || elements.isEmpty()) {
-            return;
-        }
-        
-        if (elements.size() > 1) {
-            throw new IllegalArgumentException("invalid input document: found multiple " + ename + " expected: 0 or 1");
-        }
-        Element ge = elements.get(0);
-        for (Element e : ge.getChildren()) {
-            if (!ENAMES.uri.name().equals(e.getName())) {
-                throw new IllegalArgumentException("invalid child element in " + ename + ": " + e.getName() + " expected: uri");
-            }
-            URI guri = getURI(e.getTextTrim(), true);
-            fill.add(guri);
-        }
     }
 }
