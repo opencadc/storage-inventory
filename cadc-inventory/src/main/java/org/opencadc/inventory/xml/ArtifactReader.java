@@ -107,10 +107,16 @@ public class ArtifactReader {
     }
     
     public Artifact read(String xml)  throws IOException {
+        if (xml == null) {
+            throw new IllegalArgumentException("xml document must not be null");
+        }
         return read(new StringReader(xml));
     }
     
     public Artifact read(InputStream istream)  throws IOException {
+        if (istream == null) {
+            throw new IllegalArgumentException("input stream must not be null");
+        }
         return read(new InputStreamReader(istream));
     }
     
