@@ -88,7 +88,6 @@ import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
-import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
 import javax.security.auth.Subject;
@@ -166,10 +165,10 @@ public class NegotiationTest extends RavenTest {
         Transfer response = negotiate(transfer);
         log.info("transfer: " + response);
 
-        Assert.assertEquals(2, response.getAllEndpoints().size());
+        Assert.assertEquals(requested.size(), response.getAllEndpoints().size());
         for (String endPoint : response.getAllEndpoints()) {
             Assert.assertTrue(endPoint.contains("iem13occq_trl.fits"));
-            Assert.assertFalse(endPoint.toLowerCase(Locale.ROOT).contains("cadc"));
+            Assert.assertFalse(endPoint.toLowerCase().contains("cadc"));
         }
 
         // repeat test after adding the artifact to a location
@@ -191,13 +190,13 @@ public class NegotiationTest extends RavenTest {
                     log.info("transfer: " + response);
 
                     List<String> allEndPoints = response.getAllEndpoints();
-                    Assert.assertEquals(5, allEndPoints.size());
-                    // first 3 internal, last 2 external
-                    Assert.assertTrue(allEndPoints.get(0).toLowerCase(Locale.ROOT).contains("cadc"));
-                    Assert.assertTrue(allEndPoints.get(1).toLowerCase(Locale.ROOT).contains("cadc"));
-                    Assert.assertTrue(allEndPoints.get(2).toLowerCase(Locale.ROOT).contains("cadc"));
-                    Assert.assertFalse(allEndPoints.get(3).toLowerCase(Locale.ROOT).contains("cadc"));
-                    Assert.assertFalse(allEndPoints.get(4).toLowerCase(Locale.ROOT).contains("cadc"));
+                    Assert.assertEquals(2 * requested.size() + 1, allEndPoints.size());
+                    // first 3 internal (2 requested + 1 pre-auth), last 2 external
+                    Assert.assertTrue(allEndPoints.get(0).toLowerCase().contains("cadc"));
+                    Assert.assertTrue(allEndPoints.get(1).toLowerCase().contains("cadc"));
+                    Assert.assertTrue(allEndPoints.get(2).toLowerCase().contains("cadc"));
+                    Assert.assertFalse(allEndPoints.get(3).toLowerCase().contains("cadc"));
+                    Assert.assertFalse(allEndPoints.get(4).toLowerCase().contains("cadc"));
 
                     return null;
                 } finally {

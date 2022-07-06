@@ -3,7 +3,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2021.                            (c) 2021.
+ *  (c) 2022.                            (c) 2022.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -84,10 +84,11 @@ public class StorageResolverTest {
     private ArtifactAction artifactAction;
 
     private static final String DEFAULT_RAVEN_CONFIG =
-            "org.opencadc.raven.inventory.schema=inventory\n" +
-            "org.opencadc.raven.publicKeyFile=raven-pub.key\n" +
-            "org.opencadc.raven.privateKeyFile=raven-priv.key\n" +
-            "org.opencadc.raven.consistency.preventNotFound=true";
+            "org.opencadc.raven.inventory.schema=inventory\n"
+            + "org.opencadc.raven.publicKeyFile=raven-pub.key\n"
+            + "org.opencadc.raven.privateKeyFile=raven-priv.key\n"
+            + "org.opencadc.raven.consistency.preventNotFound=true";
+
     static {
         Log4jInit.setLevel("org.opencadc.raven", Level.DEBUG);
     }
@@ -97,13 +98,16 @@ public class StorageResolverTest {
     }
 
     public StorageResolverTest() {
-         artifactAction = new ArtifactAction(false) {
+        artifactAction = new ArtifactAction(false) {
+
             @Override
             void parseRequest() throws Exception { }
+
             @Override
             protected InlineContentHandler getInlineContentHandler() {
                 return null;
             }
+
             @Override
             public void doAction() throws Exception { }
         };
@@ -114,29 +118,30 @@ public class StorageResolverTest {
         File propFile = new File(getTestConfigDir(), "raven.properties");
         try {
             System.setProperty(PropertiesReader.CONFIG_DIR_SYSTEM_PROPERTY, getTestConfigDir());
-            if (!propFile.exists())
+            if (!propFile.exists()) {
                 propFile.createNewFile();
+            }
 
             FileOutputStream out = new FileOutputStream(propFile);
-            String test_properties = DEFAULT_RAVEN_CONFIG;
-            out.write(test_properties.getBytes("UTF-8"));
+            String testProperties = DEFAULT_RAVEN_CONFIG;
+            out.write(testProperties.getBytes("UTF-8"));
             out.close();
             artifactAction.initResolvers();
             Assert.assertTrue(artifactAction.storageResolvers.isEmpty());
 
             out = new FileOutputStream(propFile);
-            test_properties = DEFAULT_RAVEN_CONFIG + "\norg.opencadc.raven.storageResolver.entry=scheme1 org.opencadc.raven.MockStorageResolver";
-            out.write(test_properties.getBytes("UTF-8"));
+            testProperties = DEFAULT_RAVEN_CONFIG + "\norg.opencadc.raven.storageResolver.entry=scheme1 org.opencadc.raven.MockStorageResolver";
+            out.write(testProperties.getBytes("UTF-8"));
             out.close();
             artifactAction.initResolvers();
             Assert.assertEquals(1, artifactAction.storageResolvers.size());
             Assert.assertTrue(artifactAction.storageResolvers.get("scheme1") instanceof MockStorageResolver);
 
             out = new FileOutputStream(propFile);
-            test_properties = DEFAULT_RAVEN_CONFIG +
-                    "\norg.opencadc.raven.storageResolver.entry=scheme2 org.opencadc.raven.MockStorageResolver" +
-                    "\norg.opencadc.raven.storageResolver.entry=scheme3 org.opencadc.raven.MockStorageResolver";
-            out.write(test_properties.getBytes("UTF-8"));
+            testProperties = DEFAULT_RAVEN_CONFIG
+                    + "\norg.opencadc.raven.storageResolver.entry=scheme2 org.opencadc.raven.MockStorageResolver"
+                    + "\norg.opencadc.raven.storageResolver.entry=scheme3 org.opencadc.raven.MockStorageResolver";
+            out.write(testProperties.getBytes("UTF-8"));
             out.close();
             artifactAction.initResolvers();
             Assert.assertEquals(2, artifactAction.storageResolvers.size());
@@ -148,30 +153,33 @@ public class StorageResolverTest {
         } finally {
             System.clearProperty(PropertiesReader.CONFIG_DIR_SYSTEM_PROPERTY);
             // cleanup
-            if (propFile.exists())
+            if (propFile.exists()) {
                 propFile.delete();
+            }
         }
     }
 
-    @Test(expected=IllegalStateException.class)
-    public void testInvalidResolverClass() throws Exception{
+    @Test(expected = IllegalStateException.class)
+    public void testInvalidResolverClass() throws Exception {
         // invalid resolver class
         File propFile = new File(getTestConfigDir(), "raven.properties");
         try {
             System.setProperty(PropertiesReader.CONFIG_DIR_SYSTEM_PROPERTY, getTestConfigDir());
-            if (!propFile.exists())
+            if (!propFile.exists()) {
                 propFile.createNewFile();
+            }
             FileOutputStream out = new FileOutputStream(propFile);
-            String test_properties = DEFAULT_RAVEN_CONFIG + "\norg.opencadc.raven.storageResolver.entry=scheme1 org.opencadc.not.Exist";
-            out.write(test_properties.getBytes("UTF-8"));
+            String testProperties = DEFAULT_RAVEN_CONFIG + "\norg.opencadc.raven.storageResolver.entry=scheme1 org.opencadc.not.Exist";
+            out.write(testProperties.getBytes("UTF-8"));
             out.close();
             boolean pass = false;
             artifactAction.initResolvers();
         } finally {
             System.clearProperty(PropertiesReader.CONFIG_DIR_SYSTEM_PROPERTY);
             // cleanup
-            if (propFile.exists())
+            if (propFile.exists()) {
                 propFile.delete();
+            }
         }
 
 
