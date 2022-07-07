@@ -76,6 +76,7 @@ import ca.nrc.cadc.io.ResourceIterator;
 import ca.nrc.cadc.profiler.Profiler;
 import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.util.StringUtil;
+import java.net.URI;
 import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
@@ -432,6 +433,11 @@ public class BucketValidator implements ValidateEventListener {
     @Override
     public void delayAction() {
         numDelay++;
+    }
+
+    @Override
+    public Artifact getArtifact(URI uri) {
+        return artifactDAO.get(uri);
     }
 
     /**

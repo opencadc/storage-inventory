@@ -92,6 +92,11 @@ public class TestEventListener implements ValidateEventListener {
     public final List<StorageMetadata> deletedStorage = new ArrayList<>();
 
     @Override
+    public Artifact getArtifact(URI uri) {
+        return null;
+    }
+
+    @Override
     public void createArtifact(StorageMetadata storageMetadata) throws Exception {
         createArtifactCalled = true;
         created.add(storageMetadata);

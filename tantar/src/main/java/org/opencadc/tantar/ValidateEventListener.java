@@ -68,6 +68,7 @@
 
 package org.opencadc.tantar;
 
+import java.net.URI;
 import java.util.EventListener;
 
 import org.opencadc.inventory.Artifact;
@@ -75,6 +76,15 @@ import org.opencadc.inventory.storage.StorageMetadata;
 
 
 public interface ValidateEventListener extends EventListener {
+    
+    /**
+     * Get existing artifact by uri. This is to support possible changes in StorageLocation
+     * for recovery of existing artifact-storage connection.
+     * 
+     * @param uri
+     * @return the artifact or null
+     */
+    Artifact getArtifact(URI uri);
 
     /**
      * Create a new Artifact using metadata from the given StorageMetadata.

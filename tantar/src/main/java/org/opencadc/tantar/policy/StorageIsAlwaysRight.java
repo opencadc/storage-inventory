@@ -113,7 +113,6 @@ public class StorageIsAlwaysRight extends ResolutionPolicy {
                 sb.append(" loc=").append(storageMetadata.getStorageLocation());
                 sb.append(" reason=invalid-storageLocation");
             }
-            //reporter.report("Removing Unknown Artifact " + artifact.storageLocation + " as per policy.");
             reporter.report(sb.toString());
             if (artifact != null) {
                 validateEventListener.delete(artifact);
@@ -122,35 +121,41 @@ public class StorageIsAlwaysRight extends ResolutionPolicy {
         }
         
         //storageMetadata != null && storageMetadata.isValid()
-        if (artifact == null) {
-            sb.append(".createArtifact");
-            sb.append(" Artifact.uri=").append(storageMetadata.artifactURI);
-            sb.append(" loc=").append(storageMetadata.getStorageLocation());
-            sb.append(" reason=no-matching-artifact");
-            //reporter.report("Adding Artifact " + storageMetadata.getStorageLocation() + " as per policy.");
-            reporter.report(sb.toString());
-            validateEventListener.createArtifact(storageMetadata);
-            return;
+        Artifact art = artifact;
+        boolean unmatchedSorageLocation = false;
+        if (art == null) {
+            // check for existing artifact with unmatched StorageLocation
+            Artifact tmp = validateEventListener.getArtifact(storageMetadata.artifactURI);
+            if (tmp == null) {
+                sb.append(".createArtifact");
+                sb.append(" Artifact.uri=").append(storageMetadata.artifactURI);
+                sb.append(" loc=").append(storageMetadata.getStorageLocation());
+                sb.append(" reason=no-matching-artifact");
+                reporter.report(sb.toString());
+                validateEventListener.createArtifact(storageMetadata);
+                return;
+            } else {
+                art = tmp;
+                unmatchedSorageLocation = true;
+            }
         }
 
         // artifact != null && storageMetadata != null && storageMetadata.isValid()
-        if (haveDifferentStructure(artifact, storageMetadata)) {
+        if (unmatchedSorageLocation || haveDifferentStructure(art, storageMetadata)) {
             // Then prefer the Storage Metadata.
             sb.append(".replaceArtifact");
-            sb.append(" Artifact.id=").append(artifact.getID());
-            sb.append(" Artifact.uri=").append(artifact.getURI());
+            sb.append(" Artifact.id=").append(art.getID());
+            sb.append(" Artifact.uri=").append(art.getURI());
             sb.append(" loc=").append(storageMetadata.getStorageLocation());
-            //reporter.report("Replacing Artifact " + artifact.storageLocation + " as per policy.");
             reporter.report(sb.toString());
-            validateEventListener.replaceArtifact(artifact, storageMetadata);
+            validateEventListener.replaceArtifact(art, storageMetadata);
             return;
         }
         
         sb.append(".valid");
-        sb.append(" Artifact.id=").append(artifact.getID());
-        sb.append(" Artifact.uri=").append(artifact.getURI());
+        sb.append(" Artifact.id=").append(art.getID());
+        sb.append(" Artifact.uri=").append(art.getURI());
         sb.append(" loc=").append(storageMetadata.getStorageLocation());
-        //reporter.report("Storage Metadata " + storageMetadata.getStorageLocation() + " is valid as per policy.");
         log.debug(sb.toString());
     }
 }
