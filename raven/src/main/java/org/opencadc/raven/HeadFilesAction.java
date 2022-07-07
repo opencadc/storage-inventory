@@ -134,7 +134,7 @@ public class HeadFilesAction extends FilesAction {
                 // message not actually output for a head request
                 throw new ResourceNotFoundException(artifactURI.toASCIIString());
             }
-         }
+        }
         setHeaders(artifact, syncOutput);
     }
     
