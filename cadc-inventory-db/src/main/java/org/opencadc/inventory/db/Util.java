@@ -71,16 +71,12 @@ package org.opencadc.inventory.db;
 
 import ca.nrc.cadc.date.DateUtil;
 import ca.nrc.cadc.util.HexUtil;
-import java.lang.reflect.Field;
 import java.net.URI;
 import java.sql.Array;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.Calendar;
-import java.util.Collection;
 import java.util.Date;
-import java.util.List;
-import java.util.Set;
 import java.util.UUID;
 import org.apache.log4j.Logger;
 
@@ -194,13 +190,13 @@ public class Util {
             i = (Integer) o;
 
         } else if (o instanceof Number) {
-            i = new Integer(((Number) o).intValue());
+            i = ((Number) o).intValue();
         }
         if (i != null) {
-            if (i.intValue() == 0) {
+            if (i == 0) {
                 return Boolean.FALSE;
             }
-            if (i.intValue() == 1) {
+            if (i == 1) {
                 return Boolean.TRUE;
             }
         }
@@ -218,7 +214,7 @@ public class Util {
             return (Integer) o;
         }
         if (o instanceof Number) {
-            return new Integer(((Number) o).intValue());
+            return ((Number) o).intValue();
         }
         throw new UnsupportedOperationException("converting " + o.getClass().getName() + " " + o + " to Integer");
     }
@@ -233,7 +229,7 @@ public class Util {
             return (Long) o;
         }
         if (o instanceof Number) {
-            return new Long(((Number) o).longValue());
+            return ((Number) o).longValue();
         }
         throw new UnsupportedOperationException("converting " + o.getClass().getName() + " " + o + " to Long");
     }
@@ -249,7 +245,7 @@ public class Util {
             return new UUID(0L, (Long) o);
         }
         if (o instanceof Number) {
-            return new UUID(0L, new Long(((Number) o).longValue()));
+            return new UUID(0L, ((Number) o).longValue());
         }
         if (o instanceof byte[]) {
             byte[] b = (byte[]) o;
@@ -301,7 +297,7 @@ public class Util {
             return (Float) o;
         }
         if (o instanceof Number) {
-            return new Float(((Number) o).floatValue());
+            return ((Number) o).floatValue();
         }
         throw new UnsupportedOperationException("converting " + o.getClass().getName() + " " + o + " to Float");
     }
@@ -320,7 +316,7 @@ public class Util {
             return (Double) o;
         }
         if (o instanceof Number) {
-            return new Double(((Number) o).doubleValue());
+            return ((Number) o).doubleValue();
         }
         throw new UnsupportedOperationException("converting " + o.getClass().getName() + " " + o + " to Double");
     }
