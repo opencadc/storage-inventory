@@ -74,6 +74,8 @@ import ca.nrc.cadc.vos.Direction;
 import ca.nrc.cadc.vos.Protocol;
 import ca.nrc.cadc.vos.Transfer;
 import ca.nrc.cadc.vos.VOS;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.InventoryUtil;
@@ -122,9 +124,17 @@ public class HeadFilesAction extends FilesAction {
 
         }
         if (artifact == null) {
-            // message not actually output for a head request
-            throw new ResourceNotFoundException(artifactURI.toASCIIString());
-        }
+            if (storageResolvers.containsKey(artifactURI.getScheme())) {
+                // redirect to external site
+                URL externalURL = storageResolvers.get(artifactURI.getScheme()).toURL(artifactURI);
+                syncOutput.setCode(HttpURLConnection.HTTP_SEE_OTHER);
+                syncOutput.setHeader("Location", externalURL);
+                return;
+            } else {
+                // message not actually output for a head request
+                throw new ResourceNotFoundException(artifactURI.toASCIIString());
+            }
+         }
         setHeaders(artifact, syncOutput);
     }
     
