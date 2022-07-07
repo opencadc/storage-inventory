@@ -144,7 +144,7 @@ public class ArtifactDAO extends AbstractDAO<Artifact> {
         put(a, true, false);
     }
     
-    // used by metadata-sync in global when copy deleted at a storage site
+    // used by metadata-sync in global when copy added at a storage site
     public void addSiteLocation(Artifact a, SiteLocation loc) {
         if (origin) {
             throw new IllegalStateException("cannot update Artifact.siteLocation(s) with origin=true");
@@ -159,16 +159,21 @@ public class ArtifactDAO extends AbstractDAO<Artifact> {
         }
     }
     
+    // used by metadata-sync in global when copy deleted at a storage site
     public void removeSiteLocation(Artifact a, SiteLocation loc) {
         if (origin) {
             throw new IllegalStateException("cannot update Artifact.siteLocation(s) with origin=true");
         }
         if (a.siteLocations.contains(loc)) {
             a.siteLocations.remove(loc);
+            if (a.siteLocations.isEmpty()) {
+                throw new IllegalStateException("Artifact.id=" + a.getID()
+                        + ": last SiteLocation removed -- caller should be using delete(Artifact)");
+            }
             put(a, true, false);
         }
     }
-    
+
     /**
      * Iterate over Artifacts in StorageLocation order. This only shows artifacts with
      * a storageLocation value. The iteration is ordered by StorageLocation.
