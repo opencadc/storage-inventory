@@ -72,13 +72,13 @@ The `putPreference` rules are optimizations; they do not restrict the destinatio
 where a namespace is intended to be stored only in some site(s) or where most or all PUTs come from systems that are near one 
 storage site. TODO: support for `GET` preferences? also use client IP address to prioritize?
 
-For requests to externally mirrored artifacts (artifacts with a definitive copy at an external data provider identified
-by the artifact URI with a schema not `cadc`), `raven` can be configured to return URLs to the external sites. For each
-such case, an entry like the one below with the value of the data provider schema and the resolver class that turns
-the artifact URI into corresponding external URLs is needed.
+`raven` can be configured to return URLs to external sites (in addition to the `minoc` ones) for the artifacts that are
+mirrored at other data providers. To do that, the configuration needs to include the name of the storage resolver class
+that implements the `ca.nrc.cadc.net.StorageResolver` interface and turns an artifact URI into a corresponding
+external URL. For example: 
 
 ```
-org.opencadc.raven.storageResolver.entry=mast ca.nrc.cadc.caom2.artifact.resolvers.MastResolver
+ca.nrc.cadc.net.StorageResolver=ca.nrc.cadc.caom2.artifact.resolvers.MastResolver
 ```
 
 **For developer testing only:** To disable authorization checking (via `readGrantProvider` or `writeGrantProvider`

@@ -79,7 +79,6 @@ import java.io.File;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -113,7 +112,7 @@ public abstract class ArtifactAction extends RestAction {
     protected final File privateKeyFile;
     protected final List<URI> readGrantServices = new ArrayList<>();
     protected final List<URI> writeGrantServices = new ArrayList<>();
-    protected final Map<String, StorageResolver> storageResolvers = new HashMap<>();
+    protected StorageResolver storageResolver;
 
     protected final boolean authenticateOnly;
     protected Map<URI, Availability> siteAvailabilities;
@@ -129,6 +128,7 @@ public abstract class ArtifactAction extends RestAction {
         this.privateKeyFile = null;
         this.artifactDAO = null;
         this.preventNotFound = false;
+        this.storageResolver = null;
     }
 
     protected ArtifactAction() {
@@ -171,7 +171,7 @@ public abstract class ArtifactAction extends RestAction {
             authenticateOnly = false;
         }
 
-        initResolvers();
+        initResolver();
 
         // technically, raven only needs the private key to generate pre-auth tokens
         // but both are requied here for clarity
@@ -201,6 +201,21 @@ public abstract class ArtifactAction extends RestAction {
         }
     }
 
+    protected void initResolver() {
+        MultiValuedProperties props = RavenInitAction.getConfig();
+        String resolverName = props.getFirstPropertyValue(RavenInitAction.RESOLVER_ENTRY);
+        if (resolverName != null) {
+            log.debug("Setting storage resolver " + resolverName);
+            try {
+                this.storageResolver = (StorageResolver) Class.forName(resolverName).newInstance();
+            } catch (ClassNotFoundException | IllegalAccessException | InstantiationException ex) {
+                throw new IllegalStateException("invalid config: failed to load storage resolver: " + resolverName, ex);
+            }
+        } else {
+            this.storageResolver = null;
+        }
+    }
+
     protected void initAndAuthorize() throws Exception {
         init();
         
@@ -225,28 +240,6 @@ public abstract class ArtifactAction extends RestAction {
             permissionsCheck.checkWritePermission(this.writeGrantServices);
         } else {
             throw new IllegalStateException("Unsupported grant class: " + grantClass);
-        }
-    }
-
-    protected void initResolvers() {
-        MultiValuedProperties props = RavenInitAction.getConfig();
-        storageResolvers.clear();
-        List<String> stResolvers = props.getProperty(RavenInitAction.RESOLVER_ENTRY);
-        if (stResolvers != null) {
-            for (String sr : stResolvers) {
-                String[] comp = sr.split(" ");
-                if (comp.length != 2) {
-                    throw new IllegalStateException("invalid config: " + RavenInitAction.RESOLVER_ENTRY + "=" + sr
-                            + " must be of form <scheme> <handling class> or not set");
-                }
-                try {
-                    log.debug("Setting storage resolver " + comp[1] + " for scheme " + comp[0]);
-                    StorageResolver resolver = (StorageResolver) Class.forName(comp[1]).newInstance();
-                    this.storageResolvers.put(comp[0], resolver);
-                } catch (ClassNotFoundException | IllegalAccessException | InstantiationException ex) {
-                    throw new IllegalStateException("invalid config: failed to load storage resolver: " + comp[1], ex);
-                }
-            }
         }
     }
 

@@ -112,7 +112,7 @@ public class RavenInitAction extends InitAction {
     static final String READ_GRANTS_KEY = RAVEN_KEY + ".readGrantProvider";
     static final String WRITE_GRANTS_KEY = RAVEN_KEY + ".writeGrantProvider";
 
-    static final String RESOLVER_ENTRY = RAVEN_KEY + ".storageResolver.entry";
+    static final String RESOLVER_ENTRY = "ca.nrc.cadc.net.StorageResolver";
     static final String PREVENT_NOT_FOUND_KEY = RAVEN_CONSIST_KEY + ".preventNotFound";
 
     static final String DEV_AUTH_ONLY_KEY = RAVEN_KEY + ".authenticateOnly";

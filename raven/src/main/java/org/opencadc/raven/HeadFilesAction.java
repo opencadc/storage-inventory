@@ -111,7 +111,7 @@ public class HeadFilesAction extends FilesAction {
             if (this.preventNotFound) {
                 // check the other sites
                 ProtocolsGenerator pg = new ProtocolsGenerator(this.artifactDAO, this.publicKeyFile, this.privateKeyFile,
-                        this.user, this.siteAvailabilities, this.siteRules, this.preventNotFound, this.storageResolvers);
+                        this.user, this.siteAvailabilities, this.siteRules, this.preventNotFound, this.storageResolver);
                 StorageSiteDAO storageSiteDAO = new StorageSiteDAO(artifactDAO);
                 Transfer transfer = new Transfer(artifactURI, Direction.pullFromVoSpace);
                 Protocol proto = new Protocol(VOS.PROTOCOL_HTTPS_GET);
@@ -124,13 +124,18 @@ public class HeadFilesAction extends FilesAction {
 
         }
         if (artifact == null) {
-            if (storageResolvers.containsKey(artifactURI.getScheme())) {
+            if (storageResolver != null) {
                 // redirect to external site
-                URL externalURL = storageResolvers.get(artifactURI.getScheme()).toURL(artifactURI);
-                syncOutput.setCode(HttpURLConnection.HTTP_SEE_OTHER);
-                syncOutput.setHeader("Location", externalURL);
-                return;
-            } else {
+                try {
+                    URL externalURL = storageResolver.toURL(artifactURI);
+                    if (externalURL != null) {
+                        syncOutput.setCode(HttpURLConnection.HTTP_SEE_OTHER);
+                        syncOutput.setHeader("Location", externalURL);
+                        return;
+                    }
+                } catch (IllegalArgumentException e) {
+                    // nothing to be done here
+                }
                 // message not actually output for a head request
                 throw new ResourceNotFoundException(artifactURI.toASCIIString());
             }

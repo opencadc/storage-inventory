@@ -73,6 +73,7 @@ import ca.nrc.cadc.util.Log4jInit;
 import ca.nrc.cadc.util.PropertiesReader;
 import java.io.File;
 import java.io.FileOutputStream;
+import java.net.URI;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
@@ -94,11 +95,12 @@ public class StorageResolverTest {
     }
 
     String getTestConfigDir() {
-        return System.getProperty("user.dir") + "/build/tmp";
+        return "build/tmp";
     }
 
-    public StorageResolverTest() {
+    public StorageResolverTest() throws Exception {
         artifactAction = new ArtifactAction(false) {
+
 
             @Override
             void parseRequest() throws Exception { }
@@ -111,6 +113,7 @@ public class StorageResolverTest {
             @Override
             public void doAction() throws Exception { }
         };
+        artifactAction.artifactURI = URI.create("cadc:TEST/foo");
     }
 
     @Test
@@ -126,30 +129,17 @@ public class StorageResolverTest {
             String testProperties = DEFAULT_RAVEN_CONFIG;
             out.write(testProperties.getBytes("UTF-8"));
             out.close();
-            artifactAction.initResolvers();
-            Assert.assertTrue(artifactAction.storageResolvers.isEmpty());
+            artifactAction.initResolver();
+            Assert.assertNull(artifactAction.storageResolver);
 
             out = new FileOutputStream(propFile);
-            testProperties = DEFAULT_RAVEN_CONFIG + "\norg.opencadc.raven.storageResolver.entry=scheme1 org.opencadc.raven.MockStorageResolver";
+            testProperties = DEFAULT_RAVEN_CONFIG + "\n" + RavenInitAction.RESOLVER_ENTRY
+                    + "=org.opencadc.raven.MockStorageResolver";
             out.write(testProperties.getBytes("UTF-8"));
             out.close();
-            artifactAction.initResolvers();
-            Assert.assertEquals(1, artifactAction.storageResolvers.size());
-            Assert.assertTrue(artifactAction.storageResolvers.get("scheme1") instanceof MockStorageResolver);
-
-            out = new FileOutputStream(propFile);
-            testProperties = DEFAULT_RAVEN_CONFIG
-                    + "\norg.opencadc.raven.storageResolver.entry=scheme2 org.opencadc.raven.MockStorageResolver"
-                    + "\norg.opencadc.raven.storageResolver.entry=scheme3 org.opencadc.raven.MockStorageResolver";
-            out.write(testProperties.getBytes("UTF-8"));
-            out.close();
-            artifactAction.initResolvers();
-            Assert.assertEquals(2, artifactAction.storageResolvers.size());
-            Assert.assertTrue(artifactAction.storageResolvers.get("scheme2") instanceof MockStorageResolver);
-            Assert.assertTrue(artifactAction.storageResolvers.get("scheme3") instanceof MockStorageResolver);
-
-            // invalid key
-            Assert.assertFalse(artifactAction.storageResolvers.containsKey("scheme1"));
+            artifactAction.initResolver();
+            Assert.assertNotNull(artifactAction.storageResolver);
+            Assert.assertTrue(artifactAction.storageResolver instanceof MockStorageResolver);
         } finally {
             System.clearProperty(PropertiesReader.CONFIG_DIR_SYSTEM_PROPERTY);
             // cleanup
@@ -169,11 +159,12 @@ public class StorageResolverTest {
                 propFile.createNewFile();
             }
             FileOutputStream out = new FileOutputStream(propFile);
-            String testProperties = DEFAULT_RAVEN_CONFIG + "\norg.opencadc.raven.storageResolver.entry=scheme1 org.opencadc.not.Exist";
+            String testProperties = DEFAULT_RAVEN_CONFIG + "\n" + RavenInitAction.RESOLVER_ENTRY
+                    + "=org.opencadc.not.Exist";
             out.write(testProperties.getBytes("UTF-8"));
             out.close();
             boolean pass = false;
-            artifactAction.initResolvers();
+            artifactAction.initResolver();
         } finally {
             System.clearProperty(PropertiesReader.CONFIG_DIR_SYSTEM_PROPERTY);
             // cleanup

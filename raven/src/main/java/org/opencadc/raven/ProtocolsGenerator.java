@@ -126,13 +126,13 @@ public class ProtocolsGenerator {
     private final File privateKeyFile;
     private final Map<URI, Availability> siteAvailabilities;
     private final Map<URI, StorageSiteRule> siteRules;
-    private final Map<String, StorageResolver> storageResolvers;
+    private final StorageResolver storageResolver;
     private final boolean preventNotFound;
 
 
     public ProtocolsGenerator(ArtifactDAO artifactDAO, File publicKeyFile, File privateKeyFile, String user,
                               Map<URI, Availability> siteAvailabilities, Map<URI, StorageSiteRule> siteRules,
-                              boolean preventNotFound, Map<String, StorageResolver> storageResolvers) {
+                              boolean preventNotFound, StorageResolver storageResolver) {
         this.artifactDAO = artifactDAO;
         this.deletedArtifactEventDAO = new DeletedArtifactEventDAO(this.artifactDAO);
         this.user = user;
@@ -141,7 +141,7 @@ public class ProtocolsGenerator {
         this.siteAvailabilities = siteAvailabilities;
         this.siteRules = siteRules;
         this.preventNotFound = preventNotFound;
-        this.storageResolvers = storageResolvers;
+        this.storageResolver = storageResolver;
     }
 
     List<Protocol> getProtocols(Transfer transfer) throws ResourceNotFoundException, IOException {
@@ -361,16 +361,22 @@ public class ProtocolsGenerator {
                 }
             }
         }
-        if ((storageResolvers != null) && storageResolvers.containsKey(artifactURI.getScheme())) {
-            URL externalURL = storageResolvers.get(artifactURI.getScheme()).toURL(artifactURI);
-            for (Protocol p : transfer.getProtocols()) {
-                Protocol proto = new Protocol(p.getUri());
-                if (transfer.version == VOS.VOSPACE_21) {
-                    proto.setSecurityMethod(p.getSecurityMethod());
+        if (storageResolver != null) {
+            try {
+                URL externalURL = storageResolver.toURL(artifactURI);
+                if (externalURL != null) {
+                    for (Protocol p : transfer.getProtocols()) {
+                        Protocol proto = new Protocol(p.getUri());
+                        if (transfer.version == VOS.VOSPACE_21) {
+                            proto.setSecurityMethod(p.getSecurityMethod());
+                        }
+                        proto.setEndpoint(externalURL.toString());
+                        protos.add(proto);
+                        log.debug("added external " + proto);
+                    }
                 }
-                proto.setEndpoint(externalURL.toString());
-                protos.add(proto);
-                log.debug("added external " + proto);
+            } catch (IllegalArgumentException ex) {
+                // storageResolver does not support that URI
             }
         }
 

@@ -155,11 +155,20 @@ public class NegotiationTest extends RavenTest {
         sc.setSecurityMethod(Standards.SECURITY_METHOD_CERT);
         requested.add(sc);
 
+        // token
+        Protocol st = new Protocol(VOS.PROTOCOL_HTTPS_GET);
+        st.setSecurityMethod(Standards.SECURITY_METHOD_TOKEN);
+        requested.add(st);
+
         URI mastURI = new URI("mast:HST/product/iem13occq_trl.fits");
         Transfer transfer = new Transfer(mastURI, Direction.pullFromVoSpace);
         transfer.getProtocols().add(sa);
         transfer.getProtocols().add(sc);
+        transfer.getProtocols().add(st);
         transfer.version = VOS.VOSPACE_21;
+
+        URI resourceID = URI.create("ivo://negotiation-test-site1");
+        StorageSite site = new StorageSite(resourceID, "site1", true, true);
 
         // file not in raven. Check external URLs
         Transfer response = negotiate(transfer);
@@ -168,13 +177,10 @@ public class NegotiationTest extends RavenTest {
         Assert.assertEquals(requested.size(), response.getAllEndpoints().size());
         for (String endPoint : response.getAllEndpoints()) {
             Assert.assertTrue(endPoint.contains("iem13occq_trl.fits"));
-            Assert.assertFalse(endPoint.toLowerCase().contains("cadc"));
+            Assert.assertFalse(endPoint.toLowerCase().contains("minoc"));
         }
 
         // repeat test after adding the artifact to a location
-        URI resourceID = URI.create("ivo://negotiation-test-site1");
-        StorageSite site = new StorageSite(resourceID, "site1", true, true);
-
         URI checksum = URI.create("md5:d41d8cd98f00b204e9800998ecf84278");
         Artifact artifact = new Artifact(mastURI, checksum, new Date(), 1L);
 
@@ -191,12 +197,13 @@ public class NegotiationTest extends RavenTest {
 
                     List<String> allEndPoints = response.getAllEndpoints();
                     Assert.assertEquals(2 * requested.size() + 1, allEndPoints.size());
-                    // first 3 internal (2 requested + 1 pre-auth), last 2 external
-                    Assert.assertTrue(allEndPoints.get(0).toLowerCase().contains("cadc"));
-                    Assert.assertTrue(allEndPoints.get(1).toLowerCase().contains("cadc"));
-                    Assert.assertTrue(allEndPoints.get(2).toLowerCase().contains("cadc"));
-                    Assert.assertFalse(allEndPoints.get(3).toLowerCase().contains("cadc"));
-                    Assert.assertFalse(allEndPoints.get(4).toLowerCase().contains("cadc"));
+                    // first are the minoc requested.size() + 1 for the pre-auth entries, the rest are external
+                    for (int i = 0; i <= requested.size(); i++) {
+                        Assert.assertTrue(allEndPoints.get(i).toLowerCase().contains("minoc"));
+                    }
+                    for (int i = requested.size() + 1; i <= 2 * requested.size(); i++) {
+                        Assert.assertFalse(allEndPoints.get(i).toLowerCase().contains("minoc"));
+                    }
 
                     return null;
                 } finally {
