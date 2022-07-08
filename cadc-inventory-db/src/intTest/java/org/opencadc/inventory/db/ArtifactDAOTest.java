@@ -444,13 +444,19 @@ public class ArtifactDAOTest {
             Assert.assertEquals("removed", 2, originDAO.get(expected.getID()).siteLocations.size());
             nonOriginDAO.removeSiteLocation(a3, loc1);
             Assert.assertEquals("removed", 1, originDAO.get(expected.getID()).siteLocations.size());
-            nonOriginDAO.removeSiteLocation(a3, loc2);
             Artifact a5 = nonOriginDAO.get(expected.getID());
             Assert.assertNotNull(a5);
             URI mcs5 = a5.computeMetaChecksum(MessageDigest.getInstance("MD5"));
             Assert.assertEquals("round trip metachecksum unchanged", expected.getMetaChecksum(), mcs5);
             Assert.assertTrue("lastModified unchanged", a3.getLastModified().equals(a5.getLastModified()));
-            Assert.assertEquals(0, a5.siteLocations.size());
+            Assert.assertEquals(1, a5.siteLocations.size());
+            
+            try {
+                nonOriginDAO.removeSiteLocation(a3, loc2);
+                Assert.fail("remove last SiteLocation - expected IllegalStateException");
+            } catch (IllegalStateException iex) {
+                log.info("caught expected: " + iex);
+            }
             
             originDAO.delete(expected.getID());
             Artifact deleted = originDAO.get(expected.getID());
