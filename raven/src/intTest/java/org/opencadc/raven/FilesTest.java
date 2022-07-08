@@ -285,6 +285,22 @@ public class FilesTest extends RavenTest {
                     return null;
                 }
             });
+
+            // test HEAD works for files available externally
+            final URI externalURI = URI.create("mast::HST/product/iem13occq_trl.fits");
+            Subject.doAs(userSubject, new PrivilegedExceptionAction<Object>() {
+                public Object run() throws Exception {
+                    String au = externalURI.toASCIIString();
+                    URL certArtifactURL = new URL(anonRavenURL.toString() + "/" + au);
+                    HttpGet request = new HttpGet(certArtifactURL, false);
+                    request.setHeadOnly(true);
+                    request.run();
+                    Assert.assertEquals("HEAD response code", 303, request.getResponseCode());
+                    Assert.assertTrue("Location", request.getResponseHeader("Location").contains("stsci"));
+                    return null;
+                }
+            });
+
         } finally {
             artifactDAO.delete(artifact.getID());
         }

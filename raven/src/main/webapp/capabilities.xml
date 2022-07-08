@@ -9,8 +9,8 @@
       <accessURL use="base">https://replace.com/raven/locate</accessURL>
       <securityMethod />
       <securityMethod standardID="ivo://ivoa.net/sso#cookie" />
-      <securityMethod standardID="ivo://ivoa.net/sso#tls-with-certificate" /> 
-    </interface>
+      <securityMethod standardID="ivo://ivoa.net/sso#tls-with-certificate" />
+      <securityMethod standardID="ivo://ivoa.net/sso#token"/></interface>
   </capability>
 
   <capability standardID="http://www.opencadc.org/std/storage#files-1.0">

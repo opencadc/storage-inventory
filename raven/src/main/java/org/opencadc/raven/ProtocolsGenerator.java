@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2021.                            (c) 2021.
+*  (c) 2022.                            (c) 2022.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -70,6 +70,7 @@ package org.opencadc.raven;
 import ca.nrc.cadc.cred.client.CredUtil;
 import ca.nrc.cadc.net.HttpGet;
 import ca.nrc.cadc.net.ResourceNotFoundException;
+import ca.nrc.cadc.net.StorageResolver;
 import ca.nrc.cadc.reg.Capabilities;
 import ca.nrc.cadc.reg.Capability;
 import ca.nrc.cadc.reg.Interface;
@@ -125,12 +126,13 @@ public class ProtocolsGenerator {
     private final File privateKeyFile;
     private final Map<URI, Availability> siteAvailabilities;
     private final Map<URI, StorageSiteRule> siteRules;
+    private final StorageResolver storageResolver;
     private final boolean preventNotFound;
 
 
     public ProtocolsGenerator(ArtifactDAO artifactDAO, File publicKeyFile, File privateKeyFile, String user,
                               Map<URI, Availability> siteAvailabilities, Map<URI, StorageSiteRule> siteRules,
-                              boolean preventNotFound) {
+                              boolean preventNotFound, StorageResolver storageResolver) {
         this.artifactDAO = artifactDAO;
         this.deletedArtifactEventDAO = new DeletedArtifactEventDAO(this.artifactDAO);
         this.user = user;
@@ -139,6 +141,7 @@ public class ProtocolsGenerator {
         this.siteAvailabilities = siteAvailabilities;
         this.siteRules = siteRules;
         this.preventNotFound = preventNotFound;
+        this.storageResolver = storageResolver;
     }
 
     List<Protocol> getProtocols(Transfer transfer) throws ResourceNotFoundException, IOException {
@@ -298,19 +301,11 @@ public class ProtocolsGenerator {
             }
         }
 
-        if (artifact == null) {
-            throw new ResourceNotFoundException("not found: " + artifactURI.toString());
-        }
-
-        // TODO: this can currently happen but maybe should not:
-        // --- when the last siteLocation is removed, the artifact should be deleted (fenwick, ratik)
-        if (artifact.siteLocations.isEmpty()) {
-            throw new ResourceNotFoundException("not found: " + artifactURI.toString());
-        }
-
-        for (SiteLocation site : artifact.siteLocations) {
-            StorageSite storageSite = getSite(sites, site.getSiteID());
-            storageSites.add(storageSite);
+        if (artifact != null) {
+            for (SiteLocation site : artifact.siteLocations) {
+                StorageSite storageSite = getSite(sites, site.getSiteID());
+                storageSites.add(storageSite);
+            }
         }
 
         prioritizePullFromSites(storageSites);
@@ -366,6 +361,32 @@ public class ProtocolsGenerator {
                 }
             }
         }
+        if (storageResolver != null) {
+            try {
+                URL externalURL = storageResolver.toURL(artifactURI);
+                if (externalURL != null) {
+                    for (Protocol p : transfer.getProtocols()) {
+                        Protocol proto = new Protocol(p.getUri());
+                        if (transfer.version == VOS.VOSPACE_21) {
+                            proto.setSecurityMethod(p.getSecurityMethod());
+                        }
+                        proto.setEndpoint(externalURL.toString());
+                        protos.add(proto);
+                        log.debug("added external " + proto);
+                    }
+                }
+            } catch (IllegalArgumentException ex) {
+                // storageResolver does not support that URI
+            }
+        }
+
+        if (protos.isEmpty() && ((artifact == null) || artifact.siteLocations.size() == 0)) {
+            // artifact not find internally and has no external resolvers either
+            // TODO: second condition can currently happen but maybe should not:
+            // --- when the last siteLocation is removed, the artifact should be deleted (fenwick, ratik)
+            throw new ResourceNotFoundException("not found: " + artifactURI.toString());
+        }
+
         return protos;
     }
 

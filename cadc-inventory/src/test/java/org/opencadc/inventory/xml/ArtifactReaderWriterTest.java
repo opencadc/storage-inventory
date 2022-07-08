@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2021.                            (c) 2021.
+*  (c) 2022.                            (c) 2022.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -65,89 +65,57 @@
 ************************************************************************
 */
 
-package org.opencadc.raven;
+package org.opencadc.inventory.xml;
 
-import ca.nrc.cadc.net.ResourceNotFoundException;
-import ca.nrc.cadc.reg.Standards;
-import ca.nrc.cadc.vos.Direction;
-import ca.nrc.cadc.vos.Protocol;
-import ca.nrc.cadc.vos.Transfer;
-import ca.nrc.cadc.vos.VOS;
-import java.io.IOException;
-import java.net.HttpURLConnection;
+import ca.nrc.cadc.util.Log4jInit;
+import java.io.ByteArrayOutputStream;
 import java.net.URI;
-import java.net.URLEncoder;
-import java.util.Iterator;
-import java.util.List;
+import java.util.Date;
+import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
+import org.junit.Assert;
+import org.junit.Test;
+import org.opencadc.inventory.Artifact;
 
 /**
- * Class to execute a "files" GET action.
  *
  * @author adriand
  */
-public class GetFilesAction extends FilesAction {
+public class ArtifactReaderWriterTest {
+    private static final Logger log = Logger.getLogger(ArtifactReaderWriterTest.class);
 
-    private static final Logger log = Logger.getLogger(GetFilesAction.class);
-
-    /**
-     * Default, no-arg constructor.
-     */
-    public GetFilesAction() {
-        super();
+    static {
+        Log4jInit.setLevel("org.opencadc.inventory", Level.INFO);
     }
 
-    /**
-     * GET redirect response to the URL of the first matching file location.
-     */
-    @Override
-    public void doAction() throws Exception {
-        initAndAuthorize();
-        URI redirect = getFirstURL();
-
-        StringBuilder sb = new StringBuilder();
-        for (String param : syncInput.getParameterNames()) {
-            Iterator<String> values = syncInput.getParameters(param).iterator();
-            while (values.hasNext()) {
-                if (sb.length() > 0) {
-                    sb.append("&");
-                }
-                sb.append(param);
-                sb.append("=");
-                sb.append(URLEncoder.encode(values.next(), "UTF-8"));
-            }
-        }
-        String redirectLocation = redirect.toASCIIString();
-        if (sb.length() > 0) {
-            if (redirect.getQuery() != null) {
-                redirectLocation += "&";
-            } else {
-                redirectLocation += "?";
-            }
-            redirectLocation += sb.toString();
-        }
-        log.debug("params: " + sb.toString());
-        log.debug("redirect: " + redirectLocation);
-        syncOutput.setCode(HttpURLConnection.HTTP_SEE_OTHER);
-        syncOutput.setHeader("Location", redirectLocation);
+    public ArtifactReaderWriterTest() {
     }
 
+    @Test
+    public void testRoundTrip() throws Exception {
+        URI artifactURI = URI.create("cadc:ARCHIVE/foo");
+        URI contentChecksum = URI.create("md5:d41d8cd98f00b204e9800998ecf8427e");
+        Date contentLastModified = new Date(System.currentTimeMillis());
+        Long contentLength = new Long(333);
+        Artifact expected = new Artifact(artifactURI, contentChecksum, contentLastModified, contentLength);
+        expected.contentType = "application/fits";
+        expected.contentEncoding = "gzip";
 
-    URI getFirstURL() throws ResourceNotFoundException, IOException {
-        Transfer transfer = new Transfer(artifactURI, Direction.pullFromVoSpace);
-        Protocol proto = new Protocol(VOS.PROTOCOL_HTTPS_GET);
-        proto.setSecurityMethod(Standards.SECURITY_METHOD_ANON);
-        transfer.getProtocols().add(proto);
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        ArtifactWriter aw = new ArtifactWriter();
+        aw.write(expected, bos);
 
-        ProtocolsGenerator pg = new ProtocolsGenerator(this.artifactDAO, this.publicKeyFile, this.privateKeyFile,
-                                                       this.user, this.siteAvailabilities, this.siteRules,
-                                                       this.preventNotFound, this.storageResolver);
-        List<Protocol> protos = pg.getProtocols(transfer);
-        if (protos.isEmpty()) {
-            throw new ResourceNotFoundException("not available: " + artifactURI);
-        }
+        String xml = bos.toString();
+        log.info("xml:\n" + xml);
 
-        // for now return the first URL in the list
-        return URI.create(protos.get(0).getEndpoint());
+        ArtifactReader ar = new ArtifactReader();
+        Artifact actual = ar.read(xml);
+
+        Assert.assertEquals(expected.getURI(), actual.getURI());
+        Assert.assertEquals(expected.getContentChecksum(), actual.getContentChecksum());
+        Assert.assertEquals(expected.getContentLastModified(), actual.getContentLastModified());
+        Assert.assertEquals(expected.getContentLength(), actual.getContentLength());
+        Assert.assertEquals(expected.contentType, actual.contentType);
+        Assert.assertEquals(expected.contentEncoding, actual.contentEncoding);
     }
 }

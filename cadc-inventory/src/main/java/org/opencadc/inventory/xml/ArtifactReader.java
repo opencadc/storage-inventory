@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2021.                            (c) 2021.
+*  (c) 2022.                            (c) 2022.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -65,89 +65,123 @@
 ************************************************************************
 */
 
-package org.opencadc.raven;
+package org.opencadc.inventory.xml;
 
-import ca.nrc.cadc.net.ResourceNotFoundException;
-import ca.nrc.cadc.reg.Standards;
-import ca.nrc.cadc.vos.Direction;
-import ca.nrc.cadc.vos.Protocol;
-import ca.nrc.cadc.vos.Transfer;
-import ca.nrc.cadc.vos.VOS;
+import ca.nrc.cadc.date.DateUtil;
+import ca.nrc.cadc.xml.XmlUtil;
 import java.io.IOException;
-import java.net.HttpURLConnection;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.Reader;
+import java.io.StringReader;
 import java.net.URI;
-import java.net.URLEncoder;
-import java.util.Iterator;
+import java.text.DateFormat;
+import java.text.ParseException;
+import java.util.Date;
 import java.util.List;
+import java.util.Set;
 import org.apache.log4j.Logger;
+import org.jdom2.Document;
+import org.jdom2.Element;
+import org.jdom2.JDOMException;
+import org.opencadc.inventory.Artifact;
 
 /**
- * Class to execute a "files" GET action.
  *
  * @author adriand
  */
-public class GetFilesAction extends FilesAction {
+public class ArtifactReader {
+    private static final Logger log = Logger.getLogger(ArtifactReader.class);
 
-    private static final Logger log = Logger.getLogger(GetFilesAction.class);
+    static enum ENAMES {
+        artifact(),
+        uri(),
+        contentChecksum(),
+        contentLastModified(),
+        contentLength(),
+        contentType(),
+        contentEncoding();
+    }
+    
+    public ArtifactReader() {
+    }
+    
+    public Artifact read(String xml)  throws IOException {
+        if (xml == null) {
+            throw new IllegalArgumentException("xml document must not be null");
+        }
+        return read(new StringReader(xml));
+    }
+    
+    public Artifact read(InputStream istream)  throws IOException {
+        if (istream == null) {
+            throw new IllegalArgumentException("input stream must not be null");
+        }
+        return read(new InputStreamReader(istream));
+    }
+    
+    public Artifact read(Reader reader) throws IOException {
+        if (reader == null) {
+            throw new IllegalArgumentException("reader must not be null");
+        }
+        
+        Document document;
+        try {
+            document = XmlUtil.buildDocument(reader);
+        } catch (JDOMException ex) {
+            throw new IllegalArgumentException("invalid input document", ex);
+        }
 
-    /**
-     * Default, no-arg constructor.
-     */
-    public GetFilesAction() {
-        super();
+        // Root element and namespace of the Document
+        Element root = document.getRootElement();
+        if (!ENAMES.artifact.name().equals(root.getName())) {
+            throw new IllegalArgumentException("invalid root element: " + root.getName() + " expected: " + ENAMES.artifact);
+        }
+        return getArtifact(root);
     }
 
-    /**
-     * GET redirect response to the URL of the first matching file location.
-     */
-    @Override
-    public void doAction() throws Exception {
-        initAndAuthorize();
-        URI redirect = getFirstURL();
-
-        StringBuilder sb = new StringBuilder();
-        for (String param : syncInput.getParameterNames()) {
-            Iterator<String> values = syncInput.getParameters(param).iterator();
-            while (values.hasNext()) {
-                if (sb.length() > 0) {
-                    sb.append("&");
-                }
-                sb.append(param);
-                sb.append("=");
-                sb.append(URLEncoder.encode(values.next(), "UTF-8"));
-            }
+    private Date getDate(String s) {
+        if (s == null) {
+            return null;
         }
-        String redirectLocation = redirect.toASCIIString();
-        if (sb.length() > 0) {
-            if (redirect.getQuery() != null) {
-                redirectLocation += "&";
-            } else {
-                redirectLocation += "?";
-            }
-            redirectLocation += sb.toString();
+        try {
+            DateFormat df = DateUtil.getDateFormat(DateUtil.IVOA_DATE_FORMAT, DateUtil.UTC);
+            return df.parse(s);
+        } catch (ParseException ex) {
+            throw new IllegalArgumentException("invalid timestamp: " + s);
         }
-        log.debug("params: " + sb.toString());
-        log.debug("redirect: " + redirectLocation);
-        syncOutput.setCode(HttpURLConnection.HTTP_SEE_OTHER);
-        syncOutput.setHeader("Location", redirectLocation);
     }
-
-
-    URI getFirstURL() throws ResourceNotFoundException, IOException {
-        Transfer transfer = new Transfer(artifactURI, Direction.pullFromVoSpace);
-        Protocol proto = new Protocol(VOS.PROTOCOL_HTTPS_GET);
-        proto.setSecurityMethod(Standards.SECURITY_METHOD_ANON);
-        transfer.getProtocols().add(proto);
-
-        ProtocolsGenerator pg = new ProtocolsGenerator(this.artifactDAO, this.publicKeyFile, this.privateKeyFile,
-                                                       this.user, this.siteAvailabilities, this.siteRules,
-                                                       this.preventNotFound, this.storageResolver);
-        List<Protocol> protos = pg.getProtocols(transfer);
-        if (protos.isEmpty()) {
-            throw new ResourceNotFoundException("not available: " + artifactURI);
+    
+    private URI getURI(String s, boolean required) {
+        if (!required && s == null) {
+            return null;
         }
-
-        // for now return the first URL in the list
-        return URI.create(protos.get(0).getEndpoint());
+        try { 
+            return new URI(s);
+        } catch (Exception ex) {
+            throw new IllegalArgumentException("missing/invalid uri element: " + s + " expected: valid URI");
+        }
+    }
+    
+    private Long getLong(String s) {
+        if (s == null) {
+            return null;
+        }
+        try {
+            return Long.parseLong(s);
+        } catch (Exception ex) {
+            throw new IllegalArgumentException("invalid numeric element: " + s + " expected: valid long");
+        }
+    }
+    
+    private Artifact getArtifact(Element ae) {
+        URI uri = getURI(ae.getChildTextTrim(ENAMES.uri.name()), true);
+        URI contentChecksum = getURI(ae.getChildTextTrim(ENAMES.contentChecksum.name()), true);
+        Date contentLastModified = getDate(ae.getChildTextTrim(ENAMES.contentLastModified.name()));
+        Long contentLength = getLong(ae.getChildTextTrim(ENAMES.contentLength.name()));
+        Artifact artifact = new Artifact(uri, contentChecksum, contentLastModified, contentLength);
+        artifact.contentType = ae.getChildTextTrim(ENAMES.contentType.name());
+        artifact.contentEncoding = ae.getChildTextTrim(ENAMES.contentEncoding.name());
+        return artifact;
     }
 }
