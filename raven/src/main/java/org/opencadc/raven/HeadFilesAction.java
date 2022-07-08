@@ -74,6 +74,8 @@ import ca.nrc.cadc.vos.Direction;
 import ca.nrc.cadc.vos.Protocol;
 import ca.nrc.cadc.vos.Transfer;
 import ca.nrc.cadc.vos.VOS;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.InventoryUtil;
@@ -109,7 +111,7 @@ public class HeadFilesAction extends FilesAction {
             if (this.preventNotFound) {
                 // check the other sites
                 ProtocolsGenerator pg = new ProtocolsGenerator(this.artifactDAO, this.publicKeyFile, this.privateKeyFile,
-                        this.user, this.siteAvailabilities, this.siteRules, this.preventNotFound);
+                        this.user, this.siteAvailabilities, this.siteRules, this.preventNotFound, this.storageResolver);
                 StorageSiteDAO storageSiteDAO = new StorageSiteDAO(artifactDAO);
                 Transfer transfer = new Transfer(artifactURI, Direction.pullFromVoSpace);
                 Protocol proto = new Protocol(VOS.PROTOCOL_HTTPS_GET);
@@ -122,8 +124,21 @@ public class HeadFilesAction extends FilesAction {
 
         }
         if (artifact == null) {
-            // message not actually output for a head request
-            throw new ResourceNotFoundException(artifactURI.toASCIIString());
+            if (storageResolver != null) {
+                // redirect to external site
+                try {
+                    URL externalURL = storageResolver.toURL(artifactURI);
+                    if (externalURL != null) {
+                        syncOutput.setCode(HttpURLConnection.HTTP_SEE_OTHER);
+                        syncOutput.setHeader("Location", externalURL);
+                        return;
+                    }
+                } catch (IllegalArgumentException e) {
+                    // nothing to be done here
+                }
+                // message not actually output for a head request
+                throw new ResourceNotFoundException(artifactURI.toASCIIString());
+            }
         }
         setHeaders(artifact, syncOutput);
     }

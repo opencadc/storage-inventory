@@ -69,6 +69,7 @@ package org.opencadc.raven;
 
 import ca.nrc.cadc.auth.AuthMethod;
 import ca.nrc.cadc.auth.AuthenticationUtil;
+import ca.nrc.cadc.net.StorageResolver;
 import ca.nrc.cadc.rest.RestAction;
 import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.vos.Direction;
@@ -111,6 +112,7 @@ public abstract class ArtifactAction extends RestAction {
     protected final File privateKeyFile;
     protected final List<URI> readGrantServices = new ArrayList<>();
     protected final List<URI> writeGrantServices = new ArrayList<>();
+    protected StorageResolver storageResolver;
 
     protected final boolean authenticateOnly;
     protected Map<URI, Availability> siteAvailabilities;
@@ -126,6 +128,7 @@ public abstract class ArtifactAction extends RestAction {
         this.privateKeyFile = null;
         this.artifactDAO = null;
         this.preventNotFound = false;
+        this.storageResolver = null;
     }
 
     protected ArtifactAction() {
@@ -168,6 +171,8 @@ public abstract class ArtifactAction extends RestAction {
             authenticateOnly = false;
         }
 
+        initResolver();
+
         // technically, raven only needs the private key to generate pre-auth tokens
         // but both are requied here for clarity
         // - in principle, raven could export it's public key and minoc(s) could retrieve it
@@ -193,6 +198,21 @@ public abstract class ArtifactAction extends RestAction {
             log.debug("Using consistency strategy: " + this.preventNotFound);
         } else {
             throw new IllegalStateException("invalid config: missing preventNotFound configuration");
+        }
+    }
+
+    protected void initResolver() {
+        MultiValuedProperties props = RavenInitAction.getConfig();
+        String resolverName = props.getFirstPropertyValue(RavenInitAction.RESOLVER_ENTRY);
+        if (resolverName != null) {
+            log.debug("Setting storage resolver " + resolverName);
+            try {
+                this.storageResolver = (StorageResolver) Class.forName(resolverName).newInstance();
+            } catch (ClassNotFoundException | IllegalAccessException | InstantiationException ex) {
+                throw new IllegalStateException("invalid config: failed to load storage resolver: " + resolverName, ex);
+            }
+        } else {
+            this.storageResolver = null;
         }
     }
 

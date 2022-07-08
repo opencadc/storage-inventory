@@ -41,4 +41,10 @@ org.opencadc.raven.putPreference=@SITE2
 org.opencadc.raven.putPreference=@SITE3
 @SITE3.resourceID=ivo://negotiation-test-site3
 @SITE3.namespace=cadc:TEST/
+
+# check sites if file not found in global (eventual consistency)
+org.opencadc.raven.consistency.preventNotFound=true
+
+# external resolvers
+ca.nrc.cadc.net.StorageResolver=mast ca.nrc.cadc.caom2.artifact.resolvers.MastResolver
 ```

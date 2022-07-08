@@ -143,6 +143,81 @@ public class NegotiationTest extends RavenTest {
     }
 
     @Test
+    public void testGetExternalResolver() throws Exception {
+        List<Protocol> requested = new ArrayList<>();
+
+        // https+anon
+        Protocol sa = new Protocol(VOS.PROTOCOL_HTTPS_GET);
+        requested.add(sa);
+
+        // https+cert
+        Protocol sc = new Protocol(VOS.PROTOCOL_HTTPS_GET);
+        sc.setSecurityMethod(Standards.SECURITY_METHOD_CERT);
+        requested.add(sc);
+
+        // token
+        Protocol st = new Protocol(VOS.PROTOCOL_HTTPS_GET);
+        st.setSecurityMethod(Standards.SECURITY_METHOD_TOKEN);
+        requested.add(st);
+
+        URI mastURI = new URI("mast:HST/product/iem13occq_trl.fits");
+        Transfer transfer = new Transfer(mastURI, Direction.pullFromVoSpace);
+        transfer.getProtocols().add(sa);
+        transfer.getProtocols().add(sc);
+        transfer.getProtocols().add(st);
+        transfer.version = VOS.VOSPACE_21;
+
+        URI resourceID = URI.create("ivo://negotiation-test-site1");
+        StorageSite site = new StorageSite(resourceID, "site1", true, true);
+
+        // file not in raven. Check external URLs
+        Transfer response = negotiate(transfer);
+        log.info("transfer: " + response);
+
+        Assert.assertEquals(requested.size(), response.getAllEndpoints().size());
+        for (String endPoint : response.getAllEndpoints()) {
+            Assert.assertTrue(endPoint.contains("iem13occq_trl.fits"));
+            Assert.assertFalse(endPoint.toLowerCase().contains("minoc"));
+        }
+
+        // repeat test after adding the artifact to a location
+        URI checksum = URI.create("md5:d41d8cd98f00b204e9800998ecf84278");
+        Artifact artifact = new Artifact(mastURI, checksum, new Date(), 1L);
+
+        Subject.doAs(userSubject, new PrivilegedExceptionAction<Object>() {
+            public Object run() throws Exception {
+                try {
+                    siteDAO.put(site);
+                    artifactDAO.put(artifact);
+                    final SiteLocation location = new SiteLocation(site.getID());
+                    artifactDAO.addSiteLocation(artifact, location);
+
+                    Transfer response = negotiate(transfer);
+                    log.info("transfer: " + response);
+
+                    List<String> allEndPoints = response.getAllEndpoints();
+                    Assert.assertEquals(2 * requested.size() + 1, allEndPoints.size());
+                    // first are the minoc requested.size() + 1 for the pre-auth entries, the rest are external
+                    for (int i = 0; i <= requested.size(); i++) {
+                        Assert.assertTrue(allEndPoints.get(i).toLowerCase().contains("minoc"));
+                    }
+                    for (int i = requested.size() + 1; i <= 2 * requested.size(); i++) {
+                        Assert.assertFalse(allEndPoints.get(i).toLowerCase().contains("minoc"));
+                    }
+
+                    return null;
+                } finally {
+                    // cleanup sites
+                    siteDAO.delete(site.getID());
+                    artifactDAO.delete(artifact.getID());
+                }
+            }
+        });
+
+
+    }
+
+    @Test
     public void testGET() {
         List<Protocol> requested = new ArrayList<>();
         

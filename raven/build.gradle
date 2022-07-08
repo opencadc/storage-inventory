@@ -38,6 +38,7 @@ dependencies {
 
     runtime 'org.opencadc:cadc-access-control:[1.1.1,2.0)'
     runtime 'org.opencadc:cadc-access-control-identity:[1.0.3,2.0)'
+    runtime 'org.opencadc:caom2-artifact-resolvers:[1.2.3,2.0)'
 
     testCompile 'junit:junit:[4.0,)'
 
