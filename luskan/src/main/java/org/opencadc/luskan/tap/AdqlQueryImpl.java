@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2019.                            (c) 2019.
+*  (c) 2022.                            (c) 2022.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -123,9 +123,7 @@ public class AdqlQueryImpl extends AdqlQuery {
         // add IS NOT NULL constraint for artifact.storagelocation_storageid when querying storage sites
         MultiValuedProperties properties = getProperties();
         boolean isStorageSite = Boolean.parseBoolean(properties.getFirstPropertyValue(LuskanConfig.STORAGE_SITE_KEY));
-        if (isStorageSite) {
-            super.navigatorList.add(new StorageLocationConverter());
-        }
+        super.navigatorList.add(new StorageLocationConverter(isStorageSite));
         
         // enable unfiltered diagnostics -- must be after StorageLocationConverter
         TableNameConverter tnc2 = new TableNameConverter(true);

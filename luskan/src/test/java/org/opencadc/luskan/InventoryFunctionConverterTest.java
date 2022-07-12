@@ -153,7 +153,7 @@ public class InventoryFunctionConverterTest {
         doTestFailure(query);
     }
 
-    private void doTest(final String query, final String expected, String expectedCardinalityFunc) {
+    private void doTest(final String query, final String origFunction, String expectedFunction) {
         try {
             TestUtil.job.getParameterList().clear();
             List<Parameter> params = new ArrayList<Parameter>();
@@ -163,15 +163,12 @@ public class InventoryFunctionConverterTest {
             tq.setTapSchema(tapSchema);
             TestUtil.job.getParameterList().addAll(params);
             tq.setJob(TestUtil.job);
-            log.info("expected: " + expected);
             String sql = tq.getSQL();
             log.info("actual: " + sql);
-
-            if (expectedCardinalityFunc != null) {
-                Assert.assertTrue(sql.contains(expectedCardinalityFunc));
-            }
-            sql = sql.toLowerCase();
-            Assert.assertTrue(sql.equalsIgnoreCase(expected));
+            
+            Assert.assertFalse(sql.contains(origFunction));
+            Assert.assertTrue(sql.contains(expectedFunction));
+            
         } catch (Exception e) {
             log.error("unexpected exception", e);
             Assert.fail();
