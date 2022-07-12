@@ -69,9 +69,7 @@
 
 package org.opencadc.luskan;
 
-import ca.nrc.cadc.auth.AuthMethod;
 import ca.nrc.cadc.dali.tables.TableWriter;
-import ca.nrc.cadc.reg.Standards;
 import ca.nrc.cadc.reg.client.RegistryClient;
 import ca.nrc.cadc.tap.ResultStore;
 import ca.nrc.cadc.util.MultiValuedProperties;
@@ -79,7 +77,6 @@ import ca.nrc.cadc.uws.Job;
 import ca.nrc.cadc.uws.server.RandomStringGenerator;
 import ca.nrc.cadc.uws.web.InlineContentException;
 import ca.nrc.cadc.uws.web.UWSInlineContentHandler;
-
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -88,7 +85,6 @@ import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URL;
 import java.sql.ResultSet;
-
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadFactory;
@@ -155,7 +151,7 @@ public class TempStorageManager implements ResultStore, UWSInlineContentHandler 
             throws IOException {
         Long num = null;
         if (maxRows != null) {
-            num = new Long(maxRows);
+            num = maxRows.longValue();
         }
 
         File dest = getDestFile();

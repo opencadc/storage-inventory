@@ -3,7 +3,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2020.                            (c) 2020.
+ *  (c) 2022.                            (c) 2022.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -93,8 +93,11 @@ import org.apache.log4j.Logger;
 public class StorageLocationConverter extends SelectNavigator {
     private static final Logger log = Logger.getLogger(StorageLocationConverter.class);
 
-    public StorageLocationConverter() {
+    private final boolean isStorageSite;
+    
+    public StorageLocationConverter(boolean isStorageSite) {
         super(new ExpressionNavigator(), new ReferenceNavigator(), new FromItemNavigator());
+        this.isStorageSite = isStorageSite;
     }
 
     @Override
@@ -123,7 +126,7 @@ public class StorageLocationConverter extends SelectNavigator {
             if (!table.getWholeTableName().equalsIgnoreCase("inventory.artifact")) {
                 continue;
             }
-            Expression isNull = createIsNullConstraint(table);
+            Expression isNull = createStoredConstraint(table);
             if (constraint == null) {
                 constraint = isNull;
             } else {
@@ -133,7 +136,7 @@ public class StorageLocationConverter extends SelectNavigator {
         return constraint;
     }
 
-    private Expression createIsNullConstraint(Table table) {
+    private Expression createStoredConstraint(Table table) {
         Table artifact;
         if (table.getAlias() != null) {
             artifact = new Table(null, table.getAlias());
@@ -143,7 +146,7 @@ public class StorageLocationConverter extends SelectNavigator {
         Column sitelocations = new Column(artifact, "storagelocation_storageid");
         IsNullExpression isNullExpression = new IsNullExpression();
         isNullExpression.setLeftExpression(sitelocations);
-        isNullExpression.setNot(true);
+        isNullExpression.setNot(isStorageSite);
         return new Parenthesis(isNullExpression);
     }
 
