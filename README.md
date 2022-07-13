@@ -1,7 +1,10 @@
 # OpenCADC Storage Inventory System
 
 The Storage Inventory system is designed to manage archival file storage for a science
-data archive. The system is designed to have one or more sites:
+data archive. 
+
+The system is designed to have one or more sites that implement services built on the 
+[Storage Inventory Data Model](storage-inventory-dm/).
 
 - a **storage site** includes back-end storage (for files), a database with the local inventory,
 a **files** service, and a **metadata** service
@@ -34,8 +37,65 @@ using the <a href="https://www.ivoa.net/documents/GMS/">IVOA GMS</a> API impleme
 - one or more **permissions** services which return grant information for resources (files); the permissions
 API is a prototype (non-standard)
 
-## More details
-[Storage Inventory Data Model](storage-inventory-dm/) [FAQ](docs/FAQ.md)
+# high level features
+
+arbitrary logical organisation of archive files (Artifact.uri)
+- Artifact.uri prefixes define **namespace**s
+- namespace supports artifact selection (mirroring) policy
+- namespace supports rule-based granting of permission to read or write files
+
+one or more storage sites with local inventory and data storage
+- artifact selection (mirroring) policy implemented at each site
+- different back end storage implementation can be used at each site
+- files stored at multiple network/geographical locations for redundancy, scalability, and
+to improve delivery to users/processing/science platforms
+
+one or more independent global inventory(ies) of all files and their locations
+- file locations stored at multiple network/geographical locations for redundancy, scalability
+- specialised global inventory(ies) can be created with subset of files
+
+rapid incremental metadata propagation and robust metadata validation
+- site(s) to global
+- global to site(s)
+
+scalable validation of external references to stored files
+- CAOM vs storage
+- VOSpace vs storage
+- global vs site(s)
+- site(s) vs global
+
+# transition features
+
+There are no transition-specific tools: the system is in a continuous state of transition and the normally
+synchronization processes bring it to the new desired state.
+
+Example: change back end storage from technology A to technology B:
+- deploy a storage site with a new (empty) database and new (empty) object store allocation
+- add new site to list of sites known to global
+- **metadata-sync** will pull selected artifacts from global to site database
+- **file-sync** will pull files for those artifacts using global **locator** service (from other storage sites)
+- when all files are redundantly stored, decommission the old storage site
+
+# more info
+
+[FAQ](docs/FAQ.md)
+
+# what's NOT included
+
+quotas, allocations, resource management
+
+monitoring, control, or config of back end storage systems
+- use their tools
+
+monitoring or control of processes and services
+- use container orchestration: docker swarm? kubernetes? something even shinier?
+
+reporting
+- get logs from containers
+- query site **metadata** service (TAP)
+- query global **metadata** service (TAP)
+
+# software components
 
 ## storage-inventory-dm
 This is the storage inventory data model and architecture documentation. TODO: Add an FAQ.
@@ -58,7 +118,7 @@ service that supports ad-hoc querying of the inventory data model.
 
 ## minoc
 This is an implementation of the **file** service that supports HEAD, GET, PUT, POST, DELETE operations
-and IVOA SODA operations.
+and <a href="https://www.ivoa.net/documents/SODA/">IVOA SODA</a> operations.
 
 ## raven
 This is an implementation of the global **locator** service that supports transfer negotiation and direct
@@ -78,3 +138,13 @@ the back end storage at a storage site.
 
 ## cadc-*
 These are libraries used in multiple services and applications.
+
+- cadc-inventory: core data model implementation
+- cadc-inventory-db: database library
+- cadc-inventory-util: re-usable code
+- cadc-inventory-server: re-usable service code
+- cadc-storage-adapter: defines the interface between inventory and back end storage
+- cadc-storage-adapter-fs: storage adapter implementation for a POSIX filesystem back end
+- cadc-storage-adapter-ad: storage adapter for the legacy CADC Archive Directory storage system (temporary)
+- cadc-storage-adapter-swift: storeage adapter implementation for the Swift Object Store API (e.g. CEPH Object Store)
+- cadc-storage-adapter-test: re-usable test suite for storage adapter implementations
