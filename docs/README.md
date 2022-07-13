@@ -4,7 +4,7 @@ The Storage Inventory system is designed to manage archival file storage for a s
 data archive. 
 
 The system is designed to have one or more sites that implement services built on the 
-[Storage Inventory Data Model](storage-inventory-dm/).
+[Storage Inventory Data Model](../storage-inventory-dm/).
 
 - a **storage site** includes back-end storage (for files), a database with the local inventory,
 a **files** service, and a **metadata** service
@@ -22,9 +22,9 @@ With the deployment of a global inventory, one would normally add **metadata-syn
 process(es) to storage sites to sync content that originates at other sites. There are mechanisms
 to apply selectivity in order to sync a subset of the global inventory to any one storage site.
 
-![storage site](docs/storage-site.png)
+![storage site](storage-site.png)
 
-![global inventory](docs/global-inventory.png)
+![global inventory](global-inventory.png)
  
 In addition to **storage site**s and **global inventory**, there are several external services that 
 are required for a complete functional system:
@@ -78,7 +78,7 @@ Example: change back end storage from technology A to technology B:
 
 # more info
 
-[FAQ](docs/FAQ.md)
+[FAQ](FAQ.md)
 
 # what's NOT included
 
