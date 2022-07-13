@@ -4,8 +4,7 @@
 <a rel="license" href="http://creativecommons.org/licenses/by-sa/4.0/">
 Creative Commons Attribution-ShareAlike 4.0 International License</a>.
 
-# storage-dm
-Storage Inventory (SI) Data Model
+# Storage Inventory (SI) Data Model
 
 This module contains a <a href="http://www.ivoa.net/documents/VODML/index.html">VO-DML</a> 
 description of the Storage data model and test code to validate the model using the 
