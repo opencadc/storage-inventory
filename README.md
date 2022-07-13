@@ -8,7 +8,7 @@ a **files** service, and a **metadata** service ![storage site](docs/storage-sit
 
 - a **global inventory** includes a database with an inventory of all files at all known storage 
 sites, a **locator** service, a **metadata** service, a **metadata-sync** process for each storage 
-site, and a periodic **metadata-validate** process for each storage site ![global inventory](global-inventory.png)
+site, and a periodic **metadata-validate** process for each storage site ![global inventory](docs/global-inventory.png)
 
 A storage site can be useful as a stand-alone deployment that provides REST API access to back 
 end storage, but the deployment of a global inventory allows multiple storage sites to store a
