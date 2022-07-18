@@ -19,14 +19,23 @@ create table <schema>.Artifact (
 
 create unique index uri_index on <schema>.Artifact(uri);
 
+-- usage: ratik validation queries
+-- usage: critwall queries for pending downloads
 create index bucket_index on <schema>.Artifact(uriBucket);
 
---create index a_modified_index on <schema>.Artifact(lastModified);
+-- TODO: critwall index on uriBucket where storageLocation_storageID is null??
+
+--this index populated in storage sites with local copy of file
+-- usage: fenwick sync queries vs storage site
 create index a_stored_index on <schema>.Artifact(lastModified)
     where storageLocation_storageID is not null;
 
+-- this index fully populated in global and partially populated in
+-- storage sites (pending downloads only)
+-- usage: fenwick sync queries vs global
 create index a_unstored_index on <schema>.Artifact(lastModified)
     where storageLocation_storageID is null;
 
+--this index populated in storage sites with local copy of file
 create unique index storage_index on <schema>.Artifact(storageLocation_storageBucket,storageLocation_storageID)
     where storageLocation_storageID is not null;
