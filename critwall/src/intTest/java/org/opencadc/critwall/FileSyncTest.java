@@ -107,7 +107,7 @@ import org.opencadc.inventory.util.BucketSelector;
 public class FileSyncTest {
     private static final Logger log = Logger.getLogger(FileSyncTest.class);
     private static final String TEST_ROOT = "build/tmp/fsroot/critwallTests";
-    private static final String TEST_RESOURCE_ID = "ivo://cadc.nrc.ca/data";
+    private static final String TEST_RESOURCE_ID = "ivo://cadc.nrc.ca/global/raven";
     private static Map<String,Object> daoConfig;
     private static ConnectionConfig cc;
 
@@ -214,26 +214,26 @@ public class FileSyncTest {
         TreeMap<Integer, Artifact> artifactMap = new TreeMap<Integer, Artifact>();
         try {
             // set up 4-5 IRIS artifacts need: checksum, size, artifact uri.
-            Artifact testArtifact = new Artifact(new URI("ad:IRIS/I429B4H0.fits"),
+            Artifact testArtifact = new Artifact(new URI("cadc:IRIS/I429B4H0.fits"),
                 new URI("md5:e3922d47243563529f387ebdf00b66da"), new Date(),
                 1008000L);
             log.debug("putting test artifact 1 to database");
             artifactMap.put(1, testArtifact);
 
-            testArtifact = new Artifact(new URI("ad:IRIS/f429h000_preview_1024.png"),
+            testArtifact = new Artifact(new URI("cadc:IRIS/f429h000_preview_1024.png"),
                 new URI("md5:ffdd0ee84d648035b0b4bd8eac6c849e"), new Date(),
                 471897L);
 
             log.debug("putting test artifact 2 to database");
             artifactMap.put(2, testArtifact);
 
-            testArtifact = new Artifact(new URI("ad:IRIS/I426B4H0.fits"),
+            testArtifact = new Artifact(new URI("cadc:IRIS/I426B4H0.fits"),
                 new URI("md5:fcd1402ee90e52b49e6624117ab79871"), new Date(),
                 1008000L);
             log.debug("putting test artifact 3 to database");
             artifactMap.put(3, testArtifact);
 
-            testArtifact = new Artifact(new URI("ad:IRIS/f426h000_preview_256.png"),
+            testArtifact = new Artifact(new URI("cadc:IRIS/f426h000_preview_256.png"),
                 new URI("md5:e8ded674e62d623d8bacab66215c1361"), new Date(),
                 113116L);
             log.debug("putting test artifact 4 to database");
@@ -256,63 +256,63 @@ public class FileSyncTest {
 
             // Build on the small dataset
             //            IRAS-25um
-            //            ad:IRIS/I422B4H0.fits ; md5:fd02b367a37f1ec989be20be40672fc5; 1008000
-            artifactMap.put(5, new Artifact(new URI("ad:IRIS/I422B4H0.fits"),
+            //            cadc:IRIS/I422B4H0.fits ; md5:fd02b367a37f1ec989be20be40672fc5; 1008000
+            artifactMap.put(5, new Artifact(new URI("cadc:IRIS/I422B4H0.fits"),
                 new URI("md5:fd02b367a37f1ec989be20be40672fc5"), new Date(),
                 1008000L));
 
-            //            ad:IRIS/I422B1H0.fits; md5:bcaa00dd3c18332d60d2f25ba31030fb; 1008000
-            artifactMap.put(6, new Artifact(new URI("ad:IRIS/I422B1H0.fits"),
+            //            cadc:IRIS/I422B1H0.fits; md5:bcaa00dd3c18332d60d2f25ba31030fb; 1008000
+            artifactMap.put(6, new Artifact(new URI("cadc:IRIS/I422B1H0.fits"),
                 new URI("md5:bcaa00dd3c18332d60d2f25ba31030fb"), new Date(),
                 1008000L));
 
-            //            ad:IRIS/I422B2H0.fits; md5:e7abb9f19fc3a28cdd926dd1e74abec7; 1008000
-            artifactMap.put(7, new Artifact(new URI("ad:IRIS/I422B2H0.fits"),
+            //            cadc:IRIS/I422B2H0.fits; md5:e7abb9f19fc3a28cdd926dd1e74abec7; 1008000
+            artifactMap.put(7, new Artifact(new URI("cadc:IRIS/I422B2H0.fits"),
                 new URI("md5:e7abb9f19fc3a28cdd926dd1e74abec7"), new Date(),
                 1008000L));
 
-            //            ad:IRIS/I422B3H0.fits; md5:2cb35c6af7e7e4df1aac3e91d4a17628; 1008000
-            artifactMap.put(8, new Artifact(new URI("ad:IRIS/I422B3H0.fits"),
+            //            cadc:IRIS/I422B3H0.fits; md5:2cb35c6af7e7e4df1aac3e91d4a17628; 1008000
+            artifactMap.put(8, new Artifact(new URI("cadc:IRIS/I422B3H0.fits"),
                 new URI("md5:2cb35c6af7e7e4df1aac3e91d4a17628"), new Date(),
                 1008000L));
 
-            //            ad:IRIS/I421B4H0.fits; md5:fd2f33f79aefc15a84f5dbfb6fa61179; 1008000;
-            artifactMap.put(9, new Artifact(new URI("ad:IRIS/I421B4H0.fits"),
+            //            cadc:IRIS/I421B4H0.fits; md5:fd2f33f79aefc15a84f5dbfb6fa61179; 1008000;
+            artifactMap.put(9, new Artifact(new URI("cadc:IRIS/I421B4H0.fits"),
                 new URI("md5:fd2f33f79aefc15a84f5dbfb6fa61179"), new Date(),
                 1008000L));
 
-            //            ad:IRIS/I421B1H0.fits; md5:e188c72cec7466e77371687eacef4188; 1008000;
-            artifactMap.put(10, new Artifact(new URI("ad:IRIS/I421B1H0.fits"),
+            //            cadc:IRIS/I421B1H0.fits; md5:e188c72cec7466e77371687eacef4188; 1008000;
+            artifactMap.put(10, new Artifact(new URI("cadc:IRIS/I421B1H0.fits"),
                 new URI("md5:e188c72cec7466e77371687eacef4188"), new Date(),
                 1008000L));
 
-            //            ad:IRIS/I421B2H0.fits; md5:50959fa149de2850f94513f3d5c1b2d8; 1008000;
-            artifactMap.put(11, new Artifact(new URI("ad:IRIS/I421B2H0.fits"),
+            //            cadc:IRIS/I421B2H0.fits; md5:50959fa149de2850f94513f3d5c1b2d8; 1008000;
+            artifactMap.put(11, new Artifact(new URI("cadc:IRIS/I421B2H0.fits"),
                 new URI("md5:50959fa149de2850f94513f3d5c1b2d8"), new Date(),
                 1008000L));
 
-            //            ad:IRIS/I421B3H0.fits; md5:e2617db27776cdf97840f727d9411dc0; 1008000;
-            artifactMap.put(12, new Artifact(new URI("ad:IRIS/I421B3H0.fits"),
+            //            cadc:IRIS/I421B3H0.fits; md5:e2617db27776cdf97840f727d9411dc0; 1008000;
+            artifactMap.put(12, new Artifact(new URI("cadc:IRIS/I421B3H0.fits"),
                 new URI("md5:e2617db27776cdf97840f727d9411dc0"), new Date(),
                 1008000L));
 
-            //            ad:IRIS/I420B4H0.fits; md5:29e647300f3fbb46d4406d1957f7f61c; 1008000;
-            artifactMap.put(13, new Artifact(new URI("ad:IRIS/I420B4H0.fits"),
+            //            cadc:IRIS/I420B4H0.fits; md5:29e647300f3fbb46d4406d1957f7f61c; 1008000;
+            artifactMap.put(13, new Artifact(new URI("cadc:IRIS/I420B4H0.fits"),
                 new URI("md5:29e647300f3fbb46d4406d1957f7f61c"), new Date(),
                 1008000L));
 
-            //            ad:IRIS/I420B1H0.fits; md5:7c6bfc10301fb617ce95dc338448cd03;1008000;
-            artifactMap.put(14, new Artifact(new URI("ad:IRIS/I420B1H0.fits"),
+            //            cadc:IRIS/I420B1H0.fits; md5:7c6bfc10301fb617ce95dc338448cd03;1008000;
+            artifactMap.put(14, new Artifact(new URI("cadc:IRIS/I420B1H0.fits"),
                 new URI("md5:7c6bfc10301fb617ce95dc338448cd03"), new Date(),
                 1008000L));
 
-            //            ad:IRIS/I420B2H0.fits; md5:5a4b9bb5dfc64ba0564ece68821b7ea1; 1008000;
-            artifactMap.put(15, new Artifact(new URI("ad:IRIS/I420B2H0.fits"),
+            //            cadc:IRIS/I420B2H0.fits; md5:5a4b9bb5dfc64ba0564ece68821b7ea1; 1008000;
+            artifactMap.put(15, new Artifact(new URI("cadc:IRIS/I420B2H0.fits"),
                 new URI("md5:5a4b9bb5dfc64ba0564ece68821b7ea1"), new Date(),
                 1008000L));
 
-            //            ad:IRIS/I420B3H0.fits; md5:65e71fad7cdbcb644922b89bc735f709; 1008000;
-            artifactMap.put(16, new Artifact(new URI("ad:IRIS/I420B3H0.fits"),
+            //            cadc:IRIS/I420B3H0.fits; md5:65e71fad7cdbcb644922b89bc735f709; 1008000;
+            artifactMap.put(16, new Artifact(new URI("cadc:IRIS/I420B3H0.fits"),
                 new URI("md5:65e71fad7cdbcb644922b89bc735f709"), new Date(),
                 1008000L));
 
@@ -349,12 +349,11 @@ public class FileSyncTest {
         fs.doit(anonSubject);
         log.info("FileSync: DONE");
         
-        // Check the storage locations, as these should get updated within a reasonable
-        // amount of timeA
+        log.info("Check the storage locations, as these should get updated within a reasonable amount of timeA...");
         Iterator artIter = dao.unstoredIterator(null);
 
         while (artIter.hasNext()) {
-            log.debug("waiting for file sync jobs to update database");
+            log.info("waiting for file sync jobs to update database");
             Thread.sleep(1000);
             artIter = dao.unstoredIterator(null);
         }
@@ -362,11 +361,11 @@ public class FileSyncTest {
         // check job succeeded by checking storage locations of at least one of
         // the artifacts from the map are not nullA
         // for one or two of the artifacts
-
+        log.info("Checking for local artifacts/files...");
         for (Artifact arti : artMap.values()) {
             Artifact thirdStoredArtifact = dao.get(arti.getURI());
-            log.debug("stored artifact: " + thirdStoredArtifact);
-            log.debug("stored artifact: " + thirdStoredArtifact.storageLocation);
+            log.info("stored artifact: " + thirdStoredArtifact);
+            log.info("stored artifact: " + thirdStoredArtifact.storageLocation);
             Assert.assertNotNull("storage location of artifact should not be null.", thirdStoredArtifact.storageLocation);
 
             // check for file on disk, throw away the bytes
@@ -379,6 +378,7 @@ public class FileSyncTest {
 
     @Test
     public void testValidFileSyncSmallSet1() {
+        log.info("testValidFileSyncSmallSet1 - START");
         String testDir = TEST_ROOT + File.separator + "testValidFileSync";
 
         try {
@@ -391,11 +391,12 @@ public class FileSyncTest {
             Assert.fail("unexpected exception: " + unexpected);
             log.debug(unexpected);
         }
-        log.info("testValidFileSync - DONE");
+        log.info("testValidFileSyncSmallSet1 - DONE");
     }
     
     @Test
     public void testValidFileSyncSmallSet4() {
+        log.info("testValidFileSyncSmallSet4 - START");
         String testDir = TEST_ROOT + File.separator + "testValidFileSync";
 
         try {
@@ -408,11 +409,12 @@ public class FileSyncTest {
             Assert.fail("unexpected exception: " + unexpected);
             log.debug(unexpected);
         }
-        log.info("testValidFileSync - DONE");
+        log.info("testValidFileSyncSmallSet4 - DONE");
     }
 
     @Test
     public void testValidFileSyncLargeSet2() {
+        log.info("testValidFileSyncLargeSet2 - START");
         String testDir = TEST_ROOT + File.separator + "testValidFileSyncLargeSet";
 
         try {
@@ -424,15 +426,16 @@ public class FileSyncTest {
             Assert.fail("unexpected exception: " + unexpected);
             log.debug(unexpected);
         }
-        log.info("testValidFileSyncLargeSet - DONE");
+        log.info("testValidFileSyncLargeSet2 - DONE");
     }
 
     @Test
     public void testRetryOnRepeatedQuery() {
+        log.info("testRetryOnRepeatedQuery - START");
         String testDir = TEST_ROOT + File.separator + "testRetryOnRepeatedQuery";
         try {
             createTestDirectory(testDir);
-            Artifact testArtifact = new Artifact(new URI("ad:IRIS/no-such-file.fits"),
+            Artifact testArtifact = new Artifact(new URI("cadc:IRIS/no-such-file.fits"),
                 new URI("md5:e3922d47243563529f387ebdf00b66da"), new Date(),
                 1008000L);
             dao.put(testArtifact);
@@ -469,6 +472,6 @@ public class FileSyncTest {
             Assert.fail("unexpected exception: " + unexpected);
             
         }
-        log.info("testValidFileSyncLargeSet - DONE");
+        log.info("testRetryOnRepeatedQuery - DONE");
     }
 }
