@@ -171,7 +171,10 @@ public class StorageLocationConverterTest {
             return new MultiValuedProperties() {
                 @Override
                 public String getFirstPropertyValue(String value) {
-                    return isStorageLocation;
+                    if (LuskanConfig.STORAGE_SITE_KEY.equals(value)) {
+                        return isStorageLocation;
+                    }
+                    return null;
                 }
             };
         }

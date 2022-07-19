@@ -70,6 +70,7 @@ package org.opencadc.inventory.db;
 import ca.nrc.cadc.db.ConnectionConfig;
 import ca.nrc.cadc.db.DBConfig;
 import ca.nrc.cadc.db.DBUtil;
+import ca.nrc.cadc.db.TransactionManager;
 import ca.nrc.cadc.util.Log4jInit;
 import java.net.URI;
 import java.security.MessageDigest;
@@ -95,7 +96,7 @@ public class HarvestStateDAOTest {
     static final URI RID = URI.create("ivo://cadc.nrc.ca/no-lookup-luskan");
     
     static {
-        Log4jInit.setLevel("org.opencadc.inventory", Level.INFO);
+        Log4jInit.setLevel("org.opencadc.inventory", Level.DEBUG);
         Log4jInit.setLevel("ca.nrc.cadc.db", Level.INFO);
     }
     
@@ -165,10 +166,18 @@ public class HarvestStateDAOTest {
             URI mcs1 = hs1.computeMetaChecksum(MessageDigest.getInstance("MD5"));
             Assert.assertEquals("round trip metachecksum", expected.getMetaChecksum(), mcs1);
             
+            //TransactionManager txn = dao.getTransactionManager();
+            //txn.startTransaction();
+            
             // update
             hs1.curLastModified = new Date();
             hs1.curID = UUID.randomUUID();
             dao.put(hs1);
+            
+            //log.warn("SLEEPING for lock diagnostics: 20 sec");
+            //Thread.sleep(20000L);
+            //txn.commitTransaction();
+            
             HarvestState hs2 = dao.get(hs1.getID());
             log.info("found: " + hs2);
             
@@ -253,7 +262,7 @@ public class HarvestStateDAOTest {
             HarvestState hs2 = dao.get(orig.getName(), orig.getResourceID());
             log.info("found by name: " + hs2);
             
-            // update: simple class name
+            log.info("update: rename to simple class name");
             hs2.setName(HarvestStateDAOTest.class.getSimpleName());
             dao.put(hs2);
             
@@ -264,12 +273,139 @@ public class HarvestStateDAOTest {
             Assert.assertEquals(orig.curID, hs3.curID);
             
             dao.delete(hs3.getID());
-            HarvestState deleted = dao.get(hs3.getID());
-            Assert.assertNull(deleted);
             
         } catch (Exception unexpected) {
             log.error("unexpected exception", unexpected);
             Assert.fail("unexpected exception: " + unexpected);
+        }
+    }
+    
+    @Test
+    public void testBufferedUpdates() {
+        try {
+            dao.setUpdateBufferCount(2); // buffer 2, write 3rd
+            
+            // orig: fully qualified class name
+            HarvestState orig = new HarvestState(HarvestStateDAOTest.class.getName(), RID);
+            log.info("expected: " + orig);
+            
+            HarvestState hs = dao.get(HarvestState.class, orig.getID());
+            Assert.assertNull(hs);
+            
+            // put 1
+            orig.curID = UUID.randomUUID();
+            orig.curLastModified = new Date();
+            dao.put(orig);
+            hs = dao.get(HarvestState.class, orig.getID());
+            Assert.assertNull(hs);
+
+            // put 2
+            orig.curID = UUID.randomUUID();
+            orig.curLastModified = new Date();
+            dao.put(orig);
+            hs = dao.get(HarvestState.class, orig.getID());
+            Assert.assertNull(hs);
+
+            // put 3
+            orig.curID = UUID.randomUUID();
+            orig.curLastModified = new Date();
+            dao.put(orig);
+            
+            // get by ID
+            HarvestState save1 = dao.get(orig.getID());
+            log.info("found by ID after put x3: " + save1);
+            Assert.assertNotNull(save1);
+            Assert.assertEquals(orig.curID, save1.curID);
+
+            // put 1
+            orig.curID = UUID.randomUUID();
+            orig.curLastModified = new Date();
+            dao.put(orig);
+            hs = dao.get(HarvestState.class, orig.getID());
+            Assert.assertNotNull(hs);
+            Assert.assertEquals(save1.curID, hs.curID);
+
+            // put 2
+            orig.curID = UUID.randomUUID();
+            orig.curLastModified = new Date();
+            dao.put(orig);
+            hs = dao.get(HarvestState.class, orig.getID());
+            Assert.assertNotNull(hs);
+            Assert.assertEquals(save1.curID, hs.curID);
+            
+            dao.flushBufferedState();
+            HarvestState save2 = dao.get(orig.getID());
+            log.info("found by ID after flush: " + save2);
+            Assert.assertNotNull(save2);
+            Assert.assertEquals(orig.curID, save2.curID);
+            
+            dao.delete(save1.getID());
+            
+        } catch (Exception unexpected) {
+            log.error("unexpected exception", unexpected);
+            Assert.fail("unexpected exception: " + unexpected);
+        } finally {
+            dao.setUpdateBufferCount(0);
+        }
+    }
+    
+    @Test
+    public void testPeriodicMaintenance() {
+        try {
+            // orig: fully qualified class name
+            HarvestState orig = new HarvestState(HarvestStateDAOTest.class.getName(), RID);
+            log.info("expected: " + orig);
+            
+            HarvestState hs = dao.get(HarvestState.class, orig.getID());
+            Assert.assertNull(hs);
+
+            // create a bunch of dead tuples
+            for (int i = 0; i < 101; i++) {
+                orig.curID = UUID.randomUUID();
+                orig.curLastModified = new Date();
+                dao.put(orig);
+            }
+            
+            // enable frequnt maintenance
+            dao.setMaintCount(2);
+            
+            // put 1
+            orig.curID = UUID.randomUUID();
+            orig.curLastModified = new Date();
+            dao.put(orig);
+            
+            // put 2
+            orig.curID = UUID.randomUUID();
+            orig.curLastModified = new Date();
+            dao.put(orig);
+            
+            // put 3 -- first maint
+            orig.curID = UUID.randomUUID();
+            orig.curLastModified = new Date();
+            dao.put(orig);
+            
+            // put 4
+            orig.curID = UUID.randomUUID();
+            orig.curLastModified = new Date();
+            dao.put(orig);
+
+            // put 5
+            orig.curID = UUID.randomUUID();
+            orig.curLastModified = new Date();
+            dao.put(orig);
+            
+            // put 6 -- second maint
+            orig.curID = UUID.randomUUID();
+            orig.curLastModified = new Date();
+            dao.put(orig);
+            
+            //dao.delete(orig.getID());
+            
+        } catch (Exception unexpected) {
+            log.error("unexpected exception", unexpected);
+            Assert.fail("unexpected exception: " + unexpected);
+        } finally {
+            dao.setMaintCount(-1);
         }
     }
 }
