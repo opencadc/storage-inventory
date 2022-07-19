@@ -122,8 +122,13 @@ public class AdqlQueryImpl extends AdqlQuery {
 
         // add IS NOT NULL constraint for artifact.storagelocation_storageid when querying storage sites
         MultiValuedProperties properties = getProperties();
-        boolean isStorageSite = Boolean.parseBoolean(properties.getFirstPropertyValue(LuskanConfig.STORAGE_SITE_KEY));
-        super.navigatorList.add(new StorageLocationConverter(isStorageSite));
+        boolean disableQueryFilters = Boolean.parseBoolean(properties.getFirstPropertyValue(LuskanConfig.DISABLE_FILTERS));
+        if (disableQueryFilters) {
+            log.warn("DEVELOPER USE ONLY: disableQueryFilters == true");
+        } else {
+            boolean isStorageSite = Boolean.parseBoolean(properties.getFirstPropertyValue(LuskanConfig.STORAGE_SITE_KEY));
+            super.navigatorList.add(new StorageLocationConverter(isStorageSite));
+        }
         
         // enable unfiltered diagnostics -- must be after StorageLocationConverter
         TableNameConverter tnc2 = new TableNameConverter(true);
