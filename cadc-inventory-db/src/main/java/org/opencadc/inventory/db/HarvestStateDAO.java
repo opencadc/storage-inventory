@@ -68,8 +68,8 @@
 package org.opencadc.inventory.db;
 
 import java.net.URI;
+import java.sql.SQLException;
 import java.util.UUID;
-
 import org.apache.log4j.Logger;
 import org.springframework.jdbc.BadSqlGrammarException;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -81,6 +81,15 @@ import org.springframework.jdbc.core.JdbcTemplate;
 public class HarvestStateDAO extends AbstractDAO<HarvestState> {
     private static final Logger log = Logger.getLogger(HarvestStateDAO.class);
 
+    // update buffer
+    private int updateBufferCount = 0;
+    private HarvestState bufferedState;
+    private int curBufferCount = 0;
+
+    // periodic maintenace
+    private int maintCount = -1; // disabled
+    private int curMaintCount = 0;
+    
     // only usable by itself for testing
     public HarvestStateDAO() { 
         super(true);
@@ -88,6 +97,42 @@ public class HarvestStateDAO extends AbstractDAO<HarvestState> {
     
     public HarvestStateDAO(AbstractDAO src) {
         super(src, true);
+    }
+    
+    /**
+     * Set the update buffer count (default: 0). This is the number of calls to
+     * <code>put(HarvestState)</code> that are buffered before the value is actually
+     * sent to the back end database. For example, if the value is 3 then 3 values will 
+     * be buffered and the 4th will be be written. The default (0) means every update is
+     * sent to the database.
+     * 
+     * @param ubc update buffer count
+     * @throws IllegalArgumentException if argument is less than 0
+     */
+    public void setUpdateBufferCount(int ubc) {
+        if (ubc < 0) {
+            throw new IllegalArgumentException("invalid count: " + ubc + " reason: mujst be [0,)");
+        }
+        this.updateBufferCount = ubc;
+    }
+    
+    public void flushBufferedState() {
+        if (bufferedState != null) {
+            super.put(bufferedState);
+            bufferedState = null;
+            curBufferCount = 0;
+        }
+    }
+    
+    /**
+     * Set the maintenance frequency (default: -1). The argument count is the number of actual
+     * database updates to execute (see setUpdateBufferCount) between maintenance
+     * operations. Negative values (like default -1) disable periodic maintenance.
+     * 
+     * @param mc 
+     */
+    public void setMaintCount(int mc) {
+        this.maintCount = mc;
     }
     
     public HarvestState get(UUID id) {
@@ -127,6 +172,41 @@ public class HarvestStateDAO extends AbstractDAO<HarvestState> {
             log.debug("GET: " + name + " " + resourceID + " " + dt + "ms");
         }
         throw new RuntimeException("BUG: should be unreachable");
+    }
+
+    @Override
+    public void put(HarvestState val) {
+        if (curBufferCount < updateBufferCount) {
+            log.debug("buffering: " + curBufferCount + " < " + updateBufferCount + " " + val);
+            curBufferCount++;
+            bufferedState = val;
+        } else {
+            super.put(val);
+            curBufferCount = 0;
+            bufferedState = null;
+            
+            // only do maintenance after real updates
+            if (maintCount > 0) {
+                if (curMaintCount == maintCount) {
+                    String sql = "VACUUM " + gen.getTable(HarvestState.class);
+                    log.warn("maintenance: " + curMaintCount + "==" + maintCount + " " + sql);
+                    //JdbcTemplate jdbc = new JdbcTemplate(dataSource);
+                    //jdbc.execute(sql);
+                    try {
+                        dataSource.getConnection().createStatement().execute(sql);
+                    } catch (SQLException ex) {
+                        log.error("ERROR: " + sql + " FAILED", ex);
+                        // yes, log and proceed
+                    }
+                    curMaintCount = 0;
+                } else {
+                    log.debug("maintenance: " + curMaintCount + " < " + maintCount);
+                    curMaintCount++;
+                }
+            }
+        }
+        
+        
     }
     
     public void delete(UUID id) {
