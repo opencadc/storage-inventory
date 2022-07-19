@@ -278,12 +278,12 @@ public class ArtifactSync extends AbstractSync {
                         }
                     }
                     
-                    harvestState.curLastModified = harvestedLastModified;
-                    harvestState.curID = artifact.getID();
-                    harvestStateDAO.put(harvestState);
                     transactionManager.commitTransaction();
                     
                     // update state outside transaction because experimental maintenance enabled
+                    harvestState.curLastModified = harvestedLastModified;
+                    harvestState.curID = artifact.getID();
+                    harvestStateDAO.put(harvestState);
                     
                     log.debug("END: Process Artifact " + artifact.getID() + " " + artifact.getURI());
                 } catch (Exception exception) {
