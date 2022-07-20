@@ -149,6 +149,7 @@ public class DeletedStorageLocationEventSync extends AbstractSync {
             }
         }
         final HarvestState harvestState = hs;
+        harvestStateDAO.setUpdateBufferCount(99); // buffer 99 updates, do every 100
         
         SSLUtil.renewSubject(AuthenticationUtil.getCurrentSubject(), new File(CERTIFICATE_FILE_LOCATION));
 
@@ -247,8 +248,10 @@ public class DeletedStorageLocationEventSync extends AbstractSync {
                 }
                 logSummary(DeletedStorageLocationEvent.class);
             }
+        } finally {
+            harvestStateDAO.flushBufferedState();
+            logSummary(DeletedStorageLocationEvent.class, true);
         }
-        logSummary(DeletedStorageLocationEvent.class, true);
     }
 
     ResourceIterator<DeletedStorageLocationEvent> getEventStream(Date startTime, Date endTime)

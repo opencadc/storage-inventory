@@ -122,7 +122,8 @@ public class StorageLocationEventSync extends AbstractSync {
         }
 
         final HarvestState harvestState = this.harvestStateDAO.get(StorageLocationEvent.class.getSimpleName(), resourceID);
-
+        harvestStateDAO.setUpdateBufferCount(99); // buffer 99 updates, do every 100
+        
         final Date endTime = new Date();
         final Date lookBack = new Date(endTime.getTime() - LOOKBACK_TIME);
         Date startTime = getQueryLowerBound(lookBack, harvestState.curLastModified);
@@ -204,8 +205,10 @@ public class StorageLocationEventSync extends AbstractSync {
                 }
                 logSummary(StorageLocationEvent.class);
             }
+        } finally {
+            harvestStateDAO.flushBufferedState();
+            logSummary(StorageLocationEvent.class, true);
         }
-        logSummary(StorageLocationEvent.class, true);
     }
     
     ResourceIterator<StorageLocationEvent> getEventStream(Date start, Date end)
