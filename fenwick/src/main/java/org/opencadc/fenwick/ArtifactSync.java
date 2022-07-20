@@ -153,7 +153,7 @@ public class ArtifactSync extends AbstractSync {
         }
         final HarvestState harvestState = hs;
         harvestStateDAO.setUpdateBufferCount(99); // buffer 99 updates, do every 100
-        harvestStateDAO.setMaintCount(9999); // skip for 9999, do every 10k
+        harvestStateDAO.setMaintCount(999); // buffer 9999 do every 10000 real updates aka every 1e5 events
         
         final Date endTime = new Date();
         final Date lookBack = new Date(endTime.getTime() - LOOKBACK_TIME);
