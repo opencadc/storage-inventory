@@ -160,7 +160,8 @@ public class NegotiationTest extends RavenTest {
         st.setSecurityMethod(Standards.SECURITY_METHOD_TOKEN);
         requested.add(st);
 
-        URI mastURI = new URI("mast:HST/product/iem13occq_trl.fits");
+        // test expects that raven gets a grant from dev setting or dev baldur service
+        URI mastURI = new URI("mast:FOO/product/no-such-file.fits");
         Transfer transfer = new Transfer(mastURI, Direction.pullFromVoSpace);
         transfer.getProtocols().add(sa);
         transfer.getProtocols().add(sc);
@@ -176,7 +177,7 @@ public class NegotiationTest extends RavenTest {
 
         Assert.assertEquals(requested.size(), response.getAllEndpoints().size());
         for (String endPoint : response.getAllEndpoints()) {
-            Assert.assertTrue(endPoint.contains("iem13occq_trl.fits"));
+            Assert.assertTrue(endPoint.contains("FOO/product/no-such-file.fits"));
             Assert.assertFalse(endPoint.toLowerCase().contains("minoc"));
         }
 

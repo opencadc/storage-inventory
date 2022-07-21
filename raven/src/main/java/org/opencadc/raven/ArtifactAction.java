@@ -69,8 +69,10 @@ package org.opencadc.raven;
 
 import ca.nrc.cadc.auth.AuthMethod;
 import ca.nrc.cadc.auth.AuthenticationUtil;
+import ca.nrc.cadc.log.WebServiceLogInfo;
 import ca.nrc.cadc.net.StorageResolver;
 import ca.nrc.cadc.rest.RestAction;
+import ca.nrc.cadc.rest.SyncInput;
 import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.vos.Direction;
 import ca.nrc.cadc.vos.Transfer;
@@ -215,7 +217,7 @@ public abstract class ArtifactAction extends RestAction {
             this.storageResolver = null;
         }
     }
-
+    
     protected void initAndAuthorize() throws Exception {
         init();
         
@@ -232,6 +234,8 @@ public abstract class ArtifactAction extends RestAction {
         if ((transfer != null) && (transfer.getDirection().equals(Direction.pushToVoSpace))) {
             grantClass = WriteGrant.class;
         }
+        logInfo.setResource(artifactURI);
+        logInfo.setPath(syncInput.getContextPath() + syncInput.getComponentPath());
         PermissionsCheck permissionsCheck = new PermissionsCheck(this.artifactURI, this.authenticateOnly,
                                                                  this.logInfo);
         if (ReadGrant.class.isAssignableFrom(grantClass)) {
