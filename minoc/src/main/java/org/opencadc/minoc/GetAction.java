@@ -507,13 +507,14 @@ public class GetAction extends ArtifactAction {
             return result;
         }
         try {
-            Long start = new Long(interval[0].length() == 0 ? "0" : interval[0]);
+            String s =  (interval[0].length() == 0 ? "0" : interval[0]);
+            Long start = Long.parseLong(s);
             if (start > contentLength - 1) {
                 throw new RangeNotSatisfiableException("Offset greater than size of file");
             }
             long end = contentLength - 1;
             if (interval.length == 2) {
-                end = new Long(interval[1]);
+                end = Long.parseLong(interval[1]);
             }
             if (end < start) {
                 log.debug("Ignore Range with invalid interval: " + range);

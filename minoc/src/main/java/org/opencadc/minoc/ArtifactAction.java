@@ -237,6 +237,7 @@ public abstract class ArtifactAction extends RestAction {
         initAndAuthorize(grantClass, false);
     }
     
+    @SuppressWarnings("unchecked")
     protected void initAndAuthorize(Class<? extends Grant> grantClass, boolean allowReadWithWriteGrant)
         throws AccessControlException, CertificateException, IOException,
                ResourceNotFoundException, TransientException {
@@ -259,10 +260,13 @@ public abstract class ArtifactAction extends RestAction {
                 subject.getPrincipals().add(new HttpPrincipal(tokenUser));
             }
             logInfo.setSubject(subject);
+            logInfo.setPath(syncInput.getContextPath() + syncInput.getComponentPath());
         } else {
             // augment subject (minoc is configured so augment is not done in rest library)
             AuthenticationUtil.augmentSubject(subject);
             logInfo.setSubject(subject);
+            logInfo.setResource(artifactURI);
+            logInfo.setPath(syncInput.getContextPath() + syncInput.getComponentPath());
             PermissionsCheck permissionsCheck = new PermissionsCheck(artifactURI, authenticateOnly, logInfo);
             // TODO: allowReadWithWriteGrant could be implemented here, but grant services are probably configured
             // that way already so it's complexity that probably won't allow/enable any actions
