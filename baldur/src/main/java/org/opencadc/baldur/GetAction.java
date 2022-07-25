@@ -170,7 +170,8 @@ public class GetAction extends RestAction {
         writer.write(grant, out);
         out.flush();
 
-        logInfo.setMessage(String.format("returned %s %s grant(s) for %s", grant.getGroups().size(), op, assetID));
+        logInfo.setMessage(String.format("%s grants: %s", op, grant.getGroups().size()));
+        logInfo.setResource(assetID);
     }
 
     /**

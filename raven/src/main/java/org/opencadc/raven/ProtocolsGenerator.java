@@ -128,6 +128,9 @@ public class ProtocolsGenerator {
     private final Map<URI, StorageSiteRule> siteRules;
     private final StorageResolver storageResolver;
     private final boolean preventNotFound;
+    
+    // for use by FilesAction subclasses
+    boolean storageResolverAdded = false;
 
 
     public ProtocolsGenerator(ArtifactDAO artifactDAO, File publicKeyFile, File privateKeyFile, String user,
@@ -373,6 +376,7 @@ public class ProtocolsGenerator {
                         proto.setEndpoint(externalURL.toString());
                         protos.add(proto);
                         log.debug("added external " + proto);
+                        storageResolverAdded = true;
                     }
                 }
             } catch (IllegalArgumentException ex) {

@@ -135,7 +135,7 @@ public class PermissionsCheck {
             List<ReadGrant> grants = Subject.doAs(ops, new GetReadGrantsAction(this.artifactURI, readGrantServices));
             for (ReadGrant g : grants) {
                 if (g.isAnonymousAccess()) {
-                    logInfo.setMessage("read grant: anonymous");
+                    logInfo.setGrant("read: anonymous");
                     return;
                 }
                 granted.addAll(g.getGroups());
@@ -162,7 +162,7 @@ public class PermissionsCheck {
                 for (GroupURI gg : granted) {
                     for (GroupURI userGroup : userGroups) {
                         if (gg.equals(userGroup)) {
-                            this.logInfo.setMessage("read grant: " + gg);
+                            this.logInfo.setGrant("read  " + gg);
                             return;
                         }
                     }
@@ -226,7 +226,7 @@ public class PermissionsCheck {
                 for (GroupURI gg : granted) {
                     for (GroupURI userGroup : userGroups) {
                         if (gg.equals(userGroup)) {
-                            this.logInfo.setMessage("write grant: " + gg);
+                            this.logInfo.setGrant("write: " + gg);
                             return;
                         }
                     }
