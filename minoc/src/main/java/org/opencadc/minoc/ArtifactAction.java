@@ -213,6 +213,8 @@ public abstract class ArtifactAction extends RestAction {
         return null;
     }
 
+    // override setLogInfo and setSyncInput so we can reset the path before START
+    // logging to not include the preauth-token (if present) but keep the artifact uri
     @Override
     public void setLogInfo(WebServiceLogInfo logInfo) {
         super.setLogInfo(logInfo);
@@ -224,7 +226,7 @@ public abstract class ArtifactAction extends RestAction {
     @Override
     public void setSyncInput(SyncInput syncInput) {
         super.setSyncInput(syncInput);
-        this.loggablePath = syncInput.getComponentPath();
+        this.loggablePath = syncInput.getContextPath() + syncInput.getComponentPath();
         parsePath();
         if (this.artifactURI != null && this.logInfo != null) {
             this.logInfo.setPath(this.loggablePath + "/" + this.artifactURI.toASCIIString());
@@ -260,23 +262,32 @@ public abstract class ArtifactAction extends RestAction {
                 subject.getPrincipals().add(new HttpPrincipal(tokenUser));
             }
             logInfo.setSubject(subject);
-            logInfo.setPath(syncInput.getContextPath() + syncInput.getComponentPath());
-        } else {
-            // augment subject (minoc is configured so augment is not done in rest library)
-            AuthenticationUtil.augmentSubject(subject);
-            logInfo.setSubject(subject);
             logInfo.setResource(artifactURI);
             logInfo.setPath(syncInput.getContextPath() + syncInput.getComponentPath());
-            PermissionsCheck permissionsCheck = new PermissionsCheck(artifactURI, authenticateOnly, logInfo);
-            // TODO: allowReadWithWriteGrant could be implemented here, but grant services are probably configured
-            // that way already so it's complexity that probably won't allow/enable any actions
             if (ReadGrant.class.isAssignableFrom(grantClass)) {
-                permissionsCheck.checkReadPermission(readGrantServices);
+                logInfo.setGrant("read: preauth-token");
             } else if (WriteGrant.class.isAssignableFrom(grantClass)) {
-                permissionsCheck.checkWritePermission(writeGrantServices);
+                logInfo.setGrant("write: preauth-token");
             } else {
                 throw new IllegalStateException("Unsupported grant class: " + grantClass);
             }
+            return;
+        }
+            
+        // augment subject (minoc is configured so augment is not done in rest library)
+        AuthenticationUtil.augmentSubject(subject);
+        logInfo.setSubject(subject);
+        logInfo.setResource(artifactURI);
+        logInfo.setPath(syncInput.getContextPath() + syncInput.getComponentPath());
+        PermissionsCheck permissionsCheck = new PermissionsCheck(artifactURI, authenticateOnly, logInfo);
+        // TODO: allowReadWithWriteGrant could be implemented here, but grant services are probably configured
+        // that way already so it's complexity that probably won't allow/enable any actions
+        if (ReadGrant.class.isAssignableFrom(grantClass)) {
+            permissionsCheck.checkReadPermission(readGrantServices);
+        } else if (WriteGrant.class.isAssignableFrom(grantClass)) {
+            permissionsCheck.checkWritePermission(writeGrantServices);
+        } else {
+            throw new IllegalStateException("Unsupported grant class: " + grantClass);
         }
     }
 
