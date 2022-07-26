@@ -147,7 +147,11 @@ public class GetFilesAction extends FilesAction {
             throw new ResourceNotFoundException("not available: " + artifactURI);
         }
 
+        URI ret = URI.create(protos.get(0).getEndpoint());
+        if (pg.storageResolverAdded && protos.size() == 1) {
+            logInfo.setMessage("external redirect: " + ret.toASCIIString());
+        }
         // for now return the first URL in the list
-        return URI.create(protos.get(0).getEndpoint());
+        return ret;
     }
 }

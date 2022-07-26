@@ -131,6 +131,7 @@ public class HeadFilesAction extends FilesAction {
                     if (externalURL != null) {
                         syncOutput.setCode(HttpURLConnection.HTTP_SEE_OTHER);
                         syncOutput.setHeader("Location", externalURL);
+                        logInfo.setMessage("external redirect: " + externalURL.toExternalForm());
                         return;
                     }
                 } catch (IllegalArgumentException e) {

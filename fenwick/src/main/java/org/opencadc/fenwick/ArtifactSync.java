@@ -152,6 +152,8 @@ public class ArtifactSync extends AbstractSync {
             }
         }
         final HarvestState harvestState = hs;
+        harvestStateDAO.setUpdateBufferCount(99); // buffer 99 updates, do every 100
+        harvestStateDAO.setMaintCount(999); // buffer 9999 do every 10000 real updates aka every 1e5 events
         
         final Date endTime = new Date();
         final Date lookBack = new Date(endTime.getTime() - LOOKBACK_TIME);
@@ -276,10 +278,13 @@ public class ArtifactSync extends AbstractSync {
                         }
                     }
                     
+                    transactionManager.commitTransaction();
+                    
+                    // update state outside transaction because experimental maintenance enabled
                     harvestState.curLastModified = harvestedLastModified;
                     harvestState.curID = artifact.getID();
                     harvestStateDAO.put(harvestState);
-                    transactionManager.commitTransaction();
+                    
                     log.debug("END: Process Artifact " + artifact.getID() + " " + artifact.getURI());
                 } catch (Exception exception) {
                     if (transactionManager.isOpen()) {
@@ -299,8 +304,10 @@ public class ArtifactSync extends AbstractSync {
                 }
                 logSummary(Artifact.class);
             }
+        } finally {
+            harvestStateDAO.flushBufferedState();
+            logSummary(Artifact.class, true);
         }
-        logSummary(Artifact.class, true);
     }
     
     // true if remote is the winner, false if local is the winner

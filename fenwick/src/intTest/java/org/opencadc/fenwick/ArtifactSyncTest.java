@@ -122,12 +122,12 @@ public class ArtifactSyncTest {
     
     @Test
     public void runAllArtifactsNoTrackSiteLocations() throws Exception {
-        doAllArtifacts(false);
+        doAllArtifacts(false); // global -> site
     }
 
     @Test
     public void runAllArtifactsTrackSiteLocations() throws Exception {
-        doAllArtifacts(true);
+        doAllArtifacts(true); // site -> global
     }
     
     // track==true:  harvest site to global -- site setup, global asserts
@@ -158,9 +158,15 @@ public class ArtifactSyncTest {
         
         StorageLocation storLoc2 = new StorageLocation(URI.create("cadc:TEST/location/2"));
         if (track) {
+            // luskan at storage site
             a1.storageLocation = new StorageLocation(URI.create("cadc:TEST/location/1"));
             a2.storageLocation = storLoc2;
             a3.storageLocation = new StorageLocation(URI.create("cadc:TEST/location/3"));
+        } else {
+            // luskan at global
+            a1.siteLocations.add(sloc2);
+            a2.siteLocations.add(sloc2);
+            a3.siteLocations.add(sloc2);
         }
 
         luskanEnvironment.artifactDAO.put(a1);
@@ -177,6 +183,7 @@ public class ArtifactSyncTest {
             inventoryEnvironment.artifactDAO.put(a2);
         } else {
             // storage: check preserve storageLocation with a2
+            a2.siteLocations.clear();
             a2.storageLocation = new StorageLocation(URI.create("cadc:TEST/location/2"));
             inventoryEnvironment.artifactDAO.put(a2);
         }

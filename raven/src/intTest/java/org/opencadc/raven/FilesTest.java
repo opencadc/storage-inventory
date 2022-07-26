@@ -287,7 +287,7 @@ public class FilesTest extends RavenTest {
             });
 
             // test HEAD works for files available externally
-            final URI externalURI = URI.create("mast::HST/product/iem13occq_trl.fits");
+            final URI externalURI = URI.create("mast:FOO/product/no-such-file.fits");
             Subject.doAs(userSubject, new PrivilegedExceptionAction<Object>() {
                 public Object run() throws Exception {
                     String au = externalURI.toASCIIString();
@@ -296,7 +296,7 @@ public class FilesTest extends RavenTest {
                     request.setHeadOnly(true);
                     request.run();
                     Assert.assertEquals("HEAD response code", 303, request.getResponseCode());
-                    Assert.assertTrue("Location", request.getResponseHeader("Location").contains("stsci"));
+                    Assert.assertTrue("Location", request.getResponseHeader("Location").contains("stsci.edu"));
                     return null;
                 }
             });

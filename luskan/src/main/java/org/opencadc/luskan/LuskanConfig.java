@@ -91,6 +91,9 @@ public class LuskanConfig {
     public static final String TMPDIR_KEY = LUSKAN_KEY + ".resultsDir";
     public static final String STORAGE_SITE_KEY = LUSKAN_KEY + ".isStorageSite";
     public static final String ALLOWED_GROUP = LUSKAN_KEY + ".allowedGroup";
+    
+    // dev use only
+    public static final String DISABLE_FILTERS = LUSKAN_KEY + ".disableQueryFilters";
 
     public LuskanConfig() {
 
