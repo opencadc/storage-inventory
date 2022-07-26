@@ -127,8 +127,8 @@ public class PartialReadInputStream extends InputStream {
             return -1; // EOF
         }
         long endPos = cur.getOffset() + cur.getLength();
-        int remainingBytes = (int) (endPos - file.getFilePointer());
-        int num = Math.min(len, remainingBytes);
+        long remainingBytes = endPos - file.getFilePointer();
+        int num = (int) Math.min(len, remainingBytes);
         return file.read(bytes, offset, num);
     }
     
