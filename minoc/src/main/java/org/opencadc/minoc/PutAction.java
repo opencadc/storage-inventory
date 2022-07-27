@@ -166,7 +166,7 @@ public class PutAction extends ArtifactAction {
             if (txnID != null) {
                 throw new IllegalArgumentException(PUT_TXN_OP + "=" + txnOP + " cannot include " + PUT_TXN_ID + "=" + txnID);
             }
-            if (totalLength == null && contentLength != null) {
+            if (totalLength == null && contentLength != null && contentLength.longValue() != 0) {
                 totalLength = contentLength;
             }
             PutTransaction t = storageAdapter.startTransaction(artifactURI, totalLength);
