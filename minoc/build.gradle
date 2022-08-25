@@ -41,6 +41,7 @@ dependencies {
     compile 'org.opencadc:cadc-gms:[1.0,)'
     
     compile 'org.opencadc:nom-tam-fits:1.16.4'
+    compile 'org.opencadc:cadc-data-ops-fits:0.2.5'
 
     testCompile 'junit:junit:[4.0,)'
     testCompile 'org.opencadc:cadc-storage-adapter-fs:[0.8.3,)'
