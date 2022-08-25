@@ -193,6 +193,7 @@ public class PostAction extends ArtifactAction {
             
             syncOutput.setCode(202); // Accepted
             HeadAction.setHeaders(existing, syncOutput);
+            syncOutput.setHeader("content-length", 0);
         } catch (Exception e) {
             log.error("failed to persist " + artifactURI, e);
             txnMgr.rollbackTransaction();
