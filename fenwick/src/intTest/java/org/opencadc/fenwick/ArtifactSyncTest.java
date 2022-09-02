@@ -315,11 +315,15 @@ public class ArtifactSyncTest {
     }
     
     @Test
-    public void testCollisions() throws Exception {
-        log.info("testCollisions - START");
+    public void testCollisionsInGlobal() throws Exception {
+        log.info("testCollisionsInGlobal - START");
+        
+        final SiteLocation oldSiteLocation = new SiteLocation(UUID.randomUUID());
         
         StorageSite expectedSite = new StorageSite(URI.create("cadc:TEST/siteone"), "Test Site", true, false);
         luskanEnvironment.storageSiteDAO.put(expectedSite);
+        inventoryEnvironment.storageSiteDAO.put(expectedSite); // harvested to global
+        final SiteLocation newSiteLocation = new SiteLocation(expectedSite.getID());
         
         // create an Artifact.uri collision where existing artifact is newer and harvested gets skipped
         final Artifact artifactCollision1 = new Artifact(URI.create("cadc:TEST/collision1"), TestUtil.getRandomMD5(), new Date(), 78787L);
@@ -328,6 +332,7 @@ public class ArtifactSyncTest {
         
         Date newerCLM = new Date(artifactCollision1.getContentLastModified().getTime() + 20000L);
         final Artifact artifactCollisionKeeper1 = new Artifact(URI.create("cadc:TEST/collision1"), TestUtil.getRandomMD5(), newerCLM, 78787L);
+        artifactCollisionKeeper1.siteLocations.add(oldSiteLocation);
         inventoryEnvironment.artifactDAO.put(artifactCollisionKeeper1);
         Thread.sleep(20L);
         
@@ -338,7 +343,7 @@ public class ArtifactSyncTest {
         
         Date olderCLM = new Date(artifactCollisionKeeper2.getContentLastModified().getTime() - 20000L);
         final Artifact artifactCollision2 = new Artifact(URI.create("cadc:TEST/collision2"), TestUtil.getRandomMD5(), olderCLM, 78787L);
-        luskanEnvironment.artifactDAO.put(artifactCollisionKeeper2);
+        artifactCollision2.siteLocations.add(oldSiteLocation);
         inventoryEnvironment.artifactDAO.put(artifactCollision2);
         Thread.sleep(20L);
         
@@ -353,24 +358,91 @@ public class ArtifactSyncTest {
         // artifactCollision1 vs artifactCollisionKeeper1
         Assert.assertNull("artifactCollision1 should have been skipped", 
                 inventoryEnvironment.artifactDAO.get(artifactCollision1.getID()));
-        Assert.assertNotNull("artifactCollisionKeeper1 should have been retained", 
-                inventoryEnvironment.artifactDAO.get(artifactCollisionKeeper1.getID()));
+        Artifact kept = inventoryEnvironment.artifactDAO.get(artifactCollisionKeeper1.getID());
+        Assert.assertNotNull("artifactCollisionKeeper1 should have been retained", kept);
+        Assert.assertEquals("kept 1 SiteLocation", 1, kept.siteLocations.size());
+        Assert.assertEquals("kept SiteLocation", oldSiteLocation.getSiteID(), kept.siteLocations.iterator().next().getSiteID());
+        
         
         // artifactCollision2 vs artifactCollisionKeeper2
         Assert.assertNull("artifactCollision2 should have been removed", 
                 inventoryEnvironment.artifactDAO.get(artifactCollision2.getID()));
         Assert.assertNotNull("artifactCollision2 DeletedArtifactEvent should have been created", 
                 inventoryEnvironment.deletedArtifactEventDAO.get(artifactCollision2.getID()));
-        Assert.assertNotNull("artifactCollisionKeeper2 should have been retained", 
-                inventoryEnvironment.artifactDAO.get(artifactCollisionKeeper2.getID()));
+        Artifact actual = inventoryEnvironment.artifactDAO.get(artifactCollisionKeeper2.getID());
+        Assert.assertNotNull("artifactCollisionKeeper2 should have been retained", actual);
+        Assert.assertEquals("expect 1 SiteLocation", 1, actual.siteLocations.size());
+        Assert.assertEquals("expected SiteLocation", newSiteLocation.getSiteID(), actual.siteLocations.iterator().next().getSiteID());
         
-        log.info("testCollisions - IDEMPOTENT");
+        log.info("testCollisionsInGlobal - IDEMPOTENT");
         
         Subject.doAs(this.testUser, (PrivilegedExceptionAction<Object>) () -> {
             testSubject.doit();
             return null;
         });
         
-        log.info("testCollisions - DONE");
+        log.info("testCollisionsInGlobal - DONE");
+    }
+    
+    @Test
+    public void testCollisionsInSite() throws Exception {
+        log.info("testCollisionsInSite - START");
+        
+        final StorageLocation oldStorageLocation = new StorageLocation(URI.create("id:123"));
+        
+        // create an Artifact.uri collision where existing artifact is newer and harvested gets skipped
+        final Artifact artifactCollision1 = new Artifact(URI.create("cadc:TEST/collision1"), TestUtil.getRandomMD5(), new Date(), 78787L);
+        artifactCollision1.storageLocation = new StorageLocation(URI.create("foo:bar/baz"));
+        luskanEnvironment.artifactDAO.put(artifactCollision1);
+        
+        Date newerCLM = new Date(artifactCollision1.getContentLastModified().getTime() + 20000L);
+        final Artifact artifactCollisionKeeper1 = new Artifact(URI.create("cadc:TEST/collision1"), TestUtil.getRandomMD5(), newerCLM, 78787L);
+        artifactCollisionKeeper1.storageLocation = oldStorageLocation;
+        inventoryEnvironment.artifactDAO.put(artifactCollisionKeeper1);
+        Thread.sleep(20L);
+        
+        // create an Artifact.uri collision where existing artifact is older and harvested gets applied
+        final Artifact artifactCollisionKeeper2 = new Artifact(URI.create("cadc:TEST/collision2"), TestUtil.getRandomMD5(), new Date(), 78787L);
+        artifactCollisionKeeper2.storageLocation = new StorageLocation(URI.create("foo:bar/baz2"));
+        luskanEnvironment.artifactDAO.put(artifactCollisionKeeper2);
+        
+        Date olderCLM = new Date(artifactCollisionKeeper2.getContentLastModified().getTime() - 20000L);
+        final Artifact artifactCollision2 = new Artifact(URI.create("cadc:TEST/collision2"), TestUtil.getRandomMD5(), olderCLM, 78787L);
+        artifactCollision2.storageLocation = oldStorageLocation;
+        inventoryEnvironment.artifactDAO.put(artifactCollision2);
+        Thread.sleep(20L);
+        
+        final ArtifactSync testSubject = new ArtifactSync(inventoryEnvironment.artifactDAO, 
+                TestUtil.LUSKAN_URI, 6, 6, new AllArtifacts(), null);
+        
+        Subject.doAs(this.testUser, (PrivilegedExceptionAction<Object>) () -> {
+            testSubject.doit();
+            return null;
+        });
+        
+        // artifactCollision1 vs artifactCollisionKeeper1
+        Assert.assertNull("artifactCollision1 should have been skipped", 
+                inventoryEnvironment.artifactDAO.get(artifactCollision1.getID()));
+        Artifact kept = inventoryEnvironment.artifactDAO.get(artifactCollisionKeeper1.getID());
+        Assert.assertNotNull("artifactCollisionKeeper1 should have been retained", kept);
+        Assert.assertEquals("retained storageLocation", oldStorageLocation, kept.storageLocation);
+        
+        // artifactCollision2 vs artifactCollisionKeeper2
+        Assert.assertNull("artifactCollision2 should have been removed", 
+                inventoryEnvironment.artifactDAO.get(artifactCollision2.getID()));
+        Assert.assertNotNull("artifactCollision2 DeletedArtifactEvent should have been created", 
+                inventoryEnvironment.deletedArtifactEventDAO.get(artifactCollision2.getID()));
+        Artifact actual = inventoryEnvironment.artifactDAO.get(artifactCollisionKeeper2.getID());
+        Assert.assertNotNull("artifactCollisionKeeper2 should have been retained", actual);
+        Assert.assertNull("storageLocation cleared", actual.storageLocation);
+        
+        log.info("testCollisionsInSite - IDEMPOTENT");
+        
+        Subject.doAs(this.testUser, (PrivilegedExceptionAction<Object>) () -> {
+            testSubject.doit();
+            return null;
+        });
+        
+        log.info("testCollisionsInSite - DONE");
     }
 }

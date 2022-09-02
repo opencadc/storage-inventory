@@ -244,6 +244,7 @@ public class ArtifactSync extends AbstractSync {
                                     + " contentLastModified=" + df.format(currentArtifact.getContentLastModified())
                                     + " reason=resolve-collision");
                             artifactDAO.delete(currentArtifact.getID());
+                            currentArtifact = null;
                         } else {
                             log.info("ArtifactSync.skipArtifact id=" + artifact.getID() 
                                     + " uri=" + artifact.getURI() 
