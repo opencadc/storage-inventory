@@ -1,4 +1,4 @@
-FROM cadc-tomcat
+FROM cadc-tomcat:1
 
 RUN dnf install -y wcslib && dnf clean all
 
