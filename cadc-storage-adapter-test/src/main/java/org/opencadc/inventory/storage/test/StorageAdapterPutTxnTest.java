@@ -95,6 +95,8 @@ import org.opencadc.inventory.storage.StorageMetadata;
 public class StorageAdapterPutTxnTest {
     private static final Logger log = Logger.getLogger(StorageAdapterPutTxnTest.class);
 
+    public static final String TEST_NAMESPACE = "test:";
+    
     static {
         Log4jInit.setLevel("org.opencadc.inventory.storage", Level.INFO);
     }
@@ -117,7 +119,7 @@ public class StorageAdapterPutTxnTest {
             URI expectedChecksum = URI.create("md5:" + HexUtil.toHex(md.digest()));
             long expectedLength = data.length;
             
-            URI uri = URI.create("cadc:TEST/testIncorrectURI");
+            URI uri = URI.create(TEST_NAMESPACE + "TEST/testIncorrectURI");
             NewArtifact newArtifact = new NewArtifact(uri);
             newArtifact.contentChecksum = expectedChecksum;
             newArtifact.contentLength = expectedLength;
@@ -147,7 +149,7 @@ public class StorageAdapterPutTxnTest {
             Assert.assertEquals("length", data.length, txnMeta1.getContentLength().longValue());
 
             // write part 2  
-            URI uri2 = URI.create("cadc:TEST/testIncorrectURI-diff");
+            URI uri2 = URI.create(TEST_NAMESPACE + "TEST/testIncorrectURI-diff");
             NewArtifact newArtifact2 = new NewArtifact(uri2);
             newArtifact.contentChecksum = expectedChecksum;
             newArtifact.contentLength = expectedLength;
@@ -173,7 +175,7 @@ public class StorageAdapterPutTxnTest {
         try {
             String dataString = "abcdefghijklmnopqrstuvwxyz\n";
             byte[] data = dataString.getBytes();
-            URI uri = URI.create("cadc:TEST/testPutTransactionCommit");
+            URI uri = URI.create(TEST_NAMESPACE + "TEST/testPutTransactionCommit");
             final NewArtifact newArtifact = new NewArtifact(uri);
             newArtifact.contentLength = (long) data.length;
             final ByteArrayInputStream source = new ByteArrayInputStream(data);
@@ -238,13 +240,13 @@ public class StorageAdapterPutTxnTest {
         try {
             String dataString = "abcdefghijklmnopqrstuvwxyz\n";
             byte[] data = dataString.getBytes();
-            URI uri = URI.create("cadc:TEST/testPutTransactionAbort");
+            URI uri = URI.create(TEST_NAMESPACE + "TEST/testPutTransactionAbort");
             final NewArtifact newArtifact = new NewArtifact(uri);
             newArtifact.contentLength = (long) data.length;
             final ByteArrayInputStream source = new ByteArrayInputStream(data);
             
             log.info("init");
-            final Long contentLength = new Long(data.length);
+            final Long contentLength = (long) data.length;
             PutTransaction txn = adapter.startTransaction(uri, contentLength);
             Assert.assertNotNull(txn);
             log.info("startTransaction: " + txn);
@@ -309,7 +311,7 @@ public class StorageAdapterPutTxnTest {
             final URI expectedChecksum = URI.create("md5:" + HexUtil.toHex(md.digest()));
             final long expectedLength = data.length;
             
-            final URI uri = URI.create("cadc:TEST/testPutResumeCommit");
+            final URI uri = URI.create(TEST_NAMESPACE + "TEST/testPutResumeCommit");
             Long knownLengthVal = null;
             if (knownLength) {
                 knownLengthVal = expectedLength;
@@ -430,7 +432,7 @@ public class StorageAdapterPutTxnTest {
             final long expectedLength = data.length;
             log.info("testPutFailResumeCommit expected: " + expectedLength + " " + expectedChecksum + "\n" + dataString);
             
-            URI uri = URI.create("cadc:TEST/testPutFailResumeCommit");
+            URI uri = URI.create(TEST_NAMESPACE + "TEST/testPutFailResumeCommit");
             NewArtifact newArtifact = new NewArtifact(uri);
             newArtifact.contentChecksum = expectedChecksum;
             newArtifact.contentLength = expectedLength;
@@ -565,7 +567,7 @@ public class StorageAdapterPutTxnTest {
             final long expectedLength = data.length;
             log.info("expected2: " + data.length + " " + expectedChecksum2);
             
-            URI uri = URI.create("cadc:TEST/testPutRevertPesumeCommit");
+            URI uri = URI.create(TEST_NAMESPACE + "TEST/testPutRevertPesumeCommit");
             NewArtifact newArtifact = new NewArtifact(uri);
             newArtifact.contentChecksum = expectedChecksum2;
             newArtifact.contentLength = expectedLength;

@@ -107,6 +107,8 @@ import org.opencadc.inventory.storage.StorageMetadata;
 public abstract class StorageAdapterByteRangeTest {
     private static final Logger log = Logger.getLogger(StorageAdapterByteRangeTest.class);
 
+    public static final String TEST_NAMESPACE = "test:";
+    
     static {
         Log4jInit.setLevel("org.opencadc.inventory.storage", Level.INFO);
     }
@@ -130,7 +132,7 @@ public abstract class StorageAdapterByteRangeTest {
     
     private void doFullRead(int mib, long datalen) {
         try {
-            URI artifactURI = URI.create("test:path/file");
+            URI artifactURI = URI.create(TEST_NAMESPACE + "path/file");
             NewArtifact newArtifact = new NewArtifact(artifactURI);
             InputStream istream = getInputStreamOfRandomBytes(datalen);
 
@@ -223,7 +225,7 @@ public abstract class StorageAdapterByteRangeTest {
     
     public void doReadPattern(int mib, long datalen, int[] readOrder) {
         try {
-            URI artifactURI = URI.create("test:path/file");
+            URI artifactURI = URI.create(TEST_NAMESPACE + "path/file");
             NewArtifact newArtifact = new NewArtifact(artifactURI);
             InputStream istream = getInputStreamOfRandomBytes(datalen);
 
