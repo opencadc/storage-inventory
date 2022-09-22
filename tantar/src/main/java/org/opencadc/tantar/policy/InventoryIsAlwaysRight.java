@@ -110,16 +110,16 @@ public class InventoryIsAlwaysRight extends ResolutionPolicy {
             if (delayAction(storageMetadata.getContentLastModified())) {
                 // delay cleanup in case the object was stored since we started validating
                 sb.append(".delayAction");
+                sb.append(" Artifact.uri=").append(storageMetadata.artifactURI);
                 sb.append(" loc=").append(storageMetadata.getStorageLocation());
                 sb.append(" reason=no-matching-artifact");
-                //reporter.report("Removing Unknown File " + storageMetadata.getStorageLocation() + " as per policy.");
                 reporter.report(sb.toString());
                 validateEventListener.delayAction();
             } else {
                 sb.append(".deleteStorageLocation");
+                sb.append(" Artifact.uri=").append(storageMetadata.artifactURI);
                 sb.append(" loc=").append(storageMetadata.getStorageLocation());
                 sb.append(" reason=no-matching-artifact");
-                //reporter.report("Removing Unknown File " + storageMetadata.getStorageLocation() + " as per policy.");
                 reporter.report(sb.toString());
                 validateEventListener.delete(storageMetadata);
             }
@@ -144,11 +144,9 @@ public class InventoryIsAlwaysRight extends ResolutionPolicy {
                 sb.append(" Artifact.uri=").append(artifact.getURI());
                 sb2.append(" loc=").append(storageMetadata.getStorageLocation());
                 sb2.append(" reason=invalid-storageLocation");
-                //reporter.report("Invalid Storage Metadata (" + storageMetadata.getStorageLocation() + "). Replacing as per policy.");
                 reporter.report(sb2.toString());
                 validateEventListener.delete(storageMetadata);
             }
-            //reporter.report("Resetting Artifact " + artifact.storageLocation + " as per policy.");
             reporter.report(sb.toString());
             validateEventListener.clearStorageLocation(artifact);
             return;
@@ -161,7 +159,6 @@ public class InventoryIsAlwaysRight extends ResolutionPolicy {
             sb.append(" Artifact.uri=").append(artifact.getURI());
             sb.append(" loc=").append(artifact.storageLocation);
             sb.append(" reason=metadata");
-            //reporter.report("Replacing File " + storageMetadata.getStorageLocation() + " as per policy.");
             reporter.report(sb.toString());
             validateEventListener.clearStorageLocation(artifact);
 
@@ -181,7 +178,7 @@ public class InventoryIsAlwaysRight extends ResolutionPolicy {
         sb.append(" Artifact.id=").append(artifact.getID());
         sb.append(" Artifact.uri=").append(artifact.getURI());
         sb.append(" loc=").append(artifact.storageLocation);
-        //reporter.report("Artifact " + artifact.storageLocation + " is valid as per policy.");
+        // valid gets logged at debug (so probably not)
         log.debug(sb.toString());
     }
 }
