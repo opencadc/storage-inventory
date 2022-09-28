@@ -71,8 +71,14 @@ package org.opencadc.baldur;
 
 import ca.nrc.cadc.vosi.Availability;
 import ca.nrc.cadc.vosi.AvailabilityPlugin;
+
 import org.apache.log4j.Logger;
 
+/**
+ * VOSI availability plugin.
+ * 
+ * @author pdowler
+ */
 public class ServiceAvailability implements AvailabilityPlugin {
 
     private static final Logger log = Logger.getLogger(ServiceAvailability.class);
@@ -89,16 +95,29 @@ public class ServiceAvailability implements AvailabilityPlugin {
 
     @Override
     public boolean heartbeat() {
+        try {
+            // read config
+            new PermissionsConfig();
+        } catch (IllegalArgumentException ex) {
+            log.error("invalid config: " + ex.getMessage(), ex);
+            return false;
+        }
         return true;
     }
 
     public Availability getStatus() {
-        boolean b = heartbeat();
         String note = "service is accepting queries";
-        if (!b) {
-            note = "service is not accepting queries";
+        boolean avail = true;
+        try {
+            // read config
+            new PermissionsConfig();
+        } catch (IllegalStateException ex) {
+            log.error("invalid config: " + ex.getMessage(), ex);
+            note = "invalid config: " + ex.getMessage();
+            avail = false;
         }
-        return new Availability(b, note);
+        
+        return new Availability(avail, note);
     }
 
     @Override
