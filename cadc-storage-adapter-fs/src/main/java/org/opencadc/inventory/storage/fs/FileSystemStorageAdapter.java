@@ -380,15 +380,15 @@ public class FileSystemStorageAdapter implements StorageAdapter {
             }
 
             // create this before committing the file so constraints applied
-            StorageMetadata test = new StorageMetadata(storageLocation, checksum, length, new Date());
+            StorageMetadata test = new StorageMetadata(storageLocation, artifactURI, checksum, length, new Date());
                 
             // to atomic copy into content directory
             Path result = Files.move(txnTarget, contentTarget, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
             log.debug("moved file to : " + contentTarget);
             txnTarget = null;
 
-            StorageMetadata metadata = new StorageMetadata(storageLocation, checksum, length, new Date(Files.getLastModifiedTime(result).toMillis()));
-            metadata.artifactURI = artifactURI;
+            StorageMetadata metadata = new StorageMetadata(storageLocation, artifactURI, 
+                    checksum, length, new Date(Files.getLastModifiedTime(result).toMillis()));
             return metadata;
             
         } catch (ReadException | WriteException | IllegalArgumentException
@@ -421,8 +421,17 @@ public class FileSystemStorageAdapter implements StorageAdapter {
     @Override
     public void delete(StorageLocation storageLocation)
         throws ResourceNotFoundException, IOException, StorageEngageException, TransientException {
+        delete(storageLocation, false);
+    }
+    
+    @Override
+    public void delete(StorageLocation storageLocation, boolean includeRecoverable)
+        throws ResourceNotFoundException, IOException, StorageEngageException, TransientException {
         InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "storageLocation", storageLocation);
         Path path = createStorageLocationPath(storageLocation);
+        if (!Files.exists(path)) {
+            throw new ResourceNotFoundException("not found: " + storageLocation);
+        }
         Files.delete(path);
     }
 
@@ -467,47 +476,15 @@ public class FileSystemStorageAdapter implements StorageAdapter {
         throws StorageEngageException, TransientException {
         throw new UnsupportedOperationException("sorted iteration not supported");
     }
-    
-    private SortedSet<StorageMetadata> list(String storageBucket)
-        throws StorageEngageException, TransientException {
-        StringBuilder path = new StringBuilder();
-        int bucketDepth = 0;
-        String fixedParentDir = null;
-        
-        if (storageBucket != null && storageBucket.length() > 0) {
-            try {
-                URI test = new URI(storageBucket + "/file");
-                InventoryUtil.validateArtifactURI(FileSystemStorageAdapter.class, test);
-            } catch (URISyntaxException | IllegalArgumentException e) {
-                throw new IllegalArgumentException("bucket must be in the form 'scheme:path'");
-            }
 
-            path.append(storageBucket);
-        }
-        if (path.length() > 0) {
-            fixedParentDir = path.toString();
-        }
-                
-        try {
-            log.debug("resolving path: " + path.toString());
-            Path bucketPath = contentPath.resolve(path.toString());
-            log.debug("bucketPath: " + bucketPath);
-            log.debug("exists: " + Files.exists(bucketPath));
-            log.debug("isDir: " + Files.isDirectory(bucketPath));
-            if (!Files.exists(bucketPath) || !Files.isDirectory(bucketPath)) {
-                throw new IllegalArgumentException("Invalid bucket: " + storageBucket);
-            }
-            Iterator<StorageMetadata> iter = new FileSystemIterator(bucketPath, bucketDepth, fixedParentDir);
-            SortedSet<StorageMetadata> ret = new TreeSet<>();
-            while (iter.hasNext()) {
-                ret.add(iter.next());
-            }
-            return ret;
-        } catch (IOException e) {
-            throw new StorageEngageException("failed to obtain iterator", e);
-        } catch (InvalidPathException e) {
-            throw new IllegalArgumentException("Invalid bucket: " + storageBucket);
-        }   
+    @Override
+    public Iterator<StorageMetadata> iterator(String storageBucketPrefix, boolean includeRecoverable) throws StorageEngageException, TransientException {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public Iterator<PutTransaction> transactionIterator() throws StorageEngageException, TransientException {
+        throw new UnsupportedOperationException();
     }
     
     private StorageLocation createStorageLocation(URI artifactURI) {

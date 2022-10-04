@@ -138,4 +138,21 @@ public class Namespace {
         return artifactURI.toASCIIString().startsWith(this.namespace);
     }
 
+    @Override
+    public String toString() {
+        return "Namespace[" + namespace + "]";
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        Namespace rhs = (Namespace) obj;
+        return namespace.equals(rhs.namespace);
+    }
+
+    @Override
+    public int hashCode() {
+        return toString().hashCode();
+    }
+
+    
 }

@@ -75,8 +75,10 @@ import ca.nrc.cadc.net.IncorrectContentLengthException;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.util.HexUtil;
+import ca.nrc.cadc.util.InvalidConfigException;
 import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.util.PropertiesReader;
+
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -98,17 +100,20 @@ import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.UserDefinedFileAttributeView;
 import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.Iterator;
+import java.util.List;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.UUID;
+
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.InventoryUtil;
+import org.opencadc.inventory.Namespace;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.storage.ByteRange;
 import org.opencadc.inventory.storage.DigestOutputStream;
-import org.opencadc.inventory.storage.InvalidConfigException;
 import org.opencadc.inventory.storage.MessageDigestAPI;
 import org.opencadc.inventory.storage.NewArtifact;
 import org.opencadc.inventory.storage.PutTransaction;
@@ -131,7 +136,7 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
     public static final String CONFIG_FILE = "cadc-storage-adapter-fs.properties";
     public static final String CONFIG_PROPERTY_ROOT = OpaqueFileSystemStorageAdapter.class.getPackage().getName() + ".baseDir";
     public static final String CONFIG_PROPERTY_BUCKET_LENGTH = OpaqueFileSystemStorageAdapter.class.getName() + ".bucketLength";
-
+    public static final String CONFIG_PRESERVE = OpaqueFileSystemStorageAdapter.class.getName() + ".preserveNamespace";
     public static final int MAX_BUCKET_LENGTH = 7;
             
     static final String ARTIFACTID_ATTR = "artifactID";
@@ -152,9 +157,12 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
     private static final String PREV_DIGEST_ATTR = "prevDigest";
     private static final String PREV_LENGTH_ATTR = "prevLength";
     
+    private static final String DELETED_PRESERVED = "deleted-preserved";
+    
     final Path txnPath;
     final Path contentPath;
     private final int bucketLength;
+    private final List<Namespace> preservationNamespaces = new ArrayList<>();
 
     public OpaqueFileSystemStorageAdapter() throws InvalidConfigException {
         PropertiesReader pr = new PropertiesReader(CONFIG_FILE);
@@ -184,6 +192,16 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
         }
         this.bucketLength = bucketLen;
         
+        List<String> preserve = props.getProperty(CONFIG_PRESERVE);
+        for (String s : preserve) {
+            try {
+                Namespace ns = new Namespace(s);
+                this.preservationNamespaces.add(ns);
+            } catch (IllegalArgumentException ex) {
+                throw new InvalidConfigException("invalid namespace: " + s, ex);
+            }
+        }
+        
         FileSystem fs = FileSystems.getDefault();
         Path root = fs.getPath(rootVal);
         this.contentPath = root.resolve(CONTENT_FOLDER);
@@ -192,7 +210,9 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
         init(root);
     }
 
-    public OpaqueFileSystemStorageAdapter(File rootDirectory, int bucketLen) throws InvalidConfigException {
+    // for intTest code
+    public OpaqueFileSystemStorageAdapter(File rootDirectory, int bucketLen) 
+            throws InvalidConfigException {
 
         InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "rootDirectory", rootDirectory);
 
@@ -200,13 +220,22 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
             throw new InvalidConfigException(CONFIG_PROPERTY_BUCKET_LENGTH + " must be in [1," + MAX_BUCKET_LENGTH + "], found " + bucketLen);
         }
         this.bucketLength = bucketLen;
-
+        
         FileSystem fs = FileSystems.getDefault();
         Path root = fs.getPath(rootDirectory.getAbsolutePath());
         this.contentPath = root.resolve(CONTENT_FOLDER);
         this.txnPath = root.resolve(TXN_FOLDER);
         
         init(root);
+    }
+    
+    OpaqueFileSystemStorageAdapter(File rootDirectory, int bucketLen, List<String> preserve) 
+            throws InvalidConfigException {
+        this(rootDirectory, bucketLen);
+        
+        for (String s : preserve) {
+            this.preservationNamespaces.add(new Namespace(s));
+        }
     }
 
     private void init(Path root) throws InvalidConfigException {
@@ -254,14 +283,23 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
         if (!Files.exists(path)) {
             throw new ResourceNotFoundException("not found: " + storageLocation);
         }
+        try {
+            String delAttr = getFileAttribute(path, DELETED_PRESERVED);
+            if ("true".equals(delAttr)) {
+                log.debug("skip " + DELETED_PRESERVED + ": " + storageLocation);
+                throw new ResourceNotFoundException("not found: " + storageLocation);
+            }
+        } catch (IOException ex) {
+            throw new StorageEngageException("failed to read attributes for stored file: " + storageLocation, ex);
+        }
         if (!Files.isRegularFile(path)) {
             throw new IllegalArgumentException("not a file: " + storageLocation);
         }
         InputStream source = null;
         try {
             source = Files.newInputStream(path, StandardOpenOption.READ);
-        } catch (IOException e) {
-            throw new StorageEngageException("failed to create input stream for stored file: " + storageLocation, e);
+        } catch (IOException ex) {
+            throw new StorageEngageException("failed to create input stream for stored file: " + storageLocation, ex);
         }
 
         MultiBufferIO io = new MultiBufferIO(CIRC_BUFFERS, CIRC_BUFFERSIZE);
@@ -284,9 +322,20 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
         if (!Files.exists(path)) {
             throw new ResourceNotFoundException("not found: " + storageLocation);
         }
+        try {
+            String delAttr = getFileAttribute(path, DELETED_PRESERVED);
+            if ("true".equals(delAttr)) {
+                log.debug("skip " + DELETED_PRESERVED + ": " + storageLocation);
+                throw new ResourceNotFoundException("not found: " + storageLocation);
+            }
+        } catch (IOException ex) {
+            throw new StorageEngageException("failed to read attributes for stored file: " + storageLocation, ex);
+        }
+        
         if (!Files.isRegularFile(path)) {
             throw new IllegalArgumentException("not a file: " + storageLocation);
         }
+        
         InputStream source = null;
         try {
             if (byteRange != null) {
@@ -297,8 +346,8 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
             } else {
                 source = Files.newInputStream(path, StandardOpenOption.READ);
             }
-        } catch (IOException e) {
-            throw new StorageEngageException("failed to create input stream for stored file: " + storageLocation, e);
+        } catch (IOException ex) {
+            throw new StorageEngageException("failed to create input stream for stored file: " + storageLocation, ex);
         }
         
         MultiBufferIO io = new MultiBufferIO(CIRC_BUFFERS, CIRC_BUFFERSIZE);
@@ -464,14 +513,13 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
                     return new StorageMetadata(storageLocation);
                 }
                 // current state
-                return new StorageMetadata(storageLocation, checksum, curLength,
-                        new Date(Files.getLastModifiedTime(txnTarget).toMillis()));
+                return new StorageMetadata(storageLocation, newArtifact.getArtifactURI(),
+                        checksum, curLength, new Date(Files.getLastModifiedTime(txnTarget).toMillis()));
             }
 
             // create this before committing the file so constraints applied
-            StorageMetadata metadata = new StorageMetadata(storageLocation, checksum, curLength,
-                    new Date(Files.getLastModifiedTime(txnTarget).toMillis()));
-            metadata.artifactURI = newArtifact.getArtifactURI();
+            StorageMetadata metadata = new StorageMetadata(storageLocation, newArtifact.getArtifactURI(),
+                    checksum, curLength, new Date(Files.getLastModifiedTime(txnTarget).toMillis()));
             
             StorageMetadata ret = commit(metadata, txnTarget);
             txnTarget = null;
@@ -563,7 +611,7 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
                 URI checksum = URI.create(md.getAlgorithmName() + ":" + md5Val);
                 setFileAttribute(txnFile, CHECKSUM_ATTR, checksum.toASCIIString());
                 
-                StorageMetadata ret = createStorageMetadata(txnPath, txnFile);
+                StorageMetadata ret = createStorageMetadata(txnPath, txnFile, false);
                 // txnPath does not have bucket dirs
                 ret.getStorageLocation().storageBucket = InventoryUtil.computeBucket(ret.getStorageLocation().getStorageID(), bucketLength);
                 PutTransaction pt = new PutTransaction(transactionID, PT_MIN_BYTES, PT_MAX_BYTES);
@@ -605,7 +653,7 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
             UUID.fromString(transactionID);
             Path txnFile = txnPath.resolve(transactionID);
             if (Files.exists(txnFile)) {
-                StorageMetadata ret = createStorageMetadata(txnPath, txnFile);
+                StorageMetadata ret = createStorageMetadata(txnPath, txnFile, false);
                 // txnPath does not have bucket dirs
                 ret.getStorageLocation().storageBucket = InventoryUtil.computeBucket(ret.getStorageLocation().getStorageID(), bucketLength);
                 PutTransaction pt = new PutTransaction(transactionID, PT_MIN_BYTES, PT_MAX_BYTES);
@@ -658,7 +706,7 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
             long delta = d2.getTime() - sm.getContentLastModified().getTime();
             if (delta != 0L) {
                 log.debug("commit-induced delta lastModified: " + delta + " - recreate StorageMetadata from path");
-                sm = createStorageMetadata(contentPath, contentTarget);
+                sm = createStorageMetadata(contentPath, contentTarget, false);
             }
 
             return sm;
@@ -670,22 +718,72 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
     @Override
     public void delete(StorageLocation storageLocation)
         throws ResourceNotFoundException, IOException, StorageEngageException, TransientException {
+        delete(storageLocation, false);
+    }
+    
+    @Override
+    public void delete(StorageLocation storageLocation, boolean includeRecoverable)
+        throws ResourceNotFoundException, IOException, StorageEngageException, TransientException {
         InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "storageLocation", storageLocation);
         Path path = storageLocationToPath(storageLocation);
+        if (!Files.exists(path)) {
+            throw new ResourceNotFoundException("not found: " + storageLocation);
+        }
+        try {
+            String delAttr = getFileAttribute(path, DELETED_PRESERVED);
+            if ("true".equals(delAttr) && !includeRecoverable) {
+                log.debug("skip " + DELETED_PRESERVED + ": " + storageLocation);
+                throw new ResourceNotFoundException("not found: " + storageLocation);
+            }
+        } catch (IOException ex) {
+            throw new StorageEngageException("failed to read attributes for stored file: " + storageLocation, ex);
+        }
+        
+        String uriAttr = getFileAttribute(path, ARTIFACTID_ATTR);
+        log.debug("delete: " + storageLocation + " aka " + uriAttr);
+        if (uriAttr != null) {
+            try {
+                URI uri = new URI(uriAttr);
+                for (Namespace ns : preservationNamespaces) {
+                    log.debug("check: " + ns.getNamespace() + " vs " + uri);
+                    if (ns.matches(uri)) {
+                        log.debug("preserve: " + uri + " in namespace " + ns.getNamespace());
+                        setFileAttribute(path, DELETED_PRESERVED, "true");
+                        return;
+                    }
+                }
+            } catch (URISyntaxException ex) {
+                if (!preservationNamespaces.isEmpty()) {
+                    log.error("found invalid " + ARTIFACTID_ATTR + "=" + uriAttr + " on " 
+                            + storageLocation + " -- cannot attempt to preserve");
+                }
+            }
+        }
         Files.delete(path);
     }
+    
     
     @Override
     public Iterator<StorageMetadata> iterator()
         throws StorageEngageException, TransientException {
         
-        return new OpaqueIterator(contentPath, null);
+        return iterator(null, false);
     }
     
     @Override
-    public Iterator<StorageMetadata> iterator(String storageBucket)
+    public Iterator<StorageMetadata> iterator(String storageBucketPrefix)
         throws StorageEngageException, TransientException {
-        return new OpaqueIterator(contentPath, storageBucket);
+        return iterator(storageBucketPrefix, false);
+    }
+
+    @Override
+    public Iterator<StorageMetadata> iterator(String storageBucketPrefix, boolean includeRecoverable) throws StorageEngageException, TransientException {
+        return new OpaqueIterator(contentPath, storageBucketPrefix, includeRecoverable);
+    }
+
+    @Override
+    public Iterator<PutTransaction> transactionIterator() throws StorageEngageException, TransientException {
+        throw new UnsupportedOperationException();
     }
 
     // create from tmpfile in the txnPath to re-use UUID
@@ -743,7 +841,7 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
     */
     
     // also used by OpaqueIterator 
-    static StorageMetadata createStorageMetadata(Path base, Path p) {
+    static StorageMetadata createStorageMetadata(Path base, Path p, boolean includeRecoverable) {
         Path rel = base.relativize(p);
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < rel.getNameCount() - 1; i++) {
@@ -763,10 +861,17 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
                 String aidAttr = getFileAttribute(p, OpaqueFileSystemStorageAdapter.ARTIFACTID_ATTR);
                 URI contentChecksum = new URI(csAttr);
                 long contentLength = Files.size(p);
-                StorageMetadata ret = new StorageMetadata(sloc, contentChecksum, contentLength, 
+                URI artifactURI = new URI(aidAttr);
+                
+                String delAttr = getFileAttribute(p, DELETED_PRESERVED);
+                if ("true".equals(delAttr) && !includeRecoverable) {
+                    log.debug("skip " + DELETED_PRESERVED + ": " + sloc + " aka " + artifactURI);
+                    return null;
+                }
+                StorageMetadata ret = new StorageMetadata(sloc, artifactURI, contentChecksum, contentLength, 
                         new Date(Files.getLastModifiedTime(p).toMillis()));
-                ret.artifactURI = new URI(aidAttr);
-                log.debug("createStorageMetadata: " + ret);
+                ret.deletePreserved = "true".equals(delAttr);
+                log.debug("createStorageMetadata: " + ret + " " + ret.deletePreserved);
                 return ret;
             } catch (FileSystemException | IllegalArgumentException | URISyntaxException ex) {
                 log.debug("invalid stored object", ex);

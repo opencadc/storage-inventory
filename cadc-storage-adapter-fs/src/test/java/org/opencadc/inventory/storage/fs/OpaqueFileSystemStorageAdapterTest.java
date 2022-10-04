@@ -67,18 +67,20 @@
 
 package org.opencadc.inventory.storage.fs;
 
+import ca.nrc.cadc.util.InvalidConfigException;
 import ca.nrc.cadc.util.Log4jInit;
+
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Iterator;
 import java.util.UUID;
+
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.Test;
 import org.opencadc.inventory.StorageLocation;
-import org.opencadc.inventory.storage.InvalidConfigException;
 
 /**
  * Unit tests that create base directory structure but do not otherwise

@@ -162,7 +162,8 @@ public interface StorageAdapter {
             InterruptedException, ReadException, WriteException, StorageEngageException, TransientException;
         
     /**
-     * Delete from storage the artifact identified by storageLocation.
+     * Delete the object identified by storageLocation.
+     * 
      * @param storageLocation Identifies the artifact to delete.
      * 
      * @throws ResourceNotFoundException if the artifact could not be found.
@@ -172,6 +173,22 @@ public interface StorageAdapter {
      * @throws TransientException if an unexpected, temporary exception occurred. 
      */
     public void delete(StorageLocation storageLocation)
+        throws ResourceNotFoundException, IOException, InterruptedException, StorageEngageException, TransientException;
+    
+    /**
+     * Delete the object identified by storageLocation even if it has been deleted before and marked
+     * for long term preservation.
+     * 
+     * @param storageLocation Identifies the artifact to delete.
+     * @param includeRecoverable true to force deletion of preserved objects, otherwise false
+     * 
+     * @throws ResourceNotFoundException if the location could not be found or it is preserved and includeRecoverable=false
+     * @throws IOException if an unrecoverable error occurred.
+     * @throws java.lang.InterruptedException if thread receives an interrupt
+     * @throws StorageEngageException if the adapter failed to interact with storage.
+     * @throws TransientException if an unexpected, temporary exception occurred. 
+     */
+    public void delete(StorageLocation storageLocation, boolean includeRecoverable)
         throws ResourceNotFoundException, IOException, InterruptedException, StorageEngageException, TransientException;
     
     /**
@@ -261,4 +278,32 @@ public interface StorageAdapter {
      */
     public Iterator<StorageMetadata> iterator(String storageBucketPrefix)
         throws StorageEngageException, TransientException;
+    
+    /**
+     * Iterate over StorageMetadata ordered by their StorageLocation. Some implementations
+     * may support recovery of previously deleted objects; these can be included in the 
+     * iteration.
+     * 
+     * @param storageBucketPrefix null, partial, or complete storageBucket string
+     * @param includeRecoverable include stored objects that are recoverable (from deleted state)
+     * @return iterator over StorageMetadata sorted by StorageLocation
+     * 
+     * @throws StorageEngageException if the adapter failed to interact with storage
+     * @throws TransientException if an unexpected, temporary exception occurred 
+     */
+    public Iterator<StorageMetadata> iterator(String storageBucketPrefix, boolean includeRecoverable)
+        throws StorageEngageException, TransientException;
+    
+    /**
+     * Iterate over current transactions. This method is expected to be used by 
+     * a maintenance program like file-validate to cleanup stale transactions.
+     * 
+     * @return Iterator over current transactions
+     * 
+     * @throws StorageEngageException if the adapter failed to interact with storage
+     * @throws TransientException if an unexpected, temporary exception occurred
+     */
+    public Iterator<PutTransaction> transactionIterator() 
+        throws StorageEngageException, TransientException;
+    
 }

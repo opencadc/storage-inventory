@@ -95,14 +95,16 @@ import org.opencadc.inventory.storage.StorageMetadata;
 class OpaqueIterator implements Iterator<StorageMetadata> {
     private static final Logger log = Logger.getLogger(OpaqueIterator.class);
 
+    private final boolean includeRecoverable;
     private final Path contentPath;
     private Path subPath;
     
     private StorageMetadata nextItem = null;
     private final LinkedList<StackItem> depthFirstPathTraversalStack = new LinkedList<>();
     
-    public OpaqueIterator(Path contentPath, String bucketPrefix) throws StorageEngageException {
+    public OpaqueIterator(Path contentPath, String bucketPrefix, boolean includeRecoverable) throws StorageEngageException {
         this.contentPath = contentPath;
+        this.includeRecoverable = includeRecoverable;
         StringBuilder sb = new StringBuilder();
         if (bucketPrefix != null) {
             for (char c : bucketPrefix.toCharArray()) {
@@ -193,6 +195,6 @@ class OpaqueIterator implements Iterator<StorageMetadata> {
     }
     
     private StorageMetadata createStorageMetadata(Path p) {
-        return OpaqueFileSystemStorageAdapter.createStorageMetadata(contentPath, p);
+        return OpaqueFileSystemStorageAdapter.createStorageMetadata(contentPath, p, includeRecoverable);
     }
 }
