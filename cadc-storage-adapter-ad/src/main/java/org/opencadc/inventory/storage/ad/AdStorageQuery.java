@@ -223,8 +223,8 @@ public class AdStorageQuery {
                 contentLastModified = new Date();
             }
 
-            StorageMetadata storageMetadata = new StorageMetadata(storageLocation, contentChecksum, contentLength, contentLastModified);
-            storageMetadata.artifactURI = artifactURI;
+            StorageMetadata storageMetadata = new StorageMetadata(storageLocation, artifactURI, 
+                    contentChecksum, contentLength, contentLastModified);
 
             // optional values
             storageMetadata.contentEncoding = (String) i.next();

@@ -152,7 +152,7 @@ public class AdStorageQueryTest {
         row.add("application/fits");
        
         StorageMetadata metadata = (StorageMetadata) mapper.mapRow(row);
-        Assert.assertTrue("cadc:FOO/foo.fits.gz".equals(metadata.artifactURI.toString()));
+        Assert.assertTrue("cadc:FOO/foo.fits.gz".equals(metadata.getArtifactURI().toString()));
         Assert.assertTrue("ad:FOO/foo.fits.gz".equals(metadata.getStorageLocation().getStorageID().toString()));
         Assert.assertTrue(metadata.getStorageLocation().storageBucket.equals("FOO"));
         Assert.assertTrue(metadata.getContentChecksum().toString().equals("md5:e687e2ecea45e78822eb68294566e6a1"));
@@ -178,7 +178,7 @@ public class AdStorageQueryTest {
         row.add("application/fits");
        
         StorageMetadata metadata = (StorageMetadata) mapper.mapRow(row);
-        Assert.assertTrue("cadc:FOO/foo.fits.gz".equals(metadata.artifactURI.toString()));
+        Assert.assertTrue("cadc:FOO/foo.fits.gz".equals(metadata.getArtifactURI().toString()));
         Assert.assertTrue("ad:FOO/foo.fits.gz".equals(metadata.getStorageLocation().getStorageID().toString()));
         Assert.assertTrue(metadata.getStorageLocation().storageBucket.equals("x-FOO"));
         Assert.assertTrue(metadata.getContentChecksum().toString().equals("md5:e687e2ecea45e78822eb68294566e6a1"));
@@ -205,7 +205,7 @@ public class AdStorageQueryTest {
         row.add("application/fits");
        
         StorageMetadata metadata = (StorageMetadata) mapper.mapRow(row);
-        Assert.assertTrue("cadc:FOO/foo.fits.gz".equals(metadata.artifactURI.toString()));
+        Assert.assertTrue("cadc:FOO/foo.fits.gz".equals(metadata.getArtifactURI().toString()));
         // work-around: storageID scheme is ad
         Assert.assertTrue("ad:FOO/foo.fits.gz".equals(metadata.getStorageLocation().getStorageID().toString()));
         Assert.assertTrue(metadata.getStorageLocation().storageBucket.equals("FOO"));

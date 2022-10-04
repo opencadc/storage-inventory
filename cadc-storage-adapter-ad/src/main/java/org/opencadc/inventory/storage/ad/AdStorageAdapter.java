@@ -207,7 +207,13 @@ public class AdStorageAdapter implements StorageAdapter {
         
     @Override
     public void delete(StorageLocation storageLocation)
-        throws ResourceNotFoundException, IOException, StorageEngageException, TransientException {
+        throws ResourceNotFoundException, IOException, InterruptedException, StorageEngageException, TransientException {
+        throw new UnsupportedOperationException("not supported");
+    }
+
+    @Override
+    public void delete(StorageLocation storageLocation, boolean includeRecoverable) 
+        throws ResourceNotFoundException, IOException, InterruptedException, StorageEngageException, TransientException {
         throw new UnsupportedOperationException("not supported");
     }
 
@@ -275,6 +281,16 @@ public class AdStorageAdapter implements StorageAdapter {
         return new AdStorageIterator(storageMetadataIterator);
     }
 
+    @Override
+    public Iterator<StorageMetadata> iterator(String storageBucketPrefix, boolean includeRecoverable) throws StorageEngageException, TransientException {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public Iterator<PutTransaction> transactionIterator() throws StorageEngageException, TransientException {
+        throw new UnsupportedOperationException();
+    }
+    
     // negotiate a URL so we can potentially re-use it for multiple ByteRange requests
     private URL toURL(URI uri) throws AccessControlException, NotAuthenticatedException,
             ByteLimitExceededException, ResourceNotFoundException, TransientException {
