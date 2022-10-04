@@ -69,15 +69,19 @@
 
 package org.opencadc.baldur;
 
+import ca.nrc.cadc.util.InvalidConfigException;
 import ca.nrc.cadc.util.Log4jInit;
 import ca.nrc.cadc.util.PropertiesReader;
+
 import java.net.URI;
 import java.security.Principal;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
+
 import javax.security.auth.x500.X500Principal;
+
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
@@ -257,8 +261,8 @@ public class PermissionsConfigTest {
             try {
                 new PermissionsConfig();
                 Assert.fail("should have received IllegalStateException");
-            } catch (IllegalStateException e) {
-                // expected
+            } catch (InvalidConfigException expected) {
+                log.info("caught expected: " + expected);
             }
         } catch (Exception unexpected) {
             log.error("unexpected exception", unexpected);
@@ -298,7 +302,7 @@ public class PermissionsConfigTest {
             try {
                 new PermissionsConfig();
                 Assert.fail("should have received IllegalStateException");
-            } catch (IllegalStateException e) {
+            } catch (InvalidConfigException e) {
                 // expected
                 Assert.assertTrue(e.getMessage(), e.getMessage().toLowerCase().contains("duplicate"));
             }
@@ -319,7 +323,7 @@ public class PermissionsConfigTest {
             try {
                 new PermissionsConfig();
                 Assert.fail("should have received IllegalStateException");
-            } catch (IllegalStateException e) {
+            } catch (InvalidConfigException e) {
                 // expected
                 Assert.assertTrue(e.getMessage(), e.getMessage().toLowerCase().contains("multiple entries"));
             }
