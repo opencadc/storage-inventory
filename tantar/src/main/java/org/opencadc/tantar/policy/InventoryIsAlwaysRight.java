@@ -110,14 +110,14 @@ public class InventoryIsAlwaysRight extends ResolutionPolicy {
             if (delayAction(storageMetadata.getContentLastModified())) {
                 // delay cleanup in case the object was stored since we started validating
                 sb.append(".delayAction");
-                sb.append(" Artifact.uri=").append(storageMetadata.artifactURI);
+                sb.append(" Artifact.uri=").append(storageMetadata.getArtifactURI());
                 sb.append(" loc=").append(storageMetadata.getStorageLocation());
                 sb.append(" reason=no-matching-artifact");
                 reporter.report(sb.toString());
                 validateEventListener.delayAction();
             } else {
                 sb.append(".deleteStorageLocation");
-                sb.append(" Artifact.uri=").append(storageMetadata.artifactURI);
+                sb.append(" Artifact.uri=").append(storageMetadata.getArtifactURI());
                 sb.append(" loc=").append(storageMetadata.getStorageLocation());
                 sb.append(" reason=no-matching-artifact");
                 reporter.report(sb.toString());

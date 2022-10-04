@@ -120,7 +120,7 @@ public class HeadAction extends ArtifactAction {
             setTransactionHeaders(t, syncOutput);
             StorageMetadata sm = t.storageMetadata;
             if (sm.isValid()) {
-                artifact = new Artifact(sm.artifactURI, sm.getContentChecksum(), sm.getContentLastModified(), sm.getContentLength());
+                artifact = new Artifact(sm.getArtifactURI(), sm.getContentChecksum(), sm.getContentLastModified(), sm.getContentLength());
             } else {
                 log.debug("invalid artifact in transaction " +  txnID + " -- assuming 0 bytes stored");
                 syncOutput.setHeader("Content-Length", "0");

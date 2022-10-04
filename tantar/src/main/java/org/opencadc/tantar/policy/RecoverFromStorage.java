@@ -118,7 +118,7 @@ public class RecoverFromStorage extends ResolutionPolicy {
         
         if (artifact == null) {
             sb.append(".createArtifact");
-            sb.append(" Artifact.uri=").append(storageMetadata.artifactURI);
+            sb.append(" Artifact.uri=").append(storageMetadata.getArtifactURI());
             sb.append(" loc=").append(storageMetadata.getStorageLocation());
             //reporter.report(String.format("Adding Artifact %s as per policy.", storageMetadata.getStorageLocation()));
             reporter.report(sb.toString());

@@ -125,10 +125,10 @@ public class StorageIsAlwaysRight extends ResolutionPolicy {
         boolean unmatchedSorageLocation = false;
         if (art == null) {
             // check for existing artifact with unmatched StorageLocation
-            Artifact tmp = validateEventListener.getArtifact(storageMetadata.artifactURI);
+            Artifact tmp = validateEventListener.getArtifact(storageMetadata.getArtifactURI());
             if (tmp == null) {
                 sb.append(".createArtifact");
-                sb.append(" Artifact.uri=").append(storageMetadata.artifactURI);
+                sb.append(" Artifact.uri=").append(storageMetadata.getArtifactURI());
                 sb.append(" loc=").append(storageMetadata.getStorageLocation());
                 sb.append(" reason=no-matching-artifact");
                 reporter.report(sb.toString());

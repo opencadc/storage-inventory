@@ -141,14 +141,14 @@ public class BucketValidatorTest {
 
         // **** Create the Storage Adapter content.
         final List<StorageMetadata> testStorageMetadataList = new ArrayList<>();
-        testStorageMetadataList.add(new StorageMetadata(new StorageLocation(URI.create("ad:123456")),
+        testStorageMetadataList.add(new StorageMetadata(new StorageLocation(URI.create("ad:123456")), URI.create("test:123456"),
                                                         artifactOneContentChecksum, 88L, artifactOne.getContentLastModified()));
 
-        StorageMetadata d1 = new StorageMetadata(new StorageLocation(URI.create("ceph:78787878")),
+        StorageMetadata d1 = new StorageMetadata(new StorageLocation(URI.create("ceph:78787878")), URI.create("test:78787878"),
                                                         URI.create("md5:" + random16Bytes()), 99L, new Date());
         testStorageMetadataList.add(d1);
 
-        StorageMetadata d2 = new StorageMetadata(new StorageLocation(URI.create("s3:CDEF00")),
+        StorageMetadata d2 = new StorageMetadata(new StorageLocation(URI.create("s3:CDEF00")), URI.create("test:CDEF00"),
                                     URI.create("md5:" + random16Bytes()), 100L, new Date());
         testStorageMetadataList.add(d2);
         testStorageMetadataList.sort(Comparator.comparing(StorageMetadata::getStorageLocation));
@@ -284,15 +284,15 @@ public class BucketValidatorTest {
 
         // **** Create the Storage Adapter content.
         final List<StorageMetadata> testStorageMetadataList = new ArrayList<>();
-        testStorageMetadataList.add(new StorageMetadata(new StorageLocation(URI.create("ad:123456")),
+        testStorageMetadataList.add(new StorageMetadata(new StorageLocation(URI.create("ad:123456")), URI.create("test:123456"),
                                                         artifactOneContentChecksum, 88L, artifactOne.getContentLastModified()));
 
-        StorageMetadata c1 = new StorageMetadata(new StorageLocation(URI.create("ceph:78787878")),
+        StorageMetadata c1 = new StorageMetadata(new StorageLocation(URI.create("ceph:78787878")), URI.create("test:78787878"),
                                                         URI.create("md5:" + random16Bytes()), 99L, new Date());
         testStorageMetadataList.add(c1);
 
         testStorageMetadataList.add(
-                new StorageMetadata(new StorageLocation(URI.create("s3:CDEF00")),
+                new StorageMetadata(new StorageLocation(URI.create("s3:CDEF00")), URI.create("test:CDEF00"),
                                     URI.create("md5:" + random16Bytes()), 100L, new Date()));
         testStorageMetadataList.sort(Comparator.comparing(StorageMetadata::getStorageLocation));
         // **** End Create the Storage Adapter content.
@@ -344,14 +344,14 @@ public class BucketValidatorTest {
 
         // **** Create the Storage Adapter content.
         final List<StorageMetadata> testStorageMetadataList = new ArrayList<>();
-        testStorageMetadataList.add(new StorageMetadata(new StorageLocation(URI.create("ad:123456")),
+        testStorageMetadataList.add(new StorageMetadata(new StorageLocation(URI.create("ad:123456")), URI.create("test:123456"),
                                                         URI.create("md5:" + random16Bytes()), 88L, new Date()));
 
-        testStorageMetadataList.add(new StorageMetadata(new StorageLocation(URI.create("ad:78787878")),
+        testStorageMetadataList.add(new StorageMetadata(new StorageLocation(URI.create("ad:78787878")), URI.create("test:78787878"),
                                                         URI.create("md5:" + random16Bytes()), 99L, new Date()));
 
         testStorageMetadataList.add(
-                new StorageMetadata(new StorageLocation(URI.create("ad:CDEF00")),
+                new StorageMetadata(new StorageLocation(URI.create("ad:CDEF00")), URI.create("test:CDEF00"),
                                     URI.create("md5:" + random16Bytes()), 100L, new Date()));
         testStorageMetadataList.sort(Comparator.comparing(StorageMetadata::getStorageLocation));
         // **** End Create the Storage Adapter content.
@@ -397,14 +397,14 @@ public class BucketValidatorTest {
 
         // **** Create the Storage Adapter content.
         final List<StorageMetadata> testStorageMetadataList = new ArrayList<>();
-        testStorageMetadataList.add(new StorageMetadata(new StorageLocation(URI.create("ad:123456")),
+        testStorageMetadataList.add(new StorageMetadata(new StorageLocation(URI.create("ad:123456")), URI.create("test:123456"),
                                                         URI.create("md5:" + random16Bytes()), 88L, new Date()));
 
-        testStorageMetadataList.add(new StorageMetadata(new StorageLocation(URI.create("ad:78787878")),
+        testStorageMetadataList.add(new StorageMetadata(new StorageLocation(URI.create("ad:78787878")), URI.create("test:78787878"),
                                                         URI.create("md5:" + random16Bytes()), 99L, new Date()));
 
         testStorageMetadataList.add(
-                new StorageMetadata(new StorageLocation(URI.create("ad:CDEF00")),
+                new StorageMetadata(new StorageLocation(URI.create("ad:CDEF00")), URI.create("test:CDEF00"),
                                     URI.create("md5:" + random16Bytes()), 100L, new Date()));
         testStorageMetadataList.sort(Comparator.comparing(StorageMetadata::getStorageLocation));
         // **** End Create the Storage Adapter content.
