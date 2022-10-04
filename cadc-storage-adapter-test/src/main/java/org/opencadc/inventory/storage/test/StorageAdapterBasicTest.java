@@ -140,7 +140,7 @@ public abstract class StorageAdapterBasicTest {
             Assert.assertNotNull(storageMetadata.getStorageLocation());
             Assert.assertEquals(newArtifact.contentChecksum, storageMetadata.getContentChecksum());
             Assert.assertEquals(newArtifact.contentLength, storageMetadata.getContentLength());
-            Assert.assertEquals("artifactURI",  artifactURI, storageMetadata.artifactURI);
+            Assert.assertEquals("artifactURI",  artifactURI, storageMetadata.getArtifactURI());
             Assert.assertNotNull(storageMetadata.getContentLastModified());
             
             // verify data stored
@@ -352,8 +352,6 @@ public abstract class StorageAdapterBasicTest {
                 NewArtifact na = new NewArtifact(artifactURI);
                 na.contentLength = (long) datalen;
                 StorageMetadata sm = adapter.put(na, TestUtil.getInputStreamOfRandomBytes(datalen), null);
-                Assert.assertNotNull(sm.artifactURI);
-                //Assert.assertNotNull(sm.contentLastModified);
                 log.debug("testIterator put: " + artifactURI + " to " + sm.getStorageLocation());
                 expected.add(sm);
             }
@@ -390,8 +388,7 @@ public abstract class StorageAdapterBasicTest {
                 Assert.assertEquals("length", em.getContentLength(), am.getContentLength());
                 Assert.assertEquals("checksum", em.getContentChecksum(), am.getContentChecksum());
                 
-                Assert.assertNotNull("artifactURI", am.artifactURI);
-                Assert.assertEquals("artifactURI", em.artifactURI, am.artifactURI);
+                Assert.assertEquals("artifactURI", em.getArtifactURI(), am.getArtifactURI());
                 
                 Assert.assertNotNull("contentLastModified", am.getContentLastModified());
                 Assert.assertEquals("contentLastModified", em.getContentLastModified(), am.getContentLastModified());

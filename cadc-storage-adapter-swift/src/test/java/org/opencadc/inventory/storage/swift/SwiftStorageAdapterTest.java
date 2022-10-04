@@ -67,19 +67,21 @@
 
 package org.opencadc.inventory.storage.swift;
 
+import ca.nrc.cadc.util.InvalidConfigException;
 import ca.nrc.cadc.util.Log4jInit;
+
 import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.List;
+
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.Test;
+import org.opencadc.inventory.Namespace;
 import org.opencadc.inventory.StorageLocation;
-import org.opencadc.inventory.storage.InvalidConfigException;
 import org.opencadc.inventory.storage.StorageEngageException;
 
 /**
@@ -266,7 +268,7 @@ public class SwiftStorageAdapterTest {
         config.add(new String[] { SwiftStorageAdapter.CONF_ENABLE_MULTI, " true " });
         config.add(new String[] { SwiftStorageAdapter.CONF_ENDPOINT, "https://example.net/v1/auth" });
         config.add(new String[] { SwiftStorageAdapter.CONF_USER, "somebody" });
-        config.add(new String[] { SwiftStorageAdapter.CONF_KEY, "sombody-has-a-key" });
+        config.add(new String[] { SwiftStorageAdapter.CONF_KEY, "somebody-has-a-key" });
         
         String userHome = System.getProperty("user.home");
         try {
@@ -319,23 +321,76 @@ public class SwiftStorageAdapterTest {
             // valid config to verify test
             writeProps(6, config, cf);
             try {
-                SwiftStorageAdapter swiftAdapter = new SwiftStorageAdapter();
+                SwiftStorageAdapter swiftAdapter = new SwiftStorageAdapter(false);
                 Assert.assertEquals("storageBucket", swiftAdapter.storageBucket, "foo");
                 Assert.assertEquals("bucketLength", swiftAdapter.storageBucketLength, 3);
                 Assert.assertTrue("multiBucket", swiftAdapter.multiBucket);
             } catch (InvalidConfigException ex) {
                 log.error("valid config failed", ex);
                 Assert.fail("syntactically valid config failed: " + ex);
-            } catch (StorageEngageException expected) {
-                log.info("bogus connection info: " + expected);
             }
-            //cf.delete();
+            cf.delete();
             
             
         } finally {
             System.setProperty("user.home", userHome);
         }
     }
+    
+    @Test
+    public void testOptionalConfigParsing() throws Exception {
+        List<String[]> config = new ArrayList<>();
+        // verify whitespace handling on first three by added extra whitespace
+        config.add(new String[] { SwiftStorageAdapter.CONF_BUCKET, " foo " });
+        config.add(new String[] { SwiftStorageAdapter.CONF_SBLEN, " 3 " });
+        config.add(new String[] { SwiftStorageAdapter.CONF_ENABLE_MULTI, " true " });
+        config.add(new String[] { SwiftStorageAdapter.CONF_ENDPOINT, "https://example.net/v1/auth" });
+        config.add(new String[] { SwiftStorageAdapter.CONF_USER, "somebody" });
+        config.add(new String[] { SwiftStorageAdapter.CONF_KEY, "somebody-has-a-key" });
+        config.add(new String[] { SwiftStorageAdapter.CONF_PRESERVE_NS, "test:KEEP/" });
+        config.add(new String[] { SwiftStorageAdapter.CONF_PRESERVE_NS, "cadc:" });
+            
+        String userHome = System.getProperty("user.home");
+        try {
+            
+            File testHome = new File("build/tmp/test-home");
+            if (!testHome.exists()) {
+                testHome.mkdirs();
+            }
+            System.setProperty("user.home", testHome.getAbsolutePath());
+            
+            File testConfig = new File(testHome, "config");
+            
+            // missing config dir
+            if (testConfig.exists()) {
+                recursiveDelete(testConfig);
+            }
+            
+            testConfig.mkdir();
+            File cf = new File(testConfig, SwiftStorageAdapter.CONFIG_FILENAME);
+            
+            writeProps(8, config, cf);
+            try {
+                SwiftStorageAdapter swiftAdapter = new SwiftStorageAdapter(false);
+                Assert.assertEquals("storageBucket", swiftAdapter.storageBucket, "foo");
+                Assert.assertEquals("bucketLength", swiftAdapter.storageBucketLength, 3);
+                Assert.assertTrue("multiBucket", swiftAdapter.multiBucket);
+                Assert.assertEquals("preservationNamespaces", 2, swiftAdapter.preservationNamespaces.size());
+                for (Namespace ns : swiftAdapter.preservationNamespaces) {
+                    log.info("preserve: " + ns);
+                }
+            } catch (InvalidConfigException ex) {
+                log.error("valid config failed", ex);
+                Assert.fail("syntactically valid config failed: " + ex);
+            }
+            cf.delete();
+            
+            
+        } finally {
+            System.setProperty("user.home", userHome);
+        }
+    }
+    
     
     private void recursiveDelete(File dir) {
         if (dir.exists()) {

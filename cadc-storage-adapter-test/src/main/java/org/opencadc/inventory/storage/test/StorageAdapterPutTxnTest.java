@@ -145,7 +145,6 @@ public class StorageAdapterPutTxnTest {
             log.info("after write part 1: " + txnMeta1 + " in " + txn.getID());
             Assert.assertNotNull(txnMeta1);
             Assert.assertTrue("valid", txnMeta1.isValid());
-            Assert.assertNotNull("artifactURI", txnMeta1.artifactURI);
             Assert.assertEquals("length", data.length, txnMeta1.getContentLength().longValue());
 
             // write part 2  
@@ -202,7 +201,6 @@ public class StorageAdapterPutTxnTest {
             log.info("testPutTransactionCommit: " + meta2 + " in " + txn.getID());
             Assert.assertNotNull(meta2);
             Assert.assertTrue("valid", meta2.isValid());
-            Assert.assertNotNull("artifactURI", meta2.artifactURI);
             
             log.info("commit: " + txn);
             StorageMetadata meta3 = adapter.commitTransaction(txn.getID());
@@ -265,7 +263,6 @@ public class StorageAdapterPutTxnTest {
             log.info("testPutTransactionAbort: " + meta2 + " in " + txn.getID());
             Assert.assertNotNull(meta2);
             Assert.assertTrue("valid", meta2.isValid());
-            Assert.assertNotNull("artifactURI", meta2.artifactURI);
             
             adapter.abortTransaction(txn.getID());
             log.info("abort");
@@ -340,7 +337,6 @@ public class StorageAdapterPutTxnTest {
             log.info("after write part 1: " + txnMeta1 + " in " + txn.getID());
             Assert.assertNotNull(txnMeta1);
             Assert.assertTrue("valid", txnMeta1.isValid());
-            Assert.assertNotNull("artifactURI", txnMeta1.artifactURI);
             Assert.assertEquals("length", data1.length, txnMeta1.getContentLength().longValue());
 
             // write part 2            
@@ -361,7 +357,6 @@ public class StorageAdapterPutTxnTest {
             log.info("after write part 2: " + txnMeta2 + " in " + txn.getID());
             Assert.assertNotNull(txnMeta2);
             Assert.assertTrue("valid", txnMeta2.isValid());
-            Assert.assertNotNull("artifactURI", txnMeta2.artifactURI);
             Assert.assertEquals("length", expectedLength, txnMeta2.getContentLength().longValue());
             
             StorageMetadata finalMeta = adapter.commitTransaction(txn.getID());
@@ -458,7 +453,6 @@ public class StorageAdapterPutTxnTest {
             log.info("txn status after write part 1: " + tmeta1 + " in " + txn.getID());
             Assert.assertNotNull(tmeta1);
             Assert.assertTrue("valid", tmeta1.isValid());
-            Assert.assertNotNull("artifactURI", tmeta1.artifactURI);
             Assert.assertEquals("length", data.length, tmeta1.getContentLength().longValue());
 
             log.info("START put 2 fail(0)");
@@ -510,7 +504,6 @@ public class StorageAdapterPutTxnTest {
             log.info("after write part 2: " + tmeta3 + " in " + txn.getID());
             Assert.assertNotNull(tmeta3);
             Assert.assertTrue("valid", tmeta3.isValid());
-            Assert.assertNotNull("artifactURI", tmeta3.artifactURI);
             Assert.assertEquals("length", expectedLength, tmeta3.getContentLength().longValue());
             Assert.assertEquals("checksum", expectedChecksum, tmeta3.getContentChecksum());
             
@@ -604,7 +597,6 @@ public class StorageAdapterPutTxnTest {
             log.info("after write part 2: " + txnMeta2 + " in " + txn.getID());
             Assert.assertNotNull(txnMeta2);
             Assert.assertTrue("valid", txnMeta2.isValid());
-            Assert.assertNotNull("artifactURI", txnMeta2.artifactURI);
             Assert.assertEquals("length", expectedLength, txnMeta2.getContentLength().longValue());
             Assert.assertEquals("checksum", expectedChecksum2, txnMeta2.getContentChecksum());
 
@@ -615,7 +607,6 @@ public class StorageAdapterPutTxnTest {
             log.info("after revert part 2: " + revMeta + " in " + txn.getID());
             Assert.assertNotNull(revMeta);
             Assert.assertTrue("valid", revMeta.isValid());
-            Assert.assertNotNull("artifactURI", revMeta.artifactURI);
             Assert.assertEquals("length", data.length, revMeta.getContentLength().longValue());
             Assert.assertEquals("checksum", expectedChecksum1, revMeta.getContentChecksum());
                    
@@ -626,7 +617,6 @@ public class StorageAdapterPutTxnTest {
             log.info("after write part 1: " + txnMeta1 + " in " + txn.getID());
             Assert.assertNotNull(txnMeta1);
             Assert.assertTrue("valid", txnMeta1.isValid());
-            Assert.assertNotNull("artifactURI", txnMeta1.artifactURI);
             Assert.assertEquals("length", data.length, txnMeta1.getContentLength().longValue());
             Assert.assertEquals("checksum", expectedChecksum1, txnMeta1.getContentChecksum());
             

@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2021.                            (c) 2021.
+*  (c) 2022.                            (c) 2022.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -267,7 +267,7 @@ public class SwiftPutTxnTest extends StorageAdapterPutTxnTest {
             while (iter.hasNext()) {
                 StorageMetadata sm = iter.next();
                 log.info("found: " + sm);
-                Assert.assertTrue(sm.artifactURI.toASCIIString().endsWith("true"));
+                Assert.assertTrue(sm.getArtifactURI().toASCIIString().endsWith("-true"));
                 numFound++;
             }
             Assert.assertEquals(numCommitted, numFound);
@@ -320,7 +320,6 @@ public class SwiftPutTxnTest extends StorageAdapterPutTxnTest {
             log.info("after write part 1: " + txnMeta1 + " in " + txn.getID());
             Assert.assertNotNull(txnMeta1);
             Assert.assertTrue("valid", txnMeta1.isValid());
-            Assert.assertNotNull("artifactURI", txnMeta1.artifactURI);
             Assert.assertEquals("length", data.length, txnMeta1.getContentLength().longValue());
 
             swiftAdapter.segmentMinBytes = tmp;
@@ -343,7 +342,7 @@ public class SwiftPutTxnTest extends StorageAdapterPutTxnTest {
             log.info("after failed write part 2: " + txnMeta2 + " in " + txn.getID());
             Assert.assertNotNull(txnMeta2);
             Assert.assertEquals("valid", txnMeta1.isValid(), txnMeta2.isValid());
-            Assert.assertEquals("artifactURI", txnMeta1.artifactURI, txnMeta2.artifactURI);
+            Assert.assertEquals("artifactURI", txnMeta1.getArtifactURI(), txnMeta2.getArtifactURI());
             Assert.assertEquals("length", txnMeta1.getContentLength(), txnMeta2.getContentLength());
             Assert.assertEquals("length", txnMeta1.getContentChecksum(), txnMeta2.getContentChecksum());
             

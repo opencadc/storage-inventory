@@ -78,9 +78,11 @@ import ca.nrc.cadc.net.PreconditionFailedException;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.util.HexUtil;
-import java.io.File;
+import ca.nrc.cadc.util.InvalidConfigException;
+import ca.nrc.cadc.util.MultiValuedProperties;
+import ca.nrc.cadc.util.PropertiesReader;
+
 import java.io.FileNotFoundException;
-import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -95,9 +97,9 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
-import java.util.Properties;
 import java.util.TreeMap;
 import java.util.UUID;
+
 import org.apache.log4j.Logger;
 import org.javaswift.joss.client.factory.AccountConfig;
 import org.javaswift.joss.client.factory.AccountFactory;
@@ -111,10 +113,10 @@ import org.javaswift.joss.model.Account;
 import org.javaswift.joss.model.Container;
 import org.javaswift.joss.model.StoredObject;
 import org.opencadc.inventory.InventoryUtil;
+import org.opencadc.inventory.Namespace;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.storage.ByteRange;
 import org.opencadc.inventory.storage.DigestInputStream;
-import org.opencadc.inventory.storage.InvalidConfigException;
 import org.opencadc.inventory.storage.MessageDigestAPI;
 import org.opencadc.inventory.storage.NewArtifact;
 import org.opencadc.inventory.storage.PutTransaction;
@@ -145,6 +147,7 @@ public class SwiftStorageAdapter  implements StorageAdapter {
     static final String CONF_SBLEN = SwiftStorageAdapter.class.getName() + ".bucketLength";
     static final String CONF_BUCKET = SwiftStorageAdapter.class.getName() + ".bucketName";
     static final String CONF_ENABLE_MULTI = SwiftStorageAdapter.class.getName() + ".multiBucket";
+    static final String CONF_PRESERVE_NS = SwiftStorageAdapter.class.getName() + ".preserveNamespace";
 
     private static final String KEY_SCHEME = "id";
 
@@ -162,6 +165,7 @@ public class SwiftStorageAdapter  implements StorageAdapter {
     private static final String ARTIFACT_ID_ATTR = "org.opencadc.artifactid";
     private static final String CONTENT_CHECKSUM_ATTR = "org.opencadc.contentchecksum";
     private static final String DLO_ATTR = "org.opencadc.swift.dlo";
+    private static final String DELETED_PRESERVED = "org.opencadc.swift.deletedpreserved";
     
     // temporary object attributes
     private static final String TRANSACTION_ATTR = "org.opencadc.swift.txn";
@@ -181,6 +185,7 @@ public class SwiftStorageAdapter  implements StorageAdapter {
     final boolean multiBucket;
     long segmentMaxBytes = CEPH_OBJECT_SIZE_LIMIT;
     long segmentMinBytes = segmentMaxBytes; // default: all files smaller than CEPH limit are simple objects
+    final List<Namespace> preservationNamespaces = new ArrayList<>();
     
     private final Account client;
     private Container txnContainer;
@@ -197,21 +202,31 @@ public class SwiftStorageAdapter  implements StorageAdapter {
     public SwiftStorageAdapter() throws InvalidConfigException, StorageEngageException {
         this(true, null, null, null);
     }
+
+    // ctor for unit test
+    SwiftStorageAdapter(boolean connect) throws InvalidConfigException, StorageEngageException {
+        this(connect, null, null, null, null);
+    }
+    
+    SwiftStorageAdapter(boolean connect, String storageBucketOverride, Integer storageBucketLengthOverride, Boolean multiBucketOverride) 
+            throws InvalidConfigException, StorageEngageException {
+        this(connect, storageBucketOverride, storageBucketLengthOverride, multiBucketOverride, null);
+    }
     
     // ctor for intTest to override configured multiBucket flag
-    SwiftStorageAdapter(boolean connect, String storageBucketOverride, Integer storageBucketLengthOverride, Boolean multiBucketOverride) 
+    SwiftStorageAdapter(boolean connect, String storageBucketOverride, Integer storageBucketLengthOverride, Boolean multiBucketOverride,
+            List<String> preserveOverride) 
             throws InvalidConfigException, StorageEngageException {
         final AccountConfig ac = new AccountConfig();
         try {
-            File config = new File(System.getProperty("user.home") + "/config/" + CONFIG_FILENAME);
-            Properties props = new Properties();
-            props.load(new FileReader(config));
+            PropertiesReader pr = new PropertiesReader(CONFIG_FILENAME);
+            MultiValuedProperties props = pr.getAllProperties();
             
             StringBuilder sb = new StringBuilder();
             sb.append("incomplete config: ");
             boolean ok = true;
             
-            final String suri = props.getProperty(CONF_ENDPOINT);
+            final String suri = props.getFirstPropertyValue(CONF_ENDPOINT);
             sb.append("\n\t").append(CONF_ENDPOINT).append(": ");
             if (suri == null) {
                 sb.append("MISSING");
@@ -220,7 +235,7 @@ public class SwiftStorageAdapter  implements StorageAdapter {
                 sb.append("OK");
             }
 
-            final String sbl = props.getProperty(CONF_SBLEN);
+            final String sbl = props.getFirstPropertyValue(CONF_SBLEN);
             sb.append("\n\t").append(CONF_SBLEN).append(": ");
             if (sbl == null) {
                 sb.append("MISSING");
@@ -229,7 +244,7 @@ public class SwiftStorageAdapter  implements StorageAdapter {
                 sb.append("OK");
             }
 
-            final String bn = props.getProperty(CONF_BUCKET);
+            final String bn = props.getFirstPropertyValue(CONF_BUCKET);
             sb.append("\n\t").append(CONF_BUCKET).append(": ");
             if (bn == null) {
                 sb.append("MISSING");
@@ -238,7 +253,7 @@ public class SwiftStorageAdapter  implements StorageAdapter {
                 sb.append("OK");
             }
             
-            final String emb = props.getProperty(CONF_ENABLE_MULTI);
+            final String emb = props.getFirstPropertyValue(CONF_ENABLE_MULTI);
             sb.append("\n\t").append(CONF_ENABLE_MULTI).append(": ");
             if (emb == null) {
                 sb.append("MISSING");
@@ -247,7 +262,7 @@ public class SwiftStorageAdapter  implements StorageAdapter {
                 sb.append("OK");
             }
             
-            final String user = props.getProperty(CONF_USER);
+            final String user = props.getFirstPropertyValue(CONF_USER);
             sb.append("\n\t").append(CONF_USER).append(": ");
             if (user == null) {
                 sb.append("MISSING");
@@ -256,7 +271,7 @@ public class SwiftStorageAdapter  implements StorageAdapter {
                 sb.append("OK");
             }
             
-            final String key = props.getProperty(CONF_KEY);
+            final String key = props.getFirstPropertyValue(CONF_KEY);
             sb.append("\n\t").append(CONF_KEY).append(": ");
             if (bn == null) {
                 sb.append("MISSING");
@@ -264,7 +279,7 @@ public class SwiftStorageAdapter  implements StorageAdapter {
             } else {
                 sb.append("OK");
             }
-            
+
             if (!ok) {
                 throw new InvalidConfigException(sb.toString());
             }
@@ -293,15 +308,33 @@ public class SwiftStorageAdapter  implements StorageAdapter {
             }
             log.debug("txnBucket: " + txnBucket + " storageBucket: " + storageBucket);
             
+            if (preserveOverride != null) {
+                for (String s : preserveOverride) {
+                    Namespace ns = new Namespace(s);
+                    this.preservationNamespaces.add(ns);
+                }
+            } else {
+                List<String> nsvals = props.getProperty(CONF_PRESERVE_NS);
+                for (String s : nsvals) {
+                    Namespace ns = new Namespace(s);
+                    this.preservationNamespaces.add(ns);
+                }
+            }
+            
             ac.setAuthenticationMethod(AuthenticationMethod.BASIC);
             ac.setUsername(user);
             ac.setPassword(key);
             ac.setAuthUrl(suri);
             
-        } catch (FileNotFoundException ex) {
-            throw new InvalidConfigException("missing config", ex);
+        } catch (InvalidConfigException ex) {
+            throw ex;
         } catch (Exception ex) {
             throw new InvalidConfigException("invalid config", ex);
+        }
+        
+        if (!connect) {
+            this.client = null;
+            return;
         }
         
         try {
@@ -499,9 +532,8 @@ public class SwiftStorageAdapter  implements StorageAdapter {
     }
     
     private StorageMetadata toStorageMetadata(StorageLocation loc, URI md5, long contentLength, 
-            final URI artifactURI, Date lastModified) {
-        StorageMetadata storageMetadata = new StorageMetadata(loc, md5, contentLength, lastModified);
-        storageMetadata.artifactURI = artifactURI;
+            URI artifactURI, Date lastModified) {
+        StorageMetadata storageMetadata = new StorageMetadata(loc, artifactURI, md5, contentLength, lastModified);
         return storageMetadata;
     }
     
@@ -522,7 +554,7 @@ public class SwiftStorageAdapter  implements StorageAdapter {
         if (!obj.exists()) {
             throw new ResourceNotFoundException("not found: " + loc);
         }
-        boolean objInTxn = !isIteratorVisible(obj);
+        boolean objInTxn = !isIteratorVisible(obj, false);
         if (!inTxn && !objInTxn) {
             return obj;
         }
@@ -540,6 +572,11 @@ public class SwiftStorageAdapter  implements StorageAdapter {
         log.debug("get: " + storageLocation);
         
         StoredObject obj = getStoredObject(storageLocation, false);
+        String delAttr = (String) obj.getMetadata(DELETED_PRESERVED);
+        if ("true".equals(delAttr)) {
+            log.debug("skip " + DELETED_PRESERVED + ": " + storageLocation);
+            throw new ResourceNotFoundException("not found: " + storageLocation);
+        }
         
         try (final InputStream source = obj.downloadObjectAsInputStream()) {
             MultiBufferIO io = new MultiBufferIO(CIRC_BUFFERS, CIRC_BUFFERSIZE);
@@ -560,6 +597,11 @@ public class SwiftStorageAdapter  implements StorageAdapter {
         log.debug("get: " + storageLocation);
         
         StoredObject obj = getStoredObject(storageLocation, false);
+        String delAttr = (String) obj.getMetadata(DELETED_PRESERVED);
+        if ("true".equals(delAttr)) {
+            log.debug("skip " + DELETED_PRESERVED + ": " + storageLocation);
+            throw new ResourceNotFoundException("not found: " + storageLocation);
+        }
         
         DownloadInstructions di = new DownloadInstructions();
         if (byteRange != null) {
@@ -801,8 +843,8 @@ public class SwiftStorageAdapter  implements StorageAdapter {
             }
 
             // create this before committing the file so constraints applied
-            StorageMetadata metadata = new StorageMetadata(writeDataLocation, checksum, curLength, obj.getLastModifiedAsDate());
-            metadata.artifactURI = newArtifact.getArtifactURI();
+            StorageMetadata metadata = new StorageMetadata(writeDataLocation, newArtifact.getArtifactURI(),
+                    checksum, curLength, obj.getLastModifiedAsDate());
             // contentLastModified assigned in commit
             StorageMetadata ret = commit(metadata, obj);
             return ret;
@@ -1015,7 +1057,7 @@ public class SwiftStorageAdapter  implements StorageAdapter {
     
     private StorageMetadata commit(StorageMetadata sm, StoredObject obj) throws StorageEngageException {
         try {
-            obj.setAndDoNotSaveMetadata(ARTIFACT_ID_ATTR, sm.artifactURI.toASCIIString());
+            obj.setAndDoNotSaveMetadata(ARTIFACT_ID_ATTR, sm.getArtifactURI().toASCIIString());
             obj.setAndDoNotSaveMetadata(CONTENT_CHECKSUM_ATTR, sm.getContentChecksum().toASCIIString());
             obj.removeAndDoNotSaveMetadata(TRANSACTION_ATTR);
             obj.saveMetadata();
@@ -1028,8 +1070,8 @@ public class SwiftStorageAdapter  implements StorageAdapter {
                 return sm;
             }
             log.debug("commit: lastModified **changed** by attribute mod");
-            StorageMetadata ret = new StorageMetadata(sm.getStorageLocation(), sm.getContentChecksum(), sm.getContentLength(), finalLastModified);
-            ret.artifactURI = sm.artifactURI;
+            StorageMetadata ret = new StorageMetadata(sm.getStorageLocation(), sm.getArtifactURI(),
+                    sm.getContentChecksum(), sm.getContentLength(), finalLastModified);
             return ret;
         } catch (CommandException ex) {
             throw new StorageEngageException("failed to persist attributes: " + sm.getStorageLocation(), ex);
@@ -1165,7 +1207,7 @@ public class SwiftStorageAdapter  implements StorageAdapter {
         
     }
     
-    private boolean isIteratorVisible(StoredObject obj) {
+    private boolean isIteratorVisible(StoredObject obj, boolean includeRecoverable) {
         String val = (String) obj.getMetadata(TRANSACTION_ATTR);
         if ("true".equals(val)) {
             return false;
@@ -1173,6 +1215,10 @@ public class SwiftStorageAdapter  implements StorageAdapter {
         String name = obj.getName();
         if (name.contains(":p:")) {
             return false;
+        }
+        String del = (String) obj.getMetadata(DELETED_PRESERVED);
+        if ("true".equals(del)) {
+            return includeRecoverable;
         }
         return true;
     }
@@ -1223,6 +1269,7 @@ public class SwiftStorageAdapter  implements StorageAdapter {
             Map<String,Object> meta = obj.getMetadata();
             String scs = (String) meta.get(CONTENT_CHECKSUM_ATTR);
             String auri = (String) meta.get(ARTIFACT_ID_ATTR);
+            String delp = (String) meta.get(DELETED_PRESERVED);
 
             if (scs == null || auri == null) {
                 // put failed to set metadata after writing the file: invalid
@@ -1232,7 +1279,9 @@ public class SwiftStorageAdapter  implements StorageAdapter {
             URI md5 = new URI(scs);
             URI artifactURI = new URI(auri);
 
-            return toStorageMetadata(loc, md5, obj.getContentLength(), artifactURI, obj.getLastModifiedAsDate());
+            StorageMetadata ret =  toStorageMetadata(loc, md5, obj.getContentLength(), artifactURI, obj.getLastModifiedAsDate());
+            ret.deletePreserved = "true".equals(delp);
+            return ret;
         } catch (IllegalArgumentException | IllegalStateException | URISyntaxException ex) {
             return new StorageMetadata(loc);
         }
@@ -1262,18 +1311,15 @@ public class SwiftStorageAdapter  implements StorageAdapter {
             throw new StorageEngageException("failed to check exists: " + storageLocation, ex);
         }
     }
-    
-    /**
-     * Delete from storage the artifact identified by storageLocation.
-     *
-     * @param storageLocation Identifies the artifact to delete.
-     * @throws ResourceNotFoundException If the artifact could not be found.
-     * @throws IOException If an unrecoverable error occurred.
-     * @throws StorageEngageException If the adapter failed to interact with storage.
-     * @throws TransientException If an unexpected, temporary exception occurred.
-     */
+
     @Override
     public void delete(StorageLocation storageLocation)
+            throws ResourceNotFoundException, IOException, StorageEngageException, TransientException {
+        delete(storageLocation, false);
+    }
+            
+    @Override
+    public void delete(StorageLocation storageLocation, boolean includeRecoverable)
             throws ResourceNotFoundException, IOException, StorageEngageException, TransientException {
         log.debug("delete: " + storageLocation);
         String key = storageLocation.getStorageID().toASCIIString();
@@ -1285,20 +1331,47 @@ public class SwiftStorageAdapter  implements StorageAdapter {
         try {
             Container sub = getContainerImpl(storageLocation);
             StoredObject obj = sub.getObject(key);
+        
             if (obj.exists()) {
-                String dloAttr = (String) obj.getMetadata(DLO_ATTR);
-                if ("true".equals(dloAttr)) {
-                    String prefix = obj.getName() + ":p:";
-                    LargeObjectPartIterator iter = new LargeObjectPartIterator(sub, prefix);
-                    while (iter.hasNext()) {
-                        StoredObject part = iter.next();
-                        log.debug("delete part: " + part.getName());
-                        part.delete();
+                Map<String,Object> meta = obj.getMetadata();
+                String delAttr = (String) meta.get(DELETED_PRESERVED);
+                if ("true".equals(delAttr) && !includeRecoverable) {
+                    log.debug("delete: " + storageLocation + " -- already marked deleted");
+                } else {
+                    String uriAttr = (String) meta.get(ARTIFACT_ID_ATTR);
+                    log.debug("delete: " + storageLocation + " aka " + uriAttr);
+                    if (uriAttr != null && !includeRecoverable) {
+                        try {
+                            URI uri = new URI(uriAttr);
+                            for (Namespace ns : preservationNamespaces) {
+                                log.debug("check: " + ns.getNamespace() + " vs " + uri);
+                                if (ns.matches(uri)) {
+                                    log.debug("preserve: " + uri + " in namespace " + ns.getNamespace());
+                                    obj.setAndSaveMetadata(DELETED_PRESERVED, "true");
+                                    return;
+                                }
+                            }
+                        } catch (URISyntaxException ex) {
+                            if (!preservationNamespaces.isEmpty()) {
+                                log.error("found invalid " + ARTIFACT_ID_ATTR + "=" + uriAttr + " on " 
+                                        + storageLocation + " -- cannot attempt to preserve");
+                            }
+                        }
                     }
+                    String dloAttr = (String) meta.get(DLO_ATTR);
+                    if ("true".equals(dloAttr)) {
+                        String prefix = obj.getName() + ":p:";
+                        LargeObjectPartIterator iter = new LargeObjectPartIterator(sub, prefix);
+                        while (iter.hasNext()) {
+                            StoredObject part = iter.next();
+                            log.debug("delete part: " + part.getName());
+                            part.delete();
+                        }
+                    }
+                    log.debug("delete object: " + obj.getName());
+                    obj.delete();
+                    return;
                 }
-                log.debug("delete object: " + obj.getName());
-                obj.delete();
-                return;
             }
         } catch (Exception ex) {
             throw new StorageEngageException("failed to delete: " + storageLocation, ex);
@@ -1312,12 +1385,22 @@ public class SwiftStorageAdapter  implements StorageAdapter {
     }
 
     @Override
-    public Iterator<StorageMetadata> iterator(String bucketPrefix) throws StorageEngageException, TransientException {
+    public Iterator<StorageMetadata> iterator(String storageBucketPrefix) throws StorageEngageException, TransientException {
+        return iterator(storageBucketPrefix, false);
+    }
+
+    @Override
+    public Iterator<StorageMetadata> iterator(String storageBucketPrefix, boolean includeRecoverable) throws StorageEngageException, TransientException {
         client.resetContainerCache();
         if (multiBucket) {
-            return new MultiBucketStorageIterator(bucketPrefix);
+            return new MultiBucketStorageIterator(storageBucketPrefix, includeRecoverable);
         }
-        return new SingleBucketStorageIterator(bucketPrefix);
+        return new SingleBucketStorageIterator(storageBucketPrefix, includeRecoverable);
+    }
+
+    @Override
+    public Iterator<PutTransaction> transactionIterator() throws StorageEngageException, TransientException {
+        throw new UnsupportedOperationException();
     }
 
     // for intTest cleanup
@@ -1352,7 +1435,7 @@ public class SwiftStorageAdapter  implements StorageAdapter {
                 return false;
             }
             
-            // laxy init
+            // lazy init
             if (iter == null) {
                 // WARNING: With CEPH Object Store and Swift API:
                 // pagesize limit is applied before filtering with the query prefix so if there are enough
@@ -1397,6 +1480,7 @@ public class SwiftStorageAdapter  implements StorageAdapter {
     private class MultiBucketStorageIterator implements Iterator<StorageMetadata> {
         private static final int BATCH_SIZE = 1024;
 
+        private final boolean includeRecoverable;
         private Iterator<Container> bucketIterator;
         private Container currentBucket;
         private InternalBucket icurBucket;
@@ -1404,9 +1488,12 @@ public class SwiftStorageAdapter  implements StorageAdapter {
         private Iterator<StoredObject> objectIterator;
         private StorageMetadata nextItem;
         private String nextMarkerKey;
+        
+        
 
-        public MultiBucketStorageIterator(String bucketPrefix) {
+        public MultiBucketStorageIterator(String bucketPrefix, boolean includeRecoverable) {
             this.bucketIterator = new BucketIterator(bucketPrefix);
+            this.includeRecoverable = includeRecoverable;
             advance();
         }
         
@@ -1460,7 +1547,7 @@ public class SwiftStorageAdapter  implements StorageAdapter {
                     while (objectIterator.hasNext()) {
                         StoredObject obj = objectIterator.next();
                         this.nextMarkerKey = obj.getName();
-                        if (isIteratorVisible(obj)) {
+                        if (isIteratorVisible(obj, includeRecoverable)) {
                             log.debug("MultiBucketStorageIterator.advance: next " + obj.getName() + " len=" + obj.getContentLength());
                             this.nextItem = objectToStorageMetadata(icurBucket, obj);
                             return; // nextItem staged
@@ -1479,17 +1566,19 @@ public class SwiftStorageAdapter  implements StorageAdapter {
         private Iterator<StoredObject> objectIterator;
         private final String bucketPrefix;
         private final Container swiftContainer;
+        private final boolean includeRecoverable;
         
         private StorageMetadata nextItem;
         private String nextMarkerKey; // name of last item returned by next()
 
-        public SingleBucketStorageIterator(String bucketPrefix) {
+        public SingleBucketStorageIterator(String bucketPrefix, boolean includeRecoverable) {
             if (bucketPrefix != null) {
                 this.bucketPrefix = KEY_SCHEME + ":" + bucketPrefix;
             } else {
                 this.bucketPrefix = null;
             }
             this.swiftContainer = client.getContainer(storageBucket);
+            this.includeRecoverable = includeRecoverable;
             advance();
         }
         
@@ -1527,7 +1616,7 @@ public class SwiftStorageAdapter  implements StorageAdapter {
                     while (objectIterator.hasNext()) {
                         StoredObject obj = objectIterator.next();
                         this.nextMarkerKey = obj.getName();
-                        if (isIteratorVisible(obj)) {
+                        if (isIteratorVisible(obj, includeRecoverable)) {
                             log.debug("SingleBucketStorageIterator.advance: next " + obj.getName() + " len=" + obj.getContentLength());
                             this.nextItem = objectToStorageMetadata(null, obj);
                             return; // nextItem staged
