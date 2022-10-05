@@ -172,7 +172,11 @@ public class NegotiationTest extends RavenTest {
         StorageSite site = new StorageSite(resourceID, "site1", true, true);
 
         // file not in raven. Check external URLs
-        Transfer response = negotiate(transfer);
+        Transfer response = Subject.doAs(userSubject, new PrivilegedExceptionAction<Transfer>() {
+            public Transfer run() throws Exception {
+                return negotiate(transfer);
+            }
+        });
         log.info("transfer: " + response);
 
         Assert.assertEquals(requested.size(), response.getAllEndpoints().size());
