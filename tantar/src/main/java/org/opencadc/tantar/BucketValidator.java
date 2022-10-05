@@ -295,12 +295,12 @@ public class BucketValidator implements ValidateEventListener {
      * @throws Exception Pass up any errors to the caller, which is most likely the Main.
      */
     public void validate() throws Exception {
-        LOGGER.info("BucketValidator.validate phase=start");
+        LOGGER.info("BucketValidator.validate phase=start reportOnly=" + reportOnlyFlag);
         try {
             doit();
         } finally {
             logSummary(true, false);
-            LOGGER.info("BucketValidator.validate phase=end");
+            LOGGER.info("BucketValidator.validate phase=end reportOnly=" + reportOnlyFlag);
         }
     }
     
