@@ -188,18 +188,17 @@ public class LuskanConfig {
         }
         
         List<String> allowedGroups = props.getProperty(ALLOWED_GROUP);
-        sb.append("\n\t").append(ALLOWED_GROUP).append(" - ");
         for (String allowedGroup : allowedGroups) {
             sb.append("\n\t").append(ALLOWED_GROUP).append(" - ").append(allowedGroup);
             try {
                 new GroupURI(URI.create(allowedGroup));
                 sb.append(" OK");
             } catch (IllegalArgumentException e) {
-                sb.append(" INVALID GroupURI: " + allowedGroup);
+                sb.append(" INVALID");
                 ok = false;
             }
         }
-
+        
         if (!ok) {
             throw new IllegalStateException(sb.toString());
         }

@@ -128,7 +128,7 @@ public class AuthJobPersistence extends PostgresJobPersistence {
         List<String> configGroups = props.getProperty(LuskanConfig.ALLOWED_GROUP);
         List<GroupURI> allowedGroups = new ArrayList<>();
         configGroups.forEach(group -> allowedGroups.add(new GroupURI(URI.create(group))));
-        if (!allowedGroups.isEmpty()) {
+        if (allowedGroups.isEmpty()) {
             throw new AccessControlException("permission denied");
         }
                 
