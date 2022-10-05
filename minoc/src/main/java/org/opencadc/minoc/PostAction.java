@@ -125,7 +125,7 @@ public class PostAction extends ArtifactAction {
                 throw new IllegalArgumentException("invalid " + PUT_TXN_OP + "=" + txnOP + " must be done with PUT");
             } 
             if (PUT_TXN_OP_ABORT.equalsIgnoreCase(txnOP)) {
-                log.warn("abortTransaction: " + txnID);
+                log.debug("abortTransaction: " + txnID);
                 storageAdapter.abortTransaction(txnID);
                 syncOutput.setCode(204);
                 return;
