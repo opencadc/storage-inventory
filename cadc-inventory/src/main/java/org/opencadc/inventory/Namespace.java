@@ -3,7 +3,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2021.                            (c) 2021.
+ *  (c) 2022.                            (c) 2022.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -67,89 +67,92 @@
  ************************************************************************
  */
 
-package org.opencadc.raven;
+package org.opencadc.inventory;
 
-import org.junit.Assert;
-import org.junit.Test;
+import java.net.URI;
 
-public class NamespaceTest {
+/**
+ * Class to represent a namespace, which is a prefix for an Artifact URI.
+ *
+ * <p>A namespace contains a schema with an optional path.</p>
+ *
+ * {@code <schema>:[<path>/] }
+ *
+ * <p>A namespace containing a schema only must end with a colon ':', i.e. <code>cadc:</code></p>
+ * <p>A namespace with a schema and a path must end with a forward slash '/' after the path,
+ * i.e. <code>cadc:CFHT/123/</code></p>
+ */
+public class Namespace {
 
-    @Test
-    public void testValidNamespace() {
+    private final String namespace;
+
+    public Namespace(String value) throws IllegalArgumentException {
+        this.namespace = value;
+        parse(value);
+    }
+
+    /**
+     * Parse and validate the namespace.
+     *
+     * @param value namespaced to validate
+     * @throws IllegalArgumentException if the namespace fails validation
+     */
+    private void parse(String value) throws IllegalArgumentException {
+
+        if (value == null) {
+            throw new IllegalArgumentException("null namespace");
+        }
+        if (value.isEmpty()) {
+            throw new IllegalArgumentException("zero length namespace");
+        }
+
+        int colon = value.indexOf(':');
+        int slash = value.lastIndexOf('/');
+        String message = "invalid namespace %s : %s, expected <schema>:[<path>/]";
+
+        // if namespace doesn't contain a '/', it should end with a ':'
+        if (slash == -1 && value.length() > colon + 1) {
+            throw new IllegalArgumentException(String.format(message, value,
+                                                             "schema only namespace should end with :"));
+        }
+
+        // namespace with a path should end with a '/'
+        if (slash != -1 && value.length() > slash + 1) {
+            throw new IllegalArgumentException(String.format(message, value,
+                                                             "namespace with path should end with /"));
+        }
 
         try {
-            Namespace namespace;
-            namespace = new Namespace("cadc:");
-            namespace = new Namespace("cadc:CFHT/");
-            namespace = new Namespace("cadc:CFHT/preview/");
-            namespace = new Namespace("cadc:CFHT/preview+/");
-
+            InventoryUtil.validateArtifactURI(Namespace.class, URI.create(value + "file.ext"));
         } catch (IllegalArgumentException e) {
-            Assert.fail(e.getMessage());
+            throw new IllegalArgumentException(String.format(message, value, e.getMessage()));
         }
 
     }
 
-    @Test
-    public void testInvalidNamespace() {
-
-        Namespace namespace;
-
-        // null namespace value
-        try {
-            namespace = new Namespace(null);
-            Assert.fail("null namespace should throw exception");
-        } catch (IllegalArgumentException e) {
-            Assert.assertTrue(e.getMessage().contains("null namespace"));
-        }
-
-        // empty namespace value
-        try {
-            namespace = new Namespace("");
-            Assert.fail("zero length namespace should throw exception");
-        } catch (IllegalArgumentException e) {
-            Assert.assertTrue(e.getMessage().contains("zero length namespace"));
-        }
-
-        // schema not ending in ':'
-        try {
-            namespace = new Namespace("cadc");
-            Assert.fail("schema without : should throw exception");
-        } catch (IllegalArgumentException e) {
-            Assert.assertTrue(e.getMessage().contains("invalid namespace"));
-        }
-
-        // missing schema before the ':'
-        try {
-            namespace = new Namespace(":");
-            Assert.fail(": with schema should throw exception");
-        } catch (IllegalArgumentException e) {
-            Assert.assertTrue(e.getMessage().contains("invalid namespace"));
-        }
-
-        // missing schema and path before the '/'
-        try {
-            namespace = new Namespace("/");
-            Assert.fail(": with schema should throw exception");
-        } catch (IllegalArgumentException e) {
-            Assert.assertTrue(e.getMessage().contains("invalid namespace"));
-        }
-
-        // path not ending in '/'
-        try {
-            namespace = new Namespace("cadc:CFHT");
-            Assert.fail("path not ending in / should throw exception");
-        } catch (IllegalArgumentException e) {
-            Assert.assertTrue(e.getMessage().contains("invalid namespace"));
-        }
-
-        // path not ending in '/'
-        try {
-            namespace = new Namespace("cadc:CFHT/preview+");
-            Assert.fail("path not ending in / should throw exception");
-        } catch (IllegalArgumentException e) {
-            Assert.assertTrue(e.getMessage().contains("invalid namespace"));
-        }
-
+    public String getNamespace() {
+        return this.namespace;
     }
+
+    public boolean matches(URI artifactURI) {
+        return artifactURI.toASCIIString().startsWith(this.namespace);
+    }
+
+    @Override
+    public String toString() {
+        return "Namespace[" + namespace + "]";
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        Namespace rhs = (Namespace) obj;
+        return namespace.equals(rhs.namespace);
+    }
+
+    @Override
+    public int hashCode() {
+        return toString().hashCode();
+    }
+
+    
 }

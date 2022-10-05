@@ -70,8 +70,10 @@
 package org.opencadc.baldur;
 
 import ca.nrc.cadc.auth.AuthenticationUtil;
+import ca.nrc.cadc.util.InvalidConfigException;
 import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.util.PropertiesReader;
+
 import java.net.URI;
 import java.security.Principal;
 import java.util.ArrayList;
@@ -84,7 +86,9 @@ import java.util.NoSuchElementException;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
 import javax.security.auth.x500.X500Principal;
+
 import org.apache.log4j.Logger;
 import org.opencadc.gms.GroupURI;
 
@@ -112,7 +116,7 @@ public class PermissionsConfig {
     private List<PermissionEntry> entries;
     private Date expiryDate;
     
-    PermissionsConfig() {
+    PermissionsConfig() throws InvalidConfigException {
         init();
     }
     
@@ -131,7 +135,7 @@ public class PermissionsConfig {
     /**
      * Read the permissions config.
      */
-    private void init() {
+    private void init() throws InvalidConfigException {
         log.debug("initializing permissions config");
         PropertiesReader pr = new PropertiesReader(PERMISSIONS_PROPERTIES);
         MultiValuedProperties allProps = pr.getAllProperties();
@@ -159,7 +163,7 @@ public class PermissionsConfig {
         // get the permission entries
         List<String> entryConfig = allProps.getProperty(KEY_ENTRY);
         if (entryConfig == null || (entryConfig.size() == 0)) {
-            throw new IllegalStateException("no entries found in " + PERMISSIONS_PROPERTIES);
+            throw new InvalidConfigException("no entries found in " + PERMISSIONS_PROPERTIES);
         }
         log.debug("reading permissions config with " + entryConfig.size() + " entries.");
 
@@ -172,7 +176,7 @@ public class PermissionsConfig {
             }
         }
         if (sb.length() > 0) {
-            throw new IllegalStateException(String.format("duplicate %s values found for %s in %s",
+            throw new InvalidConfigException(String.format("duplicate %s values found for %s in %s",
                                                           KEY_ENTRY, sb, PERMISSIONS_PROPERTIES));
         }
 
@@ -181,7 +185,7 @@ public class PermissionsConfig {
             log.debug("reading permission entry: " + entry);
             String[] entryName = entry.split(" ");
             if (entryName.length > 1) {
-                throw new IllegalStateException(String.format("multiple values found for %s = %s in %s",
+                throw new InvalidConfigException(String.format("multiple values found for %s = %s in %s",
                                                               KEY_ENTRY, entry, PERMISSIONS_PROPERTIES));
             }
             String name = entryName[0];
@@ -189,7 +193,7 @@ public class PermissionsConfig {
             // compile the pattern
             List<String> entryPattern = allProps.getProperty(name + KEY_PATTERN);
             if (entryPattern.size() != 1) {
-                throw new IllegalStateException(String.format("zero or multiple pattern values found for %s in %s",
+                throw new InvalidConfigException(String.format("zero or multiple pattern values found for %s in %s",
                                                               entry + KEY_PATTERN, PERMISSIONS_PROPERTIES));
             }
 
@@ -197,13 +201,13 @@ public class PermissionsConfig {
             try {
                 pattern = Pattern.compile(entryPattern.get(0));
             } catch (Exception e) {
-                throw new IllegalStateException(String.format("invalid pattern for %s = %s in %s: %s",
+                throw new InvalidConfigException(String.format("invalid pattern for %s = %s in %s: %s",
                                                               name + KEY_PATTERN, entryPattern.get(0),
                                                               PERMISSIONS_PROPERTIES, e.getMessage()));
             }
             PermissionEntry permissionEntry = new PermissionEntry(name, pattern);
             if (this.entries.contains(permissionEntry)) {
-                throw new IllegalStateException(String.format("duplicate entry name %s in %s",
+                throw new InvalidConfigException(String.format("duplicate entry name %s in %s",
                                                               name, PERMISSIONS_PROPERTIES));
             }
 
@@ -211,7 +215,7 @@ public class PermissionsConfig {
             List<String> anonRead = allProps.getProperty(permissionEntry.getName() + KEY_ANON_READ);
             if (anonRead != null && !anonRead.isEmpty()) {
                 if (anonRead.size() > 1) {
-                    throw new IllegalStateException(String.format("multiple entries for %s",
+                    throw new InvalidConfigException(String.format("multiple entries for %s",
                                                                   permissionEntry.getName() + KEY_ANON_READ));
                 }
                 permissionEntry.anonRead = Boolean.parseBoolean(anonRead.get(0));
@@ -227,16 +231,16 @@ public class PermissionsConfig {
         // get the Grant timeout
         List<String> timeout = allProps.getProperty(KEY_GRANT_EXPIRY);
         if (timeout.size() == 0) {
-            throw new IllegalStateException("no values for key " + KEY_GRANT_EXPIRY + " in " + PERMISSIONS_PROPERTIES);
+            throw new InvalidConfigException("no values for key " + KEY_GRANT_EXPIRY + " in " + PERMISSIONS_PROPERTIES);
         }
         if (timeout.size() > 1) {
-            throw new IllegalStateException("multiple values for key " + KEY_GRANT_EXPIRY + " in "
+            throw new InvalidConfigException("multiple values for key " + KEY_GRANT_EXPIRY + " in "
                 + PERMISSIONS_PROPERTIES + " where single value expected");
         }
         try {
             this.expiryDate = calcExpiryDate(Integer.parseInt(timeout.get(0)));
         } catch (NumberFormatException nfe) {
-            throw new IllegalStateException("invalid  number value for " + KEY_GRANT_EXPIRY + " in "
+            throw new InvalidConfigException("invalid  number value for " + KEY_GRANT_EXPIRY + " in "
                 + PERMISSIONS_PROPERTIES);
         }
 

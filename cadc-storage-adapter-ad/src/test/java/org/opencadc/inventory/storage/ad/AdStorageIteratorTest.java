@@ -196,8 +196,7 @@ public class AdStorageIteratorTest {
         URI uri = new URI(uriStr);
         StorageLocation storageLocation = new StorageLocation(uri);
         storageLocation.storageBucket = "testBucket";
-        StorageMetadata storageMetadata = new StorageMetadata(storageLocation, new URI("md5:12345"), 12345L, new Date());
-        storageMetadata.artifactURI = uri;
+        StorageMetadata storageMetadata = new StorageMetadata(storageLocation, uri, new URI("md5:12345"), 12345L, new Date());
         return storageMetadata;
     }
 

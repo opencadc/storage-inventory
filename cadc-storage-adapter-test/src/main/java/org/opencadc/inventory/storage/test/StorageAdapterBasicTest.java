@@ -100,6 +100,8 @@ import org.opencadc.inventory.storage.StorageMetadata;
 public abstract class StorageAdapterBasicTest {
     private static final Logger log = Logger.getLogger(StorageAdapterBasicTest.class);
 
+    public static final String TEST_NAMESPACE = "test:";
+    
     static {
         Log4jInit.setLevel("org.opencadc.inventory.storage", Level.INFO);
     }
@@ -115,7 +117,7 @@ public abstract class StorageAdapterBasicTest {
     
     @Test
     public void testPutGetDelete() {
-        URI artifactURI = URI.create("cadc:TEST/testPutGetDelete");
+        URI artifactURI = URI.create(TEST_NAMESPACE + "TEST/testPutGetDelete");
         
         try {
             MessageDigest md = MessageDigest.getInstance("MD5");
@@ -138,7 +140,7 @@ public abstract class StorageAdapterBasicTest {
             Assert.assertNotNull(storageMetadata.getStorageLocation());
             Assert.assertEquals(newArtifact.contentChecksum, storageMetadata.getContentChecksum());
             Assert.assertEquals(newArtifact.contentLength, storageMetadata.getContentLength());
-            Assert.assertEquals("artifactURI",  artifactURI, storageMetadata.artifactURI);
+            Assert.assertEquals("artifactURI",  artifactURI, storageMetadata.getArtifactURI());
             Assert.assertNotNull(storageMetadata.getContentLastModified());
             
             // verify data stored
@@ -160,6 +162,13 @@ public abstract class StorageAdapterBasicTest {
             } catch (ResourceNotFoundException expected) {
                 log.info("caught expected: " + expected);
             }
+            
+            try {
+                adapter.delete(storageMetadata.getStorageLocation());
+                Assert.fail("Should have received resource not found exception");
+            }  catch (ResourceNotFoundException expected) {
+                log.info("caught expected: " + expected);
+            }
         } catch (Exception ex) {
             log.error("unexpected exception", ex);
             Assert.fail("unexpected exception: " + ex);
@@ -168,7 +177,7 @@ public abstract class StorageAdapterBasicTest {
     
     @Test
     public void testPutGetDeleteMinimal() {
-        URI artifactURI = URI.create("cadc:TEST/testPutGetDeleteMinimal");
+        URI artifactURI = URI.create(TEST_NAMESPACE + "TEST/testPutGetDeleteMinimal");
         
         try {
             Random rnd = new Random();
@@ -216,7 +225,7 @@ public abstract class StorageAdapterBasicTest {
     @Test
     public void testPutReadFail() {
         try {
-            URI artifactURI = URI.create("cadc:TEST/testPutReadFail");
+            URI artifactURI = URI.create(TEST_NAMESPACE + "TEST/testPutReadFail");
             NewArtifact na = new NewArtifact(artifactURI);
             adapter.put(na, TestUtil.getInputStreamThatFails(true), null); // provoke IOException
             Assert.fail("expected ReadException: call succeeded");
@@ -231,7 +240,7 @@ public abstract class StorageAdapterBasicTest {
     @Test
     public void testGetWriteFail() {
         try {
-            URI artifactURI = URI.create("cadc:TEST/testPutReadFail");
+            URI artifactURI = URI.create(TEST_NAMESPACE + "TEST/testPutReadFail");
             NewArtifact na = new NewArtifact(artifactURI);
             StorageMetadata sm = adapter.put(na, TestUtil.getInputStreamOfRandomBytes(8192), null);
             Assert.assertNotNull(sm);
@@ -339,12 +348,10 @@ public abstract class StorageAdapterBasicTest {
         try {
             SortedSet<StorageMetadata> expected = new TreeSet<>();
             for (int i = 0; i < iterNum; i++) {
-                URI artifactURI = URI.create("cadc:TEST/testIterator-" + i);
+                URI artifactURI = URI.create(TEST_NAMESPACE + "TEST/testIterator-" + i);
                 NewArtifact na = new NewArtifact(artifactURI);
                 na.contentLength = (long) datalen;
                 StorageMetadata sm = adapter.put(na, TestUtil.getInputStreamOfRandomBytes(datalen), null);
-                Assert.assertNotNull(sm.artifactURI);
-                //Assert.assertNotNull(sm.contentLastModified);
                 log.debug("testIterator put: " + artifactURI + " to " + sm.getStorageLocation());
                 expected.add(sm);
             }
@@ -381,8 +388,7 @@ public abstract class StorageAdapterBasicTest {
                 Assert.assertEquals("length", em.getContentLength(), am.getContentLength());
                 Assert.assertEquals("checksum", em.getContentChecksum(), am.getContentChecksum());
                 
-                Assert.assertNotNull("artifactURI", am.artifactURI);
-                Assert.assertEquals("artifactURI", em.artifactURI, am.artifactURI);
+                Assert.assertEquals("artifactURI", em.getArtifactURI(), am.getArtifactURI());
                 
                 Assert.assertNotNull("contentLastModified", am.getContentLastModified());
                 Assert.assertEquals("contentLastModified", em.getContentLastModified(), am.getContentLastModified());
@@ -402,7 +408,7 @@ public abstract class StorageAdapterBasicTest {
         try {
             SortedSet<StorageMetadata> expected = new TreeSet<>();
             for (int i = 0; i < iterNum; i++) {
-                URI artifactURI = URI.create("cadc:TEST/testIteratorBucketPrefix-" + i);
+                URI artifactURI = URI.create(TEST_NAMESPACE + "TEST/testIteratorBucketPrefix-" + i);
                 NewArtifact na = new NewArtifact(artifactURI);
                 na.contentLength = (long) datalen;
                 StorageMetadata sm = adapter.put(na,  TestUtil.getInputStreamOfRandomBytes(datalen), null);

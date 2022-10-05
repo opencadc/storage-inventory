@@ -85,12 +85,13 @@ public class StorageMetadata implements Comparable<StorageMetadata> {
     private final URI contentChecksum;
     private final Long contentLength;
     private final Date contentLastModified;
-    
-    public URI artifactURI;
+    private final URI artifactURI;
     
 
     public String contentEncoding;
     public String contentType;
+    
+    public boolean deletePreserved = false;
     
     /**
      * Constructor for a valid stored object.
@@ -100,8 +101,9 @@ public class StorageMetadata implements Comparable<StorageMetadata> {
      * @param contentLength length of the file in bytes
      * @param contentLastModified timestamp when the file was last modified
      */
-    public StorageMetadata(StorageLocation storageLocation, URI contentChecksum, Long contentLength, Date contentLastModified) {
+    public StorageMetadata(StorageLocation storageLocation, URI artifactURI, URI contentChecksum, Long contentLength, Date contentLastModified) {
         InventoryUtil.assertNotNull(StorageMetadata.class, "storageLocation", storageLocation);
+        InventoryUtil.assertNotNull(StorageMetadata.class, "artifactURI", artifactURI);
         InventoryUtil.assertNotNull(StorageMetadata.class, "contentChecksum", contentChecksum);
         InventoryUtil.assertNotNull(StorageMetadata.class, "contentLength", contentLength);
         InventoryUtil.assertNotNull(StorageMetadata.class, "contentLastModified", contentLastModified);
@@ -109,6 +111,7 @@ public class StorageMetadata implements Comparable<StorageMetadata> {
             throw new IllegalArgumentException("invalid " + StorageMetadata.class.getSimpleName() + ".contentLength: " + contentLength);
         }
         this.storageLocation = storageLocation;
+        this.artifactURI = artifactURI;
         this.contentChecksum = contentChecksum;
         this.contentLength = contentLength;
         this.contentLastModified = contentLastModified;
@@ -122,19 +125,24 @@ public class StorageMetadata implements Comparable<StorageMetadata> {
     public StorageMetadata(StorageLocation storageLocation) {
         InventoryUtil.assertNotNull(StorageMetadata.class, "storageLocation", storageLocation);
         this.storageLocation = storageLocation;
+        this.artifactURI = null;
         this.contentChecksum = null;
         this.contentLength = null;
         this.contentLastModified = null;
     }
 
     public boolean isValid() {
-        return contentChecksum != null;
+        return artifactURI != null;
     }
     
     public StorageLocation getStorageLocation() {
         return storageLocation;
     }
 
+    public URI getArtifactURI() {
+        return artifactURI;
+    }
+    
     public URI getContentChecksum() {
         return contentChecksum;
     }

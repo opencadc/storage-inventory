@@ -94,7 +94,7 @@ public class InventoryIsAlwaysRightTest extends AbstractResolutionPolicyTest<Inv
 
         artifact.storageLocation = new StorageLocation(URI.create("s3:998877"));
 
-        final StorageMetadata storageMetadata = new StorageMetadata(new StorageLocation(URI.create("s3:989877")),
+        final StorageMetadata storageMetadata = new StorageMetadata(new StorageLocation(URI.create("s3:989877")), URI.create("test:989877"),
                                                         URI.create("md5:" + random16Bytes()), 1001L, new Date());
         final TestEventListener testEventListener = new TestEventListener();
 
@@ -117,7 +117,7 @@ public class InventoryIsAlwaysRightTest extends AbstractResolutionPolicyTest<Inv
     public void resolveNullAndStorageMetadata() throws Exception {
         final ByteArrayOutputStream output = new ByteArrayOutputStream();
         final Reporter reporter = new Reporter(getTestLogger(output));
-        final StorageMetadata storageMetadata = new StorageMetadata(new StorageLocation(URI.create("s3:989877")),
+        final StorageMetadata storageMetadata = new StorageMetadata(new StorageLocation(URI.create("s3:989877")), URI.create("test:989877"),
                                                         URI.create("md5:" + random16Bytes()), 1001L, new Date());
         final TestEventListener testEventListener = new TestEventListener();
 
@@ -147,7 +147,7 @@ public class InventoryIsAlwaysRightTest extends AbstractResolutionPolicyTest<Inv
         testSubject = new InventoryIsAlwaysRight(testEventListener, reporter);
         Thread.sleep(100L);
         
-        final StorageMetadata storageMetadata = new StorageMetadata(new StorageLocation(URI.create("s3:989877")),
+        final StorageMetadata storageMetadata = new StorageMetadata(new StorageLocation(URI.create("s3:989877")), URI.create("test:989877"),
                                                         URI.create("md5:" + random16Bytes()), 1001L, new Date());
 
         

@@ -71,6 +71,8 @@ package org.opencadc.raven;
 
 import java.util.List;
 
+import org.opencadc.inventory.Namespace;
+
 public class StorageSiteRule {
 
     private final List<Namespace> namespaces;

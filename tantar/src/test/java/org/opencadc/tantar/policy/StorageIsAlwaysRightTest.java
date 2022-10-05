@@ -92,7 +92,7 @@ public class StorageIsAlwaysRightTest extends AbstractResolutionPolicyTest<Stora
                                                URI.create("md5:" + random16Bytes()), new Date(), 88L);
         artifact.storageLocation = new StorageLocation(URI.create("s3:101010"));
 
-        final StorageMetadata storageMetadata = new StorageMetadata(new StorageLocation(URI.create("s3:101011")),
+        final StorageMetadata storageMetadata = new StorageMetadata(new StorageLocation(URI.create("s3:101011")), URI.create("test:101011"),
                                                         URI.create("md5:" + random16Bytes()), 1001L, new Date());
         final TestEventListener testEventListener = new TestEventListener();
 
@@ -201,7 +201,7 @@ public class StorageIsAlwaysRightTest extends AbstractResolutionPolicyTest<Stora
     public void resolveNullAndStorageMetadata() throws Exception {
         final ByteArrayOutputStream output = new ByteArrayOutputStream();
         final Reporter reporter = new Reporter(getTestLogger(output));
-        final StorageMetadata storageMetadata = new StorageMetadata(new StorageLocation(URI.create("s3:101011")),
+        final StorageMetadata storageMetadata = new StorageMetadata(new StorageLocation(URI.create("s3:101011")), URI.create("test:101011"),
                                                         URI.create("md5:" + random16Bytes()), 1001L, new Date());
         final TestEventListener testEventListener = new TestEventListener();
 

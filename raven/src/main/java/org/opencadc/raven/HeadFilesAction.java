@@ -107,9 +107,10 @@ public class HeadFilesAction extends FilesAction {
         initAndAuthorize();
         log.debug("Starting HEAD action for " + artifactURI.toASCIIString());
         Artifact artifact = artifactDAO.get(artifactURI);
+        
         if (artifact == null) {
             if (this.preventNotFound) {
-                // check the other sites
+                // check known storage sites
                 ProtocolsGenerator pg = new ProtocolsGenerator(this.artifactDAO, this.publicKeyFile, this.privateKeyFile,
                         this.user, this.siteAvailabilities, this.siteRules, this.preventNotFound, this.storageResolver);
                 StorageSiteDAO storageSiteDAO = new StorageSiteDAO(artifactDAO);
@@ -121,8 +122,8 @@ public class HeadFilesAction extends FilesAction {
                 String authToken = tk.generateToken(artifactURI, ReadGrant.class, user);
                 artifact = pg.getUnsyncedArtifact(artifactURI, transfer, storageSiteDAO.list(), authToken);
             }
-
         }
+        
         if (artifact == null) {
             if (storageResolver != null) {
                 // redirect to external site
@@ -137,10 +138,13 @@ public class HeadFilesAction extends FilesAction {
                 } catch (IllegalArgumentException e) {
                     // nothing to be done here
                 }
-                // message not actually output for a head request
-                throw new ResourceNotFoundException(artifactURI.toASCIIString());
             }
         }
+        
+        if (artifact == null) {
+            throw new ResourceNotFoundException(artifactURI.toASCIIString());
+        }
+        
         setHeaders(artifact, syncOutput);
     }
     

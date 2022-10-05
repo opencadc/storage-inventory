@@ -4,7 +4,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2020.                            (c) 2020.
+ *  (c) 2022.                            (c) 2022.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -76,18 +76,20 @@ import ca.nrc.cadc.io.ResourceIterator;
 import ca.nrc.cadc.profiler.Profiler;
 import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.util.StringUtil;
+
 import java.net.URI;
 import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+
 import javax.naming.NamingException;
 import javax.security.auth.Subject;
 import javax.sql.DataSource;
+
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.DeletedArtifactEvent;
@@ -97,7 +99,6 @@ import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.DeletedArtifactEventDAO;
 import org.opencadc.inventory.db.DeletedStorageLocationEventDAO;
-import org.opencadc.inventory.db.EntityNotFoundException;
 import org.opencadc.inventory.db.ObsoleteStorageLocation;
 import org.opencadc.inventory.db.ObsoleteStorageLocationDAO;
 import org.opencadc.inventory.db.SQLGenerator;
@@ -541,22 +542,14 @@ public class BucketValidator implements ValidateEventListener {
 
     // used by createArtifact and replaceArtifact
     private Artifact toArtifact(StorageMetadata storageMetadata) {
-        if (storageMetadata.artifactURI != null) {
-            final Artifact artifact = new Artifact(storageMetadata.artifactURI,
+        final Artifact artifact = new Artifact(storageMetadata.getArtifactURI(),
                                                    storageMetadata.getContentChecksum(),
                                                    storageMetadata.getContentLastModified(),
                                                    storageMetadata.getContentLength());
-            artifact.storageLocation = storageMetadata.getStorageLocation();
-            artifact.contentType = storageMetadata.contentType;
-            artifact.contentEncoding = storageMetadata.contentEncoding;
-            return artifact;
-        }
-        LOGGER.warn(String.format(
-            "Policy would like to create an Artifact, but no Artifact URI exists in StorageMetadata "
-            + "located at %s.  This StorageLocation will be skipped for now but will be present in future"
-            + "runs and will likely require manual intervention.",
-            storageMetadata.getStorageLocation()));
-        return null;
+        artifact.storageLocation = storageMetadata.getStorageLocation();
+        artifact.contentType = storageMetadata.contentType;
+        artifact.contentEncoding = storageMetadata.contentEncoding;
+        return artifact;
     }
     
     /**
@@ -625,7 +618,7 @@ public class BucketValidator implements ValidateEventListener {
                 transactionManager.commitTransaction();
                 numReplaceArtifact++;
             } catch (Exception e) {
-                LOGGER.error(String.format("Failed to create Artifact %s.", storageMetadata.artifactURI), e);
+                LOGGER.error(String.format("Failed to create Artifact %s.", storageMetadata.getArtifactURI()), e);
                 transactionManager.rollbackTransaction();
                 LOGGER.debug("Rollback Transaction: OK");
                 throw e;
@@ -673,7 +666,7 @@ public class BucketValidator implements ValidateEventListener {
                     LOGGER.debug("failed to lock artifact, assume deleted: " + artifact.getID());
                 }
             } catch (Exception e) {
-                LOGGER.error(String.format("Failed to update Artifact %s.", storageMetadata.artifactURI), e);
+                LOGGER.error(String.format("Failed to update Artifact %s.", storageMetadata.getArtifactURI()), e);
                 transactionManager.rollbackTransaction();
                 LOGGER.debug("Rollback Transaction: OK");
                 throw e;
@@ -738,13 +731,13 @@ public class BucketValidator implements ValidateEventListener {
             throw new IllegalStateException(
                 String.format("query failed for ObsoleteStorageLocation %s for file %s",
                               storageMetadata.getStorageLocation().getStorageID().toASCIIString(),
-                              storageMetadata.artifactURI.toASCIIString()), e);
+                              storageMetadata.getArtifactURI().toASCIIString()), e);
         }
         if (obsoleteStorageLocation != null) {
             StringBuilder sb = new StringBuilder();
             sb.append(this.getClass().getSimpleName());
             sb.append(".deleteStorageLocation");
-            sb.append(" Artifact.uri=").append(storageMetadata.artifactURI);
+            sb.append(" Artifact.uri=").append(storageMetadata.getArtifactURI());
             sb.append(" loc=").append(storageMetadata.getStorageLocation());
             sb.append(" reason=obsolete");
             //LOGGER.info(String.format("delete obsolete object: %s (was: %s)", obsoleteStorageLocation,

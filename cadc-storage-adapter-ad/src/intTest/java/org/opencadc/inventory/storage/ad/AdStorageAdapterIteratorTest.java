@@ -161,10 +161,10 @@ public class AdStorageAdapterIteratorTest {
                     while (storageMetaIterator.hasNext()) {
                         StorageMetadata sm = storageMetaIterator.next();
                         // check that for IRIS storageID and artifact URI are different in scheme (ad vs cadc)
-                        Assert.assertTrue("cadc".equals(sm.artifactURI.getScheme()));
+                        Assert.assertTrue("cadc".equals(sm.getArtifactURI().getScheme()));
                         Assert.assertTrue("ad".equals(sm.getStorageLocation().getStorageID().getScheme()));
                         Assert.assertTrue(
-                                sm.artifactURI.getSchemeSpecificPart().equals(
+                                sm.getArtifactURI().getSchemeSpecificPart().equals(
                                         sm.getStorageLocation().getStorageID().getSchemeSpecificPart()));
                         sortedMeta.add(sm);
                     }
@@ -223,7 +223,7 @@ public class AdStorageAdapterIteratorTest {
                     // Create SortedSet for comparison
                     while (storageMetaIterator.hasNext()) {
                         StorageMetadata sm = storageMetaIterator.next();
-                        Assert.assertTrue("cadc".equals(sm.artifactURI.getScheme()));
+                        Assert.assertTrue("cadc".equals(sm.getArtifactURI().getScheme()));
                         Assert.assertTrue("ad".equals(sm.getStorageLocation().getStorageID().getScheme()));
                         sortedMeta.add(sm);
                     }

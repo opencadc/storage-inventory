@@ -81,6 +81,7 @@ import ca.nrc.cadc.vos.Protocol;
 import ca.nrc.cadc.vos.Transfer;
 import ca.nrc.cadc.vos.VOS;
 import ca.nrc.cadc.vosi.Availability;
+
 import java.io.File;
 import java.io.IOException;
 import java.net.InetAddress;
@@ -96,9 +97,11 @@ import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.UUID;
+
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.InventoryUtil;
+import org.opencadc.inventory.Namespace;
 import org.opencadc.inventory.SiteLocation;
 import org.opencadc.inventory.StorageSite;
 import org.opencadc.inventory.db.ArtifactDAO;

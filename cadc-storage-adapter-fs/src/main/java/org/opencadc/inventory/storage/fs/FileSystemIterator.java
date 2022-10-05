@@ -197,8 +197,8 @@ public class FileSystemIterator implements Iterator<StorageMetadata> {
         try {
             URI checksum = new URI(getFileAttribute(next.path, FileSystemStorageAdapter.CHECKSUM_ATTRIBUTE_NAME));
             long length = Files.size(next.path);
-            StorageMetadata meta = new StorageMetadata(storageLocation, checksum, length, new Date(Files.getLastModifiedTime(next.path).toMillis()));
-            meta.artifactURI = storageID;
+            StorageMetadata meta = new StorageMetadata(storageLocation, storageID, 
+                    checksum, length, new Date(Files.getLastModifiedTime(next.path).toMillis()));
             return meta;
         } catch (Exception e) {
             throw new RuntimeException("Failed to compute file metadata: " + e.getMessage(), e);

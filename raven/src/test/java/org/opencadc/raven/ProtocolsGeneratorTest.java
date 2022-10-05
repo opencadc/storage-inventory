@@ -69,6 +69,7 @@
 package org.opencadc.raven;
 
 import ca.nrc.cadc.util.Log4jInit;
+
 import java.net.InetAddress;
 import java.net.URI;
 import java.util.ArrayList;
@@ -78,10 +79,12 @@ import java.util.Map;
 import java.util.Random;
 import java.util.SortedSet;
 import java.util.TreeSet;
+
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.Test;
+import org.opencadc.inventory.Namespace;
 import org.opencadc.inventory.StorageSite;
 
 public class ProtocolsGeneratorTest {
