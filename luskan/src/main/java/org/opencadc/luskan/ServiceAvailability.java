@@ -79,9 +79,12 @@ import ca.nrc.cadc.vosi.avail.CheckDataSource;
 import ca.nrc.cadc.vosi.avail.CheckException;
 import ca.nrc.cadc.vosi.avail.CheckResource;
 import ca.nrc.cadc.vosi.avail.CheckWebService;
+
 import java.io.File;
 import java.net.URI;
 import java.net.URL;
+import java.util.NoSuchElementException;
+
 import org.apache.log4j.Logger;
 
 /**
@@ -122,9 +125,7 @@ public class ServiceAvailability implements AvailabilityPlugin {
                 return new Availability(false, RestAction.STATE_READ_ONLY_MSG);
             }
 
-            // check for a certficate needed to perform network ops
-            CheckCertificate checkCert = new CheckCertificate(SERVOPS_PEM_FILE);
-            checkCert.check();
+            
 
             // check connection pools
             CheckResource cr = new CheckDataSource("jdbc/tapuser", TAP_TEST);
@@ -138,26 +139,44 @@ public class ServiceAvailability implements AvailabilityPlugin {
 
             // check other services we depend on
             RegistryClient reg = new RegistryClient();
-            URL url;
-            CheckResource checkResource;
-            
             LocalAuthority localAuthority = new LocalAuthority();
 
-            URI credURI = localAuthority.getServiceURI(Standards.CRED_PROXY_10.toString());
-            url = reg.getServiceURL(credURI, Standards.VOSI_AVAILABILITY, AuthMethod.ANON);
-            checkResource = new CheckWebService(url);
-            checkResource.check();
-
-            URI usersURI = localAuthority.getServiceURI(Standards.UMS_USERS_01.toString());
-            url = reg.getServiceURL(usersURI, Standards.VOSI_AVAILABILITY, AuthMethod.ANON);
-            checkResource = new CheckWebService(url);
-            checkResource.check();
-            
-            URI groupsURI = localAuthority.getServiceURI(Standards.GMS_SEARCH_01.toString());
-            if (!groupsURI.equals(usersURI)) {
-                url = reg.getServiceURL(groupsURI, Standards.VOSI_AVAILABILITY, AuthMethod.ANON);
-                checkResource = new CheckWebService(url);
+            URI credURI = null;
+            try {
+                credURI = localAuthority.getServiceURI(Standards.CRED_PROXY_10.toString());
+                URL url = reg.getServiceURL(credURI, Standards.VOSI_AVAILABILITY, AuthMethod.ANON);
+                CheckResource checkResource = new CheckWebService(url);
                 checkResource.check();
+            } catch (NoSuchElementException ex) {
+                log.debug("not configured: " + Standards.CRED_PROXY_10);
+            }
+
+            URI usersURI = null;
+            try {
+                usersURI = localAuthority.getServiceURI(Standards.UMS_USERS_01.toString());
+                URL url = reg.getServiceURL(credURI, Standards.VOSI_AVAILABILITY, AuthMethod.ANON);
+                CheckResource checkResource = new CheckWebService(url);
+                checkResource.check();
+            } catch (NoSuchElementException ex) {
+                log.debug("not configured: " + Standards.UMS_USERS_01);
+            }
+            
+            URI groupsURI = null;
+            try {
+                groupsURI = localAuthority.getServiceURI(Standards.GMS_SEARCH_10.toString());
+                if (!groupsURI.equals(usersURI)) {
+                    URL url = reg.getServiceURL(credURI, Standards.VOSI_AVAILABILITY, AuthMethod.ANON);
+                    CheckResource checkResource = new CheckWebService(url);
+                    checkResource.check();
+                }
+            } catch (NoSuchElementException ex) {
+                log.debug("not configured: " + Standards.GMS_SEARCH_10);
+            }
+            
+            if (credURI != null || usersURI != null || groupsURI != null) {
+                // check for a certficate needed to perform network A&A ops
+                CheckCertificate checkCert = new CheckCertificate(SERVOPS_PEM_FILE);
+                checkCert.check();
             }
 
         } catch (CheckException ce) {

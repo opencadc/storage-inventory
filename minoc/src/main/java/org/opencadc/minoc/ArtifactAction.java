@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2019.                            (c) 2019.
+*  (c) 2022.                            (c) 2022.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -196,7 +196,11 @@ public abstract class ArtifactAction extends RestAction {
         }
 
         String pubkeyFileName = config.getFirstPropertyValue(MinocInitAction.PUBKEYFILE_KEY);
-        this.publicKey = new File(System.getProperty("user.home") + "/config/" + pubkeyFileName);
+        if (pubkeyFileName != null) {
+            this.publicKey = new File(System.getProperty("user.home") + "/config/" + pubkeyFileName);
+        } else {
+            this.publicKey = null; // no pre-auth
+        }
     }
 
     @Override
@@ -249,6 +253,9 @@ public abstract class ArtifactAction extends RestAction {
         // do authorization (with token or subject)
         Subject subject = AuthenticationUtil.getCurrentSubject();
         if (authToken != null) {
+            if (publicKey == null) {
+                throw new IllegalArgumentException("unexpected pre-auth token in URL");
+            }
             TokenTool tk = new TokenTool(publicKey);
             String tokenUser;
             if (allowReadWithWriteGrant && ReadGrant.class.isAssignableFrom(grantClass)) {

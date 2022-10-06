@@ -130,19 +130,24 @@ public class PermissionsCheck {
         }
 
         Set<GroupURI> granted = new TreeSet<>();
-        Subject ops = CredUtil.createOpsSubject();
-        try {
-            List<ReadGrant> grants = Subject.doAs(ops, new GetReadGrantsAction(this.artifactURI, readGrantServices));
-            for (ReadGrant g : grants) {
-                if (g.isAnonymousAccess()) {
-                    logInfo.setGrant("read: anonymous");
-                    return;
+        if (!readGrantServices.isEmpty()) {
+            try {
+                Subject ops = CredUtil.createOpsSubject();
+                List<ReadGrant> grants = Subject.doAs(ops, new GetReadGrantsAction(this.artifactURI, readGrantServices));
+                for (ReadGrant g : grants) {
+                    if (g.isAnonymousAccess()) {
+                        logInfo.setGrant("read: anonymous");
+                        return;
+                    }
+                    granted.addAll(g.getGroups());
                 }
-                granted.addAll(g.getGroups());
+            } catch (TransientException ex) {
+                throw ex;
+            } catch (Exception ex) {
+                throw new RuntimeException("unexpected exception calling permissions service(s)", ex);
             }
-        } catch (PrivilegedActionException ex) {
-            throw new RuntimeException("BUG: unexpected exception calling permissions service(s)", ex);
         }
+        
 
         if (granted.isEmpty()) {
             throw new AccessControlException("permission denied: no read grants for " + this.artifactURI);
@@ -198,14 +203,16 @@ public class PermissionsCheck {
         }
 
         Set<GroupURI> granted = new TreeSet<>();
-        Subject ops = CredUtil.createOpsSubject();
-        try {
-            List<WriteGrant> grants = Subject.doAs(ops, new GetWriteGrantsAction(this.artifactURI, writeGrantServices));
-            for (WriteGrant g : grants) {
-                granted.addAll(g.getGroups());
+        if (!writeGrantServices.isEmpty()) {
+            Subject ops = CredUtil.createOpsSubject();
+            try {
+                List<WriteGrant> grants = Subject.doAs(ops, new GetWriteGrantsAction(this.artifactURI, writeGrantServices));
+                for (WriteGrant g : grants) {
+                    granted.addAll(g.getGroups());
+                }
+            } catch (Exception ex) {
+                throw new RuntimeException("unexpected exception calling permissions service(s)", ex);
             }
-        } catch (PrivilegedActionException ex) {
-            throw new RuntimeException("BUG: unexpected exception calling permissions service(s)", ex);
         }
 
         if (granted.isEmpty()) {

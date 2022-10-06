@@ -114,9 +114,24 @@ public class AuthJobPersistence extends PostgresJobPersistence {
     private void checkPermission() {
         Subject s = AuthenticationUtil.getCurrentSubject();
         AuthMethod am = AuthenticationUtil.getAuthMethod(s);
+        MultiValuedProperties props = LuskanConfig.getConfig();
+        String allowAnon = props.getFirstPropertyValue(LuskanConfig.ALLOW_ANON);
+        log.debug(LuskanConfig.ALLOW_ANON + "=" + allowAnon);
+        if ("true".equals(allowAnon)) {
+            return;
+        }
+        
         if (am == null || AuthMethod.ANON.equals(am)) {
             throw new NotAuthenticatedException("permission denied");
         }
+        
+        List<String> configGroups = props.getProperty(LuskanConfig.ALLOWED_GROUP);
+        List<GroupURI> allowedGroups = new ArrayList<>();
+        configGroups.forEach(group -> allowedGroups.add(new GroupURI(URI.create(group))));
+        if (allowedGroups.isEmpty()) {
+            throw new AccessControlException("permission denied");
+        }
+                
         try {
             if (CredUtil.checkCredentials()) {
                 // better to get all the groups for the caller which could be a long list,
@@ -127,10 +142,7 @@ public class AuthJobPersistence extends PostgresJobPersistence {
                 GroupClient client = GroupUtil.getGroupClient(resourceID);
                 List<GroupURI> memberships = client.getMemberships();
 
-                MultiValuedProperties props = LuskanConfig.getConfig();
-                List<String> configGroups = props.getProperty(LuskanConfig.ALLOWED_GROUP);
-                List<GroupURI> allowedGroups = new ArrayList<>();
-                configGroups.forEach(group -> allowedGroups.add(new GroupURI(URI.create(group))));
+                
 
                 for (GroupURI memberGroup : memberships) {
                     for (GroupURI allowedGroup : allowedGroups) {

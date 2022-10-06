@@ -90,6 +90,7 @@ public class LuskanConfig {
     public static final String URI_KEY = LUSKAN_KEY + ".resourceID";
     public static final String TMPDIR_KEY = LUSKAN_KEY + ".resultsDir";
     public static final String STORAGE_SITE_KEY = LUSKAN_KEY + ".isStorageSite";
+    public static final String ALLOW_ANON = LUSKAN_KEY + ".allowAnon";
     public static final String ALLOWED_GROUP = LUSKAN_KEY + ".allowedGroup";
     
     // dev use only
@@ -175,24 +176,29 @@ public class LuskanConfig {
         }
         sb.append("\n");
 
-        List<String> allowedGroups = props.getProperty(ALLOWED_GROUP);
-        sb.append("\n\t").append(ALLOWED_GROUP).append(" - ");
-        if (allowedGroups.isEmpty()) {
-            sb.append("MISSING");
-            ok = false;
+        // optional
+        sb.append("\n\t").append(ALLOW_ANON).append(" - ");
+        String anonStr = props.getFirstPropertyValue(ALLOW_ANON);
+        if (anonStr == null) {
+            sb.append("DEFAULT");
+        } else if ("false".equals(anonStr) || "true".equals(anonStr)) {
+            sb.append("OK");
         } else {
-            for (String allowedGroup : allowedGroups) {
-                sb.append("\n\t").append(ALLOWED_GROUP).append(" - ").append(allowedGroup);
-                try {
-                    new GroupURI(URI.create(allowedGroup));
-                    sb.append(" OK");
-                } catch (IllegalArgumentException e) {
-                    sb.append(" INVALID GroupURI");
-                    ok = false;
-                }
+            sb.append("INVALID: " + anonStr);
+        }
+        
+        List<String> allowedGroups = props.getProperty(ALLOWED_GROUP);
+        for (String allowedGroup : allowedGroups) {
+            sb.append("\n\t").append(ALLOWED_GROUP).append(" - ").append(allowedGroup);
+            try {
+                new GroupURI(URI.create(allowedGroup));
+                sb.append(" OK");
+            } catch (IllegalArgumentException e) {
+                sb.append(" INVALID");
+                ok = false;
             }
         }
-
+        
         if (!ok) {
             throw new IllegalStateException(sb.toString());
         }

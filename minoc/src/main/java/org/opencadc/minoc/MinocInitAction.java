@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2020.                            (c) 2020.
+*  (c) 2022.                            (c) 2022.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -187,12 +187,10 @@ public class MinocInitAction extends InitAction {
             sb.append("OK");
         }
         
+        // optional
         String pubkeyFileName = mvp.getFirstPropertyValue(PUBKEYFILE_KEY);
         sb.append("\n\t").append(PUBKEYFILE_KEY).append(": ");
-        if (pubkeyFileName == null) {
-            sb.append("MISSING");
-            ok = false;
-        } else {
+        if (pubkeyFileName != null) {
             File pk = new File(System.getProperty("user.home") + "/config/" + pubkeyFileName);
             if (!pk.exists()) {
                 sb.append(" NOT FOUND ").append(pk.getAbsolutePath());
