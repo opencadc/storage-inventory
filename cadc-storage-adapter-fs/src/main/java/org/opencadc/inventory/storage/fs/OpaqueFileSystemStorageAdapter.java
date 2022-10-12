@@ -120,6 +120,8 @@ import org.opencadc.inventory.storage.PutTransaction;
 import org.opencadc.inventory.storage.StorageAdapter;
 import org.opencadc.inventory.storage.StorageEngageException;
 import org.opencadc.inventory.storage.StorageMetadata;
+import org.opencadc.inventory.storage.policy.InventoryIsAlwaysRight;
+import org.opencadc.inventory.storage.policy.StorageValidationPolicy;
 
 /**
  * An implementation of the StorageAdapter interface on a file system.
@@ -270,6 +272,11 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
         } catch (IOException io) {
             throw new InvalidConfigException(("Could not create content or transaction directory"), io);
         }
+    }
+
+    @Override
+    public StorageValidationPolicy getValidationPolicy() {
+        return new InventoryIsAlwaysRight();
     }
     
     @Override

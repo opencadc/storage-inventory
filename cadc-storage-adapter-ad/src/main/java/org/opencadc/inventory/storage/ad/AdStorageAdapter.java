@@ -99,6 +99,7 @@ import ca.nrc.cadc.vos.TransferParsingException;
 import ca.nrc.cadc.vos.TransferReader;
 import ca.nrc.cadc.vos.TransferWriter;
 import ca.nrc.cadc.vos.VOS;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -111,7 +112,9 @@ import java.security.AccessControlException;
 import java.security.cert.CertificateExpiredException;
 import java.security.cert.CertificateNotYetValidException;
 import java.util.Iterator;
+
 import javax.security.auth.Subject;
+
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.StorageLocation;
@@ -121,6 +124,8 @@ import org.opencadc.inventory.storage.PutTransaction;
 import org.opencadc.inventory.storage.StorageAdapter;
 import org.opencadc.inventory.storage.StorageEngageException;
 import org.opencadc.inventory.storage.StorageMetadata;
+import org.opencadc.inventory.storage.policy.StorageIsAlwaysRight;
+import org.opencadc.inventory.storage.policy.StorageValidationPolicy;
 import org.opencadc.tap.TapClient;
 
 /**
@@ -145,6 +150,11 @@ public class AdStorageAdapter implements StorageAdapter {
      */
     public AdStorageAdapter(){}
 
+    @Override
+    public StorageValidationPolicy getValidationPolicy() {
+        return new StorageIsAlwaysRight();
+    }
+    
     @Override
     public void get(StorageLocation storageLocation, OutputStream dest)
         throws ResourceNotFoundException, ReadException, WriteException, StorageEngageException, TransientException {

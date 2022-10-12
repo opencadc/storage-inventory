@@ -83,8 +83,7 @@ public class InventoryIsAlwaysRight extends StorageValidationPolicy {
 
     private final Date now = new Date();
     
-    public InventoryIsAlwaysRight(final ValidateEventListener validateEventListener) {
-        super(validateEventListener);
+    public InventoryIsAlwaysRight() {
     }
 
     private boolean delayAction(Date d) {
@@ -114,14 +113,14 @@ public class InventoryIsAlwaysRight extends StorageValidationPolicy {
                 sb.append(" loc=").append(storageMetadata.getStorageLocation());
                 sb.append(" reason=no-matching-artifact");
                 log.info(sb.toString());
-                validateEventListener.delayAction();
+                validateActions.delayAction();
             } else {
                 sb.append(".deleteStorageLocation");
                 sb.append(" Artifact.uri=").append(storageMetadata.getArtifactURI());
                 sb.append(" loc=").append(storageMetadata.getStorageLocation());
                 sb.append(" reason=no-matching-artifact");
                 log.info(sb.toString());
-                validateEventListener.delete(storageMetadata);
+                validateActions.delete(storageMetadata);
             }
             return;
         }
@@ -145,10 +144,10 @@ public class InventoryIsAlwaysRight extends StorageValidationPolicy {
                 sb2.append(" loc=").append(storageMetadata.getStorageLocation());
                 sb2.append(" reason=invalid-storageLocation");
                 log.info(sb2.toString());
-                validateEventListener.delete(storageMetadata);
+                validateActions.delete(storageMetadata);
             }
             log.info(sb.toString());
-            validateEventListener.clearStorageLocation(artifact);
+            validateActions.clearStorageLocation(artifact);
             return;
         } 
 
@@ -160,7 +159,7 @@ public class InventoryIsAlwaysRight extends StorageValidationPolicy {
             sb.append(" loc=").append(artifact.storageLocation);
             sb.append(" reason=metadata");
             log.info(sb.toString());
-            validateEventListener.clearStorageLocation(artifact);
+            validateActions.clearStorageLocation(artifact);
 
             StringBuilder sb2 = new StringBuilder();
             sb2.append(this.getClass().getSimpleName());
@@ -170,7 +169,7 @@ public class InventoryIsAlwaysRight extends StorageValidationPolicy {
             sb2.append(" loc=").append(storageMetadata.getStorageLocation());
             sb2.append(" reason=metadata");
             log.info(sb2.toString());
-            validateEventListener.delete(storageMetadata);
+            validateActions.delete(storageMetadata);
             return;
         }
 

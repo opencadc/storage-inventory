@@ -91,9 +91,10 @@ public class StorageIsAlwaysRightTest extends AbstractResolutionPolicyTest<Stora
 
         final StorageMetadata storageMetadata = new StorageMetadata(new StorageLocation(URI.create("s3:101011")), URI.create("test:101011"),
                                                         URI.create("md5:" + random16Bytes()), 1001L, new Date());
-        final TestEventListener testEventListener = new TestEventListener();
+        final TestValidateActions testEventListener = new TestValidateActions();
 
-        testSubject = new StorageIsAlwaysRight(testEventListener);
+        testSubject = new StorageIsAlwaysRight();
+        testSubject.setValidateActions(testEventListener);
         testSubject.validate(artifact, storageMetadata);
 
         final List<String> outputLines = Arrays.asList(new String(output.toByteArray()).split("\n"));
@@ -115,9 +116,10 @@ public class StorageIsAlwaysRightTest extends AbstractResolutionPolicyTest<Stora
         // StorageMetadata nas no other metadata than the StorageLocation.
         final StorageMetadata storageMetadata = new StorageMetadata(new StorageLocation(URI.create("s3:989877")));
 
-        final TestEventListener testEventListener = new TestEventListener();
+        final TestValidateActions testEventListener = new TestValidateActions();
 
-        testSubject = new StorageIsAlwaysRight(testEventListener);
+        testSubject = new StorageIsAlwaysRight();
+        testSubject.setValidateActions(testEventListener);
         testSubject.validate(null, storageMetadata);
 
         final List<String> outputLines = Arrays.asList(new String(output.toByteArray()).split("\n"));
@@ -141,11 +143,12 @@ public class StorageIsAlwaysRightTest extends AbstractResolutionPolicyTest<Stora
 
         final Artifact artifact = new Artifact(URI.create("cadc:bucket/file.fits"),
                                                URI.create("md5:" + random16Bytes()), new Date(), 88L);
-        final TestEventListener testEventListener = new TestEventListener();
+        final TestValidateActions testEventListener = new TestValidateActions();
 
         artifact.storageLocation = new StorageLocation(URI.create("s3:101010"));
 
-        testSubject = new StorageIsAlwaysRight(testEventListener);
+        testSubject = new StorageIsAlwaysRight();
+        testSubject.setValidateActions(testEventListener);
         testSubject.validate(artifact, null);
 
         final List<String> outputLines = Arrays.asList(new String(output.toByteArray()).split("\n"));
@@ -172,9 +175,10 @@ public class StorageIsAlwaysRightTest extends AbstractResolutionPolicyTest<Stora
 
         artifact.storageLocation = new StorageLocation(URI.create("s3:989877"));
 
-        final TestEventListener testEventListener = new TestEventListener();
+        final TestValidateActions testEventListener = new TestValidateActions();
 
-        testSubject = new StorageIsAlwaysRight(testEventListener);
+        testSubject = new StorageIsAlwaysRight();
+        testSubject.setValidateActions(testEventListener);
         testSubject.validate(artifact, storageMetadata);
 
         final List<String> outputLines = Arrays.asList(new String(output.toByteArray()).split("\n"));
@@ -198,9 +202,10 @@ public class StorageIsAlwaysRightTest extends AbstractResolutionPolicyTest<Stora
 
         final StorageMetadata storageMetadata = new StorageMetadata(new StorageLocation(URI.create("s3:101011")), URI.create("test:101011"),
                                                         URI.create("md5:" + random16Bytes()), 1001L, new Date());
-        final TestEventListener testEventListener = new TestEventListener();
+        final TestValidateActions testEventListener = new TestValidateActions();
 
-        testSubject = new StorageIsAlwaysRight(testEventListener);
+        testSubject = new StorageIsAlwaysRight();
+        testSubject.setValidateActions(testEventListener);
         testSubject.validate(null, storageMetadata);
 
         final List<String> outputLines = Arrays.asList(new String(output.toByteArray()).split("\n"));

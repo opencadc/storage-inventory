@@ -93,9 +93,10 @@ public class InventoryIsAlwaysRightTest extends AbstractResolutionPolicyTest<Inv
 
         final StorageMetadata storageMetadata = new StorageMetadata(new StorageLocation(URI.create("s3:989877")), URI.create("test:989877"),
                                                         URI.create("md5:" + random16Bytes()), 1001L, new Date());
-        final TestEventListener testEventListener = new TestEventListener();
+        final TestValidateActions testEventListener = new TestValidateActions();
 
-        testSubject = new InventoryIsAlwaysRight(testEventListener);
+        testSubject = new InventoryIsAlwaysRight();
+        testSubject.setValidateActions(testEventListener);
         testSubject.validate(artifact, storageMetadata);
 
         final List<String> outputLines = Arrays.asList(new String(output.toByteArray()).split("\n"));
@@ -115,9 +116,10 @@ public class InventoryIsAlwaysRightTest extends AbstractResolutionPolicyTest<Inv
         final ByteArrayOutputStream output = new ByteArrayOutputStream();
         final StorageMetadata storageMetadata = new StorageMetadata(new StorageLocation(URI.create("s3:989877")), URI.create("test:989877"),
                                                         URI.create("md5:" + random16Bytes()), 1001L, new Date());
-        final TestEventListener testEventListener = new TestEventListener();
+        final TestValidateActions testEventListener = new TestValidateActions();
 
-        testSubject = new InventoryIsAlwaysRight(testEventListener);
+        testSubject = new InventoryIsAlwaysRight();
+        testSubject.setValidateActions(testEventListener);
         testSubject.validate(null, storageMetadata);
 
         final List<String> outputLines = Arrays.asList(new String(output.toByteArray()).split("\n"));
@@ -135,11 +137,12 @@ public class InventoryIsAlwaysRightTest extends AbstractResolutionPolicyTest<Inv
     @Test
     public void resolveNullAndStorageMetadataDelayed() throws Exception {
         final ByteArrayOutputStream output = new ByteArrayOutputStream();
-        final TestEventListener testEventListener = new TestEventListener();
+        final TestValidateActions testEventListener = new TestValidateActions();
         
         // simulate new stored object after validation started
         
-        testSubject = new InventoryIsAlwaysRight(testEventListener);
+        testSubject = new InventoryIsAlwaysRight();
+        testSubject.setValidateActions(testEventListener);
         Thread.sleep(100L);
         
         final StorageMetadata storageMetadata = new StorageMetadata(new StorageLocation(URI.create("s3:989877")), URI.create("test:989877"),
@@ -173,9 +176,10 @@ public class InventoryIsAlwaysRightTest extends AbstractResolutionPolicyTest<Inv
 
         artifact.storageLocation = new StorageLocation(URI.create("s3:989877"));
 
-        final TestEventListener testEventListener = new TestEventListener();
+        final TestValidateActions testEventListener = new TestValidateActions();
 
-        testSubject = new InventoryIsAlwaysRight(testEventListener);
+        testSubject = new InventoryIsAlwaysRight();
+        testSubject.setValidateActions(testEventListener);
         testSubject.validate(artifact, storageMetadata);
 
         final List<String> outputLines = Arrays.asList(new String(output.toByteArray()).split("\n"));
@@ -199,9 +203,10 @@ public class InventoryIsAlwaysRightTest extends AbstractResolutionPolicyTest<Inv
                                                URI.create("md5:" + random16Bytes()), new Date(), 88L);
         artifact.storageLocation = new StorageLocation(URI.create("s3:101010"));
 
-        final TestEventListener testEventListener = new TestEventListener();
+        final TestValidateActions testEventListener = new TestValidateActions();
 
-        testSubject = new InventoryIsAlwaysRight(testEventListener);
+        testSubject = new InventoryIsAlwaysRight();
+        testSubject.setValidateActions(testEventListener);
         testSubject.validate(artifact, null);
 
         final List<String> outputLines = Arrays.asList(new String(output.toByteArray()).split("\n"));

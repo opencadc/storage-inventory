@@ -123,6 +123,8 @@ import org.opencadc.inventory.storage.PutTransaction;
 import org.opencadc.inventory.storage.StorageAdapter;
 import org.opencadc.inventory.storage.StorageEngageException;
 import org.opencadc.inventory.storage.StorageMetadata;
+import org.opencadc.inventory.storage.policy.InventoryIsAlwaysRight;
+import org.opencadc.inventory.storage.policy.StorageValidationPolicy;
 
 /**
  * StorageAdapter implementation using the SWIFT API to store files in an
@@ -566,6 +568,11 @@ public class SwiftStorageAdapter  implements StorageAdapter {
         throw new ResourceNotFoundException("not found: " + loc);
     }
 
+    @Override
+    public StorageValidationPolicy getValidationPolicy() {
+        return new InventoryIsAlwaysRight();
+    }
+    
     @Override
     public void get(StorageLocation storageLocation, OutputStream dest)
             throws ResourceNotFoundException, ReadException, WriteException, StorageEngageException {

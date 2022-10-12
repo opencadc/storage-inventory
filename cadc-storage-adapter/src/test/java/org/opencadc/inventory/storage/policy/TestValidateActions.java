@@ -1,3 +1,4 @@
+
 /*
  ************************************************************************
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
@@ -69,81 +70,70 @@
 package org.opencadc.inventory.storage.policy;
 
 import java.net.URI;
-import java.util.EventListener;
-
+import java.util.ArrayList;
+import java.util.List;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.storage.StorageMetadata;
 
-/**
- * Interface used to limit dependencies so this lib doesn't depend on cadc-inventory-db??
- * 
- * @author pdowler
- */
-public interface ValidateEventListener extends EventListener {
+public class TestValidateActions implements ValidateActions {
+    public boolean createArtifactCalled = false;
+    public boolean deleteStorageMetadataCalled = false;
+    public boolean deleteArtifactCalled = false;
+    public boolean clearStorageLocationCalled = false;
+    public boolean replaceArtifactCalled = false;
+    public boolean updateArtifactCalled = false;
     
-    /**
-     * Get existing artifact by uri. This is to support possible changes in StorageLocation
-     * for recovery of existing artifact-storage connection.
-     * 
-     * @param uri
-     * @return the artifact or null
-     */
-    Artifact getArtifact(URI uri);
-
-    /**
-     * Create a new Artifact using metadata from the given StorageMetadata.
-     *
-     * @param storageMetadata       The StorageMetadata to pull metadata from.
-     * @throws Exception    Any unexpected error.
-     */
-    void createArtifact(final StorageMetadata storageMetadata) throws Exception;
-
-    /**
-     * Delete the given StorageMetadata.
-     *
-     * @param storageMetadata   The StorageMetadata to delete
-     * @throws Exception    Any unexpected error.
-     */
-    void delete(final StorageMetadata storageMetadata) throws Exception;
-
-    /**
-     * Delete the given Artifact.  Implementors should also create a DeletedArtifactEvent as necessary.
-     *
-     * @param artifact      The Artifact to remove.
-     * @throws Exception    Any unexpected error.
-     */
-    void delete(final Artifact artifact) throws Exception;
-
-    /**
-     * This will force the file-sync application to assume it's a new insert and force a re-download of the file.  The
-     * default logic will most likely be to remove its StorageLocation instance.
-     *
-     * @param artifact The base artifact.  This MUST have a Storage Location.
-     * @throws Exception Anything IO/Thread related.
-     */
-    void clearStorageLocation(final Artifact artifact) throws Exception;
-
-    /**
-     * Replace the given Artifact with a new one created from the given StorageMetadata instance.
-     *
-     * @param artifact          The Artifact to replace.
-     * @param storageMetadata   The StorageMetadata from which to create a new Artifact.
-     * @throws Exception    Any unexpected error.
-     */
-    void replaceArtifact(final Artifact artifact, final StorageMetadata storageMetadata) throws Exception;
-
-    /**
-     * Update the values of the given Artifact with those from the given StorageMetadata.  This differs from a replace
-     * as it will not delete the original Artifact first, but rather update the values and issue a PUT.
-     *
-     * @param artifact          The Artifact to update.
-     * @param storageMetadata   The StorageMetadata from which to update the Artifact's fields.
-     * @throws Exception    Any unexpected error.
-     */
-    void updateArtifact(final Artifact artifact, final StorageMetadata storageMetadata) throws Exception;
+    public final List<StorageMetadata> created = new ArrayList<>();
+    public final List<Artifact> cleared = new ArrayList<>();
+    public final List<Artifact> deleted = new ArrayList<>();
+    public final List<Artifact> replaced = new ArrayList<>();
+    public final List<Artifact> updated = new ArrayList<>();
     
-    /**
-     * Delay validation but increment count.
-     */
-    void delayAction();
+    public final List<StorageMetadata> deletedStorage = new ArrayList<>();
+
+    @Override
+    public Artifact getArtifact(URI uri) {
+        return null;
+    }
+
+    @Override
+    public void createArtifact(StorageMetadata storageMetadata) throws Exception {
+        createArtifactCalled = true;
+        created.add(storageMetadata);
+    }
+
+    @Override
+    public void delete(StorageMetadata storageMetadata) throws Exception {
+        deleteStorageMetadataCalled = true;
+        deletedStorage.add(storageMetadata);
+    }
+
+    @Override
+    public void delete(Artifact artifact) throws Exception {
+        deleteArtifactCalled = true;
+        deleted.add(artifact);
+    }
+
+    @Override
+    public void clearStorageLocation(Artifact artifact) throws Exception {
+        clearStorageLocationCalled = true;
+        cleared.add(artifact);
+    }
+
+    @Override
+    public void replaceArtifact(Artifact artifact, StorageMetadata storageMetadata) throws Exception {
+        replaceArtifactCalled = true;
+        replaced.add(artifact);
+    }
+
+    @Override
+    public void updateArtifact(Artifact artifact, StorageMetadata storageMetadata) throws Exception {
+        updateArtifactCalled = true;
+        updated.add(artifact);
+    }
+
+    @Override
+    public void delayAction() {
+        // noop
+    }
 }

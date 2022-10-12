@@ -77,6 +77,7 @@ import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.util.HexUtil;
 import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.util.PropertiesReader;
+
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -98,6 +99,7 @@ import java.util.Iterator;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.UUID;
+
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.StorageLocation;
@@ -107,6 +109,8 @@ import org.opencadc.inventory.storage.PutTransaction;
 import org.opencadc.inventory.storage.StorageAdapter;
 import org.opencadc.inventory.storage.StorageEngageException;
 import org.opencadc.inventory.storage.StorageMetadata;
+import org.opencadc.inventory.storage.policy.InventoryIsAlwaysRight;
+import org.opencadc.inventory.storage.policy.StorageValidationPolicy;
 
 /**
  * An implementation of the storage adapter interface on a file system.
@@ -203,6 +207,11 @@ public class FileSystemStorageAdapter implements StorageAdapter {
         } catch (IOException io) {
             throw new IllegalArgumentException(("Could not create content or transaction directory"), io);
         }
+    }
+
+    @Override
+    public StorageValidationPolicy getValidationPolicy() {
+        return new InventoryIsAlwaysRight();
     }
     
     @Override

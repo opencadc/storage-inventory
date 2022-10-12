@@ -74,6 +74,7 @@ import ca.nrc.cadc.db.DBUtil;
 import ca.nrc.cadc.db.TransactionManager;
 import ca.nrc.cadc.io.ResourceIterator;
 import ca.nrc.cadc.profiler.Profiler;
+import ca.nrc.cadc.util.BucketSelector;
 import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.util.StringUtil;
 
@@ -106,15 +107,14 @@ import org.opencadc.inventory.db.version.InitDatabase;
 import org.opencadc.inventory.storage.StorageAdapter;
 import org.opencadc.inventory.storage.StorageMetadata;
 import org.opencadc.inventory.storage.policy.StorageValidationPolicy;
-import org.opencadc.inventory.storage.policy.ValidateEventListener;
-import org.opencadc.inventory.util.BucketSelector;
+import org.opencadc.inventory.storage.policy.ValidateActions;
 
 /**
  * Main class to issue iterator requests to the Storage Adaptor and verify the contents.
  * Policies for conflicts, meaning situations where there is a discrepancy between what the Storage Adaptor relays
  * what is currently stored and what the Storage Inventory declares, are set at the properties level.
  */
-public class BucketValidator implements ValidateEventListener {
+public class BucketValidator implements ValidateActions {
 
     private static final Logger log = Logger.getLogger(BucketValidator.class);
 

@@ -80,8 +80,7 @@ import org.opencadc.inventory.storage.StorageMetadata;
 public class RecoverFromStorage extends StorageValidationPolicy {
     private static final Logger log = Logger.getLogger(RecoverFromStorage.class);
 
-    public RecoverFromStorage(ValidateEventListener validateEventListener) {
-        super(validateEventListener);
+    public RecoverFromStorage() {
         throw new UnsupportedOperationException("** incomplete implementation **");
     }
 
@@ -120,7 +119,7 @@ public class RecoverFromStorage extends StorageValidationPolicy {
             sb.append(" loc=").append(storageMetadata.getStorageLocation());
             //log.info(String.format("Adding Artifact %s as per policy.", storageMetadata.getStorageLocation()));
             log.info(sb.toString());
-            validateEventListener.createArtifact(storageMetadata);
+            validateActions.createArtifact(storageMetadata);
         } else  {
             sb.append(".updateArtifact");
             sb.append(" Artifact.id=").append(artifact.getID());
@@ -130,7 +129,7 @@ public class RecoverFromStorage extends StorageValidationPolicy {
             // StorageMetadata's values.
             //log.info(String.format("Updating Artifact %s as per policy.", storageMetadata.getStorageLocation()));
             log.info(sb.toString());
-            validateEventListener.updateArtifact(artifact, storageMetadata);
+            validateActions.updateArtifact(artifact, storageMetadata);
         }
     }
 }

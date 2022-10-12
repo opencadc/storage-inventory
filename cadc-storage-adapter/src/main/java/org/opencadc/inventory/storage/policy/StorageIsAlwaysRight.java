@@ -76,8 +76,7 @@ import org.opencadc.inventory.storage.StorageMetadata;
 public class StorageIsAlwaysRight extends StorageValidationPolicy {
     private static final Logger log = Logger.getLogger(StorageIsAlwaysRight.class);
     
-    public StorageIsAlwaysRight(final ValidateEventListener validateEventListener) {
-        super(validateEventListener);
+    public StorageIsAlwaysRight() {
     }
 
     /**
@@ -112,7 +111,7 @@ public class StorageIsAlwaysRight extends StorageValidationPolicy {
             }
             log.info(sb.toString());
             if (artifact != null) {
-                validateEventListener.delete(artifact);
+                validateActions.delete(artifact);
             }
             return;
         }
@@ -122,14 +121,14 @@ public class StorageIsAlwaysRight extends StorageValidationPolicy {
         boolean unmatchedSorageLocation = false;
         if (art == null) {
             // check for existing artifact with unmatched StorageLocation
-            Artifact tmp = validateEventListener.getArtifact(storageMetadata.getArtifactURI());
+            Artifact tmp = validateActions.getArtifact(storageMetadata.getArtifactURI());
             if (tmp == null) {
                 sb.append(".createArtifact");
                 sb.append(" Artifact.uri=").append(storageMetadata.getArtifactURI());
                 sb.append(" loc=").append(storageMetadata.getStorageLocation());
                 sb.append(" reason=no-matching-artifact");
                 log.info(sb.toString());
-                validateEventListener.createArtifact(storageMetadata);
+                validateActions.createArtifact(storageMetadata);
                 return;
             } else {
                 art = tmp;
@@ -145,7 +144,7 @@ public class StorageIsAlwaysRight extends StorageValidationPolicy {
             sb.append(" Artifact.uri=").append(art.getURI());
             sb.append(" loc=").append(storageMetadata.getStorageLocation());
             log.info(sb.toString());
-            validateEventListener.replaceArtifact(art, storageMetadata);
+            validateActions.replaceArtifact(art, storageMetadata);
             return;
         }
         

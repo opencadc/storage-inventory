@@ -74,10 +74,13 @@ import org.opencadc.inventory.storage.StorageMetadata;
 
 public abstract class StorageValidationPolicy {
 
-    final ValidateEventListener validateEventListener;
+    protected ValidateActions validateActions;
 
-    StorageValidationPolicy(final ValidateEventListener validateEventListener) {
-        this.validateEventListener = validateEventListener;
+    protected StorageValidationPolicy() {
+    }
+    
+    public void setValidateActions(final ValidateActions validateActions) {
+        this.validateActions = validateActions;
     }
 
     /**
