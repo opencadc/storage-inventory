@@ -4,7 +4,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2020.                            (c) 2020.
+ *  (c) 2022.                            (c) 2022.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -67,26 +67,26 @@
  ************************************************************************
  */
 
-package org.opencadc.tantar.policy;
+package org.opencadc.inventory.storage.policy;
 
 import java.util.Date;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.storage.StorageMetadata;
-import org.opencadc.tantar.Reporter;
-import org.opencadc.tantar.ValidateEventListener;
 
-
-public class InventoryIsAlwaysRight extends ResolutionPolicy {
+/**
+ * 
+ * @author pdowler
+ */
+public class InventoryIsAlwaysRight extends StorageValidationPolicy {
     private static final Logger log = Logger.getLogger(InventoryIsAlwaysRight.class);
 
     private final Date now = new Date();
     
-    public InventoryIsAlwaysRight(final ValidateEventListener validateEventListener, final Reporter reporter) {
-        super(validateEventListener, reporter);
+    public InventoryIsAlwaysRight(final ValidateEventListener validateEventListener) {
+        super(validateEventListener);
     }
 
-    
     private boolean delayAction(Date d) {
         return (d != null && now.before(d));
     }
@@ -99,7 +99,7 @@ public class InventoryIsAlwaysRight extends ResolutionPolicy {
      * @param storageMetadata The StorageMetadata to use in deciding.
      */
     @Override
-    public void resolve(final Artifact artifact, final StorageMetadata storageMetadata) throws Exception {
+    public void validate(final Artifact artifact, final StorageMetadata storageMetadata) throws Exception {
         if (artifact == null && storageMetadata == null) {
             throw new RuntimeException("BUG: both args to resolve are null");
         }
@@ -113,14 +113,14 @@ public class InventoryIsAlwaysRight extends ResolutionPolicy {
                 sb.append(" Artifact.uri=").append(storageMetadata.getArtifactURI());
                 sb.append(" loc=").append(storageMetadata.getStorageLocation());
                 sb.append(" reason=no-matching-artifact");
-                reporter.report(sb.toString());
+                log.info(sb.toString());
                 validateEventListener.delayAction();
             } else {
                 sb.append(".deleteStorageLocation");
                 sb.append(" Artifact.uri=").append(storageMetadata.getArtifactURI());
                 sb.append(" loc=").append(storageMetadata.getStorageLocation());
                 sb.append(" reason=no-matching-artifact");
-                reporter.report(sb.toString());
+                log.info(sb.toString());
                 validateEventListener.delete(storageMetadata);
             }
             return;
@@ -144,10 +144,10 @@ public class InventoryIsAlwaysRight extends ResolutionPolicy {
                 sb.append(" Artifact.uri=").append(artifact.getURI());
                 sb2.append(" loc=").append(storageMetadata.getStorageLocation());
                 sb2.append(" reason=invalid-storageLocation");
-                reporter.report(sb2.toString());
+                log.info(sb2.toString());
                 validateEventListener.delete(storageMetadata);
             }
-            reporter.report(sb.toString());
+            log.info(sb.toString());
             validateEventListener.clearStorageLocation(artifact);
             return;
         } 
@@ -159,7 +159,7 @@ public class InventoryIsAlwaysRight extends ResolutionPolicy {
             sb.append(" Artifact.uri=").append(artifact.getURI());
             sb.append(" loc=").append(artifact.storageLocation);
             sb.append(" reason=metadata");
-            reporter.report(sb.toString());
+            log.info(sb.toString());
             validateEventListener.clearStorageLocation(artifact);
 
             StringBuilder sb2 = new StringBuilder();
@@ -169,7 +169,7 @@ public class InventoryIsAlwaysRight extends ResolutionPolicy {
             sb.append(" Artifact.uri=").append(artifact.getURI());
             sb2.append(" loc=").append(storageMetadata.getStorageLocation());
             sb2.append(" reason=metadata");
-            reporter.report(sb2.toString());
+            log.info(sb2.toString());
             validateEventListener.delete(storageMetadata);
             return;
         }

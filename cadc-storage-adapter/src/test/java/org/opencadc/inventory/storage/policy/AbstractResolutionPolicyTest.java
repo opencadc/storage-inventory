@@ -4,7 +4,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2020.                            (c) 2020.
+ *  (c) 2022.                            (c) 2022.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -67,72 +67,45 @@
  ************************************************************************
  */
 
-package org.opencadc.tantar.policy;
+package org.opencadc.inventory.storage.policy;
 
-import org.opencadc.inventory.Artifact;
-import org.opencadc.inventory.storage.StorageMetadata;
-import org.opencadc.tantar.Reporter;
-import org.opencadc.tantar.ValidateEventListener;
+import ca.nrc.cadc.util.Log4jInit;
 
+import java.io.OutputStream;
+import java.util.List;
+import java.util.UUID;
 
-/**
- * Policy to ensure that a recovery from Storage (in the event of a disaster or a new site is brought online) will
- * dictate what goes into the Inventory Database. This policy differs from StorageIsAlwaysRight because... ???
- */
-public class RecoverFromStorage extends ResolutionPolicy {
+import org.apache.log4j.Level;
+import org.apache.log4j.Logger;
+import org.apache.log4j.SimpleLayout;
+import org.apache.log4j.WriterAppender;
+import org.junit.Assert;
 
-    public RecoverFromStorage(ValidateEventListener validateEventListener, Reporter reporter) {
-        super(validateEventListener, reporter);
-        throw new UnsupportedOperationException("** incomplete implementation **");
+public class AbstractResolutionPolicyTest<T extends StorageValidationPolicy> {
+
+    T testSubject;
+
+    static {
+        Log4jInit.setLevel("org.opencadc.tantar", Level.DEBUG);
     }
 
-    /**
-     * Use the logic of this Policy to correct a conflict caused by the two given items.  Only the Artifact can be
-     * null; it will be assumed that the given StorageMetadata is never null.
-     *
-     * @param artifact        The Artifact to use in deciding.  Can be null.
-     * @param storageMetadata The StorageMetadata to use in deciding.  Never null.
-     * @throws Exception For any unknown error that should be passed up.
-     */
-    @Override
-    public void resolve(final Artifact artifact, final StorageMetadata storageMetadata) throws Exception {
-        if (artifact == null && storageMetadata == null) {
-            throw new RuntimeException("BUG: both args to resolve are null");
-        }
-        
-        StringBuilder sb = new StringBuilder();
-        sb.append(this.getClass().getSimpleName());
-        if (storageMetadata == null || !storageMetadata.isValid()) {
-            sb.append(".noAction");
-            if (artifact != null) {
-                sb.append(" Artifact.id=").append(artifact.getID());
-                sb.append(" Artifact.uri=").append(artifact.getURI());
-                sb.append(" reason=no-matching-storageLocation");
-            } else {
-                sb.append(" reason=invalid-storageLocation");
-            }
-            //reporter.report("RecoverFromStorage: artifact " + artifact.getID() + " vs StorageMetadata null");
-            reporter.report(sb.toString());
-            return;
-        }
-        
-        if (artifact == null) {
-            sb.append(".createArtifact");
-            sb.append(" Artifact.uri=").append(storageMetadata.getArtifactURI());
-            sb.append(" loc=").append(storageMetadata.getStorageLocation());
-            //reporter.report(String.format("Adding Artifact %s as per policy.", storageMetadata.getStorageLocation()));
-            reporter.report(sb.toString());
-            validateEventListener.createArtifact(storageMetadata);
-        } else  {
-            sb.append(".updateArtifact");
-            sb.append(" Artifact.id=").append(artifact.getID());
-            sb.append(" Artifact.uri=").append(artifact.getURI());
-            sb.append(" loc=").append(storageMetadata.getStorageLocation());
-            // This scenario is for an incomplete previous run.  Treat the Artifact as corrupt and set it back to the
-            // StorageMetadata's values.
-            //reporter.report(String.format("Updating Artifact %s as per policy.", storageMetadata.getStorageLocation()));
-            reporter.report(sb.toString());
-            validateEventListener.updateArtifact(artifact, storageMetadata);
-        }
+    void assertListContainsMessage(final List<String> outputLines, final String message) {
+        Assert.assertTrue(String.format("Output does not contain %s", message),
+                          outputLines.stream().anyMatch(s -> s.contains(message)));
+    }
+
+    Logger getTestLogger(final OutputStream outputStream) {
+        final Logger logger = Logger.getLogger(AbstractResolutionPolicyTest.class);
+        final WriterAppender testAppender = new WriterAppender(new SimpleLayout(), outputStream);
+        testAppender.setName(String.format("%s appender", StorageIsAlwaysRightTest.class));
+
+        logger.removeAllAppenders();
+        logger.addAppender(testAppender);
+
+        return logger;
+    }
+
+    String random16Bytes() {
+        return UUID.randomUUID().toString().replaceAll("-", "");
     }
 }

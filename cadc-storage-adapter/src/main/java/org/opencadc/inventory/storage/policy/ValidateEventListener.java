@@ -1,10 +1,9 @@
-
 /*
  ************************************************************************
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2020.                            (c) 2020.
+ *  (c) 2022.                            (c) 2022.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -67,95 +66,84 @@
  ************************************************************************
  */
 
-package org.opencadc.tantar.policy;
+package org.opencadc.inventory.storage.policy;
 
-import org.apache.log4j.Logger;
+import java.net.URI;
+import java.util.EventListener;
+
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.storage.StorageMetadata;
-import org.opencadc.tantar.Reporter;
-import org.opencadc.tantar.ValidateEventListener;
 
-
-public class StorageIsAlwaysRight extends ResolutionPolicy {
-    private static final Logger log = Logger.getLogger(StorageIsAlwaysRight.class);
+/**
+ * Interface used to limit dependencies so this lib doesn't depend on cadc-inventory-db??
+ * 
+ * @author pdowler
+ */
+public interface ValidateEventListener extends EventListener {
     
-    public StorageIsAlwaysRight(final ValidateEventListener validateEventListener, final Reporter reporter) {
-        super(validateEventListener, reporter);
-    }
+    /**
+     * Get existing artifact by uri. This is to support possible changes in StorageLocation
+     * for recovery of existing artifact-storage connection.
+     * 
+     * @param uri
+     * @return the artifact or null
+     */
+    Artifact getArtifact(URI uri);
 
     /**
-     * Use the logic of this Policy to correct a conflict caused by the two given items.  One of the arguments can
-     * be null, but not both.
+     * Create a new Artifact using metadata from the given StorageMetadata.
      *
-     * @param artifact        The Artifact to use in deciding.
-     * @param storageMetadata The StorageMetadata to use in deciding.
+     * @param storageMetadata       The StorageMetadata to pull metadata from.
+     * @throws Exception    Any unexpected error.
      */
-    @Override
-    public void resolve(final Artifact artifact, final StorageMetadata storageMetadata) throws Exception {
-        if (artifact == null && storageMetadata == null) {
-            throw new RuntimeException("BUG: both args to resolve are null");
-        }
-        
-        StringBuilder sb = new StringBuilder();
-        sb.append(this.getClass().getSimpleName());
-        
-        if (storageMetadata == null || !storageMetadata.isValid()) {
-            if (artifact != null) {
-                sb.append(".deleteArtifact");
-                sb.append(" Artifact.id=").append(artifact.getID());
-                sb.append(" Artifact.uri=").append(artifact.getURI());
-            } else {
-                sb.append(".noAction");
-            }
-            if (storageMetadata == null) {
-                sb.append(" reason=no-matching-storageLocation");
-            } else {
-                sb.append(" loc=").append(storageMetadata.getStorageLocation());
-                sb.append(" reason=invalid-storageLocation");
-            }
-            reporter.report(sb.toString());
-            if (artifact != null) {
-                validateEventListener.delete(artifact);
-            }
-            return;
-        }
-        
-        //storageMetadata != null && storageMetadata.isValid()
-        Artifact art = artifact;
-        boolean unmatchedSorageLocation = false;
-        if (art == null) {
-            // check for existing artifact with unmatched StorageLocation
-            Artifact tmp = validateEventListener.getArtifact(storageMetadata.getArtifactURI());
-            if (tmp == null) {
-                sb.append(".createArtifact");
-                sb.append(" Artifact.uri=").append(storageMetadata.getArtifactURI());
-                sb.append(" loc=").append(storageMetadata.getStorageLocation());
-                sb.append(" reason=no-matching-artifact");
-                reporter.report(sb.toString());
-                validateEventListener.createArtifact(storageMetadata);
-                return;
-            } else {
-                art = tmp;
-                unmatchedSorageLocation = true;
-            }
-        }
+    void createArtifact(final StorageMetadata storageMetadata) throws Exception;
 
-        // artifact != null && storageMetadata != null && storageMetadata.isValid()
-        if (unmatchedSorageLocation || haveDifferentStructure(art, storageMetadata)) {
-            // Then prefer the Storage Metadata.
-            sb.append(".replaceArtifact");
-            sb.append(" Artifact.id=").append(art.getID());
-            sb.append(" Artifact.uri=").append(art.getURI());
-            sb.append(" loc=").append(storageMetadata.getStorageLocation());
-            reporter.report(sb.toString());
-            validateEventListener.replaceArtifact(art, storageMetadata);
-            return;
-        }
-        
-        sb.append(".valid");
-        sb.append(" Artifact.id=").append(art.getID());
-        sb.append(" Artifact.uri=").append(art.getURI());
-        sb.append(" loc=").append(storageMetadata.getStorageLocation());
-        log.debug(sb.toString());
-    }
+    /**
+     * Delete the given StorageMetadata.
+     *
+     * @param storageMetadata   The StorageMetadata to delete
+     * @throws Exception    Any unexpected error.
+     */
+    void delete(final StorageMetadata storageMetadata) throws Exception;
+
+    /**
+     * Delete the given Artifact.  Implementors should also create a DeletedArtifactEvent as necessary.
+     *
+     * @param artifact      The Artifact to remove.
+     * @throws Exception    Any unexpected error.
+     */
+    void delete(final Artifact artifact) throws Exception;
+
+    /**
+     * This will force the file-sync application to assume it's a new insert and force a re-download of the file.  The
+     * default logic will most likely be to remove its StorageLocation instance.
+     *
+     * @param artifact The base artifact.  This MUST have a Storage Location.
+     * @throws Exception Anything IO/Thread related.
+     */
+    void clearStorageLocation(final Artifact artifact) throws Exception;
+
+    /**
+     * Replace the given Artifact with a new one created from the given StorageMetadata instance.
+     *
+     * @param artifact          The Artifact to replace.
+     * @param storageMetadata   The StorageMetadata from which to create a new Artifact.
+     * @throws Exception    Any unexpected error.
+     */
+    void replaceArtifact(final Artifact artifact, final StorageMetadata storageMetadata) throws Exception;
+
+    /**
+     * Update the values of the given Artifact with those from the given StorageMetadata.  This differs from a replace
+     * as it will not delete the original Artifact first, but rather update the values and issue a PUT.
+     *
+     * @param artifact          The Artifact to update.
+     * @param storageMetadata   The StorageMetadata from which to update the Artifact's fields.
+     * @throws Exception    Any unexpected error.
+     */
+    void updateArtifact(final Artifact artifact, final StorageMetadata storageMetadata) throws Exception;
+    
+    /**
+     * Delay validation but increment count.
+     */
+    void delayAction();
 }

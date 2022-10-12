@@ -4,7 +4,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2020.                            (c) 2020.
+ *  (c) 2022.                            (c) 2022.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -67,7 +67,7 @@
  ************************************************************************
  */
 
-package org.opencadc.tantar.policy;
+package org.opencadc.inventory.storage.policy;
 
 import java.io.ByteArrayOutputStream;
 import java.net.URI;
@@ -79,15 +79,12 @@ import org.junit.Test;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.storage.StorageMetadata;
-import org.opencadc.tantar.Reporter;
-import org.opencadc.tantar.TestEventListener;
 
 public class InventoryIsAlwaysRightTest extends AbstractResolutionPolicyTest<InventoryIsAlwaysRight> {
     
     @Test
     public void resolveArtifactAndStorageMetadata() throws Exception {
         final ByteArrayOutputStream output = new ByteArrayOutputStream();
-        final Reporter reporter = new Reporter(getTestLogger(output));
         final Artifact artifact = new Artifact(URI.create("cadc:bucket/file.fits"),
                                                URI.create("md5:" + random16Bytes()), new Date(),
                                                88L);
@@ -98,8 +95,8 @@ public class InventoryIsAlwaysRightTest extends AbstractResolutionPolicyTest<Inv
                                                         URI.create("md5:" + random16Bytes()), 1001L, new Date());
         final TestEventListener testEventListener = new TestEventListener();
 
-        testSubject = new InventoryIsAlwaysRight(testEventListener, reporter);
-        testSubject.resolve(artifact, storageMetadata);
+        testSubject = new InventoryIsAlwaysRight(testEventListener);
+        testSubject.validate(artifact, storageMetadata);
 
         final List<String> outputLines = Arrays.asList(new String(output.toByteArray()).split("\n"));
         System.out.println(String.format("Message lines are \n\n%s\n\n", outputLines));
@@ -116,13 +113,12 @@ public class InventoryIsAlwaysRightTest extends AbstractResolutionPolicyTest<Inv
     @Test
     public void resolveNullAndStorageMetadata() throws Exception {
         final ByteArrayOutputStream output = new ByteArrayOutputStream();
-        final Reporter reporter = new Reporter(getTestLogger(output));
         final StorageMetadata storageMetadata = new StorageMetadata(new StorageLocation(URI.create("s3:989877")), URI.create("test:989877"),
                                                         URI.create("md5:" + random16Bytes()), 1001L, new Date());
         final TestEventListener testEventListener = new TestEventListener();
 
-        testSubject = new InventoryIsAlwaysRight(testEventListener, reporter);
-        testSubject.resolve(null, storageMetadata);
+        testSubject = new InventoryIsAlwaysRight(testEventListener);
+        testSubject.validate(null, storageMetadata);
 
         final List<String> outputLines = Arrays.asList(new String(output.toByteArray()).split("\n"));
         System.out.println(String.format("Message lines are \n\n%s\n\n", outputLines));
@@ -139,19 +135,18 @@ public class InventoryIsAlwaysRightTest extends AbstractResolutionPolicyTest<Inv
     @Test
     public void resolveNullAndStorageMetadataDelayed() throws Exception {
         final ByteArrayOutputStream output = new ByteArrayOutputStream();
-        final Reporter reporter = new Reporter(getTestLogger(output));
         final TestEventListener testEventListener = new TestEventListener();
         
         // simulate new stored object after validation started
         
-        testSubject = new InventoryIsAlwaysRight(testEventListener, reporter);
+        testSubject = new InventoryIsAlwaysRight(testEventListener);
         Thread.sleep(100L);
         
         final StorageMetadata storageMetadata = new StorageMetadata(new StorageLocation(URI.create("s3:989877")), URI.create("test:989877"),
                                                         URI.create("md5:" + random16Bytes()), 1001L, new Date());
 
         
-        testSubject.resolve(null, storageMetadata);
+        testSubject.validate(null, storageMetadata);
 
         final List<String> outputLines = Arrays.asList(new String(output.toByteArray()).split("\n"));
         System.out.println(String.format("Message lines are \n\n%s\n\n", outputLines));
@@ -168,7 +163,6 @@ public class InventoryIsAlwaysRightTest extends AbstractResolutionPolicyTest<Inv
     @Test
     public void resolveNullAndInvalidStorageMetadata() throws Exception {
         final ByteArrayOutputStream output = new ByteArrayOutputStream();
-        final Reporter reporter = new Reporter(getTestLogger(output));
 
         // StorageMetadata nas no other metadata than the StorageLocation.
         final StorageMetadata storageMetadata = new StorageMetadata(new StorageLocation(URI.create("s3:989877")));
@@ -181,8 +175,8 @@ public class InventoryIsAlwaysRightTest extends AbstractResolutionPolicyTest<Inv
 
         final TestEventListener testEventListener = new TestEventListener();
 
-        testSubject = new InventoryIsAlwaysRight(testEventListener, reporter);
-        testSubject.resolve(artifact, storageMetadata);
+        testSubject = new InventoryIsAlwaysRight(testEventListener);
+        testSubject.validate(artifact, storageMetadata);
 
         final List<String> outputLines = Arrays.asList(new String(output.toByteArray()).split("\n"));
         System.out.println(String.format("Message lines are \n\n%s\n\n", outputLines));
@@ -201,15 +195,14 @@ public class InventoryIsAlwaysRightTest extends AbstractResolutionPolicyTest<Inv
     @Test
     public void resolveArtifactAndNull() throws Exception {
         final ByteArrayOutputStream output = new ByteArrayOutputStream();
-        final Reporter reporter = new Reporter(getTestLogger(output));
         final Artifact artifact = new Artifact(URI.create("cadc:bucket/file.fits"),
                                                URI.create("md5:" + random16Bytes()), new Date(), 88L);
         artifact.storageLocation = new StorageLocation(URI.create("s3:101010"));
 
         final TestEventListener testEventListener = new TestEventListener();
 
-        testSubject = new InventoryIsAlwaysRight(testEventListener, reporter);
-        testSubject.resolve(artifact, null);
+        testSubject = new InventoryIsAlwaysRight(testEventListener);
+        testSubject.validate(artifact, null);
 
         final List<String> outputLines = Arrays.asList(new String(output.toByteArray()).split("\n"));
         System.out.println(String.format("Message lines are \n\n%s\n\n", outputLines));

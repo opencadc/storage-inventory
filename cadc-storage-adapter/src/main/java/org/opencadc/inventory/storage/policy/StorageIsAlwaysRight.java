@@ -4,7 +4,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2020.                            (c) 2020.
+ *  (c) 2022.                            (c) 2022.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -67,73 +67,92 @@
  ************************************************************************
  */
 
-package org.opencadc.tantar;
+package org.opencadc.inventory.storage.policy;
 
-import java.net.URI;
-import java.util.ArrayList;
-import java.util.List;
+import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.storage.StorageMetadata;
 
-public class TestEventListener implements ValidateEventListener {
-    public boolean createArtifactCalled = false;
-    public boolean deleteStorageMetadataCalled = false;
-    public boolean deleteArtifactCalled = false;
-    public boolean clearStorageLocationCalled = false;
-    public boolean replaceArtifactCalled = false;
-    public boolean updateArtifactCalled = false;
+public class StorageIsAlwaysRight extends StorageValidationPolicy {
+    private static final Logger log = Logger.getLogger(StorageIsAlwaysRight.class);
     
-    public final List<StorageMetadata> created = new ArrayList<>();
-    public final List<Artifact> cleared = new ArrayList<>();
-    public final List<Artifact> deleted = new ArrayList<>();
-    public final List<Artifact> replaced = new ArrayList<>();
-    public final List<Artifact> updated = new ArrayList<>();
-    
-    public final List<StorageMetadata> deletedStorage = new ArrayList<>();
-
-    @Override
-    public Artifact getArtifact(URI uri) {
-        return null;
+    public StorageIsAlwaysRight(final ValidateEventListener validateEventListener) {
+        super(validateEventListener);
     }
 
+    /**
+     * Use the logic of this Policy to correct a conflict caused by the two given items.  One of the arguments can
+     * be null, but not both.
+     *
+     * @param artifact        The Artifact to use in deciding.
+     * @param storageMetadata The StorageMetadata to use in deciding.
+     */
     @Override
-    public void createArtifact(StorageMetadata storageMetadata) throws Exception {
-        createArtifactCalled = true;
-        created.add(storageMetadata);
-    }
+    public void validate(final Artifact artifact, final StorageMetadata storageMetadata) throws Exception {
+        if (artifact == null && storageMetadata == null) {
+            throw new RuntimeException("BUG: both args to resolve are null");
+        }
+        
+        StringBuilder sb = new StringBuilder();
+        sb.append(this.getClass().getSimpleName());
+        
+        if (storageMetadata == null || !storageMetadata.isValid()) {
+            if (artifact != null) {
+                sb.append(".deleteArtifact");
+                sb.append(" Artifact.id=").append(artifact.getID());
+                sb.append(" Artifact.uri=").append(artifact.getURI());
+            } else {
+                sb.append(".noAction");
+            }
+            if (storageMetadata == null) {
+                sb.append(" reason=no-matching-storageLocation");
+            } else {
+                sb.append(" loc=").append(storageMetadata.getStorageLocation());
+                sb.append(" reason=invalid-storageLocation");
+            }
+            log.info(sb.toString());
+            if (artifact != null) {
+                validateEventListener.delete(artifact);
+            }
+            return;
+        }
+        
+        //storageMetadata != null && storageMetadata.isValid()
+        Artifact art = artifact;
+        boolean unmatchedSorageLocation = false;
+        if (art == null) {
+            // check for existing artifact with unmatched StorageLocation
+            Artifact tmp = validateEventListener.getArtifact(storageMetadata.getArtifactURI());
+            if (tmp == null) {
+                sb.append(".createArtifact");
+                sb.append(" Artifact.uri=").append(storageMetadata.getArtifactURI());
+                sb.append(" loc=").append(storageMetadata.getStorageLocation());
+                sb.append(" reason=no-matching-artifact");
+                log.info(sb.toString());
+                validateEventListener.createArtifact(storageMetadata);
+                return;
+            } else {
+                art = tmp;
+                unmatchedSorageLocation = true;
+            }
+        }
 
-    @Override
-    public void delete(StorageMetadata storageMetadata) throws Exception {
-        deleteStorageMetadataCalled = true;
-        deletedStorage.add(storageMetadata);
-    }
-
-    @Override
-    public void delete(Artifact artifact) throws Exception {
-        deleteArtifactCalled = true;
-        deleted.add(artifact);
-    }
-
-    @Override
-    public void clearStorageLocation(Artifact artifact) throws Exception {
-        clearStorageLocationCalled = true;
-        cleared.add(artifact);
-    }
-
-    @Override
-    public void replaceArtifact(Artifact artifact, StorageMetadata storageMetadata) throws Exception {
-        replaceArtifactCalled = true;
-        replaced.add(artifact);
-    }
-
-    @Override
-    public void updateArtifact(Artifact artifact, StorageMetadata storageMetadata) throws Exception {
-        updateArtifactCalled = true;
-        updated.add(artifact);
-    }
-
-    @Override
-    public void delayAction() {
-        // noop
+        // artifact != null && storageMetadata != null && storageMetadata.isValid()
+        if (unmatchedSorageLocation || haveDifferentStructure(art, storageMetadata)) {
+            // Then prefer the Storage Metadata.
+            sb.append(".replaceArtifact");
+            sb.append(" Artifact.id=").append(art.getID());
+            sb.append(" Artifact.uri=").append(art.getURI());
+            sb.append(" loc=").append(storageMetadata.getStorageLocation());
+            log.info(sb.toString());
+            validateEventListener.replaceArtifact(art, storageMetadata);
+            return;
+        }
+        
+        sb.append(".valid");
+        sb.append(" Artifact.id=").append(art.getID());
+        sb.append(" Artifact.uri=").append(art.getURI());
+        sb.append(" loc=").append(storageMetadata.getStorageLocation());
+        log.debug(sb.toString());
     }
 }

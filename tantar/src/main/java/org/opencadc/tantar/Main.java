@@ -82,8 +82,6 @@ import javax.security.auth.Subject;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.db.SQLGenerator;
-import org.opencadc.tantar.policy.ResolutionPolicy;
-
 
 /**
  * Main application entry.  This class expects a tantar.properties file to be available and readable.
@@ -96,7 +94,6 @@ public class Main {
     private static final String REPORT_ONLY_KEY = CONFIG_BASE + ".reportOnly";
     
     private static final String BUCKETS_KEY = CONFIG_BASE + ".buckets";
-    private static final String POLICY_KEY = ResolutionPolicy.class.getName();
     private static final String GENERATOR_KEY = SQLGenerator.class.getName();
     
     private static final String DB_SCHEMA_KEY = CONFIG_BASE + ".inventory.schema";
@@ -106,7 +103,6 @@ public class Main {
     
     public static void main(final String[] args) {
             
-        final Reporter reporter = new Reporter(log);
         try {
             Log4jInit.setLevel("ca.nrc.cadc", Level.WARN);
             Log4jInit.setLevel("org.opencadc", Level.WARN);
@@ -121,8 +117,6 @@ public class Main {
             Log4jInit.setLevel("org.opencadc.inventory", logLevel);
             Log4jInit.setLevel("org.opencadc.tantar", logLevel);
             
-            reporter.start();
-        
             // The PropertiesReader won't throw a FileNotFoundException if the given file doesn't exist at all.  We'll
             // need to throw it here as an appropriate way to notify users.
             if (props == null) {
@@ -135,7 +129,7 @@ public class Main {
                 s = SSLUtil.createSubject(certFile);
             }
             
-            BucketValidator bucketValidator = new BucketValidator(props, reporter, s);
+            BucketValidator bucketValidator = new BucketValidator(props, s);
             bucketValidator.validate();
             
         } catch (IllegalStateException e) {
@@ -152,8 +146,6 @@ public class Main {
             // Used to catch everything else, such as a RuntimeException when a file cannot be obtained and put.
             log.fatal(e.getMessage(), e);
             System.exit(4);
-        } finally {
-            reporter.end();
         }
     }
 }

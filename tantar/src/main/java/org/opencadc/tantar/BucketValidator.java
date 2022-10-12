@@ -105,8 +105,9 @@ import org.opencadc.inventory.db.SQLGenerator;
 import org.opencadc.inventory.db.version.InitDatabase;
 import org.opencadc.inventory.storage.StorageAdapter;
 import org.opencadc.inventory.storage.StorageMetadata;
+import org.opencadc.inventory.storage.policy.StorageValidationPolicy;
+import org.opencadc.inventory.storage.policy.ValidateEventListener;
 import org.opencadc.inventory.util.BucketSelector;
-import org.opencadc.tantar.policy.ResolutionPolicy;
 
 /**
  * Main class to issue iterator requests to the Storage Adaptor and verify the contents.
@@ -115,7 +116,7 @@ import org.opencadc.tantar.policy.ResolutionPolicy;
  */
 public class BucketValidator implements ValidateEventListener {
 
-    private static final Logger LOGGER = Logger.getLogger(BucketValidator.class);
+    private static final Logger log = Logger.getLogger(BucketValidator.class);
 
     private static final String CONFIG_BASE = Main.class.getPackage().getName();
     private static final String REPORT_ONLY_KEY = CONFIG_BASE + ".reportOnly";
@@ -130,8 +131,7 @@ public class BucketValidator implements ValidateEventListener {
     private final StorageAdapter storageAdapter;
     private final Subject runUser;
     private final boolean reportOnlyFlag;
-    private final Reporter reporter;
-    private final ResolutionPolicy resolutionPolicy;
+    private final StorageValidationPolicy validationPolicy;
 
     // Cached ArtifactDAO used for transactional access.
     private final ArtifactDAO artifactDAO;
@@ -161,21 +161,12 @@ public class BucketValidator implements ValidateEventListener {
      * @param reporter   The Reporter to use in the policy.  Can be used elsewhere.
      * @param runUser    The user to run as.
      */
-    BucketValidator(final MultiValuedProperties properties, final Reporter reporter, final Subject runUser) {
-        this.reporter = reporter;
+    BucketValidator(final MultiValuedProperties properties, final Subject runUser) {
         this.runUser = runUser;
 
         final String configuredReportOnly = properties.getFirstPropertyValue(REPORT_ONLY_KEY);
         this.reportOnlyFlag = StringUtil.hasText(configuredReportOnly) && Boolean.parseBoolean(configuredReportOnly);
         
-        // ResolutionPolicy
-        final String policyClassName = properties.getFirstPropertyValue(ResolutionPolicy.class.getName());
-        if (StringUtil.hasLength(policyClassName)) {
-            this.resolutionPolicy = InventoryUtil.loadPlugin(policyClassName, this, reporter);
-        } else {
-            throw new IllegalStateException("required config property missing: " + ResolutionPolicy.class.getName());
-        }
-
         // StorageAdapter
         final String storageAdapterClassName = properties.getFirstPropertyValue(StorageAdapter.class.getName());
         if (StringUtil.hasLength(storageAdapterClassName)) {
@@ -183,6 +174,7 @@ public class BucketValidator implements ValidateEventListener {
         } else {
             throw new IllegalStateException("required config property missing: " + StorageAdapter.class.getName());
         }
+        this.validationPolicy = storageAdapter.getValidationPolicy();
         
         // buckets
         final String bucketRange = properties.getFirstPropertyValue(BUCKETS_KEY);
@@ -223,13 +215,11 @@ public class BucketValidator implements ValidateEventListener {
         } else {
             throw new IllegalStateException("required config property missing: " + DB_SCHEMA_KEY);
         }
-        // not currently used: correct database must be in the JDBC URL
-        //config.put("database", "???");
         
         final String dbUsername = properties.getFirstPropertyValue(DB_USERNAME_KEY);
         final String dbPassword = properties.getFirstPropertyValue(DB_PASSWORD_KEY);
         final String jdbcURL = properties.getFirstPropertyValue(JDBC_URL_KEY);
-        LOGGER.debug("database connection: " + jdbcURL);
+        log.debug("database connection: " + jdbcURL);
         final ConnectionConfig cc = new ConnectionConfig(null, null, dbUsername, dbPassword, jdbcDriverClassname, jdbcURL);
                                                          
         try {
@@ -255,7 +245,7 @@ public class BucketValidator implements ValidateEventListener {
             DataSource ds = ca.nrc.cadc.db.DBUtil.findJNDIDataSource("jdbc/inventory");
             InitDatabase init = new InitDatabase(ds, database, schema);
             init.doInit();
-            LOGGER.info("initDatabase: " + schema + " OK");
+            log.info("initDatabase: " + schema + " OK");
         } catch (Exception ex) {
             throw new IllegalStateException("check/init database failed", ex);
         }
@@ -274,15 +264,14 @@ public class BucketValidator implements ValidateEventListener {
      * @param obsoleteStorageLocationDAO ObsoleteStorageLocation DAO.
      */
     BucketValidator(final List<String> bucketPrefixes, final StorageAdapter storageAdapter, final Subject runUser,
-                    final boolean reportOnlyFlag, final Reporter reporter, final ResolutionPolicy resolutionPolicy,
+                    final boolean reportOnlyFlag, StorageValidationPolicy validationPolicy,
                     final ArtifactDAO artifactDAO, final ArtifactDAO iteratorDAO,
                     final ObsoleteStorageLocationDAO obsoleteStorageLocationDAO) {
         this.bucketPrefixes.addAll(bucketPrefixes);
         this.storageAdapter = storageAdapter;
-        this.reporter = reporter;
         this.runUser = runUser;
         this.reportOnlyFlag = reportOnlyFlag;
-        this.resolutionPolicy = resolutionPolicy;
+        this.validationPolicy = validationPolicy;
         this.artifactDAO = artifactDAO;
         this.iteratorDAO = iteratorDAO;
         this.obsoleteStorageLocationDAO = obsoleteStorageLocationDAO;
@@ -295,12 +284,12 @@ public class BucketValidator implements ValidateEventListener {
      * @throws Exception Pass up any errors to the caller, which is most likely the Main.
      */
     public void validate() throws Exception {
-        LOGGER.info("BucketValidator.validate phase=start reportOnly=" + reportOnlyFlag);
+        log.info("BucketValidator.validate phase=start reportOnly=" + reportOnlyFlag);
         try {
             doit();
         } finally {
             logSummary(true, false);
-            LOGGER.info("BucketValidator.validate phase=end reportOnly=" + reportOnlyFlag);
+            log.info("BucketValidator.validate phase=end reportOnly=" + reportOnlyFlag);
         }
     }
     
@@ -311,13 +300,13 @@ public class BucketValidator implements ValidateEventListener {
 
         final Iterator<StorageMetadata> storageMetadataIterator = getStorageMetadataIterator();
         long t2 = System.currentTimeMillis();
-        LOGGER.info("BucketValidator.storageQuery duration=" + (t2 - t1));
+        log.info("BucketValidator.storageQuery duration=" + (t2 - t1));
 
         final Iterator<Artifact> inventoryIterator = iterateInventory();
         long t3 = System.currentTimeMillis();
-        LOGGER.info("BucketValidator.inventoryQuery duration=" + (t3 - t2));
+        log.info("BucketValidator.inventoryQuery duration=" + (t3 - t2));
 
-        LOGGER.debug(String.format("Acquired iterators: \nHas Artifacts (%b)\nHas Storage Metadata (%b).",
+        log.debug(String.format("Acquired iterators: \nHas Artifacts (%b)\nHas Storage Metadata (%b).",
                                    inventoryIterator.hasNext(), storageMetadataIterator.hasNext()));
 
         Artifact unresolvedArtifact = null;
@@ -331,24 +320,24 @@ public class BucketValidator implements ValidateEventListener {
 
             final int comparison = artifact.storageLocation.compareTo(storageMetadata.getStorageLocation());
 
-            LOGGER.debug(String.format("Comparing Inventory Storage Location %s with Storage Adapter Location %s (%d)",
+            log.debug(String.format("Comparing Inventory Storage Location %s with Storage Adapter Location %s (%d)",
                                        artifact.storageLocation, storageMetadata.getStorageLocation(), comparison));
 
             if (comparison == 0) {
                 // Same storage location.  Test the metadata.
                 unresolvedArtifact = null;
                 unresolvedStorageMetadata = null;
-                resolutionPolicy.resolve(artifact, storageMetadata);
+                validationPolicy.validate(artifact, storageMetadata);
             } else if (comparison > 0) {
                 // Exists in Storage but not in inventory.
                 unresolvedArtifact = artifact;
                 unresolvedStorageMetadata = null;
-                resolutionPolicy.resolve(null, storageMetadata);
+                validationPolicy.validate(null, storageMetadata);
             } else {
                 // Exists in Inventory but not in Storage.
                 unresolvedArtifact = null;
                 unresolvedStorageMetadata = storageMetadata;
-                resolutionPolicy.resolve(artifact, null);
+                validationPolicy.validate(artifact, null);
             }
             numValidated++;
             logSummary();
@@ -358,17 +347,17 @@ public class BucketValidator implements ValidateEventListener {
         // not, like in the case of a fresh load from another site.
         while (inventoryIterator.hasNext()) {
             final Artifact artifact = inventoryIterator.next();
-            LOGGER.debug(String.format("Artifact %s exists with no Storage Metadata.", artifact.storageLocation));
-            resolutionPolicy.resolve(artifact, null);
+            log.debug(String.format("Artifact %s exists with no Storage Metadata.", artifact.storageLocation));
+            validationPolicy.validate(artifact, null);
             numValidated++;
             logSummary();
         }
 
         while (storageMetadataIterator.hasNext()) {
             final StorageMetadata storageMetadata = storageMetadataIterator.next();
-            LOGGER.debug(String.format("Storage Metadata %s exists with no Artifact.",
+            log.debug(String.format("Storage Metadata %s exists with no Artifact.",
                                        storageMetadata.getStorageLocation()));
-            resolutionPolicy.resolve(null, storageMetadata);
+            validationPolicy.validate(null, storageMetadata);
             numValidated++;
             logSummary();
         }
@@ -390,7 +379,7 @@ public class BucketValidator implements ValidateEventListener {
         lastSummary = sec;
         
         StringBuilder sb = new StringBuilder();
-        sb.append(resolutionPolicy.getClass().getSimpleName()).append(".summary");
+        sb.append(validationPolicy.getClass().getSimpleName()).append(".summary");
         if (numValidated > 0) {
             sb.append(" numValidated=").append(numValidated);
         }
@@ -424,7 +413,7 @@ public class BucketValidator implements ValidateEventListener {
         if (showNext) {
             sb.append(" nextSummaryIn=").append(summaryLogInterval).append("sec");
         }
-        LOGGER.info(sb.toString());
+        log.info(sb.toString());
     }
     
     private boolean canTakeAction() {
@@ -453,7 +442,7 @@ public class BucketValidator implements ValidateEventListener {
             final TransactionManager transactionManager = artifactDAO.getTransactionManager();
 
             try {
-                LOGGER.debug("Start transaction.");
+                log.debug("Start transaction.");
                 transactionManager.startTransaction();
                 
                 Artifact curArtifact = artifactDAO.lock(artifact);
@@ -466,18 +455,18 @@ public class BucketValidator implements ValidateEventListener {
                     numClearStorageLocation++;
                 } else {
                     transactionManager.rollbackTransaction();
-                    LOGGER.debug("failed to lock artifact, assume deleted: " + artifact.getID());
+                    log.debug("failed to lock artifact, assume deleted: " + artifact.getID());
                 }
             } catch (Exception e) {
-                LOGGER.error(String.format("Failed to mark Artifact as new %s.", artifact.getURI()), e);
+                log.error(String.format("Failed to mark Artifact as new %s.", artifact.getURI()), e);
                 transactionManager.rollbackTransaction();
-                LOGGER.debug("Rollback Transaction: OK");
+                log.debug("Rollback Transaction: OK");
                 throw e;
             } finally {
                 if (transactionManager.isOpen()) {
-                    LOGGER.error("BUG - Open transaction in finally");
+                    log.error("BUG - Open transaction in finally");
                     transactionManager.rollbackTransaction();
-                    LOGGER.error("Transaction rolled back successfully.");
+                    log.error("Transaction rolled back successfully.");
                 }
             }
         }
@@ -492,7 +481,7 @@ public class BucketValidator implements ValidateEventListener {
     public void delete(final StorageMetadata storageMetadata) throws Exception {
         if (canTakeAction()) {
             final StorageLocation storageLocation = storageMetadata.getStorageLocation();
-            LOGGER.debug("Delete from storage: " + storageLocation);
+            log.debug("Delete from storage: " + storageLocation);
             storageAdapter.delete(storageLocation);
             numDeleteStorageLocation++;
         }
@@ -509,9 +498,9 @@ public class BucketValidator implements ValidateEventListener {
         if (canTakeAction()) {
             final TransactionManager transactionManager = artifactDAO.getTransactionManager();
             try {
-                LOGGER.debug("start transaction...");
+                log.debug("start transaction...");
                 transactionManager.startTransaction();
-                LOGGER.debug("start transaction... OK");
+                log.debug("start transaction... OK");
 
                 Artifact cur = artifactDAO.lock(artifact);
                 if (cur != null) {
@@ -523,18 +512,18 @@ public class BucketValidator implements ValidateEventListener {
                     numDeleteArtifact++;
                 } else {
                     transactionManager.rollbackTransaction();
-                    LOGGER.debug("failed to lock artifact, assume deleted: " + artifact.getID());
+                    log.debug("failed to lock artifact, assume deleted: " + artifact.getID());
                 }
             } catch (Exception e) {
-                LOGGER.error(String.format("Failed to delete Artifact %s.", artifact.getURI()), e);
+                log.error(String.format("Failed to delete Artifact %s.", artifact.getURI()), e);
                 transactionManager.rollbackTransaction();
-                LOGGER.debug("Rollback Transaction: OK");
+                log.debug("Rollback Transaction: OK");
                 throw e;
             } finally {
                 if (transactionManager.isOpen()) {
-                    LOGGER.error("BUG - Open transaction in finally");
+                    log.error("BUG - Open transaction in finally");
                     transactionManager.rollbackTransaction();
-                    LOGGER.error("Transaction rolled back successfully.");
+                    log.error("Transaction rolled back successfully.");
                 }
             }
         }
@@ -568,21 +557,21 @@ public class BucketValidator implements ValidateEventListener {
             final TransactionManager transactionManager = artifactDAO.getTransactionManager();
 
             try {
-                LOGGER.debug("Start transaction.");
+                log.debug("Start transaction.");
                 transactionManager.startTransaction();
                 artifactDAO.put(artifact);
                 transactionManager.commitTransaction();
                 numCreateArtifact++;
             } catch (Exception e) {
-                LOGGER.error(String.format("Failed to create Artifact %s.", artifact.getURI()), e);
+                log.error(String.format("Failed to create Artifact %s.", artifact.getURI()), e);
                 transactionManager.rollbackTransaction();
-                LOGGER.debug("Rollback Transaction: OK");
+                log.debug("Rollback Transaction: OK");
                 throw e;
             } finally {
                 if (transactionManager.isOpen()) {
-                    LOGGER.error("BUG - Open transaction in finally");
+                    log.error("BUG - Open transaction in finally");
                     transactionManager.rollbackTransaction();
-                    LOGGER.error("Transaction rolled back successfully.");
+                    log.error("Transaction rolled back successfully.");
                 }
             }
         }
@@ -602,7 +591,7 @@ public class BucketValidator implements ValidateEventListener {
             final TransactionManager transactionManager = artifactDAO.getTransactionManager();
 
             try {
-                LOGGER.debug("Start transaction.");
+                log.debug("Start transaction.");
                 transactionManager.startTransaction();
                 
                 Artifact cur = artifactDAO.lock(artifact);
@@ -618,15 +607,15 @@ public class BucketValidator implements ValidateEventListener {
                 transactionManager.commitTransaction();
                 numReplaceArtifact++;
             } catch (Exception e) {
-                LOGGER.error(String.format("Failed to create Artifact %s.", storageMetadata.getArtifactURI()), e);
+                log.error(String.format("Failed to create Artifact %s.", storageMetadata.getArtifactURI()), e);
                 transactionManager.rollbackTransaction();
-                LOGGER.debug("Rollback Transaction: OK");
+                log.debug("Rollback Transaction: OK");
                 throw e;
             } finally {
                 if (transactionManager.isOpen()) {
-                    LOGGER.error("BUG - Open transaction in finally");
+                    log.error("BUG - Open transaction in finally");
                     transactionManager.rollbackTransaction();
-                    LOGGER.error("Transaction rolled back successfully.");
+                    log.error("Transaction rolled back successfully.");
                 }
             }
         }
@@ -646,7 +635,7 @@ public class BucketValidator implements ValidateEventListener {
             final TransactionManager transactionManager = artifactDAO.getTransactionManager();
 
             try {
-                LOGGER.debug("Start transaction.");
+                log.debug("Start transaction.");
                 transactionManager.startTransaction();
                 
                 Artifact cur = artifactDAO.lock(artifact);
@@ -663,18 +652,18 @@ public class BucketValidator implements ValidateEventListener {
                     numUpdateArtifact++;
                 } else {
                     transactionManager.rollbackTransaction();
-                    LOGGER.debug("failed to lock artifact, assume deleted: " + artifact.getID());
+                    log.debug("failed to lock artifact, assume deleted: " + artifact.getID());
                 }
             } catch (Exception e) {
-                LOGGER.error(String.format("Failed to update Artifact %s.", storageMetadata.getArtifactURI()), e);
+                log.error(String.format("Failed to update Artifact %s.", storageMetadata.getArtifactURI()), e);
                 transactionManager.rollbackTransaction();
-                LOGGER.debug("Rollback Transaction: OK");
+                log.debug("Rollback Transaction: OK");
                 throw e;
             } finally {
                 if (transactionManager.isOpen()) {
-                    LOGGER.error("BUG - Open transaction in finally");
+                    log.error("BUG - Open transaction in finally");
                     transactionManager.rollbackTransaction();
-                    LOGGER.error("Transaction rolled back successfully.");
+                    log.error("Transaction rolled back successfully.");
                 }
             }
         }
@@ -740,9 +729,7 @@ public class BucketValidator implements ValidateEventListener {
             sb.append(" Artifact.uri=").append(storageMetadata.getArtifactURI());
             sb.append(" loc=").append(storageMetadata.getStorageLocation());
             sb.append(" reason=obsolete");
-            //LOGGER.info(String.format("delete obsolete object: %s (was: %s)", obsoleteStorageLocation,
-            //                          storageMetadata.artifactURI.toASCIIString()));
-            reporter.report(sb.toString());
+            log.info(sb.toString());
             
             if (canTakeAction()) {
                 try {
@@ -780,7 +767,7 @@ public class BucketValidator implements ValidateEventListener {
          * Constructor
          */
         StorageMetadataIterator() {
-            LOGGER.debug(String.format("Getting iterator for %s running as %s",
+            log.debug(String.format("Getting iterator for %s running as %s",
                                        bucketPrefixes, runUser.getPrincipals()));
             this.bucketPrefixIterator = bucketPrefixes.iterator();
 

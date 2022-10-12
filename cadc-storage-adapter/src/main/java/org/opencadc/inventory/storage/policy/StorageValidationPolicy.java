@@ -4,7 +4,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2020.                            (c) 2020.
+ *  (c) 2022.                            (c) 2022.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -67,22 +67,17 @@
  ************************************************************************
  */
 
-package org.opencadc.tantar.policy;
+package org.opencadc.inventory.storage.policy;
 
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.storage.StorageMetadata;
-import org.opencadc.tantar.Reporter;
-import org.opencadc.tantar.ValidateEventListener;
 
-
-public abstract class ResolutionPolicy {
+public abstract class StorageValidationPolicy {
 
     final ValidateEventListener validateEventListener;
-    final Reporter reporter;
 
-    ResolutionPolicy(final ValidateEventListener validateEventListener, final Reporter reporter) {
+    StorageValidationPolicy(final ValidateEventListener validateEventListener) {
         this.validateEventListener = validateEventListener;
-        this.reporter = reporter;
     }
 
     /**
@@ -106,5 +101,5 @@ public abstract class ResolutionPolicy {
      * @param storageMetadata The StorageMetadata to use in deciding.
      * @throws Exception    For any unknown error that should be passed up.
      */
-    public abstract void resolve(final Artifact artifact, final StorageMetadata storageMetadata) throws Exception;
+    public abstract void validate(final Artifact artifact, final StorageMetadata storageMetadata) throws Exception;
 }

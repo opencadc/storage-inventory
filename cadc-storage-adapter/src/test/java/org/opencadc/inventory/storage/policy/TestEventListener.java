@@ -4,7 +4,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2020.                            (c) 2020.
+ *  (c) 2022.                            (c) 2022.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -67,28 +67,73 @@
  ************************************************************************
  */
 
-package org.opencadc.tantar;
+package org.opencadc.inventory.storage.policy;
 
-import org.apache.log4j.Logger;
+import java.net.URI;
+import java.util.ArrayList;
+import java.util.List;
+import org.opencadc.inventory.Artifact;
+import org.opencadc.inventory.storage.StorageMetadata;
 
+public class TestEventListener implements ValidateEventListener {
+    public boolean createArtifactCalled = false;
+    public boolean deleteStorageMetadataCalled = false;
+    public boolean deleteArtifactCalled = false;
+    public boolean clearStorageLocationCalled = false;
+    public boolean replaceArtifactCalled = false;
+    public boolean updateArtifactCalled = false;
+    
+    public final List<StorageMetadata> created = new ArrayList<>();
+    public final List<Artifact> cleared = new ArrayList<>();
+    public final List<Artifact> deleted = new ArrayList<>();
+    public final List<Artifact> replaced = new ArrayList<>();
+    public final List<Artifact> updated = new ArrayList<>();
+    
+    public final List<StorageMetadata> deletedStorage = new ArrayList<>();
 
-public class Reporter {
-
-    private final Logger logger;
-
-    public Reporter(final Logger logger) {
-        this.logger = logger;
+    @Override
+    public Artifact getArtifact(URI uri) {
+        return null;
     }
 
-    public void start() {
-        logger.info("START");
+    @Override
+    public void createArtifact(StorageMetadata storageMetadata) throws Exception {
+        createArtifactCalled = true;
+        created.add(storageMetadata);
     }
 
-    public void report(final String message) {
-        logger.info(message);
+    @Override
+    public void delete(StorageMetadata storageMetadata) throws Exception {
+        deleteStorageMetadataCalled = true;
+        deletedStorage.add(storageMetadata);
     }
 
-    public void end() {
-        logger.info("END");
+    @Override
+    public void delete(Artifact artifact) throws Exception {
+        deleteArtifactCalled = true;
+        deleted.add(artifact);
+    }
+
+    @Override
+    public void clearStorageLocation(Artifact artifact) throws Exception {
+        clearStorageLocationCalled = true;
+        cleared.add(artifact);
+    }
+
+    @Override
+    public void replaceArtifact(Artifact artifact, StorageMetadata storageMetadata) throws Exception {
+        replaceArtifactCalled = true;
+        replaced.add(artifact);
+    }
+
+    @Override
+    public void updateArtifact(Artifact artifact, StorageMetadata storageMetadata) throws Exception {
+        updateArtifactCalled = true;
+        updated.add(artifact);
+    }
+
+    @Override
+    public void delayAction() {
+        // noop
     }
 }
