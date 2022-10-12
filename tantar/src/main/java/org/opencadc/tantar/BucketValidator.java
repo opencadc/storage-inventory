@@ -175,6 +175,7 @@ public class BucketValidator implements ValidateActions {
             throw new IllegalStateException("required config property missing: " + StorageAdapter.class.getName());
         }
         this.validationPolicy = storageAdapter.getValidationPolicy();
+        validationPolicy.setValidateActions(this);
         
         // buckets
         final String bucketRange = properties.getFirstPropertyValue(BUCKETS_KEY);
@@ -272,6 +273,7 @@ public class BucketValidator implements ValidateActions {
         this.runUser = runUser;
         this.reportOnlyFlag = reportOnlyFlag;
         this.validationPolicy = validationPolicy;
+        validationPolicy.setValidateActions(this);
         this.artifactDAO = artifactDAO;
         this.iteratorDAO = iteratorDAO;
         this.obsoleteStorageLocationDAO = obsoleteStorageLocationDAO;
