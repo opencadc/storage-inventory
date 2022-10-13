@@ -103,14 +103,13 @@ import java.util.UUID;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.StorageLocation;
+import org.opencadc.inventory.storage.BucketType;
 import org.opencadc.inventory.storage.ByteRange;
 import org.opencadc.inventory.storage.NewArtifact;
 import org.opencadc.inventory.storage.PutTransaction;
 import org.opencadc.inventory.storage.StorageAdapter;
 import org.opencadc.inventory.storage.StorageEngageException;
 import org.opencadc.inventory.storage.StorageMetadata;
-import org.opencadc.inventory.storage.policy.InventoryIsAlwaysRight;
-import org.opencadc.inventory.storage.policy.StorageValidationPolicy;
 
 /**
  * An implementation of the storage adapter interface on a file system.
@@ -210,8 +209,9 @@ public class FileSystemStorageAdapter implements StorageAdapter {
     }
 
     @Override
-    public StorageValidationPolicy getValidationPolicy() {
-        return new InventoryIsAlwaysRight();
+    public BucketType getBucketType() {
+        throw new UnsupportedOperationException();
+        //return BucketType.PATH;
     }
     
     @Override

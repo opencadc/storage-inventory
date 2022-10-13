@@ -84,7 +84,6 @@ import java.net.URI;
 import java.util.Iterator;
 
 import org.opencadc.inventory.StorageLocation;
-import org.opencadc.inventory.storage.policy.StorageValidationPolicy;
 
 /**
  * The interface to storage implementations. Implementations may throw InvalidConfigException
@@ -95,6 +94,13 @@ import org.opencadc.inventory.storage.policy.StorageValidationPolicy;
  */
 public interface StorageAdapter {
 
+    /**
+     * Get the bucket type supported by the adapter.
+     * 
+     * @return a BucketType
+     */
+    public BucketType getBucketType();
+    
     /**
      * Get a stored object identified by storageLocation.
      * 
@@ -305,12 +311,4 @@ public interface StorageAdapter {
      */
     public Iterator<PutTransaction> transactionIterator() 
         throws StorageEngageException, TransientException;
-    
-    /**
-     * Get the appropriate (possibly configured) validation policy implementation for this
-     * adapter.
-     * 
-     * @return the StorageValidationPolicy implementation to use to validate Artfact vs StorageMetadada
-     */
-    public StorageValidationPolicy getValidationPolicy();
 }

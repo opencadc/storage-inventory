@@ -118,14 +118,13 @@ import javax.security.auth.Subject;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.StorageLocation;
+import org.opencadc.inventory.storage.BucketType;
 import org.opencadc.inventory.storage.ByteRange;
 import org.opencadc.inventory.storage.NewArtifact;
 import org.opencadc.inventory.storage.PutTransaction;
 import org.opencadc.inventory.storage.StorageAdapter;
 import org.opencadc.inventory.storage.StorageEngageException;
 import org.opencadc.inventory.storage.StorageMetadata;
-import org.opencadc.inventory.storage.policy.StorageIsAlwaysRight;
-import org.opencadc.inventory.storage.policy.StorageValidationPolicy;
 import org.opencadc.tap.TapClient;
 
 /**
@@ -151,8 +150,8 @@ public class AdStorageAdapter implements StorageAdapter {
     public AdStorageAdapter(){}
 
     @Override
-    public StorageValidationPolicy getValidationPolicy() {
-        return new StorageIsAlwaysRight();
+    public BucketType getBucketType() {
+        return BucketType.PLAIN;
     }
     
     @Override

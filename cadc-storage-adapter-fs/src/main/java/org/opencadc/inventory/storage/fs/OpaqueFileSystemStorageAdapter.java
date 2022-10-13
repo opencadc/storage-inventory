@@ -112,6 +112,7 @@ import org.apache.log4j.Logger;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.Namespace;
 import org.opencadc.inventory.StorageLocation;
+import org.opencadc.inventory.storage.BucketType;
 import org.opencadc.inventory.storage.ByteRange;
 import org.opencadc.inventory.storage.DigestOutputStream;
 import org.opencadc.inventory.storage.MessageDigestAPI;
@@ -120,8 +121,6 @@ import org.opencadc.inventory.storage.PutTransaction;
 import org.opencadc.inventory.storage.StorageAdapter;
 import org.opencadc.inventory.storage.StorageEngageException;
 import org.opencadc.inventory.storage.StorageMetadata;
-import org.opencadc.inventory.storage.policy.InventoryIsAlwaysRight;
-import org.opencadc.inventory.storage.policy.StorageValidationPolicy;
 
 /**
  * An implementation of the StorageAdapter interface on a file system.
@@ -275,8 +274,8 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
     }
 
     @Override
-    public StorageValidationPolicy getValidationPolicy() {
-        return new InventoryIsAlwaysRight();
+    public BucketType getBucketType() {
+        return BucketType.HEX;
     }
     
     @Override
