@@ -71,10 +71,24 @@ package org.opencadc.tantar;
 
 import ca.nrc.cadc.util.Log4jInit;
 
+import java.net.URI;
+import java.util.Date;
+import java.util.Iterator;
+import java.util.SortedSet;
+import java.util.TreeSet;
 import java.util.UUID;
 
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
+import org.junit.Assert;
+import org.junit.Test;
+import org.opencadc.inventory.Artifact;
+import org.opencadc.inventory.StorageLocation;
+import org.opencadc.inventory.StoredArtifactComparator;
+import org.opencadc.inventory.storage.StorageEngageException;
+import org.opencadc.inventory.storage.StorageMetadata;
+import org.opencadc.tantar.policy.InventoryIsAlwaysRight;
+import org.opencadc.tantar.policy.ResolutionPolicy;
 
 /**
  * Test that ResolutionPolicy implementations log the correct events.
@@ -88,11 +102,123 @@ public class BucketValidatorTest {
         Log4jInit.setLevel("org.opencadc.tantar", Level.INFO);
     }
 
-    // TODO: test merge-join iteration
+    @Test
+    public void testIteratorMerge() throws Exception {
+        SortedSet<StorageMetadata> stored = new TreeSet<>();
+        SortedSet<Artifact> artifacts = new TreeSet<>(new StoredArtifactComparator());
+
+        StorageMetadata sm = new StorageMetadata(new StorageLocation(URI.create("id:123")), URI.create("test:FOO/bar1"), 
+                URI.create("md5:a5b4861ccc5da8454e84fc1a686e40aa"), 1024L, new Date());
+        Artifact a = new Artifact(sm.getArtifactURI(), sm.getContentChecksum(), sm.getContentLastModified(), sm.getContentLength());
+        a.storageLocation = sm.getStorageLocation();
+        stored.add(sm);
+        artifacts.add(a);
+        
+        sm = new StorageMetadata(new StorageLocation(URI.create("id:456")), URI.create("test:FOO/bar2"), 
+                URI.create("md5:a5b4861ccc5da8454e84fc1a686e40aa"), 1024L, new Date());
+        a = new Artifact(sm.getArtifactURI(), sm.getContentChecksum(), sm.getContentLastModified(), sm.getContentLength());
+        a.storageLocation = sm.getStorageLocation();
+        stored.add(sm);
+        artifacts.add(a);
+        
+        sm = new StorageMetadata(new StorageLocation(URI.create("id:789")), URI.create("test:FOO/bar3"), 
+                URI.create("md5:a5b4861ccc5da8454e84fc1a686e40aa"), 1024L, new Date());
+        a = new Artifact(sm.getArtifactURI(), sm.getContentChecksum(), sm.getContentLastModified(), sm.getContentLength());
+        a.storageLocation = sm.getStorageLocation();
+        stored.add(sm);
+        artifacts.add(a);
+    
+        final TestPolicy testPolicy = new TestPolicy();
+        BucketValidator bv = new BucketValidator(testPolicy) {
+            @Override
+            Iterator<StorageMetadata> getStorageIterator() throws StorageEngageException {
+                return stored.iterator();
+            }
+
+            @Override
+            Iterator<Artifact> getInventoryIterator() {
+                return artifacts.iterator();
+            }
+        };
+    
+        bv.validate();
+        Assert.assertEquals("number validated", artifacts.size(), testPolicy.numArtifacts);
+        Assert.assertEquals("number validated", stored.size(), testPolicy.numStorage);
+        Assert.assertEquals("number validated", 3, testPolicy.numMatch);
+    }
     
     // TODO: test ValdiateEventListener methods for correctness
-
+    
+    
     String random16Bytes() {
         return UUID.randomUUID().toString().replaceAll("-", "");
+    }
+    
+    private class TestPolicy extends ResolutionPolicy {
+
+        int numArtifacts = 0;
+        int numStorage = 0;
+        int numMatch = 0;
+        
+        @Override
+        public void validate(Artifact artifact, StorageMetadata storageMetadata) throws Exception {
+            log.info("validate: " + artifact + " vs " + storageMetadata);
+            if (artifact != null) {
+                numArtifacts++;
+            }
+            if (storageMetadata != null) {
+                numStorage++;
+            }
+            if (artifact != null && storageMetadata != null) {
+                numMatch++;
+            }
+        }
+        
+    }
+    
+    private class TestActions implements ValidateActions {
+
+        int num = 0;
+        
+        @Override
+        public Artifact getArtifact(URI uri) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public void createArtifact(StorageMetadata storageMetadata) throws Exception {
+            num++;
+        }
+
+        @Override
+        public void delete(StorageMetadata storageMetadata) throws Exception {
+            num++;
+        }
+
+        @Override
+        public void delete(Artifact artifact) throws Exception {
+            num++;
+        }
+
+        @Override
+        public void clearStorageLocation(Artifact artifact) throws Exception {
+            num++;
+        }
+
+        @Override
+        public void replaceArtifact(Artifact artifact, StorageMetadata storageMetadata) throws Exception {
+            num++;
+        }
+
+        @Override
+        public void updateArtifact(Artifact artifact, StorageLocation storageLoc) throws Exception {
+            num++;
+        }
+
+        @Override
+        public void delayAction() {
+            num++;
+        }
+        
     }
 }

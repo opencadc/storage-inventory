@@ -75,39 +75,34 @@ import ca.nrc.cadc.db.TransactionManager;
 import ca.nrc.cadc.io.ResourceIterator;
 import ca.nrc.cadc.profiler.Profiler;
 import ca.nrc.cadc.util.BucketSelector;
-import ca.nrc.cadc.util.MultiValuedProperties;
-import ca.nrc.cadc.util.StringUtil;
 
 import java.net.URI;
-import java.security.PrivilegedActionException;
-import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
 import javax.naming.NamingException;
-import javax.security.auth.Subject;
 import javax.sql.DataSource;
 
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.DeletedArtifactEvent;
 import org.opencadc.inventory.DeletedStorageLocationEvent;
-import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.StorageLocation;
+import org.opencadc.inventory.StorageLocationEvent;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.DeletedArtifactEventDAO;
 import org.opencadc.inventory.db.DeletedStorageLocationEventDAO;
 import org.opencadc.inventory.db.ObsoleteStorageLocation;
 import org.opencadc.inventory.db.ObsoleteStorageLocationDAO;
-import org.opencadc.inventory.db.SQLGenerator;
+import org.opencadc.inventory.db.StorageLocationEventDAO;
 import org.opencadc.inventory.db.version.InitDatabase;
+import org.opencadc.inventory.storage.BucketType;
 import org.opencadc.inventory.storage.StorageAdapter;
+import org.opencadc.inventory.storage.StorageEngageException;
 import org.opencadc.inventory.storage.StorageMetadata;
-import org.opencadc.inventory.storage.policy.StorageValidationPolicy;
-import org.opencadc.inventory.storage.policy.ValidateActions;
+import org.opencadc.tantar.policy.ResolutionPolicy;
 
 /**
  * Main class to issue iterator requests to the Storage Adaptor and verify the contents.
@@ -129,9 +124,8 @@ public class BucketValidator implements ValidateActions {
 
     private final List<String> bucketPrefixes = new ArrayList<>();
     private final StorageAdapter storageAdapter;
-    private final Subject runUser;
+    private final ResolutionPolicy validationPolicy;
     private final boolean reportOnlyFlag;
-    private final StorageValidationPolicy validationPolicy;
 
     // Cached ArtifactDAO used for transactional access.
     private final ArtifactDAO artifactDAO;
@@ -152,97 +146,58 @@ public class BucketValidator implements ValidateActions {
     private long numReplaceArtifact = 0L;
     private long numUpdateArtifact = 0L;
 
-
     /**
-     * Constructor to allow configuration via some provided properties.  Expect an IllegalStateException for any
-     * mis-configured or missing values.
-     *
-     * @param properties The Properties object.
-     * @param reporter   The Reporter to use in the policy.  Can be used elsewhere.
-     * @param runUser    The user to run as.
+     * Constructor.
+     * 
+     * @param daoConfig DAO config map
+     * @param connectionConfig database connection info
+     * @param adapter StorageAdapter
+     * @param validator validation policy
+     * @param bucketRange raw bucket range
+     * @param reportOnly true for dry-run, false to take actions
      */
-    BucketValidator(final MultiValuedProperties properties, final Subject runUser) {
-        this.runUser = runUser;
-
-        final String configuredReportOnly = properties.getFirstPropertyValue(REPORT_ONLY_KEY);
-        this.reportOnlyFlag = StringUtil.hasText(configuredReportOnly) && Boolean.parseBoolean(configuredReportOnly);
+    public BucketValidator(Map<String, Object> daoConfig, ConnectionConfig connectionConfig, StorageAdapter adapter, 
+            ResolutionPolicy validationPolicy, String bucketRange, boolean reportOnly) {
+        this.reportOnlyFlag = reportOnly;
+        this.storageAdapter = adapter;
+        this.validationPolicy = validationPolicy;
         
-        // StorageAdapter
-        final String storageAdapterClassName = properties.getFirstPropertyValue(StorageAdapter.class.getName());
-        if (StringUtil.hasLength(storageAdapterClassName)) {
-            this.storageAdapter = InventoryUtil.loadPlugin(storageAdapterClassName);
-        } else {
-            throw new IllegalStateException("required config property missing: " + StorageAdapter.class.getName());
-        }
-        this.validationPolicy = storageAdapter.getValidationPolicy();
-        validationPolicy.setValidateActions(this);
-        
-        // buckets
-        final String bucketRange = properties.getFirstPropertyValue(BUCKETS_KEY);
-        if (!StringUtil.hasLength(bucketRange)) {
-            throw new IllegalStateException("required config property missing: " + BUCKETS_KEY);
-        } else {
-            // Ugly hack to support single Bucket names.
-            if (this.storageAdapter.getClass().getName().endsWith("AdStorageAdapter")) {
-                this.bucketPrefixes.add(bucketRange.trim());
-            } else {
+        switch (storageAdapter.getBucketType()) {
+            case NONE:
+                break;
+            case HEX:
                 final BucketSelector bucketSelector = new BucketSelector(bucketRange.trim());
                 for (final Iterator<String> bucketIterator = bucketSelector.getBucketIterator();
                      bucketIterator.hasNext();) {
                     this.bucketPrefixes.add(bucketIterator.next().trim());
                 }
-            }
+                break;
+            case PLAIN:
+                this.bucketPrefixes.add(bucketRange.trim());
+                break;
+            default:
+                throw new RuntimeException("BUG: unexpected BucketType " + storageAdapter.getBucketType());
         }
         
-        // database
-        final Map<String, Object> config = new HashMap<>();
-        final String sqlGeneratorClass = properties.getFirstPropertyValue(SQLGenerator.class.getName());
-
-        if (StringUtil.hasLength(sqlGeneratorClass)) {
-            try {
-                config.put(SQLGenerator.class.getName(), Class.forName(sqlGeneratorClass));
-            } catch (ClassNotFoundException e) {
-                throw new IllegalStateException("could not load SQLGenerator class: " + e.getMessage(), e);
-            }
-        } else {
-            throw new IllegalStateException("required config property missing: " + SQLGenerator.class.getName());
-        }
-        
-        // database
-        final String jdbcDriverClassname = "org.postgresql.Driver";
-        final String schemaName = properties.getFirstPropertyValue(DB_SCHEMA_KEY);
-        if (StringUtil.hasLength(schemaName)) {
-            config.put("schema", schemaName);
-        } else {
-            throw new IllegalStateException("required config property missing: " + DB_SCHEMA_KEY);
-        }
-        
-        final String dbUsername = properties.getFirstPropertyValue(DB_USERNAME_KEY);
-        final String dbPassword = properties.getFirstPropertyValue(DB_PASSWORD_KEY);
-        final String jdbcURL = properties.getFirstPropertyValue(JDBC_URL_KEY);
-        log.debug("database connection: " + jdbcURL);
-        final ConnectionConfig cc = new ConnectionConfig(null, null, dbUsername, dbPassword, jdbcDriverClassname, jdbcURL);
-                                                         
         try {
             // Register two datasources.
-            DBUtil.createJNDIDataSource("jdbc/inventory", cc);
-            DBUtil.createJNDIDataSource("jdbc/txinventory", cc);
+            DBUtil.createJNDIDataSource("jdbc/inventory", connectionConfig);
+            DBUtil.createJNDIDataSource("jdbc/txinventory", connectionConfig);
         } catch (NamingException ne) {
             throw new IllegalStateException("Unable to access Inventory Database.", ne);
         }
-
-        config.put("jndiDataSourceName", "jdbc/txinventory");
+        daoConfig.put("jndiDataSourceName", "jdbc/txinventory");
         this.artifactDAO = new ArtifactDAO();
-        this.artifactDAO.setConfig(config);
+        this.artifactDAO.setConfig(daoConfig);
 
-        config.put("jndiDataSourceName", "jdbc/inventory");
+        daoConfig.put("jndiDataSourceName", "jdbc/inventory");
         this.iteratorDAO = new ArtifactDAO();
-        this.iteratorDAO.setConfig(config);
+        this.iteratorDAO.setConfig(daoConfig);
         this.obsoleteStorageLocationDAO = new ObsoleteStorageLocationDAO(this.artifactDAO);
         
         try {
-            String database = (String) config.get("database");
-            String schema = (String) config.get("schema");
+            String database = (String) daoConfig.get("database");
+            String schema = (String) daoConfig.get("schema");
             DataSource ds = ca.nrc.cadc.db.DBUtil.findJNDIDataSource("jdbc/inventory");
             InitDatabase init = new InitDatabase(ds, database, schema);
             init.doInit();
@@ -251,34 +206,17 @@ public class BucketValidator implements ValidateActions {
             throw new IllegalStateException("check/init database failed", ex);
         }
     }
-
-    /**
-     * Complete constructor.  Useful for unit testing.
-     *
-     * @param bucketPrefixes   The bucket key(s) to query.
-     * @param storageAdapter   The StorageAdapter instance to interact with a Site.
-     * @param runUser          The Subject to run as when iterating over the Site's StorageMetadata.
-     * @param reportOnlyFlag   Whether to take action or not.  Default is false.
-     * @param resolutionPolicy The policy that dictates handling conflicts.
-     * @param artifactDAO      The Transactional artifact DAO for CRUD operations.
-     * @param iteratorDAO      The bare artifact DAO for iterating.
-     * @param obsoleteStorageLocationDAO ObsoleteStorageLocation DAO.
-     */
-    BucketValidator(final List<String> bucketPrefixes, final StorageAdapter storageAdapter, final Subject runUser,
-                    final boolean reportOnlyFlag, StorageValidationPolicy validationPolicy,
-                    final ArtifactDAO artifactDAO, final ArtifactDAO iteratorDAO,
-                    final ObsoleteStorageLocationDAO obsoleteStorageLocationDAO) {
-        this.bucketPrefixes.addAll(bucketPrefixes);
-        this.storageAdapter = storageAdapter;
-        this.runUser = runUser;
-        this.reportOnlyFlag = reportOnlyFlag;
+    
+    // minimal unit test use
+    BucketValidator(ResolutionPolicy validationPolicy) {
+        this.reportOnlyFlag = false;
+        this.storageAdapter = null;
         this.validationPolicy = validationPolicy;
-        validationPolicy.setValidateActions(this);
-        this.artifactDAO = artifactDAO;
-        this.iteratorDAO = iteratorDAO;
-        this.obsoleteStorageLocationDAO = obsoleteStorageLocationDAO;
+        this.artifactDAO = null;
+        this.obsoleteStorageLocationDAO = null;
+        this.iteratorDAO = null;
     }
-
+    
     /**
      * Main functionality.  This will obtain the iterators necessary to validate, and delegate to the Policy to take
      * action and/or report.
@@ -287,24 +225,25 @@ public class BucketValidator implements ValidateActions {
      */
     public void validate() throws Exception {
         log.info("BucketValidator.validate phase=start reportOnly=" + reportOnlyFlag);
+        validationPolicy.setValidateActions(this);
         try {
-            doit();
+            doit(validationPolicy);
         } finally {
-            logSummary(true, false);
+            logSummary(validationPolicy, true, false);
             log.info("BucketValidator.validate phase=end reportOnly=" + reportOnlyFlag);
         }
     }
     
-    private void doit() throws Exception {
+    private void doit(ResolutionPolicy validationPolicy) throws Exception {
         final Profiler profiler = new Profiler(BucketValidator.class);
         
         long t1 = System.currentTimeMillis();
 
-        final Iterator<StorageMetadata> storageMetadataIterator = getStorageMetadataIterator();
+        final Iterator<StorageMetadata> storageMetadataIterator = getStorageIterator();
         long t2 = System.currentTimeMillis();
         log.info("BucketValidator.storageQuery duration=" + (t2 - t1));
 
-        final Iterator<Artifact> inventoryIterator = iterateInventory();
+        final Iterator<Artifact> inventoryIterator = getInventoryIterator();
         long t3 = System.currentTimeMillis();
         log.info("BucketValidator.inventoryQuery duration=" + (t3 - t2));
 
@@ -313,7 +252,7 @@ public class BucketValidator implements ValidateActions {
 
         Artifact unresolvedArtifact = null;
         StorageMetadata unresolvedStorageMetadata = null;
-        logSummary(true, true);
+        logSummary(validationPolicy, true, true);
         while ((inventoryIterator.hasNext() || unresolvedArtifact != null)
                && (storageMetadataIterator.hasNext() || unresolvedStorageMetadata != null)) {
             final Artifact artifact = (unresolvedArtifact == null) ? inventoryIterator.next() : unresolvedArtifact;
@@ -342,7 +281,7 @@ public class BucketValidator implements ValidateActions {
                 validationPolicy.validate(artifact, null);
             }
             numValidated++;
-            logSummary();
+            logSummary(validationPolicy);
         }
 
         // *** Perform some mop up.  These loops will take effect when one of the iterators is empty but the other is
@@ -352,7 +291,7 @@ public class BucketValidator implements ValidateActions {
             log.debug(String.format("Artifact %s exists with no Storage Metadata.", artifact.storageLocation));
             validationPolicy.validate(artifact, null);
             numValidated++;
-            logSummary();
+            logSummary(validationPolicy);
         }
 
         while (storageMetadataIterator.hasNext()) {
@@ -361,18 +300,18 @@ public class BucketValidator implements ValidateActions {
                                        storageMetadata.getStorageLocation()));
             validationPolicy.validate(null, storageMetadata);
             numValidated++;
-            logSummary();
+            logSummary(validationPolicy);
         }
     }
 
     // default per-item invocation
-    private void logSummary() {
-        logSummary(false, true);
+    private void logSummary(ResolutionPolicy pol) {
+        logSummary(pol, false, true);
     }
     
     // initial: true, true
     // final:   true, false
-    private void logSummary(boolean force, boolean showNext) {
+    private void logSummary(ResolutionPolicy pol, boolean force, boolean showNext) {
         long sec = System.currentTimeMillis() / 1000L;
         long dt = (sec - lastSummary);
         if (!force && dt < summaryLogInterval) {
@@ -381,7 +320,7 @@ public class BucketValidator implements ValidateActions {
         lastSummary = sec;
         
         StringBuilder sb = new StringBuilder();
-        sb.append(validationPolicy.getClass().getSimpleName()).append(".summary");
+        sb.append(pol.getClass().getSimpleName()).append(".summary");
         if (numValidated > 0) {
             sb.append(" numValidated=").append(numValidated);
         }
@@ -421,7 +360,7 @@ public class BucketValidator implements ValidateActions {
     private boolean canTakeAction() {
         return !reportOnlyFlag;
     }
-
+    
     @Override
     public void delayAction() {
         numDelay++;
@@ -624,15 +563,14 @@ public class BucketValidator implements ValidateActions {
     }
 
     /**
-     * Update the values of the given Artifact with those from the given StorageMetadata.  This differs from a replace
-     * as it will not delete the original Artifact first, but rather update the values and issue a PUT.
+     * Update the StorageLocation of the given Artifact
      *
-     * @param artifact        The Artifact to update.
-     * @param storageMetadata The StorageMetadata from which to update the Artifact's fields.
+     * @param artifact        The Artifact to update
+     * @param storageLoc      The StorageLocation from which to update the Artifact
      * @throws Exception Any unexpected error.
      */
     @Override
-    public void updateArtifact(final Artifact artifact, final StorageMetadata storageMetadata) throws Exception {
+    public void updateArtifact(final Artifact artifact, final StorageLocation storageLoc) throws Exception {
         if (canTakeAction()) {
             final TransactionManager transactionManager = artifactDAO.getTransactionManager();
 
@@ -642,13 +580,13 @@ public class BucketValidator implements ValidateActions {
                 
                 Artifact cur = artifactDAO.lock(artifact);
                 if (cur != null) {
-                    // By reusing the Artifact instance's ID we can have the original Artifact but reset the mutable
-                    // fields below.
-                    artifact.contentEncoding = storageMetadata.contentEncoding;
-                    artifact.contentType = storageMetadata.contentType;
-                    artifact.storageLocation = storageMetadata.getStorageLocation();
+                    cur.storageLocation = storageLoc;
 
-                    artifactDAO.put(artifact);
+                    artifactDAO.put(cur);
+                    
+                    StorageLocationEventDAO sleDAO = new StorageLocationEventDAO(artifactDAO);
+                    StorageLocationEvent sle = new StorageLocationEvent(cur.getID());
+                    sleDAO.put(sle);
                     
                     transactionManager.commitTransaction();
                     numUpdateArtifact++;
@@ -657,7 +595,7 @@ public class BucketValidator implements ValidateActions {
                     log.debug("failed to lock artifact, assume deleted: " + artifact.getID());
                 }
             } catch (Exception e) {
-                log.error(String.format("Failed to update Artifact %s.", storageMetadata.getArtifactURI()), e);
+                log.error(String.format("Failed to update Artifact %s.", artifact.getURI()), e);
                 transactionManager.rollbackTransaction();
                 log.debug("Rollback Transaction: OK");
                 throw e;
@@ -679,7 +617,7 @@ public class BucketValidator implements ValidateActions {
      *
      * @return Iterator instance of Artifact objects
      */
-    Iterator<Artifact> iterateInventory() {
+    Iterator<Artifact> getInventoryIterator() {
         return new Iterator<Artifact>() {
             final Iterator<String> bucketPrefixIterator = bucketPrefixes.iterator();
 
@@ -751,7 +689,7 @@ public class BucketValidator implements ValidateActions {
      *
      * @return StorageMetadataIterator instance.
      */
-    Iterator<StorageMetadata> getStorageMetadataIterator() {
+    Iterator<StorageMetadata> getStorageIterator() throws StorageEngageException {
         return new StorageMetadataIterator();
     }
 
@@ -768,39 +706,29 @@ public class BucketValidator implements ValidateActions {
         /**
          * Constructor
          */
-        StorageMetadataIterator() {
-            log.debug(String.format("Getting iterator for %s running as %s",
-                                       bucketPrefixes, runUser.getPrincipals()));
+        StorageMetadataIterator() throws StorageEngageException {
             this.bucketPrefixIterator = bucketPrefixes.iterator();
 
             // The bucket range should have at least one value, so calling next() should be safe here.
-            try {
-                this.storageMetadataIterator =
-                    Subject.doAs(runUser, (PrivilegedExceptionAction<Iterator<StorageMetadata>>) () ->
-                        storageAdapter.iterator(bucketPrefixIterator.next()));
-            } catch (PrivilegedActionException exception) {
-                throw new IllegalStateException(exception);
-            }
+            this.storageMetadataIterator = storageAdapter.iterator(bucketPrefixIterator.next());
             advance();
         }
 
         private void advance() {
-            if (this.storageMetadataIterator.hasNext()) {
-                this.storageMetadata = this.storageMetadataIterator.next();
-                if (isObsoleteStorageLocation(this.storageMetadata)) {
+            try {
+                if (this.storageMetadataIterator.hasNext()) {
+                    this.storageMetadata = this.storageMetadataIterator.next();
+                    if (isObsoleteStorageLocation(this.storageMetadata)) {
+                        advance();
+                    }
+                } else if (this.bucketPrefixIterator.hasNext()) {
+                    this.storageMetadataIterator = storageAdapter.iterator(this.bucketPrefixIterator.next());
                     advance();
+                } else {
+                    this.storageMetadata = null;
                 }
-            } else if (this.bucketPrefixIterator.hasNext()) {
-                try {
-                    this.storageMetadataIterator =
-                        Subject.doAs(runUser, (PrivilegedExceptionAction<Iterator<StorageMetadata>>) () ->
-                            storageAdapter.iterator(this.bucketPrefixIterator.next()));
-                } catch (PrivilegedActionException exception) {
-                    throw new IllegalStateException(exception);
-                }
-                advance();
-            } else {
-                this.storageMetadata = null;
+            } catch (StorageEngageException ex) {
+                throw new RuntimeException("unexpected failure after iteration started", ex);
             }
         }
 

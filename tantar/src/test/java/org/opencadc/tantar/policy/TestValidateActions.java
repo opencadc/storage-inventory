@@ -67,12 +67,16 @@
  ************************************************************************
  */
 
-package org.opencadc.inventory.storage.policy;
+package org.opencadc.tantar.policy;
+
+import org.opencadc.tantar.ValidateActions;
 
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
+
 import org.opencadc.inventory.Artifact;
+import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.storage.StorageMetadata;
 
 public class TestValidateActions implements ValidateActions {
@@ -127,7 +131,7 @@ public class TestValidateActions implements ValidateActions {
     }
 
     @Override
-    public void updateArtifact(Artifact artifact, StorageMetadata storageMetadata) throws Exception {
+    public void updateArtifact(Artifact artifact, StorageLocation sloc) throws Exception {
         updateArtifactCalled = true;
         updated.add(artifact);
     }

@@ -67,13 +67,16 @@
  ************************************************************************
  */
 
-package org.opencadc.inventory.storage.policy;
+package org.opencadc.tantar.policy;
+
+import org.opencadc.tantar.policy.InventoryIsAlwaysRight;
 
 import java.io.ByteArrayOutputStream;
 import java.net.URI;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
+
 import org.junit.Assert;
 import org.junit.Test;
 import org.opencadc.inventory.Artifact;

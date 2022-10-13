@@ -67,7 +67,7 @@
  ************************************************************************
  */
 
-package org.opencadc.inventory.storage.policy;
+package org.opencadc.tantar.policy;
 
 import java.net.URI;
 import java.util.Objects;

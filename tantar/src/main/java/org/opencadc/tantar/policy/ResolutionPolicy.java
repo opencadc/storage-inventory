@@ -67,16 +67,17 @@
  ************************************************************************
  */
 
-package org.opencadc.inventory.storage.policy;
+package org.opencadc.tantar.policy;
 
+import org.opencadc.tantar.ValidateActions;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.storage.StorageMetadata;
 
-public abstract class StorageValidationPolicy {
+public abstract class ResolutionPolicy {
 
     protected ValidateActions validateActions;
 
-    protected StorageValidationPolicy() {
+    protected ResolutionPolicy() {
     }
     
     public void setValidateActions(final ValidateActions validateActions) {
@@ -84,25 +85,27 @@ public abstract class StorageValidationPolicy {
     }
 
     /**
-     * Equality check for the main components that establish a different Storage Entity.
+     * Determine is the artifact and stored object mean the same content.
      *
      * @param artifact          The Artifact to check.
      * @param storageMetadata   The StorageMetadata to check.
-     * @return          True if the metadata that verify the structure of the Entity differ.  False otherwise.
+     * @return          True if the content is the same, otherwise false
      */
-    protected final boolean haveDifferentStructure(final Artifact artifact, final StorageMetadata storageMetadata) {
-        return !storageMetadata.isValid()
-               || (!(artifact.getContentChecksum().equals(storageMetadata.getContentChecksum()))
-                   || !(artifact.getContentLength().equals(storageMetadata.getContentLength())));
+    protected final boolean isSameContent(final Artifact artifact, final StorageMetadata storageMetadata) {
+        // Artifact.contentLastModified is immutable but the value from storage can differ depending on
+        // file-sync actions, so we have to ignore that here
+        return storageMetadata.isValid()
+               && artifact.getContentChecksum().equals(storageMetadata.getContentChecksum())
+                   && artifact.getContentLength().equals(storageMetadata.getContentLength());
     }
 
     /**
      * Use the logic of this Policy to correct a conflict caused by the two given items.  One of the arguments can
      * be null, but not both.
      *
-     * @param artifact        The Artifact to use in deciding.
-     * @param storageMetadata The StorageMetadata to use in deciding.
-     * @throws Exception    For any unknown error that should be passed up.
+     * @param artifact        the Artifact in inventory database
+     * @param storageMetadata the metadata for the object in storage
+     * @throws Exception      an unknown error that should be passed up
      */
     public abstract void validate(final Artifact artifact, final StorageMetadata storageMetadata) throws Exception;
 }

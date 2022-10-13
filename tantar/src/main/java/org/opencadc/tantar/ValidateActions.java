@@ -66,12 +66,13 @@
  ************************************************************************
  */
 
-package org.opencadc.inventory.storage.policy;
+package org.opencadc.tantar;
 
 import java.net.URI;
 import java.util.EventListener;
 
 import org.opencadc.inventory.Artifact;
+import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.storage.StorageMetadata;
 
 /**
@@ -107,7 +108,7 @@ public interface ValidateActions extends EventListener {
     void delete(final StorageMetadata storageMetadata) throws Exception;
 
     /**
-     * Delete the given Artifact.  Implementors should also create a DeletedArtifactEvent as necessary.
+     * Delete the given Artifact.
      *
      * @param artifact      The Artifact to remove.
      * @throws Exception    Any unexpected error.
@@ -115,14 +116,22 @@ public interface ValidateActions extends EventListener {
     void delete(final Artifact artifact) throws Exception;
 
     /**
-     * This will force the file-sync application to assume it's a new insert and force a re-download of the file.  The
-     * default logic will most likely be to remove its StorageLocation instance.
+     * Clear the StorageLocation of an Artifact.
      *
      * @param artifact The base artifact.  This MUST have a Storage Location.
      * @throws Exception Anything IO/Thread related.
      */
     void clearStorageLocation(final Artifact artifact) throws Exception;
 
+    /**
+     * Update the storageLocation of the given Artifact.
+     *
+     * @param artifact      Artifact to update
+     * @param storageLoc    StorageLocation to assign
+     * @throws Exception    Any unexpected error.
+     */
+    void updateArtifact(final Artifact artifact, final StorageLocation storageLoc) throws Exception;
+    
     /**
      * Replace the given Artifact with a new one created from the given StorageMetadata instance.
      *
@@ -132,16 +141,6 @@ public interface ValidateActions extends EventListener {
      */
     void replaceArtifact(final Artifact artifact, final StorageMetadata storageMetadata) throws Exception;
 
-    /**
-     * Update the values of the given Artifact with those from the given StorageMetadata.  This differs from a replace
-     * as it will not delete the original Artifact first, but rather update the values and issue a PUT.
-     *
-     * @param artifact          The Artifact to update.
-     * @param storageMetadata   The StorageMetadata from which to update the Artifact's fields.
-     * @throws Exception    Any unexpected error.
-     */
-    void updateArtifact(final Artifact artifact, final StorageMetadata storageMetadata) throws Exception;
-    
     /**
      * Delay validation but increment count.
      */

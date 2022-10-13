@@ -67,7 +67,7 @@
  ************************************************************************
  */
 
-package org.opencadc.inventory.storage.policy;
+package org.opencadc.tantar.policy;
 
 import java.util.Date;
 import org.apache.log4j.Logger;
@@ -78,7 +78,7 @@ import org.opencadc.inventory.storage.StorageMetadata;
  * 
  * @author pdowler
  */
-public class InventoryIsAlwaysRight extends StorageValidationPolicy {
+public class InventoryIsAlwaysRight extends ResolutionPolicy {
     private static final Logger log = Logger.getLogger(InventoryIsAlwaysRight.class);
 
     private final Date now = new Date();
@@ -152,7 +152,7 @@ public class InventoryIsAlwaysRight extends StorageValidationPolicy {
         } 
 
         // artifact != null && storageMetadata != null && storageMetadata.isValid()
-        if (haveDifferentStructure(artifact, storageMetadata)) {
+        if (!isSameContent(artifact, storageMetadata)) {
             sb.append(".clearStorageLocation");
             sb.append(" Artifact.id=").append(artifact.getID());
             sb.append(" Artifact.uri=").append(artifact.getURI());

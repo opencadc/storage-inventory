@@ -67,7 +67,9 @@
  ************************************************************************
  */
 
-package org.opencadc.inventory.storage.policy;
+package org.opencadc.tantar.policy;
+
+import org.opencadc.tantar.policy.ResolutionPolicy;
 
 import ca.nrc.cadc.util.Log4jInit;
 
@@ -81,7 +83,7 @@ import org.apache.log4j.SimpleLayout;
 import org.apache.log4j.WriterAppender;
 import org.junit.Assert;
 
-public class AbstractResolutionPolicyTest<T extends StorageValidationPolicy> {
+public class AbstractResolutionPolicyTest<T extends ResolutionPolicy> {
 
     T testSubject;
 

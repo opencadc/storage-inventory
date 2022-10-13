@@ -67,13 +67,13 @@
  ************************************************************************
  */
 
-package org.opencadc.inventory.storage.policy;
+package org.opencadc.tantar.policy;
 
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.storage.StorageMetadata;
 
-public class StorageIsAlwaysRight extends StorageValidationPolicy {
+public class StorageIsAlwaysRight extends ResolutionPolicy {
     private static final Logger log = Logger.getLogger(StorageIsAlwaysRight.class);
     
     public StorageIsAlwaysRight() {
@@ -118,33 +118,41 @@ public class StorageIsAlwaysRight extends StorageValidationPolicy {
         
         //storageMetadata != null && storageMetadata.isValid()
         Artifact art = artifact;
-        boolean unmatchedSorageLocation = false;
         if (art == null) {
-            // check for existing artifact with unmatched StorageLocation
-            Artifact tmp = validateActions.getArtifact(storageMetadata.getArtifactURI());
-            if (tmp == null) {
-                sb.append(".createArtifact");
-                sb.append(" Artifact.uri=").append(storageMetadata.getArtifactURI());
-                sb.append(" loc=").append(storageMetadata.getStorageLocation());
-                sb.append(" reason=no-matching-artifact");
-                log.info(sb.toString());
-                validateActions.createArtifact(storageMetadata);
-                return;
-            } else {
-                art = tmp;
-                unmatchedSorageLocation = true;
-            }
+            // check for existing artifact with unmatched StorageLocation (possibly different bucket)
+            art = validateActions.getArtifact(storageMetadata.getArtifactURI());
+        }
+        if (art == null) {
+            sb.append(".createArtifact");
+            sb.append(" Artifact.uri=").append(storageMetadata.getArtifactURI());
+            sb.append(" loc=").append(storageMetadata.getStorageLocation());
+            sb.append(" reason=no-matching-artifact");
+            log.info(sb.toString());
+            validateActions.createArtifact(storageMetadata);
+            return;
         }
 
-        // artifact != null && storageMetadata != null && storageMetadata.isValid()
-        if (unmatchedSorageLocation || haveDifferentStructure(art, storageMetadata)) {
-            // Then prefer the Storage Metadata.
+        // artifact != null
+        if (!isSameContent(art, storageMetadata)) {
+            // file replaced in storage
             sb.append(".replaceArtifact");
             sb.append(" Artifact.id=").append(art.getID());
             sb.append(" Artifact.uri=").append(art.getURI());
             sb.append(" loc=").append(storageMetadata.getStorageLocation());
             log.info(sb.toString());
             validateActions.replaceArtifact(art, storageMetadata);
+            return;
+        }
+        
+        // isSameContent()
+        if (art.storageLocation == null || !art.storageLocation.equals(storageMetadata.getStorageLocation())) {
+            // same file: fix storage location
+            sb.append(".updateArtifact");
+            sb.append(" Artifact.id=").append(art.getID());
+            sb.append(" Artifact.uri=").append(art.getURI());
+            sb.append(" loc=").append(storageMetadata.getStorageLocation());
+            log.info(sb.toString());
+            validateActions.updateArtifact(art, storageMetadata.getStorageLocation());
             return;
         }
         
