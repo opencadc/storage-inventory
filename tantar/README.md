@@ -41,9 +41,6 @@ site. There are two kinds of buckets in use: some StorageAdapter(s) use a short 
 prefix it to denote fewer but larger buckets (e.g. bucket prefix "0" denotes ~1/16 of the storage locations; the prefix range "0-f"
 denotes the entire storage range). 
 
-Note: This does not really belong here, but tantar has specific temporary code to support this: the AD StorageAdapter uses archive 
-name as the bucket, so there is no prefixing to subdivide further and no range of buckets: just a single bucket (archive) per tantar instance.
-
 The _StorageAdapter_ is a plugin implementation to support the back end storage system. These are implemented in separate libraries; 
 each available implementation is in a library named cadc-storage-adapter-{impl} and the fully qualified class name to use is documented 
 there.
@@ -72,7 +69,14 @@ of artifacts/files.
 The _RecoverFromStorage_ policy is currently in development and not yet usable; it will be useful to recover from losing the entire 
 inventory database as well from lesser disasters if the StorageAdapter supports it. Additional config may be needed when this is ready.
 
-Additional java system properties and/or configuration files may be requires to configure the storage adapter.
+The following StorageAdapter and ResolutionPolicy combinations are considered well tested:
+```
+OpaqueFilesystemStorageAdapter + InventoryIsAlwaysRight
+SwiftStorageAdapter + InventoryIsAlwaysRight
+AdStorageAdapter + StorageIsAlwaysRight (CADC archive migration to SI)
+```
+
+Additional java system properties and/or configuration files may be required to configure the storage adapter.
 
 ### cadcproxy.pem
 This client certificate may be used by the StorageAdapter implementation.
