@@ -98,7 +98,6 @@ import org.opencadc.inventory.db.ObsoleteStorageLocation;
 import org.opencadc.inventory.db.ObsoleteStorageLocationDAO;
 import org.opencadc.inventory.db.StorageLocationEventDAO;
 import org.opencadc.inventory.db.version.InitDatabase;
-import org.opencadc.inventory.storage.BucketType;
 import org.opencadc.inventory.storage.StorageAdapter;
 import org.opencadc.inventory.storage.StorageEngageException;
 import org.opencadc.inventory.storage.StorageMetadata;
@@ -152,7 +151,7 @@ public class BucketValidator implements ValidateActions {
      * @param daoConfig DAO config map
      * @param connectionConfig database connection info
      * @param adapter StorageAdapter
-     * @param validator validation policy
+     * @param validationPolicy the discrepancy resolution policy
      * @param bucketRange raw bucket range
      * @param reportOnly true for dry-run, false to take actions
      */
@@ -581,8 +580,7 @@ public class BucketValidator implements ValidateActions {
                 Artifact cur = artifactDAO.lock(artifact);
                 if (cur != null) {
                     cur.storageLocation = storageLoc;
-
-                    artifactDAO.put(cur);
+                    artifactDAO.setStorageLocation(cur, storageLoc);
                     
                     StorageLocationEventDAO sleDAO = new StorageLocationEventDAO(artifactDAO);
                     StorageLocationEvent sle = new StorageLocationEvent(cur.getID());

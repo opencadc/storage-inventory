@@ -69,9 +69,9 @@
 
 package org.opencadc.tantar.policy;
 
-import org.opencadc.tantar.ValidateActions;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.storage.StorageMetadata;
+import org.opencadc.tantar.ValidateActions;
 
 public abstract class ResolutionPolicy {
 

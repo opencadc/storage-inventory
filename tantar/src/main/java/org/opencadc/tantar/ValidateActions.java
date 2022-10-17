@@ -83,10 +83,10 @@ import org.opencadc.inventory.storage.StorageMetadata;
 public interface ValidateActions extends EventListener {
     
     /**
-     * Get existing artifact by uri. This is to support possible changes in StorageLocation
+     * Get existing artifact by uri (from inventory). This is to support possible changes in StorageLocation
      * for recovery of existing artifact-storage connection.
      * 
-     * @param uri
+     * @param uri uri of the artifact to get from inventory
      * @return the artifact or null
      */
     Artifact getArtifact(URI uri);

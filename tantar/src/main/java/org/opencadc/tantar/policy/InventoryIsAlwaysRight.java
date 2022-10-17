@@ -81,13 +81,18 @@ import org.opencadc.inventory.storage.StorageMetadata;
 public class InventoryIsAlwaysRight extends ResolutionPolicy {
     private static final Logger log = Logger.getLogger(InventoryIsAlwaysRight.class);
 
-    private final Date now = new Date();
+    private Date now = new Date();
     
     public InventoryIsAlwaysRight() {
     }
 
     private boolean delayAction(Date d) {
         return (d != null && now.before(d));
+    }
+    
+    // for test convenience
+    protected void resetDelayTimestamp() {
+        now = new Date();
     }
     
     /**
@@ -164,8 +169,8 @@ public class InventoryIsAlwaysRight extends ResolutionPolicy {
             StringBuilder sb2 = new StringBuilder();
             sb2.append(this.getClass().getSimpleName());
             sb2.append(".deleteStorageLocation");
-            sb.append(" Artifact.id=").append(artifact.getID());
-            sb.append(" Artifact.uri=").append(artifact.getURI());
+            sb2.append(" Artifact.id=").append(artifact.getID());
+            sb2.append(" Artifact.uri=").append(artifact.getURI());
             sb2.append(" loc=").append(storageMetadata.getStorageLocation());
             sb2.append(" reason=metadata");
             log.info(sb2.toString());
