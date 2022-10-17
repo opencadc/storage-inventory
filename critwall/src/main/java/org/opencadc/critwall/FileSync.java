@@ -72,6 +72,7 @@ import ca.nrc.cadc.auth.SSLUtil;
 import ca.nrc.cadc.db.ConnectionConfig;
 import ca.nrc.cadc.io.ResourceIterator;
 import ca.nrc.cadc.thread.ThreadedRunnableExecutor;
+import ca.nrc.cadc.util.BucketSelector;
 import ca.nrc.cadc.vosi.Availability;
 import ca.nrc.cadc.vosi.AvailabilityClient;
 
@@ -79,21 +80,21 @@ import java.io.File;
 import java.net.URI;
 import java.util.Iterator;
 import java.util.Map;
-
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+
 import javax.naming.NamingException;
 import javax.security.auth.Subject;
 import javax.sql.DataSource;
+
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.version.InitDatabase;
 import org.opencadc.inventory.storage.StorageAdapter;
-import org.opencadc.inventory.util.BucketSelector;
 import org.opencadc.inventory.util.DBUtil;
 
 
