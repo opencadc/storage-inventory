@@ -27,6 +27,7 @@ dependencies {
     compile 'org.jdom:jdom2:[2.0,)'
 
     compile 'org.opencadc:cadc-util:[1.6,2.0)'
+    compile 'org.opencadc:cadc-log:[1.1.6,2.0)'
     compile 'org.opencadc:cadc-vosi:[1.4.3,2.0)'
     compile 'org.opencadc:cadc-adql:[1.1,)'
     compile 'org.opencadc:cadc-uws:[1.0.3,)'
