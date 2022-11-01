@@ -75,16 +75,13 @@ import ca.nrc.cadc.db.TransactionManager;
 import ca.nrc.cadc.io.ResourceIterator;
 import ca.nrc.cadc.profiler.Profiler;
 import ca.nrc.cadc.util.BucketSelector;
-
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-
 import javax.naming.NamingException;
 import javax.sql.DataSource;
-
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.DeletedArtifactEvent;
@@ -111,15 +108,6 @@ import org.opencadc.tantar.policy.ResolutionPolicy;
 public class BucketValidator implements ValidateActions {
 
     private static final Logger log = Logger.getLogger(BucketValidator.class);
-
-    private static final String CONFIG_BASE = Main.class.getPackage().getName();
-    private static final String REPORT_ONLY_KEY = CONFIG_BASE + ".reportOnly";
-    private static final String BUCKETS_KEY = CONFIG_BASE + ".buckets";
-    private static final String DB_SCHEMA_KEY = CONFIG_BASE + ".inventory.schema";
-    private static final String DB_USERNAME_KEY = CONFIG_BASE + ".inventory.username";
-    private static final String DB_PASSWORD_KEY = CONFIG_BASE + ".inventory.password";
-    private static final String JDBC_URL_KEY = CONFIG_BASE + ".inventory.url";
-    
 
     private final List<String> bucketPrefixes = new ArrayList<>();
     private final StorageAdapter storageAdapter;
@@ -249,54 +237,68 @@ public class BucketValidator implements ValidateActions {
         log.debug(String.format("Acquired iterators: \nHas Artifacts (%b)\nHas Storage Metadata (%b).",
                                    inventoryIterator.hasNext(), storageMetadataIterator.hasNext()));
 
-        Artifact unresolvedArtifact = null;
-        StorageMetadata unresolvedStorageMetadata = null;
+        Artifact unvalidatedArtifact = null;
+        StorageMetadata unvalidatedStorageMetadata = null;
         logSummary(validationPolicy, true, true);
-        while ((inventoryIterator.hasNext() || unresolvedArtifact != null)
-               && (storageMetadataIterator.hasNext() || unresolvedStorageMetadata != null)) {
-            final Artifact artifact = (unresolvedArtifact == null) ? inventoryIterator.next() : unresolvedArtifact;
+        while ((inventoryIterator.hasNext() || unvalidatedArtifact != null)
+               && (storageMetadataIterator.hasNext() || unvalidatedStorageMetadata != null)) {
+            final Artifact artifact = (unvalidatedArtifact == null) ? inventoryIterator.next() : unvalidatedArtifact;
             final StorageMetadata storageMetadata =
-                    (unresolvedStorageMetadata == null) ? storageMetadataIterator.next() : unresolvedStorageMetadata;
+                    (unvalidatedStorageMetadata == null) ? storageMetadataIterator.next() : unvalidatedStorageMetadata;
 
             final int comparison = artifact.storageLocation.compareTo(storageMetadata.getStorageLocation());
 
-            log.debug(String.format("Comparing Inventory Storage Location %s with Storage Adapter Location %s (%d)",
+            log.debug(String.format("compare (I vs S): %s  vs %s (%d)",
                                        artifact.storageLocation, storageMetadata.getStorageLocation(), comparison));
 
             if (comparison == 0) {
                 // Same storage location.  Test the metadata.
-                unresolvedArtifact = null;
-                unresolvedStorageMetadata = null;
+                unvalidatedArtifact = null;
+                unvalidatedStorageMetadata = null;
                 validationPolicy.validate(artifact, storageMetadata);
             } else if (comparison > 0) {
                 // Exists in Storage but not in inventory.
-                unresolvedArtifact = artifact;
-                unresolvedStorageMetadata = null;
+                unvalidatedArtifact = artifact;
+                unvalidatedStorageMetadata = null;
                 validationPolicy.validate(null, storageMetadata);
             } else {
                 // Exists in Inventory but not in Storage.
-                unresolvedArtifact = null;
-                unresolvedStorageMetadata = storageMetadata;
+                unvalidatedArtifact = null;
+                unvalidatedStorageMetadata = storageMetadata;
                 validationPolicy.validate(artifact, null);
             }
             numValidated++;
             logSummary(validationPolicy);
         }
 
-        // *** Perform some mop up.  These loops will take effect when one of the iterators is empty but the other is
-        // not, like in the case of a fresh load from another site.
+        // deal with one unvalidated object when one iterator is exhausted
+        if (unvalidatedArtifact != null) {
+            log.debug("unvalidatedArtifact: " + unvalidatedArtifact);
+            validationPolicy.validate(unvalidatedArtifact, null);
+        }
+        if (unvalidatedStorageMetadata != null) {
+            log.debug("unvalidatedStorageMetadata: " + unvalidatedStorageMetadata);
+            validationPolicy.validate(null, unvalidatedStorageMetadata);
+        }
+        
+        // when one iterator is exhausted, the other can have multiple remaining
+        // items, eg synced artifact database but no/minimal synced files
+        // or ingesting/recovering from storage... so we do need to process that
+        // iterator to completion, but if there is a undetected failure of
+        // one iterator, then the loops below are potentially dangerous
+        
+        // this loop is dangerous with StorageIsAlwaysRight because it is 
+        // deleting all these artifacts
         while (inventoryIterator.hasNext()) {
             final Artifact artifact = inventoryIterator.next();
-            log.debug(String.format("Artifact %s exists with no Storage Metadata.", artifact.storageLocation));
             validationPolicy.validate(artifact, null);
             numValidated++;
             logSummary(validationPolicy);
         }
-
+        // this loop is dangerous with InventoryisAlwaysRight because it is 
+        // deleting all these storageLocations
         while (storageMetadataIterator.hasNext()) {
             final StorageMetadata storageMetadata = storageMetadataIterator.next();
-            log.debug(String.format("Storage Metadata %s exists with no Artifact.",
-                                       storageMetadata.getStorageLocation()));
             validationPolicy.validate(null, storageMetadata);
             numValidated++;
             logSummary(validationPolicy);
