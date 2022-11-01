@@ -270,6 +270,8 @@ public class AdStorageAdapter implements StorageAdapter {
         TapClient tc = null;
         try {
             tc = new TapClient(URI.create(TAP_SERVICE_URI));
+            tc.setConnectionTimeout(12000); // 12 sec
+            tc.setReadTimeout(20 * 60000); // 20 min
         } catch (ResourceNotFoundException rnfe) {
             throw new StorageEngageException("Unable to connect to tap client: ", rnfe);
         }
@@ -279,7 +281,7 @@ public class AdStorageAdapter implements StorageAdapter {
         try {
             String adql = adQuery.getQuery();
             log.debug("bucket: " + storageBucket + " query: " + adql);
-            storageMetadataIterator = tc.query(adql, adQuery.getRowMapper());
+            storageMetadataIterator = tc.query(adql, adQuery.getRowMapper(), true);
         } catch (Exception e) {
             log.error("error executing TapClient query");
 
