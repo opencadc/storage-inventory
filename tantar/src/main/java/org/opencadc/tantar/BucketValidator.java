@@ -153,6 +153,9 @@ public class BucketValidator implements ValidateActions {
             case NONE:
                 break;
             case HEX:
+                if (bucketRange == null) {
+                    throw new IllegalArgumentException("invalid bucket range: null");
+                }
                 final BucketSelector bucketSelector = new BucketSelector(bucketRange.trim());
                 for (final Iterator<String> bucketIterator = bucketSelector.getBucketIterator();
                      bucketIterator.hasNext();) {
@@ -160,6 +163,9 @@ public class BucketValidator implements ValidateActions {
                 }
                 break;
             case PLAIN:
+                if (bucketRange == null) {
+                    throw new IllegalArgumentException("invalid bucket range: null");
+                }
                 this.bucketPrefixes.add(bucketRange.trim());
                 break;
             default:

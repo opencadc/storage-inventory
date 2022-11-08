@@ -35,11 +35,14 @@ The `inventory` database account owns and manages (create, alter, drop) inventor
 The database is specified in the JDBC URL. Failure to connect or initialize the database will show up in logs and cause
 the application to exit.
 
-The _buckets_ value indicates a subset of inventory database and back end storage to validate. This uses the 
-Artifact.storageLocation.storageBucket values so the exact usage and behaviour depends on the StorageAdapter being used for the
-site. There are two kinds of buckets in use: some StorageAdapter(s) use a short string of hex characters as the bucket and one can
-prefix it to denote fewer but larger buckets (e.g. bucket prefix "0" denotes ~1/16 of the storage locations; the prefix range "0-f"
-denotes the entire storage range). 
+The _buckets_ value indicates a subset of inventory database and back end storage to validate. 
+This uses the Artifact.storageLocation.storageBucket values so the exact usage and behaviour 
+depends on the StorageAdapter being used for the site. There are several kinds of buckets in use: 
+some StorageAdapter(s) use BucketType.HEX and one can prefix the hex string to denote fewer but 
+larger buckets (e.g. bucket prefix "0" denotes ~1/16 of the storage locations; the prefix range "0-f" 
+denotes the entire storage range). A StorageAdapter using BucketType.PLAIN has named buckets that
+are used as-is. A StorageAdapter using BucketType.NONE leaves Artifact.storageLocation.storageBucket
+null; the _buckets_ value in this case optional (ignored).
 
 The _StorageAdapter_ is a plugin implementation to support the back end storage system. These are implemented in separate libraries; 
 each available implementation is in a library named cadc-storage-adapter-{impl} and the fully qualified class name to use is documented 
