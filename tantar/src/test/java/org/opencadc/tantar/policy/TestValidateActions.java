@@ -4,7 +4,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2020.                            (c) 2020.
+ *  (c) 2022.                            (c) 2022.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -69,82 +69,75 @@
 
 package org.opencadc.tantar.policy;
 
+import org.opencadc.tantar.ValidateActions;
+
 import java.net.URI;
-import java.util.Objects;
+import java.util.ArrayList;
+import java.util.List;
 
 import org.opencadc.inventory.Artifact;
+import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.storage.StorageMetadata;
 
+public class TestValidateActions implements ValidateActions {
+    public boolean createArtifactCalled = false;
+    public boolean deleteStorageMetadataCalled = false;
+    public boolean deleteArtifactCalled = false;
+    public boolean clearStorageLocationCalled = false;
+    public boolean replaceArtifactCalled = false;
+    public boolean updateArtifactCalled = false;
+    
+    public final List<StorageMetadata> created = new ArrayList<>();
+    public final List<Artifact> cleared = new ArrayList<>();
+    public final List<Artifact> deleted = new ArrayList<>();
+    public final List<Artifact> replaced = new ArrayList<>();
+    public final List<Artifact> updated = new ArrayList<>();
+    
+    public final List<StorageMetadata> deletedStorage = new ArrayList<>();
 
-/**
- * Simple encompassing class to house the metadata to be compared when enforcing a policy for an existing Storage
- * Location.
- */
-public class PolicyMetadata {
-
-    private final URI contentChecksum;
-    private final Long contentLength;
-    public final String contentType;
-    public final String contentEncoding;
-
-    PolicyMetadata(URI contentChecksum, Long contentLength, String contentType, String contentEncoding) {
-        this.contentChecksum = contentChecksum;
-        this.contentLength = contentLength;
-        this.contentType = contentType;
-        this.contentEncoding = contentEncoding;
-    }
-
-
-    /**
-     * Create a new Policy Metadata by extracting valid fields from an Artifact.
-     *
-     * @param artifact The Artifact to use.
-     */
-    PolicyMetadata(final Artifact artifact) {
-        this(artifact.getContentChecksum(), artifact.getContentLength(), artifact.contentType,
-             artifact.contentEncoding);
-    }
-
-    /**
-     * Create a new Policy Metadata by extracting valid fields from a StorageMetadata.
-     *
-     * @param storageMetadata The StorageMetadata to use.
-     */
-    PolicyMetadata(final StorageMetadata storageMetadata) {
-        this(storageMetadata.getContentChecksum(), storageMetadata.getContentLength(),
-             storageMetadata.contentType, storageMetadata.contentEncoding);
+    @Override
+    public Artifact getArtifact(URI uri) {
+        return null;
     }
 
     @Override
-    public boolean equals(Object o) {
-        if (this == o) {
-            return true;
-        } else if (o == null || getClass() != o.getClass()) {
-            return false;
-        }
-
-        final PolicyMetadata that = (PolicyMetadata) o;
-
-        // Because contentType and contentEncoding are optional, they use the null checking Objects.equals.  The
-        // checksum and length are always mandatory as is explicitly shown here.
-        return contentChecksum.equals(that.contentChecksum)
-               && contentLength.equals(that.contentLength)
-               && Objects.equals(contentType, that.contentType)
-               && Objects.equals(contentEncoding, that.contentEncoding);
+    public void createArtifact(StorageMetadata storageMetadata) throws Exception {
+        createArtifactCalled = true;
+        created.add(storageMetadata);
     }
 
     @Override
-    public int hashCode() {
-        return Objects.hash(contentChecksum, contentLength, contentType, contentEncoding);
+    public void delete(StorageMetadata storageMetadata) throws Exception {
+        deleteStorageMetadataCalled = true;
+        deletedStorage.add(storageMetadata);
     }
 
     @Override
-    public String toString() {
-        return "PolicyMetadata{"
-               + "contentChecksum=" + contentChecksum
-               + ", contentLength=" + contentLength
-               + ", contentType='" + contentType + '\''
-               + ", contentEncoding='" + contentEncoding + '\''
-               + '}';
+    public void delete(Artifact artifact) throws Exception {
+        deleteArtifactCalled = true;
+        deleted.add(artifact);
+    }
+
+    @Override
+    public void clearStorageLocation(Artifact artifact) throws Exception {
+        clearStorageLocationCalled = true;
+        cleared.add(artifact);
+    }
+
+    @Override
+    public void replaceArtifact(Artifact artifact, StorageMetadata storageMetadata) throws Exception {
+        replaceArtifactCalled = true;
+        replaced.add(artifact);
+    }
+
+    @Override
+    public void updateArtifact(Artifact artifact, StorageLocation sloc) throws Exception {
+        updateArtifactCalled = true;
+        updated.add(artifact);
+    }
+
+    @Override
+    public void delayAction() {
+        // noop
     }
 }

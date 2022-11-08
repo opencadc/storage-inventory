@@ -4,7 +4,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2020.                            (c) 2020.
+ *  (c) 2022.                            (c) 2022.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -69,70 +69,82 @@
 
 package org.opencadc.tantar.policy;
 
+import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.storage.StorageMetadata;
-import org.opencadc.tantar.Reporter;
-import org.opencadc.tantar.ValidateEventListener;
-
 
 /**
- * Policy to ensure that a recovery from Storage (in the event of a disaster or a new site is brought online) will
- * dictate what goes into the Inventory Database. This policy differs from StorageIsAlwaysRight because... ???
+ * Policy to recover after losing the inventory database. This class is currently
+ * INCOMPLETE and should not be used (constructor throws an exception).
  */
 public class RecoverFromStorage extends ResolutionPolicy {
+    private static final Logger log = Logger.getLogger(RecoverFromStorage.class);
 
-    public RecoverFromStorage(ValidateEventListener validateEventListener, Reporter reporter) {
-        super(validateEventListener, reporter);
+    public RecoverFromStorage() {
         throw new UnsupportedOperationException("** incomplete implementation **");
     }
 
-    /**
-     * Use the logic of this Policy to correct a conflict caused by the two given items.  Only the Artifact can be
-     * null; it will be assumed that the given StorageMetadata is never null.
-     *
-     * @param artifact        The Artifact to use in deciding.  Can be null.
-     * @param storageMetadata The StorageMetadata to use in deciding.  Never null.
-     * @throws Exception For any unknown error that should be passed up.
-     */
     @Override
-    public void resolve(final Artifact artifact, final StorageMetadata storageMetadata) throws Exception {
+    public void validate(final Artifact artifact, final StorageMetadata storageMetadata) throws Exception {
         if (artifact == null && storageMetadata == null) {
             throw new RuntimeException("BUG: both args to resolve are null");
         }
         
         StringBuilder sb = new StringBuilder();
         sb.append(this.getClass().getSimpleName());
-        if (storageMetadata == null || !storageMetadata.isValid()) {
+        
+        if (storageMetadata == null) {
+            sb.append(".noAction");
+            sb.append(" Artifact.id=").append(artifact.getID());
+            sb.append(" Artifact.uri=").append(artifact.getURI());
+            sb.append(" reason=no-matching-storageLocation");
+            log.info(sb.toString());
+            return;
+        } else if (!storageMetadata.isValid()) {
             sb.append(".noAction");
             if (artifact != null) {
                 sb.append(" Artifact.id=").append(artifact.getID());
                 sb.append(" Artifact.uri=").append(artifact.getURI());
-                sb.append(" reason=no-matching-storageLocation");
-            } else {
-                sb.append(" reason=invalid-storageLocation");
             }
-            //reporter.report("RecoverFromStorage: artifact " + artifact.getID() + " vs StorageMetadata null");
-            reporter.report(sb.toString());
+            sb.append(" reason=invalid-storageLocation");
+            log.info(sb.toString());
             return;
         }
         
-        if (artifact == null) {
+        // storageMetadata.isValid()
+        Artifact cur = artifact;
+        if (cur == null) {
+            // query for artifact by URI and see if we can assign the storage location
+            cur = validateActions.getArtifact(storageMetadata.getArtifactURI());
+        }
+        
+        if (cur == null) {
             sb.append(".createArtifact");
             sb.append(" Artifact.uri=").append(storageMetadata.getArtifactURI());
             sb.append(" loc=").append(storageMetadata.getStorageLocation());
-            //reporter.report(String.format("Adding Artifact %s as per policy.", storageMetadata.getStorageLocation()));
-            reporter.report(sb.toString());
-            validateEventListener.createArtifact(storageMetadata);
-        } else  {
+            log.info(sb.toString());
+            validateActions.createArtifact(storageMetadata);
+            return;
+        }
+        
+        if (cur.storageLocation == null && isSameContent(cur, storageMetadata)) {
             sb.append(".updateArtifact");
-            sb.append(" Artifact.id=").append(artifact.getID());
-            sb.append(" Artifact.uri=").append(artifact.getURI());
+            sb.append(" Artifact.id=").append(cur.getID());
+            sb.append(" Artifact.uri=").append(cur.getURI());
             sb.append(" loc=").append(storageMetadata.getStorageLocation());
-            // This scenario is for an incomplete previous run.  Treat the Artifact as corrupt and set it back to the
-            // StorageMetadata's values.
-            //reporter.report(String.format("Updating Artifact %s as per policy.", storageMetadata.getStorageLocation()));
-            reporter.report(sb.toString());
-            validateEventListener.updateArtifact(artifact, storageMetadata);
+            log.info(sb.toString());
+            validateActions.updateArtifact(cur, storageMetadata.getStorageLocation());
+            return;
+        }
+        
+        sb.append("noAction");
+        sb.append(" Artifact.id=").append(artifact.getID());
+        sb.append(" Artifact.uri=").append(artifact.getURI());
+        sb.append(" loc=").append(storageMetadata.getStorageLocation());
+        if (cur.storageLocation == null) {
+            sb.append(" reason=metadata-mismatch");
+        } else {
+            sb.append(" reason=storageLocation-set");
         }
     }
 }

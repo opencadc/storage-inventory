@@ -99,6 +99,7 @@ import ca.nrc.cadc.vos.TransferParsingException;
 import ca.nrc.cadc.vos.TransferReader;
 import ca.nrc.cadc.vos.TransferWriter;
 import ca.nrc.cadc.vos.VOS;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -111,10 +112,13 @@ import java.security.AccessControlException;
 import java.security.cert.CertificateExpiredException;
 import java.security.cert.CertificateNotYetValidException;
 import java.util.Iterator;
+
 import javax.security.auth.Subject;
+
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.StorageLocation;
+import org.opencadc.inventory.storage.BucketType;
 import org.opencadc.inventory.storage.ByteRange;
 import org.opencadc.inventory.storage.NewArtifact;
 import org.opencadc.inventory.storage.PutTransaction;
@@ -145,6 +149,11 @@ public class AdStorageAdapter implements StorageAdapter {
      */
     public AdStorageAdapter(){}
 
+    @Override
+    public BucketType getBucketType() {
+        return BucketType.PLAIN;
+    }
+    
     @Override
     public void get(StorageLocation storageLocation, OutputStream dest)
         throws ResourceNotFoundException, ReadException, WriteException, StorageEngageException, TransientException {
@@ -261,6 +270,8 @@ public class AdStorageAdapter implements StorageAdapter {
         TapClient tc = null;
         try {
             tc = new TapClient(URI.create(TAP_SERVICE_URI));
+            tc.setConnectionTimeout(12000); // 12 sec
+            tc.setReadTimeout(20 * 60000); // 20 min
         } catch (ResourceNotFoundException rnfe) {
             throw new StorageEngageException("Unable to connect to tap client: ", rnfe);
         }
@@ -270,7 +281,7 @@ public class AdStorageAdapter implements StorageAdapter {
         try {
             String adql = adQuery.getQuery();
             log.debug("bucket: " + storageBucket + " query: " + adql);
-            storageMetadataIterator = tc.query(adql, adQuery.getRowMapper());
+            storageMetadataIterator = tc.query(adql, adQuery.getRowMapper(), true);
         } catch (Exception e) {
             log.error("error executing TapClient query");
 

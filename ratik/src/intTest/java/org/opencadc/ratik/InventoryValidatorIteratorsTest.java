@@ -69,7 +69,9 @@
 
 package org.opencadc.ratik;
 
+import ca.nrc.cadc.util.BucketSelector;
 import ca.nrc.cadc.util.Log4jInit;
+
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -81,6 +83,7 @@ import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
@@ -88,7 +91,6 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import org.opencadc.inventory.Artifact;
-import org.opencadc.inventory.util.BucketSelector;
 import org.opencadc.inventory.util.IncludeArtifacts;
 
 public class InventoryValidatorIteratorsTest {

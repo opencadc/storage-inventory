@@ -77,6 +77,7 @@ import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.util.HexUtil;
 import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.util.PropertiesReader;
+
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -98,9 +99,11 @@ import java.util.Iterator;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.UUID;
+
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.StorageLocation;
+import org.opencadc.inventory.storage.BucketType;
 import org.opencadc.inventory.storage.ByteRange;
 import org.opencadc.inventory.storage.NewArtifact;
 import org.opencadc.inventory.storage.PutTransaction;
@@ -203,6 +206,12 @@ public class FileSystemStorageAdapter implements StorageAdapter {
         } catch (IOException io) {
             throw new IllegalArgumentException(("Could not create content or transaction directory"), io);
         }
+    }
+
+    @Override
+    public BucketType getBucketType() {
+        throw new UnsupportedOperationException();
+        //return BucketType.PATH;
     }
     
     @Override

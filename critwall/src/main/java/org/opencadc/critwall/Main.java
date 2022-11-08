@@ -68,20 +68,22 @@
 package org.opencadc.critwall;
 
 import ca.nrc.cadc.db.ConnectionConfig;
+import ca.nrc.cadc.util.BucketSelector;
 import ca.nrc.cadc.util.Log4jInit;
 import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.util.PropertiesReader;
 import ca.nrc.cadc.util.StringUtil;
+
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
+
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.db.SQLGenerator;
 import org.opencadc.inventory.storage.StorageAdapter;
-import org.opencadc.inventory.util.BucketSelector;
 
 /**
  * Main entry point for critwall.

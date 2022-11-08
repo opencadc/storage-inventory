@@ -12,14 +12,14 @@ Runtime configuration must be made available via the `/config` directory.
 ```
 org.opencadc.tantar.logging = {info|debug}
 
+# set whether to report all activity or to perform any actions required.
+org.opencadc.tantar.reportOnly = {true|false}
+
 # set the bucket prefix(es) that tantar will validate
 org.opencadc.tantar.buckets = {bucket prefix or range of bucket prefixes}
 
 # set the policy to resolve conflicts of files
-org.opencadc.tantar.policy.ResolutionPolicy = {fully-qualified-classname of implementation}
-
-# set whether to report all activity or to perform any actions required.
-org.opencadc.tantar.reportOnly = {true|false}
+org.opencadc.tantar.policy.ResolutionPolicy = {resolution policy}
 
 ## inventory database settings
 org.opencadc.inventory.db.SQLGenerator=org.opencadc.inventory.db.SQLGenerator
@@ -35,14 +35,14 @@ The `inventory` database account owns and manages (create, alter, drop) inventor
 The database is specified in the JDBC URL. Failure to connect or initialize the database will show up in logs and cause
 the application to exit.
 
-The _buckets_ value indicates a subset of inventory database and back end storage to validate. This uses the 
-Artifact.storageLocation.storageBucket values so the exact usage and behaviour depends on the StorageAdapter being used for the
-site. There are two kinds of buckets in use: some StorageAdapter(s) use a short string of hex characters as the bucket and one can
-prefix it to denote fewer but larger buckets (e.g. bucket prefix "0" denotes ~1/16 of the storage locations; the prefix range "0-f"
-denotes the entire storage range). 
-
-Note: This does not really belong here, but tantar has specific temporary code to support this: the AD StorageAdapter uses archive 
-name as the bucket, so there is no prefixing to subdivide further and no range of buckets: just a single bucket (archive) per tantar instance.
+The _buckets_ value indicates a subset of inventory database and back end storage to validate. 
+This uses the Artifact.storageLocation.storageBucket values so the exact usage and behaviour 
+depends on the StorageAdapter being used for the site. There are several kinds of buckets in use: 
+some StorageAdapter(s) use BucketType.HEX and one can prefix the hex string to denote fewer but 
+larger buckets (e.g. bucket prefix "0" denotes ~1/16 of the storage locations; the prefix range "0-f" 
+denotes the entire storage range). A StorageAdapter using BucketType.PLAIN has named buckets that
+are used as-is. A StorageAdapter using BucketType.NONE leaves Artifact.storageLocation.storageBucket
+null; the _buckets_ value in this case optional (ignored).
 
 The _StorageAdapter_ is a plugin implementation to support the back end storage system. These are implemented in separate libraries; 
 each available implementation is in a library named cadc-storage-adapter-{impl} and the fully qualified class name to use is documented 
@@ -56,16 +56,30 @@ currently must be "inventory" due to configuration limitations in luskan.
 
 The _ResolutionPolicy_ is a plugin implementation that controls how discrepancies between the inventory database and the back end storage 
 are resolved. The policy specified that one is the definitive source of information about the existence of an Artifact or file and fixes 
-the discrepancy accordingly. The standard policy one would normally use is _org.opencadc.tantar.policy.InventoryIsAlwaysRight_: an Artifact 
-in the database indicates the correct state and a file without an Artifact should be deleted.
+the discrepancy accordingly. Since these policies are all implemented within `tantar`, policies can be identified by the simple class name
+(use of fully qualified class name is deprecated but still works). 
 
-To support a read-only storage site where files are added or removed out-of-band, one must use the 
-_org.opencadc.tantar.policy.StorageIsAlwaysRight_ policy. This policy will never delete stored files but it will delete Artifact(s) from the 
-inventory datbase that do not match a stored file (including generate a DeletedArtifactEvent that will propagate to other sites), create new 
-Artifact(s) for files that do not match an existing one, and may modify Artifact metadata in the inventory database to match values from storage.
-This policy makes the back end storage of this site the definitive source for the existence of files.
+The standard policy one would normally use is _InventoryIsAlwaysRight_: an Artifact in the database indicates the correct state and a 
+file without an Artifact should be deleted.
 
-Additional java system properties and/or configuration files may be requires to configure the storage adapter.
+The _StorageIsAlwaysRight_ policy is used for a site where files are added to back end storage and "ingested" into inventory (a read-only 
+storage site); this is suitable when using a StorageAdapter to migrate content from an old system. This policy will never delete stored files 
+but it will delete Artifact(s) from the inventory database that do not match a stored file (and generate a DeletedArtifactEvent that will 
+propagate to other sites), create new Artifact(s) for files that do not match an existing one, and may modify Artifact metadata in the 
+inventory database to match values from storage. This policy makes the back end storage of this site the definitive source for the existence 
+of artifacts/files.
+
+The _RecoverFromStorage_ policy is currently in development and not yet usable; it will be useful to recover from losing the entire 
+inventory database as well from lesser disasters if the StorageAdapter supports it. Additional config may be needed when this is ready.
+
+The following StorageAdapter and ResolutionPolicy combinations are considered well tested:
+```
+OpaqueFilesystemStorageAdapter + InventoryIsAlwaysRight
+SwiftStorageAdapter + InventoryIsAlwaysRight
+AdStorageAdapter + StorageIsAlwaysRight (CADC archive migration to SI)
+```
+
+Additional java system properties and/or configuration files may be required to configure the storage adapter.
 
 ### cadcproxy.pem
 This client certificate may be used by the StorageAdapter implementation.

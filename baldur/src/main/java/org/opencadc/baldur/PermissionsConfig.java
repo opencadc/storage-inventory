@@ -157,7 +157,7 @@ public class PermissionsConfig {
             this.authPrincipals.add(new X500Principal(AuthenticationUtil.canonizeDistinguishedName(dn)));
         }
         if (this.authPrincipals.size() == 0) {
-            throw new IllegalStateException("no values for key " + KEY_ALLOWED_USER + " in " + PERMISSIONS_PROPERTIES);
+            throw new InvalidConfigException("no values for key " + KEY_ALLOWED_USER + " in " + PERMISSIONS_PROPERTIES);
         }
 
         // get the permission entries

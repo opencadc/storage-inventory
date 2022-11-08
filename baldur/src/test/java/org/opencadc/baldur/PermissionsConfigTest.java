@@ -260,7 +260,7 @@ public class PermissionsConfigTest {
             System.setProperty(PropertiesReader.CONFIG_DIR_SYSTEM_PROPERTY, "src/test/resources/testMissingConfig");
             try {
                 new PermissionsConfig();
-                Assert.fail("should have received IllegalStateException");
+                Assert.fail("should have received InvalidConfigException");
             } catch (InvalidConfigException expected) {
                 log.info("caught expected: " + expected);
             }
@@ -280,8 +280,8 @@ public class PermissionsConfigTest {
             System.setProperty(PropertiesReader.CONFIG_DIR_SYSTEM_PROPERTY, "src/test/resources/testEmptyConfig");
             try {
                 new PermissionsConfig();
-                Assert.fail("should have received IllegalStateException");
-            } catch (IllegalStateException e) {
+                Assert.fail("should have received InvalidConfigException");
+            } catch (InvalidConfigException e) {
                 // expected
                 Assert.assertTrue(e.getMessage(), e.getMessage().toLowerCase().contains("baldur.properties"));
             }

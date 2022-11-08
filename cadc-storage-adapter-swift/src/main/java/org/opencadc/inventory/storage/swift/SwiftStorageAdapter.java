@@ -82,7 +82,6 @@ import ca.nrc.cadc.util.InvalidConfigException;
 import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.util.PropertiesReader;
 
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -115,6 +114,7 @@ import org.javaswift.joss.model.StoredObject;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.Namespace;
 import org.opencadc.inventory.StorageLocation;
+import org.opencadc.inventory.storage.BucketType;
 import org.opencadc.inventory.storage.ByteRange;
 import org.opencadc.inventory.storage.DigestInputStream;
 import org.opencadc.inventory.storage.MessageDigestAPI;
@@ -435,6 +435,11 @@ public class SwiftStorageAdapter  implements StorageAdapter {
         meta.put(MULTIBUCKET_ATTR, Boolean.toString(multiBucket));
         c.setMetadata(meta);
         log.info("bucket init complete: " + storageBucket + "/" + storageBucketLength + "/" + multiBucket);
+    }
+    
+    @Override
+    public BucketType getBucketType() {
+        return BucketType.HEX;
     }
     
     static class InternalBucket {
