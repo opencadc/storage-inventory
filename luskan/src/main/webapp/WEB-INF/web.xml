@@ -16,7 +16,8 @@
     <init-param>
       <param-name>logLevelPackages</param-name>
       <param-value>
-        org.opencadc.luskan
+	org.opencadc.luskan
+        orgh.opencadc.tap
         ca.nrc.cadc.reg
         ca.nrc.cadc.rest
         ca.nrc.cadc.uws
@@ -34,7 +35,31 @@
     </init-param>
     <load-on-startup>1</load-on-startup>
   </servlet>
+  
+    <servlet>
+        <servlet-name>LuskanInitServlet</servlet-name>
+        <servlet-class>ca.nrc.cadc.rest.RestServlet</servlet-class>
+        <init-param>
+            <param-name>init</param-name>
+            <param-value>org.opencadc.luskan.LuskanInitAction</param-value>
+        </init-param>
+        <load-on-startup>2</load-on-startup>
+    </servlet>
 
+    <servlet>
+        <servlet-name>TempStorageServlet</servlet-name>
+        <servlet-class>ca.nrc.cadc.rest.RestServlet</servlet-class>
+        <init-param>
+            <param-name>init</param-name>
+            <param-value>org.opencadc.tap.tmp.TempStorageInitAction</param-value>
+        </init-param>
+        <init-param>
+            <param-name>get</param-name>
+            <param-value>org.opencadc.tap.tmp.TempStorageGetAction</param-value>
+        </init-param>
+        <load-on-startup>2</load-on-startup>
+    </servlet>
+    
     <servlet>
         <servlet-name>AsyncQueryServlet</servlet-name>
         <servlet-class>ca.nrc.cadc.uws.server.JobServlet</servlet-class>
@@ -55,12 +80,13 @@
             <param-name>ca.nrc.cadc.uws.server.JobManager</param-name>
             <param-value>org.opencadc.luskan.QueryJobManager</param-value>
         </init-param>
+        <!-- tap_upload not supported
         <init-param>
             <param-name>ca.nrc.cadc.rest.InlineContentHandler</param-name>
-            <param-value>org.opencadc.luskan.TempStorageManager</param-value>
+            <param-value>${org.opencadc.luskan.InlineContentHandler}</param-value>
         </init-param>
-        
-        <load-on-startup>2</load-on-startup>
+        -->
+        <load-on-startup>3</load-on-startup>
     </servlet>
 
     <servlet>
@@ -79,27 +105,16 @@
             <param-name>ca.nrc.cadc.uws.server.JobManager</param-name>
             <param-value>org.opencadc.luskan.QueryJobManager</param-value>
         </init-param>
+        <!-- tap_upload not supported
         <init-param>
             <param-name>ca.nrc.cadc.rest.InlineContentHandler</param-name>
-            <param-value>org.opencadc.luskan.TempStorageManager</param-value>
+            <param-value>${org.opencadc.luskan.InlineContentHandler}</param-value>
         </init-param>
-
-        <load-on-startup>2</load-on-startup>
-    </servlet>
-
-    <servlet>
-        <servlet-name>TempStorageServlet</servlet-name>
-        <servlet-class>ca.nrc.cadc.rest.RestServlet</servlet-class>
-        <init-param>
-            <param-name>init</param-name>
-            <param-value>org.opencadc.luskan.LuskanInitAction</param-value>
-        </init-param>
-        <init-param>
-            <param-name>get</param-name>
-            <param-value>org.opencadc.luskan.TempStorageGetAction</param-value>
-        </init-param>
+        -->
         <load-on-startup>3</load-on-startup>
     </servlet>
+
+    
 
     <servlet>
         <servlet-name>CapabilitiesServlet</servlet-name>

@@ -71,13 +71,7 @@ package org.opencadc.luskan;
 
 import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.util.PropertiesReader;
-import java.io.IOException;
 import java.net.URI;
-import java.net.URISyntaxException;
-import java.nio.file.FileAlreadyExistsException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.List;
 import org.apache.log4j.Logger;
 import org.opencadc.gms.GroupURI;
@@ -87,8 +81,6 @@ public class LuskanConfig {
 
     // config keys
     private static final String LUSKAN_KEY = LuskanConfig.class.getPackage().getName();
-    public static final String URI_KEY = LUSKAN_KEY + ".resourceID";
-    public static final String TMPDIR_KEY = LUSKAN_KEY + ".resultsDir";
     public static final String STORAGE_SITE_KEY = LUSKAN_KEY + ".isStorageSite";
     public static final String ALLOW_ANON = LUSKAN_KEY + ".allowAnon";
     public static final String ALLOWED_GROUP = LUSKAN_KEY + ".allowedGroup";
@@ -106,14 +98,7 @@ public class LuskanConfig {
     public static void initConfig() {
         log.debug("initConfig: START");
         MultiValuedProperties props = getConfig();
-        String rid = props.getFirstPropertyValue(URI_KEY);
-
-        try {
-            new URI(rid);
-            log.debug("initConfig: OK");
-        } catch (URISyntaxException ex) {
-            throw new IllegalStateException("invalid config: " + URI_KEY + " must be a valid URI");
-        }
+        
     }
 
     /**
@@ -129,42 +114,6 @@ public class LuskanConfig {
         StringBuilder sb = new StringBuilder();
         sb.append("incomplete config: ");
         boolean ok = true;
-
-        String suri = props.getFirstPropertyValue(URI_KEY);
-        sb.append("\n\t").append(URI_KEY).append(" - ");
-        if (suri == null) {
-            sb.append("MISSING");
-            ok = false;
-        } else {
-            sb.append("OK");
-        }
-
-        String srd = props.getFirstPropertyValue(TMPDIR_KEY);
-        sb.append("\n\t").append(TMPDIR_KEY).append(" - ");
-        if (srd == null) {
-            sb.append("MISSING");
-            ok = false;
-        } else {
-            // create tmpdir path if necessary, and check if writable
-            Path tmpDirPath = Paths.get(srd);
-            try {
-                Files.createDirectories(tmpDirPath.toAbsolutePath());
-                Path tmpFile = Files.createTempFile(tmpDirPath, null, null);
-                Files.delete(tmpFile);
-                sb.append("OK");
-            } catch (Exception e) {
-                if (e instanceof FileAlreadyExistsException) {
-                    sb.append("FILE ALREADY EXISTS");
-                } else if (e instanceof SecurityException) {
-                    sb.append(String.format("WRITE PERMISSION DENIED: %s", e.getMessage()));
-                } else if (e instanceof IOException) {
-                    sb.append(String.format("UNABLE TO CREATE FILE: %s", e.getMessage()));
-                } else {
-                    sb.append(String.format("ERROR: %s", e.getMessage()));
-                }
-                ok = false;
-            }
-        }
 
         String ssk = props.getFirstPropertyValue(STORAGE_SITE_KEY);
         sb.append("\n\t").append(STORAGE_SITE_KEY).append(" - ");

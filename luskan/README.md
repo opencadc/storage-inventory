@@ -42,12 +42,17 @@ All three pools must have the same JDBC URL (e.g. use the same database) with Po
 In addition, the TAP service does not currerently support a configurable schema name: it assumes a schema named `inventory`
 holds the content.
 
+### cadc-tap-tmp.properties
+Temporary storage of async results is now handled by the 
+[cadc-tap-tmp](https://github.com/opencadc/tap/tree/master/cadc-tap-tmp) library. This
+library should be configured as follows:
+```
+org.opencadc.tap.tmp.TempStorageManager.baseURL = https://{server name}/{luskan path}/results
+org.opencadc.tap.tmp.TempStorageManager.baseStorageDir = {local directory}
+```
+
 ### luskan.properties
 ```
-# service identity
-org.opencadc.luskan.resourceID=ivo://{authority}/{name}
-org.opencadc.luskan.resultsDir={absolute path to directory for async results}
-
 # true if luskan is running on a storage site, false or not set if
 # running on a global site
 org.opencadc.luskan.isStorageSite={true|false}
