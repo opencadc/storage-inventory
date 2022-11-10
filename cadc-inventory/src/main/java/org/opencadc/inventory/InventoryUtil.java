@@ -254,11 +254,19 @@ public abstract class InventoryUtil {
         String ssp = uri.getSchemeSpecificPart();
         if (scheme == null || ssp == null || ssp.isEmpty()) {
             throw new IllegalArgumentException(caller.getSimpleName()
-                + ": invalid Artifact.uri: " + uri + " -- expected {scheme}:{scheme-specific-part} where {scheme-specific-part} is a relative path");
+                + ": invalid Artifact.uri: " + uri 
+                    + " -- expected {scheme}:{scheme-specific-part} where {scheme-specific-part} is a relative path ending with a filename");
         }
         if (ssp.charAt(0) == '/') {
             throw new IllegalArgumentException(caller.getSimpleName()
-                + ": invalid Artifact.uri: " + uri + " -- expected {scheme}:{scheme-specific-part} where {scheme-specific-part} is a relative path");
+                + ": invalid Artifact.uri: " + uri 
+                    + " -- expected {scheme}:{scheme-specific-part} where {scheme-specific-part} is a relative path ending with a filename");
+        }
+        char lastChar = ssp.charAt(ssp.length() - 1);
+        if (lastChar == ':' || lastChar == '/') {
+            throw new IllegalArgumentException(caller.getSimpleName()
+                + ": invalid Artifact.uri: " + uri 
+                    + " -- expected {scheme}:{scheme-specific-part} where {scheme-specific-part} is a relative path ending with a filename");
         }
         String[] comps = ssp.split("/");
         for (String c : comps) {

@@ -1,10 +1,9 @@
-
 /*
  ************************************************************************
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2020.                            (c) 2020.
+ *  (c) 2022.                            (c) 2022.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -69,26 +68,81 @@
 
 package org.opencadc.tantar;
 
-import org.apache.log4j.Logger;
+import java.net.URI;
+import java.util.EventListener;
 
+import org.opencadc.inventory.Artifact;
+import org.opencadc.inventory.StorageLocation;
+import org.opencadc.inventory.storage.StorageMetadata;
 
-public class Reporter {
+/**
+ * Interface used to limit dependencies so this lib doesn't depend on cadc-inventory-db??
+ * 
+ * @author pdowler
+ */
+public interface ValidateActions extends EventListener {
+    
+    /**
+     * Get existing artifact by uri (from inventory). This is to support possible changes in StorageLocation
+     * for recovery of existing artifact-storage connection.
+     * 
+     * @param uri uri of the artifact to get from inventory
+     * @return the artifact or null
+     */
+    Artifact getArtifact(URI uri);
 
-    private final Logger logger;
+    /**
+     * Create a new Artifact using metadata from the given StorageMetadata.
+     *
+     * @param storageMetadata       The StorageMetadata to pull metadata from.
+     * @throws Exception    Any unexpected error.
+     */
+    void createArtifact(final StorageMetadata storageMetadata) throws Exception;
 
-    public Reporter(final Logger logger) {
-        this.logger = logger;
-    }
+    /**
+     * Delete the given StorageMetadata.
+     *
+     * @param storageMetadata   The StorageMetadata to delete
+     * @throws Exception    Any unexpected error.
+     */
+    void delete(final StorageMetadata storageMetadata) throws Exception;
 
-    public void start() {
-        logger.info("START");
-    }
+    /**
+     * Delete the given Artifact.
+     *
+     * @param artifact      The Artifact to remove.
+     * @throws Exception    Any unexpected error.
+     */
+    void delete(final Artifact artifact) throws Exception;
 
-    public void report(final String message) {
-        logger.info(message);
-    }
+    /**
+     * Clear the StorageLocation of an Artifact.
+     *
+     * @param artifact The base artifact.  This MUST have a Storage Location.
+     * @throws Exception Anything IO/Thread related.
+     */
+    void clearStorageLocation(final Artifact artifact) throws Exception;
 
-    public void end() {
-        logger.info("END");
-    }
+    /**
+     * Update the storageLocation of the given Artifact.
+     *
+     * @param artifact      Artifact to update
+     * @param storageLoc    StorageLocation to assign
+     * @throws Exception    Any unexpected error.
+     */
+    void updateArtifact(final Artifact artifact, final StorageLocation storageLoc) throws Exception;
+    
+    /**
+     * Replace the given Artifact with a new one created from the given StorageMetadata instance.
+     *
+     * @param artifact          The Artifact to replace.
+     * @param storageMetadata   The StorageMetadata from which to create a new Artifact.
+     * @throws Exception    Any unexpected error.
+     */
+    void replaceArtifact(final Artifact artifact, final StorageMetadata storageMetadata) throws Exception;
+
+    /**
+     * Delay validation but increment count.
+     */
+    void delayAction();
 }

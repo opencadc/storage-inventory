@@ -4,7 +4,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2020.                            (c) 2020.
+ *  (c) 2022.                            (c) 2022.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -72,15 +72,11 @@ package org.opencadc.tantar.policy;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.storage.StorageMetadata;
-import org.opencadc.tantar.Reporter;
-import org.opencadc.tantar.ValidateEventListener;
-
 
 public class StorageIsAlwaysRight extends ResolutionPolicy {
     private static final Logger log = Logger.getLogger(StorageIsAlwaysRight.class);
     
-    public StorageIsAlwaysRight(final ValidateEventListener validateEventListener, final Reporter reporter) {
-        super(validateEventListener, reporter);
+    public StorageIsAlwaysRight() {
     }
 
     /**
@@ -91,7 +87,7 @@ public class StorageIsAlwaysRight extends ResolutionPolicy {
      * @param storageMetadata The StorageMetadata to use in deciding.
      */
     @Override
-    public void resolve(final Artifact artifact, final StorageMetadata storageMetadata) throws Exception {
+    public void validate(final Artifact artifact, final StorageMetadata storageMetadata) throws Exception {
         if (artifact == null && storageMetadata == null) {
             throw new RuntimeException("BUG: both args to resolve are null");
         }
@@ -113,42 +109,50 @@ public class StorageIsAlwaysRight extends ResolutionPolicy {
                 sb.append(" loc=").append(storageMetadata.getStorageLocation());
                 sb.append(" reason=invalid-storageLocation");
             }
-            reporter.report(sb.toString());
+            log.info(sb.toString());
             if (artifact != null) {
-                validateEventListener.delete(artifact);
+                validateActions.delete(artifact);
             }
             return;
         }
         
         //storageMetadata != null && storageMetadata.isValid()
         Artifact art = artifact;
-        boolean unmatchedSorageLocation = false;
         if (art == null) {
-            // check for existing artifact with unmatched StorageLocation
-            Artifact tmp = validateEventListener.getArtifact(storageMetadata.getArtifactURI());
-            if (tmp == null) {
-                sb.append(".createArtifact");
-                sb.append(" Artifact.uri=").append(storageMetadata.getArtifactURI());
-                sb.append(" loc=").append(storageMetadata.getStorageLocation());
-                sb.append(" reason=no-matching-artifact");
-                reporter.report(sb.toString());
-                validateEventListener.createArtifact(storageMetadata);
-                return;
-            } else {
-                art = tmp;
-                unmatchedSorageLocation = true;
-            }
+            // check for existing artifact with unmatched StorageLocation (possibly different bucket)
+            art = validateActions.getArtifact(storageMetadata.getArtifactURI());
+        }
+        if (art == null) {
+            sb.append(".createArtifact");
+            sb.append(" Artifact.uri=").append(storageMetadata.getArtifactURI());
+            sb.append(" loc=").append(storageMetadata.getStorageLocation());
+            sb.append(" reason=no-matching-artifact");
+            log.info(sb.toString());
+            validateActions.createArtifact(storageMetadata);
+            return;
         }
 
-        // artifact != null && storageMetadata != null && storageMetadata.isValid()
-        if (unmatchedSorageLocation || haveDifferentStructure(art, storageMetadata)) {
-            // Then prefer the Storage Metadata.
+        // artifact != null
+        if (!isSameContent(art, storageMetadata)) {
+            // file replaced in storage
             sb.append(".replaceArtifact");
             sb.append(" Artifact.id=").append(art.getID());
             sb.append(" Artifact.uri=").append(art.getURI());
             sb.append(" loc=").append(storageMetadata.getStorageLocation());
-            reporter.report(sb.toString());
-            validateEventListener.replaceArtifact(art, storageMetadata);
+            log.info(sb.toString());
+            validateActions.replaceArtifact(art, storageMetadata);
+            return;
+        }
+        
+        // isSameContent()
+        if (art.storageLocation == null || !art.storageLocation.equals(storageMetadata.getStorageLocation())) {
+            // same file: fix storage location
+            sb.append(".updateArtifact");
+            sb.append(" Artifact.id=").append(art.getID());
+            sb.append(" Artifact.uri=").append(art.getURI());
+            sb.append(" loc=").append(storageMetadata.getStorageLocation());
+            log.info(sb.toString());
+            validateActions.updateArtifact(art, storageMetadata.getStorageLocation());
             return;
         }
         

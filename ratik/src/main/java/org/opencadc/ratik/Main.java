@@ -68,7 +68,7 @@
 package org.opencadc.ratik;
 
 import ca.nrc.cadc.db.ConnectionConfig;
-import ca.nrc.cadc.db.DBUtil;
+import ca.nrc.cadc.util.BucketSelector;
 import ca.nrc.cadc.util.Log4jInit;
 import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.util.PropertiesReader;
@@ -79,14 +79,12 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
-import javax.naming.NamingException;
 
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.db.SQLGenerator;
 import org.opencadc.inventory.util.ArtifactSelector;
-import org.opencadc.inventory.util.BucketSelector;
 
 /**
  * Main entry point for ratik.

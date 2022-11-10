@@ -4,7 +4,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2020.                            (c) 2020.
+ *  (c) 2022.                            (c) 2022.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -73,22 +73,26 @@ import java.util.Date;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.storage.StorageMetadata;
-import org.opencadc.tantar.Reporter;
-import org.opencadc.tantar.ValidateEventListener;
 
-
+/**
+ * 
+ * @author pdowler
+ */
 public class InventoryIsAlwaysRight extends ResolutionPolicy {
     private static final Logger log = Logger.getLogger(InventoryIsAlwaysRight.class);
 
-    private final Date now = new Date();
+    private Date now = new Date();
     
-    public InventoryIsAlwaysRight(final ValidateEventListener validateEventListener, final Reporter reporter) {
-        super(validateEventListener, reporter);
+    public InventoryIsAlwaysRight() {
     }
 
-    
     private boolean delayAction(Date d) {
         return (d != null && now.before(d));
+    }
+    
+    // for test convenience
+    protected void resetDelayTimestamp() {
+        now = new Date();
     }
     
     /**
@@ -99,7 +103,7 @@ public class InventoryIsAlwaysRight extends ResolutionPolicy {
      * @param storageMetadata The StorageMetadata to use in deciding.
      */
     @Override
-    public void resolve(final Artifact artifact, final StorageMetadata storageMetadata) throws Exception {
+    public void validate(final Artifact artifact, final StorageMetadata storageMetadata) throws Exception {
         if (artifact == null && storageMetadata == null) {
             throw new RuntimeException("BUG: both args to resolve are null");
         }
@@ -113,15 +117,15 @@ public class InventoryIsAlwaysRight extends ResolutionPolicy {
                 sb.append(" Artifact.uri=").append(storageMetadata.getArtifactURI());
                 sb.append(" loc=").append(storageMetadata.getStorageLocation());
                 sb.append(" reason=no-matching-artifact");
-                reporter.report(sb.toString());
-                validateEventListener.delayAction();
+                log.info(sb.toString());
+                validateActions.delayAction();
             } else {
                 sb.append(".deleteStorageLocation");
                 sb.append(" Artifact.uri=").append(storageMetadata.getArtifactURI());
                 sb.append(" loc=").append(storageMetadata.getStorageLocation());
                 sb.append(" reason=no-matching-artifact");
-                reporter.report(sb.toString());
-                validateEventListener.delete(storageMetadata);
+                log.info(sb.toString());
+                validateActions.delete(storageMetadata);
             }
             return;
         }
@@ -144,33 +148,33 @@ public class InventoryIsAlwaysRight extends ResolutionPolicy {
                 sb.append(" Artifact.uri=").append(artifact.getURI());
                 sb2.append(" loc=").append(storageMetadata.getStorageLocation());
                 sb2.append(" reason=invalid-storageLocation");
-                reporter.report(sb2.toString());
-                validateEventListener.delete(storageMetadata);
+                log.info(sb2.toString());
+                validateActions.delete(storageMetadata);
             }
-            reporter.report(sb.toString());
-            validateEventListener.clearStorageLocation(artifact);
+            log.info(sb.toString());
+            validateActions.clearStorageLocation(artifact);
             return;
         } 
 
         // artifact != null && storageMetadata != null && storageMetadata.isValid()
-        if (haveDifferentStructure(artifact, storageMetadata)) {
+        if (!isSameContent(artifact, storageMetadata)) {
             sb.append(".clearStorageLocation");
             sb.append(" Artifact.id=").append(artifact.getID());
             sb.append(" Artifact.uri=").append(artifact.getURI());
             sb.append(" loc=").append(artifact.storageLocation);
             sb.append(" reason=metadata");
-            reporter.report(sb.toString());
-            validateEventListener.clearStorageLocation(artifact);
+            log.info(sb.toString());
+            validateActions.clearStorageLocation(artifact);
 
             StringBuilder sb2 = new StringBuilder();
             sb2.append(this.getClass().getSimpleName());
             sb2.append(".deleteStorageLocation");
-            sb.append(" Artifact.id=").append(artifact.getID());
-            sb.append(" Artifact.uri=").append(artifact.getURI());
+            sb2.append(" Artifact.id=").append(artifact.getID());
+            sb2.append(" Artifact.uri=").append(artifact.getURI());
             sb2.append(" loc=").append(storageMetadata.getStorageLocation());
             sb2.append(" reason=metadata");
-            reporter.report(sb2.toString());
-            validateEventListener.delete(storageMetadata);
+            log.info(sb2.toString());
+            validateActions.delete(storageMetadata);
             return;
         }
 

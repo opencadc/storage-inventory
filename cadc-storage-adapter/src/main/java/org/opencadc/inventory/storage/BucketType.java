@@ -65,89 +65,18 @@
 ************************************************************************
 */
 
-package org.opencadc.inventory.util;
+package org.opencadc.inventory.storage;
 
-import java.util.Iterator;
-import java.util.TreeSet;
-import org.apache.log4j.Logger;
-import org.opencadc.inventory.Artifact;
-import org.opencadc.inventory.InventoryUtil;
-
-
-public class BucketSelector {
-    private static final Logger log = Logger.getLogger(BucketSelector.class);
-
-    private static final int MAX_PREFIX_LENGTH = 1;
-    private final String rangeMin;
-    private final String rangeMax;
-    private final TreeSet<String> bucketList = new TreeSet<>();
-
-    public Iterator<String> getBucketIterator() {
-        return bucketList.iterator();
-    }
-
-    public BucketSelector(String selector) {
-        InventoryUtil.assertNotNull(BucketSelector.class, "selector", selector);
-
-        String[] minMax = selector.split("-");
-        if (minMax.length > 2) {
-            throw new IllegalArgumentException("invalid prefix range: single value or range only: "
-                + selector);
-        }
-
-        // trim and convert to lower case for consistent processing
-        rangeMin = minMax[0].trim().toLowerCase();
-
-        if (minMax.length == 1) {
-            rangeMax = rangeMin;
-        } else {
-            rangeMax = minMax[1].trim().toLowerCase();
-        }
-
-        // Prefix size is currently 1. This check will adapt if MAX_PREFIX_LENGTH is changed in future.
-        if ((1 <= rangeMin.length() && rangeMin.length() <= MAX_PREFIX_LENGTH)
-            && (1 <= rangeMax.length() && rangeMax.length() <= MAX_PREFIX_LENGTH)) {
-            log.debug("acceptable length: " + rangeMin + " - " + rangeMax);
-        } else {
-            throw new IllegalArgumentException("invalid bucket prefix (" + rangeMin + " or " + rangeMax
-                + "): max length is " + MAX_PREFIX_LENGTH);
-        }
-
-        // Note: Lookup of the rangeMin & rangeMax values below in Artifact.URI_BUCKET_CHARS
-        // is an acceptable shortcut while MAX_PREFIX_LENGTH == 1.
-        // If MAX_PREFIX_LENGTH is set to > 1, each character in rangeMin & rangeMax would
-        // need to be evaluated against values in Artifact.URI_BUCKET_CHARS
-        int min;
-        int max;
-        min = Artifact.URI_BUCKET_CHARS.indexOf(rangeMin);
-        if (min == -1) {
-            throw new IllegalArgumentException("invalid bucket prefix: " + rangeMin);
-        }
-        max = Artifact.URI_BUCKET_CHARS.indexOf(rangeMax);
-        if (max == -1) {
-            throw new IllegalArgumentException("invalid bucket prefix: " + rangeMax);
-        }
-
-        // order of range must be sane
-        if (max < min) {
-            throw new IllegalArgumentException("invalid prefix range (min - max): " + rangeMin + " - " + rangeMax);
-        }
-
-        log.debug("range values as ints: " + min + ", " + max);
-
-        // Populate bucketList
-        // Note: The index of the character position in Artifact.URI_BUCKET_CHARS can be used
-        // as a sane value to generate bucketList from only in the case that MAX_PREFIX_LENGTH == 1.
-        // Otherwise, a different algorithm needs to be developed here to give sane values
-        // that the bucketList iterator will return.
-        for (int i = min; i <= max; i++) {
-            bucketList.add(Character.toString(Artifact.URI_BUCKET_CHARS.charAt(i)));
-            log.debug("added " + Artifact.URI_BUCKET_CHARS.charAt(i));
-        }
-    }
-
-    @Override
-    public String toString() {
-        return "BucketSelector[" + rangeMin + "," + rangeMax + "]";
-    }
+/**
+ * BucketType are the different kinds of buckets supported by a StorageAdapter implementation.
+ * NONE: no bucket support at all. HEX: buckets are strings of hex chars and fewer larger buckets
+ * can be dynamically used by using a prefix. PLAIN: buckets are opaque strings that can only be used 
+ * as-is.
+ * 
+ * @author pdowler
+ */
+public enum BucketType {
+    NONE,
+    HEX,
+    PLAIN
 }

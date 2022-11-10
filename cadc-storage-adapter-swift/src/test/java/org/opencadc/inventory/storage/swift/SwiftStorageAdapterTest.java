@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2020.                            (c) 2020.
+*  (c) 2022.                            (c) 2022.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -271,9 +271,10 @@ public class SwiftStorageAdapterTest {
         config.add(new String[] { SwiftStorageAdapter.CONF_KEY, "somebody-has-a-key" });
         
         String userHome = System.getProperty("user.home");
+        log.info("original user.home: " + userHome);
         try {
             
-            File testHome = new File("build/tmp/test-home");
+            File testHome = new File("build/tmp/testConfigParsing");
             if (!testHome.exists()) {
                 testHome.mkdirs();
             }
@@ -287,7 +288,7 @@ public class SwiftStorageAdapterTest {
             }
             
             try {
-                SwiftStorageAdapter swiftAdapter = new SwiftStorageAdapter();
+                SwiftStorageAdapter swiftAdapter = new SwiftStorageAdapter(false);
                 Assert.fail("expected InvalidConfigException - created " + swiftAdapter);
             } catch (InvalidConfigException expected) {
                 log.info("missing config dir: " + expected);
@@ -298,7 +299,7 @@ public class SwiftStorageAdapterTest {
             // missing config file
             
             try {
-                SwiftStorageAdapter swiftAdapter = new SwiftStorageAdapter();
+                SwiftStorageAdapter swiftAdapter = new SwiftStorageAdapter(false);
                 Assert.fail("expected InvalidConfigException - created " + swiftAdapter);
             } catch (InvalidConfigException expected) {
                 log.info("missing config file: " + expected);
@@ -310,7 +311,7 @@ public class SwiftStorageAdapterTest {
             for (int i = 0; i < config.size() - 1; i++) {
                 writeProps(i, config, cf);
                 try {
-                    SwiftStorageAdapter sa = new SwiftStorageAdapter();
+                    SwiftStorageAdapter sa = new SwiftStorageAdapter(false);
                     Assert.fail("expected InvalidConfigException - created " + sa);
                 } catch (InvalidConfigException expected) {
                     log.info("missing config items: " + expected);
@@ -329,46 +330,10 @@ public class SwiftStorageAdapterTest {
                 log.error("valid config failed", ex);
                 Assert.fail("syntactically valid config failed: " + ex);
             }
-            cf.delete();
             
-            
-        } finally {
-            System.setProperty("user.home", userHome);
-        }
-    }
-    
-    @Test
-    public void testOptionalConfigParsing() throws Exception {
-        List<String[]> config = new ArrayList<>();
-        // verify whitespace handling on first three by added extra whitespace
-        config.add(new String[] { SwiftStorageAdapter.CONF_BUCKET, " foo " });
-        config.add(new String[] { SwiftStorageAdapter.CONF_SBLEN, " 3 " });
-        config.add(new String[] { SwiftStorageAdapter.CONF_ENABLE_MULTI, " true " });
-        config.add(new String[] { SwiftStorageAdapter.CONF_ENDPOINT, "https://example.net/v1/auth" });
-        config.add(new String[] { SwiftStorageAdapter.CONF_USER, "somebody" });
-        config.add(new String[] { SwiftStorageAdapter.CONF_KEY, "somebody-has-a-key" });
-        config.add(new String[] { SwiftStorageAdapter.CONF_PRESERVE_NS, "test:KEEP/" });
-        config.add(new String[] { SwiftStorageAdapter.CONF_PRESERVE_NS, "cadc:" });
-            
-        String userHome = System.getProperty("user.home");
-        try {
-            
-            File testHome = new File("build/tmp/test-home");
-            if (!testHome.exists()) {
-                testHome.mkdirs();
-            }
-            System.setProperty("user.home", testHome.getAbsolutePath());
-            
-            File testConfig = new File(testHome, "config");
-            
-            // missing config dir
-            if (testConfig.exists()) {
-                recursiveDelete(testConfig);
-            }
-            
-            testConfig.mkdir();
-            File cf = new File(testConfig, SwiftStorageAdapter.CONFIG_FILENAME);
-            
+            // add optional props
+            config.add(new String[] { SwiftStorageAdapter.CONF_PRESERVE_NS, "test:KEEP/" });
+            config.add(new String[] { SwiftStorageAdapter.CONF_PRESERVE_NS, "cadc:" });
             writeProps(8, config, cf);
             try {
                 SwiftStorageAdapter swiftAdapter = new SwiftStorageAdapter(false);
@@ -383,14 +348,15 @@ public class SwiftStorageAdapterTest {
                 log.error("valid config failed", ex);
                 Assert.fail("syntactically valid config failed: " + ex);
             }
+            
             cf.delete();
             
             
         } finally {
             System.setProperty("user.home", userHome);
+            log.info("restored user.home: " + System.getProperty("user.home"));
         }
     }
-    
     
     private void recursiveDelete(File dir) {
         if (dir.exists()) {
@@ -405,6 +371,8 @@ public class SwiftStorageAdapterTest {
     }
     
     private void writeProps(int num, List<String[]> props, File f) throws IOException {
+        log.info("writeProps: " + num + " -> " + f.getAbsolutePath());
+        f.delete();
         PrintWriter w = new PrintWriter(f);
         for (int i = 0; i < num; i++) {
             String[] ci = props.get(i);

@@ -76,7 +76,9 @@ import ca.nrc.cadc.io.ResourceIterator;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.reg.client.RegistryClient;
+import ca.nrc.cadc.util.BucketSelector;
 import ca.nrc.cadc.util.StringUtil;
+
 import java.io.File;
 import java.io.IOException;
 import java.net.URI;
@@ -91,9 +93,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.UUID;
+
 import javax.naming.NamingException;
 import javax.security.auth.Subject;
 import javax.sql.DataSource;
+
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.InventoryUtil;
@@ -102,7 +106,6 @@ import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.version.InitDatabase;
 import org.opencadc.inventory.query.ArtifactRowMapper;
 import org.opencadc.inventory.util.ArtifactSelector;
-import org.opencadc.inventory.util.BucketSelector;
 import org.opencadc.tap.TapClient;
 import org.opencadc.tap.TapRowMapper;
 

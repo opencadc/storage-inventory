@@ -4,7 +4,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2020.                            (c) 2020.
+ *  (c) 2022.                            (c) 2022.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -71,40 +71,41 @@ package org.opencadc.tantar.policy;
 
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.storage.StorageMetadata;
-import org.opencadc.tantar.Reporter;
-import org.opencadc.tantar.ValidateEventListener;
-
+import org.opencadc.tantar.ValidateActions;
 
 public abstract class ResolutionPolicy {
 
-    final ValidateEventListener validateEventListener;
-    final Reporter reporter;
+    protected ValidateActions validateActions;
 
-    ResolutionPolicy(final ValidateEventListener validateEventListener, final Reporter reporter) {
-        this.validateEventListener = validateEventListener;
-        this.reporter = reporter;
+    protected ResolutionPolicy() {
+    }
+    
+    public void setValidateActions(final ValidateActions validateActions) {
+        this.validateActions = validateActions;
     }
 
     /**
-     * Equality check for the main components that establish a different Storage Entity.
+     * Determine is the artifact and stored object mean the same content.
      *
      * @param artifact          The Artifact to check.
      * @param storageMetadata   The StorageMetadata to check.
-     * @return          True if the metadata that verify the structure of the Entity differ.  False otherwise.
+     * @return          True if the content is the same, otherwise false
      */
-    protected final boolean haveDifferentStructure(final Artifact artifact, final StorageMetadata storageMetadata) {
-        return !storageMetadata.isValid()
-               || (!(artifact.getContentChecksum().equals(storageMetadata.getContentChecksum()))
-                   || !(artifact.getContentLength().equals(storageMetadata.getContentLength())));
+    protected final boolean isSameContent(final Artifact artifact, final StorageMetadata storageMetadata) {
+        // Artifact.contentLastModified is immutable but the value from storage can differ depending on
+        // file-sync actions, so we have to ignore that here
+        return storageMetadata.isValid()
+               && artifact.getContentChecksum().equals(storageMetadata.getContentChecksum())
+                   && artifact.getContentLength().equals(storageMetadata.getContentLength());
     }
 
     /**
      * Use the logic of this Policy to correct a conflict caused by the two given items.  One of the arguments can
      * be null, but not both.
      *
-     * @param artifact        The Artifact to use in deciding.
-     * @param storageMetadata The StorageMetadata to use in deciding.
-     * @throws Exception    For any unknown error that should be passed up.
+     * @param artifact        the Artifact in inventory database
+     * @param storageMetadata the metadata for the object in storage
+     * @throws Exception      an unknown error that should be passed up
      */
-    public abstract void resolve(final Artifact artifact, final StorageMetadata storageMetadata) throws Exception;
+    public abstract void validate(final Artifact artifact, final StorageMetadata storageMetadata) throws Exception;
 }

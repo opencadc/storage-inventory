@@ -10,6 +10,8 @@ repositories {
     mavenLocal()
 }
 
+apply from: '../opencadc.gradle'
+
 sourceCompatibility = 1.8
 
 group = 'org.opencadc'
@@ -24,12 +26,14 @@ dependencies {
     compile 'org.opencadc:cadc-inventory-util:[0.1.8,1.0)'
     compile 'org.opencadc:cadc-storage-adapter:[0.8,1.0)'
 
-    runtime 'org.opencadc:cadc-storage-adapter-fs:[0.7,)'
-    runtime 'org.opencadc:cadc-storage-adapter-ad:[0.4.1,)'
-    runtime 'org.opencadc:cadc-storage-adapter-swift:[0.6,)'
+    runtime 'org.opencadc:cadc-storage-adapter-fs:[0.9.1,)'
+    runtime 'org.opencadc:cadc-storage-adapter-ad:[0.5.5,)'
+    runtime 'org.opencadc:cadc-storage-adapter-swift:[0.8.1,)'
 
     testCompile 'junit:junit:[4.12,5.0)'
-    
+
+    intTestCompile 'org.opencadc:cadc-storage-adapter-fs:[0.7,)'
+
     // work around because 1.8.0-beta4 prints exceptions in log, eg:
     // java.lang.NoSuchFieldException: mdc
     //    at java.base/java.lang.Class.getDeclaredField(Class.java:2411)
@@ -43,5 +47,5 @@ configurations {
   runtime.exclude group: 'org.slf4j', module: 'slf4j-reload4j'
 }
 
-apply from: '../opencadc.gradle'
+
 

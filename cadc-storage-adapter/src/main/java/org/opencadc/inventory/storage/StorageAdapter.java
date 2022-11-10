@@ -3,7 +3,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2020.                            (c) 2020.
+ *  (c) 2022.                            (c) 2022.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -76,12 +76,13 @@ import ca.nrc.cadc.net.IncorrectContentChecksumException;
 import ca.nrc.cadc.net.IncorrectContentLengthException;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URI;
 import java.util.Iterator;
-import java.util.SortedSet;
+
 import org.opencadc.inventory.StorageLocation;
 
 /**
@@ -94,7 +95,14 @@ import org.opencadc.inventory.StorageLocation;
 public interface StorageAdapter {
 
     /**
-     * Get from storage the artifact identified by storageLocation.
+     * Get the bucket type supported by the adapter.
+     * 
+     * @return a BucketType
+     */
+    public BucketType getBucketType();
+    
+    /**
+     * Get a stored object identified by storageLocation.
      * 
      * @param storageLocation the storage location containing storageID and storageBucket
      * @param dest the destination stream
@@ -109,7 +117,7 @@ public interface StorageAdapter {
         throws InterruptedException, ResourceNotFoundException, ReadException, WriteException, StorageEngageException, TransientException;
     
     /**
-     * Get parts of a stored object specified by one or more byte ranges.
+     * Get part of a stored object identified by storageLocation using a byte range.
      * 
      * @param storageLocation the object to read
      * @param dest the destination stream
@@ -126,16 +134,14 @@ public interface StorageAdapter {
         throws InterruptedException, ResourceNotFoundException, ReadException, WriteException, StorageEngageException, TransientException;
             
     /**
-     * Write an artifact to storage. The returned storage location will be used for future get and 
-     * delete calls. if the storage implementation overwrites a previously used StorageLocation, it must
+     * Write an object to storage. The returned storage location will be used for future get and 
+     * delete calls. If the storage implementation overwrites a previously used StorageLocation, it must
      * perform an atomic replace and leave the previously stored bytes intact if the put fails. The storage
-     * implementation may be designed to always write to a new storage location (e.g. generated unique storageID);
-     *  in this case, the caller is responsible for keeping track of and cleaning up previously stored objects
-     * (the previous StorageLocation of an Artifact). 
+     * implementation may be designed to always write to a new storage location (e.g. generated unique storageID). 
      * The value of storageBucket in the returned StorageMetadata and StorageLocation can be used to
-     * retrieve batches of artifacts in some of the iterator signatures defined in this interface.
+     * retrieve batches of objects in some of the iterator signatures defined in this interface.
      * Batches of artifacts can be listed by bucket in two of the iterator methods in this interface.
-     * if storageBucket is null then the caller will not be able perform bucket-based batch
+     * If storageBucket is null then the caller will not be able perform bucket-based batch
      * validation through the iterator methods.
      * 
      * @param newArtifact The holds information about the incoming artifact.  if the contentChecksum
@@ -305,5 +311,4 @@ public interface StorageAdapter {
      */
     public Iterator<PutTransaction> transactionIterator() 
         throws StorageEngageException, TransientException;
-    
 }

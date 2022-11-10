@@ -69,21 +69,29 @@
 package org.opencadc.tantar;
 
 import ca.nrc.cadc.auth.AuthenticationUtil;
-import ca.nrc.cadc.auth.RunnableAction;
 import ca.nrc.cadc.auth.SSLUtil;
+import ca.nrc.cadc.db.ConnectionConfig;
+import ca.nrc.cadc.util.InvalidConfigException;
 import ca.nrc.cadc.util.Log4jInit;
 import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.util.PropertiesReader;
 import ca.nrc.cadc.util.StringUtil;
+
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.security.PrivilegedExceptionAction;
+import java.util.Map;
+import java.util.TreeMap;
+
 import javax.security.auth.Subject;
+
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
+import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.db.SQLGenerator;
+import org.opencadc.inventory.storage.StorageAdapter;
 import org.opencadc.tantar.policy.ResolutionPolicy;
-
 
 /**
  * Main application entry.  This class expects a tantar.properties file to be available and readable.
@@ -96,7 +104,6 @@ public class Main {
     private static final String REPORT_ONLY_KEY = CONFIG_BASE + ".reportOnly";
     
     private static final String BUCKETS_KEY = CONFIG_BASE + ".buckets";
-    private static final String POLICY_KEY = ResolutionPolicy.class.getName();
     private static final String GENERATOR_KEY = SQLGenerator.class.getName();
     
     private static final String DB_SCHEMA_KEY = CONFIG_BASE + ".inventory.schema";
@@ -106,7 +113,6 @@ public class Main {
     
     public static void main(final String[] args) {
             
-        final Reporter reporter = new Reporter(log);
         try {
             Log4jInit.setLevel("ca.nrc.cadc", Level.WARN);
             Log4jInit.setLevel("org.opencadc", Level.WARN);
@@ -121,39 +127,81 @@ public class Main {
             Log4jInit.setLevel("org.opencadc.inventory", logLevel);
             Log4jInit.setLevel("org.opencadc.tantar", logLevel);
             
-            reporter.start();
-        
-            // The PropertiesReader won't throw a FileNotFoundException if the given file doesn't exist at all.  We'll
-            // need to throw it here as an appropriate way to notify users.
-            if (props == null) {
-                throw new FileNotFoundException("Unable to locate configuration file.");
-            }
-
+            // optional client cert
             File certFile = new File(System.getProperty("user.home") + "/.ssl/cadcproxy.pem");
             Subject s = AuthenticationUtil.getAnonSubject();
             if (certFile.exists()) {
                 s = SSLUtil.createSubject(certFile);
             }
             
-            BucketValidator bucketValidator = new BucketValidator(props, reporter, s);
-            bucketValidator.validate();
+            StorageAdapter storageAdapter = null;
+            String storageAdapterClassName = props.getFirstPropertyValue(StorageAdapter.class.getName());
+            if (StringUtil.hasLength(storageAdapterClassName)) {
+                storageAdapter = InventoryUtil.loadPlugin(storageAdapterClassName);
+            } else {
+                throw new InvalidConfigException("required config property missing: " + StorageAdapter.class.getName());
+            }
             
-        } catch (IllegalStateException e) {
-            // IllegalStateExceptions are thrown for missing but required configuration.
-            log.fatal(e.getMessage(), e);
-            System.exit(3);
-        } catch (FileNotFoundException e) {
-            log.fatal(e.getMessage(), e);
-            System.exit(1);
-        } catch (IOException e) {
+            ResolutionPolicy validationPolicy = null;
+            String policyClassName = props.getFirstPropertyValue(ResolutionPolicy.class.getName());
+            policyClassName = addPackage(policyClassName);
+            if (StringUtil.hasLength(policyClassName)) {
+                validationPolicy = InventoryUtil.loadPlugin(policyClassName);
+            } else {
+                throw new InvalidConfigException("required config property missing: " + ResolutionPolicy.class.getName());
+            }
+            
+            final String rawBucketRange = props.getFirstPropertyValue(BUCKETS_KEY);
+            
+            String reportOnlyStr = props.getFirstPropertyValue(REPORT_ONLY_KEY);
+            final boolean reportOnly = StringUtil.hasText(reportOnlyStr) && Boolean.parseBoolean(reportOnlyStr);
+            
+            final Map<String,Object> daoConfig = new TreeMap<>();
+            
+            String sqlGeneratorClass = props.getFirstPropertyValue(SQLGenerator.class.getName());
+            if (StringUtil.hasLength(sqlGeneratorClass)) {
+                daoConfig.put(SQLGenerator.class.getName(), Class.forName(sqlGeneratorClass));
+            } else {
+                throw new InvalidConfigException("required config property missing: " + SQLGenerator.class.getName());
+            }
+
+            // database
+            final String jdbcDriverClassname = "org.postgresql.Driver";
+            final String schemaName = props.getFirstPropertyValue(DB_SCHEMA_KEY);
+            if (StringUtil.hasLength(schemaName)) {
+                daoConfig.put("schema", schemaName);
+            } else {
+                throw new InvalidConfigException("required config property missing: " + DB_SCHEMA_KEY);
+            }
+
+            final String dbUsername = props.getFirstPropertyValue(DB_USERNAME_KEY);
+            final String dbPassword = props.getFirstPropertyValue(DB_PASSWORD_KEY);
+            final String jdbcURL = props.getFirstPropertyValue(JDBC_URL_KEY);
+            log.debug("database connection: " + jdbcURL);
+            ConnectionConfig cc = new ConnectionConfig(null, null, dbUsername, dbPassword, jdbcDriverClassname, jdbcURL);
+            
+            BucketValidator bucketValidator = new BucketValidator(daoConfig, cc, storageAdapter, validationPolicy, rawBucketRange, reportOnly);
+            
+            Subject.doAs(s, (PrivilegedExceptionAction<Object>) () -> {
+                bucketValidator.validate();
+                return null;
+            });
+            
+        } catch (InvalidConfigException e) {
             log.fatal(e.getMessage(), e);
             System.exit(2);
         } catch (Exception e) {
             // Used to catch everything else, such as a RuntimeException when a file cannot be obtained and put.
             log.fatal(e.getMessage(), e);
-            System.exit(4);
-        } finally {
-            reporter.end();
+            System.exit(1);
         }
+    }
+    
+    private static String addPackage(String cname) {
+        if (cname.indexOf('.') == -1) {
+            return ResolutionPolicy.class.getPackageName() + "." + cname;
+        }
+        log.warn("using fully qualified class name for ResolutionPolicy is deprecated");
+        return cname;
     }
 }

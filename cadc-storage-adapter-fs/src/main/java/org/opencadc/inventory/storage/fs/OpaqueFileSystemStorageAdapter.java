@@ -112,6 +112,7 @@ import org.apache.log4j.Logger;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.Namespace;
 import org.opencadc.inventory.StorageLocation;
+import org.opencadc.inventory.storage.BucketType;
 import org.opencadc.inventory.storage.ByteRange;
 import org.opencadc.inventory.storage.DigestOutputStream;
 import org.opencadc.inventory.storage.MessageDigestAPI;
@@ -270,6 +271,11 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
         } catch (IOException io) {
             throw new InvalidConfigException(("Could not create content or transaction directory"), io);
         }
+    }
+
+    @Override
+    public BucketType getBucketType() {
+        return BucketType.HEX;
     }
     
     @Override
