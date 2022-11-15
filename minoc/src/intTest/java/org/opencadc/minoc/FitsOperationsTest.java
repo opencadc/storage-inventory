@@ -169,6 +169,18 @@ public class FitsOperationsTest extends MinocTest {
     }
 
     @Test
+    public void testLargeNGVSCompressed() throws Exception {
+        final String testFilePrefix = "test-ngvs-fits";
+        final String testFileExtension = "fz";
+        final URI artifactURI = URI.create("cadc:TEST/" + testFilePrefix + "." + testFileExtension);
+        final String[] cutoutSpecs = new String[] {
+                "[1][18806:19317,7963:8474]"
+        };
+
+        uploadAndCompareCutout(artifactURI, SodaParamValidator.SUB, cutoutSpecs, testFilePrefix, "fits");
+    }
+
+    @Test
     public void testSimple() throws Exception {
         final String testFilePrefix = "test-simple";
         final String testFileExtension = "fits";
