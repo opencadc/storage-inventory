@@ -199,7 +199,7 @@ public class Main {
     
     private static String addPackage(String cname) {
         if (cname.indexOf('.') == -1) {
-            return ResolutionPolicy.class.getPackageName() + "." + cname;
+            return ResolutionPolicy.class.getPackage().getName() + "." + cname;
         }
         log.warn("using fully qualified class name for ResolutionPolicy is deprecated");
         return cname;
