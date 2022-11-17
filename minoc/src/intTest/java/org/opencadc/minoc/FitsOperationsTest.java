@@ -162,7 +162,7 @@ public class FitsOperationsTest extends MinocTest {
         final String testFileExtension = "fz";
         final URI artifactURI = URI.create("cadc:TEST/" + testFilePrefix + "." + testFileExtension);
         final String[] cutoutSpecs = new String[] {
-                "[2][*:20]"
+                "[2][*:2]"
         };
 
         uploadAndCompareCutout(artifactURI, SodaParamValidator.SUB, cutoutSpecs, testFilePrefix, "fits");
