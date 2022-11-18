@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2020.                            (c) 2020.
+*  (c) 2022.                            (c) 2022.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -77,13 +77,10 @@ import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.DeletedStorageLocationEvent;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.DeletedStorageLocationEventDAO;
-import org.opencadc.inventory.db.EntityNotFoundException;
-import org.opencadc.inventory.db.ObsoleteStorageLocation;
-import org.opencadc.inventory.db.ObsoleteStorageLocationDAO;
 
 /**
- * Validate local inventory. This currently supports cleanup after a change in
- * the fenwick filter policy.
+ * Remove artifacts from local inventory and generate DeletedStorageLocationEvent(s). 
+ * This currently supports cleanup after a change in the fenwick filter policy.
  * 
  * @author pdowler
  */
@@ -121,7 +118,6 @@ public class InventoryValidator implements Runnable {
         final TransactionManager transactionManager = this.artifactDAO.getTransactionManager();
         final DeletedStorageLocationEventDAO deletedStorageLocationEventDAO =
             new DeletedStorageLocationEventDAO(this.artifactDAO);
-        final ObsoleteStorageLocationDAO obsoleteStorageLocationDAO = new ObsoleteStorageLocationDAO(this.artifactDAO);
 
         try (final ResourceIterator<Artifact> artifactIterator =
             this.artifactIteratorDAO.iterator(this.deselector, null, false)) {
@@ -134,12 +130,9 @@ public class InventoryValidator implements Runnable {
 
                     Artifact cur = this.artifactDAO.lock(deselectorArtifact);
                     if (cur != null) {
-                        DeletedStorageLocationEvent deletedStorageLocationEvent =
-                            new DeletedStorageLocationEvent(cur.getID());
+                        DeletedStorageLocationEvent deletedStorageLocationEvent = new DeletedStorageLocationEvent(cur.getID());
                         deletedStorageLocationEventDAO.put(deletedStorageLocationEvent);
-                        ObsoleteStorageLocation obsoleteStorageLocation =
-                            new ObsoleteStorageLocation(cur.storageLocation);
-                        obsoleteStorageLocationDAO.put(obsoleteStorageLocation);
+                        
                         this.artifactDAO.delete(cur.getID());
                         
                         transactionManager.commitTransaction();

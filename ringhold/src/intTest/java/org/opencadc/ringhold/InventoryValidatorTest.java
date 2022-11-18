@@ -3,7 +3,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2020.                            (c) 2020.
+ *  (c) 2022.                            (c) 2022.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -100,8 +100,6 @@ import org.opencadc.inventory.DeletedStorageLocationEvent;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.DeletedStorageLocationEventDAO;
-import org.opencadc.inventory.db.ObsoleteStorageLocation;
-import org.opencadc.inventory.db.ObsoleteStorageLocationDAO;
 import org.opencadc.inventory.db.SQLGenerator;
 import org.opencadc.inventory.db.version.InitDatabase;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -157,14 +155,12 @@ public class InventoryValidatorTest {
 
     final ArtifactDAO artifactDAO;
     final DeletedStorageLocationEventDAO deletedStorageLocationEventDAO;
-    final ObsoleteStorageLocationDAO obsoleteStorageLocationDAO;
     final Map<String, Object> daoConfig = new TreeMap<>();
     final String jndiPath = "jdbc/InventoryEnvironment";
 
     public InventoryValidatorTest() throws Exception {
         artifactDAO = new ArtifactDAO();
         deletedStorageLocationEventDAO = new DeletedStorageLocationEventDAO();
-        obsoleteStorageLocationDAO = new ObsoleteStorageLocationDAO();
 
         final DBConfig dbrc = new DBConfig();
         final ConnectionConfig connectionConfig = dbrc.getConnectionConfig(INVENTORY_SERVER, INVENTORY_DATABASE);
@@ -186,7 +182,6 @@ public class InventoryValidatorTest {
 
         artifactDAO.setConfig(daoConfig);
         deletedStorageLocationEventDAO.setConfig(daoConfig);
-        obsoleteStorageLocationDAO.setConfig(daoConfig);
     }
 
     @Before
@@ -299,13 +294,6 @@ public class InventoryValidatorTest {
         DeletedStorageLocationEvent dsle2 = this.deletedStorageLocationEventDAO.get(a2.getID());
         Assert.assertNull(dsle2);
         DeletedStorageLocationEvent dsle3 = this.deletedStorageLocationEventDAO.get(a3.getID());
-
-        ObsoleteStorageLocation osl1 = this.obsoleteStorageLocationDAO.get(a1.storageLocation);
-        Assert.assertNull(osl1);
-        ObsoleteStorageLocation osl2 = this.obsoleteStorageLocationDAO.get(a2.storageLocation);
-        Assert.assertNull(osl2);
-        ObsoleteStorageLocation osl3 = this.obsoleteStorageLocationDAO.get(a3.storageLocation);
-        Assert.assertNull(osl3);
     }
 
     @Test
@@ -343,13 +331,6 @@ public class InventoryValidatorTest {
         Assert.assertNull(dsle2);
         DeletedStorageLocationEvent dsle3 = this.deletedStorageLocationEventDAO.get(a3.getID());
         Assert.assertNull(dsle3);
-
-        ObsoleteStorageLocation osl1 = this.obsoleteStorageLocationDAO.get(a1.storageLocation);
-        Assert.assertNull(osl1);
-        ObsoleteStorageLocation osl2 = this.obsoleteStorageLocationDAO.get(a2.storageLocation);
-        Assert.assertNull(osl2);
-        ObsoleteStorageLocation osl3 = this.obsoleteStorageLocationDAO.get(a3.storageLocation);
-        Assert.assertNull(osl3);
     }
 
     @Test
@@ -398,20 +379,6 @@ public class InventoryValidatorTest {
         DeletedStorageLocationEvent b_dsle3 = this.deletedStorageLocationEventDAO.get(b3.getID());
         Assert.assertNull(b_dsle3);
 
-        ObsoleteStorageLocation a_osl1 = this.obsoleteStorageLocationDAO.get(a1.storageLocation);
-        Assert.assertNotNull(a_osl1);
-        ObsoleteStorageLocation a_osl2 = this.obsoleteStorageLocationDAO.get(a2.storageLocation);
-        Assert.assertNotNull(a_osl2);
-        ObsoleteStorageLocation a_osl3 = this.obsoleteStorageLocationDAO.get(a3.storageLocation);
-        Assert.assertNotNull(a_osl3);
-
-        ObsoleteStorageLocation b_osl1 = this.obsoleteStorageLocationDAO.get(b1.storageLocation);
-        Assert.assertNull(b_osl1);
-        ObsoleteStorageLocation b_osl2 = this.obsoleteStorageLocationDAO.get(b2.storageLocation);
-        Assert.assertNull(b_osl2);
-        ObsoleteStorageLocation b_osl3 = this.obsoleteStorageLocationDAO.get(b3.storageLocation);
-        Assert.assertNull(b_osl3);
-
         a1 = this.artifactDAO.get(a1.getID());
         Assert.assertNull(a1);
         a2 = this.artifactDAO.get(a2.getID());
@@ -455,13 +422,6 @@ public class InventoryValidatorTest {
         Assert.assertNotNull(a_dsle2);
         DeletedStorageLocationEvent a_dsle3 = this.deletedStorageLocationEventDAO.get(a3.getID());
         Assert.assertNotNull(a_dsle3);
-
-        ObsoleteStorageLocation a_osl1 = this.obsoleteStorageLocationDAO.get(a1.storageLocation);
-        Assert.assertNotNull(a_osl1);
-        ObsoleteStorageLocation a_osl2 = this.obsoleteStorageLocationDAO.get(a2.storageLocation);
-        Assert.assertNotNull(a_osl2);
-        ObsoleteStorageLocation a_osl3 = this.obsoleteStorageLocationDAO.get(a3.storageLocation);
-        Assert.assertNotNull(a_osl3);
 
         a1 = this.artifactDAO.get(a1.getID());
         Assert.assertNull(a1);
