@@ -313,12 +313,28 @@ public class AdStorageAdapter implements StorageAdapter {
             }
             RegistryClient rc = new RegistryClient();
             Capabilities caps = rc.getCapabilities(DATA_RESOURCE_ID);
-
+            if (caps == null) {
+                throw new RuntimeException("OOPS - " + DATA_RESOURCE_ID + " not found");
+            }
+            
+            /*
             Capability negotiate = caps.findCapability(Standards.VOSPACE_SYNC_21);
+            if (negotiate == null) {
+                throw new RuntimeException("OOPS - " + DATA_RESOURCE_ID + " does not support transfer negotiation");
+            }
             Interface ifc = negotiate.findInterface(authMethod);
             if (ifc == null) {
-                throw new IllegalArgumentException("No interface for auth method " + authMethod);
+                throw new RuntimeException("OOPS - no interface for auth method " + authMethod);
             }
+            URL srcURL = ifc.getAccessURL().getURL();
+            */
+            
+            // caps is for the new read-only data2 service, so we have to fake it a bit
+            Capability cap = caps.findCapability(Standards.VOSI_CAPABILITIES);
+            Interface ifc = cap.findInterface(AuthMethod.ANON);
+            URL furl = ifc.getAccessURL().getURL();
+            final URL srcURL = new URL(furl.toExternalForm().replace("/capabilities", "/transfer"));
+            
             Transfer request = new Transfer(uri, Direction.pullFromVoSpace);
             request.version = VOS.VOSPACE_21;
             request.getProtocols().add(new Protocol(VOS.PROTOCOL_HTTPS_GET));
@@ -329,7 +345,7 @@ public class AdStorageAdapter implements StorageAdapter {
             log.debug("request:\n" + req);
 
             FileContent content = new FileContent(req, "text/xml", Charset.forName("UTF-8"));
-            HttpPost post = new HttpPost(ifc.getAccessURL().getURL(), content, true);
+            HttpPost post = new HttpPost(srcURL, content, true);
             post.prepare();
             
             InputStream istream = post.getInputStream();
@@ -344,7 +360,8 @@ public class AdStorageAdapter implements StorageAdapter {
                     return new URL(p.getEndpoint());
                 }
             }
-            return null;
+            
+            throw new RuntimeException("OOPS - failed to get transfer URL for " + uri);
             
         } catch (MalformedURLException | ResourceAlreadyExistsException ex) {
             throw new RuntimeException("BUG", ex);
