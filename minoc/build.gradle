@@ -53,7 +53,7 @@ dependencies {
     runtime 'org.opencadc:cadc-access-control:[1.1.1,2.0)'
     runtime 'org.opencadc:cadc-access-control-identity:[1.0.3,2.0)'
     runtime 'org.opencadc:cadc-storage-adapter-fs:[0.8,)'
-    runtime 'org.opencadc:cadc-storage-adapter-ad:[0.5,)'
+    runtime 'org.opencadc:cadc-storage-adapter-ad:[0.6,)'
     runtime 'org.opencadc:cadc-storage-adapter-swift:[0.7,)'
 
     // work around because 1.8.0-beta4 prints exceptions in log, eg:
