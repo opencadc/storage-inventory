@@ -91,9 +91,10 @@ public class StorageLocationConverterTest {
 
     private static final TapSchema tapSchema = TestUtil.mockTapSchema();
 
-    // Not a storage location site, should not append the is null constraint
+    // global luskan
+    // HACK: this currently applies the inverse so queries can use the index on unstored artifacts
     @Test
-    public void testSelectWithoutStorageLocation() {
+    public void testSelectArtifactInGlobal() {
         String query = "select id from inventory.artifact";
         String expected = "SELECT id FROM inventory.artifact WHERE (inventory.artifact.storagelocation_storageid IS NULL)";
         doTest(query, expected, "false");
@@ -106,7 +107,21 @@ public class StorageLocationConverterTest {
         String expected = "SELECT id FROM inventory.storagesite";
         doTest(query, expected, "true");
     }
-
+    
+    @Test
+    public void testUnfilteredArtifactMetadata() {
+        String query = "select id from inventory.ArtifactMetadata";
+        String expected = "SELECT id FROM inventory.Artifact";
+        doTest(query, expected, "true");
+    }
+    
+    @Test
+    public void testPendingArtifact() {
+        String query = "select id from inventory.PendingArtifact";
+        String expected = "SELECT id FROM inventory.Artifact WHERE (inventory.artifact.storagelocation_storageid IS NULL)";
+        doTest(query, expected, "true");
+    }
+    
     @Test
     public void testSelectWithStorageLocation() {
         String query = "select id from inventory.artifact";
@@ -124,14 +139,16 @@ public class StorageLocationConverterTest {
     @Test
     public void testSelectWithTableJoin() {
         String query = "select a.contentLength from inventory.artifact a join inventory.artifact b on a.id = b.id";
-        String expected = "SELECT a.contentLength from inventory.artifact AS a JOIN inventory.artifact AS b on a.id = b.id WHERE (a.storagelocation_storageid IS NOT NULL) AND (b.storagelocation_storageid IS NOT NULL)";
+        String expected = "SELECT a.contentLength from inventory.artifact AS a JOIN inventory.artifact AS b on a.id = b.id"
+                + " WHERE (a.storagelocation_storageid IS NOT NULL) AND (b.storagelocation_storageid IS NOT NULL)";
         doTest(query, expected, "true");
     }
 
     @Test
     public void testSelectWithWhere() {
         String query = "select id from inventory.artifact where contentLength <= 1024";
-        String expected = "SELECT id from inventory.artifact WHERE (contentLength <= 1024) and (inventory.artifact.storagelocation_storageid IS NOT NULL)";
+        String expected = "SELECT id from inventory.artifact WHERE (contentLength <= 1024) and"
+                + " (inventory.artifact.storagelocation_storageid IS NOT NULL)";
         doTest(query, expected, "true");
     }
 
@@ -162,6 +179,7 @@ public class StorageLocationConverterTest {
     private static class TestQuery extends AdqlQueryImpl {
 
         private final String isStorageLocation;
+        
         public TestQuery(String isStorageLocation) {
             this.isStorageLocation = isStorageLocation;
         }
