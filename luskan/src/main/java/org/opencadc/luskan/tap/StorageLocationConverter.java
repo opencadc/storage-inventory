@@ -74,7 +74,6 @@ import ca.nrc.cadc.tap.parser.navigator.ExpressionNavigator;
 import ca.nrc.cadc.tap.parser.navigator.FromItemNavigator;
 import ca.nrc.cadc.tap.parser.navigator.ReferenceNavigator;
 import ca.nrc.cadc.tap.parser.navigator.SelectNavigator;
-import java.util.ArrayList;
 import java.util.List;
 import net.sf.jsqlparser.expression.Expression;
 import net.sf.jsqlparser.expression.Parenthesis;
@@ -82,13 +81,11 @@ import net.sf.jsqlparser.expression.operators.conditional.AndExpression;
 import net.sf.jsqlparser.expression.operators.relational.IsNullExpression;
 import net.sf.jsqlparser.schema.Column;
 import net.sf.jsqlparser.schema.Table;
-import net.sf.jsqlparser.statement.select.FromItem;
-import net.sf.jsqlparser.statement.select.Join;
 import net.sf.jsqlparser.statement.select.PlainSelect;
 import org.apache.log4j.Logger;
 
 /**
- * Injects a `inventory.storagelocation_storageid IS NOT NULL` into a WHERE clause.
+ * Injects a `storageLocation_storageID IS NOT NULL` into a WHERE clause.
  */
 public class StorageLocationConverter extends SelectNavigator {
     private static final Logger log = Logger.getLogger(StorageLocationConverter.class);
@@ -122,31 +119,36 @@ public class StorageLocationConverter extends SelectNavigator {
         Expression constraint = null;
         List<Table> tables = ParserUtil.getFromTableList(ps);
         for (Table table : tables) {
-            // Only add the constraint to the inventory.artifact table
-            if (!table.getWholeTableName().equalsIgnoreCase("inventory.artifact")) {
-                continue;
-            }
-            Expression isNull = createStoredConstraint(table);
-            if (constraint == null) {
-                constraint = isNull;
-            } else {
-                constraint = new AndExpression(constraint, isNull);
+            String tname = table.getWholeTableName();
+            boolean pending = "inventory.PendingArtifact".equalsIgnoreCase(tname);
+            boolean art = "inventory.Artifact".equalsIgnoreCase(tname);
+            if (art || pending) {
+                Expression expr = createStoredConstraint(table, pending);
+                if (constraint == null) {
+                    constraint = expr;
+                } else {
+                    constraint = new AndExpression(constraint, expr);
+                }
             }
         }
         return constraint;
     }
 
-    private Expression createStoredConstraint(Table table) {
+    private Expression createStoredConstraint(Table table, boolean pending) {
         Table artifact;
         if (table.getAlias() != null) {
             artifact = new Table(null, table.getAlias());
         } else {
             artifact = table;
         }
-        Column sitelocations = new Column(artifact, "storagelocation_storageid");
+        Column sitelocations = new Column(artifact, "storageLocation_storageID");
         IsNullExpression isNullExpression = new IsNullExpression();
         isNullExpression.setLeftExpression(sitelocations);
-        isNullExpression.setNot(isStorageSite);
+        if (pending) {
+            isNullExpression.setNot(false);
+        } else {
+            isNullExpression.setNot(isStorageSite);
+        }
         return new Parenthesis(isNullExpression);
     }
 
