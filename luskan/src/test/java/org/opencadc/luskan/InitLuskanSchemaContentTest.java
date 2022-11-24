@@ -68,7 +68,13 @@
 package org.opencadc.luskan;
 
 import ca.nrc.cadc.util.Log4jInit;
+import java.io.PrintWriter;
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.sql.SQLFeatureNotSupportedException;
+import java.sql.ShardingKeyBuilder;
 import java.util.List;
+import javax.sql.DataSource;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
@@ -82,17 +88,73 @@ public class InitLuskanSchemaContentTest {
     private static final Logger log = Logger.getLogger(InitLuskanSchemaContentTest.class);
 
     static {
+        Log4jInit.setLevel("org.opencadc.luskan", Level.INFO);
         Log4jInit.setLevel("ca.nrc.cadc.tap.impl", Level.INFO);
         Log4jInit.setLevel("ca.nrc.cadc.db.version", Level.INFO);
     }
 
     private String schema = "tap_schema";
+    
+    // InitDatabase requires non-null DataSource arg
+    DataSource dummyDS = new DataSource() {
+        @Override
+        public Connection getConnection() throws SQLException {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public Connection getConnection(String string, String string1) throws SQLException {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public PrintWriter getLogWriter() throws SQLException {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public void setLogWriter(PrintWriter writer) throws SQLException {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public void setLoginTimeout(int i) throws SQLException {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public int getLoginTimeout() throws SQLException {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public java.util.logging.Logger getParentLogger() throws SQLFeatureNotSupportedException {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public ShardingKeyBuilder createShardingKeyBuilder() throws SQLException {
+            ShardingKeyBuilder ret = DataSource.super.createShardingKeyBuilder();
+            return ret;
+        }
+
+        @Override
+        public <T> T unwrap(Class<T> type) throws SQLException {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public boolean isWrapperFor(Class<?> type) throws SQLException {
+            throw new UnsupportedOperationException();
+        }
+        
+    };
 
     @Test
     public void testParseCreateDDL() {
         try {
-            InitLuskanSchemaContent init = new InitLuskanSchemaContent(null, null, schema);
-            for (String fname : InitLuskanSchemaContent.CREATE_SQL) {
+            InitLuskanSchemaContent init = new InitLuskanSchemaContent(dummyDS, null, schema);
+            for (String fname : init.getCreateSQL()) {
                 log.info("process file: " + fname);
                 List<String> statements = init.parseDDL(fname, schema);
                 Assert.assertNotNull(statements);
@@ -143,8 +205,8 @@ public class InitLuskanSchemaContentTest {
     @Test
     public void testParseUpgradeDDL() {
         try {
-            InitLuskanSchemaContent init = new InitLuskanSchemaContent(null, null, schema);
-            for (String fname : InitLuskanSchemaContent.UPGRADE_SQL) {
+            InitLuskanSchemaContent init = new InitLuskanSchemaContent(dummyDS, null, schema);
+            for (String fname : init.getUpgradeSQL()) {
                 log.info("process file: " + fname);
                 List<String> statements = init.parseDDL(fname, schema);
                 Assert.assertNotNull(statements);
