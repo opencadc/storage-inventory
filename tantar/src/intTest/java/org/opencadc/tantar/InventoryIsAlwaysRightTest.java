@@ -68,12 +68,10 @@
 package org.opencadc.tantar;
 
 import ca.nrc.cadc.io.ResourceIterator;
-
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
-
 import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.Before;
@@ -84,7 +82,8 @@ import org.opencadc.inventory.storage.StorageMetadata;
 import org.opencadc.tantar.policy.InventoryIsAlwaysRight;
 
 /**
- *
+ * InventoryIsAlwaysRight integration test.
+ * 
  * @author pdowler
  */
 public class InventoryIsAlwaysRightTest extends TantarTest {
@@ -111,7 +110,16 @@ public class InventoryIsAlwaysRightTest extends TantarTest {
         
         validator.validate();
         // a2 storagelocation cleared
+        // a4-sm4 recovered
         // sm6 deleted
+        // a7 storageLocation cleared, sm7 deleted
+        // sm8 deleted
+        
+        // verify a4 was recovered rather than replaced
+        Artifact actual = artifactDAO.get(URI.create("test:FOO/a4"));
+        Assert.assertNotNull(actual);
+        Assert.assertEquals(a4_recoverable.getID(), actual.getID());
+        Assert.assertNotNull(actual.storageLocation);
         
         List<StorageLocation> locs = new ArrayList<>();
         Iterator<StorageMetadata> si = adapter.iterator();
@@ -120,7 +128,7 @@ public class InventoryIsAlwaysRightTest extends TantarTest {
             log.info("data: " + sm.getArtifactURI() + " " + sm.getStorageLocation());
             locs.add(sm.getStorageLocation());
         }
-        Assert.assertEquals("locs", 3, locs.size());
+        Assert.assertEquals("locs", 4, locs.size());
         
         List<StorageLocation> refs = new ArrayList<>();
         try (final ResourceIterator<Artifact> ai = artifactDAO.storedIterator(null)) {
@@ -130,7 +138,7 @@ public class InventoryIsAlwaysRightTest extends TantarTest {
                 refs.add(a.storageLocation);
             }
         }
-        Assert.assertEquals("refs", 3, refs.size());
+        Assert.assertEquals("refs", 4, refs.size());
         
         Assert.assertTrue("no broken refs", locs.containsAll(refs));
         Assert.assertTrue("no orphaned files", refs.containsAll(locs));
@@ -144,12 +152,10 @@ public class InventoryIsAlwaysRightTest extends TantarTest {
             }
         }
         
-        Assert.assertEquals("unstored", 4, unstored.size());
+        Assert.assertEquals("unstored", 3, unstored.size());
         Assert.assertTrue(unstored.contains(URI.create("test:FOO/a2")));
-        Assert.assertTrue(unstored.contains(URI.create("test:FOO/a4")));
         Assert.assertTrue(unstored.contains(URI.create("test:FOO/a7")));
         Assert.assertTrue(unstored.contains(URI.create("test:FOO/a8")));
-        
     }
     
     private static class TestPolicy extends InventoryIsAlwaysRight {

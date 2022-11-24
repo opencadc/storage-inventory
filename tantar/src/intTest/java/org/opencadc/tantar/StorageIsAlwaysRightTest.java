@@ -68,12 +68,10 @@
 package org.opencadc.tantar;
 
 import ca.nrc.cadc.io.ResourceIterator;
-
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
-
 import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.Before;
@@ -84,7 +82,8 @@ import org.opencadc.inventory.storage.StorageMetadata;
 import org.opencadc.tantar.policy.StorageIsAlwaysRight;
 
 /**
- *
+ * StorageIsAlwaysRight integration test.
+ * 
  * @author pdowler
  */
 public class StorageIsAlwaysRightTest extends TantarTest {
@@ -142,5 +141,10 @@ public class StorageIsAlwaysRightTest extends TantarTest {
         }
         
         Assert.assertEquals("unstored", 0, unstored.size());
+        
+        // verify a4 was recovered rather than replaced
+        Artifact actual = artifactDAO.get(URI.create("test:FOO/a4"));
+        Assert.assertNotNull(actual);
+        Assert.assertEquals(a4_recoverable.getID(), actual.getID());
     }
 }

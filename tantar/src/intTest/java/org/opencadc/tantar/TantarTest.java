@@ -70,7 +70,6 @@ package org.opencadc.tantar;
 import ca.nrc.cadc.db.ConnectionConfig;
 import ca.nrc.cadc.db.DBConfig;
 import ca.nrc.cadc.util.Log4jInit;
-
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -80,18 +79,17 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.Random;
 import java.util.TreeMap;
-
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
-import org.junit.Before;
-import org.junit.Test;
 import org.opencadc.inventory.Artifact;
+import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.DeletedArtifactEventDAO;
 import org.opencadc.inventory.db.DeletedStorageLocationEventDAO;
 import org.opencadc.inventory.db.SQLGenerator;
 import org.opencadc.inventory.db.StorageLocationEventDAO;
 import org.opencadc.inventory.storage.NewArtifact;
+import org.opencadc.inventory.storage.PutTransaction;
 import org.opencadc.inventory.storage.StorageAdapter;
 import org.opencadc.inventory.storage.StorageMetadata;
 import org.opencadc.inventory.storage.fs.OpaqueFileSystemStorageAdapter;
@@ -110,6 +108,7 @@ abstract class TantarTest {
     
     static {
         Log4jInit.setLevel("org.opencadc.tantar", Level.INFO);
+        Log4jInit.setLevel("org.opencadc.inventory.storage.fs", Level.INFO);
         ROOT.mkdirs();
     }
     
@@ -140,6 +139,28 @@ abstract class TantarTest {
         dsleDAO = new DeletedStorageLocationEventDAO(artifactDAO);
     }
     
+    void cleanupBefore() throws Exception {
+
+        log.debug("cleaning stored artifacts...");
+        Iterator<Artifact> storedArtifacts = artifactDAO.storedIterator(null);
+        log.debug("got an iterator back: " + storedArtifacts);
+        cleanupDatabase(storedArtifacts);
+
+        log.debug("cleaning unstored artifacts...");
+        Iterator<Artifact> unstoredArtifacts = artifactDAO.unstoredIterator(null);
+        log.debug("got an iterator back: " + storedArtifacts);
+        cleanupDatabase(unstoredArtifacts);
+
+        // Clean up all test content in fsroot
+        log.debug("deleting contents of test directories in: " + ROOT);
+        Iterator<StorageMetadata> smi = adapter.iterator(null, true);
+        while (smi.hasNext()) {
+            StorageLocation loc = smi.next().getStorageLocation();
+            log.debug("delete storage: " + loc);
+            adapter.delete(loc);
+        }
+    }
+    
     private void cleanupDatabase(Iterator<Artifact> artifactIterator) {
         log.debug("wipe_clean running...");
         int deletedArtifacts = 0;
@@ -157,31 +178,6 @@ abstract class TantarTest {
         }
     }
 
-    
-    void cleanupBefore() throws Exception {
-
-        log.debug("cleaning stored artifacts...");
-        Iterator<Artifact> storedArtifacts = artifactDAO.storedIterator(null);
-        log.debug("got an iterator back: " + storedArtifacts);
-        cleanupDatabase(storedArtifacts);
-
-        log.debug("cleaning unstored artifacts...");
-        Iterator<Artifact> unstoredArtifacts = artifactDAO.unstoredIterator(null);
-        log.debug("got an iterator back: " + storedArtifacts);
-        cleanupDatabase(unstoredArtifacts);
-
-        // Clean up critwall tests in fsroot
-        log.debug("deleting contents of test directories in: " + ROOT);
-
-        Iterator<StorageMetadata> iter = adapter.iterator();
-
-        while (iter.hasNext()) {
-            StorageMetadata sm = iter.next();
-            log.debug("deleting storage location: " + sm.getStorageLocation());
-            adapter.delete(sm.getStorageLocation());
-        }
-    }
-    
     private Artifact create(StorageMetadata sm) {
         return new Artifact(sm.getArtifactURI(), sm.getContentChecksum(), sm.getContentLastModified(), sm.getContentLength());
     }
@@ -190,11 +186,14 @@ abstract class TantarTest {
     // a1,a3,a5: artifacts with storageLocation + matching stored object
     //
     // discrepancies:
-    // a2: artifact  with storageLocation + no matching stored object
+    // a2: artifact  with storageLocation + no stored object
     // a4: artifact with no storageLocation + stored object with same artifact uri/metadata (recoverable)
     // a6: stored object with no matching artifact
-    // a7: artifact with storageLocation + stored object with different metadata (checksum) (
-    // a8: artifact with different storageLocation + stored object with same artifact uri/different metadata (not recoverable)
+    // a7: artifact with storageLocation + stored object with different metadata (checksum) (metadata conflict)
+    // a8: artifact with no storageLocation + stored object with same artifact uri/different metadata (not recoverable)
+    
+    Artifact a4_recoverable;
+    
     void doTestSetup() throws Exception {
         // create
         StorageMetadata sm1 = adapter.put(new NewArtifact(URI.create("test:FOO/a1")), getInputStreamOfRandomBytes(1024L), null);
@@ -234,6 +233,7 @@ abstract class TantarTest {
         
         // no storageLocation
         artifactDAO.put(a4);
+        this.a4_recoverable = a4;
         
         a5.storageLocation = sm5.getStorageLocation();
         artifactDAO.put(a5);

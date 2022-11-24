@@ -113,6 +113,9 @@ public class BucketValidator implements ValidateActions {
     private final StorageAdapter storageAdapter;
     private final ResolutionPolicy validationPolicy;
     private final boolean reportOnlyFlag;
+    
+    // modifiable by test code
+    boolean recoveryMode = false;
 
     // Cached ArtifactDAO used for transactional access.
     private final ArtifactDAO artifactDAO;
@@ -728,7 +731,7 @@ public class BucketValidator implements ValidateActions {
                         advance();
                     }
                 } else if (this.bucketPrefixIterator.hasNext()) {
-                    this.storageMetadataIterator = storageAdapter.iterator(this.bucketPrefixIterator.next());
+                    this.storageMetadataIterator = storageAdapter.iterator(this.bucketPrefixIterator.next(), recoveryMode);
                     advance();
                 } else {
                     this.storageMetadata = null;
