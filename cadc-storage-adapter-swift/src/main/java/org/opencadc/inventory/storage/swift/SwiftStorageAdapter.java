@@ -67,6 +67,7 @@
 
 package org.opencadc.inventory.storage.swift;
 
+import ca.nrc.cadc.date.DateUtil;
 import ca.nrc.cadc.io.ByteCountInputStream;
 import ca.nrc.cadc.io.ByteLimitExceededException;
 import ca.nrc.cadc.io.MultiBufferIO;
@@ -89,6 +90,8 @@ import java.net.SocketException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.security.NoSuchAlgorithmException;
+import java.text.DateFormat;
+import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Date;
@@ -165,7 +168,8 @@ public class SwiftStorageAdapter  implements StorageAdapter {
     private static final String ARTIFACT_ID_ATTR = "org.opencadc.artifactid";
     private static final String CONTENT_CHECKSUM_ATTR = "org.opencadc.contentchecksum";
     private static final String DLO_ATTR = "org.opencadc.swift.dlo";
-    private static final String DELETED_PRESERVED = "org.opencadc.swift.deletedpreserved";
+    private static final String DELETED_PRESERVED_ATTR = "org.opencadc.swift.deletedpreserved";
+    private static final String CONTENT_LAST_MODIFIED_ATTR = "org.opencadc.swift.lastmodified";
     
     // temporary object attributes
     private static final String TRANSACTION_ATTR = "org.opencadc.swift.txn";
@@ -577,9 +581,9 @@ public class SwiftStorageAdapter  implements StorageAdapter {
         log.debug("get: " + storageLocation);
         
         StoredObject obj = getStoredObject(storageLocation, false);
-        String delAttr = (String) obj.getMetadata(DELETED_PRESERVED);
+        String delAttr = (String) obj.getMetadata(DELETED_PRESERVED_ATTR);
         if ("true".equals(delAttr)) {
-            log.debug("skip " + DELETED_PRESERVED + ": " + storageLocation);
+            log.debug("skip " + DELETED_PRESERVED_ATTR + ": " + storageLocation);
             throw new ResourceNotFoundException("not found: " + storageLocation);
         }
         
@@ -602,9 +606,9 @@ public class SwiftStorageAdapter  implements StorageAdapter {
         log.debug("get: " + storageLocation);
         
         StoredObject obj = getStoredObject(storageLocation, false);
-        String delAttr = (String) obj.getMetadata(DELETED_PRESERVED);
+        String delAttr = (String) obj.getMetadata(DELETED_PRESERVED_ATTR);
         if ("true".equals(delAttr)) {
-            log.debug("skip " + DELETED_PRESERVED + ": " + storageLocation);
+            log.debug("skip " + DELETED_PRESERVED_ATTR + ": " + storageLocation);
             throw new ResourceNotFoundException("not found: " + storageLocation);
         }
         
@@ -1221,7 +1225,7 @@ public class SwiftStorageAdapter  implements StorageAdapter {
         if (name.contains(":p:")) {
             return false;
         }
-        String del = (String) obj.getMetadata(DELETED_PRESERVED);
+        String del = (String) obj.getMetadata(DELETED_PRESERVED_ATTR);
         if ("true".equals(del)) {
             return includeRecoverable;
         }
@@ -1274,7 +1278,8 @@ public class SwiftStorageAdapter  implements StorageAdapter {
             Map<String,Object> meta = obj.getMetadata();
             String scs = (String) meta.get(CONTENT_CHECKSUM_ATTR);
             String auri = (String) meta.get(ARTIFACT_ID_ATTR);
-            String delp = (String) meta.get(DELETED_PRESERVED);
+            String delp = (String) meta.get(DELETED_PRESERVED_ATTR);
+            String dateStr = (String) meta.get(CONTENT_LAST_MODIFIED_ATTR);
 
             if (scs == null || auri == null) {
                 // put failed to set metadata after writing the file: invalid
@@ -1283,11 +1288,16 @@ public class SwiftStorageAdapter  implements StorageAdapter {
 
             URI md5 = new URI(scs);
             URI artifactURI = new URI(auri);
+            Date contentLastModified = obj.getLastModifiedAsDate();
+            if (dateStr != null) {
+                DateFormat df = DateUtil.getDateFormat(DateUtil.IVOA_DATE_FORMAT, DateUtil.UTC);
+                contentLastModified = df.parse(dateStr);
+            }
 
-            StorageMetadata ret =  toStorageMetadata(loc, md5, obj.getContentLength(), artifactURI, obj.getLastModifiedAsDate());
+            StorageMetadata ret =  toStorageMetadata(loc, md5, obj.getContentLength(), artifactURI, contentLastModified);
             ret.deletePreserved = "true".equals(delp);
             return ret;
-        } catch (IllegalArgumentException | IllegalStateException | URISyntaxException ex) {
+        } catch (IllegalArgumentException | IllegalStateException | ParseException | URISyntaxException ex) {
             return new StorageMetadata(loc);
         }
     }
@@ -1339,7 +1349,7 @@ public class SwiftStorageAdapter  implements StorageAdapter {
         
             if (obj.exists()) {
                 Map<String,Object> meta = obj.getMetadata();
-                String delAttr = (String) meta.get(DELETED_PRESERVED);
+                String delAttr = (String) meta.get(DELETED_PRESERVED_ATTR);
                 if ("true".equals(delAttr) && !includeRecoverable) {
                     log.debug("delete: " + storageLocation + " -- already marked deleted");
                 } else {
@@ -1352,7 +1362,15 @@ public class SwiftStorageAdapter  implements StorageAdapter {
                                 log.debug("check: " + ns.getNamespace() + " vs " + uri);
                                 if (ns.matches(uri)) {
                                     log.debug("preserve: " + uri + " in namespace " + ns.getNamespace());
-                                    obj.setAndSaveMetadata(DELETED_PRESERVED, "true");
+                                    // perserve original timestamp
+                                    String dateStr = (String) meta.get(CONTENT_LAST_MODIFIED_ATTR);
+                                    if (dateStr == null) {
+                                        DateFormat df = DateUtil.getDateFormat(DateUtil.IVOA_DATE_FORMAT, DateUtil.UTC);
+                                        dateStr = df.format(obj.getLastModifiedAsDate());
+                                        obj.setAndDoNotSaveMetadata(CONTENT_LAST_MODIFIED_ATTR, dateStr);
+                                    }
+                                    obj.setAndDoNotSaveMetadata(DELETED_PRESERVED_ATTR, "true");
+                                    obj.saveMetadata();
                                     return;
                                 }
                             }
@@ -1383,6 +1401,42 @@ public class SwiftStorageAdapter  implements StorageAdapter {
         }
         throw new ResourceNotFoundException("not found: " + storageLocation);
     }
+    
+    @Override
+    public void recover(StorageLocation storageLocation, Date contentLastModified) 
+            throws ResourceNotFoundException, IOException, InterruptedException, StorageEngageException, TransientException {
+        log.debug("delete: " + storageLocation);
+        String key = storageLocation.getStorageID().toASCIIString();
+        
+        // invalid object found by StorageMetadataIterator
+        if (key.startsWith("invalid:")) {
+            key = key.replace("invalid:", "");
+        }
+        try {
+            Container sub = getContainerImpl(storageLocation);
+            StoredObject obj = sub.getObject(key);
+        
+            if (obj.exists()) {
+                Map<String,Object> meta = obj.getMetadata();
+                String delAttr = (String) meta.get(DELETED_PRESERVED_ATTR);
+                if ("true".equals(delAttr)) {
+                    log.debug("recover: " + storageLocation);
+                    obj.removeAndDoNotSaveMetadata(DELETED_PRESERVED_ATTR);
+                    if (contentLastModified != null) {
+                        DateFormat df = DateUtil.getDateFormat(DateUtil.IVOA_DATE_FORMAT, DateUtil.UTC);
+                        obj.setAndDoNotSaveMetadata(CONTENT_LAST_MODIFIED_ATTR, df.format(contentLastModified));
+                    }
+                    obj.saveMetadata();
+                }
+                return;
+            }
+        } catch (Exception ex) {
+            throw new StorageEngageException("failed to delete: " + storageLocation, ex);
+        }
+        throw new ResourceNotFoundException("not found: " + storageLocation);
+    }
+    
+    
 
     @Override
     public Iterator<StorageMetadata> iterator() throws StorageEngageException, TransientException {

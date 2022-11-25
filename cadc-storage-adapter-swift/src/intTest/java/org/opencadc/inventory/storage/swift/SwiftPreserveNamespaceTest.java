@@ -67,9 +67,13 @@
 
 package org.opencadc.inventory.storage.swift;
 
+import ca.nrc.cadc.date.DateUtil;
+import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.util.Log4jInit;
 
+import java.io.ByteArrayOutputStream;
 import java.net.URI;
+import java.text.DateFormat;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -128,92 +132,14 @@ public class SwiftPreserveNamespaceTest extends StorageAdapterBasicTest {
     }
     
     @Test
+    @Override
     public void testIteratorOverPreserved() {
-        int iterNum = 13;
-        long datalen = 8192L;
-        try {
-            SortedSet<StorageMetadata> expected = new TreeSet<>();
-            for (int i = 0; i < iterNum; i++) {
-                URI artifactURI = URI.create(TEST_NAMESPACE + "TEST/testIterator-" + i);
-                NewArtifact na = new NewArtifact(artifactURI);
-                na.contentLength = (long) datalen;
-                StorageMetadata sm = adapter.put(na, TestUtil.getInputStreamOfRandomBytes(datalen), null);
-                log.debug("testIterator put: " + artifactURI + " to " + sm.getStorageLocation());
-                expected.add(sm);
-            }
-            
-            log.info("testIterator created: " + expected.size());
-            
-            // full iterator
-            List<StorageMetadata> actual = new ArrayList<>();
-            Iterator<StorageMetadata> iter = adapter.iterator();
-            while (iter.hasNext()) {
-                StorageMetadata sm = iter.next();
-                log.debug("found: " + sm.getStorageLocation() + " " + sm.getContentLength() + " " + sm.getContentChecksum());
-                actual.add(sm);
-            }
-            
-            Assert.assertEquals("iterator.size", expected.size(), actual.size());
-            Iterator<StorageMetadata> ei = expected.iterator();
-            Iterator<StorageMetadata> ai = actual.iterator();
-            while (ei.hasNext()) {
-                StorageMetadata em = ei.next();
-                StorageMetadata am = ai.next();
-                log.debug("compare: " + em.getStorageLocation() + " vs " + am.getStorageLocation());
-                Assert.assertEquals("order", em, am);
-                Assert.assertTrue("valid", am.isValid());
-                Assert.assertEquals("length", em.getContentLength(), am.getContentLength());
-                Assert.assertEquals("checksum", em.getContentChecksum(), am.getContentChecksum());
-                
-                Assert.assertEquals("artifactURI", em.getArtifactURI(), am.getArtifactURI());
-                
-                Assert.assertNotNull("contentLastModified", am.getContentLastModified());
-                Assert.assertEquals("contentLastModified", em.getContentLastModified(), am.getContentLastModified());
-            }
-            
-            // delete half of the items
-            boolean odd = true;
-            int numPreserved = 0;
-            for (StorageMetadata sm : expected) {
-                if (odd) {
-                    log.info("delete: " + sm.getStorageLocation());
-                    adapter.delete(sm.getStorageLocation());
-                    numPreserved++;
-                } else {
-                    log.info("keep: " + sm.getStorageLocation());
-                }
-                odd = !odd;
-            }
-            
-            int foundPreserved = 0;
-            ei = expected.iterator();
-            ai = adapter.iterator(null, true);
-            while (ei.hasNext()) {
-                StorageMetadata em = ei.next();
-                StorageMetadata am = ai.next();
-                log.info("compare: " + em.getStorageLocation() + " vs " + am.getStorageLocation() + " dp=" + am.deletePreserved);
-                if (am.deletePreserved) {
-                    foundPreserved++;
-                }
-                Assert.assertEquals("order", em, am);
-                Assert.assertTrue("valid", am.isValid());
-                Assert.assertEquals("length", em.getContentLength(), am.getContentLength());
-                Assert.assertEquals("checksum", em.getContentChecksum(), am.getContentChecksum());
-                
-                Assert.assertEquals("artifactURI", em.getArtifactURI(), am.getArtifactURI());
-                
-                Assert.assertNotNull("contentLastModified", am.getContentLastModified());
-                
-                // setting delete-preserved attr modifies this timestamp
-                //Assert.assertEquals("contentLastModified", em.getContentLastModified(), am.getContentLastModified());
-            }
-            Assert.assertEquals(numPreserved, foundPreserved);
-            
-            // rely on cleanup()
-        } catch (Exception ex) {
-            log.error("unexpected exception", ex);
-            Assert.fail("unexpected exception: " + ex);
-        }
+        super.testIteratorOverPreserved();
     }
- 
+
+    @Test
+    @Override
+    public void testDeleteRecover() {
+        super.testDeleteRecover();
+    }
 }

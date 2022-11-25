@@ -67,6 +67,7 @@
 
 package org.opencadc.inventory.storage.test;
 
+import ca.nrc.cadc.date.DateUtil;
 import ca.nrc.cadc.io.ReadException;
 import ca.nrc.cadc.io.WriteException;
 import ca.nrc.cadc.net.PreconditionFailedException;
@@ -77,6 +78,7 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.net.URI;
 import java.security.MessageDigest;
+import java.text.DateFormat;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -440,6 +442,162 @@ public abstract class StorageAdapterBasicTest {
             }
             Assert.assertEquals("found with bucketPrefix", expected.size(), found);
             
+        } catch (Exception ex) {
+            log.error("unexpected exception", ex);
+            Assert.fail("unexpected exception: " + ex);
+        }
+    }
+    
+    /**
+     * Sub-classes of this test can override this method and add @Test to
+     * test delete and recover.
+     */
+    protected void testDeleteRecover() {
+        long datalen = 8192L;
+        DateFormat df = DateUtil.getDateFormat(DateUtil.IVOA_DATE_FORMAT, DateUtil.UTC);
+        try {
+            URI artifactURI = URI.create(TEST_NAMESPACE + "TEST/testDeleteRecover");
+            NewArtifact na = new NewArtifact(artifactURI);
+            na.contentLength = datalen;
+            StorageMetadata sm = adapter.put(na, TestUtil.getInputStreamOfRandomBytes(datalen), null);
+            Assert.assertFalse(sm.deletePreserved);
+            
+            
+            Thread.sleep(2000L);
+            adapter.delete(sm.getStorageLocation());
+            
+            try {
+                adapter.get(sm.getStorageLocation(), new ByteArrayOutputStream());
+            } catch (ResourceNotFoundException expected) {
+                log.info("caught expected: " + expected);
+            }
+            
+            Iterator<StorageMetadata> smi = adapter.iterator(null, true);
+            StorageMetadata deleted = null;
+            while (smi.hasNext()) {
+                StorageMetadata s = smi.next();
+                if (sm.getStorageLocation().equals(s.getStorageLocation())) {
+                    deleted = s;
+                }
+            }
+            Assert.assertNotNull(deleted);
+            Assert.assertTrue(deleted.deletePreserved);
+            // timestamp shanged when attrs set
+            log.info(" \n   orig: " + df.format(sm.getContentLastModified())
+                    + "\ndeleted: " + df.format(deleted.getContentLastModified()));
+            // so this verifies that adapter.delete() compensates if the backend modifies the object's timestamp
+            Assert.assertTrue(sm.getContentLastModified().equals(deleted.getContentLastModified()));
+            
+            Thread.sleep(2000L);
+            adapter.recover(sm.getStorageLocation(), sm.getContentLastModified());
+            
+            smi = adapter.iterator(null);
+            StorageMetadata recovered = null;
+            while (smi.hasNext()) {
+                StorageMetadata s = smi.next();
+                if (sm.getStorageLocation().equals(s.getStorageLocation())) {
+                    recovered = s;
+                }
+            }
+            Assert.assertNotNull(recovered);
+            Assert.assertFalse(recovered.deletePreserved); // must be true due to iterator call
+            // timestamp restored
+            log.info(" \n     orig: " + df.format(sm.getContentLastModified())
+                    + "\nrecovered: " + df.format(deleted.getContentLastModified()));
+            Assert.assertEquals(sm.getContentLastModified(), recovered.getContentLastModified());
+            
+        } catch (Exception unexpected) {
+            log.error("unexpected exception", unexpected);
+            Assert.fail("unexpected exception: " + unexpected);
+        }
+    }
+    
+    /**
+     * Sub-classes of this test can override this method and add @Test to
+     * test iterator(String, includeRecoverable=true).
+     */
+    protected void testIteratorOverPreserved() {
+        int iterNum = 13;
+        long datalen = 8192L;
+        try {
+            SortedSet<StorageMetadata> expected = new TreeSet<>();
+            for (int i = 0; i < iterNum; i++) {
+                URI artifactURI = URI.create(TEST_NAMESPACE + "TEST/testIterator-" + i);
+                NewArtifact na = new NewArtifact(artifactURI);
+                na.contentLength = (long) datalen;
+                StorageMetadata sm = adapter.put(na, TestUtil.getInputStreamOfRandomBytes(datalen), null);
+                log.debug("testIterator put: " + artifactURI + " to " + sm.getStorageLocation());
+                expected.add(sm);
+            }
+            
+            log.info("testIterator created: " + expected.size());
+            
+            // full iterator
+            List<StorageMetadata> actual = new ArrayList<>();
+            Iterator<StorageMetadata> iter = adapter.iterator();
+            while (iter.hasNext()) {
+                StorageMetadata sm = iter.next();
+                log.debug("found: " + sm.getStorageLocation() + " " + sm.getContentLength() + " " + sm.getContentChecksum());
+                actual.add(sm);
+            }
+            
+            Assert.assertEquals("iterator.size", expected.size(), actual.size());
+            Iterator<StorageMetadata> ei = expected.iterator();
+            Iterator<StorageMetadata> ai = actual.iterator();
+            while (ei.hasNext()) {
+                StorageMetadata em = ei.next();
+                StorageMetadata am = ai.next();
+                log.debug("compare: " + em.getStorageLocation() + " vs " + am.getStorageLocation());
+                Assert.assertEquals("order", em, am);
+                Assert.assertTrue("valid", am.isValid());
+                Assert.assertEquals("length", em.getContentLength(), am.getContentLength());
+                Assert.assertEquals("checksum", em.getContentChecksum(), am.getContentChecksum());
+                
+                Assert.assertEquals("artifactURI", em.getArtifactURI(), am.getArtifactURI());
+                
+                Assert.assertNotNull("contentLastModified", am.getContentLastModified());
+                Assert.assertEquals("contentLastModified", em.getContentLastModified(), am.getContentLastModified());
+            }
+            
+            // delete half of the items
+            boolean odd = true;
+            int numPreserved = 0;
+            for (StorageMetadata sm : expected) {
+                if (odd) {
+                    log.info("delete: " + sm.getStorageLocation());
+                    adapter.delete(sm.getStorageLocation());
+                    numPreserved++;
+                } else {
+                    log.info("keep: " + sm.getStorageLocation());
+                }
+                odd = !odd;
+            }
+            
+            int foundPreserved = 0;
+            ei = expected.iterator();
+            ai = adapter.iterator(null, true);
+            while (ei.hasNext()) {
+                StorageMetadata em = ei.next();
+                StorageMetadata am = ai.next();
+                log.info("compare: " + em.getStorageLocation() + " vs " + am.getStorageLocation() + " dp=" + am.deletePreserved);
+                if (am.deletePreserved) {
+                    foundPreserved++;
+                }
+                Assert.assertEquals("order", em, am);
+                Assert.assertTrue("valid", am.isValid());
+                Assert.assertEquals("length", em.getContentLength(), am.getContentLength());
+                Assert.assertEquals("checksum", em.getContentChecksum(), am.getContentChecksum());
+                
+                Assert.assertEquals("artifactURI", em.getArtifactURI(), am.getArtifactURI());
+                
+                Assert.assertNotNull("contentLastModified", am.getContentLastModified());
+                
+                // setting delete-preserved attr modifies this timestamp
+                //Assert.assertEquals("contentLastModified", em.getContentLastModified(), am.getContentLastModified());
+            }
+            Assert.assertEquals(numPreserved, foundPreserved);
+            
+            // rely on cleanup()
         } catch (Exception ex) {
             log.error("unexpected exception", ex);
             Assert.fail("unexpected exception: " + ex);

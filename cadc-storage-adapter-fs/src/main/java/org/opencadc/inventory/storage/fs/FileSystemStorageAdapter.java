@@ -445,6 +445,12 @@ public class FileSystemStorageAdapter implements StorageAdapter {
     }
 
     @Override
+    public void recover(StorageLocation storageLocation, Date contentLastModified) 
+        throws ResourceNotFoundException, IOException, InterruptedException, StorageEngageException, TransientException {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
     public PutTransaction startTransaction(URI uri, Long contentLength) 
         throws StorageEngageException, TransientException {
         throw new UnsupportedOperationException();

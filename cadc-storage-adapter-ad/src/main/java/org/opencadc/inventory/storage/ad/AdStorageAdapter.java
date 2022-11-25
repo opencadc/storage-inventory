@@ -111,6 +111,7 @@ import java.nio.charset.Charset;
 import java.security.AccessControlException;
 import java.security.cert.CertificateExpiredException;
 import java.security.cert.CertificateNotYetValidException;
+import java.util.Date;
 import java.util.Iterator;
 
 import javax.security.auth.Subject;
@@ -226,6 +227,12 @@ public class AdStorageAdapter implements StorageAdapter {
         throw new UnsupportedOperationException("not supported");
     }
 
+    @Override
+    public void recover(StorageLocation storageLocation, Date contentLastModified) 
+        throws ResourceNotFoundException, IOException, InterruptedException, StorageEngageException, TransientException {
+        throw new UnsupportedOperationException("not supported");
+    }
+    
     @Override
     public PutTransaction startTransaction(URI uri, Long contentLength) throws StorageEngageException, TransientException {
         throw new UnsupportedOperationException();

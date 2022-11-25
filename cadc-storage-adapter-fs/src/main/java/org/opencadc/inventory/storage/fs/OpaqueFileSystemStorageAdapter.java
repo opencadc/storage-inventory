@@ -98,6 +98,7 @@ import java.nio.file.OpenOption;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
+import java.nio.file.attribute.FileTime;
 import java.nio.file.attribute.UserDefinedFileAttributeView;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
@@ -211,7 +212,7 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
         init(root);
     }
 
-    // for intTest code
+    // for test code
     public OpaqueFileSystemStorageAdapter(File rootDirectory, int bucketLen) 
             throws InvalidConfigException {
 
@@ -230,7 +231,8 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
         init(root);
     }
     
-    OpaqueFileSystemStorageAdapter(File rootDirectory, int bucketLen, List<String> preserve) 
+    // for test code
+    public OpaqueFileSystemStorageAdapter(File rootDirectory, int bucketLen, List<String> preserve) 
             throws InvalidConfigException {
         this(rootDirectory, bucketLen);
         
@@ -766,6 +768,31 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
             }
         }
         Files.delete(path);
+    }
+
+    @Override
+    public void recover(StorageLocation storageLocation, Date contentLastModified) 
+            throws ResourceNotFoundException, IOException, InterruptedException, StorageEngageException, TransientException {
+        InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "storageLocation", storageLocation);
+        Path path = storageLocationToPath(storageLocation);
+        if (!Files.exists(path)) {
+            throw new ResourceNotFoundException("not found: " + storageLocation);
+        }
+        try {
+            String delAttr = getFileAttribute(path, DELETED_PRESERVED);
+            if ("true".equals(delAttr)) {
+                String uriAttr = getFileAttribute(path, ARTIFACTID_ATTR);
+                log.debug("recover: " + storageLocation + " aka " + uriAttr);
+                setFileAttribute(path, DELETED_PRESERVED, null);
+                if (contentLastModified != null) {
+                    FileTime t = FileTime.fromMillis(contentLastModified.getTime());
+                    Files.setLastModifiedTime(path, t);
+                }
+            }
+        } catch (IOException ex) {
+            throw new StorageEngageException("failed to read attributes for stored file: " + storageLocation, ex);
+        }
+        // silently do nothing??
     }
     
     
