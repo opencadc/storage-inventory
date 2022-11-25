@@ -67,29 +67,16 @@
 
 package org.opencadc.inventory.storage.swift;
 
-import ca.nrc.cadc.date.DateUtil;
-import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.util.Log4jInit;
-
-import java.io.ByteArrayOutputStream;
-import java.net.URI;
-import java.text.DateFormat;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
-import java.util.SortedSet;
-import java.util.TreeSet;
-
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
-import org.junit.Assert;
 import org.junit.Test;
 import org.opencadc.inventory.StorageLocation;
-import org.opencadc.inventory.storage.NewArtifact;
 import org.opencadc.inventory.storage.StorageMetadata;
 import org.opencadc.inventory.storage.test.StorageAdapterBasicTest;
-import static org.opencadc.inventory.storage.test.StorageAdapterBasicTest.TEST_NAMESPACE;
-import org.opencadc.inventory.storage.test.TestUtil;
 
 /**
  *

@@ -67,40 +67,26 @@
 
 package org.opencadc.inventory.storage.fs;
 
-import ca.nrc.cadc.date.DateUtil;
-import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.util.InvalidConfigException;
 import ca.nrc.cadc.util.Log4jInit;
-
-import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
-import java.net.URI;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.BasicFileAttributes;
-import java.text.DateFormat;
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
-import java.util.SortedSet;
-import java.util.TreeSet;
 import java.util.UUID;
-
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
-import org.opencadc.inventory.storage.NewArtifact;
-import org.opencadc.inventory.storage.StorageMetadata;
 import org.opencadc.inventory.storage.test.StorageAdapterBasicTest;
-import static org.opencadc.inventory.storage.test.StorageAdapterBasicTest.TEST_NAMESPACE;
-import org.opencadc.inventory.storage.test.TestUtil;
 
 /**
  * Integration tests that interact with the file system. These tests require a file system
