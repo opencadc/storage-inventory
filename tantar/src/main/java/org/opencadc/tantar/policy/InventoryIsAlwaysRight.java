@@ -69,6 +69,9 @@
 
 package org.opencadc.tantar.policy;
 
+import ca.nrc.cadc.date.DateUtil;
+import ca.nrc.cadc.util.ObjectUtil;
+import java.text.DateFormat;
 import java.util.Date;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
@@ -193,14 +196,36 @@ public class InventoryIsAlwaysRight extends ResolutionPolicy {
 
         // recover
         if (art.storageLocation == null || !art.storageLocation.equals(storageMetadata.getStorageLocation())) {
-            // same file: fix storage location
-            sb.append(".updateArtifact");
-            sb.append(" Artifact.id=").append(art.getID());
-            sb.append(" Artifact.uri=").append(art.getURI());
-            sb.append(" loc=").append(storageMetadata.getStorageLocation());
-            log.info(sb.toString());
-            validateActions.updateArtifact(art, storageMetadata.getStorageLocation());
-            return;
+            // same file content: fix storage location
+            DateFormat df = DateUtil.getDateFormat(DateUtil.IVOA_DATE_FORMAT, DateUtil.UTC);
+            log.warn("recover: art=" + df.format(art.getContentLastModified())
+                    + " storage=" + df.format(storageMetadata.getContentLastModified()));
+            boolean doFix = art.storageLocation == null; // always
+            String reason = "null-storageLocation";
+            if (!doFix && art.storageLocation != null && !art.storageLocation.equals(storageMetadata.getStorageLocation())) {
+                // check for better (matching) timestamp 
+                doFix = art.getContentLastModified().equals(storageMetadata.getContentLastModified());
+                reason = "improve-contentLastModified";
+            }
+            if (doFix) {
+                sb.append(".updateArtifact");
+                sb.append(" Artifact.id=").append(art.getID());
+                sb.append(" Artifact.uri=").append(art.getURI());
+                sb.append(" loc=").append(storageMetadata.getStorageLocation());
+                sb.append(" reason=").append(reason);
+                log.info(sb.toString());
+                validateActions.updateArtifact(art, storageMetadata);
+                return;
+            } else {
+                sb.append(".deleteStorageLocation");
+                sb.append(" Artifact.id=").append(art.getID());
+                sb.append(" Artifact.uri=").append(art.getURI());
+                sb.append(" loc=").append(storageMetadata.getStorageLocation());
+                sb.append(" reason=old-storageLocation");
+                log.info(sb.toString());
+                validateActions.delete(storageMetadata);
+                return;
+            }
         }
         
         sb.append(".valid");

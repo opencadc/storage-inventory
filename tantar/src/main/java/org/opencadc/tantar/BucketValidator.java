@@ -576,11 +576,10 @@ public class BucketValidator implements ValidateActions {
      * Update the StorageLocation of the given Artifact
      *
      * @param artifact        The Artifact to update
-     * @param storageLoc      The StorageLocation from which to update the Artifact
-     * @throws Exception Any unexpected error.
+     * @param smeta         StorageMetadata from which to get the StorageLocation to assign
+     * @throws Exception    Any unexpected error.
      */
-    @Override
-    public void updateArtifact(final Artifact artifact, final StorageLocation storageLoc) throws Exception {
+    public void updateArtifact(final Artifact artifact, final StorageMetadata smeta) throws Exception {
         if (canTakeAction()) {
             final TransactionManager transactionManager = artifactDAO.getTransactionManager();
 
@@ -590,12 +589,16 @@ public class BucketValidator implements ValidateActions {
                 
                 Artifact cur = artifactDAO.lock(artifact);
                 if (cur != null) {
-                    cur.storageLocation = storageLoc;
-                    artifactDAO.setStorageLocation(cur, storageLoc);
+                    cur.storageLocation = smeta.getStorageLocation();
+                    artifactDAO.setStorageLocation(cur, smeta.getStorageLocation());
                     
                     StorageLocationEventDAO sleDAO = new StorageLocationEventDAO(artifactDAO);
                     StorageLocationEvent sle = new StorageLocationEvent(cur.getID());
                     sleDAO.put(sle);
+                    
+                    if (smeta.deletePreserved) {
+                        //storageAdapter.undelete(smeta.getStorageLocation(), artifact.getContentLastModified());
+                    }
                     
                     transactionManager.commitTransaction();
                     numUpdateArtifact++;

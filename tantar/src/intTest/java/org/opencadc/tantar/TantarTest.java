@@ -70,6 +70,7 @@ package org.opencadc.tantar;
 import ca.nrc.cadc.db.ConnectionConfig;
 import ca.nrc.cadc.db.DBConfig;
 import ca.nrc.cadc.util.Log4jInit;
+import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -193,8 +194,9 @@ abstract class TantarTest {
     // a8: artifact with no storageLocation + stored object with same artifact uri/different metadata (not recoverable)
     
     Artifact a4_recoverable;
+    StorageLocation sm4_recoverable;
     
-    void doTestSetup() throws Exception {
+    void doTestSetup(boolean a4recovery) throws Exception {
         // create
         StorageMetadata sm1 = adapter.put(new NewArtifact(URI.create("test:FOO/a1")), getInputStreamOfRandomBytes(1024L), null);
         final Artifact a1 = create(sm1);
@@ -205,14 +207,49 @@ abstract class TantarTest {
         StorageMetadata sm3 = adapter.put(new NewArtifact(URI.create("test:FOO/a3")), getInputStreamOfRandomBytes(1024L), null);
         final Artifact a3 = create(sm3);
         
-        StorageMetadata sm4 = adapter.put(new NewArtifact(URI.create("test:FOO/a4")), getInputStreamOfRandomBytes(1024L), null);
+        byte[] data = getRandomBytes(1024);
+        StorageMetadata sm4a = null;
+        if (a4recovery) {
+            // stored object with older timestamp
+            sm4a = adapter.put(new NewArtifact(URI.create("test:FOO/a4")), new ByteArrayInputStream(data), null);
+            log.info("sm4a: " + sm4a);
+            Thread.sleep(10L);
+        }
+        
+        // stored object with matching timestamp
+        StorageMetadata sm4 = adapter.put(new NewArtifact(URI.create("test:FOO/a4")), new ByteArrayInputStream(data), null);
+        if (a4recovery) {
+            // keep generating sm4 until storageLocation comes before sm4a
+            while (sm4a.compareTo(sm4) < 0) {
+                log.debug("delete " + sm4.getStorageLocation() + " and retry...");
+                adapter.delete(sm4.getStorageLocation());
+                sm4 = adapter.put(new NewArtifact(URI.create("test:FOO/a4")), new ByteArrayInputStream(data), null);
+            }
+            log.info("sm4: " + sm4);
+        }
+        
         final Artifact a4 = create(sm4);
+        sm4_recoverable = sm4.getStorageLocation();
+        this.a4_recoverable = a4;
+        
+        if (a4recovery) {
+            // second stored object with same Artifact.uri, later contentLastModified, earlier storageLocation
+            // so we can tell that matching contentLastModified won
+            Thread.sleep(10L);
+            StorageMetadata sm4b = adapter.put(new NewArtifact(URI.create("test:FOO/a4")), new ByteArrayInputStream(data), null);
+            // keep generating sm4b until storageLocation comes before sm4
+            while (sm4.compareTo(sm4b) < 0) {
+                log.debug("delete " + sm4b.getStorageLocation() + " and retry...");
+                adapter.delete(sm4b.getStorageLocation());
+                sm4b = adapter.put(new NewArtifact(URI.create("test:FOO/a4")), new ByteArrayInputStream(data), null);
+            }
+            log.info("sm4b: " + sm4b);
+        }
         
         StorageMetadata sm5 = adapter.put(new NewArtifact(URI.create("test:FOO/a5")), getInputStreamOfRandomBytes(1024L), null);
         final Artifact a5 = create(sm5);
         
         StorageMetadata sm6 = adapter.put(new NewArtifact(URI.create("test:FOO/a6")), getInputStreamOfRandomBytes(1024L), null);
-        final Artifact a6 = create(sm6);
 
         StorageMetadata sm7 = adapter.put(new NewArtifact(URI.create("test:FOO/a7")), getInputStreamOfRandomBytes(1024L), null);
         final Artifact a7 = create(sm7);
@@ -233,7 +270,6 @@ abstract class TantarTest {
         
         // no storageLocation
         artifactDAO.put(a4);
-        this.a4_recoverable = a4;
         
         a5.storageLocation = sm5.getStorageLocation();
         artifactDAO.put(a5);
@@ -289,5 +325,15 @@ abstract class TantarTest {
                 return num;
             }
         };
+    }
+    
+    private static byte[] getRandomBytes(int numBytes) {
+        Random rnd = new Random();
+        byte[] ret = new byte[numBytes];
+        byte val = (byte) rnd.nextInt(255);
+        for (int i = 0; i < numBytes; i++) {
+            ret[i] = val;
+        }
+        return ret;
     }
 }

@@ -102,7 +102,7 @@ public class InventoryIsAlwaysRightTest extends TantarTest {
     
     @Test
     public void testPolicy() throws Exception {
-        doTestSetup();
+        doTestSetup(true);
         
         // make sure delayAction doesn't prevent actions
         Thread.sleep(10L);
@@ -110,7 +110,7 @@ public class InventoryIsAlwaysRightTest extends TantarTest {
         
         validator.validate();
         // a2 storagelocation cleared
-        // a4-sm4 recovered
+        // a4->sm4 recovered
         // sm6 deleted
         // a7 storageLocation cleared, sm7 deleted
         // sm8 deleted
@@ -120,9 +120,28 @@ public class InventoryIsAlwaysRightTest extends TantarTest {
         Assert.assertNotNull(actual);
         Assert.assertEquals(a4_recoverable.getID(), actual.getID());
         Assert.assertNotNull(actual.storageLocation);
+        Assert.assertEquals(sm4_recoverable, actual.storageLocation);
         
         List<StorageLocation> locs = new ArrayList<>();
         Iterator<StorageMetadata> si = adapter.iterator();
+        while (si.hasNext()) {
+            StorageMetadata sm = si.next();
+            log.info("data: " + sm.getArtifactURI() + " " + sm.getStorageLocation());
+            locs.add(sm.getStorageLocation());
+        }
+        // in the first pass, we have an extra sm4 lying around
+        Assert.assertEquals("locs", 5, locs.size());
+        
+        // re-check a4
+        validator.validate();
+        actual = artifactDAO.get(URI.create("test:FOO/a4"));
+        Assert.assertNotNull(actual);
+        Assert.assertEquals(a4_recoverable.getID(), actual.getID());
+        Assert.assertNotNull(actual.storageLocation);
+        Assert.assertEquals(sm4_recoverable, actual.storageLocation);
+        
+        locs.clear();
+        si = adapter.iterator();
         while (si.hasNext()) {
             StorageMetadata sm = si.next();
             log.info("data: " + sm.getArtifactURI() + " " + sm.getStorageLocation());

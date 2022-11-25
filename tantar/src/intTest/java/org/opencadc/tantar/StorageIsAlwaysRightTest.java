@@ -100,7 +100,7 @@ public class StorageIsAlwaysRightTest extends TantarTest {
     
     @Test
     public void testPolicy() throws Exception {
-        doTestSetup();
+        doTestSetup(false);
         
         validator.validate();
         // a2 deleted
@@ -126,6 +126,7 @@ public class StorageIsAlwaysRightTest extends TantarTest {
                 refs.add(a.storageLocation);
             }
         }
+        
         Assert.assertEquals("refs", 7, refs.size());
         
         Assert.assertTrue("no broken refs", locs.containsAll(refs));
