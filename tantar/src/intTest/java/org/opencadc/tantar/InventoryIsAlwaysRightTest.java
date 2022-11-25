@@ -68,6 +68,7 @@
 package org.opencadc.tantar;
 
 import ca.nrc.cadc.io.ResourceIterator;
+import java.io.ByteArrayOutputStream;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -108,7 +109,9 @@ public class InventoryIsAlwaysRightTest extends TantarTest {
         Thread.sleep(10L);
         policy.resetDelayTimestamp();
         
+        validator.setIncludeRecoverable(true);
         validator.validate();
+        
         // a2 storagelocation cleared
         // a4->sm4 recovered
         // sm6 deleted
@@ -118,9 +121,9 @@ public class InventoryIsAlwaysRightTest extends TantarTest {
         // verify a4 was recovered rather than replaced
         Artifact actual = artifactDAO.get(URI.create("test:FOO/a4"));
         Assert.assertNotNull(actual);
-        Assert.assertEquals(a4_recoverable.getID(), actual.getID());
+        Assert.assertEquals(recoverableA4.getID(), actual.getID());
         Assert.assertNotNull(actual.storageLocation);
-        Assert.assertEquals(sm4_recoverable, actual.storageLocation);
+        Assert.assertEquals(recoverableSM4, actual.storageLocation);
         
         List<StorageLocation> locs = new ArrayList<>();
         Iterator<StorageMetadata> si = adapter.iterator();
@@ -130,15 +133,26 @@ public class InventoryIsAlwaysRightTest extends TantarTest {
             locs.add(sm.getStorageLocation());
         }
         // in the first pass, we have an extra sm4 lying around
+        // or: if recovery doesn't successfully recover the stored object
         Assert.assertEquals("locs", 5, locs.size());
         
-        // re-check a4
         validator.validate();
+        
+        // re-check a4
         actual = artifactDAO.get(URI.create("test:FOO/a4"));
         Assert.assertNotNull(actual);
-        Assert.assertEquals(a4_recoverable.getID(), actual.getID());
+        Assert.assertEquals(recoverableA4.getID(), actual.getID());
         Assert.assertNotNull(actual.storageLocation);
-        Assert.assertEquals(sm4_recoverable, actual.storageLocation);
+        Assert.assertEquals(recoverableSM4, actual.storageLocation);
+        
+        // verify sm4 was recovered
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        try {
+            adapter.get(recoverableSM4, bos);
+        } catch (Exception ex) {
+            log.error("failed to read recovered storageLocation: " + recoverableSM4, ex);
+            Assert.fail("failed to read recovered storageLocation: " + recoverableSM4 + " cause: " + ex);
+        }
         
         locs.clear();
         si = adapter.iterator();

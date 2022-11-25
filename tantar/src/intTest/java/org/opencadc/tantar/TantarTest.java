@@ -75,8 +75,10 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.TreeMap;
@@ -90,7 +92,6 @@ import org.opencadc.inventory.db.DeletedStorageLocationEventDAO;
 import org.opencadc.inventory.db.SQLGenerator;
 import org.opencadc.inventory.db.StorageLocationEventDAO;
 import org.opencadc.inventory.storage.NewArtifact;
-import org.opencadc.inventory.storage.PutTransaction;
 import org.opencadc.inventory.storage.StorageAdapter;
 import org.opencadc.inventory.storage.StorageMetadata;
 import org.opencadc.inventory.storage.fs.OpaqueFileSystemStorageAdapter;
@@ -114,6 +115,7 @@ abstract class TantarTest {
     }
     
     final StorageAdapter adapter;
+    final StorageAdapter preservingAdapter;
     final ArtifactDAO artifactDAO;
     final StorageLocationEventDAO sleDAO;
     final DeletedArtifactEventDAO daeDAO;
@@ -124,6 +126,11 @@ abstract class TantarTest {
     protected TantarTest(ResolutionPolicy policy) throws Exception {
         this.adapter = new OpaqueFileSystemStorageAdapter(ROOT, 1);
         
+        List<String> preserve = new ArrayList<>();
+        preserve.add("test:FOO/"); 
+        this.preservingAdapter = new OpaqueFileSystemStorageAdapter(ROOT, 1, preserve);
+        
+        
         DBConfig dbrc = new DBConfig();
         ConnectionConfig cc = dbrc.getConnectionConfig(SERVER, DATABASE);
 
@@ -131,7 +138,7 @@ abstract class TantarTest {
         daoConfig.put(SQLGenerator.class.getName(), SQLGenerator.class);
         daoConfig.put("schema", "inventory");
         
-        this.validator = new BucketValidator(daoConfig, cc, adapter, policy, "0-f", false);
+        this.validator = new BucketValidator(daoConfig, cc, preservingAdapter, policy, "0-f", false);
         
         this.artifactDAO = new ArtifactDAO();
         artifactDAO.setConfig(daoConfig);
@@ -158,7 +165,7 @@ abstract class TantarTest {
         while (smi.hasNext()) {
             StorageLocation loc = smi.next().getStorageLocation();
             log.debug("delete storage: " + loc);
-            adapter.delete(loc);
+            adapter.delete(loc, true);
         }
     }
     
@@ -193,8 +200,9 @@ abstract class TantarTest {
     // a7: artifact with storageLocation + stored object with different metadata (checksum) (metadata conflict)
     // a8: artifact with no storageLocation + stored object with same artifact uri/different metadata (not recoverable)
     
-    Artifact a4_recoverable;
-    StorageLocation sm4_recoverable;
+    // state to help subclasses verify recovery
+    protected Artifact recoverableA4;
+    protected StorageLocation recoverableSM4;
     
     void doTestSetup(boolean a4recovery) throws Exception {
         // create
@@ -229,8 +237,10 @@ abstract class TantarTest {
         }
         
         final Artifact a4 = create(sm4);
-        sm4_recoverable = sm4.getStorageLocation();
-        this.a4_recoverable = a4;
+        recoverableSM4 = sm4.getStorageLocation();
+        this.recoverableA4 = a4;
+        
+        preservingAdapter.delete(recoverableSM4);
         
         if (a4recovery) {
             // second stored object with same Artifact.uri, later contentLastModified, earlier storageLocation

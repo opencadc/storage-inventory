@@ -30,6 +30,9 @@ org.opencadc.tantar.inventory.url=jdbc:postgresql://{server}/{database}
 
 ## storage adapter settings
 org.opencadc.inventory.storage.StorageAdapter={fully-qualified-classname of implementation}
+
+## optional full scan of storage 
+org.opencadc.tantar.includeRecoverable = true | false
 ```
 The `inventory` database account owns and manages (create, alter, drop) inventory database objects and modifies the content. 
 The database is specified in the JDBC URL. Failure to connect or initialize the database will show up in logs and cause
@@ -69,8 +72,8 @@ propagate to other sites), create new Artifact(s) for files that do not match an
 inventory database to match values from storage. This policy makes the back end storage of this site the definitive source for the existence 
 of artifacts/files.
 
-The _RecoverFromStorage_ policy is currently in development and not yet usable; it will be useful to recover from losing the entire 
-inventory database as well from lesser disasters if the StorageAdapter supports it. Additional config may be needed when this is ready.
+The _RecoverFromStorage_ policy is currently in development and not yet usable; it will be useful to recover
+from losing the entire inventory database. Additional config may be needed when this is ready.
 
 The following StorageAdapter and ResolutionPolicy combinations are considered well tested:
 ```
@@ -78,6 +81,13 @@ OpaqueFilesystemStorageAdapter + InventoryIsAlwaysRight
 SwiftStorageAdapter + InventoryIsAlwaysRight
 AdStorageAdapter + StorageIsAlwaysRight (CADC archive migration to SI)
 ```
+
+The _includeRecoverable_ configuration is optional and defaults to _false_. When true, `tantar` will 
+request that the StorageAdapter include previously deleted but preserved stored objects for consideration.
+This option is likely to make tantar validation slower if the number of previously deleted objects is larger because it usually requires an additional query to the inventory database for each stored object that 
+dosn't currently match an artifact (which is all of the deleted/preserved stored objects). This option 
+should be used rarely, but it can potentially recover from the scenario where an Artifact has no
+storageLocation but the file (or an older copy with the same bytes) still resides in storage.
 
 Additional java system properties and/or configuration files may be required to configure the storage adapter.
 
