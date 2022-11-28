@@ -14,7 +14,7 @@ sourceCompatibility = 1.8
 
 group = 'org.opencadc'
 
-version = '0.5.0'
+version = '0.5.1'
 
 description = 'OpenCADC Storage Inventory StorageAdapter test library'
 def git_url = 'https://github.com/opencadc/storage-inventory'
@@ -22,7 +22,7 @@ def git_url = 'https://github.com/opencadc/storage-inventory'
 dependencies {
     compile 'org.opencadc:cadc-util:[1.6,2.0)'
     compile 'org.opencadc:cadc-inventory:[0.7,)'
-    compile 'org.opencadc:cadc-storage-adapter:[0.10,)'
+    compile 'org.opencadc:cadc-storage-adapter:[0.11,)'
 
     // this is a test suite lib
     compile 'junit:junit:[4.0,)'
