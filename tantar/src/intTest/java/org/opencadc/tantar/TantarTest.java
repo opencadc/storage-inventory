@@ -121,14 +121,18 @@ abstract class TantarTest {
     final DeletedArtifactEventDAO daeDAO;
     final DeletedStorageLocationEventDAO dsleDAO;
     
+    final boolean includeRecoverable;
     final BucketValidator validator;
     
-    protected TantarTest(ResolutionPolicy policy) throws Exception {
+    protected TantarTest(ResolutionPolicy policy, boolean includeRecoverable) throws Exception {
         this.adapter = new OpaqueFileSystemStorageAdapter(ROOT, 1);
         
         List<String> preserve = new ArrayList<>();
-        preserve.add("test:FOO/"); 
+        if (includeRecoverable) {
+            preserve.add("test:FOO/");
+        }
         this.preservingAdapter = new OpaqueFileSystemStorageAdapter(ROOT, 1, preserve);
+        this.includeRecoverable = includeRecoverable;
         
         
         DBConfig dbrc = new DBConfig();
@@ -240,7 +244,9 @@ abstract class TantarTest {
         recoverableSM4 = sm4.getStorageLocation();
         this.recoverableA4 = a4;
         
-        preservingAdapter.delete(recoverableSM4);
+        if (includeRecoverable) {
+            preservingAdapter.delete(recoverableSM4);
+        }
         
         if (a4recovery) {
             // second stored object with same Artifact.uri, later contentLastModified, earlier storageLocation

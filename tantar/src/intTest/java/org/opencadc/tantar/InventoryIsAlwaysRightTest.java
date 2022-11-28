@@ -93,7 +93,11 @@ public class InventoryIsAlwaysRightTest extends TantarTest {
     private static TestPolicy policy = new TestPolicy();
     
     public InventoryIsAlwaysRightTest() throws Exception {
-        super(policy);
+        this(false);
+    }
+    
+    protected InventoryIsAlwaysRightTest(boolean includeRecoverable) throws Exception {
+        super(policy, includeRecoverable);
     }
     
     @Before
@@ -109,7 +113,7 @@ public class InventoryIsAlwaysRightTest extends TantarTest {
         Thread.sleep(10L);
         policy.resetDelayTimestamp();
         
-        validator.setIncludeRecoverable(true);
+        validator.setIncludeRecoverable(includeRecoverable);
         validator.validate();
         
         // a2 storagelocation cleared
