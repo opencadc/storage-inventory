@@ -467,7 +467,9 @@ public abstract class StorageAdapterBasicTest {
             adapter.delete(sm.getStorageLocation());
             
             try {
-                adapter.get(sm.getStorageLocation(), new ByteArrayOutputStream());
+                ByteArrayOutputStream bos = new ByteArrayOutputStream();
+                adapter.get(sm.getStorageLocation(), bos);
+                Assert.fail("expected ResourceNotFoundException, got  " + bos.toByteArray().length + " bytes");
             } catch (ResourceNotFoundException expected) {
                 log.info("caught expected: " + expected);
             }

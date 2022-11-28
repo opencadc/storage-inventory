@@ -1336,6 +1336,7 @@ public class SwiftStorageAdapter  implements StorageAdapter {
     @Override
     public void delete(StorageLocation storageLocation, boolean includeRecoverable)
             throws ResourceNotFoundException, IOException, StorageEngageException, TransientException {
+        InventoryUtil.assertNotNull(SwiftStorageAdapter.class, "storageLocation", storageLocation);
         log.debug("delete: " + storageLocation);
         String key = storageLocation.getStorageID().toASCIIString();
         
@@ -1405,6 +1406,7 @@ public class SwiftStorageAdapter  implements StorageAdapter {
     @Override
     public void recover(StorageLocation storageLocation, Date contentLastModified) 
             throws ResourceNotFoundException, IOException, InterruptedException, StorageEngageException, TransientException {
+        InventoryUtil.assertNotNull(SwiftStorageAdapter.class, "storageLocation", storageLocation);
         log.debug("delete: " + storageLocation);
         String key = storageLocation.getStorageID().toASCIIString();
         
