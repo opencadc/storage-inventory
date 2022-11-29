@@ -142,8 +142,8 @@ public class AdStorageAdapterIteratorTest {
         });
     }
 
-
-    @Test
+    // test disabled because there are no small archives left in AD
+    //@Test
     public void testIteratorOrder() throws Exception {
         Subject.doAs(testSubject, new PrivilegedExceptionAction<Object>() {
             public Object run() throws Exception {

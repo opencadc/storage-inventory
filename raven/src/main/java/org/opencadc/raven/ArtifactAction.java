@@ -73,6 +73,7 @@ import ca.nrc.cadc.log.WebServiceLogInfo;
 import ca.nrc.cadc.net.StorageResolver;
 import ca.nrc.cadc.rest.RestAction;
 import ca.nrc.cadc.rest.SyncInput;
+import ca.nrc.cadc.rest.Version;
 import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.vos.Direction;
 import ca.nrc.cadc.vos.Transfer;
@@ -274,4 +275,11 @@ public abstract class ArtifactAction extends RestAction {
         }
     }
 
+    @Override
+    protected String getServerImpl() {
+        // no null version checking because fail to build correctly can't get past basic testing
+        Version v = getVersionFromResource();
+        String ret = "storage-inventory/raven-" + v.getMajorMinor();
+        return ret;
+    }
 }

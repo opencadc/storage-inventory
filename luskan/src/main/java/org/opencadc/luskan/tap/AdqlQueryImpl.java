@@ -130,9 +130,10 @@ public class AdqlQueryImpl extends AdqlQuery {
             super.navigatorList.add(new StorageLocationConverter(isStorageSite));
         }
         
-        // enable unfiltered diagnostics -- must be after StorageLocationConverter
+        // must be after StorageLocationConverter
         TableNameConverter tnc2 = new TableNameConverter(true);
-        tnc2.put("inventory.ArtifactMetadata", "inventory.Artifact");
+        tnc2.put("inventory.ArtifactMetadata", "inventory.Artifact"); // no filter
+        tnc2.put("inventory.PendingArtifact", "inventory.Artifact");  // alt filter
         TableNameReferenceConverter tnrc2 = new TableNameReferenceConverter(tnc2.map);
         super.navigatorList.add(new SelectNavigator(new ExpressionNavigator(), tnrc2, tnc2));
     }

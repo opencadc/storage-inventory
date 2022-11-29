@@ -145,12 +145,36 @@ public class FitsOperationsTest extends MinocTest {
     }
 
     @Test
+    public void testMEFMACHOCompressed() throws Exception {
+        final String testFilePrefix = "test-mef-macho";
+        final String testFileExtension = "fz";
+        final URI artifactURI = URI.create("cadc:TEST/" + testFilePrefix + "." + testFileExtension);
+        final String[] cutoutSpecs = new String[] {
+                "[4][180:337,600:655]"
+        };
+
+        uploadAndCompareCutout(artifactURI, SodaParamValidator.SUB, cutoutSpecs, testFilePrefix, testFileExtension);
+    }
+
+    @Test
     public void testLargeCompressed() throws Exception {
         final String testFilePrefix = "test-cfht";
         final String testFileExtension = "fz";
         final URI artifactURI = URI.create("cadc:TEST/" + testFilePrefix + "." + testFileExtension);
         final String[] cutoutSpecs = new String[] {
-                "[2][*:20]"
+                "[2][*:2]"
+        };
+
+        uploadAndCompareCutout(artifactURI, SodaParamValidator.SUB, cutoutSpecs, testFilePrefix, "fits");
+    }
+
+    @Test
+    public void testLargeNGVSCompressed() throws Exception {
+        final String testFilePrefix = "test-ngvs-fits";
+        final String testFileExtension = "fz";
+        final URI artifactURI = URI.create("cadc:TEST/" + testFilePrefix + "." + testFileExtension);
+        final String[] cutoutSpecs = new String[] {
+                "[1][18806:19317,7963:8474]"
         };
 
         uploadAndCompareCutout(artifactURI, SodaParamValidator.SUB, cutoutSpecs, testFilePrefix, "fits");

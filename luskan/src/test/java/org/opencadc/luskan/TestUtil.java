@@ -92,6 +92,16 @@ public class TestUtil {
         schemaDesc.getTableDescs().add(tableDesc);
         tableDesc.getColumnDescs().add(new ColumnDesc(tableName, "id", new TapDataType("char", "36", "uuid")));
         tableDesc.getColumnDescs().add(new ColumnDesc(tableName, "contentLength", TapDataType.LONG));
+        
+        tableName = schemaName + ".ArtifactMetadata";
+        tableDesc = new TableDesc(schemaName, tableName);
+        schemaDesc.getTableDescs().add(tableDesc);
+        tableDesc.getColumnDescs().add(new ColumnDesc(tableName, "id", new TapDataType("char", "36", "uuid")));
+        
+        tableName = schemaName + ".PendingArtifact";
+        tableDesc = new TableDesc(schemaName, tableName);
+        schemaDesc.getTableDescs().add(tableDesc);
+        tableDesc.getColumnDescs().add(new ColumnDesc(tableName, "id", new TapDataType("char", "36", "uuid")));
 
         // inventory.StorageSite
         tableName = schemaName + ".StorageSite";

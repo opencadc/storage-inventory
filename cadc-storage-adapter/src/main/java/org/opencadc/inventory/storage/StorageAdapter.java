@@ -81,6 +81,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URI;
+import java.util.Date;
 import java.util.Iterator;
 
 import org.opencadc.inventory.StorageLocation;
@@ -195,6 +196,22 @@ public interface StorageAdapter {
      * @throws TransientException if an unexpected, temporary exception occurred. 
      */
     public void delete(StorageLocation storageLocation, boolean includeRecoverable)
+        throws ResourceNotFoundException, IOException, InterruptedException, StorageEngageException, TransientException;
+    
+    /**
+     * Recover a previously deleted storage location. Implementations should try to reset or store
+     * the provided contentLastModified and return that value in future iterations over StorageMetadata
+     * objects.
+     * 
+     * @param storageLocation the storage location to recover
+     * @param contentLastModified preferred last modified timestamp
+     * @throws ResourceNotFoundException
+     * @throws IOException
+     * @throws InterruptedException
+     * @throws StorageEngageException
+     * @throws TransientException 
+     */
+    public void recover(StorageLocation storageLocation, Date contentLastModified)
         throws ResourceNotFoundException, IOException, InterruptedException, StorageEngageException, TransientException;
     
     /**

@@ -75,6 +75,7 @@ import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.rest.InlineContentHandler;
 import ca.nrc.cadc.rest.RestAction;
 import ca.nrc.cadc.rest.SyncInput;
+import ca.nrc.cadc.rest.Version;
 import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.util.PropertiesReader;
 import java.io.File;
@@ -205,7 +206,10 @@ public abstract class ArtifactAction extends RestAction {
 
     @Override
     protected String getServerImpl() {
-        return "storage-inventory/minoc";
+        // no null version checking because fail to build correctly can't get past basic testing
+        Version v = getVersionFromResource();
+        String ret = "storage-inventory/minoc-" + v.getMajorMinor();
+        return ret;
     }
 
     /**

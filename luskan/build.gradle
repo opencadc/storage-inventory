@@ -20,6 +20,9 @@ war {
     from(System.getenv('RPS') + '/resources/') {
         include 'swagger-ui/'
     }
+    from('.') { 
+        include 'VERSION'
+    }
 }
 
 dependencies {

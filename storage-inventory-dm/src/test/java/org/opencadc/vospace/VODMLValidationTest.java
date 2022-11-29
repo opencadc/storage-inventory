@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2020.                            (c) 2020.
+*  (c) 2022.                            (c) 2022.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -63,70 +63,113 @@
 *                                       <http://www.gnu.org/licenses/>.
 *
 ************************************************************************
-*/
+ */
 
-package org.opencadc.inventory.storage.swift;
+package org.opencadc.vospace;
 
+import ca.nrc.cadc.util.FileUtil;
 import ca.nrc.cadc.util.Log4jInit;
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
+import ca.nrc.cadc.vodml.SchematronValidationException;
+import ca.nrc.cadc.vodml.VOModelReader;
+import ca.nrc.cadc.vodml.VOModelWriter;
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileInputStream;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
+import org.jdom2.Document;
+import org.junit.Assert;
 import org.junit.Test;
-import org.opencadc.inventory.StorageLocation;
-import org.opencadc.inventory.storage.StorageMetadata;
-import org.opencadc.inventory.storage.test.StorageAdapterBasicTest;
 
 /**
  *
  * @author pdowler
  */
-public class SwiftPreserveNamespaceTest extends StorageAdapterBasicTest {
-    private static final Logger log = Logger.getLogger(SwiftPreserveNamespaceTest.class);
+public class VODMLValidationTest {
 
-    static final List<String> PRESERVE = new ArrayList<>();
-    
+    private static final Logger log = Logger.getLogger(VODMLValidationTest.class);
+
+    private static final String VODML_FILE_01 = "vospace-storage-inventory-0.1-vodml.xml";
+
+    private static final String[] VODML_FILES = new String[]{
+        VODML_FILE_01
+    };
+
     static {
         Log4jInit.setLevel("org.opencadc.inventory", Level.INFO);
-        Log4jInit.setLevel("org.javaswift.joss.client", Level.INFO);
-        
-        PRESERVE.add(StorageAdapterBasicTest.TEST_NAMESPACE);
-    }
-    
-    final SwiftStorageAdapter swiftAdapter;
-    
-    public SwiftPreserveNamespaceTest() throws Exception {
-        super(new SwiftStorageAdapter(true, System.getProperty("user.name") + "-single-test", 2, false, PRESERVE));
-        this.swiftAdapter = (SwiftStorageAdapter) super.adapter; 
+        Log4jInit.setLevel("ca.nrc.cadc.vodml", Level.INFO);
     }
 
-    @Override
-    public void cleanupBefore() throws Exception {
-        log.info("cleanupBefore: START");
-        Iterator<StorageMetadata> sbi = swiftAdapter.iterator(null, true);
-        while (sbi.hasNext()) {
-            StorageLocation loc = sbi.next().getStorageLocation();
-            swiftAdapter.delete(loc, true);
-            log.info("\tdeleted: " + loc);
+    public VODMLValidationTest() {
+    }
+
+    @Test
+    public void testWellFormed() {
+        for (String vodmlFile : VODML_FILES) {
+            try {
+                File testVODML = FileUtil.getFileFromResource(vodmlFile, VODMLValidationTest.class);
+                log.info("testWellFormed VO-DML/XML doc: " + testVODML);
+
+                VOModelReader wf = new VOModelReader(false, false, false);
+                Document doc = wf.read(new FileInputStream(testVODML));
+                Assert.assertNotNull(doc);
+
+                VOModelWriter w = new VOModelWriter();
+                ByteArrayOutputStream bos = new ByteArrayOutputStream();
+                w.write(doc, bos);
+                log.debug("well-formed document:\n" + bos.toString());
+                log.info("testWellFormed VO-DML/XML doc: OK");
+            } catch (Exception unexpected) {
+                log.error("unexpected exception", unexpected);
+                Assert.fail("unexpected exception: " + unexpected);
+            }
         }
-        log.info("cleanupBefore: DONE");        
-    }
-    
-    @Test
-    public void testCleanupOnly() {
-        log.info("testCleanupOnly: no-op");
-    }
-    
-    @Test
-    @Override
-    public void testIteratorOverPreserved() {
-        super.testIteratorOverPreserved();
     }
 
     @Test
-    @Override
-    public void testDeleteRecover() {
-        super.testDeleteRecover();
+    public void testSchemaValid() {
+        for (String vodmlFile : VODML_FILES) {
+            try {
+                File testVODML = FileUtil.getFileFromResource(vodmlFile, VODMLValidationTest.class);
+                log.info("testSchemaValid VO-DML/XML doc: " + testVODML);
+
+                VOModelReader wf = new VOModelReader(true, false, false);
+                Document doc = wf.read(new FileInputStream(testVODML));
+                Assert.assertNotNull(doc);
+
+                VOModelWriter w = new VOModelWriter();
+                ByteArrayOutputStream bos = new ByteArrayOutputStream();
+                w.write(doc, bos);
+                log.debug("schema-valid document:\n" + bos.toString());
+                log.info("testSchemaValid VO-DML/XML doc: OK");
+
+            } catch (Exception unexpected) {
+                log.error("unexpected exception", unexpected);
+                Assert.fail("unexpected exception: " + unexpected);
+            }
+        }
+    }
+
+    @Test
+    public void testSchematronValid() {
+        for (String vodmlFile : VODML_FILES) {
+            try {
+                File testVODML = FileUtil.getFileFromResource(vodmlFile, VODMLValidationTest.class);
+                log.info("testSchematronValid VO-DML/XML doc: " + testVODML);
+
+                VOModelReader wf = new VOModelReader(true, true, true);
+                Document doc = wf.read(new FileInputStream(testVODML));
+                Assert.assertNotNull(doc);
+                log.info("testSchematronValid VO-DML/XML doc: OK");
+            } catch (SchematronValidationException ex) {
+                for (String msg : ex.getFailures()) {
+                    log.error(msg);
+                }
+                Assert.fail("schematron validation failed: " + ex);
+            } catch (Exception unexpected) {
+                log.error("unexpected exception", unexpected);
+                Assert.fail("unexpected exception: " + unexpected);
+            }
+        }
     }
 }
