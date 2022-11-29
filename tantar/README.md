@@ -84,7 +84,8 @@ AdStorageAdapter + StorageIsAlwaysRight (CADC archive migration to SI)
 
 The _includeRecoverable_ configuration is optional and defaults to _false_. When true, `tantar` will 
 request that the StorageAdapter include previously deleted but preserved stored objects for consideration.
-This option is likely to make tantar validation slower if the number of previously deleted objects is larger because it usually requires an additional query to the inventory database for each stored object that 
+This option is likely to make tantar validation slower if the number of previously deleted objects is 
+large because it usually requires an additional query to the inventory database for each stored object that 
 dosn't currently match an artifact (which is all of the deleted/preserved stored objects). This option 
 should be used rarely, but it can potentially recover from the scenario where an Artifact has no
 storageLocation but the file (or an older copy with the same bytes) still resides in storage.
