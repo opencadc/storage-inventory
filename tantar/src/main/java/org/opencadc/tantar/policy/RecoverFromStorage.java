@@ -133,7 +133,7 @@ public class RecoverFromStorage extends ResolutionPolicy {
             sb.append(" Artifact.uri=").append(cur.getURI());
             sb.append(" loc=").append(storageMetadata.getStorageLocation());
             log.info(sb.toString());
-            validateActions.updateArtifact(cur, storageMetadata.getStorageLocation());
+            validateActions.updateArtifact(cur, storageMetadata);
             return;
         }
         
