@@ -69,7 +69,6 @@ package org.opencadc.raven;
 
 import ca.nrc.cadc.cred.client.CredUtil;
 import ca.nrc.cadc.net.HttpGet;
-import ca.nrc.cadc.net.NetUtil;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.StorageResolver;
 import ca.nrc.cadc.reg.Capabilities;
@@ -81,10 +80,7 @@ import ca.nrc.cadc.vos.Direction;
 import ca.nrc.cadc.vos.Protocol;
 import ca.nrc.cadc.vos.Transfer;
 import ca.nrc.cadc.vos.VOS;
-import ca.nrc.cadc.vos.View;
-import ca.nrc.cadc.vos.View.Parameter;
 import ca.nrc.cadc.vosi.Availability;
-
 import java.io.File;
 import java.io.IOException;
 import java.net.InetAddress;
@@ -100,7 +96,6 @@ import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.UUID;
-
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.InventoryUtil;
@@ -316,15 +311,11 @@ public class ProtocolsGenerator {
                 storageSites.add(storageSite);
             }
         }
-        
-        View view = transfer.getView();
 
         prioritizePullFromSites(storageSites);
         for (StorageSite storageSite : storageSites) {
             Capability filesCap = getFilesCapability(storageSite);
             if (filesCap != null) {
-                // TODO: if view, check if this StorageSite supports the view params
-                // view.uri ~~ standardID (eg ivo://ivoa.net/std/SODA#sync-1.0)
                 for (Protocol proto : transfer.getProtocols()) {
                     if (storageSite.getAllowRead()) {
                         URI sec = proto.getSecurityMethod();
@@ -342,7 +333,6 @@ public class ProtocolsGenerator {
                                     sb.append(authToken).append("/");
                                 }
                                 sb.append(artifactURI.toASCIIString());
-                                appendViewParams(sb, view);
                                 Protocol p = new Protocol(proto.getUri());
                                 if (transfer.version == VOS.VOSPACE_21) {
                                     p.setSecurityMethod(proto.getSecurityMethod());
@@ -356,7 +346,6 @@ public class ProtocolsGenerator {
                                     sb = new StringBuilder();
                                     sb.append(baseURL.toExternalForm()).append("/");
                                     sb.append(artifactURI.toASCIIString());
-                                    appendViewParams(sb, view);
                                     p = new Protocol(proto.getUri());
                                     p.setEndpoint(sb.toString());
                                     protos.add(p);
@@ -404,22 +393,6 @@ public class ProtocolsGenerator {
         }
 
         return protos;
-    }
-    
-    private void appendViewParams(StringBuilder sb, View view) {
-        int np = 0;
-        if (view != null && !view.getParameters().isEmpty()) {
-            sb.append("?");
-            for (Parameter p : view.getParameters()) {
-                String sp = p.getUri().getFragment();
-                String val = NetUtil.encode(p.getValue());
-                sb.append(sp).append("=").append(val).append("&");
-                np++;
-            }
-        }
-        if (np > 0) {
-            sb.setLength(sb.length() - 1); // trim trailing &
-        }
     }
 
     static SortedSet<StorageSite> prioritizePushToSites(Set<StorageSite> storageSites, URI artifactURI,
