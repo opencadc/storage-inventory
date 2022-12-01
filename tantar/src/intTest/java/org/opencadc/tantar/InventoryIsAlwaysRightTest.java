@@ -122,6 +122,13 @@ public class InventoryIsAlwaysRightTest extends TantarTest {
         // a7 storageLocation cleared, sm7 deleted
         // sm8 deleted
         
+        // veirfy a3 was left intact
+        Artifact a3 = artifactDAO.get(URI.create("test:FOO/a3"));
+        Assert.assertNotNull(a3);
+        Assert.assertEquals(correctA3.getID(), a3.getID());
+        Assert.assertNotNull(a3.storageLocation);
+        Assert.assertEquals(correctSM3, a3.storageLocation);
+        
         // verify a4 was recovered rather than replaced
         Artifact actual = artifactDAO.get(URI.create("test:FOO/a4"));
         Assert.assertNotNull(actual);
@@ -143,11 +150,11 @@ public class InventoryIsAlwaysRightTest extends TantarTest {
         validator.validate();
         
         // re-check a4
-        actual = artifactDAO.get(URI.create("test:FOO/a4"));
-        Assert.assertNotNull(actual);
-        Assert.assertEquals(recoverableA4.getID(), actual.getID());
-        Assert.assertNotNull(actual.storageLocation);
-        Assert.assertEquals(recoverableSM4, actual.storageLocation);
+        a3 = artifactDAO.get(URI.create("test:FOO/a4"));
+        Assert.assertNotNull(a3);
+        Assert.assertEquals(recoverableA4.getID(), a3.getID());
+        Assert.assertNotNull(a3.storageLocation);
+        Assert.assertEquals(recoverableSM4, a3.storageLocation);
         
         // verify sm4 was recovered
         ByteArrayOutputStream bos = new ByteArrayOutputStream();

@@ -196,6 +196,7 @@ abstract class TantarTest {
     
     // correct artifact+storage
     // a1,a3,a5: artifacts with storageLocation + matching stored object
+    // sm3x: old copyu of a3 with different metadata (not recoverable)
     //
     // discrepancies:
     // a2: artifact  with storageLocation + no stored object
@@ -205,10 +206,13 @@ abstract class TantarTest {
     // a8: artifact with no storageLocation + stored object with same artifact uri/different metadata (not recoverable)
     
     // state to help subclasses verify recovery
+    protected Artifact correctA3;
+    protected StorageLocation correctSM3;
+    
     protected Artifact recoverableA4;
     protected StorageLocation recoverableSM4;
     
-    void doTestSetup(boolean a4recovery) throws Exception {
+    void doTestSetup(boolean testRecovery) throws Exception {
         // create
         StorageMetadata sm1 = adapter.put(new NewArtifact(URI.create("test:FOO/a1")), getInputStreamOfRandomBytes(1024L), null);
         final Artifact a1 = create(sm1);
@@ -216,12 +220,27 @@ abstract class TantarTest {
         StorageMetadata sm2 = adapter.put(new NewArtifact(URI.create("test:FOO/a2")), getInputStreamOfRandomBytes(1024L), null);
         final Artifact a2 = create(sm2);
         
+        StorageMetadata sm3x = null;
+        if (testRecovery) {
+            sm3x = adapter.put(new NewArtifact(URI.create("test:FOO/a3")), getInputStreamOfRandomBytes(1024L), null);
+            Thread.sleep(10L);
+        }
         StorageMetadata sm3 = adapter.put(new NewArtifact(URI.create("test:FOO/a3")), getInputStreamOfRandomBytes(1024L), null);
+        if (sm3x != null) {
+            // make sure sm3 is after sm3x
+            while (sm3x.compareTo(sm3) < 0) {
+                adapter.delete(sm3.getStorageLocation());
+                sm3 = adapter.put(new NewArtifact(URI.create("test:FOO/a3")), getInputStreamOfRandomBytes(1024L), null);
+            }
+        }
         final Artifact a3 = create(sm3);
+        correctA3 = a3;
+        correctSM3 = sm3.getStorageLocation();
+        
         
         byte[] data = getRandomBytes(1024);
         StorageMetadata sm4a = null;
-        if (a4recovery) {
+        if (testRecovery) {
             // stored object with older timestamp
             sm4a = adapter.put(new NewArtifact(URI.create("test:FOO/a4")), new ByteArrayInputStream(data), null);
             log.info("sm4a: " + sm4a);
@@ -230,7 +249,7 @@ abstract class TantarTest {
         
         // stored object with matching timestamp
         StorageMetadata sm4 = adapter.put(new NewArtifact(URI.create("test:FOO/a4")), new ByteArrayInputStream(data), null);
-        if (a4recovery) {
+        if (testRecovery) {
             // keep generating sm4 until storageLocation comes before sm4a
             while (sm4a.compareTo(sm4) < 0) {
                 log.debug("delete " + sm4.getStorageLocation() + " and retry...");
@@ -248,7 +267,7 @@ abstract class TantarTest {
             preservingAdapter.delete(recoverableSM4);
         }
         
-        if (a4recovery) {
+        if (testRecovery) {
             // second stored object with same Artifact.uri, later contentLastModified, earlier storageLocation
             // so we can tell that matching contentLastModified won
             Thread.sleep(10L);

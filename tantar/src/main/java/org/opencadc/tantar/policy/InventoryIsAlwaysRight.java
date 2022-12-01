@@ -172,8 +172,10 @@ public class InventoryIsAlwaysRight extends ResolutionPolicy {
             return;
         }
 
-        // artifact != null
-        if (!isSameContent(art, storageMetadata)) {
+        // artifact != null 
+        // only check metadata if already same storageLocation 
+        if (storageMetadata.getStorageLocation().equals(art.storageLocation)
+                && !isSameContent(art, storageMetadata)) {
             sb.append(".clearStorageLocation");
             sb.append(" Artifact.id=").append(art.getID());
             sb.append(" Artifact.uri=").append(art.getURI());
@@ -200,13 +202,19 @@ public class InventoryIsAlwaysRight extends ResolutionPolicy {
             DateFormat df = DateUtil.getDateFormat(DateUtil.IVOA_DATE_FORMAT, DateUtil.UTC);
             log.warn("recover: art=" + df.format(art.getContentLastModified())
                     + " storage=" + df.format(storageMetadata.getContentLastModified()));
-            boolean doFix = art.storageLocation == null; // always
+            boolean sc = isSameContent(art, storageMetadata);
+            boolean doFix = false;
             String reason = "null-storageLocation";
-            if (!doFix && art.storageLocation != null && !art.storageLocation.equals(storageMetadata.getStorageLocation())) {
-                // check for better (matching) timestamp 
-                doFix = art.getContentLastModified().equals(storageMetadata.getContentLastModified());
-                reason = "improve-contentLastModified";
+            if (sc) {
+                if (art.storageLocation == null) {
+                    doFix = true;
+                } else if (!art.storageLocation.equals(storageMetadata.getStorageLocation())
+                        && art.getContentLastModified().equals(storageMetadata.getContentLastModified())) {
+                    doFix = true;
+                    reason = "improve-contentLastModified";
+                }
             }
+            
             if (doFix) {
                 sb.append(".updateArtifact");
                 sb.append(" Artifact.id=").append(art.getID());
