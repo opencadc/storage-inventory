@@ -69,6 +69,7 @@
 package org.opencadc.tantar;
 
 import java.net.URI;
+import java.util.Date;
 import java.util.EventListener;
 
 import org.opencadc.inventory.Artifact;
@@ -127,10 +128,10 @@ public interface ValidateActions extends EventListener {
      * Update the storageLocation of the given Artifact.
      *
      * @param artifact      Artifact to update
-     * @param storageLoc    StorageLocation to assign
+     * @param smeta         StorageMetadata from which to get the StorageLocation to assign
      * @throws Exception    Any unexpected error.
      */
-    void updateArtifact(final Artifact artifact, final StorageLocation storageLoc) throws Exception;
+    void updateArtifact(final Artifact artifact, final StorageMetadata smeta) throws Exception;
     
     /**
      * Replace the given Artifact with a new one created from the given StorageMetadata instance.

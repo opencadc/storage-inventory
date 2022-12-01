@@ -113,6 +113,8 @@ public class BucketValidator implements ValidateActions {
     private final StorageAdapter storageAdapter;
     private final ResolutionPolicy validationPolicy;
     private final boolean reportOnlyFlag;
+    
+    private boolean includeRecoverable = false;
 
     // Cached ArtifactDAO used for transactional access.
     private final ArtifactDAO artifactDAO;
@@ -209,6 +211,10 @@ public class BucketValidator implements ValidateActions {
         this.obsoleteStorageLocationDAO = null;
         this.iteratorDAO = null;
     }
+
+    public void setIncludeRecoverable(boolean enabled) {
+        this.includeRecoverable = enabled;
+    }
     
     /**
      * Main functionality.  This will obtain the iterators necessary to validate, and delegate to the Policy to take
@@ -217,13 +223,15 @@ public class BucketValidator implements ValidateActions {
      * @throws Exception Pass up any errors to the caller, which is most likely the Main.
      */
     public void validate() throws Exception {
-        log.info("BucketValidator.validate phase=start reportOnly=" + reportOnlyFlag);
+        log.info("BucketValidator.validate phase=start reportOnly=" + reportOnlyFlag
+            + " includeRecoverable=" + includeRecoverable);
         validationPolicy.setValidateActions(this);
         try {
             doit(validationPolicy);
         } finally {
             logSummary(validationPolicy, true, false);
-            log.info("BucketValidator.validate phase=end reportOnly=" + reportOnlyFlag);
+            log.info("BucketValidator.validate phase=end reportOnly=" + reportOnlyFlag
+            + " includeRecoverable=" + includeRecoverable);
         }
     }
     
@@ -429,9 +437,11 @@ public class BucketValidator implements ValidateActions {
     public void delete(final StorageMetadata storageMetadata) throws Exception {
         if (canTakeAction()) {
             final StorageLocation storageLocation = storageMetadata.getStorageLocation();
-            log.debug("Delete from storage: " + storageLocation);
-            storageAdapter.delete(storageLocation);
-            numDeleteStorageLocation++;
+            if (!storageMetadata.deletePreserved) {
+                log.debug("Delete from storage: " + storageLocation);
+                storageAdapter.delete(storageLocation);
+                numDeleteStorageLocation++;
+            }
         }
     }
 
@@ -573,11 +583,10 @@ public class BucketValidator implements ValidateActions {
      * Update the StorageLocation of the given Artifact
      *
      * @param artifact        The Artifact to update
-     * @param storageLoc      The StorageLocation from which to update the Artifact
-     * @throws Exception Any unexpected error.
+     * @param smeta         StorageMetadata from which to get the StorageLocation to assign
+     * @throws Exception    Any unexpected error.
      */
-    @Override
-    public void updateArtifact(final Artifact artifact, final StorageLocation storageLoc) throws Exception {
+    public void updateArtifact(final Artifact artifact, final StorageMetadata smeta) throws Exception {
         if (canTakeAction()) {
             final TransactionManager transactionManager = artifactDAO.getTransactionManager();
 
@@ -587,12 +596,17 @@ public class BucketValidator implements ValidateActions {
                 
                 Artifact cur = artifactDAO.lock(artifact);
                 if (cur != null) {
-                    cur.storageLocation = storageLoc;
-                    artifactDAO.setStorageLocation(cur, storageLoc);
+                    cur.storageLocation = smeta.getStorageLocation();
+                    artifactDAO.setStorageLocation(cur, smeta.getStorageLocation());
                     
                     StorageLocationEventDAO sleDAO = new StorageLocationEventDAO(artifactDAO);
                     StorageLocationEvent sle = new StorageLocationEvent(cur.getID());
                     sleDAO.put(sle);
+                    
+                    if (smeta.deletePreserved) {
+                        // TODO: there is no intTest that verifies that this was called correctly
+                        storageAdapter.recover(smeta.getStorageLocation(), artifact.getContentLastModified());
+                    }
                     
                     transactionManager.commitTransaction();
                     numUpdateArtifact++;
@@ -716,7 +730,7 @@ public class BucketValidator implements ValidateActions {
             this.bucketPrefixIterator = bucketPrefixes.iterator();
 
             // The bucket range should have at least one value, so calling next() should be safe here.
-            this.storageMetadataIterator = storageAdapter.iterator(bucketPrefixIterator.next());
+            this.storageMetadataIterator = storageAdapter.iterator(bucketPrefixIterator.next(), includeRecoverable);
             advance();
         }
 
@@ -728,7 +742,7 @@ public class BucketValidator implements ValidateActions {
                         advance();
                     }
                 } else if (this.bucketPrefixIterator.hasNext()) {
-                    this.storageMetadataIterator = storageAdapter.iterator(this.bucketPrefixIterator.next());
+                    this.storageMetadataIterator = storageAdapter.iterator(this.bucketPrefixIterator.next(), includeRecoverable);
                     advance();
                 } else {
                     this.storageMetadata = null;

@@ -68,12 +68,11 @@
 package org.opencadc.tantar;
 
 import ca.nrc.cadc.io.ResourceIterator;
-
+import java.io.ByteArrayOutputStream;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
-
 import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.Before;
@@ -84,7 +83,8 @@ import org.opencadc.inventory.storage.StorageMetadata;
 import org.opencadc.tantar.policy.InventoryIsAlwaysRight;
 
 /**
- *
+ * InventoryIsAlwaysRight integration test.
+ * 
  * @author pdowler
  */
 public class InventoryIsAlwaysRightTest extends TantarTest {
@@ -93,7 +93,11 @@ public class InventoryIsAlwaysRightTest extends TantarTest {
     private static TestPolicy policy = new TestPolicy();
     
     public InventoryIsAlwaysRightTest() throws Exception {
-        super(policy);
+        this(false);
+    }
+    
+    protected InventoryIsAlwaysRightTest(boolean includeRecoverable) throws Exception {
+        super(policy, includeRecoverable);
     }
     
     @Before
@@ -103,15 +107,27 @@ public class InventoryIsAlwaysRightTest extends TantarTest {
     
     @Test
     public void testPolicy() throws Exception {
-        doTestSetup();
+        doTestSetup(true);
         
         // make sure delayAction doesn't prevent actions
         Thread.sleep(10L);
         policy.resetDelayTimestamp();
         
+        validator.setIncludeRecoverable(includeRecoverable);
         validator.validate();
+        
         // a2 storagelocation cleared
+        // a4->sm4 recovered
         // sm6 deleted
+        // a7 storageLocation cleared, sm7 deleted
+        // sm8 deleted
+        
+        // verify a4 was recovered rather than replaced
+        Artifact actual = artifactDAO.get(URI.create("test:FOO/a4"));
+        Assert.assertNotNull(actual);
+        Assert.assertEquals(recoverableA4.getID(), actual.getID());
+        Assert.assertNotNull(actual.storageLocation);
+        Assert.assertEquals(recoverableSM4, actual.storageLocation);
         
         List<StorageLocation> locs = new ArrayList<>();
         Iterator<StorageMetadata> si = adapter.iterator();
@@ -120,7 +136,36 @@ public class InventoryIsAlwaysRightTest extends TantarTest {
             log.info("data: " + sm.getArtifactURI() + " " + sm.getStorageLocation());
             locs.add(sm.getStorageLocation());
         }
-        Assert.assertEquals("locs", 3, locs.size());
+        // in the first pass, we have an extra sm4 lying around
+        // or: if recovery doesn't successfully recover the stored object
+        Assert.assertEquals("locs", 5, locs.size());
+        
+        validator.validate();
+        
+        // re-check a4
+        actual = artifactDAO.get(URI.create("test:FOO/a4"));
+        Assert.assertNotNull(actual);
+        Assert.assertEquals(recoverableA4.getID(), actual.getID());
+        Assert.assertNotNull(actual.storageLocation);
+        Assert.assertEquals(recoverableSM4, actual.storageLocation);
+        
+        // verify sm4 was recovered
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        try {
+            adapter.get(recoverableSM4, bos);
+        } catch (Exception ex) {
+            log.error("failed to read recovered storageLocation: " + recoverableSM4, ex);
+            Assert.fail("failed to read recovered storageLocation: " + recoverableSM4 + " cause: " + ex);
+        }
+        
+        locs.clear();
+        si = adapter.iterator();
+        while (si.hasNext()) {
+            StorageMetadata sm = si.next();
+            log.info("data: " + sm.getArtifactURI() + " " + sm.getStorageLocation());
+            locs.add(sm.getStorageLocation());
+        }
+        Assert.assertEquals("locs", 4, locs.size());
         
         List<StorageLocation> refs = new ArrayList<>();
         try (final ResourceIterator<Artifact> ai = artifactDAO.storedIterator(null)) {
@@ -130,7 +175,7 @@ public class InventoryIsAlwaysRightTest extends TantarTest {
                 refs.add(a.storageLocation);
             }
         }
-        Assert.assertEquals("refs", 3, refs.size());
+        Assert.assertEquals("refs", 4, refs.size());
         
         Assert.assertTrue("no broken refs", locs.containsAll(refs));
         Assert.assertTrue("no orphaned files", refs.containsAll(locs));
@@ -144,12 +189,10 @@ public class InventoryIsAlwaysRightTest extends TantarTest {
             }
         }
         
-        Assert.assertEquals("unstored", 4, unstored.size());
+        Assert.assertEquals("unstored", 3, unstored.size());
         Assert.assertTrue(unstored.contains(URI.create("test:FOO/a2")));
-        Assert.assertTrue(unstored.contains(URI.create("test:FOO/a4")));
         Assert.assertTrue(unstored.contains(URI.create("test:FOO/a7")));
         Assert.assertTrue(unstored.contains(URI.create("test:FOO/a8")));
-        
     }
     
     private static class TestPolicy extends InventoryIsAlwaysRight {
