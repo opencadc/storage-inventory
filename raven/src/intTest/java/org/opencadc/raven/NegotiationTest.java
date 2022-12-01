@@ -80,7 +80,6 @@ import ca.nrc.cadc.vos.Direction;
 import ca.nrc.cadc.vos.Protocol;
 import ca.nrc.cadc.vos.Transfer;
 import ca.nrc.cadc.vos.VOS;
-import ca.nrc.cadc.vos.View;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.net.URI;
@@ -363,70 +362,6 @@ public class NegotiationTest extends RavenTest {
                 log.error("unexpected exception", e);
                 Assert.fail("unexpected exception: " + e);
             }
-        }
-    }
-
-    @Test
-    public void testGetWithView() {
-        List<Protocol> requested = new ArrayList<>();
-        
-        // https+anon
-        Protocol sa = new Protocol(VOS.PROTOCOL_HTTPS_GET);
-        requested.add(sa);
-
-        // https+cert
-        Protocol sc = new Protocol(VOS.PROTOCOL_HTTPS_GET);
-        sc.setSecurityMethod(Standards.SECURITY_METHOD_CERT);
-        requested.add(sc);
-        
-        URI resourceID1 = URI.create("ivo://negotiation-test-site1");
-
-        StorageSite site1 = new StorageSite(resourceID1, "site1", true, true);
-
-        URI artifactURI = URI.create("cadc:TEST/" + UUID.randomUUID() + ".fits");
-        URI checksum = URI.create("md5:d41d8cd98f00b204e9800998ecf8427e");
-        Artifact artifact = new Artifact(artifactURI, checksum, new Date(), 1L);
-
-        try {
-            siteDAO.put(site1);
-
-            final SiteLocation location1 = new SiteLocation(site1.getID());
-
-            Transfer transfer = new Transfer(artifactURI, Direction.pullFromVoSpace);
-            transfer.getProtocols().addAll(requested);
-            transfer.version = VOS.VOSPACE_21;
-            
-            // ad-hoc soda param view
-            String soda = "ivo://ivoa.net/std/SODA";
-            transfer.setView(new View(URI.create(soda + "#sync-1.0"))); // standardID
-            transfer.getView().getParameters().add(
-                    new View.Parameter(URI.create(soda + "#CIRCLE"), "12.0 23.0 0.5"));
-
-            artifactDAO.put(artifact);
-            artifactDAO.addSiteLocation(artifact, location1);
-            artifact = artifactDAO.get(artifact.getID());
-        
-            Transfer response = Subject.doAs(userSubject, new PrivilegedExceptionAction<Transfer>() {
-                public Transfer run() throws Exception {
-                    return negotiate(transfer);
-                }
-            });
-            
-            log.info("transfer: " + response);
-            for (Protocol p : response.getProtocols()) {
-                Assert.assertNotNull(p.getEndpoint());
-                URL u = new URL(p.getEndpoint());
-                log.info("result URL: " + u);
-                Assert.assertNotNull(u.getQuery());
-                Assert.assertTrue(u.getQuery().contains("CIRCLE"));
-            }
-        } catch (Exception e) {
-            log.error("unexpected exception", e);
-            Assert.fail("unexpected exception: " + e);
-        } finally {
-            // cleanup sites
-            siteDAO.delete(site1.getID());
-            artifactDAO.delete(artifact.getID());
         }
     }
 
