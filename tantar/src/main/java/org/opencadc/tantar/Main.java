@@ -104,6 +104,9 @@ public class Main {
     private static final String REPORT_ONLY_KEY = CONFIG_BASE + ".reportOnly";
     
     private static final String BUCKETS_KEY = CONFIG_BASE + ".buckets";
+    private static final String INCLUDE_RECOVERABLE_KEY = CONFIG_BASE + ".includeRecoverable";
+
+    private static final String POLICY_KEY = ResolutionPolicy.class.getName();
     private static final String GENERATOR_KEY = SQLGenerator.class.getName();
     
     private static final String DB_SCHEMA_KEY = CONFIG_BASE + ".inventory.schema";
@@ -143,7 +146,7 @@ public class Main {
             }
             
             ResolutionPolicy validationPolicy = null;
-            String policyClassName = props.getFirstPropertyValue(ResolutionPolicy.class.getName());
+            String policyClassName = props.getFirstPropertyValue(POLICY_KEY);
             policyClassName = addPackage(policyClassName);
             if (StringUtil.hasLength(policyClassName)) {
                 validationPolicy = InventoryUtil.loadPlugin(policyClassName);
@@ -155,6 +158,9 @@ public class Main {
             
             String reportOnlyStr = props.getFirstPropertyValue(REPORT_ONLY_KEY);
             final boolean reportOnly = StringUtil.hasText(reportOnlyStr) && Boolean.parseBoolean(reportOnlyStr);
+            
+            String rawIncludeRecovery = props.getFirstPropertyValue(INCLUDE_RECOVERABLE_KEY);
+            final boolean includeRecoverable = StringUtil.hasText(rawIncludeRecovery) && Boolean.parseBoolean(rawIncludeRecovery);
             
             final Map<String,Object> daoConfig = new TreeMap<>();
             
@@ -181,6 +187,7 @@ public class Main {
             ConnectionConfig cc = new ConnectionConfig(null, null, dbUsername, dbPassword, jdbcDriverClassname, jdbcURL);
             
             BucketValidator bucketValidator = new BucketValidator(daoConfig, cc, storageAdapter, validationPolicy, rawBucketRange, reportOnly);
+            bucketValidator.setIncludeRecoverable(includeRecoverable);
             
             Subject.doAs(s, (PrivilegedExceptionAction<Object>) () -> {
                 bucketValidator.validate();
@@ -201,7 +208,6 @@ public class Main {
         if (cname.indexOf('.') == -1) {
             return ResolutionPolicy.class.getPackage().getName() + "." + cname;
         }
-        log.warn("using fully qualified class name for ResolutionPolicy is deprecated");
-        return cname;
+        throw new InvalidConfigException("using fully qualified class name for ResolutionPolicy is obsolete: " + cname);
     }
 }

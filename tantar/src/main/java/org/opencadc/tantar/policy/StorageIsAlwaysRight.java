@@ -152,7 +152,7 @@ public class StorageIsAlwaysRight extends ResolutionPolicy {
             sb.append(" Artifact.uri=").append(art.getURI());
             sb.append(" loc=").append(storageMetadata.getStorageLocation());
             log.info(sb.toString());
-            validateActions.updateArtifact(art, storageMetadata.getStorageLocation());
+            validateActions.updateArtifact(art, storageMetadata);
             return;
         }
         

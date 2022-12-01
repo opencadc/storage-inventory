@@ -131,7 +131,7 @@ public class TestValidateActions implements ValidateActions {
     }
 
     @Override
-    public void updateArtifact(Artifact artifact, StorageLocation sloc) throws Exception {
+    public void updateArtifact(Artifact artifact, StorageMetadata storageMetadata) throws Exception {
         updateArtifactCalled = true;
         updated.add(artifact);
     }

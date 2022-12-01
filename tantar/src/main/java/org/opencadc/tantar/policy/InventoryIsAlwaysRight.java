@@ -69,6 +69,9 @@
 
 package org.opencadc.tantar.policy;
 
+import ca.nrc.cadc.date.DateUtil;
+import ca.nrc.cadc.util.ObjectUtil;
+import java.text.DateFormat;
 import java.util.Date;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
@@ -110,7 +113,46 @@ public class InventoryIsAlwaysRight extends ResolutionPolicy {
 
         StringBuilder sb = new StringBuilder();
         sb.append(this.getClass().getSimpleName());
-        if (artifact == null) {
+        
+        Artifact art = artifact;
+        
+        if (storageMetadata != null && !storageMetadata.isValid()) {
+            StringBuilder sb2 = new StringBuilder();
+            sb2.append(this.getClass().getSimpleName());
+            sb2.append(".deleteStorageLocation");
+            if (art != null) {
+                sb.append(" Artifact.id=").append(art.getID());
+                sb.append(" Artifact.uri=").append(art.getURI());
+            }
+            sb2.append(" loc=").append(storageMetadata.getStorageLocation());
+            sb2.append(" reason=invalid-storageLocation");
+            log.info(sb2.toString());
+            validateActions.delete(storageMetadata);
+        }
+        if (storageMetadata == null || !storageMetadata.isValid()) {
+            if (art != null) {
+                sb.append(".clearStorageLocation");
+                sb.append(" Artifact.id=").append(art.getID());
+                sb.append(" Artifact.uri=").append(art.getURI());
+                sb.append(" loc=").append(art.storageLocation);
+                sb.append(" reason=");
+                if (storageMetadata == null) {
+                    sb.append("no-matching-storageLocation");
+                } else {
+                    sb.append("invalid-storageLocation");
+                }
+                log.info(sb.toString());
+                validateActions.clearStorageLocation(art);
+            }
+            return;
+        }
+        
+        //  storageMetadata != null && storageMetadata.isValid()
+        if (art == null) {
+            // check for existing artifact with unmatched StorageLocation (possibly different bucket)
+            art = validateActions.getArtifact(storageMetadata.getArtifactURI());
+        }
+        if (art == null) {
             if (delayAction(storageMetadata.getContentLastModified())) {
                 // delay cleanup in case the object was stored since we started validating
                 sb.append(".delayAction");
@@ -130,47 +172,23 @@ public class InventoryIsAlwaysRight extends ResolutionPolicy {
             return;
         }
 
-        // artifact != null
-        if (storageMetadata == null || !storageMetadata.isValid()) {
+        // artifact != null 
+        // only check metadata if already same storageLocation 
+        if (storageMetadata.getStorageLocation().equals(art.storageLocation)
+                && !isSameContent(art, storageMetadata)) {
             sb.append(".clearStorageLocation");
-            sb.append(" Artifact.id=").append(artifact.getID());
-            sb.append(" Artifact.uri=").append(artifact.getURI());
-            sb.append(" loc=").append(artifact.storageLocation);
-            sb.append(" reason=");
-            if (storageMetadata == null) {
-                sb.append("no-matching-storageLocation");
-            } else {
-                sb.append("invalid-storageLocation");
-                StringBuilder sb2 = new StringBuilder();
-                sb2.append(this.getClass().getSimpleName());
-                sb2.append(".deleteStorageLocation");
-                sb.append(" Artifact.id=").append(artifact.getID());
-                sb.append(" Artifact.uri=").append(artifact.getURI());
-                sb2.append(" loc=").append(storageMetadata.getStorageLocation());
-                sb2.append(" reason=invalid-storageLocation");
-                log.info(sb2.toString());
-                validateActions.delete(storageMetadata);
-            }
-            log.info(sb.toString());
-            validateActions.clearStorageLocation(artifact);
-            return;
-        } 
-
-        // artifact != null && storageMetadata != null && storageMetadata.isValid()
-        if (!isSameContent(artifact, storageMetadata)) {
-            sb.append(".clearStorageLocation");
-            sb.append(" Artifact.id=").append(artifact.getID());
-            sb.append(" Artifact.uri=").append(artifact.getURI());
-            sb.append(" loc=").append(artifact.storageLocation);
+            sb.append(" Artifact.id=").append(art.getID());
+            sb.append(" Artifact.uri=").append(art.getURI());
+            sb.append(" loc=").append(art.storageLocation);
             sb.append(" reason=metadata");
             log.info(sb.toString());
-            validateActions.clearStorageLocation(artifact);
+            validateActions.clearStorageLocation(art);
 
             StringBuilder sb2 = new StringBuilder();
             sb2.append(this.getClass().getSimpleName());
             sb2.append(".deleteStorageLocation");
-            sb2.append(" Artifact.id=").append(artifact.getID());
-            sb2.append(" Artifact.uri=").append(artifact.getURI());
+            sb2.append(" Artifact.id=").append(art.getID());
+            sb2.append(" Artifact.uri=").append(art.getURI());
             sb2.append(" loc=").append(storageMetadata.getStorageLocation());
             sb2.append(" reason=metadata");
             log.info(sb2.toString());
@@ -178,10 +196,50 @@ public class InventoryIsAlwaysRight extends ResolutionPolicy {
             return;
         }
 
+        // recover
+        if (art.storageLocation == null || !art.storageLocation.equals(storageMetadata.getStorageLocation())) {
+            // same file content: fix storage location
+            DateFormat df = DateUtil.getDateFormat(DateUtil.IVOA_DATE_FORMAT, DateUtil.UTC);
+            log.warn("recover: art=" + df.format(art.getContentLastModified())
+                    + " storage=" + df.format(storageMetadata.getContentLastModified()));
+            boolean sc = isSameContent(art, storageMetadata);
+            boolean doFix = false;
+            String reason = "null-storageLocation";
+            if (sc) {
+                if (art.storageLocation == null) {
+                    doFix = true;
+                } else if (!art.storageLocation.equals(storageMetadata.getStorageLocation())
+                        && art.getContentLastModified().equals(storageMetadata.getContentLastModified())) {
+                    doFix = true;
+                    reason = "improve-contentLastModified";
+                }
+            }
+            
+            if (doFix) {
+                sb.append(".updateArtifact");
+                sb.append(" Artifact.id=").append(art.getID());
+                sb.append(" Artifact.uri=").append(art.getURI());
+                sb.append(" loc=").append(storageMetadata.getStorageLocation());
+                sb.append(" reason=").append(reason);
+                log.info(sb.toString());
+                validateActions.updateArtifact(art, storageMetadata);
+                return;
+            } else {
+                sb.append(".deleteStorageLocation");
+                sb.append(" Artifact.id=").append(art.getID());
+                sb.append(" Artifact.uri=").append(art.getURI());
+                sb.append(" loc=").append(storageMetadata.getStorageLocation());
+                sb.append(" reason=old-storageLocation");
+                log.info(sb.toString());
+                validateActions.delete(storageMetadata);
+                return;
+            }
+        }
+        
         sb.append(".valid");
-        sb.append(" Artifact.id=").append(artifact.getID());
-        sb.append(" Artifact.uri=").append(artifact.getURI());
-        sb.append(" loc=").append(artifact.storageLocation);
+        sb.append(" Artifact.id=").append(art.getID());
+        sb.append(" Artifact.uri=").append(art.getURI());
+        sb.append(" loc=").append(art.storageLocation);
         // valid gets logged at debug (so probably not)
         log.debug(sb.toString());
     }

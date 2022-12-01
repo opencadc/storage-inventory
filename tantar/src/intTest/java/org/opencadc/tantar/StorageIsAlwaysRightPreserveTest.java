@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2020.                            (c) 2020.
+*  (c) 2022.                            (c) 2022.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -65,68 +65,25 @@
 ************************************************************************
 */
 
-package org.opencadc.inventory.storage.swift;
+package org.opencadc.tantar;
 
-import ca.nrc.cadc.util.Log4jInit;
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
-import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
-import org.junit.Test;
-import org.opencadc.inventory.StorageLocation;
-import org.opencadc.inventory.storage.StorageMetadata;
-import org.opencadc.inventory.storage.test.StorageAdapterBasicTest;
+import org.junit.Before;
 
 /**
- *
+ * StorageIsAlwaysRightTest that includes storage deletePreserved and recovery.
+ * 
  * @author pdowler
  */
-public class SwiftPreserveNamespaceTest extends StorageAdapterBasicTest {
-    private static final Logger log = Logger.getLogger(SwiftPreserveNamespaceTest.class);
+public class StorageIsAlwaysRightPreserveTest extends StorageIsAlwaysRightTest {
+    private static final Logger log = Logger.getLogger(StorageIsAlwaysRightPreserveTest.class);
 
-    static final List<String> PRESERVE = new ArrayList<>();
-    
-    static {
-        Log4jInit.setLevel("org.opencadc.inventory", Level.INFO);
-        Log4jInit.setLevel("org.javaswift.joss.client", Level.INFO);
-        
-        PRESERVE.add(StorageAdapterBasicTest.TEST_NAMESPACE);
+    public StorageIsAlwaysRightPreserveTest() throws Exception {
+        super(true);
     }
     
-    final SwiftStorageAdapter swiftAdapter;
-    
-    public SwiftPreserveNamespaceTest() throws Exception {
-        super(new SwiftStorageAdapter(true, System.getProperty("user.name") + "-single-test", 2, false, PRESERVE));
-        this.swiftAdapter = (SwiftStorageAdapter) super.adapter; 
-    }
-
-    @Override
-    public void cleanupBefore() throws Exception {
-        log.info("cleanupBefore: START");
-        Iterator<StorageMetadata> sbi = swiftAdapter.iterator(null, true);
-        while (sbi.hasNext()) {
-            StorageLocation loc = sbi.next().getStorageLocation();
-            swiftAdapter.delete(loc, true);
-            log.info("\tdeleted: " + loc);
-        }
-        log.info("cleanupBefore: DONE");        
-    }
-    
-    @Test
-    public void testCleanupOnly() {
-        log.info("testCleanupOnly: no-op");
-    }
-    
-    @Test
-    @Override
-    public void testIteratorOverPreserved() {
-        super.testIteratorOverPreserved();
-    }
-
-    @Test
-    @Override
-    public void testDeleteRecover() {
-        super.testDeleteRecover();
+    @Before
+    public void doCleanup() throws Exception {
+        super.cleanupBefore();
     }
 }

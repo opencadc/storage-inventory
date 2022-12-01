@@ -211,7 +211,7 @@ public class BucketValidatorTest {
         }
 
         @Override
-        public void updateArtifact(Artifact artifact, StorageLocation storageLoc) throws Exception {
+        public void updateArtifact(Artifact artifact, StorageMetadata storageMetadata) throws Exception {
             num++;
         }
 

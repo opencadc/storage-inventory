@@ -68,12 +68,10 @@
 package org.opencadc.tantar;
 
 import ca.nrc.cadc.io.ResourceIterator;
-
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
-
 import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.Before;
@@ -84,14 +82,19 @@ import org.opencadc.inventory.storage.StorageMetadata;
 import org.opencadc.tantar.policy.StorageIsAlwaysRight;
 
 /**
- *
+ * StorageIsAlwaysRight integration test.
+ * 
  * @author pdowler
  */
 public class StorageIsAlwaysRightTest extends TantarTest {
     private static final Logger log = Logger.getLogger(StorageIsAlwaysRightTest.class);
 
     public StorageIsAlwaysRightTest() throws Exception {
-        super(new StorageIsAlwaysRight());
+        this(false);
+    }
+    
+    protected StorageIsAlwaysRightTest(boolean includeRecoverable) throws Exception {
+        super(new StorageIsAlwaysRight(), includeRecoverable);
     }
     
     @Before
@@ -101,8 +104,9 @@ public class StorageIsAlwaysRightTest extends TantarTest {
     
     @Test
     public void testPolicy() throws Exception {
-        doTestSetup();
+        doTestSetup(false);
         
+        validator.setIncludeRecoverable(includeRecoverable);
         validator.validate();
         // a2 deleted
         // a4 updated (fixed)
@@ -127,6 +131,7 @@ public class StorageIsAlwaysRightTest extends TantarTest {
                 refs.add(a.storageLocation);
             }
         }
+        
         Assert.assertEquals("refs", 7, refs.size());
         
         Assert.assertTrue("no broken refs", locs.containsAll(refs));
@@ -142,5 +147,10 @@ public class StorageIsAlwaysRightTest extends TantarTest {
         }
         
         Assert.assertEquals("unstored", 0, unstored.size());
+        
+        // verify a4 was recovered rather than replaced
+        Artifact actual = artifactDAO.get(URI.create("test:FOO/a4"));
+        Assert.assertNotNull(actual);
+        Assert.assertEquals(recoverableA4.getID(), actual.getID());
     }
 }
