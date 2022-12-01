@@ -138,7 +138,7 @@ public class AuthJobPersistence extends PostgresJobPersistence {
                 // or call isMember for each configured allowed group, which should be a short list.
                 // Or make it configurable.
                 LocalAuthority loc = new LocalAuthority();
-                URI resourceID = loc.getServiceURI(Standards.GMS_SEARCH_01.toString());
+                URI resourceID = loc.getServiceURI(Standards.GMS_SEARCH_10.toString());
                 GroupClient client = GroupUtil.getGroupClient(resourceID);
                 List<GroupURI> memberships = client.getMemberships();
 

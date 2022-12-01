@@ -93,7 +93,7 @@ public class LuskanConfig {
     }
 
     /**
-     * Verify the config file is valid and the resourceID value is a valid URI.
+     * Verify the config file.
      */
     public static void initConfig() {
         log.debug("initConfig: START");
