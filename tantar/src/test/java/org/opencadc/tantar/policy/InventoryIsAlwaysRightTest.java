@@ -92,10 +92,11 @@ public class InventoryIsAlwaysRightTest extends AbstractResolutionPolicyTest<Inv
                                                URI.create("md5:" + random16Bytes()), new Date(),
                                                88L);
 
-        artifact.storageLocation = new StorageLocation(URI.create("s3:998877"));
-
         final StorageMetadata storageMetadata = new StorageMetadata(new StorageLocation(URI.create("s3:989877")), URI.create("test:989877"),
                                                         URI.create("md5:" + random16Bytes()), 1001L, new Date());
+        
+        artifact.storageLocation = storageMetadata.getStorageLocation();
+        
         final TestValidateActions testEventListener = new TestValidateActions();
 
         testSubject = new InventoryIsAlwaysRight();

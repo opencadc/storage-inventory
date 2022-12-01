@@ -231,7 +231,7 @@ public class BucketValidator implements ValidateActions {
         } finally {
             logSummary(validationPolicy, true, false);
             log.info("BucketValidator.validate phase=end reportOnly=" + reportOnlyFlag
-            + " includeRecoverable=" + includeRecoverable);
+                + " includeRecoverable=" + includeRecoverable);
         }
     }
     
