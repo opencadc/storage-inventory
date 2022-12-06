@@ -134,22 +134,13 @@ public class AuthJobPersistence extends PostgresJobPersistence {
                 
         try {
             if (CredUtil.checkCredentials()) {
-                // better to get all the groups for the caller which could be a long list,
-                // or call isMember for each configured allowed group, which should be a short list.
-                // Or make it configurable.
-                LocalAuthority loc = new LocalAuthority();
-                URI resourceID = loc.getServiceURI(Standards.GMS_SEARCH_10.toString());
-                GroupClient client = GroupUtil.getGroupClient(resourceID);
-                List<GroupURI> memberships = client.getMemberships();
-
-                
-
-                for (GroupURI memberGroup : memberships) {
-                    for (GroupURI allowedGroup : allowedGroups) {
-                        if (memberGroup.equals(allowedGroup)) {
-                            log.debug("Allowed group: " + allowedGroup);
-                            return;
-                        }
+                // TODO: use IvoaGroupCLient.getMemberships(List<MGroupURI>)
+                // and let it optimize calls
+                for (GroupURI allowedGroup : allowedGroups) {
+                    GroupClient client = GroupUtil.getGroupClient(allowedGroup.getServiceID());
+                    if (client.isMember(allowedGroup)) {
+                        log.debug("Allowed group: " + allowedGroup);
+                        return;
                     }
                 }
             }

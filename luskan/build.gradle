@@ -43,7 +43,6 @@ dependencies {
     runtime 'org.opencadc:cadc-tap-tmp:[1.1,)'
     runtime 'org.opencadc:cadc-registry:[1.5.13,)'
     runtime 'org.opencadc:cadc-rest:[1.s.10,)'
-    runtime 'org.opencadc:cadc-access-control:[1.1.1,)'
     runtime 'org.opencadc:cadc-access-control-identity:[1.0.3,2.0)'
 
     testCompile 'junit:junit:[4.0,)'
