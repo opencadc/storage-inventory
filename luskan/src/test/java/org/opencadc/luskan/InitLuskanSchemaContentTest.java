@@ -72,7 +72,6 @@ import java.io.PrintWriter;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.SQLFeatureNotSupportedException;
-import java.sql.ShardingKeyBuilder;
 import java.util.List;
 import javax.sql.DataSource;
 import org.apache.log4j.Level;
@@ -133,12 +132,6 @@ public class InitLuskanSchemaContentTest {
         }
 
         @Override
-        public ShardingKeyBuilder createShardingKeyBuilder() throws SQLException {
-            ShardingKeyBuilder ret = DataSource.super.createShardingKeyBuilder();
-            return ret;
-        }
-
-        @Override
         public <T> T unwrap(Class<T> type) throws SQLException {
             throw new UnsupportedOperationException();
         }
@@ -147,7 +140,6 @@ public class InitLuskanSchemaContentTest {
         public boolean isWrapperFor(Class<?> type) throws SQLException {
             throw new UnsupportedOperationException();
         }
-        
     };
 
     @Test
