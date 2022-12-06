@@ -144,9 +144,14 @@ public class StorageLocationConverter extends SelectNavigator {
         Column sitelocations = new Column(artifact, "storageLocation_storageID");
         IsNullExpression isNullExpression = new IsNullExpression();
         isNullExpression.setLeftExpression(sitelocations);
+        
         if (pending) {
-            isNullExpression.setNot(false);
+            // site: is null
+            // global: is not null aka empty set
+            isNullExpression.setNot(!isStorageSite);
         } else {
+            // site: is not null
+            // global: is null aka all artifacts
             isNullExpression.setNot(isStorageSite);
         }
         return new Parenthesis(isNullExpression);

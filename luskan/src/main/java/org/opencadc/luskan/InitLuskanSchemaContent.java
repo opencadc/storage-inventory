@@ -69,35 +69,25 @@ package org.opencadc.luskan;
 
 import ca.nrc.cadc.db.version.InitDatabase;
 import java.net.URL;
+import java.util.List;
 import javax.sql.DataSource;
 
 /**
- * This class automates adding/updating the description of CAOM tables and views
+ * This class automates adding/updating the description of inventory tables and views
  * in the tap_schema. This class assumes that it can re-use the tap_schema.ModelVersion
  * table (usually created by InitDatabaseTS in cadc-tap-schema library) and does
- * not try to create it.  The init includes base CAOM tables and IVOA views (ObsCore++),
- * but <em>does not include</em> aggregate (simple or materialised) views. The service
- * operator must create simple views manually or implement a mechanism to create and
- * update materialised views periodically.
+ * not try to create it. 
  *
  * @author pdowler
  */
 public class InitLuskanSchemaContent extends InitDatabase {
 
     public static final String MODEL_NAME = "luskan-schema";
-    public static final String MODEL_VERSION = "0.6.1";
-    public static final String PREV_MODEL_VERSION = "0.6.0";
+    public static final String MODEL_VERSION = "0.6.2";
 
     // the SQL is tightly coupled to cadc-tap-schema table names (for TAP-1.1)
-    static String[] CREATE_SQL = new String[] {
-        "inventory.tap_schema_content11.sql"
-    };
-
-    // upgrade is normally the same as create since SQL is idempotent
-    static String[] UPGRADE_SQL = new String[] {
-        "inventory.tap_schema_content11.sql"
-    };
-
+    static String TAP_SCHEMA_CONTENT = "inventory.tap_schema_content11.sql";
+    
     /**
      * Constructor. The schema argument is used to query the ModelVersion table
      * as {schema}.ModelVersion.
@@ -107,18 +97,21 @@ public class InitLuskanSchemaContent extends InitDatabase {
      * @param schema     schema name (usually tap_schema)
      */
     public InitLuskanSchemaContent(DataSource dataSource, String database, String schema) {
-        super(dataSource, database, schema, MODEL_NAME, MODEL_VERSION, PREV_MODEL_VERSION);
-        for (String s : CREATE_SQL) {
-            createSQL.add(s);
-        }
-
-        for (String s : UPGRADE_SQL) {
-            upgradeSQL.add(s);
-        }
+        super(dataSource, database, schema, MODEL_NAME, MODEL_VERSION);
+        createSQL.add(TAP_SCHEMA_CONTENT);
+        upgradeSQL.add(TAP_SCHEMA_CONTENT);
     }
 
     @Override
     protected URL findSQL(String fname) {
         return InitLuskanSchemaContent.class.getClassLoader().getResource("sql/" + fname);
+    }
+
+    List<String> getCreateSQL() {
+        return createSQL;
+    }
+
+    List<String> getUpgradeSQL() {
+        return upgradeSQL;
     }
 }

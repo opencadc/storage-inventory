@@ -75,8 +75,6 @@ import ca.nrc.cadc.auth.IdentityManager;
 import ca.nrc.cadc.auth.NotAuthenticatedException;
 import ca.nrc.cadc.cred.client.CredUtil;
 import ca.nrc.cadc.net.TransientException;
-import ca.nrc.cadc.reg.Standards;
-import ca.nrc.cadc.reg.client.LocalAuthority;
 import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.uws.Job;
 import ca.nrc.cadc.uws.server.JobPersistenceException;
@@ -91,7 +89,6 @@ import org.apache.log4j.Logger;
 import org.opencadc.gms.GroupClient;
 import org.opencadc.gms.GroupURI;
 import org.opencadc.gms.GroupUtil;
-import org.opencadc.luskan.LuskanConfig;
 
 public class AuthJobPersistence extends PostgresJobPersistence {
 
@@ -134,22 +131,13 @@ public class AuthJobPersistence extends PostgresJobPersistence {
                 
         try {
             if (CredUtil.checkCredentials()) {
-                // better to get all the groups for the caller which could be a long list,
-                // or call isMember for each configured allowed group, which should be a short list.
-                // Or make it configurable.
-                LocalAuthority loc = new LocalAuthority();
-                URI resourceID = loc.getServiceURI(Standards.GMS_SEARCH_01.toString());
-                GroupClient client = GroupUtil.getGroupClient(resourceID);
-                List<GroupURI> memberships = client.getMemberships();
-
-                
-
-                for (GroupURI memberGroup : memberships) {
-                    for (GroupURI allowedGroup : allowedGroups) {
-                        if (memberGroup.equals(allowedGroup)) {
-                            log.debug("Allowed group: " + allowedGroup);
-                            return;
-                        }
+                // TODO: use IvoaGroupCLient.getMemberships(List<MGroupURI>)
+                // and let it optimize calls
+                for (GroupURI allowedGroup : allowedGroups) {
+                    GroupClient client = GroupUtil.getGroupClient(allowedGroup.getServiceID());
+                    if (client.isMember(allowedGroup)) {
+                        log.debug("Allowed group: " + allowedGroup);
+                        return;
                     }
                 }
             }

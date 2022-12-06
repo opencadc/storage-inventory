@@ -29,7 +29,7 @@ dependencies {
     providedCompile 'javax.servlet:javax.servlet-api:[3.1.0,)'
     compile 'org.jdom:jdom2:[2.0,)'
 
-    compile 'org.opencadc:cadc-util:[1.6,2.0)'
+    compile 'org.opencadc:cadc-util:[1.8.4,2.0)'
     compile 'org.opencadc:cadc-log:[1.1.6,2.0)'
     compile 'org.opencadc:cadc-vosi:[1.4.3,2.0)'
     compile 'org.opencadc:cadc-adql:[1.1,)'
@@ -43,7 +43,6 @@ dependencies {
     runtime 'org.opencadc:cadc-tap-tmp:[1.1,)'
     runtime 'org.opencadc:cadc-registry:[1.5.13,)'
     runtime 'org.opencadc:cadc-rest:[1.s.10,)'
-    runtime 'org.opencadc:cadc-access-control:[1.1.1,)'
     runtime 'org.opencadc:cadc-access-control-identity:[1.0.3,2.0)'
 
     testCompile 'junit:junit:[4.0,)'

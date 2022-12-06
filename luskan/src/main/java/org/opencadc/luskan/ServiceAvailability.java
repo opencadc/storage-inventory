@@ -92,10 +92,9 @@ import org.apache.log4j.Logger;
  * @author adriand
  */
 public class ServiceAvailability implements AvailabilityPlugin {
-
     private static final Logger log = Logger.getLogger(ServiceAvailability.class);
-    private static final File SERVOPS_PEM_FILE = new File(System.getProperty("user.home") + "/.ssl/cadcproxy.pem");
 
+    private static final File AAI_PEM_FILE = new File(System.getProperty("user.home") + "/.ssl/cadcproxy.pem");
 
     private static final String TAP_TEST = "select schema_name from tap_schema.schemas11 where schema_name='tap_schema'";
     private static final String UWS_TEST = "select jobID from uws.Job limit 1";
@@ -175,7 +174,7 @@ public class ServiceAvailability implements AvailabilityPlugin {
             
             if (credURI != null || usersURI != null || groupsURI != null) {
                 // check for a certficate needed to perform network A&A ops
-                CheckCertificate checkCert = new CheckCertificate(SERVOPS_PEM_FILE);
+                CheckCertificate checkCert = new CheckCertificate(AAI_PEM_FILE);
                 checkCert.check();
             }
 
