@@ -75,8 +75,6 @@ import ca.nrc.cadc.auth.IdentityManager;
 import ca.nrc.cadc.auth.NotAuthenticatedException;
 import ca.nrc.cadc.cred.client.CredUtil;
 import ca.nrc.cadc.net.TransientException;
-import ca.nrc.cadc.reg.Standards;
-import ca.nrc.cadc.reg.client.LocalAuthority;
 import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.uws.Job;
 import ca.nrc.cadc.uws.server.JobPersistenceException;
@@ -91,7 +89,6 @@ import org.apache.log4j.Logger;
 import org.opencadc.gms.GroupClient;
 import org.opencadc.gms.GroupURI;
 import org.opencadc.gms.GroupUtil;
-import org.opencadc.luskan.LuskanConfig;
 
 public class AuthJobPersistence extends PostgresJobPersistence {
 
