@@ -190,6 +190,7 @@ public class DeletedArtifactEventSyncTest {
             
             // doit
             DeletedArtifactEventSync sync = new DeletedArtifactEventSync(inventoryEnvironment.artifactDAO, TestUtil.LUSKAN_URI, 6, 6);
+            sync.enableSkipOldEvents = false;
             Subject.doAs(this.testUser, (PrivilegedExceptionAction<Object>) () -> {
                 sync.doit();
                 return null;

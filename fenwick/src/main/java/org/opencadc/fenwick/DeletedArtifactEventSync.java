@@ -102,6 +102,9 @@ public class DeletedArtifactEventSync extends AbstractSync {
 
     private final DeletedArtifactEventDAO deletedDAO;
     private final TapClient<DeletedArtifactEvent> tapClient;
+    
+    // package access for intTest code
+    boolean enableSkipOldEvents = true;
 
     public DeletedArtifactEventSync(ArtifactDAO artifactDAO, URI resourceID, 
             int querySleepInterval, int maxRetryInterval) {
@@ -134,7 +137,7 @@ public class DeletedArtifactEventSync extends AbstractSync {
                 hs = orig;
             }
         }
-        if (hs.curLastModified == null) {
+        if (enableSkipOldEvents && hs.curLastModified == null) {
             // first harvest: ignore old deleted events?
             HarvestState artifactHS = harvestStateDAO.get(Artifact.class.getSimpleName(), resourceID);
             if (artifactHS.curLastModified == null) {

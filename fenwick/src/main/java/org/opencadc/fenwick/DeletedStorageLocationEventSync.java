@@ -104,6 +104,9 @@ public class DeletedStorageLocationEventSync extends AbstractSync {
 
     private final StorageSite storageSite;
     private final TapClient<DeletedStorageLocationEvent> tapClient;
+    
+    // package access for intTest code
+    boolean enableSkipOldEvents = true;
 
     public DeletedStorageLocationEventSync(ArtifactDAO artifactDAO, URI resourceID, 
             int querySleepInterval, int maxRetryInterval, StorageSite storageSite) {
@@ -138,7 +141,7 @@ public class DeletedStorageLocationEventSync extends AbstractSync {
                 hs = orig;
             }
         }
-        if (hs.curLastModified == null) { 
+        if (enableSkipOldEvents && hs.curLastModified == null) { 
             // first harvest: ignore old deleted events?
             HarvestState artifactHS = harvestStateDAO.get(Artifact.class.getSimpleName(), resourceID);
             if (artifactHS.curLastModified == null) {
