@@ -498,10 +498,7 @@ public class InventoryValidatorTest {
      *
      * explanation2: L==global, deleted from R, pending/missed DeletedStorageLocationEvent in L
      * evidence: DeletedStorageLocationEvent in R
-     * action: remove siteID from Artifact.storageLocations (see note)
-     *
-     * note: when removing siteID from Artifact.storageLocations in global, if the Artifact.siteLocations becomes empty
-     * the artifact should be deleted (metadata-sync needs to also do this in response to a DeletedStorageLocationEvent)
+     * action: remove siteID from Artifact.storageLocations (see note below)
      *
      * L == global
      * case 1
@@ -510,7 +507,7 @@ public class InventoryValidatorTest {
      *
      * case 2
      * before: Artifact in L with R siteID in Artifact.siteLocations, not in R, DeletedStorageLocationEvent in R
-     * after: Artifact in not in L
+     * after: Artifact.siteLocations empty
      */
     @Test
     public void explanation2_ArtifactInLocal_LocalIsGlobal() throws Exception {
@@ -583,18 +580,15 @@ public class InventoryValidatorTest {
         // The Artifact's remote SiteLocation should have been deleted,
         // and since Artifact.siteLocations in now empty the Artifact should have been deleted.
         localArtifact = this.localEnvironment.artifactDAO.get(artifact.getID());
-        Assert.assertNull("local artifact found", localArtifact);
+        Assert.assertNotNull("local artifact found", localArtifact);
+        Assert.assertTrue("siteLocations empty", localArtifact.siteLocations.isEmpty());
     }
 
     /* discrepancy: artifact in L && artifact not in R
      *
      * explanation3: L==global, new Artifact in L, pending/missed Artifact or sync in R
      * evidence: ?
-     * action: remove siteID from Artifact.storageLocations (see below)
-     *
-     * note: when removing siteID from Artifact.storageLocations in global, if the Artifact.siteLocations becomes empty
-     * the artifact should be deleted (metadata-sync needs to also do this in response to a DeletedStorageLocationEvent)
-     * TBD: must this also create a DeletedArtifactEvent?
+     * action: remove siteID from Artifact.storageLocations (see note below)
      *
      * L == global
      * test1
@@ -603,7 +597,7 @@ public class InventoryValidatorTest {
      *
      * test2
      * before: Artifact in L with R siteID in Artifact.siteLocations, not in R
-     * after: Artifact in not in L
+     * after: Artifact.siteLocations empty
      */
     @Test
     public void explanation3_ArtifactInLocal_LocalIsGlobal() throws Exception {
@@ -668,7 +662,8 @@ public class InventoryValidatorTest {
         // The Artifact's remote SiteLocation should have been deleted,
         // and since Artifact.siteLocations in now empty the Artifact should have been deleted.
         localArtifact = this.localEnvironment.artifactDAO.get(artifact.getID());
-        Assert.assertNull("local artifact found", localArtifact);
+        Assert.assertNotNull("local artifact found", localArtifact);
+        Assert.assertTrue("siteLocations empty", localArtifact.siteLocations.isEmpty());
     }
 
     /** discrepancy: artifact in L && artifact not in R

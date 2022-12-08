@@ -3,7 +3,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2021.                            (c) 2021.
+ *  (c) 2022.                            (c) 2022.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -327,17 +327,10 @@ public class ArtifactValidator {
                         throw new EntityNotFoundException(); // HACK: goto catch below
                     }
                     if (current.siteLocations.contains(remoteSiteLocation)) {
-                        // if siteLocations becomes empty removing the remote siteLocation, delete the artifact
-                        if (current.siteLocations.size() == 1) {
-                            log.info(String.format("ArtifactValidator.deleteArtifact: Artifact.id=%s Artifact.uri=%s reason=empty-siteLocations",
-                                                   current.getID(), current.getURI()));
-                            this.artifactDAO.delete(current.getID());
-                        } else {
-                            log.info(String.format("ArtifactValidator.removeSiteLocation Artifact.id=%s Artifact.uri=%s" 
-                                    + " site=%s reason=found-DeletedStorageLocationEvent", 
+                        log.info(String.format("ArtifactValidator.removeSiteLocation id=%s uri=%s" 
+                                    + " site=%s reason=no-remote-artifact", 
                                     current.getID(), current.getURI(), remoteSiteLocation)); 
-                            this.artifactDAO.removeSiteLocation(current, remoteSiteLocation);
-                        }
+                        this.artifactDAO.removeSiteLocation(current, remoteSiteLocation);
                     }
 
                     log.debug("committing transaction");
@@ -382,17 +375,10 @@ public class ArtifactValidator {
                 Artifact current = this.artifactDAO.lock(local);
                 if (current != null) {
                     if (current.siteLocations.contains(remoteSiteLocation)) {
-                        // if siteLocation's becomes empty removing the siteLocation, delete the artifact
-                        if (current.siteLocations.size() == 1) {
-                            log.info(String.format("ArtifactValidator.deleteArtifact id=%s uri=%s reason=empty-siteLocations",
-                                                   current.getID(), current.getURI()));
-                            this.artifactDAO.delete(current.getID());
-                        } else {
-                            log.info(String.format("ArtifactValidator.removeSiteLocation id=%s uri=%s" 
-                                        + " site=%s reason=no-remote-artifact", 
-                                        current.getID(), current.getURI(), remoteSiteLocation)); 
-                            this.artifactDAO.removeSiteLocation(current, remoteSiteLocation);
-                        }
+                        log.info(String.format("ArtifactValidator.removeSiteLocation id=%s uri=%s" 
+                                    + " site=%s reason=no-remote-artifact", 
+                                    current.getID(), current.getURI(), remoteSiteLocation)); 
+                        this.artifactDAO.removeSiteLocation(current, remoteSiteLocation);
                     }
 
                     log.debug("committing transaction");
