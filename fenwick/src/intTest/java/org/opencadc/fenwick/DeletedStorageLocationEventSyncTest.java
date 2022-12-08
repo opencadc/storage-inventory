@@ -220,7 +220,8 @@ public class DeletedStorageLocationEventSyncTest {
             Assert.assertEquals(a1.siteLocations.size() - 1, r1.siteLocations.size());
 
             Artifact d2 = inventoryEnvironment.artifactDAO.get(a2.getID());
-            Assert.assertNull(d2);
+            Assert.assertNotNull(d2);
+            Assert.assertTrue(d2.siteLocations.isEmpty());
 
             Artifact r3 = inventoryEnvironment.artifactDAO.get(a3.getID());
             Assert.assertNotNull(r3);

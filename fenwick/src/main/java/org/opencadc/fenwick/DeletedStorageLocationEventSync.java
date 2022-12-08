@@ -211,22 +211,18 @@ public class DeletedStorageLocationEventSync extends AbstractSync {
                     Artifact cur = artifactDAO.lock(syncEvent.getID());
                     if (cur != null) {
                         if (cur.siteLocations.contains(siteLocation)) {
-                            // if siteLocations becomes empty, delete the artifact
-                            if (cur.siteLocations.size() == 1) {
-                                log.info(String.format("DeletedStorageLocationEventSync.deleteArtifact id=%s uri=%s reason=%s",
-                                    cur.getID(), cur.getURI(), "empty-siteLocations"));
-                                this.artifactDAO.delete(cur.getID());
-                            } else {
-                                log.info("DeletedStorageLocationEventSync.removeSiteLocation id=" 
-                                        + syncEvent.getID()
-                                        + " uri=" + cur.getURI()
-                                        + " lastModified=" + df.format(syncEvent.getLastModified())
-                                        + " reason=DeletedStorageLocationEvent"); 
-                                this.artifactDAO.removeSiteLocation(cur, siteLocation);
-                            }
+                            log.info("DeletedStorageLocationEventSync.removeSiteLocation id=" 
+                                + syncEvent.getID()
+                                + " uri=" + cur.getURI()
+                                + " lastModified=" + df.format(syncEvent.getLastModified())
+                                + " reason=DeletedStorageLocationEvent"); 
+                            this.artifactDAO.removeSiteLocation(cur, siteLocation);
+                        } else {
+                            log.debug("DeletedStorageLocationEventSync..skip id=" 
+                                + syncEvent.getID() + " reason=no-matching-siteLocation");
                         }
                     } else {
-                        log.debug("DeletedStorageLocationEventSync.removeSiteLocation SKIP id=" 
+                        log.debug("DeletedStorageLocationEventSync.skip id=" 
                                 + syncEvent.getID() + " reason=no-matching-artifact");
                     }
                     harvestState.curLastModified = syncEvent.getLastModified();
