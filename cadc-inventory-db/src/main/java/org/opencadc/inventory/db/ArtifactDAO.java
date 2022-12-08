@@ -166,10 +166,10 @@ public class ArtifactDAO extends AbstractDAO<Artifact> {
         }
         if (a.siteLocations.contains(loc)) {
             a.siteLocations.remove(loc);
-            if (a.siteLocations.isEmpty()) {
-                throw new IllegalStateException("Artifact.id=" + a.getID()
-                        + ": last SiteLocation removed -- caller should be using delete(Artifact)");
-            }
+            //if (a.siteLocations.isEmpty()) {
+            //    throw new IllegalStateException("Artifact.id=" + a.getID()
+            //            + ": last SiteLocation removed -- caller should be using delete(Artifact)");
+            //}
             put(a, true, false);
         }
     }

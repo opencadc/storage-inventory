@@ -87,7 +87,7 @@ minor differences if validating global L.
     explanation0: filter policy at L changed to exclude artifact in R
     evidence: Artifact in R without filter && remoteArtifact.lastModified < remote-query-start
     action: if L==storage, check num_copies>1 in R, delete Artifact, create DeletedStorageLocationEvent
-            if L==global, delete Artifact (no event)
+            if L==global, remove siteID from Artifact.siteLocations (see note below)
 
     explanation1: deleted from R, pending/missed DeletedArtifactEvent in L
     evidence: DeletedArtifactEvent in R 
@@ -99,7 +99,7 @@ minor differences if validating global L.
 
     explanation3: L==global, new Artifact in L, pending/missed Artifact or sync in R
     evidence: ?
-    action: remove siteID from Artifact.siteLocations (see below)
+    action: remove siteID from Artifact.siteLocations (see note below)
     
     explanation4: L==storage, new Artifact in L, pending/missed new Artifact event in R
     evidence: ?
@@ -115,9 +115,12 @@ minor differences if validating global L.
     evidence: ?
     action: assume explanation3
     
-    note: when removing siteID from Artifact.storageLocations in global, if the Artifact.siteLocations becomes empty:
-        the artifact should be deleted (metadata-sync needs to also do this in response to a DeletedStorageLocationEvent)
-        Deletion when siteLocations becomes empty due to DeletedStorageLocationEvent must not generate a DeletedArtifactEvent.
+    note: when removing siteID from Artifact.siteLocations in global, if the Artifact.siteLocations becomes empty:
+        the artifact should be deleted; deletion when siteLocations becomes empty due to DeletedStorageLocationEvent
+        must not generate a DeletedArtifactEvent. Pro: system always reaches same state no matter what order events
+        are propagated. Con: system silently "loses" artifacts in global if something is malfunctioning and it will
+        be hard to notice; if metadata-sync and metadata-validate do not remove the artifact, you end up with 
+        artifacts with no siteLocations - aka zero known copies - but that might be better/desirable.
 
 *discrepancy*: artifact not in L && artifact in R
 

@@ -73,10 +73,8 @@ import ca.nrc.cadc.io.ResourceIterator;
 import ca.nrc.cadc.util.Log4jInit;
 import java.net.URI;
 import java.security.PrivilegedExceptionAction;
-import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
-import java.util.List;
 import java.util.UUID;
 import javax.security.auth.Subject;
 import org.apache.log4j.Level;
@@ -89,8 +87,6 @@ import org.opencadc.inventory.DeletedStorageLocationEvent;
 import org.opencadc.inventory.SiteLocation;
 import org.opencadc.inventory.StorageSite;
 import org.opencadc.inventory.db.HarvestState;
-import org.opencadc.inventory.query.DeletedStorageLocationEventRowMapper;
-import org.opencadc.tap.TapRowMapper;
 
 public class DeletedStorageLocationEventSyncTest {
 
@@ -208,6 +204,7 @@ public class DeletedStorageLocationEventSyncTest {
             // doit
             DeletedStorageLocationEventSync sync = new DeletedStorageLocationEventSync(
                     inventoryEnvironment.artifactDAO, TestUtil.LUSKAN_URI, 6, 6, site1);
+            sync.enableSkipOldEvents = false;
             Subject.doAs(this.testUser, (PrivilegedExceptionAction<Object>) () -> {
                 sync.doit();
                 return null;
@@ -215,7 +212,7 @@ public class DeletedStorageLocationEventSyncTest {
 
             // verify: 
             // artifact a1 removed site location
-            // artifact a2: removed
+            // artifact a2: removed site location, now empty
             // artifact a3: no change
             // DLSE not stored
             Artifact r1 = inventoryEnvironment.artifactDAO.get(a1.getID());
@@ -223,7 +220,8 @@ public class DeletedStorageLocationEventSyncTest {
             Assert.assertEquals(a1.siteLocations.size() - 1, r1.siteLocations.size());
 
             Artifact d2 = inventoryEnvironment.artifactDAO.get(a2.getID());
-            Assert.assertNull(d2);
+            Assert.assertNotNull(d2);
+            Assert.assertTrue(d2.siteLocations.isEmpty());
 
             Artifact r3 = inventoryEnvironment.artifactDAO.get(a3.getID());
             Assert.assertNotNull(r3);
