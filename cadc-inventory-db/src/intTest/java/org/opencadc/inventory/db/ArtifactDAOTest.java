@@ -451,12 +451,12 @@ public class ArtifactDAOTest {
             Assert.assertTrue("lastModified unchanged", a3.getLastModified().equals(a5.getLastModified()));
             Assert.assertEquals(1, a5.siteLocations.size());
             
-            try {
-                nonOriginDAO.removeSiteLocation(a3, loc2);
-                Assert.fail("remove last SiteLocation - expected IllegalStateException");
-            } catch (IllegalStateException iex) {
-                log.info("caught expected: " + iex);
-            }
+            //try {
+            nonOriginDAO.removeSiteLocation(a3, loc2);
+            //    Assert.fail("remove last SiteLocation - expected IllegalStateException");
+            //} catch (IllegalStateException iex) {
+            //    log.info("caught expected: " + iex);
+            //}
             
             originDAO.delete(expected.getID());
             Artifact deleted = originDAO.get(expected.getID());
