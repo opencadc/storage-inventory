@@ -3,7 +3,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2019.                            (c) 2019.
+ *  (c) 2022.                            (c) 2022.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -69,12 +69,14 @@ package org.opencadc.inventory.storage;
 
 /**
  * This exception indicates that the storage adapter failed
- * to connect to or interact with its storage system.
+ * to connect to or interact with its storage system. This
+ * was changed to unchecked (RuntimeException) so it can be thrown
+ * from iterator methods.
  * 
  * @author majorb
  */
 @SuppressWarnings("serial")
-public class StorageEngageException extends Exception {
+public class StorageEngageException extends RuntimeException {
 
     /**
      * Construct an exception.
