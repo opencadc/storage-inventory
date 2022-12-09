@@ -1534,14 +1534,18 @@ public class SwiftStorageAdapter  implements StorageAdapter {
                 boolean doList = true;
                 String nextMarkeyKey = null;
                 while (doList) {
-                    Collection<Container> list = client.list(queryPrefix, nextMarkeyKey, BATCH_SIZE);
-                    log.debug("BucketIterator from=" + nextMarkeyKey + " -> size=" + list.size());
-                    doList = !list.isEmpty();
-                    for (Container c : list) {
-                        if (c.getName().startsWith(bucketPrefix)) {
-                            keep.add(c);
+                    try {
+                        Collection<Container> list = client.list(queryPrefix, nextMarkeyKey, BATCH_SIZE);
+                        log.debug("BucketIterator from=" + nextMarkeyKey + " -> size=" + list.size());
+                        doList = !list.isEmpty();
+                        for (Container c : list) {
+                            if (c.getName().startsWith(bucketPrefix)) {
+                                keep.add(c);
+                            }
+                            nextMarkeyKey = c.getName();
                         }
-                        nextMarkeyKey = c.getName();
+                    } catch (CommandException ex) {
+                        throw new StorageEngageException("failed to list bucket", ex);
                     }
                 }
                 log.debug("BucketIterator bucketprefix=" + bucketPrefix + " keep=" + keep.size());
@@ -1618,16 +1622,20 @@ public class SwiftStorageAdapter  implements StorageAdapter {
                 
                 // next batch in current bucket
                 if (objectIterator == null || !objectIterator.hasNext()) {
-                    Collection<StoredObject> list = currentBucket.list(null, nextMarkerKey, BATCH_SIZE);
-                    log.debug("SingleBucketStorageIterator bucket=" + currentBucket.getName()
-                            + " size=" + list.size() + " from=" + nextMarkerKey);
-                    if (!list.isEmpty()) {
-                        objectIterator = list.iterator();
-                    } else {
-                        log.debug("MultiBucketStorageIterator: " + currentBucket.getName() + " DONE");
-                        currentBucket = null;
-                        icurBucket = null;
-                        objectIterator = null; // bucket done
+                    try {
+                        Collection<StoredObject> list = currentBucket.list(null, nextMarkerKey, BATCH_SIZE);
+                        log.debug("SingleBucketStorageIterator bucket=" + currentBucket.getName()
+                                + " size=" + list.size() + " from=" + nextMarkerKey);
+                        if (!list.isEmpty()) {
+                            objectIterator = list.iterator();
+                        } else {
+                            log.debug("MultiBucketStorageIterator: " + currentBucket.getName() + " DONE");
+                            currentBucket = null;
+                            icurBucket = null;
+                            objectIterator = null; // bucket done
+                        }
+                    } catch (CommandException ex) {
+                        throw new StorageEngageException("failed to list bucket", ex);
                     }
                 }
                 
@@ -1636,6 +1644,7 @@ public class SwiftStorageAdapter  implements StorageAdapter {
                     while (objectIterator.hasNext()) {
                         StoredObject obj = objectIterator.next();
                         this.nextMarkerKey = obj.getName();
+                        // isIteratorVisible handles client exceptions with retry
                         if (isIteratorVisible(obj, includeRecoverable)) {
                             log.debug("MultiBucketStorageIterator.advance: next " + obj.getName() + " len=" + obj.getContentLength());
                             this.nextItem = objectToStorageMetadata(icurBucket, obj);
@@ -1691,20 +1700,25 @@ public class SwiftStorageAdapter  implements StorageAdapter {
             this.nextItem = null;
             while (true) {
                 if (objectIterator == null || !objectIterator.hasNext()) {
-                    Collection<StoredObject> list = swiftContainer.list(bucketPrefix, nextMarkerKey, BATCH_SIZE);
-                    log.debug("SingleBucketStorageIterator bucketPrefix=" + bucketPrefix + " size=" + list.size() + " from=" + nextMarkerKey);
-                    if (!list.isEmpty()) {
-                        objectIterator = list.iterator();
-                    } else {
-                        log.debug("SingleBucketStorageIterator: DONE");
-                        objectIterator = null;
-                        return; // nextItem == null aka done
+                    try {
+                        Collection<StoredObject> list = swiftContainer.list(bucketPrefix, nextMarkerKey, BATCH_SIZE);
+                        log.debug("SingleBucketStorageIterator bucketPrefix=" + bucketPrefix + " size=" + list.size() + " from=" + nextMarkerKey);
+                        if (!list.isEmpty()) {
+                            objectIterator = list.iterator();
+                        } else {
+                            log.debug("SingleBucketStorageIterator: DONE");
+                            objectIterator = null;
+                            return; // nextItem == null aka done
+                        }
+                    } catch (CommandException ex) {
+                        throw new StorageEngageException("failed to list bucket", ex);
                     }
                 }
                 if (objectIterator != null) {
                     while (objectIterator.hasNext()) {
                         StoredObject obj = objectIterator.next();
                         this.nextMarkerKey = obj.getName();
+                        // isIteratorVisible handles client exceptions with retry
                         if (isIteratorVisible(obj, includeRecoverable)) {
                             log.debug("SingleBucketStorageIterator.advance: next " + obj.getName() + " len=" + obj.getContentLength());
                             this.nextItem = objectToStorageMetadata(null, obj);
@@ -1755,14 +1769,18 @@ public class SwiftStorageAdapter  implements StorageAdapter {
             this.nextItem = null;
             while (true) {
                 if (objectIterator == null || !objectIterator.hasNext()) {
-                    Collection<StoredObject> list = swiftContainer.list(prefix, nextMarkerKey, BATCH_SIZE);
-                    log.debug("LargeObjectPartIterator prefix=" + prefix + " size=" + list.size() + " from=" + nextMarkerKey);
-                    if (!list.isEmpty()) {
-                        objectIterator = list.iterator();
-                    } else {
-                        log.debug("LargeObjectPartIterator: DONE");
-                        objectIterator = null;
-                        return; // nextItem == null aka done
+                    try {
+                        Collection<StoredObject> list = swiftContainer.list(prefix, nextMarkerKey, BATCH_SIZE);
+                        log.debug("LargeObjectPartIterator prefix=" + prefix + " size=" + list.size() + " from=" + nextMarkerKey);
+                        if (!list.isEmpty()) {
+                            objectIterator = list.iterator();
+                        } else {
+                            log.debug("LargeObjectPartIterator: DONE");
+                            objectIterator = null;
+                            return; // nextItem == null aka done
+                        }
+                    } catch (CommandException ex) {
+                        throw new StorageEngageException("failed to list bucket with large object prefix", ex);
                     }
                 }
                 if (objectIterator != null) {
