@@ -1244,10 +1244,11 @@ public class SwiftStorageAdapter  implements StorageAdapter {
             return false;
         } catch (CommandException ex) {
             if (ex.getHttpStatusCode() > 500) {
+                retryCount++;
                 if (retryCount <= 3) {
                     try {
                         Thread.sleep(retryCount * 2000L);
-                        return isIteratorVisible(obj, includeRecoverable, retryCount++);
+                        return isIteratorVisible(obj, includeRecoverable, retryCount);
                     } catch (InterruptedException iex) {
                         log.debug("isIteratorVisible sleep-before-retry interrupted", iex);
                         // continue to throw below
