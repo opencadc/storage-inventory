@@ -108,6 +108,7 @@ import org.javaswift.joss.client.factory.AccountFactory;
 import org.javaswift.joss.client.factory.AuthenticationMethod;
 import org.javaswift.joss.exception.CommandException;
 import org.javaswift.joss.exception.Md5ChecksumException;
+import org.javaswift.joss.exception.NotFoundException;
 import org.javaswift.joss.headers.object.ObjectManifest;
 import org.javaswift.joss.instructions.DownloadInstructions;
 import org.javaswift.joss.instructions.UploadInstructions;
@@ -556,7 +557,8 @@ public class SwiftStorageAdapter  implements StorageAdapter {
         return sub;
     }
     
-    private StoredObject getStoredObject(StorageLocation loc, boolean inTxn) throws ResourceNotFoundException {
+    private StoredObject getStoredObject(StorageLocation loc, boolean inTxn) 
+            throws ResourceNotFoundException, StorageEngageException {
         Container sub = getContainerImpl(loc);
         String key = loc.getStorageID().toASCIIString();
         StoredObject obj = sub.getObject(key);
@@ -1216,20 +1218,46 @@ public class SwiftStorageAdapter  implements StorageAdapter {
         
     }
     
-    private boolean isIteratorVisible(StoredObject obj, boolean includeRecoverable) {
-        String val = (String) obj.getMetadata(TRANSACTION_ATTR);
-        if ("true".equals(val)) {
+    private boolean isIteratorVisible(StoredObject obj, boolean includeRecoverable) 
+            throws StorageEngageException {
+        return isIteratorVisible(obj, includeRecoverable, 0);
+    }
+    
+    private boolean isIteratorVisible(StoredObject obj, boolean includeRecoverable, int retryCount) 
+            throws StorageEngageException {
+        try {
+            String val = (String) obj.getMetadata(TRANSACTION_ATTR);
+            if ("true".equals(val)) {
+                return false;
+            }
+            String name = obj.getName();
+            if (name.contains(":p:")) {
+                return false;
+            }
+            String del = (String) obj.getMetadata(DELETED_PRESERVED_ATTR);
+            if ("true".equals(del)) {
+                return includeRecoverable;
+            }
+            return true;
+        } catch (NotFoundException ex) {
+            log.warn("StoredObject disappeared inside iterator: " + obj.getName());
             return false;
+        } catch (CommandException ex) {
+            if (ex.getHttpStatusCode() > 500) {
+                if (retryCount <= 3) {
+                    try {
+                        Thread.sleep(retryCount * 2000L);
+                        return isIteratorVisible(obj, includeRecoverable, retryCount++);
+                    } catch (InterruptedException iex) {
+                        log.debug("isIteratorVisible sleep-before-retry interrupted", iex);
+                        // continue to throw below
+                    }
+                }
+                throw new StorageEngageException("failed to get attributes for " + obj.getName() 
+                        + " after " + retryCount + " retries" , ex);
+            }
+            throw new StorageEngageException("failed to get attributes for " + obj.getName(), ex);
         }
-        String name = obj.getName();
-        if (name.contains(":p:")) {
-            return false;
-        }
-        String del = (String) obj.getMetadata(DELETED_PRESERVED_ATTR);
-        if ("true".equals(del)) {
-            return includeRecoverable;
-        }
-        return true;
     }
     
     // get destination to write bytes to
