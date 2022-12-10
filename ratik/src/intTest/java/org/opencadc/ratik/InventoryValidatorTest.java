@@ -194,15 +194,25 @@ public class InventoryValidatorTest {
      */
     @Test
     public void noDiscrepancy_LocalIsStorage() throws Exception {
-        noDiscrepancy(false);
+        noDiscrepancy(false, false);
     }
 
     @Test
     public void noDiscrepancy_LocalIsGlobal() throws Exception {
-        noDiscrepancy(true);
+        noDiscrepancy(true, false);
+    }
+    
+    @Test
+    public void noDiscrepancy_LocalIsStorage_SubBuckets() throws Exception {
+        noDiscrepancy(false, true);
     }
 
-    public void noDiscrepancy(boolean trackSiteLocations) throws Exception {
+    @Test
+    public void noDiscrepancy_LocalIsGlobal_SubBuckets() throws Exception {
+        noDiscrepancy(true, true);
+    }
+
+    public void noDiscrepancy(boolean trackSiteLocations, boolean enableSubBucketQuery) throws Exception {
         // Put the same Artifact into local and remote.
         Artifact artifact = new Artifact(URI.create("cadc:INTTEST/one.ext"), TestUtil.getRandomMD5(),
                                          new Date(), 1024L);
@@ -221,6 +231,7 @@ public class InventoryValidatorTest {
                                                                     TestUtil.LUSKAN_URI, new IncludeArtifacts(),
                                                                     null, trackSiteLocations);
             testSubject.raceConditionDelta = 0L;
+            testSubject.enableSubBucketQuery = enableSubBucketQuery;
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
@@ -270,6 +281,7 @@ public class InventoryValidatorTest {
                 }
             };
             testSubject.raceConditionDelta = 0L;
+            testSubject.enableSubBucketQuery = false;
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
@@ -312,6 +324,7 @@ public class InventoryValidatorTest {
                 }
             };
             testSubject.raceConditionDelta = 0L;
+            testSubject.enableSubBucketQuery = false;
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
@@ -350,6 +363,7 @@ public class InventoryValidatorTest {
                 }
             };
             testSubject.raceConditionDelta = 0L;
+            testSubject.enableSubBucketQuery = false;
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
@@ -392,6 +406,7 @@ public class InventoryValidatorTest {
 
             };
             // no change to testSubject.raceConditionDelta
+            testSubject.enableSubBucketQuery = false;
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
@@ -427,6 +442,7 @@ public class InventoryValidatorTest {
                 }
             };
             testSubject.raceConditionDelta = 0L;
+            testSubject.enableSubBucketQuery = false;
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
@@ -481,6 +497,7 @@ public class InventoryValidatorTest {
                                                                     new IncludeArtifacts(),null,
                                                                     trackSiteLocations);
             testSubject.raceConditionDelta = 0L;
+            testSubject.enableSubBucketQuery = false;
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
@@ -533,6 +550,7 @@ public class InventoryValidatorTest {
                                                                     new IncludeArtifacts(),null,
                                                                     true);
             testSubject.raceConditionDelta = 0L;
+            testSubject.enableSubBucketQuery = false;
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
@@ -572,6 +590,7 @@ public class InventoryValidatorTest {
                                                                     new IncludeArtifacts(),null,
                                                                     true);
             testSubject.raceConditionDelta = 0L;
+            testSubject.enableSubBucketQuery = false;
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
@@ -619,6 +638,7 @@ public class InventoryValidatorTest {
                                                                     new IncludeArtifacts(),null,
                                                                     true);
             testSubject.raceConditionDelta = 0L;
+            testSubject.enableSubBucketQuery = false;
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
@@ -654,6 +674,7 @@ public class InventoryValidatorTest {
                                                                     new IncludeArtifacts(),null,
                                                                     true);
             testSubject.raceConditionDelta = 0L;
+            testSubject.enableSubBucketQuery = false;
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
@@ -690,6 +711,7 @@ public class InventoryValidatorTest {
                                                                     new IncludeArtifacts(),null,
                                                                     false);
             testSubject.raceConditionDelta = 0L;
+            testSubject.enableSubBucketQuery = false;
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
@@ -758,6 +780,7 @@ public class InventoryValidatorTest {
                                                                     new IncludeArtifacts(),null,
                                                                     trackSiteLocations);
             testSubject.raceConditionDelta = 0L;
+            testSubject.enableSubBucketQuery = false;
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
@@ -799,6 +822,7 @@ public class InventoryValidatorTest {
                                                                     new IncludeArtifacts(),null,
                                                                     false);
             testSubject.raceConditionDelta = 0L;
+            testSubject.enableSubBucketQuery = false;
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
@@ -833,6 +857,7 @@ public class InventoryValidatorTest {
                                                                     new IncludeArtifacts(),null,
                                                                     false);
             testSubject.raceConditionDelta = 0L;
+            testSubject.enableSubBucketQuery = false;
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
@@ -881,6 +906,7 @@ public class InventoryValidatorTest {
                                                                     new IncludeArtifacts(),null,
                                                                     true);
             testSubject.raceConditionDelta = 0L;
+            testSubject.enableSubBucketQuery = false;
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
@@ -944,6 +970,7 @@ public class InventoryValidatorTest {
                                                                     new IncludeArtifacts(),null,
                                                                     true);
             testSubject.raceConditionDelta = 0L;
+            testSubject.enableSubBucketQuery = false;
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
@@ -1040,6 +1067,7 @@ public class InventoryValidatorTest {
                                                                     new IncludeArtifacts(),null,
                                                                     trackSiteLocations);
             testSubject.raceConditionDelta = 0L;
+            testSubject.enableSubBucketQuery = false;
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
@@ -1073,6 +1101,7 @@ public class InventoryValidatorTest {
                                                                     new IncludeArtifacts(),null,
                                                                     trackSiteLocations);
             testSubject.raceConditionDelta = 0L;
+            testSubject.enableSubBucketQuery = false;
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
@@ -1149,6 +1178,7 @@ public class InventoryValidatorTest {
                                                                     new IncludeArtifacts(),null,
                                                                     trackSiteLocations);
             testSubject.raceConditionDelta = 0L;
+            testSubject.enableSubBucketQuery = false;
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
@@ -1204,6 +1234,7 @@ public class InventoryValidatorTest {
                                                                     new IncludeArtifacts(),null,
                                                                     trackSiteLocations);
             testSubject.raceConditionDelta = 0L;
+            testSubject.enableSubBucketQuery = false;
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
@@ -1241,6 +1272,7 @@ public class InventoryValidatorTest {
                                                                     new IncludeArtifacts(),null,
                                                                     true);
             testSubject.raceConditionDelta = 0L;
+            testSubject.enableSubBucketQuery = false;
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);

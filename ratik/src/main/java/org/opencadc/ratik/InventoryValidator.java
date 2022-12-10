@@ -87,6 +87,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
@@ -127,6 +128,7 @@ public class InventoryValidator implements Runnable {
     
     // package access so tests can reduce this
     long raceConditionDelta = 5 * 60 * 60 * 1000L; // 5 min ago
+    boolean enableSubBucketQuery = true;
     
     private final long summaryLogInterval = 5 * 60L; // 5 minutes
     private long lastSummary = 0L;
@@ -264,14 +266,42 @@ public class InventoryValidator implements Runnable {
     void doit() throws ResourceNotFoundException, IOException, IllegalStateException, TransientException,
                        InterruptedException {
 
+        // generate validate jobs to keep subsequent loop simple and make it easier to 
+        // add multi-threaded capability later
+        List<String> buckets = new ArrayList<>();
+        BucketSelector allBuckets = new BucketSelector("0-f");
         if (this.bucketSelector == null) {
+            if (enableSubBucketQuery) {
+                Iterator<String> inner = allBuckets.getBucketIterator();
+                while (inner.hasNext()) {
+                    String b = inner.next();
+                    buckets.add(b);
+                }
+            }
+        } else {
+            Iterator<String> outer = bucketSelector.getBucketIterator();
+            while (outer.hasNext()) {
+                String b1 = outer.next();
+                if (enableSubBucketQuery) {
+                    Iterator<String> inner = allBuckets.getBucketIterator();
+                    while (inner.hasNext()) {
+                        String b2 = inner.next();
+                        String b = b1 + b2;
+                        buckets.add(b);
+                    }
+                } else {
+                    buckets.add(b1);
+                }
+            }
+        }
+        
+        if (buckets.isEmpty()) {
             iterateBucket(null);
         } else {
-            Iterator<String> bucketIterator = this.bucketSelector.getBucketIterator();
+            Iterator<String> bucketIterator = buckets.iterator();
             while (bucketIterator.hasNext()) {
                 String bucket = bucketIterator.next();
                 log.info(InventoryValidator.class.getSimpleName() + ".START bucket=" + bucket);
-                
                 int retries = 0;
                 boolean done = false;
                 while (!done && retries < 3) {
@@ -327,7 +357,7 @@ public class InventoryValidator implements Runnable {
         artifactValidator.setRaceConditionStart(new Date(System.currentTimeMillis() - raceConditionDelta));
         logSummary(true, true);
         try (final ResourceIterator<Artifact> localIterator = getLocalIterator(bucket);
-            final ResourceIterator<Artifact> remoteIterator = getRemoteIterator(bucket)) {
+            final ResourceIterator<Artifact> remoteIterator = getRemoteIterator(bucket, 0)) {
             
             Artifact local = null;
             Artifact remote = null;
@@ -496,6 +526,7 @@ public class InventoryValidator implements Runnable {
      * Execute the query and return the iterator back.
      *
      * @param bucket The bucket prefix.
+     * @param retryCount track number of attempts in recursive retry
      * @return ResourceIterator over Artifact's matching the remote filter policy and the uri buckets.
      *
      * @throws ResourceNotFoundException For any missing required configuration that is missing.
@@ -504,17 +535,32 @@ public class InventoryValidator implements Runnable {
      * @throws TransientException        temporary failure of TAP service: same call could work in future
      * @throws InterruptedException      thread interrupted
      */
-    ResourceIterator<Artifact> getRemoteIterator(final String bucket)
+    ResourceIterator<Artifact> getRemoteIterator(final String bucket, int retryCount)
         throws ResourceNotFoundException, IOException, IllegalStateException, TransientException, InterruptedException {
         final TapClient<Artifact> tapClient = new TapClient<>(this.resourceID);
         final String query = buildRemoteQuery(bucket);
-        log.debug("\nExecuting query '" + query + "'\n");
+        log.debug(InventoryValidator.class.getSimpleName() + ".remoteQuery bucket=" + bucket 
+                + "query: \n'" + query + "\n");
+
         long t1 = System.currentTimeMillis();
-        log.debug(InventoryValidator.class.getSimpleName() + ".remoteQuery bucket=" + bucket);
-        ResourceIterator<Artifact> ret = tapClient.query(query, new ArtifactRowMapper(), true);
-        long dt = System.currentTimeMillis() - t1;
-        log.info(InventoryValidator.class.getSimpleName() + ".remoteQuery bucket=" + bucket + " duration=" + dt);
-        return ret;
+        try {
+            
+            log.debug(InventoryValidator.class.getSimpleName() + ".remoteQuery bucket=" + bucket);
+            ResourceIterator<Artifact> ret = tapClient.query(query, new ArtifactRowMapper(), true);
+            long dt = System.currentTimeMillis() - t1;
+            log.info(InventoryValidator.class.getSimpleName() + ".remoteQuery bucket=" + bucket + " duration=" + dt);
+            return ret;
+        } catch (TransientException ex) {
+            long dt = System.currentTimeMillis() - t1;
+            log.warn(InventoryValidator.class.getSimpleName() + ".remoteQuery bucket=" + bucket + " duration=" + dt
+                + " success=false reason=" + ex);
+            retryCount++;
+            if (retryCount <= 3) {
+                Thread.sleep(retryCount * 2000L);
+                return getRemoteIterator(bucket, retryCount);
+            }
+            throw new TransientException(ex.getMessage() + " after " + retryCount + " retries");
+        }
     }
 
     /**
