@@ -70,7 +70,6 @@
 package org.opencadc.tantar.policy;
 
 import ca.nrc.cadc.date.DateUtil;
-import ca.nrc.cadc.util.ObjectUtil;
 import java.text.DateFormat;
 import java.util.Date;
 import org.apache.log4j.Logger;
@@ -199,9 +198,6 @@ public class InventoryIsAlwaysRight extends ResolutionPolicy {
         // recover
         if (art.storageLocation == null || !art.storageLocation.equals(storageMetadata.getStorageLocation())) {
             // same file content: fix storage location
-            DateFormat df = DateUtil.getDateFormat(DateUtil.IVOA_DATE_FORMAT, DateUtil.UTC);
-            log.warn("recover: art=" + df.format(art.getContentLastModified())
-                    + " storage=" + df.format(storageMetadata.getContentLastModified()));
             boolean sc = isSameContent(art, storageMetadata);
             boolean doFix = false;
             String reason = "null-storageLocation";
@@ -210,8 +206,11 @@ public class InventoryIsAlwaysRight extends ResolutionPolicy {
                     doFix = true;
                 } else if (!art.storageLocation.equals(storageMetadata.getStorageLocation())
                         && art.getContentLastModified().equals(storageMetadata.getContentLastModified())) {
-                    doFix = true;
-                    reason = "improve-contentLastModified";
+                    if (!storageMetadata.deletePreserved) {
+                        // don't recover a previously deleted stored object in this case
+                        doFix = true;
+                        reason = "improve-contentLastModified";
+                    }
                 }
             }
             
@@ -225,13 +224,19 @@ public class InventoryIsAlwaysRight extends ResolutionPolicy {
                 validateActions.updateArtifact(art, storageMetadata);
                 return;
             } else {
-                sb.append(".deleteStorageLocation");
+                if (storageMetadata.deletePreserved) {
+                    sb.append(".skip");
+                } else {
+                    sb.append(".deleteStorageLocation");
+                }
                 sb.append(" Artifact.id=").append(art.getID());
                 sb.append(" Artifact.uri=").append(art.getURI());
                 sb.append(" loc=").append(storageMetadata.getStorageLocation());
                 sb.append(" reason=old-storageLocation");
                 log.info(sb.toString());
-                validateActions.delete(storageMetadata);
+                if (!storageMetadata.deletePreserved) {
+                    validateActions.delete(storageMetadata);
+                }
                 return;
             }
         }

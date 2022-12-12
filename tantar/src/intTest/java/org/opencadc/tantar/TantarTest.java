@@ -263,10 +263,6 @@ abstract class TantarTest {
         recoverableSM4 = sm4.getStorageLocation();
         this.recoverableA4 = a4;
         
-        if (includeRecoverable) {
-            preservingAdapter.delete(recoverableSM4);
-        }
-        
         if (testRecovery) {
             // second stored object with same Artifact.uri, later contentLastModified, earlier storageLocation
             // so we can tell that matching contentLastModified won
