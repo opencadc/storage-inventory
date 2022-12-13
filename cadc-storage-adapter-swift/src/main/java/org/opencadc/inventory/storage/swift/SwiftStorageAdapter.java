@@ -642,7 +642,7 @@ public class SwiftStorageAdapter  implements StorageAdapter {
         InventoryUtil.assertNotNull(SwiftStorageAdapter.class, "artifact", newArtifact);
         InventoryUtil.assertNotNull(SwiftStorageAdapter.class, "source", source);
         
-        StorageLocation writeDataLocation;
+        StorageLocation writeDataLocation = null;
         MessageDigestAPI txnDigest = null;
         String checksumAlg = DEFAULT_CHECKSUM_ALGORITHM;
         if (newArtifact.contentChecksum != null) {
@@ -714,6 +714,8 @@ public class SwiftStorageAdapter  implements StorageAdapter {
 
         } catch (NoSuchAlgorithmException ex) {
             throw new RuntimeException("failed to create MessageDigestAPI: " + checksumAlg, ex);
+        } catch (CommandException ex) {
+            throw new StorageEngageException("unexpected fail during write: " + ex.getHttpStatusCode(), ex);
         }
         log.debug("write location: " + writeDataLocation + " transaction: " + transactionID);
         
@@ -862,7 +864,7 @@ public class SwiftStorageAdapter  implements StorageAdapter {
         } catch (NoSuchAlgorithmException ex) {
             throw new RuntimeException("failed to create MessageDigestAPI: " + checksumAlg);
         } catch (CommandException ex) {
-            throw new StorageEngageException("internal failure: " + ex, ex);
+            throw new StorageEngageException("unexpected fail during verify: " + ex.getHttpStatusCode(), ex);
         }
     }
     
