@@ -347,8 +347,11 @@ public class FileSyncJob implements Runnable {
             } catch (ByteLimitExceededException | IllegalStateException | EntityNotFoundException ex) {
                 log.debug("artifact sync aborted: " + artifactLabel, ex);
                 msg = "reason=" + ex.getClass().getName() + " " + ex.getMessage();
-            } catch (IllegalArgumentException | InterruptedException | StorageEngageException | WriteException ex) {
+            } catch (IllegalArgumentException | InterruptedException | ResourceNotFoundException ex) {
                 log.debug("artifact sync error: " + artifactLabel, ex);
+                msg = "reason=" + ex.getClass().getName() + " " + ex.getMessage();
+            } catch (StorageEngageException | WriteException ex) {
+                log.error("artifact sync error: " + artifactLabel, ex);
                 msg = "reason=" + ex.getClass().getName() + " " + ex.getMessage();
             } catch (Exception ex) {
                 log.error("unexpected fail: " + artifactLabel, ex);
