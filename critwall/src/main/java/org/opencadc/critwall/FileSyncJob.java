@@ -351,7 +351,7 @@ public class FileSyncJob implements Runnable {
                 log.debug("artifact sync error: " + artifactLabel, ex);
                 msg = "reason=" + ex.getClass().getName() + " " + ex.getMessage();
             } catch (Exception ex) {
-                log.debug("unexpected fail: " + artifactLabel, ex);
+                log.error("unexpected fail: " + artifactLabel, ex);
                 msg = "reason=" + ex.getClass().getName() + " " + ex.getMessage();
             }
         } finally {
@@ -621,32 +621,30 @@ public class FileSyncJob implements Runnable {
                 return ret;
             } catch (ByteLimitExceededException | StorageEngageException | WriteException ex) {
                 // IOException will capture this if not explicitly caught and rethrown
-                log.debug("FileSyncJob.FAIL", ex);
                 log.error("FileSyncJob.FAIL " + artifactLabel + " reason=" + ex);
                 throw ex;
             } catch (MalformedURLException | ResourceNotFoundException | ResourceAlreadyExistsException
                      | PreconditionFailedException | RangeNotSatisfiableException 
                      | AccessControlException | NotAuthenticatedException ex) {
                 log.error("FileSyncJob.ERROR remove=" + u, ex);
-                log.warn("FileSyncJob.ERROR " + artifactLabel + " remove=" + logURL + " auth=" + auth + "] reason=" + ex);
+                log.warn("FileSyncJob.ERROR " + artifactLabel + " remove=" + logURL + " auth=" + auth + " reason=" + ex);
                 fails.add(ex);
                 urlIterator.remove();
             } catch (IOException | TransientException ex) {
                 // includes ReadException
                 // - prepare or put throwing this error
                 log.debug("FileSyncJob.ERROR keep=" + u, ex);
-                log.warn("FileSyncJob.ERROR " + artifactLabel + " keep=" + logURL + " auth=" + auth + "] reason=" + ex);
+                log.warn("FileSyncJob.ERROR " + artifactLabel + " keep=" + logURL + " auth=" + auth + " reason=" + ex);
                 fails.add(ex);
             } catch (Exception ex) {
                 if (!postPrepare) {
                     // remote server 5xx response: discard
                     log.debug("FileSyncJob.ERROR remove=" + u, ex);
-                    log.warn("FileSyncJob.ERROR " + artifactLabel + " remove=" + logURL + " auth=" + auth + "] reason=" + ex);
+                    log.warn("FileSyncJob.ERROR " + artifactLabel + " remove=" + logURL + " auth=" + auth + " reason=" + ex);
                     urlIterator.remove();
                     fails.add(ex);
                 } else {
                     // StorageAdapter.put internal fail: abort
-                    log.debug("FileSyncJob.FAIL", ex);
                     log.warn("FileSyncJob.FAIL " + artifactLabel + " reason=" + ex);
                     throw ex;
                 }
