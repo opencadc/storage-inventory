@@ -629,7 +629,7 @@ public class FileSyncJob implements Runnable {
             } catch (MalformedURLException | ResourceNotFoundException | ResourceAlreadyExistsException
                      | PreconditionFailedException | RangeNotSatisfiableException 
                      | AccessControlException | NotAuthenticatedException ex) {
-                log.error("FileSyncJob.ERROR remove=" + u, ex);
+                log.debug("FileSyncJob.ERROR remove=" + u, ex);
                 log.warn("FileSyncJob.ERROR " + artifactLabel + " remove=" + logURL + " auth=" + auth + " reason=" + ex);
                 fails.add(ex);
                 urlIterator.remove();
