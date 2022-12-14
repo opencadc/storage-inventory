@@ -796,7 +796,7 @@ public class SwiftStorageAdapter  implements StorageAdapter {
                     if (trap.fail != null) {
                         throw new ReadException("read from input stream failed", trap.fail);
                     }
-                    throw new WriteException("internal failure: " + ex);
+                    throw new WriteException("internal upload failure", ex);
                 }
             }
                     

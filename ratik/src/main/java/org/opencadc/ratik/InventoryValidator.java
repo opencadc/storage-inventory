@@ -589,7 +589,7 @@ public class InventoryValidator implements Runnable {
             } else {
                 query.append(" AND ");
             }
-            query.append("(uribucket LIKE '").append(bucket.trim()).append("%')");
+            query.append("(uriBucket LIKE '").append(bucket.trim()).append("%')");
             log.debug("where clause: " + query.toString());
         }
 
