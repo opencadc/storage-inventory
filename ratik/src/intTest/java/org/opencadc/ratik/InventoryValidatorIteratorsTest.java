@@ -457,6 +457,7 @@ public class InventoryValidatorIteratorsTest {
                 }
             };
             testSubject.enableSubBucketQuery = false;
+            testSubject.allowEmptyIterator = true;
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
