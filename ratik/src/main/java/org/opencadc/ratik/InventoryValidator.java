@@ -3,7 +3,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2021.                            (c) 2021.
+ *  (c) 2022.                            (c) 2022.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -129,6 +129,7 @@ public class InventoryValidator implements Runnable {
     // package access so tests can reduce this
     long raceConditionDelta = 5 * 60 * 60 * 1000L; // 5 min ago
     boolean enableSubBucketQuery = true;
+    boolean allowEmptyIterator = false;
     
     private final long summaryLogInterval = 5 * 60L; // 5 minutes
     private long lastSummary = 0L;
@@ -357,7 +358,7 @@ public class InventoryValidator implements Runnable {
         artifactValidator.setRaceConditionStart(new Date(System.currentTimeMillis() - raceConditionDelta));
         logSummary(true, true);
         try (final ResourceIterator<Artifact> localIterator = getLocalIterator(bucket);
-            final ResourceIterator<Artifact> remoteIterator = getRemoteIterator(bucket, 0)) {
+            final ResourceIterator<Artifact> remoteIterator = getRemoteIterator(bucket)) {
             
             Artifact local = null;
             Artifact remote = null;
@@ -510,13 +511,16 @@ public class InventoryValidator implements Runnable {
         throws IOException {
         // order query results by Artifact.uri
         boolean ordered = true;
-        long t1 = System.currentTimeMillis();
+        final long t1 = System.currentTimeMillis();
         log.debug(InventoryValidator.class.getSimpleName() + ".localQuery bucket=" + bucket);
         UUID remoteSiteID = null;
         if (this.remoteSite != null) {
             remoteSiteID = this.remoteSite.getID();
         }
         ResourceIterator<Artifact> ret = this.artifactDAO.iterator(remoteSiteID, bucket, ordered);
+        if (!ret.hasNext() && !allowEmptyIterator) {
+            throw new TransientException("something looks sketchy: local query found empty bucket");
+        }
         long dt = System.currentTimeMillis() - t1;
         log.info(InventoryValidator.class.getSimpleName() + ".localQuery bucket=" + bucket + " duration=" + dt);
         return ret;
@@ -535,32 +539,40 @@ public class InventoryValidator implements Runnable {
      * @throws TransientException        temporary failure of TAP service: same call could work in future
      * @throws InterruptedException      thread interrupted
      */
-    ResourceIterator<Artifact> getRemoteIterator(final String bucket, int retryCount)
+    ResourceIterator<Artifact> getRemoteIterator(final String bucket)
         throws ResourceNotFoundException, IOException, IllegalStateException, TransientException, InterruptedException {
         final TapClient<Artifact> tapClient = new TapClient<>(this.resourceID);
+        tapClient.setConnectionTimeout(12000); // 12 sec
+        tapClient.setReadTimeout(120000);      // 120 sec
         final String query = buildRemoteQuery(bucket);
         log.debug(InventoryValidator.class.getSimpleName() + ".remoteQuery bucket=" + bucket 
                 + "query: \n'" + query + "\n");
 
-        long t1 = System.currentTimeMillis();
-        try {
-            
-            log.debug(InventoryValidator.class.getSimpleName() + ".remoteQuery bucket=" + bucket);
-            ResourceIterator<Artifact> ret = tapClient.query(query, new ArtifactRowMapper(), true);
-            long dt = System.currentTimeMillis() - t1;
-            log.info(InventoryValidator.class.getSimpleName() + ".remoteQuery bucket=" + bucket + " duration=" + dt);
-            return ret;
-        } catch (TransientException ex) {
-            long dt = System.currentTimeMillis() - t1;
-            log.warn(InventoryValidator.class.getSimpleName() + ".remoteQuery bucket=" + bucket + " duration=" + dt
-                + " success=false reason=" + ex);
-            retryCount++;
-            if (retryCount <= 3) {
-                Thread.sleep(retryCount * 2000L);
-                return getRemoteIterator(bucket, retryCount);
+        TransientException tex = null;
+        int retryCount = 0;
+        while (retryCount <= 3) {
+            final long t1 = System.currentTimeMillis();
+            try {
+                log.debug(InventoryValidator.class.getSimpleName() + ".remoteQuery bucket=" + bucket);
+                ResourceIterator<Artifact> ret = tapClient.query(query, new ArtifactRowMapper(), true);
+                long dt = System.currentTimeMillis() - t1;
+                log.info(InventoryValidator.class.getSimpleName() + ".remoteQuery bucket=" + bucket + " duration=" + dt);
+                if (!ret.hasNext() && !allowEmptyIterator) {
+                    throw new TransientException("something looks sketchy: remote query found empty bucket");
+                }
+                return ret;
+            } catch (TransientException ex) {
+                tex = ex;
+                long dt = System.currentTimeMillis() - t1;
+                log.warn(InventoryValidator.class.getSimpleName() + ".remoteQuery bucket=" + bucket + " duration=" + dt
+                    + " success=false reason=" + ex);
+                retryCount++;
             }
-            throw new TransientException(ex.getMessage() + " after " + retryCount + " retries");
         }
+        if (tex == null) {
+            throw new RuntimeException("BUG: finished retry loop without success or TransientException");
+        }
+        throw tex;
     }
 
     /**

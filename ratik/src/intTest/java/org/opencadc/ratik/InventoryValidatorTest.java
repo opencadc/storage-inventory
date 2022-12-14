@@ -232,6 +232,7 @@ public class InventoryValidatorTest {
                                                                     null, trackSiteLocations);
             testSubject.raceConditionDelta = 0L;
             testSubject.enableSubBucketQuery = enableSubBucketQuery;
+            testSubject.allowEmptyIterator = true;
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
@@ -282,6 +283,7 @@ public class InventoryValidatorTest {
             };
             testSubject.raceConditionDelta = 0L;
             testSubject.enableSubBucketQuery = false;
+            testSubject.allowEmptyIterator = true;
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
@@ -325,6 +327,7 @@ public class InventoryValidatorTest {
             };
             testSubject.raceConditionDelta = 0L;
             testSubject.enableSubBucketQuery = false;
+            testSubject.allowEmptyIterator = true;
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
@@ -364,6 +367,7 @@ public class InventoryValidatorTest {
             };
             testSubject.raceConditionDelta = 0L;
             testSubject.enableSubBucketQuery = false;
+            testSubject.allowEmptyIterator = true;
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
@@ -407,6 +411,7 @@ public class InventoryValidatorTest {
             };
             // no change to testSubject.raceConditionDelta
             testSubject.enableSubBucketQuery = false;
+            testSubject.allowEmptyIterator = true;
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
@@ -443,6 +448,7 @@ public class InventoryValidatorTest {
             };
             testSubject.raceConditionDelta = 0L;
             testSubject.enableSubBucketQuery = false;
+            testSubject.allowEmptyIterator = true;
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
@@ -498,6 +504,7 @@ public class InventoryValidatorTest {
                                                                     trackSiteLocations);
             testSubject.raceConditionDelta = 0L;
             testSubject.enableSubBucketQuery = false;
+            testSubject.allowEmptyIterator = true;
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
@@ -551,6 +558,7 @@ public class InventoryValidatorTest {
                                                                     true);
             testSubject.raceConditionDelta = 0L;
             testSubject.enableSubBucketQuery = false;
+            testSubject.allowEmptyIterator = true;
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
@@ -591,6 +599,7 @@ public class InventoryValidatorTest {
                                                                     true);
             testSubject.raceConditionDelta = 0L;
             testSubject.enableSubBucketQuery = false;
+            testSubject.allowEmptyIterator = true;
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
@@ -639,6 +648,7 @@ public class InventoryValidatorTest {
                                                                     true);
             testSubject.raceConditionDelta = 0L;
             testSubject.enableSubBucketQuery = false;
+            testSubject.allowEmptyIterator = true;
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
@@ -675,6 +685,7 @@ public class InventoryValidatorTest {
                                                                     true);
             testSubject.raceConditionDelta = 0L;
             testSubject.enableSubBucketQuery = false;
+            testSubject.allowEmptyIterator = true;
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
@@ -712,6 +723,7 @@ public class InventoryValidatorTest {
                                                                     false);
             testSubject.raceConditionDelta = 0L;
             testSubject.enableSubBucketQuery = false;
+            testSubject.allowEmptyIterator = true;
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
@@ -781,6 +793,7 @@ public class InventoryValidatorTest {
                                                                     trackSiteLocations);
             testSubject.raceConditionDelta = 0L;
             testSubject.enableSubBucketQuery = false;
+            testSubject.allowEmptyIterator = true;
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
@@ -823,6 +836,7 @@ public class InventoryValidatorTest {
                                                                     false);
             testSubject.raceConditionDelta = 0L;
             testSubject.enableSubBucketQuery = false;
+            testSubject.allowEmptyIterator = true;
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
@@ -858,6 +872,7 @@ public class InventoryValidatorTest {
                                                                     false);
             testSubject.raceConditionDelta = 0L;
             testSubject.enableSubBucketQuery = false;
+            testSubject.allowEmptyIterator = true;
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
@@ -907,6 +922,7 @@ public class InventoryValidatorTest {
                                                                     true);
             testSubject.raceConditionDelta = 0L;
             testSubject.enableSubBucketQuery = false;
+            testSubject.allowEmptyIterator = true;
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
@@ -971,6 +987,7 @@ public class InventoryValidatorTest {
                                                                     true);
             testSubject.raceConditionDelta = 0L;
             testSubject.enableSubBucketQuery = false;
+            testSubject.allowEmptyIterator = true;
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
@@ -1068,6 +1085,7 @@ public class InventoryValidatorTest {
                                                                     trackSiteLocations);
             testSubject.raceConditionDelta = 0L;
             testSubject.enableSubBucketQuery = false;
+            testSubject.allowEmptyIterator = true;
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
@@ -1102,6 +1120,7 @@ public class InventoryValidatorTest {
                                                                     trackSiteLocations);
             testSubject.raceConditionDelta = 0L;
             testSubject.enableSubBucketQuery = false;
+            testSubject.allowEmptyIterator = true;
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
@@ -1179,6 +1198,7 @@ public class InventoryValidatorTest {
                                                                     trackSiteLocations);
             testSubject.raceConditionDelta = 0L;
             testSubject.enableSubBucketQuery = false;
+            testSubject.allowEmptyIterator = true;
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
@@ -1235,6 +1255,7 @@ public class InventoryValidatorTest {
                                                                     trackSiteLocations);
             testSubject.raceConditionDelta = 0L;
             testSubject.enableSubBucketQuery = false;
+            testSubject.allowEmptyIterator = true;
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
@@ -1273,6 +1294,7 @@ public class InventoryValidatorTest {
                                                                     true);
             testSubject.raceConditionDelta = 0L;
             testSubject.enableSubBucketQuery = false;
+            testSubject.allowEmptyIterator = true;
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
