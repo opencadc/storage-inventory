@@ -82,6 +82,7 @@ import ca.nrc.cadc.net.HttpGet;
 import ca.nrc.cadc.net.HttpPost;
 import ca.nrc.cadc.net.IncorrectContentChecksumException;
 import ca.nrc.cadc.net.IncorrectContentLengthException;
+import ca.nrc.cadc.net.PreconditionFailedException;
 import ca.nrc.cadc.net.RangeNotSatisfiableException;
 import ca.nrc.cadc.net.ResourceAlreadyExistsException;
 import ca.nrc.cadc.net.ResourceNotFoundException;
@@ -99,7 +100,6 @@ import ca.nrc.cadc.vos.TransferParsingException;
 import ca.nrc.cadc.vos.TransferReader;
 import ca.nrc.cadc.vos.TransferWriter;
 import ca.nrc.cadc.vos.VOS;
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -113,9 +113,7 @@ import java.security.cert.CertificateExpiredException;
 import java.security.cert.CertificateNotYetValidException;
 import java.util.Date;
 import java.util.Iterator;
-
 import javax.security.auth.Subject;
-
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.StorageLocation;
@@ -197,6 +195,12 @@ public class AdStorageAdapter implements StorageAdapter {
                 get.setRequestProperty("range", rval);
             }
             get.prepare();
+            String hexMD5 = get.getContentMD5();
+            if (storageLocation.expectedContentChecksum != null && hexMD5 != null) {
+                if (!hexMD5.equals(storageLocation.expectedContentChecksum.getSchemeSpecificPart())) {
+                    throw new PreconditionFailedException("file changed in AD and contentChecksum no longer matches");
+                }
+            }
             MultiBufferIO tio = new MultiBufferIO();
             tio.copy(get.getInputStream(), dest);
 
