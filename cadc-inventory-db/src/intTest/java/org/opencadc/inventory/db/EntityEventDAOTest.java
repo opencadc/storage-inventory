@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2019.                            (c) 2019.
+*  (c) 2022.                            (c) 2022.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -73,6 +73,7 @@ import ca.nrc.cadc.db.DBUtil;
 import ca.nrc.cadc.util.Log4jInit;
 import java.net.URI;
 import java.security.MessageDigest;
+import java.util.Date;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.UUID;
@@ -171,6 +172,13 @@ public class EntityEventDAOTest {
             Assert.assertNotNull(fid2);
             // idempotent includes not updating timestamp
             Assert.assertEquals("lastModified", expected.getLastModified(), fid2.getLastModified());
+            
+            // global: force timestamp update
+            Thread.sleep(10L);
+            daeDAO.put(fid, true);
+            DeletedArtifactEvent fid3 = (DeletedArtifactEvent) daeDAO.get(expected.getID());
+            Assert.assertNotNull(fid3);
+            Assert.assertTrue("lastModified", expected.getLastModified().before(fid3.getLastModified()));
             
             // no delete
         } catch (Exception unexpected) {
