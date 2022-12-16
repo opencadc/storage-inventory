@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2019.                            (c) 2019.
+*  (c) 2022.                            (c) 2022.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -73,6 +73,7 @@ import ca.nrc.cadc.db.DBUtil;
 import ca.nrc.cadc.util.Log4jInit;
 import java.net.URI;
 import java.security.MessageDigest;
+import java.util.Date;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.UUID;
@@ -84,6 +85,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.opencadc.inventory.DeletedArtifactEvent;
 import org.opencadc.inventory.DeletedStorageLocationEvent;
+import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.StorageLocationEvent;
 import org.opencadc.inventory.db.version.InitDatabase;
 
@@ -120,8 +122,7 @@ public class EntityEventDAOTest {
     
     @Before
     public void setup()
-        throws Exception
-    {
+        throws Exception {
         log.info("init database...");
         InitDatabase init = new InitDatabase(daeDAO.getDataSource(), TestUtil.DATABASE, TestUtil.SCHEMA);
         init.doInit();
@@ -171,6 +172,48 @@ public class EntityEventDAOTest {
             Assert.assertNotNull(fid2);
             // idempotent includes not updating timestamp
             Assert.assertEquals("lastModified", expected.getLastModified(), fid2.getLastModified());
+            
+            // no delete
+        } catch (Exception unexpected) {
+            log.error("unexpected exception", unexpected);
+            Assert.fail("unexpected exception: " + unexpected);
+        }
+    }
+    
+    @Test
+    public void testPutDeletedArtifactEvent_LastModifiedUpdate() {
+        try {
+            DeletedArtifactEvent expected = new DeletedArtifactEvent(UUID.randomUUID());
+            log.info("expected: " + expected);
+            
+            DeletedArtifactEvent notFound = daeDAO.get(expected.getID());
+            Assert.assertNull(notFound);
+            
+            Date now = new Date();
+            InventoryUtil.assignLastModified(expected, now);
+            URI mcs = expected.computeMetaChecksum(MessageDigest.getInstance("MD5"));
+            InventoryUtil.assignMetaChecksum(expected, mcs);
+            
+            Thread.sleep(10L);
+            
+            daeDAO.put(expected, true);
+
+            Assert.assertNotNull(expected.getMetaChecksum());
+            Assert.assertEquals(mcs, expected.getMetaChecksum()); // no delta
+                        
+            // get by ID
+            DeletedArtifactEvent fid = (DeletedArtifactEvent) daeDAO.get(expected.getID());
+            Assert.assertNotNull(fid);
+            
+            Assert.assertTrue("lastModified", fid.getLastModified().after(now));
+            
+            // idempotent put: put again, try to force, but no update
+            Thread.sleep(10L);
+            daeDAO.put(fid, true);
+            
+            DeletedArtifactEvent fid2 = (DeletedArtifactEvent) daeDAO.get(expected.getID());
+            Assert.assertNotNull(fid2);
+            Assert.assertEquals("lastModified", fid.getLastModified(), fid2.getLastModified());
             
             // no delete
         } catch (Exception unexpected) {
