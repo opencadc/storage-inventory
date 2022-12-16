@@ -567,6 +567,7 @@ public class InventoryValidator implements Runnable {
                 log.warn(InventoryValidator.class.getSimpleName() + ".remoteQuery bucket=" + bucket + " duration=" + dt
                     + " success=false reason=" + ex);
                 retryCount++;
+                Thread.sleep(retryCount * 2000L);
             }
         }
         if (tex == null) {
