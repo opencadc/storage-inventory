@@ -81,6 +81,13 @@ public class StorageLocation implements Comparable<StorageLocation> {
     public String storageBucket;
     
     /**
+     * StorageAdapter.get() implementations where file content in the back end can
+     * change out-of-band can use this to detect that they will deliver content 
+     * that doesn't match the checksum and fail early.
+     */
+    public transient URI expectedContentChecksum;
+    
+    /**
      * Constructor with storage bucket null.
      * 
      * @param storageID internal storage identifier
