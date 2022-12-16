@@ -207,7 +207,7 @@ public class EntityEventDAOTest {
             
             Assert.assertTrue("lastModified", fid.getLastModified().after(now));
             
-            // idempotent put: create new instance with same state
+            // idempotent put: put again, try to force, but no update
             Thread.sleep(10L);
             daeDAO.put(fid, true);
             
