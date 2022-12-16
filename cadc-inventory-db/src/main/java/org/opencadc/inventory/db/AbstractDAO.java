@@ -323,6 +323,10 @@ public abstract class AbstractDAO<T extends Entity> {
     }
     
     protected void put(T val, boolean extendedUpdate, boolean timestampUpdate) {
+        put(val, extendedUpdate, timestampUpdate, false);
+    }
+
+    protected void put(T val, boolean extendedUpdate, boolean timestampUpdate, boolean tsUpdateOnInsertOnly) {
         if (val == null) {
             throw new IllegalArgumentException("entity cannot be null");
         }
@@ -337,7 +341,7 @@ public abstract class AbstractDAO<T extends Entity> {
             Entity cur = get.execute(jdbc);
             Date now = getCurrentTime();
             boolean update = cur != null;
-            boolean delta = updateEntity(val, cur, now, timestampUpdate);
+            boolean delta = updateEntity(val, cur, now, timestampUpdate, tsUpdateOnInsertOnly);
             if (delta || extendedUpdate) {
                 EntityPut put = gen.getEntityPut(val.getClass(), update);
                 put.setValue(val);
@@ -375,7 +379,7 @@ public abstract class AbstractDAO<T extends Entity> {
     }
     
     // assign metaChecksum and update lastModified
-    private boolean updateEntity(T entity, Entity cur, Date now, boolean timestampUpdate) {
+    private boolean updateEntity(T entity, Entity cur, Date now, boolean timestampUpdate, boolean tsUpdateOnInsertOnly) {
         log.debug("updateEntity: " + entity);
         MessageDigest digest = getDigest();
         
@@ -395,7 +399,12 @@ public abstract class AbstractDAO<T extends Entity> {
             InventoryUtil.assignLastModified(entity, cur.getLastModified());
         }
         
-        if ((origin && delta) || entity.getLastModified() == null || timestampUpdate) {
+        boolean forceUpateLastModified = (entity.getLastModified() == null); // new
+        forceUpateLastModified = forceUpateLastModified || (origin && delta);
+        forceUpateLastModified = forceUpateLastModified || timestampUpdate;
+        forceUpateLastModified = forceUpateLastModified || (tsUpdateOnInsertOnly && cur == null);
+        
+        if (forceUpateLastModified) {
             InventoryUtil.assignLastModified(entity, now);
         }
         

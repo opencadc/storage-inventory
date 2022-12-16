@@ -85,6 +85,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.opencadc.inventory.DeletedArtifactEvent;
 import org.opencadc.inventory.DeletedStorageLocationEvent;
+import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.StorageLocationEvent;
 import org.opencadc.inventory.db.version.InitDatabase;
 
@@ -121,8 +122,7 @@ public class EntityEventDAOTest {
     
     @Before
     public void setup()
-        throws Exception
-    {
+        throws Exception {
         log.info("init database...");
         InitDatabase init = new InitDatabase(daeDAO.getDataSource(), TestUtil.DATABASE, TestUtil.SCHEMA);
         init.doInit();
@@ -173,12 +173,47 @@ public class EntityEventDAOTest {
             // idempotent includes not updating timestamp
             Assert.assertEquals("lastModified", expected.getLastModified(), fid2.getLastModified());
             
-            // global: force timestamp update
+            // no delete
+        } catch (Exception unexpected) {
+            log.error("unexpected exception", unexpected);
+            Assert.fail("unexpected exception: " + unexpected);
+        }
+    }
+    
+    @Test
+    public void testPutDeletedArtifactEvent_LastModifiedUpdate() {
+        try {
+            DeletedArtifactEvent expected = new DeletedArtifactEvent(UUID.randomUUID());
+            log.info("expected: " + expected);
+            
+            DeletedArtifactEvent notFound = daeDAO.get(expected.getID());
+            Assert.assertNull(notFound);
+            
+            Date now = new Date();
+            InventoryUtil.assignLastModified(expected, now);
+            URI mcs = expected.computeMetaChecksum(MessageDigest.getInstance("MD5"));
+            InventoryUtil.assignMetaChecksum(expected, mcs);
+            
+            Thread.sleep(10L);
+            
+            daeDAO.put(expected, true);
+
+            Assert.assertNotNull(expected.getMetaChecksum());
+            Assert.assertEquals(mcs, expected.getMetaChecksum()); // no delta
+                        
+            // get by ID
+            DeletedArtifactEvent fid = (DeletedArtifactEvent) daeDAO.get(expected.getID());
+            Assert.assertNotNull(fid);
+            
+            Assert.assertTrue("lastModified", fid.getLastModified().after(now));
+            
+            // idempotent put: create new instance with same state
             Thread.sleep(10L);
             daeDAO.put(fid, true);
-            DeletedArtifactEvent fid3 = (DeletedArtifactEvent) daeDAO.get(expected.getID());
-            Assert.assertNotNull(fid3);
-            Assert.assertTrue("lastModified", expected.getLastModified().before(fid3.getLastModified()));
+            
+            DeletedArtifactEvent fid2 = (DeletedArtifactEvent) daeDAO.get(expected.getID());
+            Assert.assertNotNull(fid2);
+            Assert.assertEquals("lastModified", fid.getLastModified(), fid2.getLastModified());
             
             // no delete
         } catch (Exception unexpected) {

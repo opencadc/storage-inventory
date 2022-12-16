@@ -93,7 +93,7 @@ public class DeletedArtifactEventDAO extends AbstractDAO<DeletedArtifactEvent> {
     }
 
     public void put(DeletedArtifactEvent val, boolean timestampUpdate) {
-        super.put(val, false, timestampUpdate);
+        super.put(val, false, false, true);
     }
     
     
