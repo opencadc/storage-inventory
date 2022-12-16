@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!DOCTYPE web-app
+    PUBLIC "-//Sun Microsystems, Inc.//DTD Web Application 2.3//EN"
+    "http://java.sun.com/j2ee/dtds/web-app_2_3.dtd">
+
+<web-app>
+
+  <display-name>vault</display-name>
+
+  <servlet>
+    <servlet-name>logControl</servlet-name>
+    <servlet-class>ca.nrc.cadc.log.LogControlServlet</servlet-class>
+    <init-param>
+      <param-name>logLevel</param-name>
+      <param-value>info</param-value>
+    </init-param>
+    <init-param>
+      <param-name>logLevelPackages</param-name>
+      <param-value>
+            org.opencadc.vault
+      </param-value>
+    </init-param>
+<!--    <init-param>-->
+<!--        <param-name>logControlProperties</param-name>-->
+<!--        <param-value>vault-logControl.properties</param-value>-->
+<!--    </init-param>-->
+    <load-on-startup>1</load-on-startup>
+  </servlet>
+
+  <servlet>
+    <servlet-name>NodesServlet</servlet-name>
+        <servlet-class>ca.nrc.cadc.rest.RestServlet</servlet-class>
+<!--        <init-param>-->
+<!--            <param-name>augmentSubject</param-name>-->
+<!--            <param-value>false</param-value>-->
+<!--        </init-param>-->
+        <init-param>
+            <param-name>init</param-name>
+            <param-value>org.opencadc.vault.VaultInitAction</param-value>
+        </init-param>
+<!--        <init-param>-->
+<!--            <param-name>get</param-name>-->
+<!--            <param-value>org.opencadc.vault.GetAction</param-value>-->
+<!--        </init-param>-->
+<!--        <init-param>-->
+<!--            <param-name>put</param-name>-->
+<!--            <param-value>org.opencadc.vault.PutAction</param-value>-->
+<!--        </init-param>-->
+<!--        <init-param>-->
+<!--            <param-name>post</param-name>-->
+<!--            <param-value>org.opencadc.vault.PostAction</param-value>-->
+<!--        </init-param>-->
+<!--        <init-param>-->
+<!--            <param-name>delete</param-name>-->
+<!--            <param-value>org.opencadc.vault.DeleteAction</param-value>-->
+<!--        </init-param>-->
+        <load-on-startup>2</load-on-startup>
+    </servlet>
+
+    <!-- VOSI capabilities -->
+    <servlet>
+        <servlet-name>CapabilitiesServlet</servlet-name>
+        <servlet-class>ca.nrc.cadc.rest.RestServlet</servlet-class>
+        <init-param>
+            <param-name>init</param-name>
+            <param-value>ca.nrc.cadc.vosi.CapInitAction</param-value>
+        </init-param>
+        <init-param>
+            <param-name>head</param-name>
+            <param-value>ca.nrc.cadc.vosi.CapHeadAction</param-value>
+        </init-param>
+        <init-param>
+            <param-name>get</param-name>
+            <param-value>ca.nrc.cadc.vosi.CapGetAction</param-value>
+        </init-param>
+        <init-param>
+            <param-name>input</param-name>
+            <param-value>/capabilities.xml</param-value>
+        </init-param>
+        <load-on-startup>3</load-on-startup>
+    </servlet>
+    
+    <!-- VOSI availability -->
+    <servlet>
+        <servlet-name>AvailabilityServlet</servlet-name>
+        <servlet-class>ca.nrc.cadc.vosi.AvailabilityServlet</servlet-class>
+        <init-param>
+            <param-name>ca.nrc.cadc.vosi.AvailabilityPlugin</param-name>
+            <param-value>org.opencadc.vault.ServiceAvailability</param-value>
+        </init-param>
+<!--        <init-param>-->
+<!--            <param-name>availabilityProperties</param-name>-->
+<!--            <param-value>vault-availability.properties</param-value>-->
+<!--        </init-param>-->
+        <load-on-startup>4</load-on-startup>
+    </servlet>
+
+  <!-- Endpoints -->
+
+  <servlet-mapping>
+    <servlet-name>NodesServlet</servlet-name>
+    <url-pattern>/nodes/*</url-pattern>
+  </servlet-mapping>
+  
+  <!-- Availability servlet endpoint -->
+  <servlet-mapping>
+    <servlet-name>AvailabilityServlet</servlet-name>
+    <url-pattern>/availability</url-pattern>
+  </servlet-mapping>
+
+  <!-- Capability servlet endpoint -->
+  <servlet-mapping>
+    <servlet-name>CapabilitiesServlet</servlet-name>
+    <url-pattern>/capabilities</url-pattern>
+  </servlet-mapping>
+
+  <!-- Log control servlet endpoint -->
+  <servlet-mapping>
+    <servlet-name>logControl</servlet-name>
+    <url-pattern>/logControl</url-pattern>
+  </servlet-mapping>
+
+<!--  <welcome-file-list>-->
+<!--    <welcome-file>index.html</welcome-file>-->
+<!--  </welcome-file-list>-->
+
+</web-app>
