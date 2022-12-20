@@ -69,7 +69,7 @@
 
 -- sample table for use with NodeDAO 
 
-create table vospace.DeletedNode
+create table <schema>.DeletedNode
 (
     nodeID bigint not null primary key,
     name varchar(276) not null,

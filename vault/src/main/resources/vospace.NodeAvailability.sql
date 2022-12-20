@@ -70,6 +70,6 @@
 -- Table used by vospace node availability test. The test performs row insertion and
 -- row deletion on the table.
 
-create table vospace.NodeAvailability (
+create table <schema>.NodeAvailability (
    value char(1)
 );

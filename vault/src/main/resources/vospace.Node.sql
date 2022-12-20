@@ -69,7 +69,7 @@
 
 -- sample table for use with NodeDAO 
 
-create table vospace.Node (
+create table <schema>.Node (
    nodeID bigint not null primary key,
    parentID bigint,
    name varchar(512) not null,
@@ -97,7 +97,7 @@ create table vospace.Node (
    storageID varchar(32)
 );
 
-create unique index node_nodeid_index on vospace.Node(nodeID);
-create unique index node_parentid_name_index on vospace.Node(parentID, name);
-create index node_parentid_contentlength_index on vospace.Node(parentID, contentLength);
-create index node_parentid_lastmodfied_index on vospace.Node(parentID, lastModified);
+create unique index node_nodeid_index on <schema>.Node(nodeID);
+create unique index node_parentid_name_index on <schema>.Node(parentID, name);
+create index node_parentid_contentlength_index on <schema>.Node(parentID, contentLength);
+create index node_parentid_lastmodfied_index on <schema>.Node(parentID, lastModified);

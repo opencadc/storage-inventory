@@ -69,9 +69,9 @@
 
 -- sample table for use with NodeDAO 
 
-create table vospace.NodeProperty
+create table <schema>.NodeProperty
 (
-   nodeID bigint not null references vospace.Node(nodeID),
+   nodeID bigint not null references <schema>.Node(nodeID),
    propertyURI varchar(256) not null,
    propertyValue varchar(512),
 
@@ -81,4 +81,4 @@ create table vospace.NodeProperty
    _rep_support        bigint primary key
 );
 
-create index nodeproperty_nodeid_index on vospace.NodeProperty(nodeID,propertyURI)
+create index nodeproperty_nodeid_index on <schema>.NodeProperty(nodeID,propertyURI)

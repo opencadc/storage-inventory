@@ -92,7 +92,7 @@ public class VaultInitAction extends InitAction {
     private static final String VAULT_KEY = "org.opencadc.vault";
     static final String RESOURCE_ID_KEY = VAULT_KEY + ".resourceID";
     static final String SQLGEN_KEY = SQLGenerator.class.getName();
-    static final String SCHEMA_KEY = VAULT_KEY + ".vospace.schema";
+    static final String SCHEMA_KEY = VAULT_KEY + ".inventory.schema";
     
     MultiValuedProperties props;
     private URI resourceID;
