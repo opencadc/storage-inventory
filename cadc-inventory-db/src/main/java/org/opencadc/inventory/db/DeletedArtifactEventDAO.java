@@ -91,4 +91,10 @@ public class DeletedArtifactEventDAO extends AbstractDAO<DeletedArtifactEvent> {
     public DeletedArtifactEvent get(UUID id) {
         return super.get(DeletedArtifactEvent.class, id);
     }
+
+    public void put(DeletedArtifactEvent val, boolean timestampUpdate) {
+        super.put(val, false, false, true);
+    }
+    
+    
 }

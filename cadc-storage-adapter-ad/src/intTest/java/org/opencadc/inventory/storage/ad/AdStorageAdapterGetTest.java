@@ -70,6 +70,7 @@ package org.opencadc.inventory.storage.ad;
 
 import ca.nrc.cadc.auth.SSLUtil;
 import ca.nrc.cadc.io.ByteCountOutputStream;
+import ca.nrc.cadc.net.PreconditionFailedException;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.util.FileUtil;
 import ca.nrc.cadc.util.Log4jInit;
@@ -128,6 +129,7 @@ public class AdStorageAdapterGetTest {
 
             final StorageLocation storageLocation = new StorageLocation(TEST_URI);
             storageLocation.storageBucket = "IRIS";
+            storageLocation.expectedContentChecksum = expectedIrisChecksum;
 
             testSubject.get(storageLocation, byteCountOutputStream);
 
@@ -135,6 +137,29 @@ public class AdStorageAdapterGetTest {
                 URI.create(String.format("%s:%s", messageDigest.getAlgorithm().toLowerCase(),
                     new BigInteger(1, messageDigest.digest()).toString(16))));
 
+        } catch (Exception unexpected) {
+            log.error("unexpected exception", unexpected);
+            Assert.fail("Unexpected exception");
+        }
+    }
+    
+    @Test
+    public void testGetPreconditionFail() {
+        final AdStorageAdapter testSubject = new AdStorageAdapter();
+
+        final ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        try {
+            
+
+            final StorageLocation storageLocation = new StorageLocation(TEST_URI);
+            storageLocation.storageBucket = "IRIS";
+            storageLocation.expectedContentChecksum = URI.create("md5:d41d8cd98f00b204e9800998ecf8427e");
+
+            testSubject.get(storageLocation, bos);
+
+            Assert.fail("expected PreconditionFailedException, got: " + bos.toByteArray().length + " bytes");
+        } catch (PreconditionFailedException expected) {
+            log.info("caught expected: " + expected);
         } catch (Exception unexpected) {
             log.error("unexpected exception", unexpected);
             Assert.fail("Unexpected exception");

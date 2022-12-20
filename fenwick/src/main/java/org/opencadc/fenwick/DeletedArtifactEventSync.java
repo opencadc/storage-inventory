@@ -102,13 +102,15 @@ public class DeletedArtifactEventSync extends AbstractSync {
 
     private final DeletedArtifactEventDAO deletedDAO;
     private final TapClient<DeletedArtifactEvent> tapClient;
+    private final boolean isGlobal;
     
     // package access for intTest code
     boolean enableSkipOldEvents = true;
 
-    public DeletedArtifactEventSync(ArtifactDAO artifactDAO, URI resourceID, 
+    public DeletedArtifactEventSync(ArtifactDAO artifactDAO, URI resourceID, boolean isGlobal,
             int querySleepInterval, int maxRetryInterval) {
         super(artifactDAO, resourceID, querySleepInterval, maxRetryInterval);
+        this.isGlobal = isGlobal;
         this.deletedDAO = new DeletedArtifactEventDAO(artifactDAO);
         try {
             this.tapClient = new TapClient<>(resourceID);
@@ -214,7 +216,13 @@ public class DeletedArtifactEventSync extends AbstractSync {
                     log.info("DeletedArtifactEventSync.putDeletedArtifactEvent id=" + syncEvent.getID()
                             + logURI
                             + " lastModified=" + df.format(syncEvent.getLastModified()));
-                    deletedDAO.put(syncEvent);
+                    if (isGlobal) {
+                        // force lastModified update
+                        deletedDAO.put(syncEvent, true);
+                    } else {
+                        deletedDAO.put(syncEvent);
+                    }
+                        
                     
                     harvestState.curLastModified = syncEvent.getLastModified();
                     harvestState.curID = syncEvent.getID();

@@ -195,7 +195,14 @@ public class GetAction extends ArtifactAction {
             // default: complete download
             HeadAction.setHeaders(artifact, syncOutput);
             bcos = new ByteCountOutputStream(syncOutput.getOutputStream());
-            storageAdapter.get(artifact.storageLocation, bcos);
+            
+            // create tmp StorageLocation with expected checksum so adapter can potentially
+            // fail early if the file content changed
+            StorageLocation tmp = new StorageLocation(artifact.storageLocation.getStorageID());
+            tmp.storageBucket = artifact.storageLocation.storageBucket;
+            tmp.expectedContentChecksum = artifact.getContentChecksum();
+            
+            storageAdapter.get(tmp, bcos);
             
         } catch (RangeNotSatisfiableException e) {
             log.debug("Invalid Range - offset greater then the content length:" + range);
