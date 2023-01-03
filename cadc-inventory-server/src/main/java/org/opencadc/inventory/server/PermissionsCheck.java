@@ -77,7 +77,6 @@ import ca.nrc.cadc.reg.Standards;
 import ca.nrc.cadc.reg.client.LocalAuthority;
 import java.net.URI;
 import java.security.AccessControlException;
-import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
 import java.security.cert.CertificateException;
 import java.util.ArrayList;
@@ -90,6 +89,7 @@ import org.opencadc.gms.GroupClient;
 import org.opencadc.gms.GroupURI;
 import org.opencadc.gms.GroupUtil;
 import org.opencadc.inventory.InventoryUtil;
+import org.opencadc.permissions.Grant;
 import org.opencadc.permissions.ReadGrant;
 import org.opencadc.permissions.WriteGrant;
 import org.opencadc.permissions.client.PermissionsClient;
@@ -131,8 +131,8 @@ public class PermissionsCheck {
 
         Set<GroupURI> granted = new TreeSet<>();
         if (!readGrantServices.isEmpty()) {
+            Subject ops = CredUtil.createOpsSubject();
             try {
-                Subject ops = CredUtil.createOpsSubject();
                 List<ReadGrant> grants = Subject.doAs(ops, new GetReadGrantsAction(this.artifactURI, readGrantServices));
                 for (ReadGrant g : grants) {
                     if (g.isAnonymousAccess()) {
@@ -260,6 +260,9 @@ public class PermissionsCheck {
         public List<ReadGrant> run() throws Exception {
             // TODO: could call multiple services in parallel
             List<ReadGrant> ret = new ArrayList<>();
+            boolean partialSuccess = false;
+            URI lastServiceFail = null;
+            Exception lastFail = null;
             for (URI ps : this.readGrantServices) {
                 try {
                     PermissionsClient pc = new PermissionsClient(ps);
@@ -267,9 +270,17 @@ public class PermissionsCheck {
                     if (grant != null) {
                         ret.add(grant);
                     }
+                    partialSuccess = true;
                 } catch (ResourceNotFoundException ex) {
                     log.warn("failed to find granting service: " + ps + " -- cause: " + ex);
+                } catch (Exception ex) {
+                    log.warn("failed to call granting service: " + ps + " -- casuse: " + ex);
+                    lastServiceFail = ps;
+                    lastFail = ex;
                 }
+            }
+            if (!partialSuccess) {
+                throw new RuntimeException("failed to call granting service: " + lastServiceFail, lastFail);
             }
             return ret;
         }
