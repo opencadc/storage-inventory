@@ -577,6 +577,9 @@ public class ArtifactValidator {
                         log.info(String.format("ArtifactValidator.putArtifact id=%s uri=%s reason=resolve-collision", 
                                 remote.getID(), remote.getURI()));
                         this.artifactDAO.put(remote);
+                        if (remoteSite != null) {
+                            artifactDAO.addSiteLocation(remote, new SiteLocation(remoteSite.getID()));
+                        }
                     } else {
                         log.debug(String.format(
                             "resolve Artifact.id collision: put DeletedArtifactEvent for remote %s %s "
