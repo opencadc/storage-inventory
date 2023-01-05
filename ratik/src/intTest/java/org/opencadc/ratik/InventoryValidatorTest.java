@@ -1068,9 +1068,11 @@ public class InventoryValidatorTest {
         Date olderDate = new Date(nowDate.getTime() - 5000);
 
         Artifact localArtifact = new Artifact(artifactURI, contentCheckSum, olderDate, 1024L);
+        
+        UUID remoteSiteID = this.remoteEnvironment.storageSiteDAO.list().iterator().next().getID();
+        SiteLocation remoteSiteLocation = new SiteLocation(remoteSiteID);
         if (trackSiteLocations) {
-            UUID remoteSiteID = this.remoteEnvironment.storageSiteDAO.list().iterator().next().getID();
-            localArtifact.siteLocations.add(new SiteLocation(remoteSiteID));
+            localArtifact.siteLocations.add(remoteSiteLocation);
         }
         this.localEnvironment.artifactDAO.put(localArtifact);
 
@@ -1098,6 +1100,15 @@ public class InventoryValidatorTest {
 
         localArtifact = this.localEnvironment.artifactDAO.get(localArtifact.getID());
         Assert.assertNull("local artifact found", localArtifact);
+        
+        Artifact actual = localEnvironment.artifactDAO.get(artifactURI);
+        Assert.assertNotNull(actual);
+        Assert.assertEquals(remoteArtifact.getID(), actual.getID());
+        
+        if (trackSiteLocations) {
+            Assert.assertEquals(1, actual.siteLocations.size());
+            Assert.assertTrue(actual.siteLocations.contains(remoteSiteLocation));
+        }
 
         // cleanup between tests
         this.localEnvironment.cleanTestEnvironment();

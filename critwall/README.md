@@ -21,7 +21,7 @@ org.opencadc.critwall.inventory.password={password for inventory admin}
 org.opencadc.critwall.inventory.url=jdbc:postgresql://{server}/{database}
 
 # global transfer negotiation service (raven)
-org.opencadc.critwall.locatorService={resorceID of global transfer negotiation service}
+org.opencadc.critwall.locatorService={resourceID of global transfer negotiation service}
 
 # storage back end
 org.opencadc.inventory.storage.StorageAdapter={fully qualified class name for StorageAdapter implementation}
