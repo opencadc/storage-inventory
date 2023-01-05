@@ -106,7 +106,7 @@ public class DeletedStorageLocationEventSync extends AbstractSync {
     private final TapClient<DeletedStorageLocationEvent> tapClient;
     
     // package access for intTest code
-    boolean enableSkipOldEvents = true;
+    boolean enableSkipOldEvents = false;
 
     public DeletedStorageLocationEventSync(ArtifactDAO artifactDAO, URI resourceID, 
             int querySleepInterval, int maxRetryInterval, StorageSite storageSite) {
@@ -132,15 +132,6 @@ public class DeletedStorageLocationEventSync extends AbstractSync {
         }
         
         HarvestState hs = harvestStateDAO.get(DeletedStorageLocationEvent.class.getSimpleName(), resourceID);
-        if (hs.curLastModified == null) {
-            // TEMPORARY: check for pre-rename record and rename
-            HarvestState orig = harvestStateDAO.get(DeletedStorageLocationEvent.class.getName(), resourceID);
-            if (orig.curLastModified != null) {
-                orig.setName(DeletedStorageLocationEvent.class.getSimpleName());
-                harvestStateDAO.put(orig);
-                hs = orig;
-            }
-        }
         if (enableSkipOldEvents && hs.curLastModified == null) { 
             // first harvest: ignore old deleted events?
             HarvestState artifactHS = harvestStateDAO.get(Artifact.class.getSimpleName(), resourceID);
@@ -158,12 +149,12 @@ public class DeletedStorageLocationEventSync extends AbstractSync {
 
         final TransactionManager transactionManager = artifactDAO.getTransactionManager();
         
-        final Date endTime = new Date();
-        final Date lookBack = new Date(endTime.getTime() - LOOKBACK_TIME);
+        final Date now = new Date();
+        final Date lookBack = new Date(now.getTime() - LOOKBACK_TIME_MS);
         Date startTime = getQueryLowerBound(lookBack, harvestState.curLastModified);
         
         DateFormat df = DateUtil.getDateFormat(DateUtil.IVOA_DATE_FORMAT, DateUtil.UTC);
-        if (lookBack != null && harvestState.curLastModified != null) {
+        if (harvestState.curLastModified != null) {
             log.debug("lookBack=" + df.format(lookBack) + " curLastModified=" + df.format(harvestState.curLastModified) 
                 + " -> " + df.format(startTime));
         }
@@ -171,17 +162,14 @@ public class DeletedStorageLocationEventSync extends AbstractSync {
         if (startTime != null) {
             start = df.format(startTime);
         }
-        String end = null;
-        if (endTime != null) {
-            end = df.format(endTime);
-        }
+        String end = df.format(now);
         log.info("DeletedStorageLocationEvent.QUERY start=" + start + " end=" + end);
         
         final SiteLocation siteLocation = new SiteLocation(storageSite.getID());
         boolean first = true;
         long t1 = System.currentTimeMillis();
         try (final ResourceIterator<DeletedStorageLocationEvent> deletedStorageLocationEventResourceIterator =
-                     getEventStream(startTime, endTime)) {
+                     getEventStream(startTime, now)) {
             long dt = System.currentTimeMillis() - t1;
             log.info("DeletedStorageLocationEvent.QUERY start=" + start + " end=" + end + " duration=" + dt);
             while (deletedStorageLocationEventResourceIterator.hasNext()) {

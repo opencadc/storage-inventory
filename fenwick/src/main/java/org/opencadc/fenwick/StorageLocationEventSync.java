@@ -123,22 +123,22 @@ public class StorageLocationEventSync extends AbstractSync {
 
         final HarvestState harvestState = this.harvestStateDAO.get(StorageLocationEvent.class.getSimpleName(), resourceID);
         harvestStateDAO.setUpdateBufferCount(99); // buffer 99 updates, do every 100
-        harvestStateDAO.setMaintCount(999); // buffer 9999 do every 10000 real updates aka every 1e5 events
+        harvestStateDAO.setMaintCount(999); // buffer 999 so every 1000 real updates aka every 1e5 events
         
-        final Date endTime = new Date();
-        final Date lookBack = new Date(endTime.getTime() - LOOKBACK_TIME);
+        final Date now = new Date();
+        final Date lookBack = new Date(now.getTime() - LOOKBACK_TIME_MS);
         Date startTime = getQueryLowerBound(lookBack, harvestState.curLastModified);
         
         DateFormat df = DateUtil.getDateFormat(DateUtil.IVOA_DATE_FORMAT, DateUtil.UTC);
         if (harvestState.curLastModified != null) {
-            log.debug("lookBack=" + df.format(lookBack) + " curLastModified=" + df.format(harvestState.curLastModified) 
+            log.warn("lookBack=" + df.format(lookBack) + " curLastModified=" + df.format(harvestState.curLastModified) 
                 + " -> " + df.format(startTime));
         }
         String start = null;
         if (startTime != null) {
-            start = df.format(startTime);
+            df.format(startTime);
         }
-        String end = df.format(endTime);
+        String end = df.format(now);
         log.info("StorageLocationEvent.QUERY start=" + start + " end=" + end);
         
         final TransactionManager transactionManager = artifactDAO.getTransactionManager();
@@ -147,7 +147,7 @@ public class StorageLocationEventSync extends AbstractSync {
         boolean first = true;
         long t1 = System.currentTimeMillis();
         try (final ResourceIterator<StorageLocationEvent> resourceIterator =
-                     getEventStream(startTime, endTime)) {
+                     getEventStream(startTime, now)) {
             long dt = System.currentTimeMillis() - t1;
             log.info("StorageLocationEvent.QUERY start=" + start + " end=" + end + " duration=" + dt);
             while (resourceIterator.hasNext()) {

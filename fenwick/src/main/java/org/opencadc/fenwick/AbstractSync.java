@@ -96,7 +96,7 @@ abstract class AbstractSync implements Runnable {
 
     public static final String CERTIFICATE_FILE_LOCATION = System.getProperty("user.home") + "/.ssl/cadcproxy.pem";
     
-    static final int LOOKBACK_TIME = 60; // sec
+    protected static final long LOOKBACK_TIME_MS = 60 * 1000L;
     
     protected final URI resourceID;
     protected final int querySleepInterval;
