@@ -141,22 +141,12 @@ public class ArtifactSync extends AbstractSync {
 
         final SiteLocation remoteSiteLocation = (storageSite == null ? null : new SiteLocation(storageSite.getID()));
         
-        HarvestState hs = this.harvestStateDAO.get(Artifact.class.getSimpleName(), resourceID);
-        if (hs.curLastModified == null) {
-            // TEMPORARY: check for pre-rename record and rename
-            HarvestState orig = harvestStateDAO.get(Artifact.class.getName(), resourceID);
-            if (orig.curLastModified != null) {
-                orig.setName(Artifact.class.getSimpleName());
-                harvestStateDAO.put(orig);
-                hs = orig;
-            }
-        }
-        final HarvestState harvestState = hs;
+        final HarvestState harvestState = this.harvestStateDAO.get(Artifact.class.getSimpleName(), resourceID);
         harvestStateDAO.setUpdateBufferCount(99); // buffer 99 updates, do every 100
-        harvestStateDAO.setMaintCount(999); // buffer 9999 do every 10000 real updates aka every 1e5 events
+        harvestStateDAO.setMaintCount(999); // buffer 999 so every 1000 real updates aka every 1e5 events
         
-        final Date endTime = new Date();
-        final Date lookBack = new Date(endTime.getTime() - LOOKBACK_TIME);
+        final Date now = new Date();
+        final Date lookBack = new Date(now.getTime() - LOOKBACK_TIME_MS);
         Date startTime = getQueryLowerBound(lookBack, harvestState.curLastModified);
         
         DateFormat df = DateUtil.getDateFormat(DateUtil.IVOA_DATE_FORMAT, DateUtil.UTC);
@@ -168,10 +158,7 @@ public class ArtifactSync extends AbstractSync {
         if (startTime != null) {
             start = df.format(startTime);
         }
-        String end = null;
-        if (endTime != null) {
-            end = df.format(endTime);
-        }
+        String end = df.format(now);
         log.info("Artifact.QUERY start=" + start + " end=" + end);
         
         final TransactionManager transactionManager = artifactDAO.getTransactionManager();
@@ -179,7 +166,7 @@ public class ArtifactSync extends AbstractSync {
         
         boolean first = true;
         long t1 = System.currentTimeMillis();
-        try (final ResourceIterator<Artifact> artifactResourceIterator = getEventStream(startTime, endTime)) {
+        try (final ResourceIterator<Artifact> artifactResourceIterator = getEventStream(startTime, now)) {
             while (artifactResourceIterator.hasNext()) {
                 final Artifact artifact = artifactResourceIterator.next();
                 if (first) {
