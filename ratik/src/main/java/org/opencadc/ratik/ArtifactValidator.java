@@ -458,11 +458,15 @@ public class ArtifactValidator {
                 log.debug("starting transaction");
                 this.transactionManager.startTransaction();
                 log.debug("start txn: OK");
-
+                
+                Artifact current = artifactDAO.lock(remote);
+                if (current != null) {
+                    // artifact appeared since query start: preserve existing storageLocation
+                    remote.storageLocation = current.storageLocation;
+                }
                 log.info(String.format("ArtifactValidator.putArtifact id=%s uri=%s %s", 
                         remote.getID(), remote.getURI(), df.format(remote.getLastModified())));
                 this.artifactDAO.put(remote);
-
                 log.debug("committing transaction");
                 this.transactionManager.commitTransaction();
                 log.debug("commit txn: OK");
@@ -492,7 +496,7 @@ public class ArtifactValidator {
             }
         }
         
-        // explanation4: L==global, new Artifact in R, pending/missed changed Artifact event in L
+        // explanation5: L==global, new Artifact in R, pending/missed changed Artifact event in L
         // also
         // explanation0: filter policy at L changed to include artifact in R
         // explanation6: deleted from L, lost DeletedArtifactEvent
@@ -632,15 +636,19 @@ public class ArtifactValidator {
                             if (current.getLastModified().before(remote.getLastModified())) {
                                 if (this.remoteSite == null) {
                                     // storage site: keep StorageLocation
-                                    remote.storageLocation = local.storageLocation;
+                                    remote.storageLocation = current.storageLocation;
                                 } else {
-                                    // global site: merge SiteLocation(s)
-                                    remote.siteLocations.add(new SiteLocation(this.remoteSite.getID()));
-                                    remote.siteLocations.addAll(local.siteLocations);
+                                    // global site: keep SiteLocation(s)
+                                    remote.siteLocations.addAll(current.siteLocations);
                                 }
+                                
                                 log.info(String.format("ArtifactValidator.putArtifact id=%s uri=%s %s reason=missed-update",
                                         remote.getID(), remote.getURI(), df.format(remote.getLastModified())));
                                 this.artifactDAO.put(remote);
+                                if (remoteSite != null) {
+                                    // explicit so addSiteLocation can force lastModified update in global
+                                    artifactDAO.addSiteLocation(remote, new SiteLocation(remoteSite.getID()));
+                                }
                             } else {
                                 // same as explanation2 below
                                 log.info(String.format("ArtifactValidator.noAction id=%s uri=%s reason=metaChecksum-mismatch",
