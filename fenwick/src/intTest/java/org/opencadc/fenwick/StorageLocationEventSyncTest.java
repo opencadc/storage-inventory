@@ -81,7 +81,6 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.opencadc.inventory.Artifact;
-import org.opencadc.inventory.DeletedStorageLocationEvent;
 import org.opencadc.inventory.SiteLocation;
 import org.opencadc.inventory.StorageLocationEvent;
 import org.opencadc.inventory.StorageSite;
