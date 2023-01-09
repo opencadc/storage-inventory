@@ -70,14 +70,11 @@
 package org.opencadc.vault;
 
 import ca.nrc.cadc.reg.Capabilities;
-import ca.nrc.cadc.reg.Capability;
-import ca.nrc.cadc.reg.Standards;
 import ca.nrc.cadc.util.Log4jInit;
 import ca.nrc.cadc.vosi.CapabilitiesTest;
 import java.net.URI;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
-import org.junit.Assert;
 
 /**
  *
@@ -89,7 +86,7 @@ public class VosiCapabilitiesTest extends CapabilitiesTest {
 
     static {
         Log4jInit.setLevel("ca.nrc.cadc.vosi", Level.INFO);
-        Log4jInit.setLevel("org.opencadc.inventory", Level.INFO);
+        Log4jInit.setLevel("org.opencadc.vault", Level.INFO);
     }
 
     public static final URI VAULT_SERVICE_ID = URI.create("ivo://opencadc.org/vault");

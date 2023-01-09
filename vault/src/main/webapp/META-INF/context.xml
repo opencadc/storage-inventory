@@ -3,15 +3,15 @@
 
     <WatchedResource>WEB-INF/web.xml</WatchedResource>
 
-    <Resource name="jdbc/inventory"
+    <Resource name="jdbc/vospace"
         auth="Container"
         type="javax.sql.DataSource"
         factory="org.apache.tomcat.jdbc.pool.DataSourceFactory" closeMethod="close"
         minEvictableIdleTimeMillis="60000" timeBetweenEvictionRunsMillis="30000"
         maxWait="20000"
-        initialSize="0" minIdle="0" maxIdle="${org.opencadc.vault.inventory.maxActive}" maxActive="${org.opencadc.vault.inventory.maxActive}"
-        username="${org.opencadc.vault.inventory.username}" password="${org.opencadc.vault.inventory.password}"
-        driverClassName="org.postgresql.Driver" url="${org.opencadc.vault.inventory.url}"
+        initialSize="0" minIdle="0" maxIdle="${org.opencadc.vault.vospace.maxActive}" maxActive="${org.opencadc.vault.vospace.maxActive}"
+        username="${org.opencadc.vault.vospace.username}" password="${org.opencadc.vault.vospace.password}"
+        driverClassName="org.postgresql.Driver" url="${org.opencadc.vault.vospace.url}"
         removeAbandoned="false"
         testOnBorrow="true" validationQuery="select 123" />
     

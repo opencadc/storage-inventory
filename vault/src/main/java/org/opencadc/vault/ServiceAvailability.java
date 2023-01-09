@@ -67,22 +67,9 @@
 
 package org.opencadc.vault;
 
-import ca.nrc.cadc.auth.AuthMethod;
-import ca.nrc.cadc.reg.Standards;
-import ca.nrc.cadc.reg.client.LocalAuthority;
-import ca.nrc.cadc.reg.client.RegistryClient;
 import ca.nrc.cadc.rest.RestAction;
 import ca.nrc.cadc.vosi.Availability;
 import ca.nrc.cadc.vosi.AvailabilityPlugin;
-import ca.nrc.cadc.vosi.avail.CheckCertificate;
-import ca.nrc.cadc.vosi.avail.CheckException;
-import ca.nrc.cadc.vosi.avail.CheckResource;
-import ca.nrc.cadc.vosi.avail.CheckWebService;
-
-import java.io.File;
-import java.net.URI;
-import java.net.URL;
-import java.util.NoSuchElementException;
 
 import org.apache.log4j.Logger;
 
@@ -95,7 +82,6 @@ import org.apache.log4j.Logger;
 public class ServiceAvailability implements AvailabilityPlugin {
 
     private static final Logger log = Logger.getLogger(ServiceAvailability.class);
-    private static final File SERVOPS_PEM_FILE = new File(System.getProperty("user.home") + "/.ssl/cadcproxy.pem");
     
     private String appName;
 
@@ -123,7 +109,6 @@ public class ServiceAvailability implements AvailabilityPlugin {
         if (RestAction.STATE_READ_ONLY.equals(state) || RestAction.STATE_READ_WRITE.equals(state)) {
             return true;
         }
-
         return false;
     }
 
@@ -144,53 +129,8 @@ public class ServiceAvailability implements AvailabilityPlugin {
             if (RestAction.STATE_READ_ONLY.equals(state)) {
                 return new Availability(false, RestAction.STATE_READ_ONLY_MSG);
             }
-            
-            // check other services we depend on
-            RegistryClient reg = new RegistryClient();
-            LocalAuthority localAuthority = new LocalAuthority();
 
-            URI credURI = null;
-            try {
-                credURI = localAuthority.getServiceURI(Standards.CRED_PROXY_10.toString());
-                URL url = reg.getServiceURL(credURI, Standards.VOSI_AVAILABILITY, AuthMethod.ANON);
-                CheckResource checkResource = new CheckWebService(url);
-                checkResource.check();
-            } catch (NoSuchElementException ex) {
-                log.debug("not configured: " + Standards.CRED_PROXY_10);
-            }
-
-            URI usersURI = null;
-            try {
-                usersURI = localAuthority.getServiceURI(Standards.UMS_USERS_01.toString());
-                URL url = reg.getServiceURL(credURI, Standards.VOSI_AVAILABILITY, AuthMethod.ANON);
-                CheckResource checkResource = new CheckWebService(url);
-                checkResource.check();
-            } catch (NoSuchElementException ex) {
-                log.debug("not configured: " + Standards.UMS_USERS_01);
-            }
-            
-            URI groupsURI = null;
-            try {
-                groupsURI = localAuthority.getServiceURI(Standards.GMS_SEARCH_10.toString());
-                if (!groupsURI.equals(usersURI)) {
-                    URL url = reg.getServiceURL(credURI, Standards.VOSI_AVAILABILITY, AuthMethod.ANON);
-                    CheckResource checkResource = new CheckWebService(url);
-                    checkResource.check();
-                }
-            } catch (NoSuchElementException ex) {
-                log.debug("not configured: " + Standards.GMS_SEARCH_10);
-            }
-            
-            if (credURI != null || usersURI != null || groupsURI != null) {
-                // check for a certificate needed to perform network A&A ops
-                CheckCertificate checkCert = new CheckCertificate(SERVOPS_PEM_FILE);
-                checkCert.check();
-            }
-            
-        } catch (CheckException ce) {
-            // tests determined that the resource is not working
-            isGood = false;
-            note = ce.getMessage();
+            //TODO add availability checks for dependent services
         } catch (Throwable t) {
             // the test itself failed
             log.debug("failure", t);
