@@ -304,8 +304,11 @@ public class AdStorageAdapter implements StorageAdapter {
     }
 
     @Override
-    public Iterator<StorageMetadata> iterator(String storageBucketPrefix, boolean includeRecoverable) throws StorageEngageException, TransientException {
-        throw new UnsupportedOperationException();
+    public Iterator<StorageMetadata> iterator(String storageBucket, boolean includeRecoverable) throws StorageEngageException, TransientException {
+        if (includeRecoverable) {
+            throw new UnsupportedOperationException();
+        }
+        return iterator(storageBucket);
     }
 
     @Override
