@@ -8,17 +8,17 @@ additional path elements (see war-rename.conf).
 
 Runtime configuration must be made available via the `/config` directory.
 
-### catalina.properties (cadc-tomcat)
+### catalina.properties
 When running vault.war in tomcat, parameters of the connection pool in META-INF/context.xml need
 to be configured in catalina.properties:
 ```
 # database connection pools
-org.opencadc.vault.vospace.maxActive={max connections for vospace pool}
-org.opencadc.vault.vospace.username={username for vospace pool}
-org.opencadc.vault.vospace.password={password for vospace pool}
-org.opencadc.vault.vospace.url=jdbc:postgresql://{server}/{database}
+org.opencadc.vault.nodes.maxActive={max connections for vospace pool}
+org.opencadc.vault.nodes.username={username for vospace pool}
+org.opencadc.vault.nodes.password={password for vospace pool}
+org.opencadc.vault.nodes.url=jdbc:postgresql://{server}/{database}
 ```
-The `vospace` account owns and manages (create, alter, drop) vospace database objects and manages
+The `nodes` account owns and manages (create, alter, drop) vault database objects and manages
 all the content (insert, update, delete). The database is specified in the JDBC URL and the schema name is specified 
 in the vault.properties (below). Failure to connect or initialize the database will show up in logs and in the 
 VOSI-availability output.
@@ -29,20 +29,20 @@ A vault.properties file in /config is required to run this service.  The followi
 # service identity
 org.opencadc.vault.resourceID=ivo://{authority}/{name}
 
-# vospace database settings
+# vault database settings
 org.opencadc.inventory.db.SQLGenerator=org.opencadc.inventory.db.SQLGenerator
-org.opencadc.vault.vospace.schema={schema name in the database configured in the JDBC URL}
+org.opencadc.vault.nodes.schema={schema name in the database configured in the JDBC URL}
 ```
 The vault _resourceID_ is the resourceID of _this_ vault service.
 
 The _SQLGenerator_ is a plugin implementation to support the database. There is currently only one implementation that is tested
 with PostgeSQL (10+). Making this work  with other database servers in future _may_ require a different implementation.
 
-The vospace _schema_ name is the name of the database schema used for all created database objects (tables, indices, etc).
+The nodes _schema_ name is the name of the database schema used for all created database objects (tables, indices, etc).
 ```
-
 ### vault-availability.properties (optional)
 The vault-availability.properties file specifies which users have the authority to change the availability state of the vault service. Each entry consists of a key=value pair. The key is always "users". The value is the x500 canonical user name.
+```
 
 Example:
 ```

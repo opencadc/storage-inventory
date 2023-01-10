@@ -90,7 +90,7 @@ public class VaultInitDatabase extends InitDatabase {
 
     public static final String MODEL_NAME = "vospace";
     public static final String MODEL_VERSION = "0.1";
-    public static final String PREV_MODEL_VERSION = "0.1";
+    public static final String PREV_MODEL_VERSION = "n/a";
     
     public VaultInitDatabase(DataSource ds, String database, String schema) {
         super(ds, database, schema, MODEL_NAME, MODEL_VERSION, PREV_MODEL_VERSION);

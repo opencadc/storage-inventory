@@ -86,13 +86,13 @@ import org.opencadc.inventory.db.SQLGenerator;
 public class VaultInitAction extends InitAction {
     private static final Logger log = Logger.getLogger(VaultInitAction.class);
     
-    static final String JNDI_DATASOURCE = "jdbc/vospace"; // context.xml
+    static final String JNDI_DATASOURCE = "jdbc/nodes"; // context.xml
     
     // config keys
     private static final String VAULT_KEY = "org.opencadc.vault";
     static final String RESOURCE_ID_KEY = VAULT_KEY + ".resourceID";
     static final String SQLGEN_KEY = SQLGenerator.class.getName();
-    static final String SCHEMA_KEY = VAULT_KEY + ".vospace.schema";
+    static final String SCHEMA_KEY = VAULT_KEY + ".nodes.schema";
     
     MultiValuedProperties props;
     private URI resourceID;
