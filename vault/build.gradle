@@ -28,7 +28,6 @@ war {
 dependencies {
     compile 'org.opencadc:cadc-log:[1.1.6,2.0)'
     compile 'org.opencadc:cadc-vosi:[1.4.3,2.0)'
-    compile 'org.opencadc:cadc-inventory-db:[0.14,1.0)'
 
     testCompile 'junit:junit:[4.0,)'
 

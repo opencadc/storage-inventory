@@ -30,13 +30,9 @@ A vault.properties file in /config is required to run this service.  The followi
 org.opencadc.vault.resourceID=ivo://{authority}/{name}
 
 # vault database settings
-org.opencadc.inventory.db.SQLGenerator=org.opencadc.inventory.db.SQLGenerator
 org.opencadc.vault.nodes.schema={schema name in the database configured in the JDBC URL}
 ```
 The vault _resourceID_ is the resourceID of _this_ vault service.
-
-The _SQLGenerator_ is a plugin implementation to support the database. There is currently only one implementation that is tested
-with PostgeSQL (10+). Making this work  with other database servers in future _may_ require a different implementation.
 
 The nodes _schema_ name is the name of the database schema used for all created database objects (tables, indices, etc).
 ```

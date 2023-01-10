@@ -77,7 +77,6 @@ import java.util.Map;
 import java.util.TreeMap;
 import javax.sql.DataSource;
 import org.apache.log4j.Logger;
-import org.opencadc.inventory.db.SQLGenerator;
 
 /**
  *
@@ -91,7 +90,6 @@ public class VaultInitAction extends InitAction {
     // config keys
     private static final String VAULT_KEY = "org.opencadc.vault";
     static final String RESOURCE_ID_KEY = VAULT_KEY + ".resourceID";
-    static final String SQLGEN_KEY = SQLGenerator.class.getName();
     static final String SCHEMA_KEY = VAULT_KEY + ".nodes.schema";
     
     MultiValuedProperties props;
@@ -131,21 +129,6 @@ public class VaultInitAction extends InitAction {
             sb.append("OK");
         }
 
-        String sqlgen = mvp.getFirstPropertyValue(SQLGEN_KEY);
-        sb.append("\n\t").append(SQLGEN_KEY).append(": ");
-        if (sqlgen == null) {
-            sb.append("MISSING");
-            ok = false;
-        } else {
-            try {
-                Class c = Class.forName(sqlgen);
-                sb.append("OK");
-            } catch (ClassNotFoundException ex) {
-                sb.append("class not found: " + sqlgen);
-                ok = false;
-            }
-        }
-
         String schema = mvp.getFirstPropertyValue(SCHEMA_KEY);
         sb.append("\n\t").append(SCHEMA_KEY).append(": ");
         if (schema == null) {
@@ -163,18 +146,10 @@ public class VaultInitAction extends InitAction {
     }
     
     static Map<String,Object> getDaoConfig(MultiValuedProperties props) {
-        String cname = props.getFirstPropertyValue(SQLGenerator.class.getName());
-        try {
-            Map<String,Object> ret = new TreeMap<>();
-            Class clz = Class.forName(cname);
-            ret.put(SQLGenerator.class.getName(), clz);
-            ret.put("jndiDataSourceName", org.opencadc.vault.VaultInitAction.JNDI_DATASOURCE);
-            ret.put("schema", props.getFirstPropertyValue(org.opencadc.vault.VaultInitAction.SCHEMA_KEY));
-            //config.put("database", null);
-            return ret;
-        } catch (ClassNotFoundException ex) {
-            throw new IllegalStateException("invalid config: failed to load SQLGenerator: " + cname);
-        }
+        Map<String, Object> ret = new TreeMap<>();
+        ret.put("jndiDataSourceName", org.opencadc.vault.VaultInitAction.JNDI_DATASOURCE);
+        ret.put("schema", props.getFirstPropertyValue(org.opencadc.vault.VaultInitAction.SCHEMA_KEY));
+        return ret;
     }
     
     private void initConfig() {
