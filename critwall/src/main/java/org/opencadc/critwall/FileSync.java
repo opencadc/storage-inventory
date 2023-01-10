@@ -70,6 +70,7 @@ package org.opencadc.critwall;
 import ca.nrc.cadc.auth.AuthenticationUtil;
 import ca.nrc.cadc.auth.SSLUtil;
 import ca.nrc.cadc.db.ConnectionConfig;
+import ca.nrc.cadc.db.DBUtil;
 import ca.nrc.cadc.io.ResourceIterator;
 import ca.nrc.cadc.thread.ThreadedRunnableExecutor;
 import ca.nrc.cadc.util.BucketSelector;
@@ -95,7 +96,6 @@ import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.version.InitDatabase;
 import org.opencadc.inventory.storage.StorageAdapter;
-import org.opencadc.inventory.util.DBUtil;
 
 
 public class FileSync implements Runnable {
