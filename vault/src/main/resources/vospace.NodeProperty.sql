@@ -78,7 +78,7 @@ create table <schema>.NodeProperty
    lastModified timestamp default now(),
 
 -- support replication with a fake primary key
-   _rep_support        bigint primary key
+   _rep_support        bigint generated always as identity primary key
 );
 
 create index nodeproperty_nodeid_index on <schema>.NodeProperty(nodeID,propertyURI)

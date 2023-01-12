@@ -70,7 +70,7 @@
 -- sample table for use with NodeDAO 
 
 create table <schema>.Node (
-   nodeID bigint not null primary key,
+   nodeID bigint generated always as identity primary key,
    parentID bigint,
    name varchar(512) not null,
    type char(1) not null,
@@ -88,13 +88,13 @@ create table <schema>.Node (
    contentType varchar(100),
    contentEncoding varchar(50),
    contentLength bigint,
-   contentMD5 bytea,
+   contentMD5 varchar(136),
 
    createdOn timestamp default now(),
    lastModified timestamp not null,
    
    link text,
-   storageID varchar(32)
+   storageID varchar(256)
 );
 
 create unique index node_nodeid_index on <schema>.Node(nodeID);
