@@ -116,6 +116,45 @@ public class AdStorageAdapterIteratorTest {
                 log.error("unexpected exception", unexpected);
                 Assert.fail("unexpected exception: " + unexpected.getMessage());
             }
+            
+            // test override method
+            try {
+                Iterator<StorageMetadata> storageMetaIterator = adStorageAdapter.iterator(archiveName, false);
+                Assert.assertTrue("iterator is not empty.", storageMetaIterator.hasNext() == false);
+            } catch (Exception unexpected) {
+                log.error("unexpected exception", unexpected);
+                Assert.fail("unexpected exception: " + unexpected.getMessage());
+            }
+
+            return null;
+        });
+    }
+    
+    @Test
+    public void testRecoverableIteratorUnsupported() throws Exception {
+        Subject.doAs(testSubject, (PrivilegedExceptionAction<Object>) () -> {
+            final AdStorageAdapter adStorageAdapter = new AdStorageAdapter();
+
+            // query should come back with 0
+            String archiveName = "NOT_IN_ARCHIVE";
+            try {
+                Iterator<StorageMetadata> storageMetaIterator = adStorageAdapter.iterator(archiveName, true);
+                Assert.assertTrue("iterator is not empty.", storageMetaIterator.hasNext() == false);
+            } catch (UnsupportedOperationException expected) {
+                    log.info("caught expected: " + expected);
+            } catch (Exception unexpected) {
+                log.error("unexpected exception", unexpected);
+                Assert.fail("unexpected exception: " + unexpected.getMessage());
+            }
+            
+            // test override method
+            try {
+                Iterator<StorageMetadata> storageMetaIterator = adStorageAdapter.iterator(archiveName, false);
+                Assert.assertTrue("iterator is not empty.", storageMetaIterator.hasNext() == false);
+            } catch (Exception unexpected) {
+                log.error("unexpected exception", unexpected);
+                Assert.fail("unexpected exception: " + unexpected.getMessage());
+            }
 
             return null;
         });
