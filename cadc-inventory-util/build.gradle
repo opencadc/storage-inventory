@@ -16,18 +16,15 @@ sourceCompatibility = 1.8
 
 group = 'org.opencadc'
 
-version = '0.1.9'
+version = '0.1.10'
 
 description = 'OpenCADC Storage Inventory client utility library'
 def git_url = 'https://github.com/opencadc/storage-inventory'
 
 dependencies {
-    compile 'org.apache.commons:commons-dbcp2:[2.8.0,2.9.0)'
     compile 'org.opencadc:cadc-inventory:[0.9,1.0)'
     compile 'org.opencadc:cadc-util:[1.6,2.0)'
     compile 'org.opencadc:cadc-tap:[1.0.1,1.2)'
     
     testCompile 'junit:junit:[4.0,)'
-    
-    intTestRuntime 'org.postgresql:postgresql:[42.2.8,)'
 }
