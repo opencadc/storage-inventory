@@ -172,8 +172,8 @@ public class VaultInitAction extends InitAction {
             DataSource ds = DBUtil.findJNDIDataSource(JNDI_DATASOURCE);
             String database = (String) daoConfig.get("database");
             String schema = (String) daoConfig.get("schema");
-            VaultInitDatabase init = new VaultInitDatabase(ds, database, schema);
-            init.doInit();
+            //VaultInitDatabase init = new VaultInitDatabase(ds, database, schema);
+            //init.doInit();
             log.info("initDatabase: " + JNDI_DATASOURCE + " " + schema + " OK");
         } catch (Exception ex) {
             throw new IllegalStateException("check/init database failed", ex);
