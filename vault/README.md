@@ -30,13 +30,14 @@ A vault.properties file in /config is required to run this service.  The followi
 org.opencadc.vault.resourceID=ivo://{authority}/{name}
 
 # vault database settings
-org.opencadc.vault.nodes.schema={schema name in the database configured in the JDBC URL}
+org.opencadc.vault.nodes.schema={schema name}
 ```
 The vault _resourceID_ is the resourceID of _this_ vault service.
 
 The nodes _schema_ name is the name of the database schema used for all created database objects (tables, indices, etc).
-```
+
 ### vault-availability.properties (optional)
+```
 The vault-availability.properties file specifies which users have the authority to change the availability state of the vault service. Each entry consists of a key=value pair. The key is always "users". The value is the x500 canonical user name.
 ```
 
