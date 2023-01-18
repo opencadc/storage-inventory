@@ -397,8 +397,8 @@ public class RavenInitAction extends InitAction {
         @Override
         public void run() {
             int lastSiteQuerySecs = 0;
-            Set<StorageSite> sites = storageSiteDAO.list();
             while (true) {
+                Set<StorageSite> sites = storageSiteDAO.list();
                 if (lastSiteQuerySecs >= AVAILABILITY_FULL_CHECK_TIMEOUT) {
                     sites = storageSiteDAO.list();
                     lastSiteQuerySecs = 0;
