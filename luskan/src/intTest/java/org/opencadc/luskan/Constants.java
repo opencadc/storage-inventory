@@ -76,6 +76,6 @@ import java.net.URI;
  */
 public abstract class Constants {
 
-    public static final URI RESOURCE_ID = URI.create("ivo://cadc.nrc.ca/luskan");
+    public static final URI RESOURCE_ID = URI.create("ivo://opencadc.org/luskan");
     
 }

@@ -117,8 +117,6 @@ public class FilesTest extends RavenTest {
     private static final URI RESOURCE_ID1 = URI.create("ivo://negotiation-test-site1");
     private static final URI RESOURCE_ID2 = URI.create("ivo://negotiation-test-site2");
 
-    private static final URI CONSIST_RESOURCE_ID = URI.create("ivo://cadc.nrc.ca/minoc");
-
     static {
         Log4jInit.setLevel("org.opencadc.raven", Level.INFO);
         Log4jInit.setLevel("ca.nrc.cadc.db", Level.INFO);
