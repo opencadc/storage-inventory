@@ -411,7 +411,7 @@ public class RavenInitAction extends InitAction {
                     log.debug("checking site: " + resourceID);
                     SiteState siteState = this.siteStates.get(resourceID);
                     if (siteState == null) {
-                        siteState = new SiteState(true, 0);
+                        siteState = new SiteState(false, 0);
                     }
                     boolean minDetail = siteState.isMinDetail();
                     Availability availability;
