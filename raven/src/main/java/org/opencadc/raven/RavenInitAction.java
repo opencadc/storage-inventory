@@ -397,8 +397,8 @@ public class RavenInitAction extends InitAction {
         @Override
         public void run() {
             int lastSiteQuerySecs = 0;
-            Set<StorageSite> sites = storageSiteDAO.list();
             while (true) {
+                Set<StorageSite> sites = storageSiteDAO.list();
                 if (lastSiteQuerySecs >= AVAILABILITY_FULL_CHECK_TIMEOUT) {
                     sites = storageSiteDAO.list();
                     lastSiteQuerySecs = 0;
@@ -411,7 +411,7 @@ public class RavenInitAction extends InitAction {
                     log.debug("checking site: " + resourceID);
                     SiteState siteState = this.siteStates.get(resourceID);
                     if (siteState == null) {
-                        siteState = new SiteState(true, 0);
+                        siteState = new SiteState(false, 0);
                     }
                     boolean minDetail = siteState.isMinDetail();
                     Availability availability;

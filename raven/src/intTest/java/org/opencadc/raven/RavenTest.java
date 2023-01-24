@@ -104,9 +104,10 @@ import org.opencadc.inventory.db.SQLGenerator;
  * @author majorb
  */
 public abstract class RavenTest {
-    
     private static final Logger log = Logger.getLogger(NegotiationTest.class);
-    public static final URI RAVEN_SERVICE_ID = URI.create("ivo://cadc.nrc.ca/raven");
+
+    static final URI RAVEN_SERVICE_ID = URI.create("ivo://opencadc.org/raven");
+    static final URI CONSIST_RESOURCE_ID = URI.create("ivo://opencadc.org/minoc");
     
     static String SERVER = "INVENTORY_TEST";
     static String DATABASE = "cadctest";

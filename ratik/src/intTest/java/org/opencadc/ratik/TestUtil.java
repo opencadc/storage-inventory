@@ -93,7 +93,7 @@ public class TestUtil {
     static String LUSKAN_SERVER = "LUSKAN_TEST";
     static String LUSKAN_SCHEMA = "inventory";
     static String LUSKAN_DATABASE = "cadctest";
-    static URI LUSKAN_URI = URI.create("ivo://cadc.nrc.ca/luskan");
+    static URI LUSKAN_URI = URI.create("ivo://opencadc.org/luskan");
     
     static String ZERO_BYTES_MD5 = "md5:d41d8cd98f00b204e9800998ecf8427e";
 

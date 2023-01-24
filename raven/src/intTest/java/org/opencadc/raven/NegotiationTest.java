@@ -119,8 +119,6 @@ public class NegotiationTest extends RavenTest {
         Log4jInit.setLevel("ca.nrc.cadc.db", Level.INFO);
     }
 
-    private static final URI CONSIST_RESOURCE_ID = URI.create("ivo://cadc.nrc.ca/minoc");
-
     ArtifactDAO artifactDAO;
     StorageSiteDAO siteDAO;
     

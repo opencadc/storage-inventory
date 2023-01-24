@@ -289,10 +289,12 @@ public class BucketValidator implements ValidateActions {
         if (unvalidatedArtifact != null) {
             log.debug("unvalidatedArtifact: " + unvalidatedArtifact);
             validationPolicy.validate(unvalidatedArtifact, null);
+            numValidated++;
         }
         if (unvalidatedStorageMetadata != null) {
             log.debug("unvalidatedStorageMetadata: " + unvalidatedStorageMetadata);
             validationPolicy.validate(null, unvalidatedStorageMetadata);
+            numValidated++;
         }
         
         // when one iterator is exhausted, the other can have multiple remaining

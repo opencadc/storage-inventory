@@ -121,7 +121,7 @@ public class InventoryValidatorTest {
     static String INVENTORY_SCHEMA = "inventory";
     static String TMP_DIR = "build/tmp";
     static String USER_HOME = System.getProperty("user.home");
-    static URI REMOTE_STORAGE_SITE = URI.create("ivo://cadc.nrc.ca/minoc");
+    static URI REMOTE_STORAGE_SITE = URI.create("ivo://opencadc.org/minoc");
 
     private final DateFormat df = DateUtil.getDateFormat(DateUtil.IVOA_DATE_FORMAT, DateUtil.UTC);
     
