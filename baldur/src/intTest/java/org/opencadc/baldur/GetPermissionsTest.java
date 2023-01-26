@@ -96,7 +96,7 @@ public class GetPermissionsTest extends BaldurTest {
     private static final Logger log = Logger.getLogger(GetPermissionsTest.class);
     
     // This URI matches the single entry in baldur-permissions-config.pem
-    URI assetID = URI.create("cadc:TEST/file.fits");
+    URI assetID = URI.create("baldur:TEST/file.fits");
     
     static {
         Log4jInit.setLevel("org.opencadc.baldur", Level.INFO);
