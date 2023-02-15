@@ -67,6 +67,7 @@
 
 package org.opencadc.luskan;
 
+import ca.nrc.cadc.auth.AuthenticationUtil;
 import ca.nrc.cadc.auth.X500IdentityManager;
 import ca.nrc.cadc.uws.server.JobExecutor;
 import ca.nrc.cadc.uws.server.JobPersistence;
@@ -91,7 +92,7 @@ public class QueryJobManager extends SimpleJobManager {
     public QueryJobManager() {
         super();
         // persist UWS jobs to PostgreSQL.
-        JobPersistence jobPersist = new AuthJobPersistence(new X500IdentityManager());
+        JobPersistence jobPersist = new AuthJobPersistence(AuthenticationUtil.getIdentityManager());
 
         // max threads: 6 == number of simultaneously running async queries (per
         // web server), plus sync queries, plus VOSI-tables queries

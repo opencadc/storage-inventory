@@ -242,14 +242,14 @@ public abstract class ArtifactAction extends RestAction {
     }
 
     protected void initAndAuthorize(Class<? extends Grant> grantClass)
-        throws AccessControlException, CertificateException, IOException,
+        throws AccessControlException, CertificateException, IOException, InterruptedException,
                ResourceNotFoundException, TransientException {
         initAndAuthorize(grantClass, false);
     }
     
     @SuppressWarnings("unchecked")
     protected void initAndAuthorize(Class<? extends Grant> grantClass, boolean allowReadWithWriteGrant)
-        throws AccessControlException, CertificateException, IOException,
+        throws AccessControlException, CertificateException, IOException, InterruptedException,
                ResourceNotFoundException, TransientException {
 
         init();

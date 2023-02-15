@@ -74,21 +74,26 @@ import ca.nrc.cadc.auth.AuthenticationUtil;
 import ca.nrc.cadc.auth.IdentityManager;
 import ca.nrc.cadc.auth.NotAuthenticatedException;
 import ca.nrc.cadc.cred.client.CredUtil;
+import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
+import ca.nrc.cadc.util.InvalidConfigException;
 import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.uws.Job;
 import ca.nrc.cadc.uws.server.JobPersistenceException;
 import ca.nrc.cadc.uws.server.impl.PostgresJobPersistence;
+import java.io.IOException;
 import java.net.URI;
 import java.security.AccessControlException;
 import java.security.cert.CertificateException;
-import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
+import java.util.TreeSet;
 import javax.security.auth.Subject;
 import org.apache.log4j.Logger;
 import org.opencadc.gms.GroupClient;
 import org.opencadc.gms.GroupURI;
 import org.opencadc.gms.GroupUtil;
+import org.opencadc.gms.IvoaGroupClient;
 
 public class AuthJobPersistence extends PostgresJobPersistence {
 
@@ -123,7 +128,7 @@ public class AuthJobPersistence extends PostgresJobPersistence {
         }
         
         List<String> configGroups = props.getProperty(LuskanConfig.ALLOWED_GROUP);
-        List<GroupURI> allowedGroups = new ArrayList<>();
+        Set<GroupURI> allowedGroups = new TreeSet<>();
         configGroups.forEach(group -> allowedGroups.add(new GroupURI(URI.create(group))));
         if (allowedGroups.isEmpty()) {
             throw new AccessControlException("permission denied");
@@ -131,18 +136,25 @@ public class AuthJobPersistence extends PostgresJobPersistence {
                 
         try {
             if (CredUtil.checkCredentials()) {
-                // TODO: use IvoaGroupCLient.getMemberships(List<MGroupURI>)
-                // and let it optimize calls
-                for (GroupURI allowedGroup : allowedGroups) {
-                    GroupClient client = GroupUtil.getGroupClient(allowedGroup.getServiceID());
-                    if (client.isMember(allowedGroup)) {
-                        log.debug("Allowed group: " + allowedGroup);
-                        return;
+                IvoaGroupClient gms = new IvoaGroupClient();
+                Set<GroupURI> mems = gms.getMemberships(allowedGroups);
+                if (!mems.isEmpty()) {
+                    StringBuilder sb = new StringBuilder("read: ");
+                    for (GroupURI g : mems) {
+                        sb.append(" ").append(g.getURI());
                     }
+                    // TODO: would be nice to be able to log this in the LogInfo object
+                    log.debug("query granted: " + sb.toString());
+                    return;
                 }
+                
             }
         } catch (CertificateException e) {
             throw new AccessControlException("read permission denied (invalid delegated client certificate)");
+        } catch (ResourceNotFoundException ex) {
+            throw new RuntimeException("CONFIG: " + ex.getMessage(), ex);
+        } catch (IOException | InterruptedException ex) {
+            throw new RuntimeException("OOPS: GMS client failed", ex);
         }
         throw new AccessControlException("permission denied");
     }
