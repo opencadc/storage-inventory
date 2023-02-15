@@ -89,7 +89,7 @@ import org.apache.log4j.Logger;
 public abstract class BaldurTest {
     
     private static final Logger log = Logger.getLogger(BaldurTest.class);
-    public static final URI BALDUR_SERVICE_ID = URI.create("ivo://cadc.nrc.ca/baldur");
+    public static final URI BALDUR_SERVICE_ID = URI.create("ivo://opencadc.org/baldur");
     
     protected URL certURL;
     protected Subject anonSubject;
