@@ -22,7 +22,7 @@ for common system properties.
 
 `baldur` includes multiple IdentityManager implementations to support authenticated access:
 See <a href="https://github.com/opencadc/ac/tree/master/cadc-access-control-identity">cadc-access-control-identity</a>) for CADC access-control system suport.
-See <a href="https://github.com/opencadc/ac/tree/master/cadc-gms">cadc-access-control-identity</a> for OIDC token support.
+See <a href="https://github.com/opencadc/ac/tree/master/cadc-gms">cadc-gms</a> for OIDC token support.
 
 ### cadc-registry.properties
 
@@ -48,7 +48,7 @@ org.opencadc.baldur.allowedGroup = {groupURI}
 # - an Artifact URI pattern (regex)
 # - followed by entry-specific permission keys with a space separated list of group identifiers
 org.opencadc.baldur.entry = {entry name}
-{entry name}.pattern = {Aritifact URI pattern}
+{entry name}.pattern = {Artifact URI pattern}
 {entry name}.anon = {true|false}
 {entry name}.readOnlyGroup = {group URI}
 {entry name}.readWriteGroup = {group URI}
@@ -59,13 +59,18 @@ org.opencadc.baldur.entry = {entry name}
 
 `org.opencadc.baldur.allowedGroup` specifies the group(s) whose members have authorization to make calls to the service. The value is a list of group identifiers (e.g. ivo://cadc.nrc.ca/gms?CADC), one line per group.
 
-The `{entry name}.pattern` entry specifies an Artifact URI regular expression to match Artifacts.
+The `org.opencadc.baldur.entry` creates a new rule with the specified name. That name must be
+unique and is used in the following four (4) dynamically defined keys.
 
-The `{entry name}.anon` flag specifies that all users (including anonymous) can get matching assets (default: false).
+The `{entry name}.pattern` entry (one per rule) specifies a regular expression to match against
+resource URIs. For example, when used with storage-inventory services, these will match Artifact.uri values.
 
-The `{entry name}.readOnlyGroup` entry specifies a group that can get matching assets (default: empty list).
+The `{entry name}.anon` flag specifies that all users (including anonymous) can read matching assets (default: false).
 
-The `{entry name}.readWriteGroup` entry specifies a group that can get/put/update/delete matching assets (default: empty list).
+The `{entry name}.readOnlyGroup` entry specifies a group (one per line) that can read (get) matching assets (default: empty list).
+
+The `{entry name}.readWriteGroup` entry specifies a group (one per line) that can read and write 
+(get/put/update/delete) matching assets (default: empty list).
 
 ### example baldur.properties entry section:
 ```
