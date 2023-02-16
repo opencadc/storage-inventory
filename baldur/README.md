@@ -1,10 +1,32 @@
-# Storage Inventory permissions service (baldur)
+# Rule-based permissions service (baldur)
+
+This is an implementation of the <a href="https://github.com/opencadc/ac/tree/master/cadc-permissisons-server">cadc-permissisons-server</a> API that provides grants to read and write
+artifacts on Storage Inventory. It was developed to be a `readGrantProvider` and
+`writeGrantProvider` for `raven` and `minoc`, but could be used to grant access to other
+resources.
 
 ## configuration
-See the <a href="https://github.com/opencadc/docker-base/tree/master/cadc-tomcat">cadc-tomcat</a> image docs 
-for expected deployment and general config requirements.
 
 The following configuration files must be available in the /config directory.
+
+### catalina.properties
+
+This file contains java system properties to configure the tomcat server and some
+of the java libraries used in the service.
+
+See <a href="https://github.com/opencadc/docker-base/tree/master/cadc-tomcat">cadc-tomcat</a>
+for system properties related to the deployment environment.
+
+See <a href="https://github.com/opencadc/core/tree/master/cadc-util">cadc-util</a>
+for common system properties. 
+
+`baldur` includes multiple IdentityManager implementations to support authenticated access:
+See <a href="https://github.com/opencadc/ac/tree/master/cadc-access-control-identity">cadc-access-control-identity</a>) for CADC access-control system suport.
+See <a href="https://github.com/opencadc/ac/tree/master/cadc-gms">cadc-access-control-identity</a> for OIDC token support.
+
+### LocalAuthority.properties
+
+See <a href="https://github.com/opencadc/core/tree/master/cadc-registry">cadc-registry</a>.
 
 ### baldur.properties
 
