@@ -24,7 +24,7 @@ for common system properties.
 See <a href="https://github.com/opencadc/ac/tree/master/cadc-access-control-identity">cadc-access-control-identity</a>) for CADC access-control system suport.
 See <a href="https://github.com/opencadc/ac/tree/master/cadc-gms">cadc-access-control-identity</a> for OIDC token support.
 
-### LocalAuthority.properties
+### cadc-registry.properties
 
 See <a href="https://github.com/opencadc/core/tree/master/cadc-registry">cadc-registry</a>.
 
