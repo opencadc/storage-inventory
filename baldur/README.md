@@ -21,7 +21,9 @@ See <a href="https://github.com/opencadc/core/tree/master/cadc-util">cadc-util</
 for common system properties. 
 
 `baldur` includes multiple IdentityManager implementations to support authenticated access:
-See <a href="https://github.com/opencadc/ac/tree/master/cadc-access-control-identity">cadc-access-control-identity</a>) for CADC access-control system suport.
+
+See <a href="https://github.com/opencadc/ac/tree/master/cadc-access-control-identity">cadc-access-control-identity</a> for CADC access-control system suport.
+
 See <a href="https://github.com/opencadc/ac/tree/master/cadc-gms">cadc-gms</a> for OIDC token support.
 
 ### cadc-registry.properties
