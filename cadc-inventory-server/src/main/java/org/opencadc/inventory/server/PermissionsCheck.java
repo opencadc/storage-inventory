@@ -3,7 +3,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2020.                            (c) 2020.
+ *  (c) 2023.                            (c) 2023.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -73,8 +73,7 @@ import ca.nrc.cadc.cred.client.CredUtil;
 import ca.nrc.cadc.log.WebServiceLogInfo;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
-import ca.nrc.cadc.reg.Standards;
-import ca.nrc.cadc.reg.client.LocalAuthority;
+import java.io.IOException;
 import java.net.URI;
 import java.security.AccessControlException;
 import java.security.PrivilegedExceptionAction;
@@ -85,11 +84,9 @@ import java.util.Set;
 import java.util.TreeSet;
 import javax.security.auth.Subject;
 import org.apache.log4j.Logger;
-import org.opencadc.gms.GroupClient;
 import org.opencadc.gms.GroupURI;
-import org.opencadc.gms.GroupUtil;
+import org.opencadc.gms.IvoaGroupClient;
 import org.opencadc.inventory.InventoryUtil;
-import org.opencadc.permissions.Grant;
 import org.opencadc.permissions.ReadGrant;
 import org.opencadc.permissions.WriteGrant;
 import org.opencadc.permissions.client.PermissionsClient;
@@ -119,9 +116,11 @@ public class PermissionsCheck {
      * @param readGrantServices list of read granting services.
      * @throws AccessControlException if read permission is denied.
      * @throws TransientException if call to permission service fails with transient status code
+     * @throws ResourceNotFoundException from GroupClient call to GMS service
      */
     public void checkReadPermission(List<URI> readGrantServices)
-        throws AccessControlException, TransientException {
+        throws AccessControlException, InterruptedException, 
+            ResourceNotFoundException, TransientException {
         InventoryUtil.assertNotNull(PermissionsCheck.class, "readGrantServices", readGrantServices);
 
         if (this.authenticateOnly) {
@@ -147,32 +146,26 @@ public class PermissionsCheck {
                 throw new RuntimeException("unexpected exception calling permissions service(s)", ex);
             }
         }
-        
 
         if (granted.isEmpty()) {
             throw new AccessControlException("permission denied: no read grants for " + this.artifactURI);
         }
 
-        // TODO: add profiling
-        // if the granted group list is small, it would be better to use GroupClient.isMember()
-        // rather than getting all groups... experiment to determine threshold?
-        // unfortunately, the speed of GroupClient.getGroups() will also depend on how many groups the
-        // caller belongs to...
         try {
             if (CredUtil.checkCredentials()) {
-                LocalAuthority loc = new LocalAuthority();
-                URI resourceID = loc.getServiceURI(Standards.GMS_SEARCH_01.toString());
-                GroupClient client = GroupUtil.getGroupClient(resourceID);
-                List<GroupURI> userGroups = client.getMemberships();
-                for (GroupURI gg : granted) {
-                    for (GroupURI userGroup : userGroups) {
-                        if (gg.equals(userGroup)) {
-                            this.logInfo.setGrant("read  " + gg);
-                            return;
-                        }
+                IvoaGroupClient client = new IvoaGroupClient();
+                Set<GroupURI> mems = client.getMemberships(granted);
+                if (!mems.isEmpty()) {
+                    StringBuilder sb = new StringBuilder("read: ");
+                    for (GroupURI g : mems) {
+                        sb.append(" ").append(g.getURI());
                     }
+                    this.logInfo.setGrant(sb.toString());
+                    return;
                 }
             }
+        } catch (IOException ex) {
+            throw new RuntimeException("unexpected failure", ex);
         } catch (CertificateException ex) {
             throw new AccessControlException("permission denied (invalid delegated client certificate)");
         }
@@ -186,9 +179,11 @@ public class PermissionsCheck {
      * @param writeGrantServices list of write granting services.
      * @throws AccessControlException if write permission is denied.
      * @throws TransientException if call to permission service fails with transient status code
+     * @throws ResourceNotFoundException from GroupClient call to GMS service
      */
     public void checkWritePermission(List<URI> writeGrantServices)
-        throws AccessControlException, TransientException {
+        throws AccessControlException, InterruptedException, 
+            ResourceNotFoundException, TransientException {
         InventoryUtil.assertNotNull(PermissionsCheck.class, "writeGrantServices", writeGrantServices);
 
         AuthMethod am = AuthenticationUtil.getAuthMethod(AuthenticationUtil.getCurrentSubject());
@@ -219,26 +214,21 @@ public class PermissionsCheck {
             throw new AccessControlException("permission denied: no write grants for " + this.artifactURI);
         }
 
-        // TODO: add profiling
-        // if the granted group list is small, it would be better to use GroupClient.isMember()
-        // rather than getting all groups... experiment to determine threshold?
-        // unfortunately, the speed of GroupClient.getGroups() will also depend on how many groups the
-        // caller belongs to...
         try {
             if (CredUtil.checkCredentials()) {
-                LocalAuthority loc = new LocalAuthority();
-                URI resourceID = loc.getServiceURI(Standards.GMS_SEARCH_01.toString());
-                GroupClient client = GroupUtil.getGroupClient(resourceID);
-                List<GroupURI> userGroups = client.getMemberships();
-                for (GroupURI gg : granted) {
-                    for (GroupURI userGroup : userGroups) {
-                        if (gg.equals(userGroup)) {
-                            this.logInfo.setGrant("write: " + gg);
-                            return;
-                        }
+                IvoaGroupClient client = new IvoaGroupClient();
+                Set<GroupURI> mems = client.getMemberships(granted);
+                if (!mems.isEmpty()) {
+                    StringBuilder sb = new StringBuilder("write: ");
+                    for (GroupURI g : mems) {
+                        sb.append(" ").append(g.getURI());
                     }
+                    this.logInfo.setGrant(sb.toString());
+                    return;
                 }
             }
+        } catch (IOException ex) {
+            throw new RuntimeException("unexpected failure", ex);
         } catch (CertificateException ex) {
             throw new AccessControlException("permission denied (invalid delegated client certificate)");
         }
