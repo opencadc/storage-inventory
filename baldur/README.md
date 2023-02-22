@@ -1,6 +1,6 @@
 # Rule-based permissions service (baldur)
 
-This is an implementation of the <a href="https://github.com/opencadc/ac/tree/master/cadc-permissisons-server">cadc-permissisons-server</a> API that provides grants to read and write
+This is an implementation of the <a href="https://github.com/opencadc/ac/tree/master/cadc-permissions-server">cadc-permissions-server</a> API that provides grants to read and write
 artifacts on Storage Inventory. It was developed to be a `readGrantProvider` and
 `writeGrantProvider` for `raven` and `minoc`, but could be used to grant access to other
 resources.
@@ -28,7 +28,7 @@ See <a href="https://github.com/opencadc/ac/tree/master/cadc-gms">cadc-gms</a> f
 
 ### cadc-registry.properties
 
-See <a href="https://github.com/opencadc/core/tree/master/cadc-registry">cadc-registry</a>.
+See <a href="https://github.com/opencadc/reg/tree/master/cadc-registry">cadc-registry</a>.
 
 ### baldur.properties
 
