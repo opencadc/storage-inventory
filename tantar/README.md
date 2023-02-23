@@ -90,7 +90,12 @@ dosn't currently match an artifact (which is all of the deleted/preserved stored
 should be used rarely, but it can potentially recover from the scenario where an Artifact has no
 storageLocation but the file (or an older copy with the same bytes) still resides in storage.
 
-Additional java system properties and/or configuration files may be required to configure the storage adapter.
+Additional java system properties and/or configuration files may be required to configure the appropriate storage adapter:
+ - [Swift Storage Adapter](https://github.com/opencadc/storage-inventory/tree/master/cadc-storage-adapter-swift)
+ 
+ - [File System Storage Adapter](https://github.com/opencadc/storage-inventory/tree/master/cadc-storage-adapter-fs)
+
+ - [AD Storage Adapter](https://github.com/opencadc/storage-inventory/tree/master/cadc-storage-adapter-ad)
 
 ### cadcproxy.pem
 This client certificate may be used by the StorageAdapter implementation.

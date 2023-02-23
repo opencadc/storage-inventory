@@ -12,7 +12,7 @@ The following StorageAdapter implementations are provided:
 |org.opencadc.inventory.storage.swift.SwiftStorageAdapter|stores files with opaque keys via OpenStack SWIFT API|
 
 This class name will be used to configure critwall, minoc, and tantar at a CEPH storage site. There
-are currently no configuation options that would differ when using this adapter with different tools
+are currently no configuration options that would differ when using this adapter with different tools
 at a storage site, so the configuration file (see below) should be identifical.
 
 ### cadc-storage-adapter-swift.properties
