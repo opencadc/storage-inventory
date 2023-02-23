@@ -7,7 +7,7 @@ resources.
 
 ## configuration
 
-The following configuration files must be available in the /config directory.
+The following configuration files must be available in the `/config` directory.
 
 ### catalina.properties
 

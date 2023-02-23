@@ -11,7 +11,7 @@ This service instance is expected to have a database backend to store the TAP me
 also includes the storage inventory tables.
 
 ### configuration
-The following configuration files must be available in the /config directory.
+The following configuration files must be available in the `/config` directory.
 
 ### catalina.properties
 This file contains java system properties to configure the tomcat server and some of the java libraries used in the service.
