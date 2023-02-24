@@ -93,7 +93,7 @@ In this example the expiry time is 60 seconds.
 
 `foo` and `bar` are authorized users that can call this service.
 
-Any artifact with a URI that matches `^cadc:TEST\\/.*`, the read grant will be:
+Any artifact with a URI that matches `^cadc:TEST\\//.*`, the read grant will be:
 * anonymous read not allowed
 * readable by members of group TestRead-1, TestRead-2, TestWrite-1, and TestWrite-2
 

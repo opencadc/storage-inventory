@@ -34,7 +34,7 @@ org.opencadc.inventory.storage.swift.SwiftStorageAdapter.preserveNamespace = {na
 ```
 
 ## multiBucket: true or false
-In all cases, the `StorageLocation.storageBucket` value is a random hex string of length `bucketlength`;
+In all cases, the `StorageLocation.storageBucket` value is a random hex string of length `bucketLength`;
 this will dynamically assign up to 16^{bucketLength} logical buckets.
 
 With multiBucket=false, a single bucket with the specified `bucketName` will be used to store all objects. The logical
