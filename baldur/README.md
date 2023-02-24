@@ -1,13 +1,13 @@
 # Rule-based permissions service (baldur)
 
-This is an implementation of the <a href="https://github.com/opencadc/ac/tree/master/cadc-permissisons-server">cadc-permissisons-server</a> API that provides grants to read and write
+This is an implementation of the <a href="https://github.com/opencadc/ac/tree/master/cadc-permissions-server">cadc-permissions-server</a> API that provides grants to read and write
 artifacts on Storage Inventory. It was developed to be a `readGrantProvider` and
 `writeGrantProvider` for `raven` and `minoc`, but could be used to grant access to other
 resources.
 
 ## configuration
 
-The following configuration files must be available in the /config directory.
+The following configuration files must be available in the `/config` directory.
 
 ### catalina.properties
 
@@ -21,14 +21,13 @@ See <a href="https://github.com/opencadc/core/tree/master/cadc-util">cadc-util</
 for common system properties. 
 
 `baldur` includes multiple IdentityManager implementations to support authenticated access:
-
-See <a href="https://github.com/opencadc/ac/tree/master/cadc-access-control-identity">cadc-access-control-identity</a> for CADC access-control system support.
-
-See <a href="https://github.com/opencadc/ac/tree/master/cadc-gms">cadc-gms</a> for OIDC token support.
+ - See <a href="https://github.com/opencadc/ac/tree/master/cadc-access-control-identity">cadc-access-control-identity</a> for CADC access-control system support.
+  
+ - See <a href="https://github.com/opencadc/ac/tree/master/cadc-gms">cadc-gms</a> for OIDC token support.
 
 ### cadc-registry.properties
 
-See <a href="https://github.com/opencadc/core/tree/master/cadc-registry">cadc-registry</a>.
+See <a href="https://github.com/opencadc/reg/tree/master/cadc-registry">cadc-registry</a>.
 
 ### baldur.properties
 
@@ -94,7 +93,7 @@ In this example the expiry time is 60 seconds.
 
 `foo` and `bar` are authorized users that can call this service.
 
-Any artifact with a URI that matches `^cadc:TEST\\/.*`, the read grant will be:
+Any artifact with a URI that matches `^cadc:TEST\\//.*`, the read grant will be:
 * anonymous read not allowed
 * readable by members of group TestRead-1, TestRead-2, TestWrite-1, and TestWrite-2
 

@@ -49,7 +49,13 @@ null; the _buckets_ value in this case optional (ignored).
 
 The _StorageAdapter_ is a plugin implementation to support the back end storage system. These are implemented in separate libraries; 
 each available implementation is in a library named cadc-storage-adapter-{impl} and the fully qualified class name to use is documented 
-there.
+there. Additional java system properties and/or configuration files may be required to configure the appropriate storage adapter:
+- [Swift Storage Adapter](https://github.com/opencadc/storage-inventory/tree/master/cadc-storage-adapter-swift)
+
+- [File System Storage Adapter](https://github.com/opencadc/storage-inventory/tree/master/cadc-storage-adapter-fs)
+
+- [AD Storage Adapter](https://github.com/opencadc/storage-inventory/tree/master/cadc-storage-adapter-ad)
+
 
 The _SQLGenerator_ is a plugin implementation to support the database. There is currently only one implementation that is tested with 
 PostgeSQL (10+). Making this work with other database servers in future may require a different implementation.
@@ -89,8 +95,6 @@ large because it usually requires an additional query to the inventory database 
 dosn't currently match an artifact (which is all of the deleted/preserved stored objects). This option 
 should be used rarely, but it can potentially recover from the scenario where an Artifact has no
 storageLocation but the file (or an older copy with the same bytes) still resides in storage.
-
-Additional java system properties and/or configuration files may be required to configure the storage adapter.
 
 ### cadcproxy.pem
 This client certificate may be used by the StorageAdapter implementation.

@@ -12,7 +12,7 @@ The following StorageAdapter implementations are provided:
 |org.opencadc.inventory.storage.swift.SwiftStorageAdapter|stores files with opaque keys via OpenStack SWIFT API|
 
 This class name will be used to configure critwall, minoc, and tantar at a CEPH storage site. There
-are currently no configuation options that would differ when using this adapter with different tools
+are currently no configuration options that would differ when using this adapter with different tools
 at a storage site, so the configuration file (see below) should be identifical.
 
 ### cadc-storage-adapter-swift.properties
@@ -34,7 +34,7 @@ org.opencadc.inventory.storage.swift.SwiftStorageAdapter.preserveNamespace = {na
 ```
 
 ## multiBucket: true or false
-In all cases, the `StorageLocation.storageBucket` value is a random hex string of length `bucketlength`;
+In all cases, the `StorageLocation.storageBucket` value is a random hex string of length `bucketLength`;
 this will dynamically assign up to 16^{bucketLength} logical buckets.
 
 With multiBucket=false, a single bucket with the specified `bucketName` will be used to store all objects. The logical
