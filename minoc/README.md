@@ -1,16 +1,31 @@
 # Storage Inventory file service (minoc)
 
-## configuration
-See the [cadc-tomcat](https://github.com/opencadc/docker-base/tree/master/cadc-tomcat) image docs
-for expected deployment and general config requirements. The `minoc` war file can be renamed
-at deployment time in order to support an alternate service name, including introducing 
+This is an implementation of the **file** service that supports HEAD, GET, PUT, POST, DELETE operations
+and <a href="https://www.ivoa.net/documents/SODA/">IVOA SODA</a> operations.
+
+### deployment
+The `minoc` war file can be renamed at deployment time in order to support an alternate service name, including introducing 
 additional path elements (see war-rename.conf).
 
-Runtime configuration must be made available via the `/config` directory.
+### configuration
 
-### catalina.properties (cadc-tomcat)
-When running minoc.war in tomcat, parameters of the connection pool in META-INF/context.xml need
-to be configured in catalina.properties:
+The following runtime configuration must be made available via the `/config` directory.
+
+### catalina.properties
+This file contains java system properties to configure the tomcat server and some of the java libraries used in the service.
+
+See <a href="https://github.com/opencadc/docker-base/tree/master/cadc-tomcat">cadc-tomcat</a>
+for system properties related to the deployment environment.
+
+See <a href="https://github.com/opencadc/core/tree/master/cadc-util">cadc-util</a>
+for common system properties.
+
+`minoc` includes multiple IdentityManager implementations to support authenticated access:
+- See <a href="https://github.com/opencadc/ac/tree/master/cadc-access-control-identity">cadc-access-control-identity</a> for CADC access-control system support.
+
+- See <a href="https://github.com/opencadc/ac/tree/master/cadc-gms">cadc-gms</a> for OIDC token support.
+
+`minoc` requires a connection pool to the local storage inventory database:
 ```
 # database connection pools
 org.opencadc.minoc.inventory.maxActive={max connections for inventory admin pool}
@@ -42,7 +57,13 @@ The minoc _resourceID_ is the resourceID of _this_ minoc service.
 
 The _StorageAdapter_ is a plugin implementation to support the back end storage system. These are implemented in separate libraries;
 each available implementation is in a library named _cadc-storage-adapter-{*impl*}_ and the fully qualified class name to use is 
-documented there.
+documented there. Additional java system properties and/or configuration files may be required to configure the appropriate storage adapter:
+- [Swift Storage Adapter](https://github.com/opencadc/storage-inventory/tree/master/cadc-storage-adapter-swift)
+
+- [File System Storage Adapter](https://github.com/opencadc/storage-inventory/tree/master/cadc-storage-adapter-fs)
+
+- [AD Storage Adapter](https://github.com/opencadc/storage-inventory/tree/master/cadc-storage-adapter-ad)
+
 
 The _SQLGenerator_ is a plugin implementation to support the database. There is currently only one implementation that is tested 
 with PostgeSQL (10+). Making this work  with other database servers in future _may_ require a different implementation.
@@ -72,22 +93,9 @@ org.opencadc.minoc.authenticateOnly=true
 With `authenticateOnly=true`, any authenticated user will be able to read/write/delete files and anonymous users
 will be able to read files.
 
-Additional configuration may be required by the storage adapter implementation.
+### cadc-registry.properties
 
-### LocalAuthority.properties
-The LocalAuthority.properties file specifies which local service is authoritative for various site-wide functions. The keys
-are standardID values for the functions and the values are resourceID values for the service that implements that standard 
-feature.
-
-Example:
-```
-ivo://ivoa.net/std/GMS#search-0.1 = ivo://cadc.nrc.ca/gms           
-ivo://ivoa.net/std/UMS#users-0.1 = ivo://cadc.nrc.ca/gms    
-ivo://ivoa.net/std/UMS#login-0.1 = ivo://cadc.nrc.ca/gms           
-
-ivo://ivoa.net/std/CDP#delegate-1.0 = ivo://cadc.nrc.ca/cred
-ivo://ivoa.net/std/CDP#proxy-1.0 = ivo://cadc.nrc.ca/cred
-```
+See <a href="https://github.com/opencadc/reg/tree/master/cadc-registry">cadc-registry</a>.
 
 ### minoc-availability.properties (optional)
 The minoc-availability.properties file specifies which users have the authority to change the availability state of the minoc service. Each entry consists of a key=value pair. The key is always "users". The value is the x500 canonical user name.
