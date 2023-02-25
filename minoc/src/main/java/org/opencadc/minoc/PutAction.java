@@ -212,6 +212,8 @@ public class PutAction extends ArtifactAction {
 
         // commit transaction or write data
         StorageMetadata artifactMetadata = null;
+        long startTime = System.currentTimeMillis();
+        Long transferTime = null;
         if (PUT_TXN_OP_COMMIT.equalsIgnoreCase(txnOP)) {
             artifactMetadata = storageAdapter.commitTransaction(txnID);
             txnID = null;
@@ -220,6 +222,7 @@ public class PutAction extends ArtifactAction {
             log.debug("writing new artifact to " + storageAdapter.getClass().getName());
             try {
                 artifactMetadata = storageAdapter.put(newArtifact, in, txnID);
+                transferTime = System.currentTimeMillis() - startTime;
                 profiler.checkpoint("storageAdapter.put.write.ok");
             } catch (ReadException ex) {
                 profiler.checkpoint("storageAdapter.put.write.fail");
@@ -257,6 +260,10 @@ public class PutAction extends ArtifactAction {
             syncOutput.setDigest(artifact.getContentChecksum());
             syncOutput.setHeader("content-length", 0);
             super.logInfo.setMessage("transaction: " + txnID);
+            long dt = System.currentTimeMillis() - startTime;
+            if (transferTime != null) {
+                logInfo.setOverhead(dt - transferTime);
+            }
             return;
         }
         
@@ -335,6 +342,11 @@ public class PutAction extends ArtifactAction {
                 // obsolete tracker record no longer needed
                 locDAO.delete(newOSL.getID());
                 profiler.checkpoint("locDAO.delete.ok");
+            }
+            
+            long dt = System.currentTimeMillis() - startTime;
+            if (transferTime != null) {
+                logInfo.setOverhead(dt - transferTime);
             }
         } catch (Exception e) {
             log.error("failed to persist " + artifactURI, e);
