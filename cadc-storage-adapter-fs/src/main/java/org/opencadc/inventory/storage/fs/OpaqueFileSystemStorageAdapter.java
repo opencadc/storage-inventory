@@ -731,23 +731,26 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
     
     @Override
     public void delete(StorageLocation storageLocation, boolean includeRecoverable)
-        throws ResourceNotFoundException, IOException, StorageEngageException, TransientException {
+        throws ResourceNotFoundException, StorageEngageException, TransientException {
         InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "storageLocation", storageLocation);
         Path path = storageLocationToPath(storageLocation);
         if (!Files.exists(path)) {
             throw new ResourceNotFoundException("not found: " + storageLocation);
         }
+        String uriAttr = null;
+        boolean deletePreserved = false;
         try {
-            String delAttr = getFileAttribute(path, DELETED_PRESERVED);
-            if ("true".equals(delAttr) && !includeRecoverable) {
-                log.debug("skip " + DELETED_PRESERVED + ": " + storageLocation);
-                throw new ResourceNotFoundException("not found: " + storageLocation);
-            }
+            deletePreserved = "true".equals(getFileAttribute(path, DELETED_PRESERVED));
+            uriAttr = getFileAttribute(path, ARTIFACTID_ATTR);
         } catch (IOException ex) {
             throw new StorageEngageException("failed to read attributes for stored file: " + storageLocation, ex);
         }
         
-        String uriAttr = getFileAttribute(path, ARTIFACTID_ATTR);
+        if (deletePreserved && !includeRecoverable) {
+            log.debug("skip " + DELETED_PRESERVED + ": " + storageLocation);
+            throw new ResourceNotFoundException("not found: " + storageLocation);
+        }
+        
         log.debug("delete: " + storageLocation + " aka " + uriAttr);
         if (uriAttr != null) {
             try {
@@ -755,8 +758,18 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
                 for (Namespace ns : preservationNamespaces) {
                     log.debug("check: " + ns.getNamespace() + " vs " + uri);
                     if (ns.matches(uri)) {
-                        log.debug("preserve: " + uri + " in namespace " + ns.getNamespace());
-                        setFileAttribute(path, DELETED_PRESERVED, "true");
+                        if (!deletePreserved) {
+                            log.debug("delete/preserve: " + storageLocation 
+                                    + " aka " + uri + " in namespace " + ns.getNamespace());
+                            try {
+                                setFileAttribute(path, DELETED_PRESERVED, "true");
+                            } catch (IOException ex) {
+                                throw new StorageEngageException("failed to set attribute for stored file: " + storageLocation, ex);
+                            }
+                        } else {
+                            log.debug("delete/preserve: " + storageLocation 
+                                + " aka " + uri + " in namespace " + ns.getNamespace() + " -- already marked deleted");
+                        }
                         return;
                     }
                 }
@@ -767,7 +780,13 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
                 }
             }
         }
-        Files.delete(path);
+        
+        log.debug("delete/actual: " + storageLocation + " aka " + uriAttr);
+        try {
+            Files.delete(path);
+        } catch (IOException ex) {
+            throw new StorageEngageException("failed to delete stored file: " + storageLocation, ex);
+        }
     }
 
     @Override

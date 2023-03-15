@@ -15,6 +15,9 @@ TODO: finish implementation of FileSystemStorageAdapter and rename to something 
 org.opencadc.inventory.storage.fs.baseDir = {absolute path to base directory}
 org.opencadc.inventory.storage.fs.OpaqueFileSystemStorageAdapter.bucketLength = {random storageBucket length}
 org.opencadc.inventory.storage.fs.OpaqueFileSystemStorageAdapter.preserveNamespace = {namespace}
+
+TODO: org.opencadc.inventory.storage.fs.OpaqueFileSystemStorageAdapter.purgeNamespace = {namespace}
+TODO: org.opencadc.inventory.storage.fs.OpaqueFileSystemStorageAdapter.purgeAfter = {amount of time}
 ```
 
 All StorageAdapter implementations use the same key for the base directory. The keys for specific classes are applicable to and required for that StorageAdapter implementation only.
@@ -34,6 +37,18 @@ Example:
 org.opencadc.inventory.storage.fs.OpaqueFileSystemStorageAdapter.preserveNamespace = cadc:
 org.opencadc.inventory.storage.fs.OpaqueFileSystemStorageAdapter.preserveNamespace = test:KEEP/
 ```
-Artifacts where the `uri` matches (starts with) one of these prefixes will be preserved and, in principle, recoverable. Others (e.g. `test:FOO/bar`) be permanently deleted and not recoverable.
+Files where the `Artifact.uri` matches (starts with) one of these prefixes will be preserved and, in principle, recoverable. Others (e.g. `test:FOO/bar`) be permanently deleted and not recoverable.
 
+The optional `purge` directives configure the storage adapter to perform a real deletion from storage for files
+_that were previously preserved_. These directives only make sense when used by file-validate (tantar) to resolve
+discrepancies between inventory and storage. The `purgeNamespace` key configures the storage adapter to delete matching files. The `purgeAfter` key configures the storage adapter to delete matching files where the file has been preserved (marked as deleted) longer than the configured value (currently, this is an integer number of days).
 
+Example:
+```
+org.opencadc.inventory.storage.fs.OpaqueFileSystemStorageAdapter.preserveNamespace = cadc:
+org.opencadc.inventory.storage.fs.OpaqueFileSystemStorageAdapter.purgeNamespace = cadc:OBSOLETE/
+org.opencadc.inventory.storage.fs.OpaqueFileSystemStorageAdapter.purgeAfter = 730
+```
+Previously deleted (marked) files where the `Artifact.uri` matches (starts with) `cadc:OBSOLETE/` 
+and files that were deleted (marked) more than 2 years ago will be deleted from storage. All other files
+where the `Artifact.uri` matches (starts with) `cadc:` are preserved.

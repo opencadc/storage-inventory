@@ -1378,60 +1378,70 @@ public class SwiftStorageAdapter  implements StorageAdapter {
         try {
             Container sub = getContainerImpl(storageLocation);
             StoredObject obj = sub.getObject(key);
-        
-            if (obj.exists()) {
-                Map<String,Object> meta = obj.getMetadata();
-                String delAttr = (String) meta.get(DELETED_PRESERVED_ATTR);
-                if ("true".equals(delAttr) && !includeRecoverable) {
-                    log.debug("delete: " + storageLocation + " -- already marked deleted");
-                } else {
-                    String uriAttr = (String) meta.get(ARTIFACT_ID_ATTR);
-                    log.debug("delete: " + storageLocation + " aka " + uriAttr);
-                    if (uriAttr != null && !includeRecoverable) {
-                        try {
-                            URI uri = new URI(uriAttr);
-                            for (Namespace ns : preservationNamespaces) {
-                                log.debug("check: " + ns.getNamespace() + " vs " + uri);
-                                if (ns.matches(uri)) {
-                                    log.debug("preserve: " + uri + " in namespace " + ns.getNamespace());
-                                    // perserve original timestamp
-                                    String dateStr = (String) meta.get(CONTENT_LAST_MODIFIED_ATTR);
-                                    if (dateStr == null) {
-                                        DateFormat df = DateUtil.getDateFormat(DateUtil.IVOA_DATE_FORMAT, DateUtil.UTC);
-                                        dateStr = df.format(obj.getLastModifiedAsDate());
-                                        obj.setAndDoNotSaveMetadata(CONTENT_LAST_MODIFIED_ATTR, dateStr);
-                                    }
-                                    obj.setAndDoNotSaveMetadata(DELETED_PRESERVED_ATTR, "true");
-                                    obj.saveMetadata();
-                                    return;
+            if (!obj.exists()) {
+                throw new ResourceNotFoundException("not found: " + storageLocation);
+            }
+            
+            Map<String,Object> meta = obj.getMetadata();
+            String uriAttr = (String) meta.get(ARTIFACT_ID_ATTR);
+            boolean deletePreserved = "true".equals((String) meta.get(DELETED_PRESERVED_ATTR));
+
+            if (deletePreserved && !includeRecoverable) {
+                throw new ResourceNotFoundException("not found: " + storageLocation);
+            } 
+
+            log.debug("delete: " + storageLocation + " aka " + uriAttr);
+            if (uriAttr != null && !includeRecoverable) {
+                try {
+                    URI uri = new URI(uriAttr);
+                    for (Namespace ns : preservationNamespaces) {
+                        log.debug("check: " + ns.getNamespace() + " vs " + uri);
+                        if (ns.matches(uri)) {
+                            if (!deletePreserved) {
+                                log.debug("delete/preserve: " + storageLocation 
+                                    + " aka " + uri + " in namespace " + ns.getNamespace());
+                                // perserve original timestamp
+                                String dateStr = (String) meta.get(CONTENT_LAST_MODIFIED_ATTR);
+                                if (dateStr == null) {
+                                    DateFormat df = DateUtil.getDateFormat(DateUtil.IVOA_DATE_FORMAT, DateUtil.UTC);
+                                    dateStr = df.format(obj.getLastModifiedAsDate());
+                                    obj.setAndDoNotSaveMetadata(CONTENT_LAST_MODIFIED_ATTR, dateStr);
                                 }
+                                obj.setAndDoNotSaveMetadata(DELETED_PRESERVED_ATTR, "true");
+                                obj.saveMetadata();
+                            } else {
+                                log.debug("delete/preserve: " + storageLocation 
+                                    + " aka " + uri + " in namespace " + ns.getNamespace() 
+                                    + " -- already marked deleted");
                             }
-                        } catch (URISyntaxException ex) {
-                            if (!preservationNamespaces.isEmpty()) {
-                                log.error("found invalid " + ARTIFACT_ID_ATTR + "=" + uriAttr + " on " 
-                                        + storageLocation + " -- cannot attempt to preserve");
-                            }
+                            return;
                         }
                     }
-                    String dloAttr = (String) meta.get(DLO_ATTR);
-                    if ("true".equals(dloAttr)) {
-                        String prefix = obj.getName() + ":p:";
-                        LargeObjectPartIterator iter = new LargeObjectPartIterator(sub, prefix);
-                        while (iter.hasNext()) {
-                            StoredObject part = iter.next();
-                            log.debug("delete part: " + part.getName());
-                            part.delete();
-                        }
+                } catch (URISyntaxException ex) {
+                    if (!preservationNamespaces.isEmpty()) {
+                        log.error("found invalid " + ARTIFACT_ID_ATTR + "=" + uriAttr + " on " 
+                                + storageLocation + " -- cannot attempt to preserve");
                     }
-                    log.debug("delete object: " + obj.getName());
-                    obj.delete();
-                    return;
                 }
             }
+            String dloAttr = (String) meta.get(DLO_ATTR);
+            if ("true".equals(dloAttr)) {
+                String prefix = obj.getName() + ":p:";
+                LargeObjectPartIterator iter = new LargeObjectPartIterator(sub, prefix);
+                while (iter.hasNext()) {
+                    StoredObject part = iter.next();
+                    log.debug("delete part: " + part.getName());
+                    part.delete();
+                }
+            }
+            log.debug("delete object: " + obj.getName());
+            obj.delete();
+        } catch (ResourceNotFoundException ex) {
+            throw ex;
         } catch (Exception ex) {
+            // wide catch here for JOSS exceptions
             throw new StorageEngageException("failed to delete: " + storageLocation, ex);
         }
-        throw new ResourceNotFoundException("not found: " + storageLocation);
     }
     
     @Override
