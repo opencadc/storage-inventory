@@ -216,7 +216,17 @@ public class FileSystemStorageAdapter implements StorageAdapter {
     }
 
     @Override
+    public List<Namespace> getRecoverableNamespaces() {
+        throw new UnsupportedOperationException();
+    }
+    
+    @Override
     public void setPurgeNamespaces(List<Namespace> purged) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public List<Namespace> getPurgeNamespaces() {
         throw new UnsupportedOperationException();
     }
 
