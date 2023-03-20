@@ -138,7 +138,6 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
     public static final String CONFIG_FILE = "cadc-storage-adapter-fs.properties";
     public static final String CONFIG_PROPERTY_ROOT = OpaqueFileSystemStorageAdapter.class.getPackage().getName() + ".baseDir";
     public static final String CONFIG_PROPERTY_BUCKET_LENGTH = OpaqueFileSystemStorageAdapter.class.getName() + ".bucketLength";
-    public static final String CONFIG_PRESERVE = OpaqueFileSystemStorageAdapter.class.getName() + ".preserveNamespace";
     public static final int MAX_BUCKET_LENGTH = 7;
             
     static final String ARTIFACTID_ATTR = "artifactID";
@@ -165,6 +164,7 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
     final Path contentPath;
     private final int bucketLength;
     private final List<Namespace> preservationNamespaces = new ArrayList<>();
+    private final List<Namespace> purgeNamespaces = new ArrayList<>();
 
     public OpaqueFileSystemStorageAdapter() throws InvalidConfigException {
         PropertiesReader pr = new PropertiesReader(CONFIG_FILE);
@@ -194,16 +194,6 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
         }
         this.bucketLength = bucketLen;
         
-        List<String> preserve = props.getProperty(CONFIG_PRESERVE);
-        for (String s : preserve) {
-            try {
-                Namespace ns = new Namespace(s);
-                this.preservationNamespaces.add(ns);
-            } catch (IllegalArgumentException ex) {
-                throw new InvalidConfigException("invalid namespace: " + s, ex);
-            }
-        }
-        
         FileSystem fs = FileSystems.getDefault();
         Path root = fs.getPath(rootVal);
         this.contentPath = root.resolve(CONTENT_FOLDER);
@@ -231,16 +221,6 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
         init(root);
     }
     
-    // for test code
-    public OpaqueFileSystemStorageAdapter(File rootDirectory, int bucketLen, List<String> preserve) 
-            throws InvalidConfigException {
-        this(rootDirectory, bucketLen);
-        
-        for (String s : preserve) {
-            this.preservationNamespaces.add(new Namespace(s));
-        }
-    }
-
     private void init(Path root) throws InvalidConfigException {
         try {
             if (!Files.isDirectory(root)) {
@@ -275,6 +255,16 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
         }
     }
 
+    @Override
+    public void setRecoverableNamespaces(List<Namespace> preserved) {
+        this.preservationNamespaces.addAll(preserved);
+    }
+
+    @Override
+    public void setPurgeNamespaces(List<Namespace> purged) {
+        this.purgeNamespaces.addAll(purged);
+    }
+    
     @Override
     public BucketType getBucketType() {
         return BucketType.HEX;

@@ -3,7 +3,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2022.                            (c) 2022.
+ *  (c) 2023.                            (c) 2023.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -84,6 +84,8 @@ import java.net.URI;
 import java.util.Date;
 import java.util.Iterator;
 
+import java.util.List;
+import org.opencadc.inventory.Namespace;
 import org.opencadc.inventory.StorageLocation;
 
 /**
@@ -95,6 +97,28 @@ import org.opencadc.inventory.StorageLocation;
  */
 public interface StorageAdapter {
 
+    /**
+     * Configure the optional set of namespaces to preserve and allow for later
+     * recovery. When objects are deleted from storage with delete(StorageLocation),
+     * those with matching artifact uri should be marked as deleted but otherwise
+     * preserved for later recovery via recover(StorageLocation storageLocation, 
+     * Date contentLastModified).
+     * 
+     * @param preserved set of namespaces to preserve
+     * @throws UnsupportedOperationException if preservation for recovery is not supported
+     */
+    public void setRecoverableNamespaces(List<Namespace> preserved);
+    
+    /**
+     * Configure the optional set of namespaces to purge from storage. When objects 
+     * are deleted from storage with delete(StorageLocation), those with matching
+     * artifact uri will be deleted without consulting the normal "recoverable namespaces"
+     * list whether or not they were previously deleted (marked) or not.
+     * 
+     * @param purged set of namespaces to purge
+     */
+    public void setPurgeNamespaces(List<Namespace> purged);
+    
     /**
      * Get the bucket type supported by the adapter.
      * 
@@ -169,11 +193,12 @@ public interface StorageAdapter {
             InterruptedException, ReadException, WriteException, StorageEngageException, TransientException;
         
     /**
-     * Delete the object identified by storageLocation.
+     * Delete the object identified by storageLocation. Actual behaviour is dependent on the
+     * configured set of recoverable namespaces and purged namespaces described elsewhere.
      * 
-     * @param storageLocation Identifies the artifact to delete.
+     * @param storageLocation the object to delete
      * 
-     * @throws ResourceNotFoundException if the artifact could not be found.
+     * @throws ResourceNotFoundException if the location could not be found or it is already preserved/recoverable
      * @throws IOException if an unrecoverable error occurred.
      * @throws java.lang.InterruptedException if thread receives an interrupt
      * @throws StorageEngageException if the adapter failed to interact with storage.
@@ -183,13 +208,15 @@ public interface StorageAdapter {
         throws ResourceNotFoundException, IOException, InterruptedException, StorageEngageException, TransientException;
     
     /**
-     * Delete the object identified by storageLocation even if it has been deleted before and marked
-     * for long term preservation.
+     * Delete the object identified by storageLocation. The includeRecoverable flag specifies if
+     * recoverable (previously deleted and preserved) locations are considered valid targets to be
+     * deleted; a value of true allows for the deletion of previously deleted objects. Actual behaviour 
+     * is dependent on the configured set of recoverable and purged namespaces described elsewhere.
      * 
-     * @param storageLocation Identifies the artifact to delete.
+     * @param storageLocation the object to delete
      * @param includeRecoverable true to force deletion of preserved objects, otherwise false
      * 
-     * @throws ResourceNotFoundException if the location could not be found or it is preserved and includeRecoverable=false
+     * @throws ResourceNotFoundException if the location could not be found or it is preserved/recoverable and includeRecoverable=false
      * @throws IOException if an unrecoverable error occurred.
      * @throws java.lang.InterruptedException if thread receives an interrupt
      * @throws StorageEngageException if the adapter failed to interact with storage.
