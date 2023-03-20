@@ -31,6 +31,12 @@ org.opencadc.tantar.inventory.url=jdbc:postgresql://{server}/{database}
 ## storage adapter settings
 org.opencadc.inventory.storage.StorageAdapter={fully-qualified-classname of implementation}
 
+## optional preserve (recoverable delete) behaviour
+org.opencadc.tantar.preserveNamespace = {namespace}
+
+## optional purge (unrecoverable delete) behaviour
+org.opencadc.tantar.purgeNamespace = {namespace}
+
 ## optional full scan of storage 
 org.opencadc.tantar.includeRecoverable = true | false
 ```
@@ -94,6 +100,40 @@ This option is likely to make tantar validation slower if the number of previous
 large because it usually requires an additional query to the inventory database for each stored object that 
 dosn't currently match an artifact (which is all of the deleted/preserved stored objects). This option 
 should be used rarely, but it can potentially recover from the scenario where an Artifact has no
+storageLocation but the file (or an older copy with the same bytes) still resides in storage.
+
+The optional _preserveNamespace_ key causes tantar to configure the storage adapter to preserve the file
+content in storage and simply mark it as deleted rather than really deleting. Multiple values may be provided by including multiple property settings in order to preserve multiple namespace(s). The namespace value(s) must end
+with a colon (:) or slash (/) so one namespace cannot accidentally match (be a prefix of) another namepsace.
+
+Example:
+```
+org.opencadc.tantar.preserveNamespace = cadc:
+org.opencadc.tantar.preserveNamespace = test:KEEP/
+```
+Files where the `Artifact.uri` matches (starts with) one of these prefixes will be preserved and, in principle, recoverable. Others (e.g. `test:FOO/bar`) be permanently deleted and not recoverable.
+
+The optional _purgeNamespace_ key tells tantar to configure the storage adapter to perform a real deletion from
+storage for matching files _even if they were previously preserved_. TODO: in future, we may implement other options
+like a "purgeAfter" feature to delete matching files where the file has been preserved (marked as deleted) longer
+than the configured value (currently, this is an integer number of days).
+
+Example:
+```
+org.opencadc.tantar.preserveNamespace = cadc:
+org.opencadc.tantar.purgeNamespace = cadc:OBSOLETE/
+org.opencadc.tantar.purgeAfter = 730
+```
+Previously deleted (marked) files where the `Artifact.uri` matches (starts with) `cadc:OBSOLETE/` 
+and files that were deleted (marked) more than 2 years ago will be deleted from storage. All other files
+where the `Artifact.uri` matches (starts with) `cadc:` are preserved.
+
+The _includeRecoverable_ configuration is optional and defaults to _false_. When true, `tantar` will 
+request that the StorageAdapter include recoverable (previously deleted but preserved) stored objects for
+consideration. This option is likely to make tantar validation slower if the number of previously deleted 
+ojects is large because it usually requires an additional query to the inventory database for each stored 
+object that dosn't currently match an artifact (which is all of the deleted/preserved stored objects). This 
+option should be used rarely, but it can potentially recover from the scenario where an Artifact has no
 storageLocation but the file (or an older copy with the same bytes) still resides in storage.
 
 ### cadcproxy.pem
