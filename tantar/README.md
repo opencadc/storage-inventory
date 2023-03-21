@@ -19,7 +19,7 @@ org.opencadc.tantar.reportOnly = {true|false}
 org.opencadc.tantar.buckets = {bucket prefix or range of bucket prefixes}
 
 # set the policy to resolve conflicts of files
-org.opencadc.tantar.policy.ResolutionPolicy = {InventoryIsAlwaysRight | StorageIsAlwaysRight}
+org.opencadc.tantar.policy.ResolutionPolicy = InventoryIsAlwaysRight | StorageIsAlwaysRight
 
 ## inventory database settings
 org.opencadc.inventory.db.SQLGenerator=org.opencadc.inventory.db.SQLGenerator
