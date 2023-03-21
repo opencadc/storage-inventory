@@ -127,7 +127,7 @@ match any _recoverableNamespace_ namespace will be real deletions from storage. 
 `tantar` depends on the resolution policy (above). 
 
 Note: Since artifact and stored object deletion can also be performed by requests to the `minoc` service,
-all instances of `minoc` that use the same inventory and storage adapter should use the same
+all instances of `minoc` and `tantar` that use the same inventory and storage adapter should use the same
  _recoverableNamespace_ configuration so that preservation and recovery (from mistakes) is consistent.
 
 ### cadcproxy.pem

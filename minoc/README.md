@@ -86,7 +86,7 @@ Multiple values of the permission granting service resourceID(s) may be provided
 settings. All services will be consulted but a single positive result is sufficient to grant permission for an 
 action.
 
-The optional _recoverableNamespace_ key causes tantar to configure the storage adapter so that deletions
+The optional _recoverableNamespace_ key causes `minoc` to configure the storage adapter so that deletions
 preserve the file content in a recoverable state. This generally means that storage space remains in use
 but details are internal to the StorageAdapter implementation . Multiple values may be provided by 
 including multiple property settings in order to make multiple namespace(s) recoverable. The namespace
@@ -102,6 +102,10 @@ org.opencadc.minoc.recoverableNamespace = cadc:IMPORTANT/
 ```
 Artifacts that are deleted via the `minoc` API with an `Artifact.uri` that matches (starts with) one of these 
 prefixes will recoverable. Others (e.g. `test:FOO/bar`) will be permanently deleted and not recoverable.
+
+Note: Since artifact and stored object deletion can also be performed by the `tantar` file validation tool,
+all instances of `minoc` and `tantar` that use the same inventory and storage adapter should use the same
+ _recoverableNamespace_ configuration so that preservation and recovery (from mistakes) is consistent.
 
 ---
 **For developer testing only:** To disable authorization checking (via `readGrantProvider` or `writeGrantProvider`
