@@ -94,6 +94,7 @@ import javax.security.auth.Subject;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.InventoryUtil;
+import org.opencadc.inventory.Namespace;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.SQLGenerator;
 import org.opencadc.inventory.server.PermissionsCheck;
@@ -319,6 +320,8 @@ public abstract class ArtifactAction extends RestAction {
     protected void initStorageAdapter() {
         if (storageAdapter == null) {
             this.storageAdapter = InventoryUtil.loadPlugin(config.getFirstPropertyValue(MinocInitAction.SA_KEY));
+            List<Namespace> rec = MinocInitAction.getRecoverableNamespaces(config);
+            storageAdapter.setRecoverableNamespaces(rec);
         }
     }
 

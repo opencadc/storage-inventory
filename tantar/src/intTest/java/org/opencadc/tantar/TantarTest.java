@@ -85,6 +85,7 @@ import java.util.TreeMap;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
+import org.opencadc.inventory.Namespace;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.DeletedArtifactEventDAO;
@@ -127,11 +128,12 @@ abstract class TantarTest {
     protected TantarTest(ResolutionPolicy policy, boolean includeRecoverable) throws Exception {
         this.adapter = new OpaqueFileSystemStorageAdapter(ROOT, 1);
         
-        List<String> preserve = new ArrayList<>();
+        List<Namespace> preserve = new ArrayList<>();
         if (includeRecoverable) {
-            preserve.add("test:FOO/");
+            preserve.add(new Namespace("test:FOO/"));
         }
-        this.preservingAdapter = new OpaqueFileSystemStorageAdapter(ROOT, 1, preserve);
+        this.preservingAdapter = new OpaqueFileSystemStorageAdapter(ROOT, 1);
+        this.preservingAdapter.setRecoverableNamespaces(preserve);
         this.includeRecoverable = includeRecoverable;
         
         

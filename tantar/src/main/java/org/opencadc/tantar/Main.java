@@ -78,9 +78,9 @@ import ca.nrc.cadc.util.PropertiesReader;
 import ca.nrc.cadc.util.StringUtil;
 
 import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.IOException;
 import java.security.PrivilegedExceptionAction;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 
@@ -89,6 +89,7 @@ import javax.security.auth.Subject;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.InventoryUtil;
+import org.opencadc.inventory.Namespace;
 import org.opencadc.inventory.db.SQLGenerator;
 import org.opencadc.inventory.storage.StorageAdapter;
 import org.opencadc.tantar.policy.ResolutionPolicy;
@@ -105,6 +106,8 @@ public class Main {
     
     private static final String BUCKETS_KEY = CONFIG_BASE + ".buckets";
     private static final String INCLUDE_RECOVERABLE_KEY = CONFIG_BASE + ".includeRecoverable";
+    private static final String RECOVERABLE_NS_KEY = CONFIG_BASE + ".recoverableNamespace";
+    private static final String PURGE_NS_KEY = CONFIG_BASE + ".purgeNamespace";
 
     private static final String POLICY_KEY = ResolutionPolicy.class.getName();
     private static final String GENERATOR_KEY = SQLGenerator.class.getName();
@@ -162,8 +165,23 @@ public class Main {
             String rawIncludeRecovery = props.getFirstPropertyValue(INCLUDE_RECOVERABLE_KEY);
             final boolean includeRecoverable = StringUtil.hasText(rawIncludeRecovery) && Boolean.parseBoolean(rawIncludeRecovery);
             
-            final Map<String,Object> daoConfig = new TreeMap<>();
+            List<String> rawRecNS = props.getProperty(RECOVERABLE_NS_KEY);
+            List<Namespace> recoverableNS = new ArrayList<>();
+            for (String ns : rawRecNS) {
+                recoverableNS.add(new Namespace(ns));
+                log.info(RECOVERABLE_NS_KEY + " = " + ns);
+            }
+            storageAdapter.setRecoverableNamespaces(recoverableNS);
             
+            List<String> rawPurgeNS = props.getProperty(PURGE_NS_KEY);
+            List<Namespace> purgeNS = new ArrayList<>();
+            for (String ns : rawPurgeNS) {
+                purgeNS.add(new Namespace(ns));
+                log.info(PURGE_NS_KEY + " = " + ns);
+            }
+            storageAdapter.setPurgeNamespaces(purgeNS);
+            
+            final Map<String,Object> daoConfig = new TreeMap<>();
             String sqlGeneratorClass = props.getFirstPropertyValue(SQLGenerator.class.getName());
             if (StringUtil.hasLength(sqlGeneratorClass)) {
                 daoConfig.put(SQLGenerator.class.getName(), Class.forName(sqlGeneratorClass));
