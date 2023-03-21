@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2020.                            (c) 2020.
+*  (c) 2023.                            (c) 2023.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -74,6 +74,7 @@ import java.util.List;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Test;
+import org.opencadc.inventory.Namespace;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.storage.StorageMetadata;
 import org.opencadc.inventory.storage.test.StorageAdapterBasicTest;
@@ -85,31 +86,44 @@ import org.opencadc.inventory.storage.test.StorageAdapterBasicTest;
 public class SwiftPreserveNamespaceTest extends StorageAdapterBasicTest {
     private static final Logger log = Logger.getLogger(SwiftPreserveNamespaceTest.class);
 
-    static final List<String> PRESERVE = new ArrayList<>();
+    static final List<Namespace> PRESERVE_NAMESPACES = new ArrayList<>();
+    static final List<Namespace> PURGE_NAMESPACES = new ArrayList<>();
     
     static {
         Log4jInit.setLevel("org.opencadc.inventory", Level.INFO);
         Log4jInit.setLevel("org.javaswift.joss.client", Level.INFO);
         
-        PRESERVE.add(StorageAdapterBasicTest.TEST_NAMESPACE);
+        PRESERVE_NAMESPACES.add(new Namespace(StorageAdapterBasicTest.TEST_NAMESPACE));
+        PURGE_NAMESPACES.add(new Namespace(StorageAdapterBasicTest.PURGE_NAMESPACE));
     }
     
     final SwiftStorageAdapter swiftAdapter;
     
     public SwiftPreserveNamespaceTest() throws Exception {
-        super(new SwiftStorageAdapter(true, System.getProperty("user.name") + "-single-test", 2, false, PRESERVE));
+        super(new SwiftStorageAdapter(true, System.getProperty("user.name") + "-single-test", 2, false));
+        adapter.setRecoverableNamespaces(PRESERVE_NAMESPACES);
+        adapter.setPurgeNamespaces(PURGE_NAMESPACES);
         this.swiftAdapter = (SwiftStorageAdapter) super.adapter; 
     }
 
     @Override
     public void cleanupBefore() throws Exception {
         log.info("cleanupBefore: START");
+        
+        // disable recoverable for cleanup
+        List<Namespace> preserveConfig = new ArrayList<>();
+        preserveConfig.addAll(adapter.getRecoverableNamespaces());
+        adapter.setRecoverableNamespaces(new ArrayList<>());
+        
         Iterator<StorageMetadata> sbi = swiftAdapter.iterator(null, true);
         while (sbi.hasNext()) {
             StorageLocation loc = sbi.next().getStorageLocation();
             swiftAdapter.delete(loc, true);
             log.info("\tdeleted: " + loc);
         }
+        
+        //restore recoverable
+        adapter.setRecoverableNamespaces(preserveConfig);
         log.info("cleanupBefore: DONE");        
     }
     
@@ -129,4 +143,12 @@ public class SwiftPreserveNamespaceTest extends StorageAdapterBasicTest {
     public void testDeleteRecover() {
         super.testDeleteRecover();
     }
+
+    @Test
+    @Override
+    public void testDeletePurge() {
+        super.testDeletePurge();
+    }
+    
+    
 }

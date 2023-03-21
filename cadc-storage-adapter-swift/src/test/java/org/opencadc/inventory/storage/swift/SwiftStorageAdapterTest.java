@@ -331,24 +331,6 @@ public class SwiftStorageAdapterTest {
                 Assert.fail("syntactically valid config failed: " + ex);
             }
             
-            // add optional props
-            config.add(new String[] { SwiftStorageAdapter.CONF_PRESERVE_NS, "test:KEEP/" });
-            config.add(new String[] { SwiftStorageAdapter.CONF_PRESERVE_NS, "cadc:" });
-            writeProps(8, config, cf);
-            try {
-                SwiftStorageAdapter swiftAdapter = new SwiftStorageAdapter(false);
-                Assert.assertEquals("storageBucket", swiftAdapter.storageBucket, "foo");
-                Assert.assertEquals("bucketLength", swiftAdapter.storageBucketLength, 3);
-                Assert.assertTrue("multiBucket", swiftAdapter.multiBucket);
-                Assert.assertEquals("preservationNamespaces", 2, swiftAdapter.preservationNamespaces.size());
-                for (Namespace ns : swiftAdapter.preservationNamespaces) {
-                    log.info("preserve: " + ns);
-                }
-            } catch (InvalidConfigException ex) {
-                log.error("valid config failed", ex);
-                Assert.fail("syntactically valid config failed: " + ex);
-            }
-            
             cf.delete();
             
             
