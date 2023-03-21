@@ -109,6 +109,8 @@ public interface StorageAdapter {
      */
     public void setRecoverableNamespaces(List<Namespace> preserved);
     
+    public List<Namespace> getRecoverableNamespaces();
+    
     /**
      * Configure the optional set of namespaces to purge from storage. When objects 
      * are deleted from storage with delete(StorageLocation), those with matching
@@ -118,6 +120,8 @@ public interface StorageAdapter {
      * @param purged set of namespaces to purge
      */
     public void setPurgeNamespaces(List<Namespace> purged);
+    
+    public List<Namespace> getPurgeNamespaces();
     
     /**
      * Get the bucket type supported by the adapter.

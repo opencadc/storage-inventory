@@ -90,6 +90,7 @@ import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
+import org.opencadc.inventory.Namespace;
 import org.opencadc.inventory.storage.NewArtifact;
 import org.opencadc.inventory.storage.StorageAdapter;
 import org.opencadc.inventory.storage.StorageMetadata;
@@ -103,6 +104,8 @@ public abstract class StorageAdapterBasicTest {
     private static final Logger log = Logger.getLogger(StorageAdapterBasicTest.class);
 
     public static final String TEST_NAMESPACE = "test:";
+    
+    public static final String PURGE_NAMESPACE = "test:JUNK/";
     
     static {
         Log4jInit.setLevel("org.opencadc.inventory.storage", Level.INFO);
@@ -460,7 +463,7 @@ public abstract class StorageAdapterBasicTest {
             NewArtifact na = new NewArtifact(artifactURI);
             na.contentLength = datalen;
             StorageMetadata sm = adapter.put(na, TestUtil.getInputStreamOfRandomBytes(datalen), null);
-            Assert.assertFalse(sm.deletePreserved);
+            Assert.assertFalse(sm.deleteRecoverable);
             
             
             Thread.sleep(2000L);
@@ -483,7 +486,7 @@ public abstract class StorageAdapterBasicTest {
                 }
             }
             Assert.assertNotNull(deleted);
-            Assert.assertTrue(deleted.deletePreserved);
+            Assert.assertTrue(deleted.deleteRecoverable);
             // timestamp shanged when attrs set
             log.info(" \n   orig: " + df.format(sm.getContentLastModified())
                     + "\ndeleted: " + df.format(deleted.getContentLastModified()));
@@ -502,7 +505,7 @@ public abstract class StorageAdapterBasicTest {
                 }
             }
             Assert.assertNotNull(recovered);
-            Assert.assertFalse(recovered.deletePreserved); // must be true due to iterator call
+            Assert.assertFalse(recovered.deleteRecoverable); // must be true due to iterator call
             // timestamp restored
             log.info(" \n     orig: " + df.format(sm.getContentLastModified())
                     + "\nrecovered: " + df.format(deleted.getContentLastModified()));
@@ -511,6 +514,110 @@ public abstract class StorageAdapterBasicTest {
         } catch (Exception unexpected) {
             log.error("unexpected exception", unexpected);
             Assert.fail("unexpected exception: " + unexpected);
+        }
+    }
+    
+    /**
+     * Sub-classes of this test can override this method and add @Test to
+     * test delete and purge.
+     */
+    protected void testDeletePurge() {
+        long datalen = 8192L;
+        DateFormat df = DateUtil.getDateFormat(DateUtil.IVOA_DATE_FORMAT, DateUtil.UTC);
+        
+        List<Namespace> purgeConfig = new ArrayList<>();
+        purgeConfig.addAll(adapter.getPurgeNamespaces());
+        
+        try {
+            URI artifactURI = URI.create(PURGE_NAMESPACE + "TEST/testDeletePurge");
+            NewArtifact na = new NewArtifact(artifactURI);
+            na.contentLength = datalen;
+            StorageMetadata sm = adapter.put(na, TestUtil.getInputStreamOfRandomBytes(datalen), null);
+            Assert.assertFalse(sm.deleteRecoverable);
+            
+            adapter.delete(sm.getStorageLocation());
+            
+            try {
+                ByteArrayOutputStream bos = new ByteArrayOutputStream();
+                adapter.get(sm.getStorageLocation(), bos);
+                Assert.fail("expected ResourceNotFoundException, got  " + bos.toByteArray().length + " bytes");
+            } catch (ResourceNotFoundException expected) {
+                log.info("caught expected: " + expected);
+            }
+            
+            Iterator<StorageMetadata> smi = adapter.iterator(null, true);
+            StorageMetadata deleted = null;
+            while (smi.hasNext()) {
+                StorageMetadata s = smi.next();
+                if (sm.getStorageLocation().equals(s.getStorageLocation())) {
+                    deleted = s;
+                }
+            }
+            Assert.assertNull(deleted); // really deleted because purge overrides preserve in normal delete
+            
+            // disable purge and try again
+            adapter.setPurgeNamespaces(new ArrayList<>());
+            
+            sm = adapter.put(na, TestUtil.getInputStreamOfRandomBytes(datalen), null);
+            Assert.assertFalse(sm.deleteRecoverable);
+            
+            adapter.delete(sm.getStorageLocation());
+            
+            try {
+                ByteArrayOutputStream bos = new ByteArrayOutputStream();
+                adapter.get(sm.getStorageLocation(), bos);
+                Assert.fail("expected ResourceNotFoundException, got  " + bos.toByteArray().length + " bytes");
+            } catch (ResourceNotFoundException expected) {
+                log.info("caught expected: " + expected);
+            }
+            
+            smi = adapter.iterator(null, true);
+            deleted = null;
+            while (smi.hasNext()) {
+                StorageMetadata s = smi.next();
+                if (sm.getStorageLocation().equals(s.getStorageLocation())) {
+                    deleted = s;
+                }
+            }
+            
+            Assert.assertNotNull(deleted);
+            Assert.assertTrue(deleted.deleteRecoverable);
+            
+            adapter.setPurgeNamespaces(purgeConfig);
+            
+            try {
+                adapter.delete(sm.getStorageLocation());
+                Assert.fail("expected ResourceNotFoundException, got success");
+            } catch (ResourceNotFoundException expected) {
+                log.info("caught expected: " + expected);
+            }
+            // includeRecoverable==true
+            adapter.delete(sm.getStorageLocation(), true);
+            
+            try {
+                ByteArrayOutputStream bos = new ByteArrayOutputStream();
+                adapter.get(sm.getStorageLocation(), bos);
+                Assert.fail("expected ResourceNotFoundException, got  " + bos.toByteArray().length + " bytes");
+            } catch (ResourceNotFoundException expected) {
+                log.info("caught expected: " + expected);
+            }
+           
+            smi = adapter.iterator(null, true);
+            deleted = null;
+            while (smi.hasNext()) {
+                StorageMetadata s = smi.next();
+                if (sm.getStorageLocation().equals(s.getStorageLocation())) {
+                    deleted = s;
+                }
+            }
+            log.info("found: " + deleted);
+            Assert.assertNull(deleted); // really deleted because purge deleted a recoverable file
+            
+        } catch (Exception unexpected) {
+            log.error("unexpected exception", unexpected);
+            Assert.fail("unexpected exception: " + unexpected);
+        } finally {
+            adapter.setPurgeNamespaces(purgeConfig);
         }
     }
     
@@ -581,8 +688,8 @@ public abstract class StorageAdapterBasicTest {
             while (ei.hasNext()) {
                 StorageMetadata em = ei.next();
                 StorageMetadata am = ai.next();
-                log.info("compare: " + em.getStorageLocation() + " vs " + am.getStorageLocation() + " dp=" + am.deletePreserved);
-                if (am.deletePreserved) {
+                log.info("compare: " + em.getStorageLocation() + " vs " + am.getStorageLocation() + " dp=" + am.deleteRecoverable);
+                if (am.deleteRecoverable) {
                     foundPreserved++;
                 }
                 Assert.assertEquals("order", em, am);

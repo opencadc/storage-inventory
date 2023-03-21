@@ -91,7 +91,7 @@ public class StorageMetadata implements Comparable<StorageMetadata> {
     public String contentEncoding;
     public String contentType;
     
-    public boolean deletePreserved = false;
+    public boolean deleteRecoverable = false;
     
     /**
      * Constructor for a valid stored object.
