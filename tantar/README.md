@@ -34,7 +34,7 @@ org.opencadc.inventory.storage.StorageAdapter={fully-qualified-classname of impl
 ## optional recoverable after delete behaviour
 org.opencadc.tantar.recoverableNamespace = {namespace}
 
-## optional purge (unrecoverable delete) behaviour
+## optional purge behaviour
 org.opencadc.tantar.purgeNamespace = {namespace}
 
 ## optional full scan of storage 
@@ -105,10 +105,11 @@ including multiple property settings in order to make multiple namespace(s) reco
 value(s) must end with a colon (:) or slash (/) so one namespace cannot _accidentally_ match (be a prefix of) 
 another namespace.
 
-The optional _purgeNamespace_ key tells tantar to configure the storage adapter to perform a real deletion from
+EXPERIMENTAL: The optional _purgeNamespace_ key tells tantar to configure the storage adapter to perform a real deletion from
 storage for matching files _even if they were previously preserved_ or match existing _recoverableNamespace_ 
-configuration. TODO: in future, we may implement other options like a "purgeAfter" feature to delete matching 
-files where the file has been preserved (marked as deleted) longer than the configured value.
+configuration. **This feature is experimental and may be renamed, modified, or removed in future.** It should not be needed
+or used for routine (scheduled) validation. TODO: in future, we could implement other options like a "purgeAfter" 
+feature to remove matching recoverable stored objects that are sufficiently old... use cases TBD.
 
 Example:
 ```
