@@ -25,5 +25,5 @@ to hold files. When validating, the listing of all files in a bottom level are l
 the `bucketLength` needs to be large enough so the bottom level sub-directories hold a few thousand files. For example, to store one million files would need `bucketLength` of 2 (1e6/256 ~ 4000 files per directory) or 3 (1e6/4096 ~ 250 files/directory) while one billion files would require a value like 5 (1e6 directories with 1000 files each).
 
 Note: The optional `preserveNamespace` key  has been removed. This setting is now part of the StorageAdapter API and
-must be configured configured directly in `minoc` and `tantar`.
+must be configured directly in `minoc` and `tantar`.
 
