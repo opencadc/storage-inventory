@@ -111,11 +111,14 @@ import java.nio.charset.Charset;
 import java.security.AccessControlException;
 import java.security.cert.CertificateExpiredException;
 import java.security.cert.CertificateNotYetValidException;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.Iterator;
+import java.util.List;
 import javax.security.auth.Subject;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.InventoryUtil;
+import org.opencadc.inventory.Namespace;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.storage.BucketType;
 import org.opencadc.inventory.storage.ByteRange;
@@ -151,6 +154,26 @@ public class AdStorageAdapter implements StorageAdapter {
     @Override
     public BucketType getBucketType() {
         return BucketType.PLAIN;
+    }
+
+    @Override
+    public void setRecoverableNamespaces(List<Namespace> preserved) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public List<Namespace> getRecoverableNamespaces() {
+        return new ArrayList<>();
+    }
+
+    @Override
+    public void setPurgeNamespaces(List<Namespace> purged) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public List<Namespace> getPurgeNamespaces() {
+        return new ArrayList<>();
     }
     
     @Override
