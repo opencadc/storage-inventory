@@ -29,8 +29,7 @@ org.opencadc.inventory.storage.swift.SwiftStorageAdapter.authEndpoint={Swift aut
 org.opencadc.inventory.storage.swift.SwiftStorageAdapter.username={Swift API username to authenticate}
 org.opencadc.inventory.storage.swift.SwiftStorageAdapter.key={Swift API key to authenticate}
 
-# optional preservation
-org.opencadc.inventory.storage.swift.SwiftStorageAdapter.preserveNamespace = {namespace}
+REMOVED: org.opencadc.inventory.storage.swift.SwiftStorageAdapter.preserveNamespace = {namespace}
 ```
 
 ## multiBucket: true or false
@@ -45,14 +44,8 @@ logical bucket name, so this eventually creates 16^{bucketLength} real buckets i
 
 For example, with `bucketName=my-bucket` and `bucketLength=3` the adapter will eventually create 4096 buckets with names from `my-bucket-000` to `my-bucket-fff`. That should be sufficient for 1 billion files (~256K per bucket).
 
-The optional `preserveNamespace` key configures the storage adapter to preserve the file
-content in storage and simply mark it as deleted rather than really deleting. Multiple values may be provided by including multiple property settings in order to preserve multiple
-namespace(s). The namespace value(s) must end with a colon (:) or slash (/) so one namespace
-cannot accidentally match (be a prefix of) another namepsace. Example:
-```
-org.opencadc.inventory.storage.swift.SwiftStorageAdapter.preserveNamespace = cadc:
-org.opencadc.inventory.storage.swift.SwiftStorageAdapter.preserveNamespace = test:KEEP/
-```
+Note: The optional `preserveNamespace` key  has been removed. This setting is now part of the StorageAdapter API and
+must be configured directly in `minoc` and `tantar`.
 
 ## limitations
 It is generally a bad idea to create other buckets in the same account and a really bad idea to make other
