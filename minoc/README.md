@@ -101,7 +101,7 @@ org.opencadc.minoc.recoverableNamespace = test:KEEP/
 org.opencadc.minoc.recoverableNamespace = cadc:IMPORTANT/
 ```
 Artifacts that are deleted via the `minoc` API with an `Artifact.uri` that matches (starts with) one of these 
-prefixes will recoverable. Others (e.g. `test:FOO/bar`) will be permanently deleted and not recoverable.
+prefixes will be recoverable. Others (e.g. `test:FOO/bar`) will be permanently deleted and not recoverable.
 
 Note: Since artifact and stored object deletion can also be performed by the `tantar` file validation tool,
 all instances of `minoc` and `tantar` that use the same inventory and storage adapter should use the same
