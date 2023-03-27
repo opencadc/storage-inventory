@@ -3,7 +3,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2022.                            (c) 2022.
+ *  (c) 2022=3.                            (c) 2023.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -163,7 +163,7 @@ public class AdStorageAdapter implements StorageAdapter {
 
     @Override
     public List<Namespace> getRecoverableNamespaces() {
-        return new ArrayList<>();
+        throw new UnsupportedOperationException();
     }
 
     @Override
@@ -173,7 +173,7 @@ public class AdStorageAdapter implements StorageAdapter {
 
     @Override
     public List<Namespace> getPurgeNamespaces() {
-        return new ArrayList<>();
+        throw new UnsupportedOperationException();
     }
     
     @Override
