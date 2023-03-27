@@ -73,6 +73,7 @@ import ca.nrc.cadc.db.ConnectionConfig;
 import ca.nrc.cadc.db.DBUtil;
 import ca.nrc.cadc.db.TransactionManager;
 import ca.nrc.cadc.io.ResourceIterator;
+import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.profiler.Profiler;
 import ca.nrc.cadc.util.BucketSelector;
 import java.net.URI;
@@ -439,10 +440,12 @@ public class BucketValidator implements ValidateActions {
     public void delete(final StorageMetadata storageMetadata) throws Exception {
         if (canTakeAction()) {
             final StorageLocation storageLocation = storageMetadata.getStorageLocation();
-            if (!storageMetadata.deletePreserved) {
-                log.debug("Delete from storage: " + storageLocation);
+            try {
+                log.debug("delete from storage: " + storageLocation);
                 storageAdapter.delete(storageLocation);
                 numDeleteStorageLocation++;
+            } catch (ResourceNotFoundException ex) {
+                log.warn("delete from storage failed: " + storageLocation + " reason: " + ex);
             }
         }
     }
@@ -605,7 +608,7 @@ public class BucketValidator implements ValidateActions {
                     StorageLocationEvent sle = new StorageLocationEvent(cur.getID());
                     sleDAO.put(sle);
                     
-                    if (smeta.deletePreserved) {
+                    if (smeta.deleteRecoverable) {
                         // TODO: there is no intTest that verifies that this was called correctly
                         storageAdapter.recover(smeta.getStorageLocation(), artifact.getContentLastModified());
                     }

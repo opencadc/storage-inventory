@@ -86,6 +86,7 @@ import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
+import org.opencadc.inventory.Namespace;
 import org.opencadc.inventory.storage.test.StorageAdapterBasicTest;
 
 /**
@@ -99,22 +100,26 @@ public class OpaqueStorageAdapterPreserveTest extends StorageAdapterBasicTest {
 
     static final int BUCKET_LEN = 2;
     static final File ROOT_DIR;
-    static final List<String> PRESERVE_NAMESPACES = new ArrayList<>();
+    static final List<Namespace> PRESERVE_NAMESPACES = new ArrayList<>();
+    static final List<Namespace> PURGE_NAMESPACES = new ArrayList<>();
     
     static {
         Log4jInit.setLevel("org.opencadc.inventory.storage", Level.INFO);
         ROOT_DIR = new File("build/tmp/opaque-int-tests");
         ROOT_DIR.mkdir();
         
-        log.warn("adding preservation namespace: " + StorageAdapterBasicTest.TEST_NAMESPACE);
-        PRESERVE_NAMESPACES.add(StorageAdapterBasicTest.TEST_NAMESPACE);
+        PRESERVE_NAMESPACES.add(new Namespace(StorageAdapterBasicTest.TEST_NAMESPACE));
+        PURGE_NAMESPACES.add(new Namespace(StorageAdapterBasicTest.PURGE_NAMESPACE));
     }
     
     final OpaqueFileSystemStorageAdapter ofsAdapter;
             
     public OpaqueStorageAdapterPreserveTest() throws InvalidConfigException {
-        super(new OpaqueFileSystemStorageAdapter(ROOT_DIR, BUCKET_LEN, PRESERVE_NAMESPACES));
+        super(new OpaqueFileSystemStorageAdapter(ROOT_DIR, BUCKET_LEN));
+        adapter.setRecoverableNamespaces(PRESERVE_NAMESPACES);
+        adapter.setPurgeNamespaces(PURGE_NAMESPACES);
         this.ofsAdapter = (OpaqueFileSystemStorageAdapter) super.adapter;
+        
 
         log.debug("    content path: " + ofsAdapter.contentPath);
         log.debug("transaction path: " + ofsAdapter.txnPath);
@@ -199,5 +204,10 @@ public class OpaqueStorageAdapterPreserveTest extends StorageAdapterBasicTest {
     public void testDeleteRecover() {
         super.testDeleteRecover();
     }
- 
+
+    @Test
+    @Override
+    public void testDeletePurge() {
+        super.testDeletePurge();
+    }
 }

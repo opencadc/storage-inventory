@@ -69,8 +69,6 @@
 
 package org.opencadc.tantar.policy;
 
-import ca.nrc.cadc.date.DateUtil;
-import java.text.DateFormat;
 import java.util.Date;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
@@ -206,8 +204,8 @@ public class InventoryIsAlwaysRight extends ResolutionPolicy {
                     doFix = true;
                 } else if (!art.storageLocation.equals(storageMetadata.getStorageLocation())
                         && art.getContentLastModified().equals(storageMetadata.getContentLastModified())) {
-                    if (!storageMetadata.deletePreserved) {
-                        // don't recover a previously deleted stored object in this case
+                    if (!storageMetadata.deleteRecoverable) {
+                        // don't recover a previously deleted stored object for this
                         doFix = true;
                         reason = "improve-contentLastModified";
                     }
@@ -224,19 +222,13 @@ public class InventoryIsAlwaysRight extends ResolutionPolicy {
                 validateActions.updateArtifact(art, storageMetadata);
                 return;
             } else {
-                if (storageMetadata.deletePreserved) {
-                    sb.append(".skip");
-                } else {
-                    sb.append(".deleteStorageLocation");
-                }
+                sb.append(".deleteStorageLocation");
                 sb.append(" Artifact.id=").append(art.getID());
                 sb.append(" Artifact.uri=").append(art.getURI());
                 sb.append(" loc=").append(storageMetadata.getStorageLocation());
                 sb.append(" reason=old-storageLocation");
                 log.info(sb.toString());
-                if (!storageMetadata.deletePreserved) {
-                    validateActions.delete(storageMetadata);
-                }
+                validateActions.delete(storageMetadata);
                 return;
             }
         }

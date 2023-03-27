@@ -52,6 +52,8 @@ org.opencadc.inventory.db.SQLGenerator=org.opencadc.inventory.db.SQLGenerator
 org.opencadc.minoc.inventory.schema={schema name in the database configured in the JDBC URL}
 
 org.opencadc.minoc.publicKeyFile={public key file from raven}
+
+org.opencadc.minoc.recoverableNamespace = {namespace}
 ```
 The minoc _resourceID_ is the resourceID of _this_ minoc service.
 
@@ -84,6 +86,28 @@ Multiple values of the permission granting service resourceID(s) may be provided
 settings. All services will be consulted but a single positive result is sufficient to grant permission for an 
 action.
 
+The optional _recoverableNamespace_ key causes `minoc` to configure the storage adapter so that deletions
+preserve the file content in a recoverable state. This generally means that storage space remains in use
+but details are internal to the StorageAdapter implementation . Multiple values may be provided by 
+including multiple property settings in order to make multiple namespace(s) recoverable. The namespace
+value(s) must end with a colon (:) or slash (/) so one namespace cannot _accidentally_ match (be a prefix of) 
+another namespace.
+Example:
+```
+org.opencadc.minoc.recoverableNamespace = cadc:
+org.opencadc.minoc.recoverableNamespace = test:KEEP/
+
+# redundant but OK
+org.opencadc.minoc.recoverableNamespace = cadc:IMPORTANT/
+```
+Artifacts that are deleted via the `minoc` API with an `Artifact.uri` that matches (starts with) one of these 
+prefixes will be recoverable. Others (e.g. `test:FOO/bar`) will be permanently deleted and not recoverable.
+
+Note: Since artifact and stored object deletion can also be performed by the `tantar` file validation tool,
+all instances of `minoc` and `tantar` that use the same inventory and storage adapter should use the same
+ _recoverableNamespace_ configuration so that preservation and recovery (from mistakes) is consistent.
+
+---
 **For developer testing only:** To disable authorization checking (via `readGrantProvider` or `writeGrantProvider`
 services), add the following configuration entry to minoc.properties:
 ```

@@ -96,12 +96,14 @@ import java.security.DigestOutputStream;
 import java.security.MessageDigest;
 import java.util.Date;
 import java.util.Iterator;
+import java.util.List;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.UUID;
 
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.InventoryUtil;
+import org.opencadc.inventory.Namespace;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.storage.BucketType;
 import org.opencadc.inventory.storage.ByteRange;
@@ -206,6 +208,26 @@ public class FileSystemStorageAdapter implements StorageAdapter {
         } catch (IOException io) {
             throw new IllegalArgumentException(("Could not create content or transaction directory"), io);
         }
+    }
+
+    @Override
+    public void setRecoverableNamespaces(List<Namespace> preserved) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public List<Namespace> getRecoverableNamespaces() {
+        throw new UnsupportedOperationException();
+    }
+    
+    @Override
+    public void setPurgeNamespaces(List<Namespace> purged) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public List<Namespace> getPurgeNamespaces() {
+        throw new UnsupportedOperationException();
     }
 
     @Override

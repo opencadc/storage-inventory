@@ -82,6 +82,7 @@ import java.util.TreeMap;
 import javax.sql.DataSource;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.InventoryUtil;
+import org.opencadc.inventory.Namespace;
 import org.opencadc.inventory.StorageSite;
 import org.opencadc.inventory.db.SQLGenerator;
 import org.opencadc.inventory.db.StorageSiteDAO;
@@ -110,6 +111,8 @@ public class MinocInitAction extends InitAction {
     static final String PUBKEYFILE_KEY = MINOC_KEY + ".publicKeyFile";
     static final String READ_GRANTS_KEY = MINOC_KEY + ".readGrantProvider";
     static final String WRITE_GRANTS_KEY = MINOC_KEY + ".writeGrantProvider";
+    
+    static final String RECOVERABLE_NS_KEY = MINOC_KEY + ".recoverableNamespace";
     
     static final String DEV_AUTH_ONLY_KEY = MINOC_KEY + ".authenticateOnly";
     
@@ -229,6 +232,19 @@ public class MinocInitAction extends InitAction {
                 }
             }
         }
+        
+        // optional
+        List<String> rawRecNS = mvp.getProperty(RECOVERABLE_NS_KEY);
+        if (rawRecNS != null) {
+            for (String s : rawRecNS) {
+                sb.append("\n\t").append(RECOVERABLE_NS_KEY + "=").append(s);
+                try {
+                    Namespace ns = new Namespace(s);
+                } catch (Exception ex) {
+                    sb.append(" INVALID");
+                }
+            }
+        }
 
         if (!ok) {
             throw new IllegalStateException(sb.toString());
@@ -250,6 +266,17 @@ public class MinocInitAction extends InitAction {
         } catch (ClassNotFoundException ex) {
             throw new IllegalStateException("invalid config: failed to load SQLGenerator: " + cname);
         }
+    }
+    
+    static List<Namespace> getRecoverableNamespaces(MultiValuedProperties props) {
+        List<Namespace> ret = new ArrayList<>();
+        List<String> rawRecNS = props.getProperty(RECOVERABLE_NS_KEY);
+        if (rawRecNS != null) {
+            for (String s : rawRecNS) {
+                ret.add(new Namespace(s));
+            }
+        }
+        return ret;
     }
     
     private void initConfig() {
@@ -319,6 +346,11 @@ public class MinocInitAction extends InitAction {
     private void initStorageAdapter() {
         log.info("initStorageAdapter: START");
         StorageAdapter storageAdapter = InventoryUtil.loadPlugin(props.getFirstPropertyValue(MinocInitAction.SA_KEY));
+        List<Namespace> rec = MinocInitAction.getRecoverableNamespaces(props);
+        for (Namespace ns : rec) {
+            log.info("initStorageAdapter: recoverableNamespace  = " + ns.getNamespace());
+        }
+        storageAdapter.setRecoverableNamespaces(rec);
         log.info("initStorageAdapter: " + storageAdapter.getClass().getName() + " OK");
     }
 }

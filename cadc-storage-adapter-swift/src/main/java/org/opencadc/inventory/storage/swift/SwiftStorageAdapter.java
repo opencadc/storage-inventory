@@ -151,7 +151,6 @@ public class SwiftStorageAdapter  implements StorageAdapter {
     static final String CONF_SBLEN = SwiftStorageAdapter.class.getName() + ".bucketLength";
     static final String CONF_BUCKET = SwiftStorageAdapter.class.getName() + ".bucketName";
     static final String CONF_ENABLE_MULTI = SwiftStorageAdapter.class.getName() + ".multiBucket";
-    static final String CONF_PRESERVE_NS = SwiftStorageAdapter.class.getName() + ".preserveNamespace";
 
     private static final String KEY_SCHEME = "id";
 
@@ -190,7 +189,8 @@ public class SwiftStorageAdapter  implements StorageAdapter {
     final boolean multiBucket;
     long segmentMaxBytes = CEPH_OBJECT_SIZE_LIMIT;
     long segmentMinBytes = segmentMaxBytes; // default: all files smaller than CEPH limit are simple objects
-    final List<Namespace> preservationNamespaces = new ArrayList<>();
+    final List<Namespace> recoverableNamespaces = new ArrayList<>();
+    final List<Namespace> purgeNamespaces = new ArrayList<>();
     
     private final Account client;
     private Container txnContainer;
@@ -210,18 +210,12 @@ public class SwiftStorageAdapter  implements StorageAdapter {
 
     // ctor for unit test
     SwiftStorageAdapter(boolean connect) throws InvalidConfigException, StorageEngageException {
-        this(connect, null, null, null, null);
+        this(connect, null, null, null);
     }
     
     SwiftStorageAdapter(boolean connect, String storageBucketOverride, Integer storageBucketLengthOverride, Boolean multiBucketOverride) 
             throws InvalidConfigException, StorageEngageException {
-        this(connect, storageBucketOverride, storageBucketLengthOverride, multiBucketOverride, null);
-    }
-    
-    // ctor for intTest to override configured multiBucket flag
-    SwiftStorageAdapter(boolean connect, String storageBucketOverride, Integer storageBucketLengthOverride, Boolean multiBucketOverride,
-            List<String> preserveOverride) 
-            throws InvalidConfigException, StorageEngageException {
+        
         final AccountConfig ac = new AccountConfig();
         try {
             PropertiesReader pr = new PropertiesReader(CONFIG_FILENAME);
@@ -312,19 +306,6 @@ public class SwiftStorageAdapter  implements StorageAdapter {
                 this.storageBucket = txnBucket + "-content";
             }
             log.debug("txnBucket: " + txnBucket + " storageBucket: " + storageBucket);
-            
-            if (preserveOverride != null) {
-                for (String s : preserveOverride) {
-                    Namespace ns = new Namespace(s);
-                    this.preservationNamespaces.add(ns);
-                }
-            } else {
-                List<String> nsvals = props.getProperty(CONF_PRESERVE_NS);
-                for (String s : nsvals) {
-                    Namespace ns = new Namespace(s);
-                    this.preservationNamespaces.add(ns);
-                }
-            }
             
             ac.setAuthenticationMethod(AuthenticationMethod.BASIC);
             ac.setUsername(user);
@@ -446,6 +427,29 @@ public class SwiftStorageAdapter  implements StorageAdapter {
     public BucketType getBucketType() {
         return BucketType.HEX;
     }
+
+    @Override
+    public void setRecoverableNamespaces(List<Namespace> recoverable) {
+        this.recoverableNamespaces.clear();
+        this.recoverableNamespaces.addAll(recoverable);
+    }
+
+    @Override
+    public List<Namespace> getRecoverableNamespaces() {
+        return recoverableNamespaces;
+    }
+
+    @Override
+    public void setPurgeNamespaces(List<Namespace> purge) {
+        this.purgeNamespaces.clear();
+        this.purgeNamespaces.addAll(purge);
+    }
+
+    @Override
+    public List<Namespace> getPurgeNamespaces() {
+        return purgeNamespaces;
+    }
+    
     
     static class InternalBucket {
         String name;
@@ -1326,7 +1330,7 @@ public class SwiftStorageAdapter  implements StorageAdapter {
             }
 
             StorageMetadata ret =  toStorageMetadata(loc, md5, obj.getContentLength(), artifactURI, contentLastModified);
-            ret.deletePreserved = "true".equals(delp);
+            ret.deleteRecoverable = "true".equals(delp);
             return ret;
         } catch (IllegalArgumentException | IllegalStateException | ParseException | URISyntaxException ex) {
             return new StorageMetadata(loc);
@@ -1378,60 +1382,80 @@ public class SwiftStorageAdapter  implements StorageAdapter {
         try {
             Container sub = getContainerImpl(storageLocation);
             StoredObject obj = sub.getObject(key);
-        
-            if (obj.exists()) {
-                Map<String,Object> meta = obj.getMetadata();
-                String delAttr = (String) meta.get(DELETED_PRESERVED_ATTR);
-                if ("true".equals(delAttr) && !includeRecoverable) {
-                    log.debug("delete: " + storageLocation + " -- already marked deleted");
-                } else {
-                    String uriAttr = (String) meta.get(ARTIFACT_ID_ATTR);
-                    log.debug("delete: " + storageLocation + " aka " + uriAttr);
-                    if (uriAttr != null && !includeRecoverable) {
-                        try {
-                            URI uri = new URI(uriAttr);
-                            for (Namespace ns : preservationNamespaces) {
-                                log.debug("check: " + ns.getNamespace() + " vs " + uri);
-                                if (ns.matches(uri)) {
-                                    log.debug("preserve: " + uri + " in namespace " + ns.getNamespace());
-                                    // perserve original timestamp
-                                    String dateStr = (String) meta.get(CONTENT_LAST_MODIFIED_ATTR);
-                                    if (dateStr == null) {
-                                        DateFormat df = DateUtil.getDateFormat(DateUtil.IVOA_DATE_FORMAT, DateUtil.UTC);
-                                        dateStr = df.format(obj.getLastModifiedAsDate());
-                                        obj.setAndDoNotSaveMetadata(CONTENT_LAST_MODIFIED_ATTR, dateStr);
-                                    }
-                                    obj.setAndDoNotSaveMetadata(DELETED_PRESERVED_ATTR, "true");
-                                    obj.saveMetadata();
-                                    return;
-                                }
+            if (!obj.exists()) {
+                throw new ResourceNotFoundException("not found: " + storageLocation);
+            }
+            
+            Map<String,Object> meta = obj.getMetadata();
+            String uriAttr = (String) meta.get(ARTIFACT_ID_ATTR);
+            boolean deletePreserved = "true".equals((String) meta.get(DELETED_PRESERVED_ATTR));
+
+            if (deletePreserved && !includeRecoverable) {
+                throw new ResourceNotFoundException("not found: " + storageLocation);
+            } 
+
+            log.debug("delete: " + storageLocation + " aka " + uriAttr);
+            if (uriAttr != null) {
+                try {
+                    URI uri = new URI(uriAttr);
+                    Namespace purge = getFirstMatch(uri, purgeNamespaces);
+                    Namespace recoverable = getFirstMatch(uri, recoverableNamespaces);
+                    
+                    if (purge != null) {
+                        log.debug("delete/purge: " + storageLocation 
+                                + " aka " + uri + " in namespace " + purge.getNamespace());
+                        // fall through to delete
+                    } else if (recoverable != null) {
+                        if (!deletePreserved) {
+                            log.debug("delete/recoverable: " + storageLocation 
+                                + " aka " + uri + " in namespace " + recoverable.getNamespace());
+                            // perserve original timestamp
+                            String dateStr = (String) meta.get(CONTENT_LAST_MODIFIED_ATTR);
+                            if (dateStr == null) {
+                                DateFormat df = DateUtil.getDateFormat(DateUtil.IVOA_DATE_FORMAT, DateUtil.UTC);
+                                dateStr = df.format(obj.getLastModifiedAsDate());
+                                obj.setAndDoNotSaveMetadata(CONTENT_LAST_MODIFIED_ATTR, dateStr);
                             }
-                        } catch (URISyntaxException ex) {
-                            if (!preservationNamespaces.isEmpty()) {
-                                log.error("found invalid " + ARTIFACT_ID_ATTR + "=" + uriAttr + " on " 
-                                        + storageLocation + " -- cannot attempt to preserve");
-                            }
+                            obj.setAndDoNotSaveMetadata(DELETED_PRESERVED_ATTR, "true");
+                            obj.saveMetadata();
                         }
+                        return;
+                    } // else: normal fall through to delete
+                } catch (URISyntaxException ex) {
+                    if (!recoverableNamespaces.isEmpty()) {
+                        log.error("found invalid " + ARTIFACT_ID_ATTR + "=" + uriAttr + " on " 
+                                + storageLocation + " -- cannot attempt to preserve");
                     }
-                    String dloAttr = (String) meta.get(DLO_ATTR);
-                    if ("true".equals(dloAttr)) {
-                        String prefix = obj.getName() + ":p:";
-                        LargeObjectPartIterator iter = new LargeObjectPartIterator(sub, prefix);
-                        while (iter.hasNext()) {
-                            StoredObject part = iter.next();
-                            log.debug("delete part: " + part.getName());
-                            part.delete();
-                        }
-                    }
-                    log.debug("delete object: " + obj.getName());
-                    obj.delete();
-                    return;
                 }
             }
+            String dloAttr = (String) meta.get(DLO_ATTR);
+            if ("true".equals(dloAttr)) {
+                String prefix = obj.getName() + ":p:";
+                LargeObjectPartIterator iter = new LargeObjectPartIterator(sub, prefix);
+                while (iter.hasNext()) {
+                    StoredObject part = iter.next();
+                    log.debug("delete part: " + part.getName());
+                    part.delete();
+                }
+            }
+            log.debug("delete object: " + obj.getName());
+            obj.delete();
+        } catch (ResourceNotFoundException ex) {
+            throw ex;
         } catch (Exception ex) {
+            // wide catch here for JOSS exceptions
             throw new StorageEngageException("failed to delete: " + storageLocation, ex);
         }
-        throw new ResourceNotFoundException("not found: " + storageLocation);
+    }
+    
+    private Namespace getFirstMatch(URI uri, List<Namespace> namespaces) {
+        for (Namespace ns : namespaces) {
+            log.debug("check: " + ns.getNamespace() + " vs " + uri);
+            if (ns.matches(uri)) {
+                return ns;
+            }
+        }
+        return null;
     }
     
     @Override

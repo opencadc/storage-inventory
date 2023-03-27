@@ -138,7 +138,6 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
     public static final String CONFIG_FILE = "cadc-storage-adapter-fs.properties";
     public static final String CONFIG_PROPERTY_ROOT = OpaqueFileSystemStorageAdapter.class.getPackage().getName() + ".baseDir";
     public static final String CONFIG_PROPERTY_BUCKET_LENGTH = OpaqueFileSystemStorageAdapter.class.getName() + ".bucketLength";
-    public static final String CONFIG_PRESERVE = OpaqueFileSystemStorageAdapter.class.getName() + ".preserveNamespace";
     public static final int MAX_BUCKET_LENGTH = 7;
             
     static final String ARTIFACTID_ATTR = "artifactID";
@@ -164,7 +163,8 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
     final Path txnPath;
     final Path contentPath;
     private final int bucketLength;
-    private final List<Namespace> preservationNamespaces = new ArrayList<>();
+    private final List<Namespace> recoverableNamespaces = new ArrayList<>();
+    private final List<Namespace> purgeNamespaces = new ArrayList<>();
 
     public OpaqueFileSystemStorageAdapter() throws InvalidConfigException {
         PropertiesReader pr = new PropertiesReader(CONFIG_FILE);
@@ -194,16 +194,6 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
         }
         this.bucketLength = bucketLen;
         
-        List<String> preserve = props.getProperty(CONFIG_PRESERVE);
-        for (String s : preserve) {
-            try {
-                Namespace ns = new Namespace(s);
-                this.preservationNamespaces.add(ns);
-            } catch (IllegalArgumentException ex) {
-                throw new InvalidConfigException("invalid namespace: " + s, ex);
-            }
-        }
-        
         FileSystem fs = FileSystems.getDefault();
         Path root = fs.getPath(rootVal);
         this.contentPath = root.resolve(CONTENT_FOLDER);
@@ -231,16 +221,6 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
         init(root);
     }
     
-    // for test code
-    public OpaqueFileSystemStorageAdapter(File rootDirectory, int bucketLen, List<String> preserve) 
-            throws InvalidConfigException {
-        this(rootDirectory, bucketLen);
-        
-        for (String s : preserve) {
-            this.preservationNamespaces.add(new Namespace(s));
-        }
-    }
-
     private void init(Path root) throws InvalidConfigException {
         try {
             if (!Files.isDirectory(root)) {
@@ -275,6 +255,28 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
         }
     }
 
+    @Override
+    public void setRecoverableNamespaces(List<Namespace> recoverable) {
+        this.recoverableNamespaces.clear();
+        this.recoverableNamespaces.addAll(recoverable);
+    }
+
+    @Override
+    public List<Namespace> getRecoverableNamespaces() {
+        return recoverableNamespaces;
+    }
+
+    @Override
+    public void setPurgeNamespaces(List<Namespace> purge) {
+        this.purgeNamespaces.clear();
+        this.purgeNamespaces.addAll(purge);
+    }
+
+    @Override
+    public List<Namespace> getPurgeNamespaces() {
+        return purgeNamespaces;
+    }
+    
     @Override
     public BucketType getBucketType() {
         return BucketType.HEX;
@@ -731,43 +733,75 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
     
     @Override
     public void delete(StorageLocation storageLocation, boolean includeRecoverable)
-        throws ResourceNotFoundException, IOException, StorageEngageException, TransientException {
+        throws ResourceNotFoundException, StorageEngageException, TransientException {
         InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "storageLocation", storageLocation);
         Path path = storageLocationToPath(storageLocation);
         if (!Files.exists(path)) {
             throw new ResourceNotFoundException("not found: " + storageLocation);
         }
+        String uriAttr = null;
+        boolean deletePreserved = false;
         try {
-            String delAttr = getFileAttribute(path, DELETED_PRESERVED);
-            if ("true".equals(delAttr) && !includeRecoverable) {
-                log.debug("skip " + DELETED_PRESERVED + ": " + storageLocation);
-                throw new ResourceNotFoundException("not found: " + storageLocation);
-            }
+            deletePreserved = "true".equals(getFileAttribute(path, DELETED_PRESERVED));
+            uriAttr = getFileAttribute(path, ARTIFACTID_ATTR);
         } catch (IOException ex) {
             throw new StorageEngageException("failed to read attributes for stored file: " + storageLocation, ex);
         }
         
-        String uriAttr = getFileAttribute(path, ARTIFACTID_ATTR);
+        if (deletePreserved && !includeRecoverable) {
+            log.debug("skip " + DELETED_PRESERVED + ": " + storageLocation);
+            throw new ResourceNotFoundException("not found: " + storageLocation);
+        }
+        
         log.debug("delete: " + storageLocation + " aka " + uriAttr);
         if (uriAttr != null) {
             try {
                 URI uri = new URI(uriAttr);
-                for (Namespace ns : preservationNamespaces) {
-                    log.debug("check: " + ns.getNamespace() + " vs " + uri);
-                    if (ns.matches(uri)) {
-                        log.debug("preserve: " + uri + " in namespace " + ns.getNamespace());
-                        setFileAttribute(path, DELETED_PRESERVED, "true");
-                        return;
+                log.debug("recoverable: " + recoverableNamespaces.size() + " purge: " + purgeNamespaces.size());
+                Namespace purge = getFirstMatch(uri, purgeNamespaces);
+                Namespace recoverable = getFirstMatch(uri, recoverableNamespaces);
+               
+                if (purge != null) {
+                    log.debug("delete/purge: " + storageLocation 
+                                + " aka " + uri + " matched " + purge.getNamespace());
+                    // fall through to delete
+                } else if (recoverable != null) {
+                    log.debug("delete/recoverable: " + storageLocation 
+                                + " aka " + uri + " matched " + recoverable.getNamespace());
+                    // avoid poking fs timestamp unecessarily
+                    if (!deletePreserved) {
+                        try {
+                            setFileAttribute(path, DELETED_PRESERVED, "true");
+                        } catch (IOException ex) {
+                            throw new StorageEngageException("failed to set attribute for stored file: " + storageLocation, ex);
+                        }
                     }
-                }
+                    return; // don't delete
+                } // else: normal fall through to delete
             } catch (URISyntaxException ex) {
-                if (!preservationNamespaces.isEmpty()) {
+                if (!recoverableNamespaces.isEmpty()) {
                     log.error("found invalid " + ARTIFACTID_ATTR + "=" + uriAttr + " on " 
-                            + storageLocation + " -- cannot attempt to preserve");
+                            + storageLocation + " -- cannot make recoverable");
                 }
             }
+        } // else: no uriAttr aka incomplete put so delete
+        
+        log.debug("delete/actual: " + storageLocation + " aka " + uriAttr);
+        try {
+            Files.delete(path);
+        } catch (IOException ex) {
+            throw new StorageEngageException("failed to delete stored file: " + storageLocation, ex);
         }
-        Files.delete(path);
+    }
+    
+    private Namespace getFirstMatch(URI uri, List<Namespace> namespaces) {
+        for (Namespace ns : namespaces) {
+            log.debug("check: " + ns.getNamespace() + " vs " + uri);
+            if (ns.matches(uri)) {
+                return ns;
+            }
+        }
+        return null;
     }
 
     @Override
@@ -903,8 +937,8 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
                 }
                 StorageMetadata ret = new StorageMetadata(sloc, artifactURI, contentChecksum, contentLength, 
                         new Date(Files.getLastModifiedTime(p).toMillis()));
-                ret.deletePreserved = "true".equals(delAttr);
-                log.debug("createStorageMetadata: " + ret + " " + ret.deletePreserved);
+                ret.deleteRecoverable = "true".equals(delAttr);
+                log.debug("createStorageMetadata: " + ret + " " + ret.deleteRecoverable);
                 return ret;
             } catch (FileSystemException | IllegalArgumentException | URISyntaxException ex) {
                 log.debug("invalid stored object", ex);
