@@ -442,7 +442,7 @@ public class BucketValidator implements ValidateActions {
             final StorageLocation storageLocation = storageMetadata.getStorageLocation();
             try {
                 log.debug("delete from storage: " + storageLocation);
-                storageAdapter.delete(storageLocation);
+                storageAdapter.delete(storageLocation, includeRecoverable);
                 numDeleteStorageLocation++;
             } catch (ResourceNotFoundException ex) {
                 log.warn("delete from storage failed: " + storageLocation + " reason: " + ex);
