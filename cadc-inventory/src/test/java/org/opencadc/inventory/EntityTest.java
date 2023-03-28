@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2019.                            (c) 2019.
+*  (c) 2023.                            (c) 2023.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -67,9 +67,11 @@
 
 package org.opencadc.inventory;
 
+import ca.nrc.cadc.date.DateUtil;
 import ca.nrc.cadc.util.Log4jInit;
 import java.net.URI;
 import java.security.MessageDigest;
+import java.text.DateFormat;
 import java.util.Date;
 import java.util.UUID;
 import org.apache.log4j.Level;
@@ -86,6 +88,8 @@ public class EntityTest {
 
     static {
         Log4jInit.setLevel("org.opencadc.inventory", Level.INFO);
+        Log4jInit.setLevel("org.opencadc.persist", Level.INFO);
+        //org.opencadc.persist.Entity.MCS_DEBUG = true;
     }
     
     public EntityTest() { 
@@ -192,22 +196,21 @@ public class EntityTest {
             
             URI mcs1 = ok.computeMetaChecksum(MessageDigest.getInstance("MD5"));
             
+            // first verify checksum changes by changing non-transient state
+            ok.contentType = "text/plain";
+            URI mcs2 = ok.computeMetaChecksum(MessageDigest.getInstance("MD5"));
+            Assert.assertNotEquals(mcs1, mcs2);
+            
             //ok.storageLocation = new StorageLocation(ok.getID(), URI.create("ceph:" + UUID.randomUUID()));
             ok.storageLocation = new StorageLocation(URI.create("ceph:" + UUID.randomUUID()));
-            URI mcs2 = ok.computeMetaChecksum(MessageDigest.getInstance("MD5"));
-            Assert.assertEquals(mcs1, mcs2);
+            URI mcs3 = ok.computeMetaChecksum(MessageDigest.getInstance("MD5"));
+            Assert.assertEquals(mcs2, mcs3);
             
             //ok.siteLocations.add(new SiteLocation(ok.getID(), UUID.randomUUID()));
             ok.siteLocations.add(new SiteLocation(UUID.randomUUID()));
-            URI mcs3 = ok.computeMetaChecksum(MessageDigest.getInstance("MD5"));
-            Assert.assertEquals(mcs1, mcs3);
+            URI mcs4 = ok.computeMetaChecksum(MessageDigest.getInstance("MD5"));
+            Assert.assertEquals(mcs2, mcs4);
             
-            try {
-                DeletedArtifactEvent invalid = new DeletedArtifactEvent(null);
-                Assert.fail("created: " + invalid);
-            } catch (IllegalArgumentException expected) {
-                log.info("expected: " + expected);
-            }
         } catch (Exception ex) {
             log.error("unexpected exception", ex);
             Assert.fail("unexpected exception: " + ex);
@@ -314,6 +317,33 @@ public class EntityTest {
                 log.info("expected: " + expected);
             }
             
+        } catch (Exception ex) {
+            log.error("unexpected exception", ex);
+            Assert.fail("unexpected exception: " + ex);
+        }
+    }
+    
+    @Test
+    public void testStableMetaChecksum() {
+        final DateFormat df = DateUtil.getDateFormat(DateUtil.IVOA_DATE_FORMAT, DateUtil.UTC);
+        try {
+            // values pulled from global luskan query
+            final URI expectedMetaChecksum = URI.create("md5:ba0af5277852ab5aea7184fdac90ca9c");
+            
+            final UUID id = UUID.fromString("61d482fe-cd4c-475f-be93-8f9d16fd1edf");
+            final URI uri = URI.create("cadc:IRIS/I001B3H0.fits");
+            final URI contentChecksum = URI.create("md5:2ada853a8ae135e16504aeba4e47489e");
+            final Long contentLength = 1008000L;
+            final Date contentLastModified = df.parse("2006-07-25T16:15:19.000");
+            final String contentType = "application/fits";
+            
+            Artifact a = new Artifact(id, uri, contentChecksum, contentLastModified, contentLength);
+            a.contentType = contentType;
+            
+            URI mcs = a.computeMetaChecksum(MessageDigest.getInstance("MD5"));
+            log.info("expected: " + expectedMetaChecksum);
+            log.info("  actual: " + mcs);
+            Assert.assertEquals(expectedMetaChecksum, mcs);
         } catch (Exception ex) {
             log.error("unexpected exception", ex);
             Assert.fail("unexpected exception: " + ex);

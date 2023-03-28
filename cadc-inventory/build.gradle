@@ -20,10 +20,11 @@ description = 'OpenCADC Storage Inventory core library'
 def git_url = 'https://github.com/opencadc/storage-inventory'
 
 dependencies {
-    compile 'org.opencadc:cadc-util:[1.6,2.0)'
+    compile 'org.opencadc:cadc-util:[1.9,2.0)'
 
     testCompile 'junit:junit:[4.0,)'
 }
 
 apply from: '../opencadc.gradle'
+
 
