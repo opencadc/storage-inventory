@@ -67,9 +67,11 @@
 
 package org.opencadc.inventory;
 
+import ca.nrc.cadc.date.DateUtil;
 import ca.nrc.cadc.util.Log4jInit;
 import java.net.URI;
 import java.security.MessageDigest;
+import java.text.DateFormat;
 import java.util.Date;
 import java.util.UUID;
 import org.apache.log4j.Level;
@@ -192,22 +194,21 @@ public class EntityTest {
             
             URI mcs1 = ok.computeMetaChecksum(MessageDigest.getInstance("MD5"));
             
+            // first verify checksum changes by changing non-transient state
+            ok.contentType = "text/plain";
+            URI mcs2 = ok.computeMetaChecksum(MessageDigest.getInstance("MD5"));
+            Assert.assertNotEquals(mcs1, mcs2);
+            
             //ok.storageLocation = new StorageLocation(ok.getID(), URI.create("ceph:" + UUID.randomUUID()));
             ok.storageLocation = new StorageLocation(URI.create("ceph:" + UUID.randomUUID()));
-            URI mcs2 = ok.computeMetaChecksum(MessageDigest.getInstance("MD5"));
-            Assert.assertEquals(mcs1, mcs2);
+            URI mcs3 = ok.computeMetaChecksum(MessageDigest.getInstance("MD5"));
+            Assert.assertEquals(mcs2, mcs3);
             
             //ok.siteLocations.add(new SiteLocation(ok.getID(), UUID.randomUUID()));
             ok.siteLocations.add(new SiteLocation(UUID.randomUUID()));
-            URI mcs3 = ok.computeMetaChecksum(MessageDigest.getInstance("MD5"));
-            Assert.assertEquals(mcs1, mcs3);
+            URI mcs4 = ok.computeMetaChecksum(MessageDigest.getInstance("MD5"));
+            Assert.assertEquals(mcs2, mcs4);
             
-            try {
-                DeletedArtifactEvent invalid = new DeletedArtifactEvent(null);
-                Assert.fail("created: " + invalid);
-            } catch (IllegalArgumentException expected) {
-                log.info("expected: " + expected);
-            }
         } catch (Exception ex) {
             log.error("unexpected exception", ex);
             Assert.fail("unexpected exception: " + ex);
@@ -314,6 +315,31 @@ public class EntityTest {
                 log.info("expected: " + expected);
             }
             
+        } catch (Exception ex) {
+            log.error("unexpected exception", ex);
+            Assert.fail("unexpected exception: " + ex);
+        }
+    }
+    
+    @Test
+    public void testStableMetaChecksum() {
+        
+        try {
+            // values pulled from test db
+            URI expectedMetaChecksum = URI.create("md5:c4fde2025b67c7ef0fb2cae529b1e722");
+            
+            URI contentChecksum = URI.create("md5:646d3c548ffb98244a0fc52b60556082");
+            DateFormat df = DateUtil.getDateFormat(DateUtil.IVOA_DATE_FORMAT, DateUtil.UTC);
+            Date contentLastModified = df.parse("2023-03-27T18:23:54.37");
+            Long contentLength = 2000000L;
+            UUID id = UUID.fromString("1a700ff3-3d07-48ed-bd38-b4f1b1183bf6");
+            URI uri = URI.create("cadc:IRIS/I212B2H0.fits");
+            
+            Artifact a = new Artifact(id, uri, contentChecksum, contentLastModified, contentLength);
+            URI mcs = a.computeMetaChecksum(MessageDigest.getInstance("MD5"));
+            log.info("expected: " + expectedMetaChecksum);
+            log.info("  actual: " + mcs);
+            Assert.assertEquals(expectedMetaChecksum, mcs);
         } catch (Exception ex) {
             log.error("unexpected exception", ex);
             Assert.fail("unexpected exception: " + ex);
