@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2019.                            (c) 2019.
+*  (c) 2023.                            (c) 2023.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -88,6 +88,8 @@ public class EntityTest {
 
     static {
         Log4jInit.setLevel("org.opencadc.inventory", Level.INFO);
+        Log4jInit.setLevel("org.opencadc.persist", Level.INFO);
+        //org.opencadc.persist.Entity.MCS_DEBUG = true;
     }
     
     public EntityTest() { 
@@ -323,19 +325,21 @@ public class EntityTest {
     
     @Test
     public void testStableMetaChecksum() {
-        
+        final DateFormat df = DateUtil.getDateFormat(DateUtil.IVOA_DATE_FORMAT, DateUtil.UTC);
         try {
-            // values pulled from test db
-            URI expectedMetaChecksum = URI.create("md5:c4fde2025b67c7ef0fb2cae529b1e722");
+            // values pulled from global luskan query
+            final URI expectedMetaChecksum = URI.create("md5:ba0af5277852ab5aea7184fdac90ca9c");
             
-            URI contentChecksum = URI.create("md5:646d3c548ffb98244a0fc52b60556082");
-            DateFormat df = DateUtil.getDateFormat(DateUtil.IVOA_DATE_FORMAT, DateUtil.UTC);
-            Date contentLastModified = df.parse("2023-03-27T18:23:54.37");
-            Long contentLength = 2000000L;
-            UUID id = UUID.fromString("1a700ff3-3d07-48ed-bd38-b4f1b1183bf6");
-            URI uri = URI.create("cadc:IRIS/I212B2H0.fits");
+            final UUID id = UUID.fromString("61d482fe-cd4c-475f-be93-8f9d16fd1edf");
+            final URI uri = URI.create("cadc:IRIS/I001B3H0.fits");
+            final URI contentChecksum = URI.create("md5:2ada853a8ae135e16504aeba4e47489e");
+            final Long contentLength = 1008000L;
+            final Date contentLastModified = df.parse("2006-07-25T16:15:19.000");
+            final String contentType = "application/fits";
             
             Artifact a = new Artifact(id, uri, contentChecksum, contentLastModified, contentLength);
+            a.contentType = contentType;
+            
             URI mcs = a.computeMetaChecksum(MessageDigest.getInstance("MD5"));
             log.info("expected: " + expectedMetaChecksum);
             log.info("  actual: " + mcs);
