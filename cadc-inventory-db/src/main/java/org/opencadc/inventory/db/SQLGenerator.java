@@ -320,12 +320,14 @@ public class SQLGenerator {
         throw new UnsupportedOperationException("entity-list: " + c.getName());
     }
     
-    public EntityLock getEntityLock(Class c) {
+    /*
+    private EntityLock getEntityLock(Class c) {
         if (Artifact.class.equals(c)) {
             return new EntityLockImpl(c);
         }
         throw new UnsupportedOperationException("entity-list: " + c.getName());
     }
+    */
     
     public EntityGet getSkeletonEntityGet(Class c) {
         EntityGet ret = new SkeletonGet(c);
@@ -361,6 +363,8 @@ public class SQLGenerator {
         return new EntityDeleteImpl(c);
     }
     
+    /*
+    // replaced by select-for-update
     private class EntityLockImpl implements EntityLock<Entity> {
         private final Calendar utc = Calendar.getInstance(DateUtil.UTC);
         private final Class entityClass;
@@ -395,7 +399,8 @@ public class SQLGenerator {
             return prep;
         }
     }
-
+    */
+    
     private class SkeletonGet implements EntityGet<Entity> {
         private UUID id;
         private final Class entityClass;
