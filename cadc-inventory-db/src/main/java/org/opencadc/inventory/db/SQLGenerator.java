@@ -98,6 +98,8 @@ import org.opencadc.inventory.SiteLocation;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.StorageLocationEvent;
 import org.opencadc.inventory.StorageSite;
+import org.opencadc.vospace.DeletedNodeEvent;
+import org.opencadc.vospace.Node;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.ResultSetExtractor;
@@ -115,6 +117,7 @@ public class SQLGenerator {
     
     protected final String database; // currently not used in SQL
     protected final String schema; // may be null
+    protected final String vosSchema;
     
     /**
      * Constructor. The database name is currently not used in any generated SQL; code assumes
@@ -128,8 +131,13 @@ public class SQLGenerator {
      * @param schema schema name (may be null)
      */
     public SQLGenerator(String database, String schema) { 
+        this(database, schema, null);
+    }
+    
+    public SQLGenerator(String database, String schema, String vosSchema) { 
         this.database = database;
         this.schema = schema;
+        this.vosSchema = vosSchema;
         init();
     }
     
@@ -202,6 +210,42 @@ public class SQLGenerator {
             "id" // last column is always PK
         };
         this.columnMap.put(HarvestState.class, cols);
+        
+        // optional vospace
+        log.warn("vosSchema: " + vosSchema);
+        if (vosSchema != null) {
+            pref = vosSchema + ".";
+            tableMap.put(Node.class, pref + Node.class.getSimpleName());
+            tableMap.put(DeletedNodeEvent.class, pref + DeletedNodeEvent.class.getSimpleName());
+            
+            cols = new String[] {
+                "parentID",
+                "name",
+                "nodeType",
+                "ownerID",
+                "isPublic",
+                "isLocked",
+                "readOnlyGroups",
+                "readWriteGroups",
+                "properties",
+                "busyState",
+                "storageID",
+                "target",
+                "lastModified",
+                "metaChecksum",
+                "id" // last column is always PK
+            };
+            this.columnMap.put(Node.class, cols);
+            
+            cols = new String[] {
+                "nodeType",
+                "storageID",
+                "lastModified",
+                "metaChecksum",
+                "id" // last column is always PK
+            };
+            this.columnMap.put(DeletedNodeEvent.class, cols);
+        }
     }
     
     private static class ClassComp implements Comparator<Class> {
@@ -217,8 +261,7 @@ public class SQLGenerator {
         return "SELECT now()";
     }
     
-    // test usage
-    String getTable(Class c) {
+    public String getTable(Class c) {
         return tableMap.get(c);
     }
     
@@ -252,6 +295,13 @@ public class SQLGenerator {
         }
         if (HarvestState.class.equals(c)) {
             return new HarvestStateGet();
+        }
+        
+        if (Node.class.equals(c)) {
+            
+        }
+        if (DeletedNodeEvent.class.equals(c)) {
+            
         }
         throw new UnsupportedOperationException("entity-get: " + c.getName());
     }
