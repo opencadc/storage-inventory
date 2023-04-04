@@ -53,9 +53,9 @@ schema when jobs are created and executed by users.
 
 The `query` pool is used to run TAP queries, including creating tables in the tap_upload schema. 
 
-All three pools must have the same JDBC URL (e.g. use the same database) with PostgreSQL. This may be relaxed in future.
-In addition, the TAP service does not currently support a configurable schema name: it assumes a schema named `inventory`
-holds the content.
+All three pools must have the same JDBC URL (e.g. use the same database) with PostgreSQL. This may be 
+relaxed in future. In addition, the TAP service does not currently support a configurable schema name: 
+it assumes a schema named `inventory` holds the content.
 
 ### cadc-registry.properties
 
@@ -82,11 +82,27 @@ org.opencadc.luskan.allowAnon={true|false}
 
 # optional: group(s) whose members have authorization to query luskan 
 org.opencadc.luskan.allowedGroup={authorized group}
+
+# optional: rollover of UWS tables
+org.opencadc.luskan.uwsRollover = {days}
 ```
 
-`org.opencadc.luskan.allowedGroup` specifies the group(s) whose members have authorization to make calls 
-to the service. The value is a list of group identifiers (e.g. ivo://cadc.nrc.ca/gms?CADC), one line per
-group.
+The `org.opencadc.luskan.allowedGroup` property(ies) specify the group(s) whose members have authorization 
+to make calls to the service. The value is a group identifiers (e.g. ivo://cadc.nrc.ca/gms?CADC); multiple
+groups can be granted access with multiple properties, one line per group.
+
+EXPERIMENTAL: The optional `org.opencadc.luskan.uwsRollover` property how frequently to rollover the `uws.Job` and
+`uws.JobDetail` tables. The value is a number of days; on startup, if the tables are older than this number 
+of days they will be renamed to include the date in the name and new (empty) tables will be created. Old 
+tables (those marked with a date) can be backed up, safely dropped, or just left lying around in case an 
+operator wants to look at the content (seems unlikely as the jobs here are queries mostly done by remote
+`fenwick` and `ratik` processes). It is possible that the rollover on startup could disrupt an executing
+query in a different instance of `luskan` because the job will no longer be in the active table; that might be
+worth improving/fixing in the future. Example:
+```
+org.opencadc.luskan.uwsRollover = 180
+```
+Assuming instances are restarted regularly, this would cause rollover approximatelty once every 6 months.
 
 
 ## building it
