@@ -67,6 +67,7 @@
 
 package org.opencadc.inventory.db;
 
+import org.opencadc.inventory.ObsoleteStorageLocation;
 import ca.nrc.cadc.db.ConnectionConfig;
 import ca.nrc.cadc.db.DBConfig;
 import ca.nrc.cadc.db.DBUtil;

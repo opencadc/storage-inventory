@@ -109,6 +109,34 @@ public class InventoryUtilTest {
     */
 
     @Test
+    public void testAssignEntityFields() {
+        try {
+            Random rnd = new Random();
+            byte[] buf = new byte[1024];
+            
+            MessageDigest md = MessageDigest.getInstance("md5");
+            byte[] cs = md.digest(buf);
+            String hex = HexUtil.toHex(cs);
+            
+            URI contentChecksum = URI.create("md5:" + hex);
+            
+            Artifact a = new Artifact(UUID.randomUUID(), new URI("test:FOO/bar"), contentChecksum, new Date(), 1024L);
+            Assert.assertNull(a.getLastModified());
+            Assert.assertNull(a.getMetaChecksum());
+            
+            InventoryUtil.assignLastModified(a, new Date());
+            Assert.assertNotNull(a.getLastModified());
+            
+            InventoryUtil.assignMetaChecksum(a, contentChecksum);
+            Assert.assertNotNull(a.getMetaChecksum());
+            
+        } catch (Exception unexpected) {
+            log.error("unexpected exception", unexpected);
+            Assert.fail("unexpected exception: " + unexpected);
+        }
+    }
+    
+    @Test
     public void testCollisionResolver() {
         URI md5 = URI.create("md5:d41d8cd98f00b204e9800998ecf8427e");
         long asize = 2014L;
