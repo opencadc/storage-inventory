@@ -194,6 +194,7 @@ public class FitsOperationsTest extends MinocTest {
 
     @Test
     public void testMEF() throws Exception {
+        LOGGER.info("testMEF - START");
         final String testFilePrefix = "test-mef";
         final String testFileExtension = "fits";
         final URI artifactURI = URI.create("cadc:TEST/" + testFilePrefix + "." + testFileExtension);

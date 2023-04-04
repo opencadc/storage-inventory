@@ -117,9 +117,9 @@ public abstract class MinocTest {
 
         anonSubject = AuthenticationUtil.getAnonSubject();
         File cert = FileUtil.getFileFromResource("minoc-test.pem", MinocTest.class);
-        log.debug("anonSubject: " + anonSubject);
+        log.info("anonSubject: " + anonSubject);
         userSubject = SSLUtil.createSubject(cert);
-        log.debug("userSubject: " + userSubject);
+        log.info("userSubject: " + userSubject);
     }
 
     protected static byte[] randomData(int len) {
