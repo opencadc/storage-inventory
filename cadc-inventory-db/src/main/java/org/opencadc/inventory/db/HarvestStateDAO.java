@@ -129,7 +129,7 @@ public class HarvestStateDAO extends AbstractDAO<HarvestState> {
      * database updates to execute (see setUpdateBufferCount) between maintenance
      * operations. Negative values (like default -1) disable periodic maintenance.
      * 
-     * @param mc 
+     * @param mc maintenance count
      */
     public void setMaintCount(int mc) {
         this.maintCount = mc;

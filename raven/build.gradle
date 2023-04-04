@@ -26,7 +26,7 @@ war {
 }
 
 dependencies {
-    compile 'org.opencadc:cadc-util:[1.9.0,2.0)'
+    compile 'org.opencadc:cadc-util:[1.9.6,2.0)'
     compile 'org.opencadc:cadc-log:[1.1.6,2.0)'
     compile 'org.opencadc:cadc-registry:[1.7,)'
     compile 'org.opencadc:cadc-vosi:[1.4.3,2.0)'
@@ -37,7 +37,7 @@ dependencies {
     compile 'org.opencadc:cadc-inventory-db:[0.14,1.0)'
     compile 'org.opencadc:cadc-inventory-server:[0.2,)'
     compile 'org.opencadc:cadc-permissions:[0.3.1,)'
-    compile 'org.opencadc:cadc-vos:[1.2,)'
+    compile 'org.opencadc:cadc-vos:[1.2,2.0)'
 
     runtime 'org.opencadc:cadc-access-control:[1.1.1,2.0)'
     runtime 'org.opencadc:cadc-access-control-identity:[1.2.0,2.0)'

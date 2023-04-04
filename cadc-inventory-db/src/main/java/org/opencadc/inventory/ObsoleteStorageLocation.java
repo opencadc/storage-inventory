@@ -65,7 +65,7 @@
 ************************************************************************
 */
 
-package org.opencadc.inventory.db;
+package org.opencadc.inventory;
 
 import java.util.Objects;
 import java.util.UUID;
@@ -90,8 +90,7 @@ public class ObsoleteStorageLocation extends Entity implements Comparable<Obsole
         this.location = location;
     }
     
-    // package access: reconstruct an instance from serialised state.
-    ObsoleteStorageLocation(UUID id, StorageLocation location) {
+    public ObsoleteStorageLocation(UUID id, StorageLocation location) {
         super(id);
         InventoryUtil.assertNotNull(ObsoleteStorageLocation.class, "location", location);
         this.location = location;

@@ -17,7 +17,7 @@ sourceCompatibility = 1.8
 
 group = 'org.opencadc'
 
-version = '0.14.4'
+version = '0.14.5'
 
 description = 'OpenCADC Storage Inventory database library'
 def git_url = 'https://github.com/opencadc/storage-inventory'
@@ -25,7 +25,7 @@ def git_url = 'https://github.com/opencadc/storage-inventory'
 mainClassName = 'org.opencadc.inventory.db.version.Main'
 
 dependencies {
-    compile 'org.opencadc:cadc-util:[1.6.2,2.0)'
+    compile 'org.opencadc:cadc-util:[1.9.5,2.0)'
     compile 'org.opencadc:cadc-inventory:[0.9,)'
     compile 'org.opencadc:cadc-vos:[2.0,3.0)'
 

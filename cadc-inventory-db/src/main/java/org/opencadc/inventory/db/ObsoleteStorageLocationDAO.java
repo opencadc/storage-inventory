@@ -69,7 +69,7 @@ package org.opencadc.inventory.db;
 
 import java.util.UUID;
 import org.apache.log4j.Logger;
-import org.opencadc.inventory.Artifact;
+import org.opencadc.inventory.ObsoleteStorageLocation;
 import org.opencadc.inventory.StorageLocation;
 import org.springframework.jdbc.core.JdbcTemplate;
 

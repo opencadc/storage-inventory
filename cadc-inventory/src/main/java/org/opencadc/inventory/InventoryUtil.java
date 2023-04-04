@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2022.                            (c) 2022.
+*  (c) 2023.                            (c) 2023.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -129,13 +129,25 @@ public abstract class InventoryUtil {
     public static String computeBucket(URI uri, int length) {
         try {
             MessageDigest md = MessageDigest.getInstance("SHA-1");
-            byte[] bytes = Entity.primitiveValueToBytes(uri, "File.uri", md.getAlgorithm());
+            byte[] bytes = new DummyEntity().primitiveValueToBytes(uri, "Artifact.uri", md.getAlgorithm());
             md.update(bytes);
             byte[] sha = md.digest();
             String hex = HexUtil.toHex(sha);
             return hex.substring(0, length);
         } catch (NoSuchAlgorithmException ex) {
             throw new RuntimeException("BUG: failed to get instance of SHA-1", ex);
+        }
+    }
+    
+    // make primitiveValueToBytes usable in computeBucket above
+    private static class DummyEntity extends Entity {
+        DummyEntity() {
+            super();
+        }
+
+        @Override
+        protected byte[] primitiveValueToBytes(Object o, String name, String digestAlg) {
+            return super.primitiveValueToBytes(o, name, digestAlg);
         }
     }
 
@@ -315,7 +327,7 @@ public abstract class InventoryUtil {
      */
     public static void assignLastModified(Entity ce, Date d) {
         try {
-            Field f = Entity.class.getDeclaredField("lastModified");
+            Field f = Entity.class.getSuperclass().getDeclaredField("lastModified");
             f.setAccessible(true);
             f.set(ce, d);
         } catch (NoSuchFieldException fex) {
@@ -335,7 +347,7 @@ public abstract class InventoryUtil {
     public static void assignMetaChecksum(Entity ce, URI u) {
         assertValidChecksumURI(InventoryUtil.class, "metaChecksum", u);
         try {
-            Field f = Entity.class.getDeclaredField("metaChecksum");
+            Field f = Entity.class.getSuperclass().getDeclaredField("metaChecksum");
             f.setAccessible(true);
             f.set(ce, u);
         } catch (NoSuchFieldException fex) {
