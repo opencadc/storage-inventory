@@ -83,7 +83,6 @@ import org.junit.Before;
 import org.junit.Test;
 import org.opencadc.inventory.db.SQLGenerator;
 import org.opencadc.inventory.db.TestUtil;
-import org.opencadc.vospace.db.InitDatabaseVOS;
 import org.opencadc.vospace.ContainerNode;
 import org.opencadc.vospace.DataNode;
 import org.opencadc.vospace.LinkNode;
@@ -98,9 +97,10 @@ public class NodeDAOTest {
 
     static {
         Log4jInit.setLevel("org.opencadc.inventory", Level.INFO);
-        Log4jInit.setLevel("org.opencadc.inventory.db", Level.INFO);
+        Log4jInit.setLevel("org.opencadc.inventory.db", Level.DEBUG);
         Log4jInit.setLevel("ca.nrc.cadc.db", Level.INFO);
         Log4jInit.setLevel("org.opencadc.vospace", Level.INFO);
+        Log4jInit.setLevel("org.opencadc.vospace.db", Level.DEBUG);
     }
     
     NodeDAO nodeDAO;

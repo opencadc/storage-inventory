@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2022.                            (c) 2022.
+*  (c) 2023.                            (c) 2023.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -69,7 +69,6 @@ package org.opencadc.vospace.db;
 
 import java.util.UUID;
 import org.apache.log4j.Logger;
-import org.opencadc.inventory.Entity;
 import org.opencadc.inventory.db.AbstractDAO;
 import org.opencadc.vospace.ContainerNode;
 import org.opencadc.vospace.Node;
@@ -78,7 +77,7 @@ import org.opencadc.vospace.Node;
  *
  * @author pdowler
  */
-public class NodeDAO extends AbstractDAO<Entity> {
+public class NodeDAO extends AbstractDAO<Node> {
     private static final Logger log = Logger.getLogger(NodeDAO.class);
 
     public NodeDAO() {
@@ -86,12 +85,7 @@ public class NodeDAO extends AbstractDAO<Entity> {
     }
 
     public Node get(UUID id) {
-        //return super.get(Node.class, id);
-        throw new UnsupportedOperationException();
-    }
-    
-    public void put(Node n) {
-        throw new UnsupportedOperationException();
+        return super.get(Node.class, id);
     }
     
     public ContainerNode getChildren(ContainerNode cn) {
