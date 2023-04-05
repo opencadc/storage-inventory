@@ -77,7 +77,6 @@ import java.text.DateFormat;
 import java.util.Date;
 import javax.sql.DataSource;
 import org.apache.log4j.Logger;
-import static org.opencadc.luskan.LuskanConfig.UWS_ROLLOVER;
 
 /**
  *
@@ -109,7 +108,7 @@ public class LuskanInitAction extends InitAction {
             String tag = df.format(now);
             
             // TODO: get numDays from config
-            String uwsRollStr = props.getFirstPropertyValue(UWS_ROLLOVER);
+            String uwsRollStr = props.getFirstPropertyValue(LuskanConfig.UWS_ROLLOVER);
             if (uwsRollStr != null) {
                 double numDays = Double.parseDouble(uwsRollStr);
 
