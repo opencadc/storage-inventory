@@ -72,6 +72,8 @@ import ca.nrc.cadc.io.ResourceIterator;
 import ca.nrc.cadc.util.StringUtil;
 import java.io.IOException;
 import java.net.URI;
+import java.net.URISyntaxException;
+import java.sql.Array;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -84,6 +86,7 @@ import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.StringTokenizer;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.UUID;
@@ -99,8 +102,13 @@ import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.StorageLocationEvent;
 import org.opencadc.inventory.StorageSite;
 import org.opencadc.persist.Entity;
+import org.opencadc.vospace.ContainerNode;
+import org.opencadc.vospace.DataNode;
 import org.opencadc.vospace.DeletedNodeEvent;
+import org.opencadc.vospace.LinkNode;
 import org.opencadc.vospace.Node;
+import org.opencadc.vospace.NodeProperty;
+import org.opencadc.vospace.VOS;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.ResultSetExtractor;
@@ -229,7 +237,8 @@ public class SQLGenerator {
                 "readOnlyGroups",
                 "readWriteGroups",
                 "properties",
-                "busyState",
+                "inheritPermissions",
+                "busy",
                 "storageID",
                 "target",
                 "lastModified",
@@ -263,7 +272,27 @@ public class SQLGenerator {
     }
     
     public String getTable(Class c) {
-        return tableMap.get(c);
+        Class targetClass = c;
+        String ret = tableMap.get(targetClass);
+        if (ret == null) {
+            // enable finding a common table that stores subclass instances
+            targetClass = targetClass.getSuperclass();
+            ret = tableMap.get(targetClass);
+        }
+        log.debug("table: " + c.getSimpleName() + " -> " + targetClass.getSimpleName() + " -> " + ret);
+        return ret;
+    }
+    
+    private String[] getColumns(Class c) {
+        Class targetClass = c;
+        String[] ret = columnMap.get(targetClass);
+        if (ret == null) {
+            // enable finding a common table that stores subclass instances
+            targetClass = targetClass.getSuperclass();
+            ret = columnMap.get(targetClass);
+        }
+        log.debug("columns: " + c.getSimpleName() + " -> " + targetClass.getSimpleName() + " -> " + (ret == null ? null : ret.length));
+        return ret;
     }
     
     public EntityGet<? extends Entity> getEntityGet(Class c) {
@@ -278,7 +307,7 @@ public class SQLGenerator {
             return new StorageSiteGet(forUpdate);
         }
         
-        if (Node.class.equals(c)) {
+        if (Node.class.equals(c) || Node.class.isInstance(c)) {
             return new NodeGet(forUpdate);
         }
         if (DeletedNodeEvent.class.equals(c)) {
@@ -322,15 +351,6 @@ public class SQLGenerator {
         throw new UnsupportedOperationException("entity-list: " + c.getName());
     }
     
-    /*
-    private EntityLock getEntityLock(Class c) {
-        if (Artifact.class.equals(c)) {
-            return new EntityLockImpl(c);
-        }
-        throw new UnsupportedOperationException("entity-list: " + c.getName());
-    }
-    */
-    
     public EntityGet getSkeletonEntityGet(Class c) {
         EntityGet ret = new SkeletonGet(c);
         return ret;
@@ -358,7 +378,7 @@ public class SQLGenerator {
         if (HarvestState.class.equals(c)) {
             return new HarvestStatePut(update);
         }
-        if (Node.class.equals(c)) {
+        if (Node.class.isAssignableFrom(c)) {
             return new NodePut(update);
         }
         if (DeletedNodeEvent.class.equals(c)) {
@@ -467,7 +487,7 @@ public class SQLGenerator {
                 String col = getKeyColumn(ObsoleteStorageLocation.class, true);
                 sb.append(col).append(" = ?");
             } else {
-                String[] cols = columnMap.get(ObsoleteStorageLocation.class);
+                String[] cols = getColumns(ObsoleteStorageLocation.class);
                 sb.append(cols[0]).append(" = ?");
                 sb.append(" AND ");
                 if (loc.storageBucket != null) {
@@ -524,7 +544,7 @@ public class SQLGenerator {
                 String col = getKeyColumn(HarvestState.class, true);
                 sb.append(col).append(" = ?");
             } else {
-                String[] cols = columnMap.get(HarvestState.class);
+                String[] cols = getColumns(HarvestState.class);
                 sb.append(cols[0]).append(" = ?");
                 sb.append(" AND ");
                 sb.append(cols[1]).append(" = ?");
@@ -824,6 +844,23 @@ public class SQLGenerator {
         }
     }
     
+    private void safeSetBoolean(PreparedStatement prep, int col, Boolean value) throws SQLException {
+        log.debug("safeSetBoolean: " + col + " " + value);
+        if (value != null) {
+            prep.setBoolean(col, value);
+        } else {
+            prep.setNull(col, Types.BOOLEAN);
+        }
+    }
+    
+    private void safeSetString(PreparedStatement prep, int col, URI value) throws SQLException {
+        String v = null;
+        if (value != null) {
+            v = value.toASCIIString();
+        }
+        safeSetString(prep, col, v);
+    }
+    
     private void safeSetString(PreparedStatement prep, int col, String value) throws SQLException {
         log.debug("safeSetString: " + col + " " + value);
         if (value != null) {
@@ -851,6 +888,24 @@ public class SQLGenerator {
         }
     }
     
+    private void safeSetArray(PreparedStatement prep, int col, Set<URI> values) throws SQLException {
+        
+        if (values != null && !values.isEmpty()) {
+            log.debug("safeSetArray: " + col + " " + values.size());
+            String[] array1d = new String[values.size()];
+            int i = 0;
+            for (URI u : values) {
+                array1d[i] = u.toASCIIString();
+                i++;
+            }
+            java.sql.Array arr = prep.getConnection().createArrayOf("text", array1d);
+            prep.setObject(col, arr);
+        } else {
+            log.debug("safeSetArray: " + col + " null");
+            prep.setNull(col, Types.ARRAY);
+        }
+    }
+    
     private void safeSetArray(PreparedStatement prep, int col, UUID[] value) throws SQLException {
         
         if (value != null) {
@@ -859,6 +914,25 @@ public class SQLGenerator {
             prep.setObject(col, arr);
         } else {
             log.debug("safeSetArray: " + col + " " + value);
+            prep.setNull(col, Types.ARRAY);
+        }
+    }
+    
+    private void safeSetProps(PreparedStatement prep, int col, Set<NodeProperty> values) throws SQLException {
+        
+        if (values != null && !values.isEmpty()) {
+            log.debug("safeSetProps: " + col + " " + values.size());
+            String[][] array2d = new String[values.size()][2]; // TODO: w-h or h-w??
+            int i = 0;
+            for (NodeProperty np : values) {
+                array2d[i][0] = np.getKey().toASCIIString();
+                array2d[i][1] = np.getValue();
+                i++;
+            }
+            java.sql.Array arr = prep.getConnection().createArrayOf("text", array2d);
+            prep.setObject(col, arr);
+        } else {
+            log.debug("safeSetProps: " + col + " = null");
             prep.setNull(col, Types.ARRAY);
         }
     }
@@ -917,8 +991,8 @@ public class SQLGenerator {
                 safeSetString(prep, col++, value.storageLocation.getStorageID().toASCIIString());
                 safeSetString(prep, col++, value.storageLocation.storageBucket);
             } else {
-                safeSetString(prep, col++, null); // storageLocation.storageID
-                safeSetString(prep, col++, null); // storageLocation.storageBucket
+                safeSetString(prep, col++, (URI) null); // storageLocation.storageID
+                safeSetString(prep, col++, (URI) null); // storageLocation.storageBucket
             }
             
             safeSetTimestamp(prep, col++, new Timestamp(value.getLastModified().getTime()), utc);
@@ -1013,7 +1087,7 @@ public class SQLGenerator {
             if (value.getLocation().storageBucket != null) {
                 safeSetString(prep, col++, value.getLocation().storageBucket);
             } else {
-                safeSetString(prep, col++, null);
+                safeSetString(prep, col++, (String) null);
             }
             
             prep.setTimestamp(col++, new Timestamp(value.getLastModified().getTime()), utc);
@@ -1107,17 +1181,54 @@ public class SQLGenerator {
             } else {
                 sql = getInsertSQL(Node.class);
             }
-            log.debug("StorageSitePut: " + sql);
+            log.debug("NodePut: " + sql);
             PreparedStatement prep = conn.prepareStatement(sql);
             int col = 1;
             
-            throw new UnsupportedOperationException("TODO");
+            if (value.parent == null) {
+                throw new RuntimeException("BUG: cannot put Node without a parent: " + value);
+            }
+            prep.setObject(col++, value.parent.getID());
+            prep.setString(col++, value.getName());
+            prep.setString(col++, value.getClass().getSimpleName().substring(0, 1)); // HACK
+            if (value.ownerID == null) {
+                throw new RuntimeException("BUG: cannot put Node without an ownerID: " + value);
+            }
+            prep.setString(col++, value.ownerID.toString());
+            safeSetBoolean(prep, col++, value.isPublic);
+            safeSetBoolean(prep, col++, value.isLocked);
+            safeSetArray(prep, col++, value.readOnlyGroup);
+            safeSetArray(prep, col++, value.readWriteGroup);
+            safeSetProps(prep, col++, value.properties);
+            if (value instanceof ContainerNode) {
+                ContainerNode cn = (ContainerNode) value;
+                safeSetBoolean(prep, col++, cn.inheritPermissions);
+            } else {
+                safeSetBoolean(prep, col++, null);
+            }
+            if (value instanceof DataNode) {
+                DataNode dn = (DataNode) value;
+                if (dn.getStorageID() == null) {
+                    throw new RuntimeException("BUG: cannot put DataNode without a storageID: " + value);
+                }
+                safeSetBoolean(prep, col++, dn.busy);
+                safeSetString(prep, col++, dn.getStorageID());
+            } else {
+                safeSetBoolean(prep, col++, null);
+                safeSetString(prep, col++, (URI) null);
+            }
+            if (value instanceof LinkNode) {
+                LinkNode ln = (LinkNode) value;
+                prep.setString(col++, ln.getTarget().toASCIIString());
+            } else {
+                safeSetString(prep, col++, (URI) null);
+            }
             
-            //prep.setTimestamp(col++, new Timestamp(value.getLastModified().getTime()), utc);
-            //prep.setString(col++, value.getMetaChecksum().toASCIIString());
-            //prep.setObject(col++, value.getID());
+            prep.setTimestamp(col++, new Timestamp(value.getLastModified().getTime()), utc);
+            prep.setString(col++, value.getMetaChecksum().toASCIIString());
+            prep.setObject(col++, value.getID());
             
-            //return prep;
+            return prep;
         }
     }
     
@@ -1190,11 +1301,13 @@ public class SQLGenerator {
     }
     
     private StringBuilder getSelectFromSQL(Class c, boolean entityCols) {
-        String tab = tableMap.get(c);
-        String[] cols = columnMap.get(c);
+        String tab = getTable(c);
+        Class targetClass = c;
         if (entityCols) {
-            cols = columnMap.get(Entity.class);
+            targetClass = Entity.class;
         }
+        String[] cols = getColumns(targetClass);
+        
         if (tab == null || cols == null) {
             throw new IllegalArgumentException("BUG: no table/columns for class " + c.getName());
         }
@@ -1213,21 +1326,13 @@ public class SQLGenerator {
         return sb;
     }
     
-    private String getLockSQL(Class c) {
-        StringBuilder sb = new StringBuilder();
-        String pk = getKeyColumn(c, true);
-        sb.append("UPDATE ");
-        sb.append(tableMap.get(c));
-        sb.append(" SET ").append(pk).append(" = ? WHERE ").append(pk).append(" = ?");
-        return sb.toString();
-    }
-    
     private String getUpdateSQL(Class c) {
         StringBuilder sb = new StringBuilder();
+        String tab = getTable(c);
         sb.append("UPDATE ");
-        sb.append(tableMap.get(c));
+        sb.append(tab);
         sb.append(" SET ");
-        String[] cols = columnMap.get(c);
+        String[] cols = getColumns(c);
         for (int i = 0; i < cols.length - 1; i++) { // PK is last
             if (i > 0) {
                 sb.append(",");
@@ -1244,10 +1349,11 @@ public class SQLGenerator {
     
     private String getInsertSQL(Class c) {
         StringBuilder sb = new StringBuilder();
+        String tab = getTable(c);
         sb.append("INSERT INTO ");
-        sb.append(tableMap.get(c));
+        sb.append(tab);
         sb.append(" (");
-        String[] cols = columnMap.get(c);
+        String[] cols = getColumns(c);
         for (int i = 0; i < cols.length; i++) {
             if (i > 0) {
                 sb.append(",");
@@ -1268,14 +1374,15 @@ public class SQLGenerator {
     
     private String getDeleteSQL(Class c) {
         StringBuilder sb = new StringBuilder();
+        String tab = getTable(c);
         sb.append("DELETE FROM ");
-        sb.append(tableMap.get(c));
+        sb.append(tab);
         sb.append(" WHERE id = ?");
         return sb.toString();
     }
     
     private String getKeyColumn(Class c, boolean pk) {
-        String[] cols = columnMap.get(c);
+        String[] cols = getColumns(c);
         if (cols == null) {
             throw new IllegalArgumentException("BUG: no table/columns for class " + c.getName());
         }
@@ -1583,8 +1690,73 @@ public class SQLGenerator {
                 return null;
             }
             int col = 1;
-            throw new UnsupportedOperationException("TODO");
+            /*
+                "parentID",
+                "name",
+                "nodeType",
+                "ownerID",
+                "isPublic",
+                "isLocked",
+                "readOnlyGroups",
+                "readWriteGroups",
+                "properties",
+            
+                "inheritPermissions",
+                "busy",
+                "storageID",
+                "target",
+            
+                "lastModified",
+                "metaChecksum",
+                "id" // last column is always PK
+            */
+            col++; //UUID unused = Util.getUUID(rs, col++);
+            final String name = rs.getString(col++);
+            final String nodeType = rs.getString(col++);
+            final String ownerID = rs.getString(col++);
+            final Boolean isPublic = Util.getBoolean(rs, col++);
+            final Boolean isLocked = Util.getBoolean(rs, col++);
+            final String rawROG = rs.getString(col++);
+            final String rawRWG = rs.getString(col++);
+            final String rawProps = rs.getString(col++);
+            final Boolean inheritPermissions = Util.getBoolean(rs, col++);
+            final Boolean busy = Util.getBoolean(rs, col++);
+            final URI storageID = Util.getURI(rs, col++);
+            final URI linkTarget = Util.getURI(rs, col++);
+            final Date lastModified = Util.getDate(rs, col++, utc);
+            final URI metaChecksum = Util.getURI(rs, col++);
+            final UUID id = Util.getUUID(rs, col++);
+            
+            Node ret;
+            if (nodeType.equals("C")) {
+                ret = new ContainerNode(id, name, inheritPermissions);
+            } else if (nodeType.equals("D")) {
+                ret = new DataNode(id, name, storageID);
+            } else if (nodeType.equals("L")) {
+                ret = new LinkNode(id, name, linkTarget);
+            } else {
+                throw new RuntimeException("BUG: unexpected node type code: " + nodeType);
+            }
+            ret.ownerID = ownerID;
+            ret.isPublic = isPublic;
+            ret.isLocked = isLocked;
+            
+            if (rawROG != null) {
+                Util.parseArrayURI(rawROG, ret.readOnlyGroup);
+            }
+            if (rawRWG != null) {
+                Util.parseArrayURI(rawRWG, ret.readWriteGroup);
+            }
+            if (rawProps != null) {
+                Util.parseArrayProps(rawProps, ret.properties);
+            }
+            
+            InventoryUtil.assignLastModified(ret, lastModified);
+            InventoryUtil.assignMetaChecksum(ret, metaChecksum);
+            
+            return ret;
         }
+        
         
     }
 }

@@ -67,11 +67,13 @@
 
 package org.opencadc.vospace.db;
 
+import ca.nrc.cadc.io.ResourceIterator;
 import java.util.UUID;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.db.AbstractDAO;
 import org.opencadc.vospace.ContainerNode;
 import org.opencadc.vospace.Node;
+import org.opencadc.vospace.VOSURI;
 
 /**
  *
@@ -84,11 +86,24 @@ public class NodeDAO extends AbstractDAO<Node> {
         super(true);
     }
 
+    @Override
+    public void put(Node val) {
+        super.put(val);
+    }
+    
     public Node get(UUID id) {
         return super.get(Node.class, id);
     }
     
-    public ContainerNode getChildren(ContainerNode cn) {
+    public void delete(UUID id) {
+        super.delete(Node.class, id);
+    }
+    
+    public ResourceIterator<Node> childIterator(ContainerNode parent) {
+        return childIterator(parent, null, null);
+    }
+    
+    public ResourceIterator<Node> childIterator(ContainerNode parent, VOSURI start, Integer limit) {
         throw new UnsupportedOperationException();
     }
 }

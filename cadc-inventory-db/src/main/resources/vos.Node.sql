@@ -14,11 +14,14 @@ create table <schema>.Node (
     -- store all props in a 2D array
     properties text[][],
 
+    -- ContainerNode
+    inheritPermissions boolean,
+    
     -- DataNode
-    busyState boolean,
+    busy boolean,
     storageID varchar(512),
 
-    -- linkNode
+    -- LinkNode
     target text,
 
     lastModified timestamp not null,
