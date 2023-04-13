@@ -83,6 +83,7 @@ import java.sql.Types;
 import java.util.Calendar;
 import java.util.Comparator;
 import java.util.Date;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -341,7 +342,10 @@ public class SQLGenerator {
         if (Artifact.class.equals(c)) {
             return new ArtifactIteratorQuery();
         }
-        throw new UnsupportedOperationException("entity-list: " + c.getName());
+        if (Node.class.equals(c)) {
+            return new NodeIteratorQuery();
+        }
+        throw new UnsupportedOperationException("entity-iterator: " + c.getName());
     }
     
     public EntityList getEntityList(Class c) {
@@ -805,8 +809,10 @@ public class SQLGenerator {
         }
     }
     
-    private class NodeGet implements EntityGet<Node> {
+    public class NodeGet implements EntityGet<Node> {
         private UUID id;
+        private ContainerNode parent;
+        private String name;
         private final boolean forUpdate;
 
         public NodeGet(boolean forUpdate) {
@@ -818,9 +824,14 @@ public class SQLGenerator {
             this.id = id;
         }
 
+        public void setPath(ContainerNode parent, String name) {
+            this.parent = parent;
+            this.name = name;
+        }
+        
         @Override
         public Node execute(JdbcTemplate jdbc) {
-            return (Node) jdbc.query(this, new NodeExtractor());
+            return (Node) jdbc.query(this, new NodeExtractor(parent));
         }
 
         @Override
@@ -830,6 +841,11 @@ public class SQLGenerator {
             if (id != null) {
                 String col = getKeyColumn(Node.class, true);
                 sb.append(col).append(" = ?");
+            } else if (parent != null && name != null) {
+                String pidCol = "parentID";
+                String nameCol = "name";
+                // TODO: better way to get column names?
+                sb.append(pidCol).append(" = ? and ").append(nameCol).append(" = ?");
             } else {
                 throw new IllegalStateException("primary key is null");
             }
@@ -839,8 +855,80 @@ public class SQLGenerator {
             String sql = sb.toString();
             log.debug("Node: " + sql);
             PreparedStatement prep = conn.prepareStatement(sql);
-            prep.setObject(1, id);
+            if (id != null) {
+                prep.setObject(1, id);
+            } else {
+                prep.setObject(1, parent.getID());
+                prep.setObject(2, name);
+            }
+            
             return prep;
+        }
+    }
+    
+    public class NodeIteratorQuery implements EntityIteratorQuery<Node> {
+        private ContainerNode parent;
+        private String start;
+        private Integer limit;
+        
+        public NodeIteratorQuery() {
+        }
+
+        public void setParent(ContainerNode parent) {
+            this.parent = parent;
+        }
+
+        public void setStart(String start) {
+            this.start = start;
+        }
+
+        public void setLimit(Integer limit) {
+            this.limit = limit;
+        }
+        
+        @Override
+        public ResourceIterator<Node> query(DataSource ds) {
+            if (parent == null) {
+                throw new RuntimeException("BUG: cannot query for children with parent==null");
+            }
+            
+            StringBuilder sb = getSelectFromSQL(Node.class, false);
+            sb.append(" WHERE parentID = ?");
+            if (start != null) {
+                sb.append(" AND ? <= name");
+            }
+            sb.append(" ORDER BY name ASC");
+            if (limit != null) {
+                sb.append(" LIMIT ?");
+            }
+            
+            String sql = sb.toString();
+            log.debug("sql: " + sql);
+            
+            try {
+                Connection con = ds.getConnection();
+                log.debug("NodeIteratorQuery: setAutoCommit(false)");
+                con.setAutoCommit(false);
+                // defaults for options: ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY
+                PreparedStatement ps = con.prepareStatement(sql);
+                ps.setFetchSize(1000);
+                ps.setFetchDirection(ResultSet.FETCH_FORWARD);
+                int col = 1;
+                
+                ps.setObject(1, parent.getID());
+                if (start != null) {
+                    ps.setString(col++, start);
+                }
+                if (limit != null) {
+                    ps.setInt(col++, limit);
+                }
+                ResultSet rs = ps.executeQuery();
+                
+                return new NodeResultSetIterator(con, rs, parent);
+            } catch (SQLException ex) {
+                throw new RuntimeException("BUG: artifact iterator query failed", ex);
+            }
+            
         }
     }
     
@@ -1495,6 +1583,63 @@ public class SQLGenerator {
         }
     }
     
+    private class NodeResultSetIterator implements ResourceIterator<Node> {
+        final Calendar utc = Calendar.getInstance(DateUtil.UTC);
+        private final Connection con;
+        private final ResultSet rs;
+        boolean hasRow;
+        
+        ContainerNode parent;
+
+        public NodeResultSetIterator(Connection con, ResultSet rs, ContainerNode parent) {
+            this.con = con;
+            this.rs = rs;
+            this.parent = parent;
+        }
+        
+        @Override
+        public void close() throws IOException {
+            if (hasRow) {
+                log.debug("NodeResultSetIterator:  " + super.toString() + " ctor - setAutoCommit(true)");
+                try {
+                    con.setAutoCommit(true);
+                    hasRow = false;
+                } catch (SQLException ex) {
+                    throw new RuntimeException("BUG: node list query failed during close()", ex);
+                }
+            }
+        }
+        
+        @Override
+        public boolean hasNext() {
+            return hasRow;
+        }
+        
+        @Override
+        public Node next() {
+            try {
+                Node ret = mapRowToNode(rs, utc, parent);
+                hasRow = rs.next();
+                if (!hasRow) {
+                    log.debug("NodeResultSetIterator:  " + super.toString() + " DONE - setAutoCommit(true)");
+                    con.setAutoCommit(true);
+                }
+                return ret;
+            } catch (Exception ex) {
+                if (hasRow) {
+                    log.debug("NodeResultSetIterator:  " + super.toString() + " ResultSet.next() FAILED - setAutoCommit(true)");
+                    try {
+                        close();
+                        hasRow = false;
+                    } catch (IOException unexpected) {
+                        log.debug("BUG: unexpected IOException from close", unexpected);
+                    }
+                }
+                throw new RuntimeException("BUG: node list query failed while iterating", ex);
+            }
+        }
+    }
+    
     private Artifact mapRowToArtifact(ResultSet rs, Calendar utc) throws SQLException {
         int col = 1;
         final URI uri = Util.getURI(rs, col++);
@@ -1526,6 +1671,62 @@ public class SQLGenerator {
         InventoryUtil.assignLastModified(a, lastModified);
         InventoryUtil.assignMetaChecksum(a, metaChecksum);
         return a;
+    }
+    
+    private Node mapRowToNode(ResultSet rs, Calendar utc, ContainerNode parent) throws SQLException {
+        int col = 1;
+        final UUID parentID = Util.getUUID(rs, col++);
+        final String name = rs.getString(col++);
+        final String nodeType = rs.getString(col++);
+        final String ownerID = rs.getString(col++);
+        final Boolean isPublic = Util.getBoolean(rs, col++);
+        final Boolean isLocked = Util.getBoolean(rs, col++);
+        final String rawROG = rs.getString(col++);
+        final String rawRWG = rs.getString(col++);
+        final String rawProps = rs.getString(col++);
+        final Boolean inheritPermissions = Util.getBoolean(rs, col++);
+        final Boolean busy = Util.getBoolean(rs, col++);
+        final URI storageID = Util.getURI(rs, col++);
+        final URI linkTarget = Util.getURI(rs, col++);
+        final Date lastModified = Util.getDate(rs, col++, utc);
+        final URI metaChecksum = Util.getURI(rs, col++);
+        final UUID id = Util.getUUID(rs, col++);
+
+        Node ret;
+        if (nodeType.equals("C")) {
+            ret = new ContainerNode(id, name, inheritPermissions);
+        } else if (nodeType.equals("D")) {
+            ret = new DataNode(id, name, storageID);
+        } else if (nodeType.equals("L")) {
+            ret = new LinkNode(id, name, linkTarget);
+        } else {
+            throw new RuntimeException("BUG: unexpected node type code: " + nodeType);
+        }
+        ret.ownerID = ownerID;
+        ret.isPublic = isPublic;
+        ret.isLocked = isLocked;
+
+        if (rawROG != null) {
+            Util.parseArrayURI(rawROG, ret.readOnlyGroup);
+        }
+        if (rawRWG != null) {
+            Util.parseArrayURI(rawRWG, ret.readWriteGroup);
+        }
+        if (rawProps != null) {
+            Util.parseArrayProps(rawProps, ret.properties);
+        }
+
+        InventoryUtil.assignLastModified(ret, lastModified);
+        InventoryUtil.assignMetaChecksum(ret, metaChecksum);
+
+        if (parent != null) {
+            if (!parent.getID().equals(parentID)) {
+                throw new RuntimeException("BUG: expected parentID=" + parent.getID() + " but got: " + parentID);
+            }
+            ret.parent = parent;
+        }
+
+        return ret;
     }
     
     private class ObsoleteStorageLocationExtractor implements ResultSetExtractor {
@@ -1681,80 +1882,20 @@ public class SQLGenerator {
     }
     
     private class NodeExtractor implements ResultSetExtractor<Node> {
-
+        private ContainerNode parent;
         final Calendar utc = Calendar.getInstance(DateUtil.UTC);
+
+        public NodeExtractor(ContainerNode parent) {
+            this.parent = parent; // optional
+        }
         
         @Override
         public Node extractData(ResultSet rs) throws SQLException, DataAccessException {
             if (!rs.next()) {
                 return null;
             }
-            int col = 1;
-            /*
-                "parentID",
-                "name",
-                "nodeType",
-                "ownerID",
-                "isPublic",
-                "isLocked",
-                "readOnlyGroups",
-                "readWriteGroups",
-                "properties",
             
-                "inheritPermissions",
-                "busy",
-                "storageID",
-                "target",
-            
-                "lastModified",
-                "metaChecksum",
-                "id" // last column is always PK
-            */
-            col++; //UUID unused = Util.getUUID(rs, col++);
-            final String name = rs.getString(col++);
-            final String nodeType = rs.getString(col++);
-            final String ownerID = rs.getString(col++);
-            final Boolean isPublic = Util.getBoolean(rs, col++);
-            final Boolean isLocked = Util.getBoolean(rs, col++);
-            final String rawROG = rs.getString(col++);
-            final String rawRWG = rs.getString(col++);
-            final String rawProps = rs.getString(col++);
-            final Boolean inheritPermissions = Util.getBoolean(rs, col++);
-            final Boolean busy = Util.getBoolean(rs, col++);
-            final URI storageID = Util.getURI(rs, col++);
-            final URI linkTarget = Util.getURI(rs, col++);
-            final Date lastModified = Util.getDate(rs, col++, utc);
-            final URI metaChecksum = Util.getURI(rs, col++);
-            final UUID id = Util.getUUID(rs, col++);
-            
-            Node ret;
-            if (nodeType.equals("C")) {
-                ret = new ContainerNode(id, name, inheritPermissions);
-            } else if (nodeType.equals("D")) {
-                ret = new DataNode(id, name, storageID);
-            } else if (nodeType.equals("L")) {
-                ret = new LinkNode(id, name, linkTarget);
-            } else {
-                throw new RuntimeException("BUG: unexpected node type code: " + nodeType);
-            }
-            ret.ownerID = ownerID;
-            ret.isPublic = isPublic;
-            ret.isLocked = isLocked;
-            
-            if (rawROG != null) {
-                Util.parseArrayURI(rawROG, ret.readOnlyGroup);
-            }
-            if (rawRWG != null) {
-                Util.parseArrayURI(rawRWG, ret.readWriteGroup);
-            }
-            if (rawProps != null) {
-                Util.parseArrayProps(rawProps, ret.properties);
-            }
-            
-            InventoryUtil.assignLastModified(ret, lastModified);
-            InventoryUtil.assignMetaChecksum(ret, metaChecksum);
-            
-            return ret;
+            return mapRowToNode(rs, utc, parent);
         }
         
         

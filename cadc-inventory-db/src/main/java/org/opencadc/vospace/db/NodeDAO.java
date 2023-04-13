@@ -70,10 +70,14 @@ package org.opencadc.vospace.db;
 import ca.nrc.cadc.io.ResourceIterator;
 import java.util.UUID;
 import org.apache.log4j.Logger;
+import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.db.AbstractDAO;
+import org.opencadc.inventory.db.SQLGenerator;
 import org.opencadc.vospace.ContainerNode;
 import org.opencadc.vospace.Node;
 import org.opencadc.vospace.VOSURI;
+import org.springframework.jdbc.BadSqlGrammarException;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
  *
@@ -95,15 +99,54 @@ public class NodeDAO extends AbstractDAO<Node> {
         return super.get(Node.class, id);
     }
     
+    public Node get(ContainerNode parent, String name) {
+        checkInit();
+        log.debug("GET: " + parent.getID() + " + " + name);
+        long t = System.currentTimeMillis();
+
+        try {
+            JdbcTemplate jdbc = new JdbcTemplate(dataSource);
+            SQLGenerator.NodeGet get = (SQLGenerator.NodeGet) gen.getEntityGet(Node.class);
+            get.setPath(parent, name);
+            return get.execute(jdbc);
+        } catch (BadSqlGrammarException ex) {
+            handleInternalFail(ex);
+        } finally {
+            long dt = System.currentTimeMillis() - t;
+            log.debug("GET: " + parent.getID() + " + " + name + " " + dt + "ms");
+        }
+        throw new RuntimeException("BUG: handleInternalFail did not throw");
+    }
+    
     public void delete(UUID id) {
         super.delete(Node.class, id);
     }
     
-    public ResourceIterator<Node> childIterator(ContainerNode parent) {
-        return childIterator(parent, null, null);
+    public ResourceIterator<Node> iterator(ContainerNode parent) {
+        return NodeDAO.this.iterator(parent, null, null);
     }
     
-    public ResourceIterator<Node> childIterator(ContainerNode parent, VOSURI start, Integer limit) {
-        throw new UnsupportedOperationException();
+    public ResourceIterator<Node> iterator(ContainerNode parent, String start, Integer limit) {
+        if (parent == null) {
+            throw new IllegalArgumentException("childIterator: parent cannot be null");
+        }
+        log.debug("iterator: " + parent.getID());
+        
+        checkInit();
+        long t = System.currentTimeMillis();
+        
+        try {
+            SQLGenerator.NodeIteratorQuery iter = (SQLGenerator.NodeIteratorQuery) gen.getEntityIteratorQuery(Node.class);
+            iter.setParent(parent);
+            iter.setStart(start);
+            iter.setLimit(limit);
+            return iter.query(dataSource);
+        } catch (BadSqlGrammarException ex) {
+            handleInternalFail(ex);
+        } finally {
+            long dt = System.currentTimeMillis() - t;
+            log.debug("iterator: " + parent.getID() + " " + dt + "ms");
+        }
+        throw new RuntimeException("BUG: should be unreachable");
     }
 }

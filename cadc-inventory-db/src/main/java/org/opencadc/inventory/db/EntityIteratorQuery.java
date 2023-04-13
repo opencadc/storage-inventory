@@ -67,7 +67,7 @@
 
 package org.opencadc.inventory.db;
 
-import java.util.Iterator;
+import ca.nrc.cadc.io.ResourceIterator;
 import javax.sql.DataSource;
 
 /**
@@ -76,5 +76,5 @@ import javax.sql.DataSource;
  * @param <T> entity subclass
  */
 public interface EntityIteratorQuery<T> {
-    Iterator<T> query(DataSource ds);
+    ResourceIterator<T> query(DataSource ds);
 }

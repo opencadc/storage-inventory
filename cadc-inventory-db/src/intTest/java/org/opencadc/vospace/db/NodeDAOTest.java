@@ -74,7 +74,6 @@ import ca.nrc.cadc.io.ResourceIterator;
 import ca.nrc.cadc.util.Log4jInit;
 import java.io.IOException;
 import java.net.URI;
-import java.util.Date;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.UUID;
@@ -116,7 +115,7 @@ public class NodeDAOTest {
             ConnectionConfig cc = dbrc.getConnectionConfig(TestUtil.SERVER, TestUtil.DATABASE);
             DBUtil.createJNDIDataSource("jdbc/ArtifactDAOTest", cc);
 
-            Map<String,Object> config = new TreeMap<String,Object>();
+            Map<String,Object> config = new TreeMap<>();
             config.put(SQLGenerator.class.getName(), SQLGenerator.class);
             config.put("jndiDataSourceName", "jdbc/ArtifactDAOTest");
             config.put("database", TestUtil.DATABASE);
@@ -149,9 +148,21 @@ public class NodeDAOTest {
     }
     
     @Test
-    public void testGetByID() {
+    public void testGetByID_NotFound() {
         UUID id = UUID.randomUUID();
         Node a = nodeDAO.get(id);
+        Assert.assertNull(a);
+    }
+    
+    @Test
+    public void testGetByPath_NotFound() {
+        ContainerNode parent = new ContainerNode("not-found", false);
+        Node a = nodeDAO.get(parent, "not-found");
+        Assert.assertNull(a);
+        
+        UUID rootID = new UUID(0L, 0L);
+        ContainerNode root = new ContainerNode(rootID, "root", false);
+        a = nodeDAO.get(root, "not-found");
         Assert.assertNull(a);
     }
     
@@ -166,12 +177,21 @@ public class NodeDAOTest {
         orig.ownerID = "the-owner";
         nodeDAO.put(orig);
         
-        // get
+        // get-by-id
         Node a = nodeDAO.get(orig.getID());
         Assert.assertNotNull(a);
         log.info("found: "  + a.getID() + " aka " + a);
         Assert.assertEquals(orig.getID(), a.getID());
         Assert.assertEquals(orig.getName(), a.getName());
+        
+        // get-by-path
+        Node aa = nodeDAO.get(root, orig.getName());
+        Assert.assertNotNull(aa);
+        log.info("found: "  + aa.getID() + " aka " + aa);
+        Assert.assertEquals(orig.getID(), aa.getID());
+        Assert.assertEquals(orig.getName(), aa.getName());
+        Assert.assertNotNull(aa.parent);
+        Assert.assertEquals(root.getID(), aa.parent.getID());
         
         Assert.assertNull(a.parent); // get-node-by-id: comes pack without parent
         Assert.assertEquals(orig.getName(), a.getName());
@@ -251,11 +271,21 @@ public class NodeDAOTest {
         orig.properties.add(new NodeProperty(URI.create("sketchy:funny"), "value-with-{delims}"));
         nodeDAO.put(orig);
         
+        // get-by-id
         Node a = nodeDAO.get(orig.getID());
         Assert.assertNotNull(a);
         log.info("found: "  + a.getID() + " aka " + a);
         Assert.assertEquals(orig.getID(), a.getID());
         Assert.assertEquals(orig.getName(), a.getName());
+        
+        // get-by-path
+        Node aa = nodeDAO.get(root, orig.getName());
+        Assert.assertNotNull(aa);
+        log.info("found: "  + aa.getID() + " aka " + aa);
+        Assert.assertEquals(orig.getID(), aa.getID());
+        Assert.assertEquals(orig.getName(), aa.getName());
+        Assert.assertNotNull(aa.parent);
+        Assert.assertEquals(root.getID(), aa.parent.getID());
         
         Assert.assertNull(a.parent); // get-node-by-id: comes pack without parent
         Assert.assertEquals(orig.getName(), a.getName());
@@ -325,11 +355,21 @@ public class NodeDAOTest {
         orig.properties.add(new NodeProperty(VOS.PROPERTY_URI_DESCRIPTION, "this is the good stuff(tm)"));
         nodeDAO.put(orig);
         
+        // get-by-id
         Node a = nodeDAO.get(orig.getID());
         Assert.assertNotNull(a);
         log.info("found: "  + a.getID() + " aka " + a);
         Assert.assertEquals(orig.getID(), a.getID());
         Assert.assertEquals(orig.getName(), a.getName());
+        
+        // get-by-path
+        Node aa = nodeDAO.get(root, orig.getName());
+        Assert.assertNotNull(aa);
+        log.info("found: "  + aa.getID() + " aka " + aa);
+        Assert.assertEquals(orig.getID(), aa.getID());
+        Assert.assertEquals(orig.getName(), aa.getName());
+        Assert.assertNotNull(aa.parent);
+        Assert.assertEquals(root.getID(), aa.parent.getID());
         
         Assert.assertNull(a.parent); // get-node-by-id: comes pack without parent
         Assert.assertEquals(orig.getName(), a.getName());
@@ -401,11 +441,21 @@ public class NodeDAOTest {
         orig.properties.add(new NodeProperty(VOS.PROPERTY_URI_DESCRIPTION, "link to the good stuff(tm)"));
         nodeDAO.put(orig);
         
+        // get-by-id
         Node a = nodeDAO.get(orig.getID());
         Assert.assertNotNull(a);
         log.info("found: "  + a.getID() + " aka " + a);
         Assert.assertEquals(orig.getID(), a.getID());
         Assert.assertEquals(orig.getName(), a.getName());
+        
+        // get-by-path
+        Node aa = nodeDAO.get(root, orig.getName());
+        Assert.assertNotNull(aa);
+        log.info("found: "  + aa.getID() + " aka " + aa);
+        Assert.assertEquals(orig.getID(), aa.getID());
+        Assert.assertEquals(orig.getName(), aa.getName());
+        Assert.assertNotNull(aa.parent);
+        Assert.assertEquals(root.getID(), aa.parent.getID());
         
         Assert.assertNull(a.parent); // get-node-by-id: comes pack without parent
         Assert.assertEquals(orig.getName(), a.getName());
@@ -478,26 +528,25 @@ public class NodeDAOTest {
         Assert.assertEquals(orig.getName(), a.getName());
         
         Assert.assertTrue(a instanceof ContainerNode);
-        ContainerNode c = (ContainerNode) a;
         
         // these are set in put
         Assert.assertEquals(orig.getMetaChecksum(), a.getMetaChecksum());
         Assert.assertEquals(orig.getLastModified(), a.getLastModified());
-        //ResourceIterator<Node> emptyIter = nodeDAO.childIterator(orig);
-        //Assert.assertNotNull(emptyIter);
-        //Assert.assertFalse(emptyIter.hasNext());
-        //emptyIter.close();
+        ResourceIterator<Node> emptyIter = nodeDAO.iterator(orig);
+        Assert.assertNotNull(emptyIter);
+        Assert.assertFalse(emptyIter.hasNext());
+        emptyIter.close();
         
         // add children
         ContainerNode cont = new ContainerNode("container1", false);
-        cont.parent = c;
-        cont.ownerID = c.ownerID;
+        cont.parent = orig;
+        cont.ownerID = orig.ownerID;
         DataNode data = new DataNode("data1", URI.create("cadc:vault/" + UUID.randomUUID()));
-        data.parent = c;
-        data.ownerID = c.ownerID;
+        data.parent = orig;
+        data.ownerID = orig.ownerID;
         LinkNode link = new LinkNode("link1", URI.create("cadc:ARCHIVE/data"));
-        link.parent = c;
-        link.ownerID = c.ownerID;
+        link.parent = orig;
+        link.ownerID = orig.ownerID;
         log.info("put child: " + cont + " of " + cont.parent);
         nodeDAO.put(cont);
         log.info("put child: " + data + " of " + data.parent);
@@ -505,7 +554,7 @@ public class NodeDAOTest {
         log.info("put child: " + link + " of " + link.parent);
         nodeDAO.put(link);
         
-        ResourceIterator<Node> iter = nodeDAO.childIterator(orig);
+        ResourceIterator<Node> iter = nodeDAO.iterator(orig);
         Assert.assertNotNull(iter);
         Assert.assertTrue(iter.hasNext());
         Node c1 = iter.next();
@@ -538,10 +587,5 @@ public class NodeDAOTest {
         nodeDAO.delete(orig.getID());
         Node gone = nodeDAO.get(orig.getID());
         Assert.assertNull(gone);
-    }
-    
-    //@Test
-    public void testPutGetDeleteNodeProperties() {
-        log.info("TODO");
     }
 }
