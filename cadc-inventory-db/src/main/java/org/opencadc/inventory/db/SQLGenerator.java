@@ -916,11 +916,14 @@ public class SQLGenerator {
                 int col = 1;
                 
                 ps.setObject(1, parent.getID());
+                log.debug("parentID = " + parent.getID());
                 if (start != null) {
                     ps.setString(col++, start);
+                    log.debug("start = " + start);
                 }
                 if (limit != null) {
                     ps.setInt(col++, limit);
+                    log.debug("limit = " + limit);
                 }
                 ResultSet rs = ps.executeQuery();
                 
@@ -1591,10 +1594,16 @@ public class SQLGenerator {
         
         ContainerNode parent;
 
-        public NodeResultSetIterator(Connection con, ResultSet rs, ContainerNode parent) {
+        public NodeResultSetIterator(Connection con, ResultSet rs, ContainerNode parent) throws SQLException {
             this.con = con;
             this.rs = rs;
             this.parent = parent;
+            hasRow = rs.next();
+            log.debug("NodeResultSetIterator: " + super.toString() + " ctor " + hasRow);
+            if (!hasRow) {
+                log.debug("NodeResultSetIterator:  " + super.toString() + " ctor - setAutoCommit(true)");
+                con.setAutoCommit(true);
+            }
         }
         
         @Override

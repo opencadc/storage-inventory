@@ -68,6 +68,7 @@
 package org.opencadc.vospace.db;
 
 import ca.nrc.cadc.io.ResourceIterator;
+import java.io.IOException;
 import java.util.UUID;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;

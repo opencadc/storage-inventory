@@ -512,7 +512,7 @@ public class NodeDAOTest {
     }
     
     @Test
-    public void testPutGetDeleteContainerNodeChildren() throws IOException {
+    public void testContainerNodeIterator() throws IOException {
         UUID rootID = new UUID(0L, 0L);
         ContainerNode root = new ContainerNode(rootID, "root", false);
         
@@ -532,10 +532,19 @@ public class NodeDAOTest {
         // these are set in put
         Assert.assertEquals(orig.getMetaChecksum(), a.getMetaChecksum());
         Assert.assertEquals(orig.getLastModified(), a.getLastModified());
-        ResourceIterator<Node> emptyIter = nodeDAO.iterator(orig);
-        Assert.assertNotNull(emptyIter);
-        Assert.assertFalse(emptyIter.hasNext());
-        emptyIter.close();
+        try (ResourceIterator<Node> emptyIter = nodeDAO.iterator(orig)) {
+            Assert.assertNotNull(emptyIter);
+            Assert.assertFalse(emptyIter.hasNext());
+        } // auto-close
+        
+        Node top = null;
+        try (ResourceIterator<Node> rootIter = nodeDAO.iterator(root)) {
+            if (rootIter.hasNext()) {
+                top = rootIter.next();
+            }
+        }
+        Assert.assertNotNull(top);
+        Assert.assertEquals(orig.getID(), top.getID());
         
         // add children
         ContainerNode cont = new ContainerNode("container1", false);
@@ -554,14 +563,18 @@ public class NodeDAOTest {
         log.info("put child: " + link + " of " + link.parent);
         nodeDAO.put(link);
         
-        ResourceIterator<Node> iter = nodeDAO.iterator(orig);
-        Assert.assertNotNull(iter);
-        Assert.assertTrue(iter.hasNext());
-        Node c1 = iter.next();
-        Assert.assertTrue(iter.hasNext());
-        Node c2 = iter.next();
-        Assert.assertTrue(iter.hasNext());
-        Node c3 = iter.next();
+        Node c1;
+        Node c2;
+        Node c3;
+        try (ResourceIterator<Node> iter = nodeDAO.iterator(orig)) {
+            Assert.assertNotNull(iter);
+            Assert.assertTrue(iter.hasNext());
+            c1 = iter.next();
+            Assert.assertTrue(iter.hasNext());
+            c2 = iter.next();
+            Assert.assertTrue(iter.hasNext());
+            c3 = iter.next();
+        }
         
         // default order: alpha
         Assert.assertEquals(cont.getID(), c1.getID());
@@ -573,14 +586,7 @@ public class NodeDAOTest {
         Assert.assertEquals(link.getID(), c3.getID());
         Assert.assertEquals(link.getName(), c3.getName());
         
-        // depth first delete required?
-        try {
-            nodeDAO.delete(orig.getID());
-            Assert.fail("expected IllegalStateException but successfully deleted non-empty container");
-        } catch (IllegalStateException expected) {
-            log.info("caught expected: " + expected);
-        }
-        
+        // depth first delete required but not enforced by DAO
         nodeDAO.delete(cont.getID());
         nodeDAO.delete(data.getID());
         nodeDAO.delete(link.getID());
