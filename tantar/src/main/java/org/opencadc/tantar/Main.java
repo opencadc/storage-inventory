@@ -171,7 +171,9 @@ public class Main {
                 recoverableNS.add(new Namespace(ns));
                 log.info(RECOVERABLE_NS_KEY + " = " + ns);
             }
-            storageAdapter.setRecoverableNamespaces(recoverableNS);
+            if (!recoverableNS.isEmpty()) {
+                storageAdapter.setRecoverableNamespaces(recoverableNS);
+            }
             
             List<String> rawPurgeNS = props.getProperty(PURGE_NS_KEY);
             List<Namespace> purgeNS = new ArrayList<>();
@@ -179,7 +181,9 @@ public class Main {
                 purgeNS.add(new Namespace(ns));
                 log.info(PURGE_NS_KEY + " = " + ns);
             }
-            storageAdapter.setPurgeNamespaces(purgeNS);
+            if (!purgeNS.isEmpty()) {
+                storageAdapter.setPurgeNamespaces(purgeNS);
+            }
             
             final Map<String,Object> daoConfig = new TreeMap<>();
             String sqlGeneratorClass = props.getFirstPropertyValue(SQLGenerator.class.getName());
