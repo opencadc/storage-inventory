@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2020.                            (c) 2020.
+*  (c) 2023.                            (c) 2023.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -67,10 +67,14 @@
 
 package org.opencadc.luskan;
 
+import ca.nrc.cadc.date.DateUtil;
 import ca.nrc.cadc.db.DBUtil;
 import ca.nrc.cadc.rest.InitAction;
 import ca.nrc.cadc.tap.schema.InitDatabaseTS;
+import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.uws.server.impl.InitDatabaseUWS;
+import java.text.DateFormat;
+import java.util.Date;
 import javax.sql.DataSource;
 import org.apache.log4j.Logger;
 
@@ -87,8 +91,9 @@ public class LuskanInitAction extends InitAction {
     @Override
     public void doInit() {
         try {
-            LuskanConfig.initConfig();
+            MultiValuedProperties props = LuskanConfig.getConfig();
 
+            // create or update tap_schema
             DataSource tapadm = DBUtil.findJNDIDataSource("jdbc/tapadm");
             InitDatabaseTS tsi = new InitDatabaseTS(tapadm, null, "tap_schema");
             tsi.doInit();
@@ -97,7 +102,24 @@ public class LuskanInitAction extends InitAction {
             InitDatabaseUWS uwsi = new InitDatabaseUWS(uws, null, "uws");
             uwsi.doInit();
             
-            // create the TAP schema
+            // generate uws rollover tag
+            Date now = new Date();
+            DateFormat df = DateUtil.getDateFormat("yyyyMMdd", DateUtil.UTC);
+            String tag = df.format(now);
+            
+            // TODO: get numDays from config
+            String uwsRollStr = props.getFirstPropertyValue(LuskanConfig.UWS_ROLLOVER);
+            if (uwsRollStr != null) {
+                double numDays = Double.parseDouble(uwsRollStr);
+
+                long numSec = (long) (86400.0 * numDays);
+                Date minDate = new Date(now.getTime() - 1000L * numSec);
+                df = DateUtil.getDateFormat(DateUtil.IVOA_DATE_FORMAT, DateUtil.UTC);
+                log.warn("calling InitDatabaseUWS.doMaintenance: if-mod-before=" + df.format(minDate) + " tag=" + tag);
+                uwsi.doMaintenance(minDate, tag);
+            }
+            
+            // populate the tap_schema
             InitLuskanSchemaContent lsc = new InitLuskanSchemaContent(tapadm, null, "tap_schema");
             lsc.doInit();
         } catch (Exception ex) {

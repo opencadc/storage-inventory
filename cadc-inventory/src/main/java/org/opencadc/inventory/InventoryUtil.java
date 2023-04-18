@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2022.                            (c) 2022.
+*  (c) 2023.                            (c) 2023.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -68,7 +68,6 @@
 package org.opencadc.inventory;
 
 import ca.nrc.cadc.util.HexUtil;
-
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
@@ -79,6 +78,7 @@ import java.util.Collection;
 import java.util.Date;
 import java.util.UUID;
 import org.apache.log4j.Logger;
+import org.opencadc.persist.Entity;
 
 /**
  * Static utility methods.
@@ -129,13 +129,25 @@ public abstract class InventoryUtil {
     public static String computeBucket(URI uri, int length) {
         try {
             MessageDigest md = MessageDigest.getInstance("SHA-1");
-            byte[] bytes = Entity.primitiveValueToBytes(uri, "File.uri", md.getAlgorithm());
+            byte[] bytes = new DummyEntity().primitiveValueToBytes(uri, "Artifact.uri", md.getAlgorithm());
             md.update(bytes);
             byte[] sha = md.digest();
             String hex = HexUtil.toHex(sha);
             return hex.substring(0, length);
         } catch (NoSuchAlgorithmException ex) {
             throw new RuntimeException("BUG: failed to get instance of SHA-1", ex);
+        }
+    }
+    
+    // make primitiveValueToBytes usable in computeBucket above
+    private static class DummyEntity extends org.opencadc.inventory.Entity {
+        DummyEntity() {
+            super();
+        }
+
+        @Override
+        protected byte[] primitiveValueToBytes(Object o, String name, String digestAlg) {
+            return super.primitiveValueToBytes(o, name, digestAlg);
         }
     }
 
@@ -318,10 +330,8 @@ public abstract class InventoryUtil {
             Field f = Entity.class.getDeclaredField("lastModified");
             f.setAccessible(true);
             f.set(ce, d);
-        } catch (NoSuchFieldException fex) {
-            throw new RuntimeException("BUG", fex);
-        } catch (IllegalAccessException bug) {
-            throw new RuntimeException("BUG", bug);
+        } catch (NoSuchFieldException | IllegalAccessException oops) {
+            throw new RuntimeException("BUG", oops);
         }
     }
 
@@ -338,10 +348,8 @@ public abstract class InventoryUtil {
             Field f = Entity.class.getDeclaredField("metaChecksum");
             f.setAccessible(true);
             f.set(ce, u);
-        } catch (NoSuchFieldException fex) {
-            throw new RuntimeException("BUG", fex);
-        } catch (IllegalAccessException bug) {
-            throw new RuntimeException("BUG", bug);
+        } catch (NoSuchFieldException | IllegalAccessException oops) {
+            throw new RuntimeException("BUG", oops);
         }
     }
 

@@ -85,6 +85,8 @@ public class LuskanConfig {
     public static final String ALLOW_ANON = LUSKAN_KEY + ".allowAnon";
     public static final String ALLOWED_GROUP = LUSKAN_KEY + ".allowedGroup";
     
+    public static final String UWS_ROLLOVER = LUSKAN_KEY + ".uwsRollover";
+    
     // dev use only
     public static final String DISABLE_FILTERS = LUSKAN_KEY + ".disableQueryFilters";
 
@@ -112,7 +114,7 @@ public class LuskanConfig {
         MultiValuedProperties props = r.getAllProperties();
 
         StringBuilder sb = new StringBuilder();
-        sb.append("incomplete config: ");
+        sb.append("incomplete/invalid config: ");
         boolean ok = true;
 
         String ssk = props.getFirstPropertyValue(STORAGE_SITE_KEY);
@@ -144,6 +146,23 @@ public class LuskanConfig {
                 sb.append(" OK");
             } catch (IllegalArgumentException e) {
                 sb.append(" INVALID");
+                ok = false;
+            }
+        }
+        
+        String uwsRollStr = props.getFirstPropertyValue(UWS_ROLLOVER);
+        if (uwsRollStr != null) {
+            sb.append("\n\t").append(UWS_ROLLOVER).append(" - ");
+            try {
+                double d = Double.parseDouble(uwsRollStr);
+                if (d < 1.0) {
+                    sb.append("INVALID: ").append(UWS_ROLLOVER).append("=").append(uwsRollStr).append(" must be >= 1.0 (days)");
+                    ok = false;
+                } else {
+                    sb.append(d).append("OK");
+                }
+            } catch (NumberFormatException ex) {
+                sb.append("INVALID: ").append(ex);
                 ok = false;
             }
         }

@@ -73,6 +73,7 @@ import ca.nrc.cadc.net.HttpGet;
 import ca.nrc.cadc.net.HttpTransfer;
 import ca.nrc.cadc.net.HttpUpload;
 import ca.nrc.cadc.net.ResourceNotFoundException;
+import ca.nrc.cadc.util.HexUtil;
 import ca.nrc.cadc.util.Log4jInit;
 
 import java.io.ByteArrayInputStream;
@@ -85,6 +86,7 @@ import javax.security.auth.Subject;
 
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
+import org.apache.xerces.impl.dv.util.Base64;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -296,11 +298,12 @@ public class IncorrectPutMetadataTest extends MinocTest {
                     } catch (ResourceNotFoundException ok) {
                         log.info("verify not found: " + artifactURL);
                     }
-                    
+                    URI checksumURI = computeChecksumURI(bytes);
+
                     // put file
                     InputStream in = new ByteArrayInputStream(bytes);
                     HttpUpload put = new HttpUpload(in, artifactURL);
-                    put.setDigest(computeChecksumURI(bytes));
+                    put.setDigest(checksumURI);
                     put.setRequestProperty(HttpTransfer.CONTENT_LENGTH, Long.toString((long) bytes.length));
 
                     put.run();
@@ -316,6 +319,28 @@ public class IncorrectPutMetadataTest extends MinocTest {
                     } catch (Exception ok) {
                         Assert.fail("verify failed: " + artifactURI);
                     }
+                    Assert.assertEquals(checksumURI, head.getDigest());
+                    
+                    // temporary: put file with digest serialized correctly
+                    in = new ByteArrayInputStream(bytes);
+                    put = new HttpUpload(in, artifactURL);
+                    byte[] cs = HexUtil.toBytes(checksumURI.getSchemeSpecificPart());
+                    String b64 = Base64.encode(cs);
+                    put.setRequestProperty("digest", "md5=" + b64);
+                    put.run();
+                    log.info("response code: " + put.getResponseCode() + " " + put.getThrowable());
+                    Assert.assertNull(put.getThrowable());
+                    Assert.assertEquals("response code", 201, put.getResponseCode());
+                    
+                    // verify
+                    head = new HttpGet(artifactURL, false);
+                    head.setHeadOnly(true);
+                    try {
+                        head.prepare();
+                    } catch (Exception ok) {
+                        Assert.fail("verify failed: " + artifactURI);
+                    }
+                    Assert.assertEquals(checksumURI, head.getDigest());
                     
                     return null;
                 }

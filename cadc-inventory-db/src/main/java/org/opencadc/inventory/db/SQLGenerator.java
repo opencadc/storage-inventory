@@ -94,6 +94,7 @@ import org.opencadc.inventory.DeletedArtifactEvent;
 import org.opencadc.inventory.DeletedStorageLocationEvent;
 import org.opencadc.inventory.Entity;
 import org.opencadc.inventory.InventoryUtil;
+import org.opencadc.inventory.ObsoleteStorageLocation;
 import org.opencadc.inventory.SiteLocation;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.StorageLocationEvent;
