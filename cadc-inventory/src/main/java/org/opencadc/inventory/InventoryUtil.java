@@ -68,7 +68,6 @@
 package org.opencadc.inventory;
 
 import ca.nrc.cadc.util.HexUtil;
-
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
@@ -79,6 +78,7 @@ import java.util.Collection;
 import java.util.Date;
 import java.util.UUID;
 import org.apache.log4j.Logger;
+import org.opencadc.persist.Entity;
 
 /**
  * Static utility methods.
@@ -140,7 +140,7 @@ public abstract class InventoryUtil {
     }
     
     // make primitiveValueToBytes usable in computeBucket above
-    private static class DummyEntity extends Entity {
+    private static class DummyEntity extends org.opencadc.inventory.Entity {
         DummyEntity() {
             super();
         }
@@ -327,13 +327,11 @@ public abstract class InventoryUtil {
      */
     public static void assignLastModified(Entity ce, Date d) {
         try {
-            Field f = Entity.class.getSuperclass().getDeclaredField("lastModified");
+            Field f = Entity.class.getDeclaredField("lastModified");
             f.setAccessible(true);
             f.set(ce, d);
-        } catch (NoSuchFieldException fex) {
-            throw new RuntimeException("BUG", fex);
-        } catch (IllegalAccessException bug) {
-            throw new RuntimeException("BUG", bug);
+        } catch (NoSuchFieldException | IllegalAccessException oops) {
+            throw new RuntimeException("BUG", oops);
         }
     }
 
@@ -347,13 +345,11 @@ public abstract class InventoryUtil {
     public static void assignMetaChecksum(Entity ce, URI u) {
         assertValidChecksumURI(InventoryUtil.class, "metaChecksum", u);
         try {
-            Field f = Entity.class.getSuperclass().getDeclaredField("metaChecksum");
+            Field f = Entity.class.getDeclaredField("metaChecksum");
             f.setAccessible(true);
             f.set(ce, u);
-        } catch (NoSuchFieldException fex) {
-            throw new RuntimeException("BUG", fex);
-        } catch (IllegalAccessException bug) {
-            throw new RuntimeException("BUG", bug);
+        } catch (NoSuchFieldException | IllegalAccessException oops) {
+            throw new RuntimeException("BUG", oops);
         }
     }
 
