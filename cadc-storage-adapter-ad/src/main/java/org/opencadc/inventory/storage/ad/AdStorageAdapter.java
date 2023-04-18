@@ -158,6 +158,9 @@ public class AdStorageAdapter implements StorageAdapter {
 
     @Override
     public void setRecoverableNamespaces(List<Namespace> preserved) {
+        if (preserved.isEmpty()) {
+            return;
+        }
         throw new UnsupportedOperationException();
     }
 
@@ -168,6 +171,9 @@ public class AdStorageAdapter implements StorageAdapter {
 
     @Override
     public void setPurgeNamespaces(List<Namespace> purged) {
+        if (purged.isEmpty()) {
+            return;
+        }
         throw new UnsupportedOperationException();
     }
 

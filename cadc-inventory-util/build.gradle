@@ -22,7 +22,7 @@ description = 'OpenCADC Storage Inventory client utility library'
 def git_url = 'https://github.com/opencadc/storage-inventory'
 
 dependencies {
-    compile 'org.opencadc:cadc-inventory:[0.9,1.0)'
+    compile 'org.opencadc:cadc-inventory:[0.9.4,1.0)'
     compile 'org.opencadc:cadc-util:[1.6,2.0)'
     compile 'org.opencadc:cadc-tap:[1.0.1,1.2)'
     
