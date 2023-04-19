@@ -139,9 +139,9 @@ public class AdStorageAdapterIteratorTest {
             String archiveName = "NOT_IN_ARCHIVE";
             try {
                 Iterator<StorageMetadata> storageMetaIterator = adStorageAdapter.iterator(archiveName, true);
-                Assert.assertTrue("iterator is not empty.", storageMetaIterator.hasNext() == false);
+                Assert.fail("expected UnsupoportedOperationException, got " + storageMetaIterator);
             } catch (UnsupportedOperationException expected) {
-                    log.info("caught expected: " + expected);
+                log.info("caught expected: " + expected);
             } catch (Exception unexpected) {
                 log.error("unexpected exception", unexpected);
                 Assert.fail("unexpected exception: " + unexpected.getMessage());

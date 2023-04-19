@@ -26,8 +26,7 @@ mainClassName = 'org.opencadc.inventory.db.version.Main'
 
 dependencies {
     compile 'org.opencadc:cadc-util:[1.9.5,2.0)'
-    compile 'org.opencadc:cadc-inventory:[0.9,)'
-    compile 'org.opencadc:cadc-vos:[2.0,3.0)'
+    compile 'org.opencadc:cadc-inventory:[0.9.4,)'
 
     testCompile 'junit:junit:[4.0,)'
     
