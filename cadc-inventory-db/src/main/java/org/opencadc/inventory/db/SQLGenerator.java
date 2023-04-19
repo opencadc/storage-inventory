@@ -476,7 +476,7 @@ public class SQLGenerator {
         
         @Override
         public ObsoleteStorageLocation execute(JdbcTemplate jdbc) {
-            return (ObsoleteStorageLocation) jdbc.query(this, new ObsoleteStorageLocationExtractor());
+            return jdbc.query(this, new ObsoleteStorageLocationExtractor());
         }
         
         @Override
@@ -1276,10 +1276,10 @@ public class SQLGenerator {
             PreparedStatement prep = conn.prepareStatement(sql);
             int col = 1;
             
-            if (value.parent == null) {
-                throw new RuntimeException("BUG: cannot put Node without a parent: " + value);
+            if (value.parentID == null) {
+                throw new RuntimeException("BUG: cannot put Node without a parentID: " + value);
             }
-            prep.setObject(col++, value.parent.getID());
+            prep.setObject(col++, value.parentID);
             prep.setString(col++, value.getName());
             prep.setString(col++, value.getClass().getSimpleName().substring(0, 1)); // HACK
             if (value.ownerID == null) {
@@ -1299,11 +1299,11 @@ public class SQLGenerator {
             }
             if (value instanceof DataNode) {
                 DataNode dn = (DataNode) value;
-                if (dn.getStorageID() == null) {
+                if (dn.storageID == null) {
                     throw new RuntimeException("BUG: cannot put DataNode without a storageID: " + value);
                 }
                 safeSetBoolean(prep, col++, dn.busy);
-                safeSetString(prep, col++, dn.getStorageID());
+                safeSetString(prep, col++, dn.storageID);
             } else {
                 safeSetBoolean(prep, col++, null);
                 safeSetString(prep, col++, (URI) null);
@@ -1711,6 +1711,7 @@ public class SQLGenerator {
         } else {
             throw new RuntimeException("BUG: unexpected node type code: " + nodeType);
         }
+        ret.parentID = parentID;
         ret.ownerID = ownerID;
         ret.isPublic = isPublic;
         ret.isLocked = isLocked;
@@ -1738,12 +1739,12 @@ public class SQLGenerator {
         return ret;
     }
     
-    private class ObsoleteStorageLocationExtractor implements ResultSetExtractor {
+    private class ObsoleteStorageLocationExtractor implements ResultSetExtractor<ObsoleteStorageLocation> {
 
         final Calendar utc = Calendar.getInstance(DateUtil.UTC);
         
         @Override
-        public Object extractData(ResultSet rs) throws SQLException, DataAccessException {
+        public ObsoleteStorageLocation extractData(ResultSet rs) throws SQLException, DataAccessException {
             if (!rs.next()) {
                 return null;
             }
@@ -1756,7 +1757,7 @@ public class SQLGenerator {
             
             StorageLocation s = new StorageLocation(storLoc);
             s.storageBucket = storBucket;
-            Entity ret = new ObsoleteStorageLocation(id, s);
+            ObsoleteStorageLocation ret = new ObsoleteStorageLocation(id, s);
             InventoryUtil.assignLastModified(ret, lastModified);
             InventoryUtil.assignMetaChecksum(ret, metaChecksum);
             return ret;

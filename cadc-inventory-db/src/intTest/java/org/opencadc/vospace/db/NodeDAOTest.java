@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2022.                            (c) 2022.
+*  (c) 2023.                            (c) 2023.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -74,6 +74,8 @@ import ca.nrc.cadc.io.ResourceIterator;
 import ca.nrc.cadc.util.Log4jInit;
 import java.io.IOException;
 import java.net.URI;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.UUID;
@@ -167,7 +169,8 @@ public class NodeDAOTest {
     }
     
     @Test
-    public void testPutGetUpdateDeleteContainerNode() throws InterruptedException {
+    public void testPutGetUpdateDeleteContainerNode() throws InterruptedException,
+            NoSuchAlgorithmException {
         UUID rootID = new UUID(0L, 0L);
         ContainerNode root = new ContainerNode(rootID, "root", false);
         
@@ -180,16 +183,18 @@ public class NodeDAOTest {
         // get-by-id
         Node a = nodeDAO.get(orig.getID());
         Assert.assertNotNull(a);
-        log.info("found: "  + a.getID() + " aka " + a);
+        log.info("found by id: "  + a.getID() + " aka " + a);
         Assert.assertEquals(orig.getID(), a.getID());
         Assert.assertEquals(orig.getName(), a.getName());
+        Assert.assertEquals(root.getID(), a.parentID);
         
         // get-by-path
         Node aa = nodeDAO.get(root, orig.getName());
         Assert.assertNotNull(aa);
-        log.info("found: "  + aa.getID() + " aka " + aa);
+        log.info("found by path: "  + aa.getID() + " aka " + aa);
         Assert.assertEquals(orig.getID(), aa.getID());
         Assert.assertEquals(orig.getName(), aa.getName());
+        Assert.assertEquals(root.getID(), a.parentID);
         Assert.assertNotNull(aa.parent);
         Assert.assertEquals(root.getID(), aa.parent.getID());
         
@@ -209,6 +214,9 @@ public class NodeDAOTest {
         // these are set in put
         Assert.assertEquals(orig.getMetaChecksum(), a.getMetaChecksum());
         Assert.assertEquals(orig.getLastModified(), a.getLastModified());
+        
+        URI mcs = a.computeMetaChecksum(MessageDigest.getInstance("MD5"));
+        Assert.assertEquals("metaChecksum", a.getMetaChecksum(), mcs);
         
         // update
         Thread.sleep(10L);
@@ -244,7 +252,8 @@ public class NodeDAOTest {
     }
     
     @Test
-    public void testPutGetUpdateDeleteContainerNodeMax() throws InterruptedException {
+    public void testPutGetUpdateDeleteContainerNodeMax() throws InterruptedException,
+            NoSuchAlgorithmException {
         UUID rootID = new UUID(0L, 0L);
         ContainerNode root = new ContainerNode(rootID, "root", false);
         
@@ -274,18 +283,20 @@ public class NodeDAOTest {
         // get-by-id
         Node a = nodeDAO.get(orig.getID());
         Assert.assertNotNull(a);
-        log.info("found: "  + a.getID() + " aka " + a);
+        log.info("found by id: "  + a.getID() + " aka " + a);
         Assert.assertEquals(orig.getID(), a.getID());
         Assert.assertEquals(orig.getName(), a.getName());
+        Assert.assertEquals(root.getID(), a.parentID);
         
         // get-by-path
         Node aa = nodeDAO.get(root, orig.getName());
         Assert.assertNotNull(aa);
-        log.info("found: "  + aa.getID() + " aka " + aa);
+        log.info("found by path: "  + aa.getID() + " aka " + aa);
         Assert.assertEquals(orig.getID(), aa.getID());
         Assert.assertEquals(orig.getName(), aa.getName());
         Assert.assertNotNull(aa.parent);
         Assert.assertEquals(root.getID(), aa.parent.getID());
+        Assert.assertEquals(root.getID(), aa.parentID);
         
         Assert.assertNull(a.parent); // get-node-by-id: comes pack without parent
         Assert.assertEquals(orig.getName(), a.getName());
@@ -303,6 +314,9 @@ public class NodeDAOTest {
         // these are set in put
         Assert.assertEquals(orig.getMetaChecksum(), a.getMetaChecksum());
         Assert.assertEquals(orig.getLastModified(), a.getLastModified());
+        
+        URI mcs = a.computeMetaChecksum(MessageDigest.getInstance("MD5"));
+        Assert.assertEquals("metaChecksum", a.getMetaChecksum(), mcs);
         
         // update
         Thread.sleep(10L);
@@ -342,11 +356,12 @@ public class NodeDAOTest {
     }
     
     @Test
-    public void testPutGetUpdateDeleteDataNode() throws InterruptedException {
+    public void testPutGetUpdateDeleteDataNode() throws InterruptedException,
+            NoSuchAlgorithmException {
         UUID rootID = new UUID(0L, 0L);
         ContainerNode root = new ContainerNode(rootID, "root", false);
         
-        DataNode orig = new DataNode("data-test", URI.create("cadc:vault/" + UUID.randomUUID()));
+        DataNode orig = new DataNode(UUID.randomUUID(), "data-test", URI.create("cadc:vault/" + UUID.randomUUID()));
         orig.parent = root;
         orig.ownerID = "the-owner";
         orig.isPublic = true;
@@ -361,6 +376,8 @@ public class NodeDAOTest {
         log.info("found: "  + a.getID() + " aka " + a);
         Assert.assertEquals(orig.getID(), a.getID());
         Assert.assertEquals(orig.getName(), a.getName());
+        Assert.assertEquals(root.getID(), a.parentID);
+        Assert.assertEquals(root.getID(), a.parentID);
         
         // get-by-path
         Node aa = nodeDAO.get(root, orig.getName());
@@ -370,6 +387,7 @@ public class NodeDAOTest {
         Assert.assertEquals(orig.getName(), aa.getName());
         Assert.assertNotNull(aa.parent);
         Assert.assertEquals(root.getID(), aa.parent.getID());
+        Assert.assertEquals(root.getID(), aa.parentID);
         
         Assert.assertNull(a.parent); // get-node-by-id: comes pack without parent
         Assert.assertEquals(orig.getName(), a.getName());
@@ -382,11 +400,14 @@ public class NodeDAOTest {
         
         Assert.assertTrue(a instanceof DataNode);
         DataNode dn = (DataNode) a;
-        Assert.assertEquals(orig.getStorageID(), dn.getStorageID());
+        Assert.assertEquals(orig.storageID, dn.storageID);
         
         // these are set in put
         Assert.assertEquals(orig.getMetaChecksum(), a.getMetaChecksum());
         Assert.assertEquals(orig.getLastModified(), a.getLastModified());
+        
+        URI mcs = a.computeMetaChecksum(MessageDigest.getInstance("MD5"));
+        Assert.assertEquals("metaChecksum", a.getMetaChecksum(), mcs);
         
         // update
         Thread.sleep(10L);
@@ -419,7 +440,7 @@ public class NodeDAOTest {
         
         Assert.assertTrue(a instanceof DataNode);
         DataNode udn = (DataNode) updated;
-        Assert.assertEquals(orig.getStorageID(), udn.getStorageID());
+        Assert.assertEquals(orig.storageID, udn.storageID);
         
         nodeDAO.delete(orig.getID());
         Node gone = nodeDAO.get(orig.getID());
@@ -427,7 +448,8 @@ public class NodeDAOTest {
     }
     
     @Test
-    public void testPutGetUpdateDeleteLinkNode() throws InterruptedException {
+    public void testPutGetUpdateDeleteLinkNode() throws InterruptedException, 
+            NoSuchAlgorithmException {
         UUID rootID = new UUID(0L, 0L);
         ContainerNode root = new ContainerNode(rootID, "root", false);
         
@@ -447,6 +469,7 @@ public class NodeDAOTest {
         log.info("found: "  + a.getID() + " aka " + a);
         Assert.assertEquals(orig.getID(), a.getID());
         Assert.assertEquals(orig.getName(), a.getName());
+        Assert.assertEquals(root.getID(), a.parentID);
         
         // get-by-path
         Node aa = nodeDAO.get(root, orig.getName());
@@ -456,6 +479,7 @@ public class NodeDAOTest {
         Assert.assertEquals(orig.getName(), aa.getName());
         Assert.assertNotNull(aa.parent);
         Assert.assertEquals(root.getID(), aa.parent.getID());
+        Assert.assertEquals(root.getID(), aa.parentID);
         
         Assert.assertNull(a.parent); // get-node-by-id: comes pack without parent
         Assert.assertEquals(orig.getName(), a.getName());
@@ -473,6 +497,9 @@ public class NodeDAOTest {
         // these are set in put
         Assert.assertEquals(orig.getMetaChecksum(), a.getMetaChecksum());
         Assert.assertEquals(orig.getLastModified(), a.getLastModified());
+        
+        URI mcs = a.computeMetaChecksum(MessageDigest.getInstance("MD5"));
+        Assert.assertEquals("metaChecksum", a.getMetaChecksum(), mcs);
         
         // update
         Thread.sleep(10L);
@@ -550,7 +577,7 @@ public class NodeDAOTest {
         ContainerNode cont = new ContainerNode("container1", false);
         cont.parent = orig;
         cont.ownerID = orig.ownerID;
-        DataNode data = new DataNode("data1", URI.create("cadc:vault/" + UUID.randomUUID()));
+        DataNode data = new DataNode(UUID.randomUUID(), "data1", URI.create("cadc:vault/" + UUID.randomUUID()));
         data.parent = orig;
         data.ownerID = orig.ownerID;
         LinkNode link = new LinkNode("link1", URI.create("cadc:ARCHIVE/data"));

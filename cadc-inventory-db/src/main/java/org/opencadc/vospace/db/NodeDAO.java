@@ -93,6 +93,11 @@ public class NodeDAO extends AbstractDAO<Node> {
 
     @Override
     public void put(Node val) {
+        // TBD: caller can assign parent or parentID before put, but here we need 
+        // parentID and it must be assigned before metaChecksum compute in super.put()
+        if (val.parentID == null && val.parent != null) {
+            val.parentID = val.parent.getID();
+        }
         super.put(val);
     }
     
