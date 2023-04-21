@@ -1,8 +1,20 @@
-# Storage Inventory storage management service (vault)
+# Storage Inventory VOSpace-2.1 service (vault)
+
+The `vault` servcie is an implementation of the <a href="https://www.ivoa.net/documents/VOSpace/">IVOA VOSpace</a>
+specification designed to co-exist with other storage-inventory components. It provides a heirarchical data
+organization laye on top of the storage management of storage-inventory.
+
+The simplest configuration would be to deploy `vault` with `minoc` with a single metadata database and single
+back end storage system. Details: TBD.
+
+The other option would be to deploy `vault` with `raven` and `luskan` in a global inventory database and make
+use of one or more of the network of known storage sites to store files. Details: TBD.
 
 ## configuration
 See the [cadc-tomcat](https://github.com/opencadc/docker-base/tree/master/cadc-tomcat) image docs
-for expected deployment and general config requirements. The `vault` war file can be renamed
+for expected deployment and general config requirements. 
+
+The `vault` war file can be renamed
 at deployment time in order to support an alternate service name, including introducing 
 additional path elements (see war-rename.conf).
 
@@ -18,7 +30,7 @@ org.opencadc.vault.nodes.username={username for vospace pool}
 org.opencadc.vault.nodes.password={password for vospace pool}
 org.opencadc.vault.nodes.url=jdbc:postgresql://{server}/{database}
 ```
-The `nodes` account owns and manages (create, alter, drop) vault database objects and manages
+The `nodes` account owns and manages (create, alter, drop) vospace database objects and manages
 all the content (insert, update, delete). The database is specified in the JDBC URL and the schema name is specified 
 in the vault.properties (below). Failure to connect or initialize the database will show up in logs and in the 
 VOSI-availability output.
@@ -27,25 +39,47 @@ VOSI-availability output.
 A vault.properties file in /config is required to run this service.  The following keys are required:
 ```
 # service identity
-org.opencadc.vault.resourceID=ivo://{authority}/{name}
+org.opencadc.vault.resourceID = ivo://{authority}/{name}
 
 # vault database settings
-org.opencadc.vault.nodes.schema={schema name}
+org.opencadc.vault.inventory.schema = {inventory schema name}
+org.opencadc.vault.vospace.schema = {vospace schema name}
+
+# root container nodes
+org.opencadc.vault.root.owner = {owner of root node}
+
+# storage namespace
+org.opencadc.vault.storage.namespace = {a storage inventory namespace to use}
 ```
 The vault _resourceID_ is the resourceID of _this_ vault service.
 
-The nodes _schema_ name is the name of the database schema used for all created database objects (tables, indices, etc).
+The _inventory.schema_ name is the name of the database schema that contains the inventory database objects. The account nominally requires read-only (select) permission on those objects.
+
+The _vospace.schema_ name is the name of the database schema used for all created database objects (tables, indices, etc). Note that with a single connection pool, the two schemas must be in the same database and some operations may join tables
+in the two schemas (probably just vospace.node join inventory.artifact).
+
+The root node owner has full read and write permission in the root container, so it can create and delete container 
+nodes at the root and to assign container node properties that are normally read-only to normal users: owner, quota, 
+etc. This is probably an X509 distingushed name of the user (to start). TBD.
+
+The _namespace_ configures `vault` to use the specified namespace in storage-inventory to store files. This only
+applies to new data nodes that are created and will not effect previously created nodes and artifacts. Probably don't
+want to change this... prevent change?
 
 ### vault-availability.properties (optional)
 ```
-The vault-availability.properties file specifies which users have the authority to change the availability state of the vault service. Each entry consists of a key=value pair. The key is always "users". The value is the x500 canonical user name.
+The vault-availability.properties file specifies which users have the authority to change the availability state of 
+the vault service. Each entry consists of a key=value pair. The key is always "users". The value is the x500 canonical 
+user name.
 ```
 
 Example:
 ```
 users = {user identity}
 ```
-`users` specifies the user(s) who are authorized to make calls to the service. The value is a list of user identities (X500 distingushed name), one line per user. Optional: if the `vault-availability.properties` is not found or does not list any `users`, the service will function in the default mode (ReadWrite) and the state will not be changeable.
+`users` specifies the user(s) who are authorized to make calls to the service. The value is a list of user identities 
+(X500 distingushed name), one line per user. Optional: if the `vault-availability.properties` is not found or does not 
+list any `users`, the service will function in the default mode (ReadWrite) and the state will not be changeable.
 
 ## building it
 ```
