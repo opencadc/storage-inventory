@@ -1,6 +1,15 @@
 
-NodePersistenceImpl: review for necessary transactions and locks
+* NodePersistenceImpl: review for necessary transactions and locks
 
-NodePersistenceImpl: reconcile with NodePersistence API
+* NodePersistenceImpl: reconcile with NodePersistence API
 
+* files endpoint:
+- if coexist with minoc: generate pre-auth  URL to it and redirect
+- if coexist with raven: need raven ProtocolsGenerator
+
+* transfer negotiation: 
+- review cadc-vos-server and cavern implementations
+- probably a complete TransferRunner; maybe separate sync and async runners
+- if co-exist with minoc: generate pre-auth  URL to it
+- if co-exist with raven: need raven ProtocolsGenerator
 
