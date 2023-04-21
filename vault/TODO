@@ -1,0 +1,6 @@
+
+NodePersistenceImpl: review for necessary transactions and locks
+
+NodePersistenceImpl: reconcile with NodePersistence API
+
+

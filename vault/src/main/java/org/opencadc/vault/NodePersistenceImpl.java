@@ -69,16 +69,24 @@ package org.opencadc.vault;
 
 import ca.nrc.cadc.io.ResourceIterator;
 import ca.nrc.cadc.net.TransientException;
+import ca.nrc.cadc.util.MultiValuedProperties;
+import java.io.IOException;
+import java.net.URI;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
+import java.util.TreeSet;
+import java.util.UUID;
 import org.apache.log4j.Logger;
+import org.opencadc.inventory.Namespace;
 import org.opencadc.inventory.db.SQLGenerator;
 import org.opencadc.vospace.ContainerNode;
+import org.opencadc.vospace.DataNode;
 import org.opencadc.vospace.Node;
-import org.opencadc.vospace.NodeNotFoundException;
 import org.opencadc.vospace.NodeNotSupportedException;
 import org.opencadc.vospace.NodeProperty;
+import org.opencadc.vospace.VOS;
 import org.opencadc.vospace.db.NodeDAO;
 
 /**
@@ -89,12 +97,65 @@ public class NodePersistenceImpl { //implements NodePersistence {
     private static final Logger log = Logger.getLogger(NodePersistenceImpl.class);
 
     private final Map<String,Object> nodeDaoConfig = new TreeMap<>();
+    private final ContainerNode root;
+    private final ContainerNode trash;
+    private final Namespace storageNamespace;
+    private final Set<URI> nonWritableProps = new TreeSet<>();
+    private final Set<URI> rootAdminProps = new TreeSet<>();
+    private final Set<URI> directNodeProps = new TreeSet<>();
     
-    public NodePersistenceImpl(String dataSourceName, String inventorySchema, String vospaceSchema) {
+    public NodePersistenceImpl() {
+        MultiValuedProperties config = VaultInitAction.getConfig();
+        String dataSourceName = VaultInitAction.JNDI_DATASOURCE;
+        String inventorySchema = config.getFirstPropertyValue(VaultInitAction.INVENTORY_SCHEMA_KEY);
+        String vospaceSchema = config.getFirstPropertyValue(VaultInitAction.VOSPACE_SCHEMA_KEY);
         nodeDaoConfig.put(SQLGenerator.class.getName(), SQLGenerator.class);
         nodeDaoConfig.put("jndiDataSourceName", dataSourceName);
         nodeDaoConfig.put("schema", inventorySchema);
         nodeDaoConfig.put("vosSchema", vospaceSchema);
+        
+        
+        UUID rootID = new UUID(0L, 0L);
+        this.root = new ContainerNode(rootID, "", false);
+        String owner = config.getFirstPropertyValue(VaultInitAction.ROOT_OWNER);
+        //root.owner = ?? // subject needed to authorize admin requests
+        //root.ownerID not needed
+        
+        // TODO: do this setup in a txn with a lock on something
+        NodeDAO dao = getDAO();
+        ContainerNode tn = (ContainerNode) dao.get(root, ".trash");
+        if (tn == null) {
+            tn = new ContainerNode(".trash", false);
+            tn.ownerID = root.ownerID;
+            tn.owner = root.owner;
+            tn.isPublic = false;
+            dao.put(tn);
+        }
+        this.trash = tn;
+        
+        String ns = config.getFirstPropertyValue(VaultInitAction.STORAGE_NAMESPACE_KEY);
+        this.storageNamespace = new Namespace(ns);
+
+        // node properties that match immutable Artifact fields
+        nonWritableProps.add(VOS.PROPERTY_URI_CONTENTLENGTH); // data nodes
+        nonWritableProps.add(VOS.PROPERTY_URI_CONTENTMD5);    // data nodes
+        nonWritableProps.add(VOS.PROPERTY_URI_CREATION_DATE); // no touch
+        
+        // computed properties
+        nonWritableProps.add(VOS.PROPERTY_URI_WRITABLE);  // prediction for current caller 
+        
+        // props only the root admin can modify
+        rootAdminProps.add(VOS.PROPERTY_URI_AVAILABLESPACE);
+        rootAdminProps.add(VOS.PROPERTY_URI_CONTENTLENGTH); // container nodes
+        rootAdminProps.add(VOS.PROPERTY_URI_QUOTA);
+        rootAdminProps.add(VOS.PROPERTY_URI_CREATOR); // owner
+        
+        // props that are stored as Node fields
+        directNodeProps.add(VOS.PROPERTY_URI_GROUPREAD);
+        directNodeProps.add(VOS.PROPERTY_URI_GROUPWRITE);
+        directNodeProps.add(VOS.PROPERTY_URI_INHERIT_PERMISSIONS);
+        directNodeProps.add(VOS.PROPERTY_URI_ISLOCKED);
+        directNodeProps.add(VOS.PROPERTY_URI_ISPUBLIC);
         
     }
     
@@ -103,16 +164,41 @@ public class NodePersistenceImpl { //implements NodePersistence {
         instance.setConfig(nodeDaoConfig);
         return instance;
     }
+    
+    private URI generateStorageID() {
+        UUID id = UUID.randomUUID();
+        URI ret = URI.create(storageNamespace.getNamespace() + id.toString());
+        return ret;
+    }
 
     /**
-     * Get a node by name.
+     * Get the container node that represents the root of all other nodes. 
+     * This container node is used to navigate a path (from the root) using
+     * <code>get(ContainerNode parent, String name)</code>.
+     * 
+     * @return the root container node
+     */
+    public ContainerNode getRootNode() {
+        return root;
+    }
+    
+    /**
+     * Get a node by name. Concept: The caller uses this to navigate the path from the root
+     * node to the target, checking permissions and deciding what to do about 
+     * LinkNode(s) along the way.
+     * 
      * @param parent parent node, may be special root node but not null
      * @param name relative name of the child node
      * @return the child node or null if it does not exist
      * @throws TransientException 
      */
     public Node get(ContainerNode parent, String name) throws TransientException {
-        throw new UnsupportedOperationException();
+        if (parent == null || name == null) {
+            throw new IllegalArgumentException("args cannot be null: parent, name");
+        }
+        NodeDAO dao = getDAO();
+        Node ret = dao.get(parent, name);
+        return ret;
     }
 
     /**
@@ -127,7 +213,12 @@ public class NodePersistenceImpl { //implements NodePersistence {
      * @return iterator of matching child nodes, may be empty
      */
     public ResourceIterator<Node> iterator(ContainerNode parent, Integer limit, String start) {
-        throw new UnsupportedOperationException();
+        if (parent == null) {
+            throw new IllegalArgumentException("arg cannot be null: parent");
+        }
+        NodeDAO dao = getDAO();
+        ResourceIterator<Node> ret = dao.iterator(parent, limit, start);
+        return ret;
     }
 
     /**
@@ -153,20 +244,86 @@ public class NodePersistenceImpl { //implements NodePersistence {
      * @throws TransientException 
      */
     public Node put(Node node) throws NodeNotSupportedException, TransientException {
-        // TODO: assign node.parentID here and remove from NodeDAO?
-        // TODO: assign DataNode.storageID here -- only when null aka new DataNode?
-        throw new UnsupportedOperationException();
+        if (node == null) {
+            throw new IllegalArgumentException("arg cannot be null: node");
+        }
+        if (node.parentID == null) {
+            if (node.parent == null) {
+                throw new RuntimeException("BUG: cannot persist node without parent: " + node);
+            }
+            node.parentID = node.parent.getID();
+        }
+        if (node instanceof DataNode) {
+            DataNode dn = (DataNode) node;
+            if (dn.storageID == null) {
+                // new data node? if lastModified is assigned, this looks sketchy
+                if (dn.getLastModified() != null) {
+                    throw new RuntimeException(
+                        "BUG: attempt to put a previously stored DataNode without persistent storageID: "
+                            + dn.getID() + " aka " + dn);
+                }
+                // concept: use a persistent storageID in the node that resolves to a a file
+                // once someone puts the file to minoc, so Node.storageID == Artifact.uri
+                // but the artifact may or may not exist
+                dn.storageID = generateStorageID();
+            }
+        }
+        NodeDAO dao = getDAO();
+        dao.put(node);
+        return node;
     }
 
     /**
-     * This can be done via put(Node) so probably obsolete. TBD.
-     * @param node
-     * @param list
-     * @return
+     * Update properties of a node. This method is responsible for accepting/rejecting changes
+     * based on whether a node property is read-only or writable by the caller (implementation
+     * specific).
+     * 
+     * @param node the node to update
+     * @param props new property values to set
+     * @return the modified node
      * @throws TransientException 
      */
-    public Node updateProperties(Node node, List<NodeProperty> list) throws TransientException {
-        throw new UnsupportedOperationException();
+    public Node updateProperties(Node node, List<NodeProperty> props) throws TransientException {
+        if (node == null || props == null) {
+            throw new IllegalArgumentException("args cannot be null: node, props");
+        }
+        
+        // merge props -> node and/or node.properties
+        for (NodeProperty np : props) {
+            if (nonWritableProps.contains(np.getKey())) {
+                log.debug("updateProperties: skip " + np.getKey());
+            } else {
+                // some props only root admin can modify
+                if (rootAdminProps.contains(np.getKey())) {
+                    throw new UnsupportedOperationException("TODO: allow admin to modify prop: " + np.getKey());
+                }
+                
+                // some props are directly in the node
+                if (VOS.PROPERTY_URI_FORMAT.equals(np.getKey())
+                        || VOS.PROPERTY_URI_CONTENTENCODING.equals(np.getKey())) {
+                    throw new UnsupportedOperationException("TODO: set mutable artifact prop: " + np.getKey());
+                }
+
+                // some props are directly in the artifact
+                if (directNodeProps.contains(np.getKey())) {
+                    throw new UnsupportedOperationException("TODO: set mutable node prop: " + np.getKey());
+                }
+                
+                // generic key-value props
+                if (node.properties.contains(np)) {
+                    log.debug("updateProperties: remove previous " + np.getKey());
+                    node.properties.remove(np);
+                }
+                if (!np.isMarkedForDeletion()) {
+                    node.properties.add(np);
+                }
+            }
+        }
+        
+        NodeDAO dao = getDAO();
+        dao.put(node);
+        return node;
+        
     }
 
     /**
@@ -176,7 +333,29 @@ public class NodePersistenceImpl { //implements NodePersistence {
      * @throws TransientException 
      */
     public void delete(Node node) throws TransientException {
-        throw new UnsupportedOperationException();
+        if (node == null) {
+            throw new IllegalArgumentException("arg cannot be null: node");
+        }
+        
+        NodeDAO dao = getDAO();
+        boolean moveToTrash = false;
+        if (node instanceof ContainerNode) {
+            ContainerNode cn = (ContainerNode) node;
+            try (ResourceIterator<Node> iter = dao.iterator(cn, 1, null)) {
+                moveToTrash = !iter.hasNext();
+            } catch (IOException ex) {
+                throw new TransientException("database IO failure", ex);
+            }
+        }
+        
+        // TODO: DeletedNodeEvent
+        if (moveToTrash) {
+            node.parentID = trash.getID();
+            dao.put(node);
+        } else {
+            dao.delete(node.getID());
+        }
+        
     }
 
 }
