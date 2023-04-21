@@ -68,15 +68,12 @@
 package org.opencadc.vospace.db;
 
 import ca.nrc.cadc.io.ResourceIterator;
-import java.io.IOException;
 import java.util.UUID;
 import org.apache.log4j.Logger;
-import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.db.AbstractDAO;
 import org.opencadc.inventory.db.SQLGenerator;
 import org.opencadc.vospace.ContainerNode;
 import org.opencadc.vospace.Node;
-import org.opencadc.vospace.VOSURI;
 import org.springframework.jdbc.BadSqlGrammarException;
 import org.springframework.jdbc.core.JdbcTemplate;
 
@@ -128,11 +125,7 @@ public class NodeDAO extends AbstractDAO<Node> {
         super.delete(Node.class, id);
     }
     
-    public ResourceIterator<Node> iterator(ContainerNode parent) {
-        return NodeDAO.this.iterator(parent, null, null);
-    }
-    
-    public ResourceIterator<Node> iterator(ContainerNode parent, String start, Integer limit) {
+    public ResourceIterator<Node> iterator(ContainerNode parent, Integer limit, String start) {
         if (parent == null) {
             throw new IllegalArgumentException("childIterator: parent cannot be null");
         }

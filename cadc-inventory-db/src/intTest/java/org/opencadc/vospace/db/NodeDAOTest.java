@@ -559,13 +559,13 @@ public class NodeDAOTest {
         // these are set in put
         Assert.assertEquals(orig.getMetaChecksum(), a.getMetaChecksum());
         Assert.assertEquals(orig.getLastModified(), a.getLastModified());
-        try (ResourceIterator<Node> emptyIter = nodeDAO.iterator(orig)) {
+        try (ResourceIterator<Node> emptyIter = nodeDAO.iterator(orig, null, null)) {
             Assert.assertNotNull(emptyIter);
             Assert.assertFalse(emptyIter.hasNext());
         } // auto-close
         
         Node top = null;
-        try (ResourceIterator<Node> rootIter = nodeDAO.iterator(root)) {
+        try (ResourceIterator<Node> rootIter = nodeDAO.iterator(root, null, null)) {
             if (rootIter.hasNext()) {
                 top = rootIter.next();
             }
@@ -593,7 +593,7 @@ public class NodeDAOTest {
         Node c1;
         Node c2;
         Node c3;
-        try (ResourceIterator<Node> iter = nodeDAO.iterator(orig)) {
+        try (ResourceIterator<Node> iter = nodeDAO.iterator(orig, null, null)) {
             Assert.assertNotNull(iter);
             Assert.assertTrue(iter.hasNext());
             c1 = iter.next();
