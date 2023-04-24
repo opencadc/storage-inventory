@@ -194,6 +194,10 @@ public class RavenInitAction extends InitAction {
         log.info("initKeys: START");
         String pubkeyFileName = props.getFirstPropertyValue(RavenInitAction.PUBKEYFILE_KEY);
         String privkeyFileName = props.getFirstPropertyValue(RavenInitAction.PRIVKEYFILE_KEY);
+        if (pubkeyFileName == null && privkeyFileName == null) {
+            log.info("initKeys: disabled OK");
+            return;
+        }
         File publicKeyFile = new File(System.getProperty("user.home") + "/config/" + pubkeyFileName);
         File privateKeyFile = new File(System.getProperty("user.home") + "/config/" + privkeyFileName);
         if (!publicKeyFile.exists() || !privateKeyFile.exists()) {
@@ -263,24 +267,6 @@ public class RavenInitAction extends InitAction {
             sb.append("OK");
         }
 
-        String pub = mvp.getFirstPropertyValue(RavenInitAction.PUBKEYFILE_KEY);
-        sb.append("\n\t").append(RavenInitAction.PUBKEYFILE_KEY).append(": ");
-        if (pub == null) {
-            sb.append("MISSING");
-            ok = false;
-        } else {
-            sb.append("OK");
-        }
-
-        String priv = mvp.getFirstPropertyValue(RavenInitAction.PRIVKEYFILE_KEY);
-        sb.append("\n\t").append(RavenInitAction.PRIVKEYFILE_KEY).append(": ");
-        if (priv == null) {
-            sb.append("MISSING");
-            ok = false;
-        } else {
-            sb.append("OK");
-        }
-
         String preventNotFound = mvp.getFirstPropertyValue(RavenInitAction.PREVENT_NOT_FOUND_KEY);
         sb.append("\n\t").append(RavenInitAction.PREVENT_NOT_FOUND_KEY).append(": ");
         if (preventNotFound == null) {
@@ -290,6 +276,24 @@ public class RavenInitAction extends InitAction {
             sb.append("OK");
         }
 
+        // optional
+        String pub = mvp.getFirstPropertyValue(RavenInitAction.PUBKEYFILE_KEY);
+        sb.append("\n\t").append(RavenInitAction.PUBKEYFILE_KEY).append(": ");
+        if (pub == null) {
+            sb.append("MISSING");
+        } else {
+            sb.append("OK");
+        }
+
+        String priv = mvp.getFirstPropertyValue(RavenInitAction.PRIVKEYFILE_KEY);
+        sb.append("\n\t").append(RavenInitAction.PRIVKEYFILE_KEY).append(": ");
+        if (priv == null) {
+            sb.append("MISSING");
+        } else {
+            sb.append("OK");
+        }
+
+        
         if (!ok) {
             throw new IllegalStateException(sb.toString());
         }
