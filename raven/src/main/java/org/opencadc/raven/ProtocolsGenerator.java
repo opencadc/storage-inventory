@@ -150,13 +150,15 @@ public class ProtocolsGenerator {
 
     List<Protocol> getProtocols(Transfer transfer) throws ResourceNotFoundException, IOException {
         String authToken = null;
-        // create an auth token
         URI artifactURI = transfer.getTargets().get(0); // see PostAction line ~127
-        TokenTool tk = new TokenTool(publicKeyFile, privateKeyFile);
-        if (transfer.getDirection().equals(Direction.pullFromVoSpace)) {
-            authToken = tk.generateToken(artifactURI, ReadGrant.class, user);
-        } else {
-            authToken = tk.generateToken(artifactURI, WriteGrant.class, user);
+        if (publicKeyFile != null && privateKeyFile != null) {
+            // create an auth token
+            TokenTool tk = new TokenTool(publicKeyFile, privateKeyFile);
+            if (transfer.getDirection().equals(Direction.pullFromVoSpace)) {
+                authToken = tk.generateToken(artifactURI, ReadGrant.class, user);
+            } else {
+                authToken = tk.generateToken(artifactURI, WriteGrant.class, user);
+            }
         }
 
         List<Protocol> protos = null;
