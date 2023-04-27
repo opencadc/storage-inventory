@@ -177,16 +177,22 @@ public abstract class ArtifactAction extends RestAction {
         initResolver();
 
         // technically, raven only needs the private key to generate pre-auth tokens
-        // but both are requied here for clarity
+        // but both are specified here for clarity
         // - in principle, raven could export it's public key and minoc(s) could retrieve it
         // - for now, minoc(s) need to be configured with the public key to validate pre-auth
 
         String pubkeyFileName = props.getFirstPropertyValue(RavenInitAction.PUBKEYFILE_KEY);
         String privkeyFileName = props.getFirstPropertyValue(RavenInitAction.PRIVKEYFILE_KEY);
-        this.publicKeyFile = new File(System.getProperty("user.home") + "/config/" + pubkeyFileName);
-        this.privateKeyFile = new File(System.getProperty("user.home") + "/config/" + privkeyFileName);
-        if (!publicKeyFile.exists() || !privateKeyFile.exists()) {
-            throw new IllegalStateException("invalid config: missing public/private key pair files -- " + publicKeyFile + " | " + privateKeyFile);
+        if (pubkeyFileName == null && privkeyFileName == null) {
+            log.debug("public/private key preauth not enabled by config");
+            this.publicKeyFile = null;
+            this.privateKeyFile = null;
+        } else {
+            this.publicKeyFile = new File(System.getProperty("user.home") + "/config/" + pubkeyFileName);
+            this.privateKeyFile = new File(System.getProperty("user.home") + "/config/" + privkeyFileName);
+            if (!publicKeyFile.exists() || !privateKeyFile.exists()) {
+                throw new IllegalStateException("invalid config: missing public/private key pair files -- " + publicKeyFile + " | " + privateKeyFile);
+            }
         }
 
         Map<String, Object> config = RavenInitAction.getDaoConfig(props);
