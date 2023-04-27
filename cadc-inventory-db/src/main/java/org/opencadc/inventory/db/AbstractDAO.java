@@ -86,8 +86,8 @@ import java.util.UUID;
 import javax.naming.NamingException;
 import javax.sql.DataSource;
 import org.apache.log4j.Logger;
-import org.opencadc.inventory.Entity;
 import org.opencadc.inventory.InventoryUtil;
+import org.opencadc.persist.Entity;
 import org.springframework.jdbc.BadSqlGrammarException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
@@ -168,7 +168,7 @@ public abstract class AbstractDAO<T extends Entity> {
         return dataSource;
     }
 
-    SQLGenerator getSQLGenerator() {
+    public SQLGenerator getSQLGenerator() {
         checkInit();
         return gen;
     }
@@ -191,6 +191,7 @@ public abstract class AbstractDAO<T extends Entity> {
         ret.put("jndiDataSourceName", String.class);
         ret.put("database", String.class);
         ret.put("schema", String.class);
+        ret.put("vosSchema", String.class); // optional
         ret.put(SQLGenerator.class.getName(), Class.class);
         return ret;
     }
@@ -224,9 +225,10 @@ public abstract class AbstractDAO<T extends Entity> {
 
         String database = (String) config.get("database");
         String schema = (String) config.get("schema");
+        String vosSchema = (String) config.get("vosSchema");
         try {
-            Constructor<?> ctor = genClass.getConstructor(String.class, String.class);
-            this.gen = (SQLGenerator) ctor.newInstance(database, schema);
+            Constructor<?> ctor = genClass.getConstructor(String.class, String.class, String.class);
+            this.gen = (SQLGenerator) ctor.newInstance(database, schema, vosSchema);
         } catch (Exception ex) {
             throw new RuntimeException("failed to instantiate SQLGenerator: " + genClass.getName(), ex);
         }

@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2019.                            (c) 2019.
+*  (c) 2023.                            (c) 2023.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -65,21 +65,49 @@
 ************************************************************************
 */
 
-package org.opencadc.inventory.db;
+package org.opencadc.vospace.db;
 
-import java.util.UUID;
-import org.opencadc.persist.Entity;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.core.PreparedStatementCreator;
+import java.net.URL;
+import javax.sql.DataSource;
+import org.apache.log4j.Logger;
+import org.opencadc.inventory.db.version.InitDatabase;
 
 /**
  *
  * @author pdowler
- * @param <T> entity subclass
  */
-interface EntityGet<T extends Entity> extends PreparedStatementCreator {
+public class InitDatabaseVOS extends ca.nrc.cadc.db.version.InitDatabase {
+    private static final Logger log = Logger.getLogger(InitDatabaseVOS.class);
+
+    public static final String MODEL_NAME = "vospace-inventory";
+    public static final String MODEL_VERSION = "0.1";
+    public static final String PREV_MODEL_VERSION = "n/a";
+    //public static final String PREV_MODEL_VERSION = "DO-NOT_UPGRADE-BY-ACCIDENT";
     
-    T execute(JdbcTemplate jdbc);
+    static String[] CREATE_SQL = new String[] {
+        "vos.ModelVersion.sql",
+        "vos.Node.sql",
+        "vos.DeletedNodeEvent.sql",
+        "inventory.permissions.sql"
+    };
     
-    void setID(UUID id);
+    static String[] UPGRADE_SQL = new String[] {
+        "inventory.permissions.sql"
+    };
+    
+    public InitDatabaseVOS(DataSource ds, String database, String schema) { 
+        super(ds, database, schema, MODEL_NAME, MODEL_VERSION, PREV_MODEL_VERSION);
+        for (String s : CREATE_SQL) {
+            createSQL.add(s);
+        }
+        for (String s : UPGRADE_SQL) {
+            upgradeSQL.add(s);
+        }
+    }
+
+    @Override
+    protected URL findSQL(String fname) {
+        // SQL files are stored inside the jar file
+        return InitDatabase.class.getClassLoader().getResource(fname);
+    }
 }

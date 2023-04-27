@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2019.                            (c) 2019.
+*  (c) 2023.                            (c) 2023.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -65,21 +65,87 @@
 ************************************************************************
 */
 
-package org.opencadc.inventory.db;
+package org.opencadc.vospace.db;
 
+import ca.nrc.cadc.io.ResourceIterator;
 import java.util.UUID;
-import org.opencadc.persist.Entity;
+import org.apache.log4j.Logger;
+import org.opencadc.inventory.db.AbstractDAO;
+import org.opencadc.inventory.db.SQLGenerator;
+import org.opencadc.vospace.ContainerNode;
+import org.opencadc.vospace.Node;
+import org.springframework.jdbc.BadSqlGrammarException;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.core.PreparedStatementCreator;
 
 /**
  *
  * @author pdowler
- * @param <T> entity subclass
  */
-interface EntityGet<T extends Entity> extends PreparedStatementCreator {
+public class NodeDAO extends AbstractDAO<Node> {
+    private static final Logger log = Logger.getLogger(NodeDAO.class);
+
+    public NodeDAO() {
+        super(true);
+    }
+
+    @Override
+    public void put(Node val) {
+        // TBD: caller can assign parent or parentID before put, but here we need 
+        // parentID and it must be assigned before metaChecksum compute in super.put()
+        if (val.parentID == null && val.parent != null) {
+            val.parentID = val.parent.getID();
+        }
+        super.put(val);
+    }
     
-    T execute(JdbcTemplate jdbc);
+    public Node get(UUID id) {
+        return super.get(Node.class, id);
+    }
     
-    void setID(UUID id);
+    public Node get(ContainerNode parent, String name) {
+        checkInit();
+        log.debug("GET: " + parent.getID() + " + " + name);
+        long t = System.currentTimeMillis();
+
+        try {
+            JdbcTemplate jdbc = new JdbcTemplate(dataSource);
+            SQLGenerator.NodeGet get = (SQLGenerator.NodeGet) gen.getEntityGet(Node.class);
+            get.setPath(parent, name);
+            return get.execute(jdbc);
+        } catch (BadSqlGrammarException ex) {
+            handleInternalFail(ex);
+        } finally {
+            long dt = System.currentTimeMillis() - t;
+            log.debug("GET: " + parent.getID() + " + " + name + " " + dt + "ms");
+        }
+        throw new RuntimeException("BUG: handleInternalFail did not throw");
+    }
+    
+    public void delete(UUID id) {
+        super.delete(Node.class, id);
+    }
+    
+    public ResourceIterator<Node> iterator(ContainerNode parent, Integer limit, String start) {
+        if (parent == null) {
+            throw new IllegalArgumentException("childIterator: parent cannot be null");
+        }
+        log.debug("iterator: " + parent.getID());
+        
+        checkInit();
+        long t = System.currentTimeMillis();
+        
+        try {
+            SQLGenerator.NodeIteratorQuery iter = (SQLGenerator.NodeIteratorQuery) gen.getEntityIteratorQuery(Node.class);
+            iter.setParent(parent);
+            iter.setStart(start);
+            iter.setLimit(limit);
+            return iter.query(dataSource);
+        } catch (BadSqlGrammarException ex) {
+            handleInternalFail(ex);
+        } finally {
+            long dt = System.currentTimeMillis() - t;
+            log.debug("iterator: " + parent.getID() + " " + dt + "ms");
+        }
+        throw new RuntimeException("BUG: should be unreachable");
+    }
 }

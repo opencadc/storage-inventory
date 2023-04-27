@@ -69,7 +69,7 @@
 
 package org.opencadc.inventory.db;
 
-import org.opencadc.inventory.Entity;
+import org.opencadc.persist.Entity;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.PreparedStatementCreator;
 

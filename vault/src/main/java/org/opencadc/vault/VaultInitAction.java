@@ -77,6 +77,8 @@ import java.util.Map;
 import java.util.TreeMap;
 import javax.sql.DataSource;
 import org.apache.log4j.Logger;
+import org.opencadc.inventory.Namespace;
+import org.opencadc.vospace.db.InitDatabaseVOS;
 
 /**
  *
@@ -90,10 +92,16 @@ public class VaultInitAction extends InitAction {
     // config keys
     private static final String VAULT_KEY = "org.opencadc.vault";
     static final String RESOURCE_ID_KEY = VAULT_KEY + ".resourceID";
-    static final String SCHEMA_KEY = VAULT_KEY + ".nodes.schema";
+    static final String INVENTORY_SCHEMA_KEY = VAULT_KEY + ".inventory.schema";
+    static final String VOSPACE_SCHEMA_KEY = VAULT_KEY + ".vospace.schema";
+    
+    static final String ROOT_OWNER = VAULT_KEY + ".root.owner"; // numeric?
+    
+    static final String STORAGE_NAMESPACE_KEY = VAULT_KEY + ".storage.namespace";
     
     MultiValuedProperties props;
     private URI resourceID;
+    private Namespace storageNamespace;
     private Map<String,Object> daoConfig;
 
     public VaultInitAction() {
@@ -129,15 +137,33 @@ public class VaultInitAction extends InitAction {
             sb.append("OK");
         }
 
-        String schema = mvp.getFirstPropertyValue(SCHEMA_KEY);
-        sb.append("\n\t").append(SCHEMA_KEY).append(": ");
-        if (schema == null) {
+        String invSchema = mvp.getFirstPropertyValue(INVENTORY_SCHEMA_KEY);
+        sb.append("\n\t").append(INVENTORY_SCHEMA_KEY).append(": ");
+        if (invSchema == null) {
             sb.append("MISSING");
             ok = false;
         } else {
             sb.append("OK");
         }
-
+        
+        String vosSchema = mvp.getFirstPropertyValue(VOSPACE_SCHEMA_KEY);
+        sb.append("\n\t").append(VOSPACE_SCHEMA_KEY).append(": ");
+        if (vosSchema == null) {
+            sb.append("MISSING");
+            ok = false;
+        } else {
+            sb.append("OK");
+        }
+        
+        String ns = mvp.getFirstPropertyValue(STORAGE_NAMESPACE_KEY);
+        sb.append("\n\t").append(STORAGE_NAMESPACE_KEY).append(": ");
+        if (ns == null) {
+            sb.append("MISSING");
+            ok = false;
+        } else {
+            sb.append("OK");
+        }
+        
         if (!ok) {
             throw new IllegalStateException(sb.toString());
         }
@@ -148,7 +174,8 @@ public class VaultInitAction extends InitAction {
     static Map<String,Object> getDaoConfig(MultiValuedProperties props) {
         Map<String, Object> ret = new TreeMap<>();
         ret.put("jndiDataSourceName", org.opencadc.vault.VaultInitAction.JNDI_DATASOURCE);
-        ret.put("schema", props.getFirstPropertyValue(org.opencadc.vault.VaultInitAction.SCHEMA_KEY));
+        ret.put("schema", props.getFirstPropertyValue(org.opencadc.vault.VaultInitAction.INVENTORY_SCHEMA_KEY));
+        ret.put("vosSchema", props.getFirstPropertyValue(org.opencadc.vault.VaultInitAction.VOSPACE_SCHEMA_KEY));
         return ret;
     }
     
@@ -156,9 +183,10 @@ public class VaultInitAction extends InitAction {
         log.info("initConfig: START");
         this.props = getConfig();
         String rid = props.getFirstPropertyValue(RESOURCE_ID_KEY);
-        
+        String ns = props.getFirstPropertyValue(STORAGE_NAMESPACE_KEY);
         try {
             this.resourceID = new URI(rid);
+            this.storageNamespace = new Namespace(ns);
             this.daoConfig = getDaoConfig(props);
             log.info("initConfig: OK");
         } catch (URISyntaxException ex) {
@@ -170,10 +198,9 @@ public class VaultInitAction extends InitAction {
         log.info("initDatabase: START");
         try {
             DataSource ds = DBUtil.findJNDIDataSource(JNDI_DATASOURCE);
-            String database = (String) daoConfig.get("database");
-            String schema = (String) daoConfig.get("schema");
-            //VaultInitDatabase init = new VaultInitDatabase(ds, database, schema);
-            //init.doInit();
+            String schema = (String) daoConfig.get("vosSchema");
+            InitDatabaseVOS init = new InitDatabaseVOS(ds, null, schema);
+            init.doInit();
             log.info("initDatabase: " + JNDI_DATASOURCE + " " + schema + " OK");
         } catch (Exception ex) {
             throw new IllegalStateException("check/init database failed", ex);

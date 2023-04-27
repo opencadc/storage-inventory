@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2022.                            (c) 2022.
+*  (c) 2023.                            (c) 2023.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -72,6 +72,8 @@ import ca.nrc.cadc.io.ResourceIterator;
 import ca.nrc.cadc.util.StringUtil;
 import java.io.IOException;
 import java.net.URI;
+import java.net.URISyntaxException;
+import java.sql.Array;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -81,9 +83,11 @@ import java.sql.Types;
 import java.util.Calendar;
 import java.util.Comparator;
 import java.util.Date;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.StringTokenizer;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.UUID;
@@ -92,13 +96,20 @@ import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.DeletedArtifactEvent;
 import org.opencadc.inventory.DeletedStorageLocationEvent;
-import org.opencadc.inventory.Entity;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.ObsoleteStorageLocation;
 import org.opencadc.inventory.SiteLocation;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.StorageLocationEvent;
 import org.opencadc.inventory.StorageSite;
+import org.opencadc.persist.Entity;
+import org.opencadc.vospace.ContainerNode;
+import org.opencadc.vospace.DataNode;
+import org.opencadc.vospace.DeletedNodeEvent;
+import org.opencadc.vospace.LinkNode;
+import org.opencadc.vospace.Node;
+import org.opencadc.vospace.NodeProperty;
+import org.opencadc.vospace.VOS;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.ResultSetExtractor;
@@ -111,11 +122,12 @@ import org.springframework.jdbc.core.RowMapper;
 public class SQLGenerator {
     private static final Logger log = Logger.getLogger(SQLGenerator.class);
 
-    private final Map<Class,String> tableMap = new TreeMap<Class,String>(new ClassComp());
-    private final Map<Class,String[]> columnMap = new TreeMap<Class,String[]>(new ClassComp());
+    private final Map<Class,String> tableMap = new TreeMap<>(new ClassComp());
+    private final Map<Class,String[]> columnMap = new TreeMap<>(new ClassComp());
     
     protected final String database; // currently not used in SQL
     protected final String schema; // may be null
+    protected final String vosSchema;
     
     /**
      * Constructor. The database name is currently not used in any generated SQL; code assumes
@@ -129,8 +141,13 @@ public class SQLGenerator {
      * @param schema schema name (may be null)
      */
     public SQLGenerator(String database, String schema) { 
+        this(database, schema, null);
+    }
+    
+    public SQLGenerator(String database, String schema, String vosSchema) { 
         this.database = database;
         this.schema = schema;
+        this.vosSchema = vosSchema;
         init();
     }
     
@@ -203,6 +220,43 @@ public class SQLGenerator {
             "id" // last column is always PK
         };
         this.columnMap.put(HarvestState.class, cols);
+        
+        // optional vospace
+        log.warn("vosSchema: " + vosSchema);
+        if (vosSchema != null) {
+            pref = vosSchema + ".";
+            tableMap.put(Node.class, pref + Node.class.getSimpleName());
+            tableMap.put(DeletedNodeEvent.class, pref + DeletedNodeEvent.class.getSimpleName());
+            
+            cols = new String[] {
+                "parentID",
+                "name",
+                "nodeType",
+                "ownerID",
+                "isPublic",
+                "isLocked",
+                "readOnlyGroups",
+                "readWriteGroups",
+                "properties",
+                "inheritPermissions",
+                "busy",
+                "storageID",
+                "target",
+                "lastModified",
+                "metaChecksum",
+                "id" // last column is always PK
+            };
+            this.columnMap.put(Node.class, cols);
+            
+            cols = new String[] {
+                "nodeType",
+                "storageID",
+                "lastModified",
+                "metaChecksum",
+                "id" // last column is always PK
+            };
+            this.columnMap.put(DeletedNodeEvent.class, cols);
+        }
     }
     
     private static class ClassComp implements Comparator<Class> {
@@ -218,9 +272,28 @@ public class SQLGenerator {
         return "SELECT now()";
     }
     
-    // test usage
-    String getTable(Class c) {
-        return tableMap.get(c);
+    public String getTable(Class c) {
+        Class targetClass = c;
+        String ret = tableMap.get(targetClass);
+        if (ret == null) {
+            // enable finding a common table that stores subclass instances
+            targetClass = targetClass.getSuperclass();
+            ret = tableMap.get(targetClass);
+        }
+        log.debug("table: " + c.getSimpleName() + " -> " + targetClass.getSimpleName() + " -> " + ret);
+        return ret;
+    }
+    
+    private String[] getColumns(Class c) {
+        Class targetClass = c;
+        String[] ret = columnMap.get(targetClass);
+        if (ret == null) {
+            // enable finding a common table that stores subclass instances
+            targetClass = targetClass.getSuperclass();
+            ret = columnMap.get(targetClass);
+        }
+        log.debug("columns: " + c.getSimpleName() + " -> " + targetClass.getSimpleName() + " -> " + (ret == null ? null : ret.length));
+        return ret;
     }
     
     public EntityGet<? extends Entity> getEntityGet(Class c) {
@@ -233,6 +306,13 @@ public class SQLGenerator {
         }
         if (StorageSite.class.equals(c)) {
             return new StorageSiteGet(forUpdate);
+        }
+        
+        if (Node.class.equals(c) || Node.class.isInstance(c)) {
+            return new NodeGet(forUpdate);
+        }
+        if (DeletedNodeEvent.class.equals(c)) {
+            //return new DeletedNodeGet();
         }
         
         if (forUpdate) {
@@ -254,6 +334,7 @@ public class SQLGenerator {
         if (HarvestState.class.equals(c)) {
             return new HarvestStateGet();
         }
+        
         throw new UnsupportedOperationException("entity-get: " + c.getName());
     }
     
@@ -261,19 +342,15 @@ public class SQLGenerator {
         if (Artifact.class.equals(c)) {
             return new ArtifactIteratorQuery();
         }
-        throw new UnsupportedOperationException("entity-list: " + c.getName());
+        if (Node.class.equals(c)) {
+            return new NodeIteratorQuery();
+        }
+        throw new UnsupportedOperationException("entity-iterator: " + c.getName());
     }
     
     public EntityList getEntityList(Class c) {
         if (StorageSite.class.equals(c)) {
             return new StorageSiteList();
-        }
-        throw new UnsupportedOperationException("entity-list: " + c.getName());
-    }
-    
-    public EntityLock getEntityLock(Class c) {
-        if (Artifact.class.equals(c)) {
-            return new EntityLockImpl(c);
         }
         throw new UnsupportedOperationException("entity-list: " + c.getName());
     }
@@ -305,6 +382,12 @@ public class SQLGenerator {
         if (HarvestState.class.equals(c)) {
             return new HarvestStatePut(update);
         }
+        if (Node.class.isAssignableFrom(c)) {
+            return new NodePut(update);
+        }
+        if (DeletedNodeEvent.class.equals(c)) {
+            //return new DeletedNodePut(update);
+        }
         throw new UnsupportedOperationException("entity-put: " + c.getName());
     }
     
@@ -312,41 +395,6 @@ public class SQLGenerator {
         return new EntityDeleteImpl(c);
     }
     
-    private class EntityLockImpl implements EntityLock<Entity> {
-        private final Calendar utc = Calendar.getInstance(DateUtil.UTC);
-        private final Class entityClass;
-        private UUID id;
-        
-        EntityLockImpl(Class entityClass) {
-            this.entityClass = entityClass;
-        }
-
-        @Override
-        public void setID(UUID id) {
-            this.id = id;
-        }
-        
-        @Override
-        public void execute(JdbcTemplate jdbc) throws EntityNotFoundException {
-            int n = jdbc.update(this);
-            if (n == 0) {
-                throw new EntityNotFoundException("not found: " + id);
-            }
-        }
-        
-        @Override
-        public PreparedStatement createPreparedStatement(Connection conn) throws SQLException {
-            String sql = getLockSQL(entityClass);
-            log.debug("EntityLockImpl: " + sql);
-            PreparedStatement prep = conn.prepareStatement(sql);
-            int col = 1;
-            prep.setObject(col++, id);
-            prep.setObject(col++, id);
-            
-            return prep;
-        }
-    }
-
     private class SkeletonGet implements EntityGet<Entity> {
         private UUID id;
         private final Class entityClass;
@@ -428,7 +476,7 @@ public class SQLGenerator {
         
         @Override
         public ObsoleteStorageLocation execute(JdbcTemplate jdbc) {
-            return (ObsoleteStorageLocation) jdbc.query(this, new ObsoleteStorageLocationExtractor());
+            return jdbc.query(this, new ObsoleteStorageLocationExtractor());
         }
         
         @Override
@@ -443,7 +491,7 @@ public class SQLGenerator {
                 String col = getKeyColumn(ObsoleteStorageLocation.class, true);
                 sb.append(col).append(" = ?");
             } else {
-                String[] cols = columnMap.get(ObsoleteStorageLocation.class);
+                String[] cols = getColumns(ObsoleteStorageLocation.class);
                 sb.append(cols[0]).append(" = ?");
                 sb.append(" AND ");
                 if (loc.storageBucket != null) {
@@ -500,7 +548,7 @@ public class SQLGenerator {
                 String col = getKeyColumn(HarvestState.class, true);
                 sb.append(col).append(" = ?");
             } else {
-                String[] cols = columnMap.get(HarvestState.class);
+                String[] cols = getColumns(HarvestState.class);
                 sb.append(cols[0]).append(" = ?");
                 sb.append(" AND ");
                 sb.append(cols[1]).append(" = ?");
@@ -704,7 +752,6 @@ public class SQLGenerator {
     
     private class StorageSiteGet implements EntityGet<StorageSite> {
         private UUID id;
-        private URI uri;
         private final boolean forUpdate;
 
         public StorageSiteGet(boolean forUpdate) {
@@ -730,6 +777,9 @@ public class SQLGenerator {
                 sb.append(col).append(" = ?");
             } else {
                 throw new IllegalStateException("primary key is null");
+            }
+            if (forUpdate) {
+                sb.append(" FOR UPDATE");
             }
             String sql = sb.toString();
             log.debug("StorageSiteGet: " + sql);
@@ -759,6 +809,149 @@ public class SQLGenerator {
         }
     }
     
+    public class NodeGet implements EntityGet<Node> {
+        private UUID id;
+        private ContainerNode parent;
+        private String name;
+        private final boolean forUpdate;
+
+        public NodeGet(boolean forUpdate) {
+            this.forUpdate = forUpdate;
+        }
+        
+        @Override
+        public void setID(UUID id) {
+            this.id = id;
+        }
+
+        public void setPath(ContainerNode parent, String name) {
+            this.parent = parent;
+            this.name = name;
+        }
+        
+        @Override
+        public Node execute(JdbcTemplate jdbc) {
+            return (Node) jdbc.query(this, new NodeExtractor(parent));
+        }
+
+        @Override
+        public PreparedStatement createPreparedStatement(Connection conn) throws SQLException {
+            StringBuilder sb = getSelectFromSQL(Node.class, false);
+            sb.append(" WHERE ");
+            if (id != null) {
+                String col = getKeyColumn(Node.class, true);
+                sb.append(col).append(" = ?");
+            } else if (parent != null && name != null) {
+                String pidCol = "parentID";
+                String nameCol = "name";
+                // TODO: better way to get column names?
+                sb.append(pidCol).append(" = ? and ").append(nameCol).append(" = ?");
+            } else {
+                throw new IllegalStateException("primary key is null");
+            }
+            if (forUpdate) {
+                sb.append(" FOR UPDATE");
+            }
+            String sql = sb.toString();
+            log.debug("Node: " + sql);
+            PreparedStatement prep = conn.prepareStatement(sql);
+            if (id != null) {
+                prep.setObject(1, id);
+            } else {
+                prep.setObject(1, parent.getID());
+                prep.setObject(2, name);
+            }
+            
+            return prep;
+        }
+    }
+    
+    public class NodeIteratorQuery implements EntityIteratorQuery<Node> {
+        private ContainerNode parent;
+        private String start;
+        private Integer limit;
+        
+        public NodeIteratorQuery() {
+        }
+
+        public void setParent(ContainerNode parent) {
+            this.parent = parent;
+        }
+
+        public void setStart(String start) {
+            this.start = start;
+        }
+
+        public void setLimit(Integer limit) {
+            this.limit = limit;
+        }
+        
+        @Override
+        public ResourceIterator<Node> query(DataSource ds) {
+            if (parent == null) {
+                throw new RuntimeException("BUG: cannot query for children with parent==null");
+            }
+            
+            StringBuilder sb = getSelectFromSQL(Node.class, false);
+            sb.append(" WHERE parentID = ?");
+            if (start != null) {
+                sb.append(" AND ? <= name");
+            }
+            sb.append(" ORDER BY name ASC");
+            if (limit != null) {
+                sb.append(" LIMIT ?");
+            }
+            
+            String sql = sb.toString();
+            log.debug("sql: " + sql);
+            
+            try {
+                Connection con = ds.getConnection();
+                log.debug("NodeIteratorQuery: setAutoCommit(false)");
+                con.setAutoCommit(false);
+                // defaults for options: ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY
+                PreparedStatement ps = con.prepareStatement(sql);
+                ps.setFetchSize(1000);
+                ps.setFetchDirection(ResultSet.FETCH_FORWARD);
+                int col = 1;
+                
+                ps.setObject(1, parent.getID());
+                log.debug("parentID = " + parent.getID());
+                if (start != null) {
+                    ps.setString(col++, start);
+                    log.debug("start = " + start);
+                }
+                if (limit != null) {
+                    ps.setInt(col++, limit);
+                    log.debug("limit = " + limit);
+                }
+                ResultSet rs = ps.executeQuery();
+                
+                return new NodeResultSetIterator(con, rs, parent);
+            } catch (SQLException ex) {
+                throw new RuntimeException("BUG: artifact iterator query failed", ex);
+            }
+            
+        }
+    }
+    
+    private void safeSetBoolean(PreparedStatement prep, int col, Boolean value) throws SQLException {
+        log.debug("safeSetBoolean: " + col + " " + value);
+        if (value != null) {
+            prep.setBoolean(col, value);
+        } else {
+            prep.setNull(col, Types.BOOLEAN);
+        }
+    }
+    
+    private void safeSetString(PreparedStatement prep, int col, URI value) throws SQLException {
+        String v = null;
+        if (value != null) {
+            v = value.toASCIIString();
+        }
+        safeSetString(prep, col, v);
+    }
+    
     private void safeSetString(PreparedStatement prep, int col, String value) throws SQLException {
         log.debug("safeSetString: " + col + " " + value);
         if (value != null) {
@@ -786,6 +979,24 @@ public class SQLGenerator {
         }
     }
     
+    private void safeSetArray(PreparedStatement prep, int col, Set<URI> values) throws SQLException {
+        
+        if (values != null && !values.isEmpty()) {
+            log.debug("safeSetArray: " + col + " " + values.size());
+            String[] array1d = new String[values.size()];
+            int i = 0;
+            for (URI u : values) {
+                array1d[i] = u.toASCIIString();
+                i++;
+            }
+            java.sql.Array arr = prep.getConnection().createArrayOf("text", array1d);
+            prep.setObject(col, arr);
+        } else {
+            log.debug("safeSetArray: " + col + " null");
+            prep.setNull(col, Types.ARRAY);
+        }
+    }
+    
     private void safeSetArray(PreparedStatement prep, int col, UUID[] value) throws SQLException {
         
         if (value != null) {
@@ -794,6 +1005,25 @@ public class SQLGenerator {
             prep.setObject(col, arr);
         } else {
             log.debug("safeSetArray: " + col + " " + value);
+            prep.setNull(col, Types.ARRAY);
+        }
+    }
+    
+    private void safeSetProps(PreparedStatement prep, int col, Set<NodeProperty> values) throws SQLException {
+        
+        if (values != null && !values.isEmpty()) {
+            log.debug("safeSetProps: " + col + " " + values.size());
+            String[][] array2d = new String[values.size()][2]; // TODO: w-h or h-w??
+            int i = 0;
+            for (NodeProperty np : values) {
+                array2d[i][0] = np.getKey().toASCIIString();
+                array2d[i][1] = np.getValue();
+                i++;
+            }
+            java.sql.Array arr = prep.getConnection().createArrayOf("text", array2d);
+            prep.setObject(col, arr);
+        } else {
+            log.debug("safeSetProps: " + col + " = null");
             prep.setNull(col, Types.ARRAY);
         }
     }
@@ -852,8 +1082,8 @@ public class SQLGenerator {
                 safeSetString(prep, col++, value.storageLocation.getStorageID().toASCIIString());
                 safeSetString(prep, col++, value.storageLocation.storageBucket);
             } else {
-                safeSetString(prep, col++, null); // storageLocation.storageID
-                safeSetString(prep, col++, null); // storageLocation.storageBucket
+                safeSetString(prep, col++, (URI) null); // storageLocation.storageID
+                safeSetString(prep, col++, (URI) null); // storageLocation.storageBucket
             }
             
             safeSetTimestamp(prep, col++, new Timestamp(value.getLastModified().getTime()), utc);
@@ -948,7 +1178,7 @@ public class SQLGenerator {
             if (value.getLocation().storageBucket != null) {
                 safeSetString(prep, col++, value.getLocation().storageBucket);
             } else {
-                safeSetString(prep, col++, null);
+                safeSetString(prep, col++, (String) null);
             }
             
             prep.setTimestamp(col++, new Timestamp(value.getLastModified().getTime()), utc);
@@ -1012,6 +1242,85 @@ public class SQLGenerator {
             return prep;
         }
         
+    }
+    
+    private class NodePut implements EntityPut<Node> {
+        private final Calendar utc = Calendar.getInstance(DateUtil.UTC);
+        private final boolean update;
+        private Node value;
+        
+        NodePut(boolean update) {
+            this.update = update;
+        }
+
+        @Override
+        public void setValue(Node value) {
+            this.value = value;
+        }
+        
+        @Override
+        public void execute(JdbcTemplate jdbc) {
+            jdbc.update(this);
+        }
+        
+        @Override
+        public PreparedStatement createPreparedStatement(Connection conn) throws SQLException {
+            String sql = null;
+            if (update) {
+                sql = getUpdateSQL(Node.class);
+                       
+            } else {
+                sql = getInsertSQL(Node.class);
+            }
+            log.debug("NodePut: " + sql);
+            PreparedStatement prep = conn.prepareStatement(sql);
+            int col = 1;
+            
+            if (value.parentID == null) {
+                throw new RuntimeException("BUG: cannot put Node without a parentID: " + value);
+            }
+            prep.setObject(col++, value.parentID);
+            prep.setString(col++, value.getName());
+            prep.setString(col++, value.getClass().getSimpleName().substring(0, 1)); // HACK
+            if (value.ownerID == null) {
+                throw new RuntimeException("BUG: cannot put Node without an ownerID: " + value);
+            }
+            prep.setString(col++, value.ownerID.toString());
+            safeSetBoolean(prep, col++, value.isPublic);
+            safeSetBoolean(prep, col++, value.isLocked);
+            safeSetArray(prep, col++, value.readOnlyGroup);
+            safeSetArray(prep, col++, value.readWriteGroup);
+            safeSetProps(prep, col++, value.properties);
+            if (value instanceof ContainerNode) {
+                ContainerNode cn = (ContainerNode) value;
+                safeSetBoolean(prep, col++, cn.inheritPermissions);
+            } else {
+                safeSetBoolean(prep, col++, null);
+            }
+            if (value instanceof DataNode) {
+                DataNode dn = (DataNode) value;
+                if (dn.storageID == null) {
+                    throw new RuntimeException("BUG: cannot put DataNode without a storageID: " + value);
+                }
+                safeSetBoolean(prep, col++, dn.busy);
+                safeSetString(prep, col++, dn.storageID);
+            } else {
+                safeSetBoolean(prep, col++, null);
+                safeSetString(prep, col++, (URI) null);
+            }
+            if (value instanceof LinkNode) {
+                LinkNode ln = (LinkNode) value;
+                prep.setString(col++, ln.getTarget().toASCIIString());
+            } else {
+                safeSetString(prep, col++, (URI) null);
+            }
+            
+            prep.setTimestamp(col++, new Timestamp(value.getLastModified().getTime()), utc);
+            prep.setString(col++, value.getMetaChecksum().toASCIIString());
+            prep.setObject(col++, value.getID());
+            
+            return prep;
+        }
     }
     
     private class EntityEventPut implements EntityPut<Entity> {
@@ -1083,11 +1392,13 @@ public class SQLGenerator {
     }
     
     private StringBuilder getSelectFromSQL(Class c, boolean entityCols) {
-        String tab = tableMap.get(c);
-        String[] cols = columnMap.get(c);
+        String tab = getTable(c);
+        Class targetClass = c;
         if (entityCols) {
-            cols = columnMap.get(Entity.class);
+            targetClass = Entity.class;
         }
+        String[] cols = getColumns(targetClass);
+        
         if (tab == null || cols == null) {
             throw new IllegalArgumentException("BUG: no table/columns for class " + c.getName());
         }
@@ -1106,21 +1417,13 @@ public class SQLGenerator {
         return sb;
     }
     
-    private String getLockSQL(Class c) {
-        StringBuilder sb = new StringBuilder();
-        String pk = getKeyColumn(c, true);
-        sb.append("UPDATE ");
-        sb.append(tableMap.get(c));
-        sb.append(" SET ").append(pk).append(" = ? WHERE ").append(pk).append(" = ?");
-        return sb.toString();
-    }
-    
     private String getUpdateSQL(Class c) {
         StringBuilder sb = new StringBuilder();
+        String tab = getTable(c);
         sb.append("UPDATE ");
-        sb.append(tableMap.get(c));
+        sb.append(tab);
         sb.append(" SET ");
-        String[] cols = columnMap.get(c);
+        String[] cols = getColumns(c);
         for (int i = 0; i < cols.length - 1; i++) { // PK is last
             if (i > 0) {
                 sb.append(",");
@@ -1137,10 +1440,11 @@ public class SQLGenerator {
     
     private String getInsertSQL(Class c) {
         StringBuilder sb = new StringBuilder();
+        String tab = getTable(c);
         sb.append("INSERT INTO ");
-        sb.append(tableMap.get(c));
+        sb.append(tab);
         sb.append(" (");
-        String[] cols = columnMap.get(c);
+        String[] cols = getColumns(c);
         for (int i = 0; i < cols.length; i++) {
             if (i > 0) {
                 sb.append(",");
@@ -1161,14 +1465,15 @@ public class SQLGenerator {
     
     private String getDeleteSQL(Class c) {
         StringBuilder sb = new StringBuilder();
+        String tab = getTable(c);
         sb.append("DELETE FROM ");
-        sb.append(tableMap.get(c));
+        sb.append(tab);
         sb.append(" WHERE id = ?");
         return sb.toString();
     }
     
     private String getKeyColumn(Class c, boolean pk) {
-        String[] cols = columnMap.get(c);
+        String[] cols = getColumns(c);
         if (cols == null) {
             throw new IllegalArgumentException("BUG: no table/columns for class " + c.getName());
         }
@@ -1281,6 +1586,69 @@ public class SQLGenerator {
         }
     }
     
+    private class NodeResultSetIterator implements ResourceIterator<Node> {
+        final Calendar utc = Calendar.getInstance(DateUtil.UTC);
+        private final Connection con;
+        private final ResultSet rs;
+        boolean hasRow;
+        
+        ContainerNode parent;
+
+        public NodeResultSetIterator(Connection con, ResultSet rs, ContainerNode parent) throws SQLException {
+            this.con = con;
+            this.rs = rs;
+            this.parent = parent;
+            hasRow = rs.next();
+            log.debug("NodeResultSetIterator: " + super.toString() + " ctor " + hasRow);
+            if (!hasRow) {
+                log.debug("NodeResultSetIterator:  " + super.toString() + " ctor - setAutoCommit(true)");
+                con.setAutoCommit(true);
+            }
+        }
+        
+        @Override
+        public void close() throws IOException {
+            if (hasRow) {
+                log.debug("NodeResultSetIterator:  " + super.toString() + " ctor - setAutoCommit(true)");
+                try {
+                    con.setAutoCommit(true);
+                    hasRow = false;
+                } catch (SQLException ex) {
+                    throw new RuntimeException("BUG: node list query failed during close()", ex);
+                }
+            }
+        }
+        
+        @Override
+        public boolean hasNext() {
+            return hasRow;
+        }
+        
+        @Override
+        public Node next() {
+            try {
+                Node ret = mapRowToNode(rs, utc, parent);
+                hasRow = rs.next();
+                if (!hasRow) {
+                    log.debug("NodeResultSetIterator:  " + super.toString() + " DONE - setAutoCommit(true)");
+                    con.setAutoCommit(true);
+                }
+                return ret;
+            } catch (Exception ex) {
+                if (hasRow) {
+                    log.debug("NodeResultSetIterator:  " + super.toString() + " ResultSet.next() FAILED - setAutoCommit(true)");
+                    try {
+                        close();
+                        hasRow = false;
+                    } catch (IOException unexpected) {
+                        log.debug("BUG: unexpected IOException from close", unexpected);
+                    }
+                }
+                throw new RuntimeException("BUG: node list query failed while iterating", ex);
+            }
+        }
+    }
+    
     private Artifact mapRowToArtifact(ResultSet rs, Calendar utc) throws SQLException {
         int col = 1;
         final URI uri = Util.getURI(rs, col++);
@@ -1314,12 +1682,69 @@ public class SQLGenerator {
         return a;
     }
     
-    private class ObsoleteStorageLocationExtractor implements ResultSetExtractor {
+    private Node mapRowToNode(ResultSet rs, Calendar utc, ContainerNode parent) throws SQLException {
+        int col = 1;
+        final UUID parentID = Util.getUUID(rs, col++);
+        final String name = rs.getString(col++);
+        final String nodeType = rs.getString(col++);
+        final String ownerID = rs.getString(col++);
+        final Boolean isPublic = Util.getBoolean(rs, col++);
+        final Boolean isLocked = Util.getBoolean(rs, col++);
+        final String rawROG = rs.getString(col++);
+        final String rawRWG = rs.getString(col++);
+        final String rawProps = rs.getString(col++);
+        final Boolean inheritPermissions = Util.getBoolean(rs, col++);
+        final Boolean busy = Util.getBoolean(rs, col++);
+        final URI storageID = Util.getURI(rs, col++);
+        final URI linkTarget = Util.getURI(rs, col++);
+        final Date lastModified = Util.getDate(rs, col++, utc);
+        final URI metaChecksum = Util.getURI(rs, col++);
+        final UUID id = Util.getUUID(rs, col++);
+
+        Node ret;
+        if (nodeType.equals("C")) {
+            ret = new ContainerNode(id, name, inheritPermissions);
+        } else if (nodeType.equals("D")) {
+            ret = new DataNode(id, name, storageID);
+        } else if (nodeType.equals("L")) {
+            ret = new LinkNode(id, name, linkTarget);
+        } else {
+            throw new RuntimeException("BUG: unexpected node type code: " + nodeType);
+        }
+        ret.parentID = parentID;
+        ret.ownerID = ownerID;
+        ret.isPublic = isPublic;
+        ret.isLocked = isLocked;
+
+        if (rawROG != null) {
+            Util.parseArrayURI(rawROG, ret.readOnlyGroup);
+        }
+        if (rawRWG != null) {
+            Util.parseArrayURI(rawRWG, ret.readWriteGroup);
+        }
+        if (rawProps != null) {
+            Util.parseArrayProps(rawProps, ret.properties);
+        }
+
+        InventoryUtil.assignLastModified(ret, lastModified);
+        InventoryUtil.assignMetaChecksum(ret, metaChecksum);
+
+        if (parent != null) {
+            if (!parent.getID().equals(parentID)) {
+                throw new RuntimeException("BUG: expected parentID=" + parent.getID() + " but got: " + parentID);
+            }
+            ret.parent = parent;
+        }
+
+        return ret;
+    }
+    
+    private class ObsoleteStorageLocationExtractor implements ResultSetExtractor<ObsoleteStorageLocation> {
 
         final Calendar utc = Calendar.getInstance(DateUtil.UTC);
         
         @Override
-        public Object extractData(ResultSet rs) throws SQLException, DataAccessException {
+        public ObsoleteStorageLocation extractData(ResultSet rs) throws SQLException, DataAccessException {
             if (!rs.next()) {
                 return null;
             }
@@ -1332,7 +1757,7 @@ public class SQLGenerator {
             
             StorageLocation s = new StorageLocation(storLoc);
             s.storageBucket = storBucket;
-            Entity ret = new ObsoleteStorageLocation(id, s);
+            ObsoleteStorageLocation ret = new ObsoleteStorageLocation(id, s);
             InventoryUtil.assignLastModified(ret, lastModified);
             InventoryUtil.assignMetaChecksum(ret, metaChecksum);
             return ret;
@@ -1464,5 +1889,25 @@ public class SQLGenerator {
             InventoryUtil.assignMetaChecksum(ret, metaChecksum);
             return ret;
         }
+    }
+    
+    private class NodeExtractor implements ResultSetExtractor<Node> {
+        private ContainerNode parent;
+        final Calendar utc = Calendar.getInstance(DateUtil.UTC);
+
+        public NodeExtractor(ContainerNode parent) {
+            this.parent = parent; // optional
+        }
+        
+        @Override
+        public Node extractData(ResultSet rs) throws SQLException, DataAccessException {
+            if (!rs.next()) {
+                return null;
+            }
+            
+            return mapRowToNode(rs, utc, parent);
+        }
+        
+        
     }
 }
