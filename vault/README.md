@@ -10,19 +10,30 @@ back end storage system. Details: TBD.
 The other option would be to deploy `vault` with `raven` and `luskan` in a global inventory database and make
 use of one or more of the network of known storage sites to store files. Details: TBD.
 
+## deployment
+
+The `vault` war file can be renamed at deployment time in order to support an alternate service name, 
+including introducing additional path elements. See 
+<a href="https://github.com/opencadc/docker-base/tree/master/cadc-tomcat">cadc-tomcat</a> (war-rename.conf).
+
 ## configuration
-See the [cadc-tomcat](https://github.com/opencadc/docker-base/tree/master/cadc-tomcat) image docs
-for expected deployment and general config requirements. 
-
-The `vault` war file can be renamed
-at deployment time in order to support an alternate service name, including introducing 
-additional path elements (see war-rename.conf).
-
-Runtime configuration must be made available via the `/config` directory.
+The following runtime configuration must be made available via the `/config` directory.
 
 ### catalina.properties
-When running vault.war in tomcat, parameters of the connection pool in META-INF/context.xml need
-to be configured in catalina.properties:
+This file contains java system properties to configure the tomcat server and some of the java libraries used in the service.
+
+See <a href="https://github.com/opencadc/docker-base/tree/master/cadc-tomcat">cadc-tomcat</a>
+for system properties related to the deployment environment.
+
+See <a href="https://github.com/opencadc/core/tree/master/cadc-util">cadc-util</a>
+for common system properties.
+
+`minoc` includes multiple IdentityManager implementations to support authenticated access:
+- See <a href="https://github.com/opencadc/ac/tree/master/cadc-access-control-identity">cadc-access-control-identity</a> for CADC access-control system support.
+
+- See <a href="https://github.com/opencadc/ac/tree/master/cadc-gms">cadc-gms</a> for OIDC token support.
+
+`vault` requires a connection pool to the local database:
 ```
 # database connection pools
 org.opencadc.vault.nodes.maxActive={max connections for vospace pool}
@@ -53,25 +64,25 @@ org.opencadc.vault.storage.namespace = {a storage inventory namespace to use}
 ```
 The vault _resourceID_ is the resourceID of _this_ vault service.
 
-The _inventory.schema_ name is the name of the database schema that contains the inventory database objects. The account nominally requires read-only (select) permission on those objects.
+The _inventory.schema_ name is the name of the database schema that contains the inventory database objects. The account nominally requires read-only (select) permission on those objects. This currently must be "inventory" due to configuration
+limitations in <a href="../luskan">luskan</a>.
 
 The _vospace.schema_ name is the name of the database schema used for all created database objects (tables, indices, etc). Note that with a single connection pool, the two schemas must be in the same database and some operations may join tables
 in the two schemas (probably just vospace.node join inventory.artifact).
 
 The root node owner has full read and write permission in the root container, so it can create and delete container 
-nodes at the root and to assign container node properties that are normally read-only to normal users: owner, quota, 
-etc. This is probably an X509 distingushed name of the user (to start). TBD.
+nodes at the root and assign container node properties that are normally read-only to normal users: owner, quota, 
+etc. This is probably an X509 distingushed name of the user (to start). **not fully implemented** TBD.
 
 The _namespace_ configures `vault` to use the specified namespace in storage-inventory to store files. This only
 applies to new data nodes that are created and will not effect previously created nodes and artifacts. Probably don't
-want to change this... prevent change?
+want to change this... prevent change? TBD.
 
 ### vault-availability.properties (optional)
-```
+
 The vault-availability.properties file specifies which users have the authority to change the availability state of 
 the vault service. Each entry consists of a key=value pair. The key is always "users". The value is the x500 canonical 
 user name.
-```
 
 Example:
 ```
