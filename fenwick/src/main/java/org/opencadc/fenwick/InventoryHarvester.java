@@ -221,6 +221,9 @@ public class InventoryHarvester implements Runnable {
             AbstractSync r1 = new DeletedArtifactEventSync(daeArtifactDAO, resourceID, trackSiteLocations, SYNC_SLEEP, maxRetryInterval);
             tasks.add(r1);
             threads.add(createThread("dae-thread", r1));
+
+            // sleep a bit to allow deleted event threads to init state on first run before harvesting artifacts
+            Thread.sleep(6000L);
             
             AbstractSync r2 = new ArtifactSync(artifactDAO, resourceID, SYNC_SLEEP, maxRetryInterval, selector, storageSite);
             tasks.add(r2);

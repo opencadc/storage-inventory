@@ -106,7 +106,7 @@ public class DeletedStorageLocationEventSync extends AbstractSync {
     private final TapClient<DeletedStorageLocationEvent> tapClient;
     
     // package access for intTest code
-    boolean enableSkipOldEvents = false;
+    boolean enableSkipOldEvents = true;
 
     public DeletedStorageLocationEventSync(ArtifactDAO artifactDAO, URI resourceID, 
             int querySleepInterval, int maxRetryInterval, StorageSite storageSite) {
@@ -145,8 +145,6 @@ public class DeletedStorageLocationEventSync extends AbstractSync {
         final HarvestState harvestState = hs;
         harvestStateDAO.setUpdateBufferCount(99); // buffer 99 updates, do every 100
         
-        SSLUtil.renewSubject(AuthenticationUtil.getCurrentSubject(), new File(CERTIFICATE_FILE_LOCATION));
-
         final TransactionManager transactionManager = artifactDAO.getTransactionManager();
         
         final Date now = new Date();
