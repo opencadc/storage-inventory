@@ -67,6 +67,7 @@
 
 package org.opencadc.fenwick;
 
+import ca.nrc.cadc.auth.AuthenticationUtil;
 import ca.nrc.cadc.auth.NotAuthenticatedException;
 import ca.nrc.cadc.auth.SSLUtil;
 import ca.nrc.cadc.net.ExpectationFailedException;
@@ -146,9 +147,17 @@ abstract class AbstractSync implements Runnable {
         int retryCount = 1;
         int sleepSeconds = querySleepInterval;
 
+        File certFile = new File(CERTIFICATE_FILE_LOCATION);
+        if (!certFile.exists()) {
+            log.info("not found: " + certFile + " -- proceeding anonymously");
+        }
         while (true) {
             try {
-                final Subject subject = SSLUtil.createSubject(new File(CERTIFICATE_FILE_LOCATION));
+                Subject subject = AuthenticationUtil.getAnonSubject();
+                if (certFile.exists()) {
+                    subject = SSLUtil.createSubject(certFile);
+                }
+                
                 int retries = retryCount;
                 int timeout = sleepSeconds;
 

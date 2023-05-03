@@ -105,7 +105,7 @@ public class DeletedArtifactEventSync extends AbstractSync {
     private final boolean isGlobal;
     
     // package access for intTest code
-    boolean enableSkipOldEvents = false;
+    boolean enableSkipOldEvents = true;
 
     public DeletedArtifactEventSync(ArtifactDAO artifactDAO, URI resourceID, boolean isGlobal,
             int querySleepInterval, int maxRetryInterval) {
@@ -143,8 +143,6 @@ public class DeletedArtifactEventSync extends AbstractSync {
         final HarvestState harvestState = hs;
         harvestStateDAO.setUpdateBufferCount(99); // buffer 99 updates, do every 100
         
-        SSLUtil.renewSubject(AuthenticationUtil.getCurrentSubject(), new File(CERTIFICATE_FILE_LOCATION));
-
         final TransactionManager transactionManager = artifactDAO.getTransactionManager();
 
         final Date now = new Date();
