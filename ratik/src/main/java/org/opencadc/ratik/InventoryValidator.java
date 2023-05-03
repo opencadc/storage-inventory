@@ -69,6 +69,7 @@
 
 package org.opencadc.ratik;
 
+import ca.nrc.cadc.auth.AuthenticationUtil;
 import ca.nrc.cadc.auth.SSLUtil;
 import ca.nrc.cadc.db.ConnectionConfig;
 import ca.nrc.cadc.db.DBUtil;
@@ -243,7 +244,13 @@ public class InventoryValidator implements Runnable {
     @Override 
     public void run() {
         try {
-            final Subject subject = SSLUtil.createSubject(new File(CERTIFICATE_FILE_LOCATION));
+            Subject subject = AuthenticationUtil.getAnonSubject();
+            File certFile = new File(CERTIFICATE_FILE_LOCATION);
+            if (certFile.exists()) {
+                subject = SSLUtil.createSubject(certFile);
+            } else {
+                log.info("not found: " + certFile + " -- proceeding anonymously");
+            }
             Subject.doAs(subject, (PrivilegedExceptionAction<Void>) () -> {
                 doit();
                 logSummary(true, false);
