@@ -99,6 +99,9 @@ public class StorageLocationEventSync extends AbstractSync {
     private final StorageSite storageSite;
     private final TapClient<StorageLocationEvent> tapClient;
     
+    // package access for intTest code
+    boolean enableSkipOldEvents = true;
+    
     public StorageLocationEventSync(ArtifactDAO artifactDAO, URI resourceID, 
             int querySleepInterval, int maxRetryInterval, 
             StorageSite storageSite) {
@@ -121,7 +124,18 @@ public class StorageLocationEventSync extends AbstractSync {
             throw new RuntimeException("BUG: failed to get instance of MD5", e);
         }
 
-        final HarvestState harvestState = this.harvestStateDAO.get(StorageLocationEvent.class.getSimpleName(), resourceID);
+        HarvestState hs = this.harvestStateDAO.get(StorageLocationEvent.class.getSimpleName(), resourceID);
+        if (enableSkipOldEvents && hs.curLastModified == null) {
+            // first harvest: ignore old deleted events?
+            HarvestState artifactHS = harvestStateDAO.get(Artifact.class.getSimpleName(), resourceID);
+            if (artifactHS.curLastModified == null) {
+                // never harvested artifacts: ignore old events
+                hs.curLastModified = new Date();
+                harvestStateDAO.put(hs);
+                hs = harvestStateDAO.get(hs.getID());
+            }
+        }
+        final HarvestState harvestState = hs;
         harvestStateDAO.setUpdateBufferCount(99); // buffer 99 updates, do every 100
         harvestStateDAO.setMaintCount(999); // buffer 999 so every 1000 real updates aka every 1e5 events
         
@@ -131,12 +145,12 @@ public class StorageLocationEventSync extends AbstractSync {
         
         DateFormat df = DateUtil.getDateFormat(DateUtil.IVOA_DATE_FORMAT, DateUtil.UTC);
         if (harvestState.curLastModified != null) {
-            log.warn("lookBack=" + df.format(lookBack) + " curLastModified=" + df.format(harvestState.curLastModified) 
+            log.debug("lookBack=" + df.format(lookBack) + " curLastModified=" + df.format(harvestState.curLastModified) 
                 + " -> " + df.format(startTime));
         }
         String start = null;
         if (startTime != null) {
-            df.format(startTime);
+            start = df.format(startTime);
         }
         String end = df.format(now);
         log.info("StorageLocationEvent.QUERY start=" + start + " end=" + end);
@@ -184,10 +198,13 @@ public class StorageLocationEventSync extends AbstractSync {
                                 + syncEvent.getID() 
                                 + " reason=no-matching-artifact");
                     }
+                    
+                    transactionManager.commitTransaction();
+                    
+                    // update state outside transaction because experimental maintenance enabled
                     harvestState.curLastModified = syncEvent.getLastModified();
                     harvestState.curID = syncEvent.getID();
                     harvestStateDAO.put(harvestState);
-                    transactionManager.commitTransaction();
                 } catch (Exception exception) {
                     if (transactionManager.isOpen()) {
                         log.error("Exception in transaction.  Rolling back...");

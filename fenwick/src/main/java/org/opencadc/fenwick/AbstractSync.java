@@ -277,7 +277,7 @@ abstract class AbstractSync implements Runnable {
     }
     
     protected final void logRetry(int retries, int timeout, String message) {
-        log.error(String.format("retry[%s] timeout %ss - reason: %s", retries, timeout, message));
+        log.error(String.format("retry[%s] waiting %ss - reason: %s", retries, timeout, message));
     }
 
     protected final void logExit(String message) {
