@@ -5,9 +5,11 @@ the operator runs multiple processes by  subdividing the Artifact.uriBucket spac
 within that process.
 
 ## configuration
-See the [cadc-java](https://github.com/opencadc/docker-base/tree/master/cadc-java) image docs for general config requirements.
+The following configuration files must be available in the `/config` directory.
 
-Runtime configuration must be made available via the `/config` directory.
+### cadc-registry.properties
+
+See <a href="https://github.com/opencadc/reg/tree/master/cadc-registry">cadc-registry</a>.
 
 ### critwall.properties
 ```
@@ -26,24 +28,33 @@ org.opencadc.critwall.locatorService={resourceID of global transfer negotiation 
 # storage back end
 org.opencadc.inventory.storage.StorageAdapter={fully qualified class name for StorageAdapter implementation}
 
-# file-sync
+# file sync
 org.opencadc.critwall.buckets = {uriBucket prefix or range of prefixes}
 org.opencadc.critwall.threads = {number of download threads}
 ```
 The `inventory` account owns and manages (create, alter, drop) inventory database objects and manages
-all the content (insert, update, delete) in the inventory schema. The database is specified in the JDBC URL. 
-Failure to connect or initialize the database will show up in logs.
+all the content (insert, update, delete) in the inventory schema. The database is specified in the 
+JDBC URL. Failure to connect or initialize the database will show up in logs.
 
-The range of uriBucket prefixes is specified with two values separated by a single - (dash) character; whitespace is ignored.
+The range of uriBucket prefixes is specified with two values separated by a single - (dash) 
+character; whitespace is ignored.
 
-The number of download threads indirectly configures a database connection pool that is shared between file sync jobs
-(approximately 3 threads per connection).
+The number of download threads indirectly configures a database connection pool that is shared 
+between file sync jobs (approximately 3 threads per connection).
 
-### cadcproxy.pem
+`critwall` includes the following StorageAdapter implementations:
+- see https://github.com/opencadc/storage-adapter/tree/master/cadc-storage-adapter-fs">cadc-storage-adapter-fs</a> to store files in a local file system
+- see https://github.com/opencadc/storage-adapter/tree/master/cadc-storage-adapter-swift">cadc-storage-adapter-swift</a> to store files in an object store using the Swift API
+
+### cadcproxy.pem (optional)
+
 Querying the global locator service (raven) and downloading files (minoc) may require permission.
+If the file is not found, `critwall` will make anonymous calls to the remote locator service and
+attempt anonymous downloads.
 
-### addtional configuration
-Additional configuration file(s) may be needed for the StorageAdapter that is configured.
+See the [cadc-java](https://github.com/opencadc/docker-base/tree/master/cadc-java) image docs 
+for general config requirements.
+
 
 ## building it
 ```
