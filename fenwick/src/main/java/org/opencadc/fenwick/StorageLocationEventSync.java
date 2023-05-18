@@ -110,6 +110,8 @@ public class StorageLocationEventSync extends AbstractSync {
         this.storageSite = storageSite;
         try {
             this.tapClient = new TapClient<>(resourceID);
+            tapClient.setConnectionTimeout(12000); // 12 sec
+            tapClient.setReadTimeout(120000);      // 120 sec
         } catch (ResourceNotFoundException ex) {
             throw new IllegalArgumentException("invalid config: query service not found: " + resourceID);
         }
