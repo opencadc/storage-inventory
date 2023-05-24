@@ -114,8 +114,8 @@ public class PermissionsConfig {
     private static final String KEY_GRANT_EXPIRY = "org.opencadc.baldur.grantExpiry";
 
     private boolean allowAnon = false;
-    private final Set<Principal> authPrincipals = new HashSet<Principal>();;
-    private List<PermissionEntry> entries;
+    private final Set<Principal> authPrincipals = new HashSet<>();
+    private final List<PermissionEntry> entries = new ArrayList<>();
     private Date expiryDate;
     
     PermissionsConfig() throws InvalidConfigException {
@@ -182,7 +182,6 @@ public class PermissionsConfig {
                                                           KEY_ENTRY, sb, PERMISSIONS_PROPERTIES));
         }
 
-        this.entries = new ArrayList<PermissionEntry>();
         for (String entry : entryConfig) {
             log.debug("reading permission entry: " + entry);
             String[] entryName = entry.split(" ");
