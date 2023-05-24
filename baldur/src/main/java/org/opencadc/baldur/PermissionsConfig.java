@@ -3,7 +3,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2019.                            (c) 2019.
+ *  (c) 2023.                            (c) 2023.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -104,6 +104,7 @@ public class PermissionsConfig {
     private static final Logger log = Logger.getLogger(PermissionsConfig.class);
 
     private static final String PERMISSIONS_PROPERTIES = "baldur.properties";
+    private static final String KEY_ALLOWED_ANON = "org.opencadc.baldur.allowAnon";
     private static final String KEY_ALLOWED_USER = "org.opencadc.baldur.allowedUser";
     private static final String KEY_ENTRY = "org.opencadc.baldur.entry";
     private static final String KEY_PATTERN = ".pattern";
@@ -112,12 +113,17 @@ public class PermissionsConfig {
     private static final String KEY_READWRITE_GROUP = ".readWriteGroup";
     private static final String KEY_GRANT_EXPIRY = "org.opencadc.baldur.grantExpiry";
 
-    private Set<Principal> authPrincipals;
+    private boolean allowAnon = false;
+    private final Set<Principal> authPrincipals = new HashSet<Principal>();;
     private List<PermissionEntry> entries;
     private Date expiryDate;
     
     PermissionsConfig() throws InvalidConfigException {
         init();
+    }
+    
+    boolean getAllowAnon() {
+        return allowAnon;
     }
     
     Set<Principal> getAuthorizedPrincipals() {
@@ -143,21 +149,17 @@ public class PermissionsConfig {
             throw new IllegalStateException("failed to read permissions config from " + PERMISSIONS_PROPERTIES);
         }
 
+        String str = allProps.getFirstPropertyValue(KEY_ALLOWED_ANON);
+        this.allowAnon = "true".equals(str);
+        
         // get the authorized users
         // (TODO: Issue 41: https://github.com/opencadc/storage-inventory/issues/41)
         List<String> authUsersConfig = allProps.getProperty(KEY_ALLOWED_USER);
-        if (authUsersConfig == null) {
-            throw new IllegalStateException("missing configurations for key " + KEY_ALLOWED_USER + " in: "
-                + PERMISSIONS_PROPERTIES);
-        }
-
-        this.authPrincipals = new HashSet<Principal>();
-        for (String dn : authUsersConfig) {
-            log.debug("authorized dn: " + dn);
-            this.authPrincipals.add(new X500Principal(AuthenticationUtil.canonizeDistinguishedName(dn)));
-        }
-        if (this.authPrincipals.size() == 0) {
-            throw new InvalidConfigException("no values for key " + KEY_ALLOWED_USER + " in " + PERMISSIONS_PROPERTIES);
+        if (authUsersConfig != null) {
+            for (String dn : authUsersConfig) {
+                log.debug("authorized dn: " + dn);
+                this.authPrincipals.add(new X500Principal(AuthenticationUtil.canonizeDistinguishedName(dn)));
+            }
         }
 
         // get the permission entries
