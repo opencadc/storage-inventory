@@ -180,6 +180,9 @@ public class GetAction extends RestAction {
      * @param permissionsConfig 
      */
     protected void authorizeRequest(PermissionsConfig permissionsConfig) {
+        if (permissionsConfig.getAllowAnon()) {
+            return;
+        }
         Subject subject = AuthenticationUtil.getCurrentSubject();
         if (subject != null) {
             Set<X500Principal> principals = subject.getPrincipals(X500Principal.class);
