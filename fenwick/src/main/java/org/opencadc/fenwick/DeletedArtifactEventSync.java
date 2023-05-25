@@ -69,14 +69,11 @@
 
 package org.opencadc.fenwick;
 
-import ca.nrc.cadc.auth.AuthenticationUtil;
-import ca.nrc.cadc.auth.SSLUtil;
 import ca.nrc.cadc.date.DateUtil;
 import ca.nrc.cadc.db.TransactionManager;
 import ca.nrc.cadc.io.ResourceIterator;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
-import java.io.File;
 import java.io.IOException;
 import java.net.URI;
 import java.security.MessageDigest;
@@ -114,6 +111,8 @@ public class DeletedArtifactEventSync extends AbstractSync {
         this.deletedDAO = new DeletedArtifactEventDAO(artifactDAO);
         try {
             this.tapClient = new TapClient<>(resourceID);
+            tapClient.setConnectionTimeout(12000); // 12 sec
+            tapClient.setReadTimeout(120000);      // 120 sec
         } catch (ResourceNotFoundException ex) {
             throw new IllegalArgumentException("invalid config: query service not found: " + resourceID);
         }
