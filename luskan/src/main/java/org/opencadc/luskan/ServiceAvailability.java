@@ -124,8 +124,6 @@ public class ServiceAvailability implements AvailabilityPlugin {
                 return new Availability(false, RestAction.STATE_READ_ONLY_MSG);
             }
 
-            
-
             // check connection pools
             CheckResource cr = new CheckDataSource("jdbc/tapuser", TAP_TEST);
             cr.check();
@@ -144,8 +142,12 @@ public class ServiceAvailability implements AvailabilityPlugin {
             try {
                 credURI = localAuthority.getServiceURI(Standards.CRED_PROXY_10.toString());
                 URL url = reg.getServiceURL(credURI, Standards.VOSI_AVAILABILITY, AuthMethod.ANON);
-                CheckResource checkResource = new CheckWebService(url);
-                checkResource.check();
+                if (url != null) {
+                    CheckResource checkResource = new CheckWebService(url);
+                    checkResource.check();
+                } else {
+                    log.debug("capabilities not found for " + url);
+                }
             } catch (NoSuchElementException ex) {
                 log.debug("not configured: " + Standards.CRED_PROXY_10);
             }
@@ -172,10 +174,14 @@ public class ServiceAvailability implements AvailabilityPlugin {
                 log.debug("not configured: " + Standards.GMS_SEARCH_10);
             }
             
-            if (credURI != null || usersURI != null || groupsURI != null) {
-                // check for a certficate needed to perform network A&A ops
-                CheckCertificate checkCert = new CheckCertificate(AAI_PEM_FILE);
-                checkCert.check();
+            if (credURI != null || usersURI != null) {
+                if (AAI_PEM_FILE.exists() && AAI_PEM_FILE.canRead()) {
+                    // check for a certificate needed to perform network A&A ops
+                    CheckCertificate checkCert = new CheckCertificate(AAI_PEM_FILE);
+                    checkCert.check();
+                } else {
+                    log.debug("AAI cert not found or unreadable");
+                }
             }
 
         } catch (CheckException ce) {
