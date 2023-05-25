@@ -98,7 +98,7 @@ import org.opencadc.inventory.db.ArtifactDAO;
 public class ServiceAvailability implements AvailabilityPlugin {
 
     private static final Logger log = Logger.getLogger(ServiceAvailability.class);
-    private static final File SERVOPS_PEM_FILE = new File(System.getProperty("user.home") + "/.ssl/cadcproxy.pem");
+    private static final File AAI_PEM_FILE = new File(System.getProperty("user.home") + "/.ssl/cadcproxy.pem");
     
     private String appName;
 
@@ -188,11 +188,15 @@ public class ServiceAvailability implements AvailabilityPlugin {
             } catch (NoSuchElementException ex) {
                 log.debug("not configured: " + Standards.GMS_SEARCH_10);
             }
-            
-            if (credURI != null || usersURI != null || groupsURI != null) {
-                // check for a certficate needed to perform network A&A ops
-                CheckCertificate checkCert = new CheckCertificate(SERVOPS_PEM_FILE);
-                checkCert.check();
+
+            if (credURI != null || usersURI != null) {
+                if (AAI_PEM_FILE.exists() && AAI_PEM_FILE.canRead()) {
+                    // check for a certificate needed to perform network A&A ops
+                    CheckCertificate checkCert = new CheckCertificate(AAI_PEM_FILE);
+                    checkCert.check();
+                } else {
+                    log.debug("AAI cert not found or unreadable");
+                }
             }
             
         } catch (CheckException ce) {
