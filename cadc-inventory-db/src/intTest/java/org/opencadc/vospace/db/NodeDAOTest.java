@@ -203,9 +203,9 @@ public class NodeDAOTest {
         Assert.assertEquals(orig.ownerID, a.ownerID);
         Assert.assertEquals(orig.isPublic, a.isPublic);
         Assert.assertEquals(orig.isLocked, a.isLocked);
-        Assert.assertEquals(orig.readOnlyGroup, a.readOnlyGroup);
-        Assert.assertEquals(orig.readWriteGroup, a.readWriteGroup);
-        Assert.assertEquals(orig.properties, a.properties);
+        Assert.assertEquals(orig.getReadOnlyGroup(), a.getReadOnlyGroup());
+        Assert.assertEquals(orig.getReadWriteGroup(), a.getReadWriteGroup());
+        Assert.assertEquals(orig.getProperties(), a.getProperties());
         
         Assert.assertTrue(a instanceof ContainerNode);
         ContainerNode c = (ContainerNode) a;
@@ -220,9 +220,9 @@ public class NodeDAOTest {
         
         // update
         Thread.sleep(10L);
-        orig.readOnlyGroup.add(URI.create("ivo://opencadc.org/gms?g1"));
-        orig.readWriteGroup.add(URI.create("ivo://opencadc.org/gms?g3"));
-        orig.properties.add(new NodeProperty(VOS.PROPERTY_URI_CONTENTLENGTH, "123"));
+        orig.getReadOnlyGroup().add(URI.create("ivo://opencadc.org/gms?g1"));
+        orig.getReadWriteGroup().add(URI.create("ivo://opencadc.org/gms?g3"));
+        orig.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTLENGTH, "123"));
         orig.isPublic = true;
         nodeDAO.put(orig);
         Node updated = nodeDAO.get(orig.getID());
@@ -237,9 +237,9 @@ public class NodeDAOTest {
         Assert.assertEquals(orig.ownerID, updated.ownerID);
         Assert.assertEquals(orig.isPublic, updated.isPublic);
         Assert.assertEquals(orig.isLocked, updated.isLocked);
-        Assert.assertEquals(orig.readOnlyGroup, updated.readOnlyGroup);
-        Assert.assertEquals(orig.readWriteGroup, updated.readWriteGroup);
-        Assert.assertEquals(orig.properties, updated.properties);
+        Assert.assertEquals(orig.getReadOnlyGroup(), updated.getReadOnlyGroup());
+        Assert.assertEquals(orig.getReadWriteGroup(), updated.getReadWriteGroup());
+        Assert.assertEquals(orig.getProperties(), updated.getProperties());
         
         Assert.assertTrue(updated instanceof ContainerNode);
         ContainerNode uc = (ContainerNode) updated;
@@ -265,19 +265,19 @@ public class NodeDAOTest {
         orig.isPublic = true;
         orig.isLocked = false;
         orig.inheritPermissions = false;
-        orig.readOnlyGroup.add(URI.create("ivo://opencadc.org/gms?g1"));
-        orig.readOnlyGroup.add(URI.create("ivo://opencadc.org/gms?g2"));
-        orig.readWriteGroup.add(URI.create("ivo://opencadc.org/gms?g3"));
-        orig.readWriteGroup.add(URI.create("ivo://opencadc.org/gms?g4,g5"));
-        orig.readWriteGroup.add(URI.create("ivo://opencadc.org/gms?g6-g7"));
-        orig.readWriteGroup.add(URI.create("ivo://opencadc.org/gms?g6.g7"));
-        orig.readWriteGroup.add(URI.create("ivo://opencadc.org/gms?g6_g7"));
-        orig.readWriteGroup.add(URI.create("ivo://opencadc.org/gms?g6~g7"));
+        orig.getReadOnlyGroup().add(URI.create("ivo://opencadc.org/gms?g1"));
+        orig.getReadOnlyGroup().add(URI.create("ivo://opencadc.org/gms?g2"));
+        orig.getReadWriteGroup().add(URI.create("ivo://opencadc.org/gms?g3"));
+        orig.getReadWriteGroup().add(URI.create("ivo://opencadc.org/gms?g4,g5"));
+        orig.getReadWriteGroup().add(URI.create("ivo://opencadc.org/gms?g6-g7"));
+        orig.getReadWriteGroup().add(URI.create("ivo://opencadc.org/gms?g6.g7"));
+        orig.getReadWriteGroup().add(URI.create("ivo://opencadc.org/gms?g6_g7"));
+        orig.getReadWriteGroup().add(URI.create("ivo://opencadc.org/gms?g6~g7"));
         
-        orig.properties.add(new NodeProperty(VOS.PROPERTY_URI_CONTENTLENGTH, "123"));
-        orig.properties.add(new NodeProperty(URI.create("custom:prop"), "spaces in value"));
-        orig.properties.add(new NodeProperty(URI.create("sketchy:a,b"), "comma in uri"));
-        orig.properties.add(new NodeProperty(URI.create("sketchy:funny"), "value-with-{delims}"));
+        orig.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTLENGTH, "123"));
+        orig.getProperties().add(new NodeProperty(URI.create("custom:prop"), "spaces in value"));
+        orig.getProperties().add(new NodeProperty(URI.create("sketchy:a,b"), "comma in uri"));
+        orig.getProperties().add(new NodeProperty(URI.create("sketchy:funny"), "value-with-{delims}"));
         nodeDAO.put(orig);
         
         // get-by-id
@@ -303,9 +303,9 @@ public class NodeDAOTest {
         Assert.assertEquals(orig.ownerID, a.ownerID);
         Assert.assertEquals(orig.isPublic, a.isPublic);
         Assert.assertEquals(orig.isLocked, a.isLocked);
-        Assert.assertEquals(orig.readOnlyGroup, a.readOnlyGroup);
-        Assert.assertEquals(orig.readWriteGroup, a.readWriteGroup);
-        Assert.assertEquals(orig.properties, a.properties);
+        Assert.assertEquals(orig.getReadOnlyGroup(), a.getReadOnlyGroup());
+        Assert.assertEquals(orig.getReadWriteGroup(), a.getReadWriteGroup());
+        Assert.assertEquals(orig.getProperties(), a.getProperties());
         
         Assert.assertTrue(a instanceof ContainerNode);
         ContainerNode c = (ContainerNode) a;
@@ -322,12 +322,12 @@ public class NodeDAOTest {
         Thread.sleep(10L);
         orig.isPublic = false;
         orig.isLocked = true;
-        orig.readOnlyGroup.clear();
-        orig.readOnlyGroup.add(URI.create("ivo://opencadc.org/gms?g1"));
-        orig.readWriteGroup.clear();
-        orig.readWriteGroup.add(URI.create("ivo://opencadc.org/gms?g3"));
-        orig.properties.clear();
-        orig.properties.add(new NodeProperty(VOS.PROPERTY_URI_CONTENTLENGTH, "123"));
+        orig.getReadOnlyGroup().clear();
+        orig.getReadOnlyGroup().add(URI.create("ivo://opencadc.org/gms?g1"));
+        orig.getReadWriteGroup().clear();
+        orig.getReadWriteGroup().add(URI.create("ivo://opencadc.org/gms?g3"));
+        orig.getProperties().clear();
+        orig.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTLENGTH, "123"));
         orig.inheritPermissions = true;
         nodeDAO.put(orig);
         Node updated = nodeDAO.get(orig.getID());
@@ -342,9 +342,9 @@ public class NodeDAOTest {
         Assert.assertEquals(orig.ownerID, updated.ownerID);
         Assert.assertEquals(orig.isPublic, updated.isPublic);
         Assert.assertEquals(orig.isLocked, updated.isLocked);
-        Assert.assertEquals(orig.readOnlyGroup, updated.readOnlyGroup);
-        Assert.assertEquals(orig.readWriteGroup, updated.readWriteGroup);
-        Assert.assertEquals(orig.properties, updated.properties);
+        Assert.assertEquals(orig.getReadOnlyGroup(), updated.getReadOnlyGroup());
+        Assert.assertEquals(orig.getReadWriteGroup(), updated.getReadWriteGroup());
+        Assert.assertEquals(orig.getProperties(), updated.getProperties());
         
         Assert.assertTrue(updated instanceof ContainerNode);
         ContainerNode uc = (ContainerNode) updated;
@@ -366,8 +366,8 @@ public class NodeDAOTest {
         orig.ownerID = "the-owner";
         orig.isPublic = true;
         orig.isLocked = false;
-        orig.properties.add(new NodeProperty(VOS.PROPERTY_URI_TYPE, "text/plain"));
-        orig.properties.add(new NodeProperty(VOS.PROPERTY_URI_DESCRIPTION, "this is the good stuff(tm)"));
+        orig.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_TYPE, "text/plain"));
+        orig.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_DESCRIPTION, "this is the good stuff(tm)"));
         nodeDAO.put(orig);
         
         // get-by-id
@@ -394,9 +394,9 @@ public class NodeDAOTest {
         Assert.assertEquals(orig.ownerID, a.ownerID);
         Assert.assertEquals(orig.isPublic, a.isPublic);
         Assert.assertEquals(orig.isLocked, a.isLocked);
-        Assert.assertEquals(orig.readOnlyGroup, a.readOnlyGroup);
-        Assert.assertEquals(orig.readWriteGroup, a.readWriteGroup);
-        Assert.assertEquals(orig.properties, a.properties);
+        Assert.assertEquals(orig.getReadOnlyGroup(), a.getReadOnlyGroup());
+        Assert.assertEquals(orig.getReadWriteGroup(), a.getReadWriteGroup());
+        Assert.assertEquals(orig.getProperties(), a.getProperties());
         
         Assert.assertTrue(a instanceof DataNode);
         DataNode dn = (DataNode) a;
@@ -413,12 +413,12 @@ public class NodeDAOTest {
         Thread.sleep(10L);
         orig.isPublic = false;
         orig.isLocked = true;
-        orig.readOnlyGroup.clear();
-        orig.readOnlyGroup.add(URI.create("ivo://opencadc.org/gms?g1"));
-        orig.readWriteGroup.clear();
-        orig.readWriteGroup.add(URI.create("ivo://opencadc.org/gms?g3"));
-        orig.properties.clear();
-        orig.properties.add(new NodeProperty(VOS.PROPERTY_URI_CONTENTLENGTH, "123"));
+        orig.getReadOnlyGroup().clear();
+        orig.getReadOnlyGroup().add(URI.create("ivo://opencadc.org/gms?g1"));
+        orig.getReadWriteGroup().clear();
+        orig.getReadWriteGroup().add(URI.create("ivo://opencadc.org/gms?g3"));
+        orig.getProperties().clear();
+        orig.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTLENGTH, "123"));
         // don't change storageID
         nodeDAO.put(orig);
         Node updated = nodeDAO.get(orig.getID());
@@ -433,9 +433,9 @@ public class NodeDAOTest {
         Assert.assertEquals(orig.ownerID, updated.ownerID);
         Assert.assertEquals(orig.isPublic, updated.isPublic);
         Assert.assertEquals(orig.isLocked, updated.isLocked);
-        Assert.assertEquals(orig.readOnlyGroup, updated.readOnlyGroup);
-        Assert.assertEquals(orig.readWriteGroup, updated.readWriteGroup);
-        Assert.assertEquals(orig.properties, updated.properties);
+        Assert.assertEquals(orig.getReadOnlyGroup(), updated.getReadOnlyGroup());
+        Assert.assertEquals(orig.getReadWriteGroup(), updated.getReadWriteGroup());
+        Assert.assertEquals(orig.getProperties(), updated.getProperties());
         
         
         Assert.assertTrue(a instanceof DataNode);
@@ -460,7 +460,7 @@ public class NodeDAOTest {
         orig.ownerID = "the-owner";
         orig.isPublic = true;
         orig.isLocked = false;
-        orig.properties.add(new NodeProperty(VOS.PROPERTY_URI_DESCRIPTION, "link to the good stuff(tm)"));
+        orig.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_DESCRIPTION, "link to the good stuff(tm)"));
         nodeDAO.put(orig);
         
         // get-by-id
@@ -486,9 +486,9 @@ public class NodeDAOTest {
         Assert.assertEquals(orig.ownerID, a.ownerID);
         Assert.assertEquals(orig.isPublic, a.isPublic);
         Assert.assertEquals(orig.isLocked, a.isLocked);
-        Assert.assertEquals(orig.readOnlyGroup, a.readOnlyGroup);
-        Assert.assertEquals(orig.readWriteGroup, a.readWriteGroup);
-        Assert.assertEquals(orig.properties, a.properties);
+        Assert.assertEquals(orig.getReadOnlyGroup(), a.getReadOnlyGroup());
+        Assert.assertEquals(orig.getReadWriteGroup(), a.getReadWriteGroup());
+        Assert.assertEquals(orig.getProperties(), a.getProperties());
         
         Assert.assertTrue(a instanceof LinkNode);
         LinkNode link = (LinkNode) a;
@@ -505,12 +505,12 @@ public class NodeDAOTest {
         Thread.sleep(10L);
         orig.isPublic = false;
         orig.isLocked = true;
-        orig.readOnlyGroup.clear();
-        orig.readOnlyGroup.add(URI.create("ivo://opencadc.org/gms?g1"));
-        orig.readWriteGroup.clear();
-        orig.readWriteGroup.add(URI.create("ivo://opencadc.org/gms?g3"));
-        orig.properties.clear();
-        orig.properties.add(new NodeProperty(VOS.PROPERTY_URI_CONTENTLENGTH, "123"));
+        orig.getReadOnlyGroup().clear();
+        orig.getReadOnlyGroup().add(URI.create("ivo://opencadc.org/gms?g1"));
+        orig.getReadWriteGroup().clear();
+        orig.getReadWriteGroup().add(URI.create("ivo://opencadc.org/gms?g3"));
+        orig.getProperties().clear();
+        orig.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTLENGTH, "123"));
         // don't change target
         nodeDAO.put(orig);
         Node updated = nodeDAO.get(orig.getID());
@@ -525,9 +525,9 @@ public class NodeDAOTest {
         Assert.assertEquals(orig.ownerID, updated.ownerID);
         Assert.assertEquals(orig.isPublic, updated.isPublic);
         Assert.assertEquals(orig.isLocked, updated.isLocked);
-        Assert.assertEquals(orig.readOnlyGroup, updated.readOnlyGroup);
-        Assert.assertEquals(orig.readWriteGroup, updated.readWriteGroup);
-        Assert.assertEquals(orig.properties, updated.properties);
+        Assert.assertEquals(orig.getReadOnlyGroup(), updated.getReadOnlyGroup());
+        Assert.assertEquals(orig.getReadWriteGroup(), updated.getReadWriteGroup());
+        Assert.assertEquals(orig.getProperties(), updated.getProperties());
         
         Assert.assertTrue(updated instanceof LinkNode);
         LinkNode ulink = (LinkNode) updated;
