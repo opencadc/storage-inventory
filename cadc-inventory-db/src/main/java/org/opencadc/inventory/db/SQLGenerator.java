@@ -1288,9 +1288,9 @@ public class SQLGenerator {
             prep.setString(col++, value.ownerID.toString());
             safeSetBoolean(prep, col++, value.isPublic);
             safeSetBoolean(prep, col++, value.isLocked);
-            safeSetArray(prep, col++, value.readOnlyGroup);
-            safeSetArray(prep, col++, value.readWriteGroup);
-            safeSetProps(prep, col++, value.properties);
+            safeSetArray(prep, col++, value.getReadOnlyGroup());
+            safeSetArray(prep, col++, value.getReadWriteGroup());
+            safeSetProps(prep, col++, value.getProperties());
             if (value instanceof ContainerNode) {
                 ContainerNode cn = (ContainerNode) value;
                 safeSetBoolean(prep, col++, cn.inheritPermissions);
@@ -1717,13 +1717,13 @@ public class SQLGenerator {
         ret.isLocked = isLocked;
 
         if (rawROG != null) {
-            Util.parseArrayURI(rawROG, ret.readOnlyGroup);
+            Util.parseArrayURI(rawROG, ret.getReadOnlyGroup());
         }
         if (rawRWG != null) {
-            Util.parseArrayURI(rawRWG, ret.readWriteGroup);
+            Util.parseArrayURI(rawRWG, ret.getReadWriteGroup());
         }
         if (rawProps != null) {
-            Util.parseArrayProps(rawProps, ret.properties);
+            Util.parseArrayProps(rawProps, ret.getProperties());
         }
 
         InventoryUtil.assignLastModified(ret, lastModified);

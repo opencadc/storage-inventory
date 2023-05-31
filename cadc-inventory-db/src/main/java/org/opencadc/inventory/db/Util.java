@@ -383,6 +383,7 @@ public class Util {
         throw new UnsupportedOperationException("converting " + o.getClass().getName() + " " + o + " to byte[]");
     }
 
+    // fills the dest set
     public static void parseArrayURI(String val, Set<URI> dest) {
         // postgresql 1D array: {a,"b,c"}
         if (val == null || val.isEmpty()) {
@@ -417,7 +418,8 @@ public class Util {
             }
         }
     }
-        
+
+    // fills the dest set
     public static void parseArrayProps(String val, Set<NodeProperty> dest) {
         // postgresql 2D array: {{a,b},{c,d}}
         if (val == null || val.isEmpty()) {
