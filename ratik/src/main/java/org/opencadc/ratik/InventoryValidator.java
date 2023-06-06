@@ -3,7 +3,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2022.                            (c) 2022.
+ *  (c) 2023.                            (c) 2023.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -254,15 +254,6 @@ public class InventoryValidator implements Runnable {
         }
     }
 
-    /**
-     * Validates local and remote sets of Artifacts.
-     *
-     * @throws ResourceNotFoundException For any missing required configuration that is missing.
-     * @throws IOException               For unreadable configuration files.
-     * @throws IllegalStateException     For any invalid configuration.
-     * @throws TransientException        temporary failure of TAP service: same call could work in future
-     * @throws InterruptedException      thread interrupted
-     */
     void doit() throws ResourceNotFoundException, IOException, IllegalStateException, TransientException,
                        InterruptedException {
 

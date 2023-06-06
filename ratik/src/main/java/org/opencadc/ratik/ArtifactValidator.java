@@ -119,7 +119,6 @@ public class ArtifactValidator {
      *
      * @param artifactDAO   local inventory database.
      * @param resourceID    identifier for the remote query service
-     * @param remoteSite    identifier for remote file service, null when local is a storage site
      * @param artifactSelector selection policy implementation
      */
     public ArtifactValidator(ArtifactDAO artifactDAO, URI resourceID, ArtifactSelector artifactSelector) {
@@ -141,6 +140,7 @@ public class ArtifactValidator {
         this.raceConditionStart = raceConditionStart;
     }
 
+    // set by InventoryHarvester before starting to validate
     public void setRemoteSite(StorageSite remoteSite) {
         this.remoteSite = remoteSite;
     }
