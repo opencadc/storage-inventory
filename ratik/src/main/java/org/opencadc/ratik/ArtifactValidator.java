@@ -3,7 +3,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2022.                            (c) 2022.
+ *  (c) 2023.                            (c) 2023.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -104,7 +104,7 @@ public class ArtifactValidator {
 
     private final ArtifactDAO artifactDAO;
     private final URI resourceID;
-    private final StorageSite remoteSite;
+    private StorageSite remoteSite;
     private final ArtifactSelector artifactSelector;
     private Date raceConditionStart;
 
@@ -122,11 +122,9 @@ public class ArtifactValidator {
      * @param remoteSite    identifier for remote file service, null when local is a storage site
      * @param artifactSelector selection policy implementation
      */
-    public ArtifactValidator(ArtifactDAO artifactDAO, URI resourceID, StorageSite remoteSite,
-                             ArtifactSelector artifactSelector) {
+    public ArtifactValidator(ArtifactDAO artifactDAO, URI resourceID, ArtifactSelector artifactSelector) {
         this.artifactDAO = artifactDAO;
         this.resourceID = resourceID;
-        this.remoteSite = remoteSite;
         this.artifactSelector = artifactSelector;
 
         this.transactionManager = this.artifactDAO.getTransactionManager();
@@ -142,9 +140,11 @@ public class ArtifactValidator {
     public void setRaceConditionStart(Date raceConditionStart) {
         this.raceConditionStart = raceConditionStart;
     }
-    
-    
 
+    public void setRemoteSite(StorageSite remoteSite) {
+        this.remoteSite = remoteSite;
+    }
+    
     /**
      * Validate the local and remote Artifacts.
      *
