@@ -161,8 +161,12 @@ public class ServiceAvailability implements AvailabilityPlugin {
             try {
                 credURI = localAuthority.getServiceURI(Standards.CRED_PROXY_10.toString());
                 URL url = reg.getServiceURL(credURI, Standards.VOSI_AVAILABILITY, AuthMethod.ANON);
-                CheckResource checkResource = new CheckWebService(url);
-                checkResource.check();
+                if (url != null) {
+                        CheckResource checkResource = new CheckWebService(url);
+                        checkResource.check();
+                    } else {
+                        log.debug("check skipped: " + credURI + " does not provide " + Standards.VOSI_AVAILABILITY);
+                    }
             } catch (NoSuchElementException ex) {
                 log.debug("not configured: " + Standards.CRED_PROXY_10);
             }
@@ -171,8 +175,12 @@ public class ServiceAvailability implements AvailabilityPlugin {
             try {
                 usersURI = localAuthority.getServiceURI(Standards.UMS_USERS_01.toString());
                 URL url = reg.getServiceURL(credURI, Standards.VOSI_AVAILABILITY, AuthMethod.ANON);
-                CheckResource checkResource = new CheckWebService(url);
-                checkResource.check();
+                if (url != null) {
+                        CheckResource checkResource = new CheckWebService(url);
+                        checkResource.check();
+                    } else {
+                        log.debug("check skipped: " + usersURI + " does not provide " + Standards.VOSI_AVAILABILITY);
+                    }
             } catch (NoSuchElementException ex) {
                 log.debug("not configured: " + Standards.UMS_USERS_01);
             }
@@ -181,9 +189,13 @@ public class ServiceAvailability implements AvailabilityPlugin {
             try {
                 groupsURI = localAuthority.getServiceURI(Standards.GMS_SEARCH_10.toString());
                 if (!groupsURI.equals(usersURI)) {
-                    URL url = reg.getServiceURL(credURI, Standards.VOSI_AVAILABILITY, AuthMethod.ANON);
-                    CheckResource checkResource = new CheckWebService(url);
-                    checkResource.check();
+                    URL url = reg.getServiceURL(groupsURI, Standards.VOSI_AVAILABILITY, AuthMethod.ANON);
+                    if (url != null) {
+                        CheckResource checkResource = new CheckWebService(url);
+                        checkResource.check();
+                    } else {
+                        log.debug("check skipped: " + groupsURI + " does not provide " + Standards.VOSI_AVAILABILITY);
+                    }
                 }
             } catch (NoSuchElementException ex) {
                 log.debug("not configured: " + Standards.GMS_SEARCH_10);
