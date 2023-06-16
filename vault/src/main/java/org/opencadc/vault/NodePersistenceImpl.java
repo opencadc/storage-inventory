@@ -310,12 +310,12 @@ public class NodePersistenceImpl { //implements NodePersistence {
                 }
                 
                 // generic key-value props
-                if (node.properties.contains(np)) {
+                if (node.getProperties().contains(np)) {
                     log.debug("updateProperties: remove previous " + np.getKey());
-                    node.properties.remove(np);
+                    node.getProperties().remove(np);
                 }
                 if (!np.isMarkedForDeletion()) {
-                    node.properties.add(np);
+                    node.getProperties().add(np);
                 }
             }
         }

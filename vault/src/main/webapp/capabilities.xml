@@ -4,6 +4,16 @@
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
     xmlns:vs="http://www.ivoa.net/xml/VODataService/v1.1">
 
+  <capability standardID="http://www.opencadc.org/std/storage#files-1.0">
+    <interface xsi:type="vs:ParamHTTP" role="std">
+      <accessURL use="base">https://replace.com/vault/nodes</accessURL>
+      <securityMethod />
+      <securityMethod standardID="ivo://ivoa.net/sso#cookie" />
+      <securityMethod standardID="ivo://ivoa.net/sso#tls-with-certificate" />
+      <securityMethod standardID="ivo://ivoa.net/sso#token"/>
+    </interface>
+  </capability>
+
   <capability standardID="ivo://ivoa.net/std/VOSI#capabilities">
     <interface xsi:type="vs:ParamHTTP" role="std">
       <accessURL use="full">https://replace.com/vault/capabilities</accessURL>
@@ -26,3 +36,4 @@
   </capability>
   
 </vosi:capabilities>
+
