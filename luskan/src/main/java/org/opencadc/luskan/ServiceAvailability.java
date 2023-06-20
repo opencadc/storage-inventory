@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2019.                            (c) 2019.
+*  (c) 2023.                            (c) 2023.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -92,6 +92,7 @@ import org.apache.log4j.Logger;
  * @author adriand
  */
 public class ServiceAvailability implements AvailabilityPlugin {
+
     private static final Logger log = Logger.getLogger(ServiceAvailability.class);
 
     private static final File AAI_PEM_FILE = new File(System.getProperty("user.home") + "/.ssl/cadcproxy.pem");
@@ -108,7 +109,7 @@ public class ServiceAvailability implements AvailabilityPlugin {
     public void setAppName(String appName) {
         this.appName = appName;
     }
-    
+
     @Override
     public Availability getStatus() {
         boolean isGood = true;
@@ -127,10 +128,10 @@ public class ServiceAvailability implements AvailabilityPlugin {
             // check connection pools
             CheckResource cr = new CheckDataSource("jdbc/tapuser", TAP_TEST);
             cr.check();
-            
+
             cr = new CheckDataSource("jdbc/tapadm", TAP_TEST);
             cr.check();
-            
+
             cr = new CheckDataSource("jdbc/tapadm", UWS_TEST);
             cr.check();
 
@@ -157,15 +158,15 @@ public class ServiceAvailability implements AvailabilityPlugin {
                 usersURI = localAuthority.getServiceURI(Standards.UMS_USERS_01.toString());
                 URL url = reg.getServiceURL(credURI, Standards.VOSI_AVAILABILITY, AuthMethod.ANON);
                 if (url != null) {
-                        CheckResource checkResource = new CheckWebService(url);
-                        checkResource.check();
-                    } else {
-                        log.debug("check skipped: " + usersURI + " does not provide " + Standards.VOSI_AVAILABILITY);
-                    }
+                    CheckResource checkResource = new CheckWebService(url);
+                    checkResource.check();
+                } else {
+                    log.debug("check skipped: " + usersURI + " does not provide " + Standards.VOSI_AVAILABILITY);
+                }
             } catch (NoSuchElementException ex) {
                 log.debug("not configured: " + Standards.UMS_USERS_01);
             }
-            
+
             URI groupsURI = null;
             try {
                 groupsURI = localAuthority.getServiceURI(Standards.GMS_SEARCH_10.toString());
@@ -181,7 +182,7 @@ public class ServiceAvailability implements AvailabilityPlugin {
             } catch (NoSuchElementException ex) {
                 log.debug("not configured: " + Standards.GMS_SEARCH_10);
             }
-            
+
             if (credURI != null || usersURI != null) {
                 if (AAI_PEM_FILE.exists() && AAI_PEM_FILE.canRead()) {
                     // check for a certificate needed to perform network A&A ops
@@ -216,17 +217,17 @@ public class ServiceAvailability implements AvailabilityPlugin {
         String key = appName + RestAction.STATE_MODE_KEY;
         if (RestAction.STATE_OFFLINE.equalsIgnoreCase(state)) {
             System.setProperty(key, RestAction.STATE_OFFLINE);
-        //} else if (RestAction.STATE_READ_ONLY.equalsIgnoreCase(state)) {
-        //    System.setProperty(key, RestAction.STATE_READ_ONLY);
+            //} else if (RestAction.STATE_READ_ONLY.equalsIgnoreCase(state)) {
+            //    System.setProperty(key, RestAction.STATE_READ_ONLY);
         } else if (RestAction.STATE_READ_WRITE.equalsIgnoreCase(state)) {
             System.setProperty(key, RestAction.STATE_READ_WRITE);
         } else {
             throw new IllegalArgumentException("invalid state: " + state
-                + " expected: " + RestAction.STATE_READ_WRITE + "|" + RestAction.STATE_OFFLINE);
+                    + " expected: " + RestAction.STATE_READ_WRITE + "|" + RestAction.STATE_OFFLINE);
         }
         log.info("WebService state changed: " + key + "=" + state + " [OK]");
     }
-    
+
     @Override
     public boolean heartbeat() throws RuntimeException {
         return true;

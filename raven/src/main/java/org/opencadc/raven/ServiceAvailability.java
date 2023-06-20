@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2022.                            (c) 2022.
+*  (c) 2023.                            (c) 2023.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -137,11 +137,11 @@ public class ServiceAvailability implements AvailabilityPlugin {
                 credURI = localAuthority.getServiceURI(Standards.CRED_PROXY_10.toString());
                 URL url = reg.getServiceURL(credURI, Standards.VOSI_AVAILABILITY, AuthMethod.ANON);
                 if (url != null) {
-                        CheckResource checkResource = new CheckWebService(url);
-                        checkResource.check();
-                    } else {
-                        log.debug("check skipped: " + credURI + " does not provide " + Standards.VOSI_AVAILABILITY);
-                    }
+                    CheckResource checkResource = new CheckWebService(url);
+                    checkResource.check();
+                } else {
+                    log.debug("check skipped: " + credURI + " does not provide " + Standards.VOSI_AVAILABILITY);
+                }
             } catch (NoSuchElementException ex) {
                 log.debug("not configured: " + Standards.CRED_PROXY_10);
             }
@@ -151,11 +151,11 @@ public class ServiceAvailability implements AvailabilityPlugin {
                 usersURI = localAuthority.getServiceURI(Standards.UMS_USERS_01.toString());
                 URL url = reg.getServiceURL(usersURI, Standards.VOSI_AVAILABILITY, AuthMethod.ANON);
                 if (url != null) {
-                        CheckResource checkResource = new CheckWebService(url);
-                        checkResource.check();
-                    } else {
-                        log.debug("check skipped: " + usersURI + " does not provide " + Standards.VOSI_AVAILABILITY);
-                    }
+                    CheckResource checkResource = new CheckWebService(url);
+                    checkResource.check();
+                } else {
+                    log.debug("check skipped: " + usersURI + " does not provide " + Standards.VOSI_AVAILABILITY);
+                }
             } catch (NoSuchElementException ex) {
                 log.debug("not configured: " + Standards.CRED_PROXY_10);
             }
