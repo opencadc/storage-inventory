@@ -33,6 +33,7 @@ dependencies {
     compile 'org.opencadc:cadc-registry:[1.7,2.0)'
 
     runtime 'org.opencadc:cadc-log:[1.1,)'
+    runtime 'org.opencadc:cadc-gms:[1.0.5,2.0)'
     runtime 'org.opencadc:cadc-access-control-identity:[1.2,2.0)'
 
     testCompile 'junit:junit:[4.0,)'
