@@ -92,14 +92,14 @@ import org.opencadc.inventory.db.ArtifactDAO;
 /**
  * This class performs the work of determining if the executing artifact
  * service is operating as expected.
- * 
+ *
  * @author majorb
  */
 public class ServiceAvailability implements AvailabilityPlugin {
 
     private static final Logger log = Logger.getLogger(ServiceAvailability.class);
     private static final File AAI_PEM_FILE = new File(System.getProperty("user.home") + "/.ssl/cadcproxy.pem");
-    
+
     private String appName;
 
     /**
@@ -118,6 +118,7 @@ public class ServiceAvailability implements AvailabilityPlugin {
 
     /**
      * Performs a simple check for the availability of the object.
+     *
      * @return true always
      */
     @Override
@@ -132,16 +133,17 @@ public class ServiceAvailability implements AvailabilityPlugin {
 
     /**
      * Do a comprehensive check of the service and it's dependencies.
+     *
      * @return Information of the availability check.
      */
     @Override
     public Availability getStatus() {
         boolean isGood = true;
         String note = "service is accepting requests";
-        
+
         try {
             MultiValuedProperties props = MinocInitAction.getConfig();
-            Map<String,Object> config = MinocInitAction.getDaoConfig(props);
+            Map<String, Object> config = MinocInitAction.getDaoConfig(props);
             ArtifactDAO dao = new ArtifactDAO();
             dao.setConfig(config); // connectivity tested
 
@@ -152,7 +154,7 @@ public class ServiceAvailability implements AvailabilityPlugin {
             if (RestAction.STATE_READ_ONLY.equals(state)) {
                 return new Availability(false, RestAction.STATE_READ_ONLY_MSG);
             }
-            
+
             // check other services we depend on
             RegistryClient reg = new RegistryClient();
             LocalAuthority localAuthority = new LocalAuthority();
@@ -162,11 +164,11 @@ public class ServiceAvailability implements AvailabilityPlugin {
                 credURI = localAuthority.getServiceURI(Standards.CRED_PROXY_10.toString());
                 URL url = reg.getServiceURL(credURI, Standards.VOSI_AVAILABILITY, AuthMethod.ANON);
                 if (url != null) {
-                        CheckResource checkResource = new CheckWebService(url);
-                        checkResource.check();
-                    } else {
-                        log.debug("check skipped: " + credURI + " does not provide " + Standards.VOSI_AVAILABILITY);
-                    }
+                    CheckResource checkResource = new CheckWebService(url);
+                    checkResource.check();
+                } else {
+                    log.debug("check skipped: " + credURI + " does not provide " + Standards.VOSI_AVAILABILITY);
+                }
             } catch (NoSuchElementException ex) {
                 log.debug("not configured: " + Standards.CRED_PROXY_10);
             }
@@ -176,15 +178,15 @@ public class ServiceAvailability implements AvailabilityPlugin {
                 usersURI = localAuthority.getServiceURI(Standards.UMS_USERS_01.toString());
                 URL url = reg.getServiceURL(credURI, Standards.VOSI_AVAILABILITY, AuthMethod.ANON);
                 if (url != null) {
-                        CheckResource checkResource = new CheckWebService(url);
-                        checkResource.check();
-                    } else {
-                        log.debug("check skipped: " + usersURI + " does not provide " + Standards.VOSI_AVAILABILITY);
-                    }
+                    CheckResource checkResource = new CheckWebService(url);
+                    checkResource.check();
+                } else {
+                    log.debug("check skipped: " + usersURI + " does not provide " + Standards.VOSI_AVAILABILITY);
+                }
             } catch (NoSuchElementException ex) {
                 log.debug("not configured: " + Standards.UMS_USERS_01);
             }
-            
+
             URI groupsURI = null;
             try {
                 groupsURI = localAuthority.getServiceURI(Standards.GMS_SEARCH_10.toString());
@@ -210,7 +212,7 @@ public class ServiceAvailability implements AvailabilityPlugin {
                     log.debug("AAI cert not found or unreadable");
                 }
             }
-            
+
         } catch (CheckException ce) {
             // tests determined that the resource is not working
             isGood = false;
@@ -239,8 +241,8 @@ public class ServiceAvailability implements AvailabilityPlugin {
             System.setProperty(key, RestAction.STATE_READ_WRITE);
         } else {
             throw new IllegalArgumentException("invalid state: " + state
-                + " expected: " + RestAction.STATE_READ_WRITE + "|" 
-                + RestAction.STATE_OFFLINE + "|" + RestAction.STATE_READ_ONLY);
+                    + " expected: " + RestAction.STATE_READ_WRITE + "|"
+                    + RestAction.STATE_OFFLINE + "|" + RestAction.STATE_READ_ONLY);
         }
         log.info("WebService state changed: " + key + "=" + state + " [OK]");
     }
