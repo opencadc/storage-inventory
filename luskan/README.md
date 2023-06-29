@@ -61,7 +61,6 @@ it assumes a schema named `inventory` holds the content.
 
 See <a href="https://github.com/opencadc/reg/tree/master/cadc-registry">cadc-registry</a>.
 
-
 ### cadc-tap-tmp.properties
 Temporary storage of async results is now handled by the 
 [cadc-tap-tmp](https://github.com/opencadc/tap/tree/master/cadc-tap-tmp) library. This
@@ -104,6 +103,8 @@ org.opencadc.luskan.uwsRollover = 180
 ```
 Assuming instances are restarted regularly, this would cause rollover approximatelty once every 6 months.
 
+### cadcproxy.pem (optional)
+This client certificate is used to make authenticated server-to-server calls for system-level A&A purposes.
 
 ## building it
 ```
