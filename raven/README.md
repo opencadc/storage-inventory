@@ -27,25 +27,29 @@ The following keys are required:
 org.opencadc.inventory.db.SQLGenerator=org.opencadc.inventory.db.SQLGenerator
 org.opencadc.raven.inventory.schema={schema}
 
-org.opencadc.raven.publicKeyFile={public key file name}
-org.opencadc.raven.privateKeyFile={private key file name}
-
 # consistency settings
 org.opencadc.raven.consistency.preventNotFound=true|false
 ```
-The key file names are relative (no path) and the files must be in the config directory.
-
-raven can be configured prevent artifact-not-found errors that might result due to the eventual consistency nature of
+`raven` can be configured prevent artifact-not-found errors that might result due to the eventual consistency nature of
 the system by directly checking for the artifact at the sites (`preventNotFound=true`). This however introduces an
 overhead for the genuine not-found cases.
 
 The following optional keys configure raven to use external service(s) to obtain grant information in order
 to perform authorization checks:
 ```
+# keys to generate pre-auth URLs to minoc
+org.opencadc.raven.publicKeyFile={public key file name}
+org.opencadc.raven.privateKeyFile={private key file name}
+
 org.opencadc.raven.readGrantProvider={resourceID of a permission granting service}
 org.opencadc.raven.writeGrantProvider={resourceID of a permission granting service}
 ```
-Multiple values of the permission granting service resourceID(s) may be provided by including multiple property 
+The optional _privateKeyFile_ is used to sign pre-auth URLs (one-time token included in URL) so that a `minoc` service does not
+have to repeat permission checks. The _publicKeyFile_ is not currently used but may be required in future (either exported via URL
+or used to check if `minoc` services have the right key before generating pre-auth URLs: TBD).
+
+The optional _readGrantProvider_ and _writeGrantProvider_ keys configure minoc to call other services to get grants (permissions) for 
+operations. Multiple values of the permission granting service resourceID(s) may be provided by including multiple property 
 settings. All services will be consulted but a single positive result is sufficient to grant permission for an 
 action.
 

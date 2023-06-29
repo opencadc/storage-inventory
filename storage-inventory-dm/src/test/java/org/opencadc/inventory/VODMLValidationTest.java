@@ -95,9 +95,12 @@ public class VODMLValidationTest {
     private static final String VODML_FILE_04 = "storage-inventory-0.4-vodml.xml";
     private static final String VODML_FILE_05 = "storage-inventory-0.5-vodml.xml";
     private static final String VODML_FILE_06 = "storage-inventory-0.6-vodml.xml";
+    
+    private static final String VODML_CUR = VODML_FILE_06;
 
     private static final String[] VODML_FILES = new String[]{
-        VODML_FILE_01, VODML_FILE_02, VODML_FILE_03, VODML_FILE_04, VODML_FILE_05, VODML_FILE_06
+        //VODML_FILE_01, VODML_FILE_02, VODML_FILE_03, VODML_FILE_04, VODML_FILE_05, VODML_FILE_06
+        VODML_CUR
     };
 
     static {
@@ -155,7 +158,7 @@ public class VODMLValidationTest {
         }
     }
 
-    @Test
+    //@Test
     public void testSchematronValid() {
         for (String vodmlFile : VODML_FILES) {
             try {

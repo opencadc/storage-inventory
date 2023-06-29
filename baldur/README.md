@@ -22,7 +22,6 @@ for common system properties.
 
 `baldur` includes multiple IdentityManager implementations to support authenticated access:
  - See <a href="https://github.com/opencadc/ac/tree/master/cadc-access-control-identity">cadc-access-control-identity</a> for CADC access-control system support.
-  
  - See <a href="https://github.com/opencadc/ac/tree/master/cadc-gms">cadc-gms</a> for OIDC token support.
 
 ### cadc-registry.properties
@@ -36,13 +35,17 @@ The configuration in baldur.properties serves two purposes:  to allow certain us
 # time (in seconds) the grant is considered valid 
 org.opencadc.baldur.grantExpiry = {time in seconds}
 
-# list of users (one per line) who are allowed to call this service
+# optional authorization: allow anonymous calls (default: false)
+org.opencadc.baldur.allowAnon = {true|false}
+
+# optional list of users (one per line) who are allowed to call this service
+# allowedUser is an X509 distinguished name (subject of a client certificate)
 org.opencadc.baldur.allowedUser = {user identity}
 
-TODO: the allowedGroup property currently does not enable access to this service,
-TODO: add support for allowedGroup to give service access.
+#TODO: the allowedGroup property currently does not enable access to this service,
+#TODO: add support for allowedGroup to give service access.
 # list of groups (one per line) whose members are allowed to call this service
-org.opencadc.baldur.allowedGroup = {groupURI}
+#org.opencadc.baldur.allowedGroup = {groupURI}
 
 # one or more entry properties to grant permission to access artifacts
 # - each entry has a name
@@ -56,9 +59,13 @@ org.opencadc.baldur.entry = {entry name}
 ```
 `org.opencadc.baldur.grantExpiry` is used to calculate the expiry date of a grant. The value is an integer in seconds. The expiry date of a grant is: (the current time when a grant is issued + the number of seconds given by the expiryTime).
 
+`org.opencadc.baldur.allowAnon` specifies if user(s) must authenticate to make to make calls to the service. Allowing
+anonymous calls can expose information about the current configuration, such as existence of namespaces and group
+identifiers that have wide permissions. Operationally, only `minoc` and `raven` would normally make calls to `baldur`.
+
 `org.opencadc.baldur.allowedUser` specifies the user(s) who are authorized to make calls to the service. The value is a list of user identities (e.g. X500 distingushed name), one line per user.
 
-`org.opencadc.baldur.allowedGroup` specifies the group(s) whose members have authorization to make calls to the service. The value is a list of group identifiers (e.g. ivo://cadc.nrc.ca/gms?CADC), one line per group.
+TODO: `org.opencadc.baldur.allowedGroup` specifies the group(s) whose members have authorization to make calls to the service. The value is a list of group identifiers (e.g. ivo://cadc.nrc.ca/gms?CADC), one line per group.
 
 The `org.opencadc.baldur.entry` creates a new rule with the specified name. That name must be
 unique and is used in the following four (4) dynamically defined keys.

@@ -12,7 +12,7 @@ repositories {
 
 sourceCompatibility = 1.8
 group = 'org.opencadc'
-version = '0.2.0'
+version = '0.2.1'
 
 description = 'OpenCADC Storage Inventory server utility library'
 def git_url = 'https://github.com/opencadc/storage-inventory'

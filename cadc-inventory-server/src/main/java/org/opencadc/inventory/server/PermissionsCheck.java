@@ -69,10 +69,12 @@ package org.opencadc.inventory.server;
 
 import ca.nrc.cadc.auth.AuthMethod;
 import ca.nrc.cadc.auth.AuthenticationUtil;
+import ca.nrc.cadc.auth.SSLUtil;
 import ca.nrc.cadc.cred.client.CredUtil;
 import ca.nrc.cadc.log.WebServiceLogInfo;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
+import java.io.File;
 import java.io.IOException;
 import java.net.URI;
 import java.security.AccessControlException;
@@ -110,6 +112,14 @@ public class PermissionsCheck {
 
     private static final Logger log = Logger.getLogger(PermissionsCheck.class);
 
+    private Subject createOpsSubject() {
+        File opscert = new File(System.getProperty("user.home") + "/.ssl/cadcproxy.pem");
+        if (opscert.exists()) {
+            return SSLUtil.createSubject(opscert);
+        }
+        return AuthenticationUtil.getAnonSubject();
+    }
+    
     /**
      * Check the given read granting services for read permission to the artifact.
      *
@@ -130,7 +140,7 @@ public class PermissionsCheck {
 
         Set<GroupURI> granted = new TreeSet<>();
         if (!readGrantServices.isEmpty()) {
-            Subject ops = CredUtil.createOpsSubject();
+            Subject ops = createOpsSubject();
             try {
                 List<ReadGrant> grants = Subject.doAs(ops, new GetReadGrantsAction(this.artifactURI, readGrantServices));
                 for (ReadGrant g : grants) {
@@ -199,7 +209,7 @@ public class PermissionsCheck {
 
         Set<GroupURI> granted = new TreeSet<>();
         if (!writeGrantServices.isEmpty()) {
-            Subject ops = CredUtil.createOpsSubject();
+            Subject ops = createOpsSubject();
             try {
                 List<WriteGrant> grants = Subject.doAs(ops, new GetWriteGrantsAction(this.artifactURI, writeGrantServices));
                 for (WriteGrant g : grants) {

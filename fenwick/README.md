@@ -54,9 +54,10 @@ If fenwick encounters a non-fatal error, it sleeps for an initial timeout value,
 If a subsequent run encounters an error, the previous timeout value is doubled, and fenwick sleeps before 
 another run. This pattern repeats until `maxRetryInterval` is reached.
 
-### cadcproxy.pem
+### cadcproxy.pem (optional)
 Querying the remote query service (luskan) requires permission. `fenwick` uses this certificate file located
-in /config to authenticate.
+in /config to authenticate. If the file is not found, `fenwick` will make anonymous calls to the remote query
+service.
 
 ### artifact-filter.sql (optional)
 When `org.opencadc.fenwick.artifactSelector=filter` is specified, this config file
