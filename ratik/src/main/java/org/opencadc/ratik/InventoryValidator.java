@@ -105,6 +105,7 @@ import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.StorageSite;
 import org.opencadc.inventory.db.ArtifactDAO;
+import org.opencadc.inventory.db.StorageSiteDAO;
 import org.opencadc.inventory.db.version.InitDatabase;
 import org.opencadc.inventory.query.ArtifactRowMapper;
 import org.opencadc.inventory.util.ArtifactSelector;
@@ -259,11 +260,19 @@ public class InventoryValidator implements Runnable {
 
         if (trackSiteLocations) {
             try {
-                this.remoteSite = getRemoteStorageSite(resourceID);
+                StorageSite ss = getRemoteStorageSite(resourceID);
+                // verify with local
+                StorageSiteDAO sdao = new StorageSiteDAO(artifactDAO);
+                StorageSite knownSite = sdao.get(ss.getID());
+                if (knownSite == null) {
+                    throw new IllegalStateException("remote site " + ss.getID() + " (" + ss.getResourceID() + ") "
+                        + "not found in local database -- cannot validate unsynced site");
+                }
+                this.remoteSite = ss;
                 artifactValidator.setRemoteSite(remoteSite);
             } catch (ResourceNotFoundException ex) {
                 throw new IllegalArgumentException("query service not found: " + resourceID, ex);
-            } catch (Exception ex) {
+            } catch (TransientException | IOException | InterruptedException ex) {
                 throw new IllegalArgumentException("remote StorageSite query failed", ex);
             }
         } else {
