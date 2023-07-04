@@ -807,8 +807,9 @@ public class ArtifactValidator {
 
     private class ArtifactQueryResultRowMapper implements TapRowMapper<ArtifactQueryResult> {
 
+        ArtifactRowMapper mapper = new ArtifactRowMapper();
         public ArtifactQueryResult mapRow(final List<Object> row) {
-            ArtifactRowMapper mapper = new ArtifactRowMapper();
+            
             Artifact artifact = mapper.mapRow(row);
             Integer numCopies = (Integer) row.get(row.size() - 1);
 

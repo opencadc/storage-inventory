@@ -1088,7 +1088,6 @@ public class InventoryValidatorTest {
                                          new Date(), 1024L);
         this.remoteEnvironment.artifactDAO.put(artifact2);
         
-        Log4jInit.setLevel(ArtifactDAO.class.getPackage().getName(), Level.DEBUG);
         try {
             System.setProperty("user.home", TMP_DIR);
             InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.inventoryConnectionConfig, 

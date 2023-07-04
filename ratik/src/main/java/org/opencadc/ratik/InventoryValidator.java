@@ -566,7 +566,7 @@ public class InventoryValidator implements Runnable {
             final long t1 = System.currentTimeMillis();
             try {
                 log.debug(InventoryValidator.class.getSimpleName() + ".remoteQuery bucket=" + bucket);
-                ResourceIterator<Artifact> ret = tapClient.query(query, new ArtifactRowMapper(), true);
+                ResourceIterator<Artifact> ret = tapClient.query(query, new CountingArtifactRowMapper(), true);
                 long dt = System.currentTimeMillis() - t1;
                 log.info(InventoryValidator.class.getSimpleName() + ".remoteQuery bucket=" + bucket + " duration=" + dt);
                 if (!ret.hasNext() && !allowEmptyIterator) {
@@ -587,6 +587,21 @@ public class InventoryValidator implements Runnable {
         }
         throw tex;
     }
+    
+    private class CountingArtifactRowMapper extends ArtifactRowMapper {
+        private long cur = 0L;
+        
+        @Override
+        public Artifact mapRow(List<Object> row) {
+            cur++;
+            Artifact ret = super.mapRow(row);
+            Long rownum = (Long) row.get(row.size() - 1);
+            if (rownum == null || rownum != cur) {
+                throw new TransientException("detected broken query result stream: expected row " + cur + "found: " + rownum);
+            }
+            return ret;
+        }
+    }
 
     /**
      * Assemble the WHERE clause and return the full query.  Very useful for testing separately.
@@ -597,7 +612,7 @@ public class InventoryValidator implements Runnable {
     String buildRemoteQuery(final String bucket)
         throws ResourceNotFoundException, IOException {
         final StringBuilder query = new StringBuilder();
-        query.append(ArtifactRowMapper.BASE_QUERY);
+        query.append(String.format("%s, row_counter() %s",  ArtifactRowMapper.SELECT,  ArtifactRowMapper.FROM));
 
         if (StringUtil.hasText(this.artifactSelector.getConstraint())) {
             if (query.indexOf("WHERE") < 0) {
