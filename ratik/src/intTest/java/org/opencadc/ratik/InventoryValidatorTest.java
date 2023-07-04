@@ -70,7 +70,9 @@
 package org.opencadc.ratik;
 
 import ca.nrc.cadc.date.DateUtil;
+import ca.nrc.cadc.io.ResourceIterator;
 import ca.nrc.cadc.net.ResourceNotFoundException;
+import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.util.FileUtil;
 import ca.nrc.cadc.util.Log4jInit;
 import java.io.File;
@@ -188,6 +190,60 @@ public class InventoryValidatorTest {
         fileWriter.close();
     }
 
+    @Test
+    public void testEmptyRemoteIterator() throws Exception {
+        // Put the same Artifact into local and remote.
+        Artifact artifact = new Artifact(URI.create("cadc:INTTEST/one.ext"), TestUtil.getRandomMD5(),
+                                         new Date(), 1024L);
+        this.remoteEnvironment.artifactDAO.put(artifact);
+        
+        // in global, can only validate a site that has been synced already
+        StorageSite ss = remoteEnvironment.storageSiteDAO.list().iterator().next();
+        localEnvironment.storageSiteDAO.put(ss);
+        
+        String bucket = artifact.getBucket();
+        
+        // first: get the bucket with the artifact
+        try {
+            System.setProperty("user.home", TMP_DIR);
+            InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.inventoryConnectionConfig, 
+                                                                    this.localEnvironment.daoConfig,
+                                                                    TestUtil.LUSKAN_URI, new IncludeArtifacts(),
+                                                                    null, true);
+            testSubject.raceConditionDelta = 0L;
+            testSubject.enableSubBucketQuery = true;
+            ResourceIterator<Artifact> iter = testSubject.getRemoteIterator(bucket);
+            while (iter.hasNext()) {
+                log.info("found: " + iter.next());
+            }
+        } finally {
+            System.setProperty("user.home", USER_HOME);
+        }
+        
+        // some other (empty) bucket): extra has digit, so valid in case of checking but does not exist
+        String emptyBucket = bucket + "0";
+        try {
+            System.setProperty("user.home", TMP_DIR);
+            InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.inventoryConnectionConfig, 
+                                                                    this.localEnvironment.daoConfig,
+                                                                    TestUtil.LUSKAN_URI, new IncludeArtifacts(),
+                                                                    null, true);
+            testSubject.raceConditionDelta = 0L;
+            testSubject.enableSubBucketQuery = true;
+            ResourceIterator<Artifact> iter = testSubject.getRemoteIterator(emptyBucket);
+            log.error("expected TransientException, got iterator:");
+            while (iter.hasNext()) {
+                log.info("found: " + iter.next());
+            }
+            Assert.fail("expected TransientException, got iterator (above)");
+        } catch (TransientException ex) {
+            log.info("caught expected: " + ex);
+            Assert.assertTrue("sketchy", ex.getMessage().contains("sketchy"));
+        } finally {
+            System.setProperty("user.home", USER_HOME);
+        }
+    }
+    
     /*
      * discrepancy: none
      * before: Artifact in L & R
@@ -222,8 +278,9 @@ public class InventoryValidatorTest {
             log.info("caught expected: " + expected);
         }
     }
-
-    public void noDiscrepancy(boolean trackSiteLocations, boolean enableSubBucketQuery, boolean prevSync) throws Exception {
+    
+    public void noDiscrepancy(boolean trackSiteLocations, boolean enableSubBucketQuery, 
+            boolean prevSync) throws Exception {
         // Put the same Artifact into local and remote.
         Artifact artifact = new Artifact(URI.create("cadc:INTTEST/one.ext"), TestUtil.getRandomMD5(),
                                          new Date(), 1024L);
@@ -248,7 +305,7 @@ public class InventoryValidatorTest {
                                                                     null, trackSiteLocations);
             testSubject.raceConditionDelta = 0L;
             testSubject.enableSubBucketQuery = enableSubBucketQuery;
-            testSubject.allowEmptyIterator = true;
+            testSubject.allowEmptyIterator = true; // not actually needed because null BucketSelector
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
