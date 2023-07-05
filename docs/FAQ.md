@@ -132,9 +132,9 @@ minor differences if validating global L.
     evidence: DeletedArtifactEvent in L
     action: none
 
-    explanation2: L==storage, deleted from L, pending/missed DeletedStorageLocationEvent in R
+    explanation2: L==storage, Artifact removed from L
     evidence: DeletedStorageLocationEvent in L
-    action: none
+    action: insert Artifact, remove DeletedStorageLocationEvent 
 
     explanation3: L==storage, new Artifact in R, pending/missed new Artifact event in L
     evidence: ?

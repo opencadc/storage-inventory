@@ -29,6 +29,10 @@ org.opencadc.ratik.queryService={resourceID of remote TAP service with inventory
 
 # local site type, true = global site, false = storage site
 org.opencadc.ratik.trackSiteLocations={true|false}
+
+# feature flag (optional), default: false
+# uses custom row_counter() UDF introduced in luskan:0.6.5
+#org.opencadc.ratik.enableRowCounterFeature = true
 ```
 
 The range of uri bucket prefixes is specified with two values separated by a 

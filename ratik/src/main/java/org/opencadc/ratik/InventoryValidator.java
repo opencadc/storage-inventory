@@ -128,7 +128,8 @@ public class InventoryValidator implements Runnable {
     private final BucketSelector bucketSelector;
     private final ArtifactValidator artifactValidator;
     private final MessageDigest messageDigest;
-    
+
+    private boolean enableRowCounterFeature = false;
     private StorageSite remoteSite;
     
     // package access so tests can reduce this
@@ -232,6 +233,10 @@ public class InventoryValidator implements Runnable {
         this.bucketSelector = null;
         this.artifactValidator = null;
         this.messageDigest = null;
+    }
+
+    public void setEnableRowCounterFeature(boolean enableRowCounterFeature) {
+        this.enableRowCounterFeature = enableRowCounterFeature;
     }
 
     @Override 
@@ -557,7 +562,7 @@ public class InventoryValidator implements Runnable {
         tapClient.setConnectionTimeout(12000); // 12 sec
         tapClient.setReadTimeout(120000);      // 120 sec
         final String query = buildRemoteQuery(bucket);
-        log.debug(InventoryValidator.class.getSimpleName() + ".remoteQuery bucket=" + bucket 
+        log.info(InventoryValidator.class.getSimpleName() + ".remoteQuery bucket=" + bucket 
                 + "query: \n'" + query + "\n");
 
         TransientException tex = null;
@@ -566,7 +571,11 @@ public class InventoryValidator implements Runnable {
             final long t1 = System.currentTimeMillis();
             try {
                 log.debug(InventoryValidator.class.getSimpleName() + ".remoteQuery bucket=" + bucket);
-                ResourceIterator<Artifact> ret = tapClient.query(query, new CountingArtifactRowMapper(), true);
+                ArtifactRowMapper arm = new ArtifactRowMapper();
+                if (enableRowCounterFeature) {
+                    arm = new CountingArtifactRowMapper();
+                }
+                ResourceIterator<Artifact> ret = tapClient.query(query, arm, true);
                 long dt = System.currentTimeMillis() - t1;
                 log.info(InventoryValidator.class.getSimpleName() + ".remoteQuery bucket=" + bucket + " duration=" + dt);
                 if (!ret.hasNext() && !allowEmptyIterator) {
@@ -612,7 +621,11 @@ public class InventoryValidator implements Runnable {
     String buildRemoteQuery(final String bucket)
         throws ResourceNotFoundException, IOException {
         final StringBuilder query = new StringBuilder();
-        query.append(String.format("%s, row_counter() %s",  ArtifactRowMapper.SELECT,  ArtifactRowMapper.FROM));
+        if (enableRowCounterFeature) {
+            query.append(String.format("%s, row_counter() %s",  ArtifactRowMapper.SELECT,  ArtifactRowMapper.FROM));
+        } else {
+            query.append(ArtifactRowMapper.BASE_QUERY);
+        }
 
         if (StringUtil.hasText(this.artifactSelector.getConstraint())) {
             if (query.indexOf("WHERE") < 0) {

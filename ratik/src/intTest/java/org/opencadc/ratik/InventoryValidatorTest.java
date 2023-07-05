@@ -3,7 +3,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2021.                            (c) 2021.
+ *  (c) 2023.                            (c) 2023.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -912,28 +912,28 @@ public class InventoryValidatorTest {
 
     /* discrepancy: artifact not in L && artifact in R
      *
-     * explanation2: L==storage, deleted from L, pending/missed DeletedStorageLocationEvent in R
+     * explanation2: L==storage, Artifact lost from L
      * evidence: DeletedStorageLocationEvent in L
-     * action: none
+     * action: insert Artifact, remove DeletedStorageLocationEvent 
      *
      * L == storage
      * before: Artifact not in L, in R, DeletedStorageLocationEvent in L
-     * after: Artifact not in L, DeletedStorageLocationEvent in L
+     * after: Artifact L, DeletedStorageLocationEvent not in L
      */
     @Test
     public void explanation2_ArtifactNotInLocal_LocalIsStorage() throws Exception {
         // Put Artifact in remote, and put a DeletedStorageLocationEvent for the remote Artifact in local.
         Artifact artifact = new Artifact(URI.create("cadc:INTTEST/one.ext"), TestUtil.getRandomMD5(),
                                          new Date(), 1024L);
-        this.remoteEnvironment.artifactDAO.put(artifact);
+        remoteEnvironment.artifactDAO.put(artifact);
 
         DeletedStorageLocationEvent localDeletedStorageLocationEvent = new DeletedStorageLocationEvent(artifact.getID());
-        this.localEnvironment.deletedStorageLocationEventDAO.put(localDeletedStorageLocationEvent);
+        localEnvironment.deletedStorageLocationEventDAO.put(localDeletedStorageLocationEvent);
 
         try {
             System.setProperty("user.home", TMP_DIR);
-            InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.inventoryConnectionConfig, 
-                                                                    this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
+            InventoryValidator testSubject = new InventoryValidator(localEnvironment.inventoryConnectionConfig, 
+                                                                    localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
                                                                     new IncludeArtifacts(),null,
                                                                     false);
             testSubject.raceConditionDelta = 0L;
@@ -945,8 +945,11 @@ public class InventoryValidatorTest {
         }
 
         // Local Artifact should have been deleted.
-        Artifact localArtifact = this.localEnvironment.artifactDAO.get(artifact.getID());
-        Assert.assertNull("local artifact not found", localArtifact);
+        Artifact localArtifact = localEnvironment.artifactDAO.get(artifact.getID());
+        Assert.assertNotNull("local artifact found", localArtifact);
+        
+        DeletedStorageLocationEvent localDLSE = localEnvironment.deletedStorageLocationEventDAO.get(localDeletedStorageLocationEvent.getID());
+        Assert.assertNull("local DLSE removed", localDLSE);
     }
 
     /* discrepancy: artifact not in L && artifact in R
