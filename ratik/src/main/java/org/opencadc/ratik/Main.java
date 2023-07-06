@@ -175,7 +175,7 @@ public class Main {
 
             final String configuredArtifactSelector = props.getFirstPropertyValue(ARTIFACT_SELECTOR_CONFIG_KEY);
             final String selectorClass = selectorMap.get(configuredArtifactSelector);
-            log.warn("selector: " + configuredArtifactSelector + " -> " + selectorClass);
+            log.info("selector: " + configuredArtifactSelector + " -> " + selectorClass);
             final ArtifactSelector artifactSelector = InventoryUtil.loadPlugin(selectorClass);
 
             final String configuredTrackSiteLocations = props.getFirstPropertyValue(TRACK_SITE_LOCATIONS_CONFIG_KEY);

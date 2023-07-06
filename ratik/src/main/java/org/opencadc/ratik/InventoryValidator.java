@@ -335,6 +335,10 @@ public class InventoryValidator implements Runnable {
                         log.error(InventoryValidator.class.getSimpleName() + ".FAIL bucket=" + bucket, ex);
                         numFailedBuckets++;
                         retries++;
+                    } catch (IllegalArgumentException ex) {
+                        log.error(InventoryValidator.class.getSimpleName() + ".FAIL bucket=" + bucket, ex);
+                        numFailedBuckets++;
+                        throw ex;
                     } catch (RuntimeException ex) {
                         // TODO: probably not a great idea to retry on these...
                         log.error(InventoryValidator.class.getSimpleName() + ".FAIL bucket=" + bucket, ex);
@@ -562,7 +566,7 @@ public class InventoryValidator implements Runnable {
         tapClient.setConnectionTimeout(12000); // 12 sec
         tapClient.setReadTimeout(120000);      // 120 sec
         final String query = buildRemoteQuery(bucket);
-        log.info(InventoryValidator.class.getSimpleName() + ".remoteQuery bucket=" + bucket 
+        log.debug(InventoryValidator.class.getSimpleName() + ".remoteQuery bucket=" + bucket 
                 + "query: \n'" + query + "\n");
 
         TransientException tex = null;
