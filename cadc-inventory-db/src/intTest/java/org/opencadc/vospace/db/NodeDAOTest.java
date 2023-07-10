@@ -643,7 +643,7 @@ public class NodeDAOTest {
         Assert.assertEquals(link.getID(), c3.getID());
         Assert.assertEquals(link.getName(), c3.getName());
         
-        // iteratoe with limit and start
+        // iterate with limit and start
         try (ResourceIterator<Node> iter = nodeDAO.iterator(orig, 1, c2.getName())) {
             Assert.assertNotNull(iter);
             Assert.assertTrue(iter.hasNext());
