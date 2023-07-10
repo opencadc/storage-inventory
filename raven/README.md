@@ -18,7 +18,11 @@ org.opencadc.raven.query.password={database password for query pool}
 org.opencadc.raven.query.url=jdbc:postgresql://{server}/{database}
 
 ```
-The `query` pool is used to query inventory for the requested Artifact.
+The _query_ pool is used to query inventory for the requested Artifact.
+
+### cadc-registry.properties
+
+See <a href="https://github.com/opencadc/reg/tree/master/cadc-registry">cadc-registry</a>.
 
 ### raven.properties
 The following keys are required:
@@ -54,8 +58,8 @@ settings. All services will be consulted but a single positive result is suffici
 action.
 
 The following optional keys configure raven to prioritize sites returned in transfer negotiation, with higher priority
-sites first in the list of transfer URL's. Multiple values of `namespace` may be specified for a single `resourceID`. 
-The `namespace` value(s) must end with a colon (:) or slash (/) so one namespace cannot accidentally match (be a 
+sites first in the list of transfer URL's. Multiple values of _namespace_ may be specified for a single _resourceID_. 
+The _namespace_ value(s) must end with a colon (:) or slash (/) so one namespace cannot accidentally match (be a 
 prefix of) another namepsace.
 
 ```
@@ -72,7 +76,7 @@ CADC.namespace=cadc:IRIS/
 CADC.namespace=cadc:CGPS/
 ```
 
-The `putPreference` rules are optimizations; they do not restrict the destination of a PUT. They are useful in cases 
+The _putPreference_ rules are optimizations; they do not restrict the destination of a PUT. They are useful in cases 
 where a namespace is intended to be stored only in some site(s) or where most or all PUTs come from systems that are near one 
 storage site. TODO: support for `GET` preferences? also use client IP address to prioritize?
 
@@ -90,27 +94,12 @@ services), add the following configuration entry to raven.properties:
 ```
 org.opencadc.raven.authenticateOnly=true
 ```
-With `authenticateOnly=true`, any authenticated user will be able to read/write/delete files and anonymous users
+When _authenticateOnly_ is `true`, any authenticated user will be able to read/write/delete files and anonymous users
 will be able to read files.
 
 
-### LocalAuthority.properties
-The LocalAuthority.properties file specifies which local service is authoritative for various site-wide functions. The keys
-are standardID values for the functions and the values are resourceID values for the service that implements that standard 
-feature.
-
-Example:
-```
-ivo://ivoa.net/std/GMS#search-0.1 = ivo://cadc.nrc.ca/gms           
-ivo://ivoa.net/std/UMS#users-0.1 = ivo://cadc.nrc.ca/gms    
-ivo://ivoa.net/std/UMS#login-0.1 = ivo://cadc.nrc.ca/gms           
-
-ivo://ivoa.net/std/CDP#delegate-1.0 = ivo://cadc.nrc.ca/cred
-ivo://ivoa.net/std/CDP#proxy-1.0 = ivo://cadc.nrc.ca/cred
-```
-
-### cadcproxy.pem
-This client certificate is used to make server-to-server calls for system-level A&A purposes.
+### cadcproxy.pem (optional)
+This client certificate is used to make authenticated server-to-server calls for system-level A&A purposes.
 
 ## building
 

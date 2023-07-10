@@ -105,6 +105,7 @@ import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.StorageSite;
 import org.opencadc.inventory.db.ArtifactDAO;
+import org.opencadc.inventory.db.StorageSiteDAO;
 import org.opencadc.inventory.db.version.InitDatabase;
 import org.opencadc.inventory.query.ArtifactRowMapper;
 import org.opencadc.inventory.util.ArtifactSelector;
@@ -127,7 +128,8 @@ public class InventoryValidator implements Runnable {
     private final BucketSelector bucketSelector;
     private final ArtifactValidator artifactValidator;
     private final MessageDigest messageDigest;
-    
+
+    private boolean enableRowCounterFeature = false;
     private StorageSite remoteSite;
     
     // package access so tests can reduce this
@@ -233,6 +235,10 @@ public class InventoryValidator implements Runnable {
         this.messageDigest = null;
     }
 
+    public void setEnableRowCounterFeature(boolean enableRowCounterFeature) {
+        this.enableRowCounterFeature = enableRowCounterFeature;
+    }
+
     @Override 
     public void run() {
         try {
@@ -259,11 +265,19 @@ public class InventoryValidator implements Runnable {
 
         if (trackSiteLocations) {
             try {
-                this.remoteSite = getRemoteStorageSite(resourceID);
+                StorageSite ss = getRemoteStorageSite(resourceID);
+                // verify with local
+                StorageSiteDAO sdao = new StorageSiteDAO(artifactDAO);
+                StorageSite knownSite = sdao.get(ss.getID());
+                if (knownSite == null) {
+                    throw new IllegalStateException("remote site " + ss.getID() + " (" + ss.getResourceID() + ") "
+                        + "not found in local database -- cannot validate unsynced site");
+                }
+                this.remoteSite = ss;
                 artifactValidator.setRemoteSite(remoteSite);
             } catch (ResourceNotFoundException ex) {
                 throw new IllegalArgumentException("query service not found: " + resourceID, ex);
-            } catch (Exception ex) {
+            } catch (TransientException | IOException | InterruptedException ex) {
                 throw new IllegalArgumentException("remote StorageSite query failed", ex);
             }
         } else {
@@ -321,6 +335,10 @@ public class InventoryValidator implements Runnable {
                         log.error(InventoryValidator.class.getSimpleName() + ".FAIL bucket=" + bucket, ex);
                         numFailedBuckets++;
                         retries++;
+                    } catch (IllegalArgumentException ex) {
+                        log.error(InventoryValidator.class.getSimpleName() + ".FAIL bucket=" + bucket, ex);
+                        numFailedBuckets++;
+                        throw ex;
                     } catch (RuntimeException ex) {
                         // TODO: probably not a great idea to retry on these...
                         log.error(InventoryValidator.class.getSimpleName() + ".FAIL bucket=" + bucket, ex);
@@ -557,7 +575,11 @@ public class InventoryValidator implements Runnable {
             final long t1 = System.currentTimeMillis();
             try {
                 log.debug(InventoryValidator.class.getSimpleName() + ".remoteQuery bucket=" + bucket);
-                ResourceIterator<Artifact> ret = tapClient.query(query, new ArtifactRowMapper(), true);
+                ArtifactRowMapper arm = new ArtifactRowMapper();
+                if (enableRowCounterFeature) {
+                    arm = new CountingArtifactRowMapper();
+                }
+                ResourceIterator<Artifact> ret = tapClient.query(query, arm, true);
                 long dt = System.currentTimeMillis() - t1;
                 log.info(InventoryValidator.class.getSimpleName() + ".remoteQuery bucket=" + bucket + " duration=" + dt);
                 if (!ret.hasNext() && !allowEmptyIterator) {
@@ -578,6 +600,21 @@ public class InventoryValidator implements Runnable {
         }
         throw tex;
     }
+    
+    private class CountingArtifactRowMapper extends ArtifactRowMapper {
+        private long cur = 0L;
+        
+        @Override
+        public Artifact mapRow(List<Object> row) {
+            cur++;
+            Artifact ret = super.mapRow(row);
+            Long rownum = (Long) row.get(row.size() - 1);
+            if (rownum == null || rownum != cur) {
+                throw new TransientException("detected broken query result stream: expected row " + cur + "found: " + rownum);
+            }
+            return ret;
+        }
+    }
 
     /**
      * Assemble the WHERE clause and return the full query.  Very useful for testing separately.
@@ -588,7 +625,11 @@ public class InventoryValidator implements Runnable {
     String buildRemoteQuery(final String bucket)
         throws ResourceNotFoundException, IOException {
         final StringBuilder query = new StringBuilder();
-        query.append(ArtifactRowMapper.BASE_QUERY);
+        if (enableRowCounterFeature) {
+            query.append(String.format("%s, row_counter() %s",  ArtifactRowMapper.SELECT,  ArtifactRowMapper.FROM));
+        } else {
+            query.append(ArtifactRowMapper.BASE_QUERY);
+        }
 
         if (StringUtil.hasText(this.artifactSelector.getConstraint())) {
             if (query.indexOf("WHERE") < 0) {

@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2022.                            (c) 2022.
+*  (c) 2023.                            (c) 2023.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -88,6 +88,7 @@ import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URL;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
@@ -171,9 +172,13 @@ public class ProtocolsGenerator {
     }
 
     static void prioritizePullFromSites(List<StorageSite> storageSites) {
-        // contains the algorithm for prioritizing storage sites to pull from. Currently
-        // read/write sites have higher priority
-        storageSites.sort((site1, site2) -> Boolean.compare(!site1.getAllowWrite(), !site2.getAllowWrite()));
+        // contains the algorithm for prioritizing storage sites to pull from.
+        
+        // was: prefer read/write sites to put less load on a read-only "seeder" site during migration
+        //storageSites.sort((site1, site2) -> Boolean.compare(!site1.getAllowWrite(), !site2.getAllowWrite()));
+        
+        // random
+        Collections.shuffle(storageSites);
     }
 
     Artifact getRemoteArtifact(URL location, URI artifactURI) {

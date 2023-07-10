@@ -306,56 +306,7 @@ public class ArtifactValidator {
         // explanation2: L==global, deleted from R, pending/missed DeletedStorageLocationEvent in L
         // evidence: DeletedStorageLocationEvent in R
         // action: remove siteID from Artifact.storageLocations
-        
         // note: action is the same as the default (explanation3) below
-        // so this more expensive check is disabled... it only provides
-        // a more concrete reason in the log
-        /*
-        log.debug("checking explanation 2");
-        if (this.remoteSite != null) {
-            DeletedStorageLocationEvent remoteDeletedStorageLocationEvent =
-                getRemoteDeletedStorageLocationEvent(local.getID());
-            if (remoteDeletedStorageLocationEvent != null) {
-                SiteLocation remoteSiteLocation = new SiteLocation(this.remoteSite.getID());
-                try {
-                    log.debug("starting transaction");
-                    this.transactionManager.startTransaction();
-                    log.debug("start txn: OK");
-
-                    Artifact current = this.artifactDAO.lock(local);
-                    if (current == null) {
-                        throw new EntityNotFoundException(); // HACK: goto catch below
-                    }
-                    if (current.siteLocations.contains(remoteSiteLocation)) {
-                        log.info(String.format("ArtifactValidator.removeSiteLocation id=%s uri=%s" 
-                                    + " site=%s reason=no-remote-artifact", 
-                                    current.getID(), current.getURI(), remoteSiteLocation)); 
-                        this.artifactDAO.removeSiteLocation(current, remoteSiteLocation);
-                    }
-
-                    log.debug("committing transaction");
-                    this.transactionManager.commitTransaction();
-                    log.debug("commit txn: OK");
-                } catch (EntityNotFoundException e) {
-                    log.debug(String.format("ArtifactValidator.skip: Artifact.id=%s Artifact.uri=%s reason=stale-local-artifact",
-                                            local.getID(), local.getURI()));
-                    this.transactionManager.rollbackTransaction();
-                } catch (Exception e) {
-                    log.error(String.format("failed to delete %s in Artifact %s %s",
-                                            remoteSiteLocation, local.getID(), local.getURI()), e);
-                    this.transactionManager.rollbackTransaction();
-                    log.debug("rollback txn: OK");
-                } finally {
-                    if (this.transactionManager.isOpen()) {
-                        log.error("BUG - open transaction in finally");
-                        this.transactionManager.rollbackTransaction();
-                        log.error("rollback txn: OK");
-                    }
-                }
-                return;
-            }
-        }
-        */
 
         if (this.remoteSite != null) {
             // explanation3: L==global, new Artifact in L, pending/missed Artifact or sync in R
@@ -432,31 +383,24 @@ public class ArtifactValidator {
             return;
         }
 
-        // explanation2: L==storage, deleted from L, pending/missed DeletedStorageLocationEvent in R
+        // explanation2: L==storage, Artifact removed from L
         // evidence: DeletedStorageLocationEvent in L
-        // action: none
-        log.debug("checking explanation 2");
-        if (this.remoteSite == null) {
-            DeletedStorageLocationEvent localDeletedStorageLocationEvent
-                = this.deletedStorageLocationEventDAO.get(remote.getID());
-            if (localDeletedStorageLocationEvent != null) {
-                logNoAction(remote, "found local DeletedStorageLocationEvent");
-                return;
-            }
-        }
+        // action: insert Artifact, remove DeletedStorageLocationEvent
+        // note: action is the same as the default (explanation3) below
 
         // explanation3: L==storage, new Artifact in R, pending/missed new Artifact event in L
         // also
         // explanation0: filter policy at L changed to include artifact in R
+        // explanation2: removed from L
         // explanation6: deleted from L, lost DeletedArtifactEvent
         // explanation7: L==storage, deleted from L, lost DeletedStorageLocationEvent
         // evidence: ?
-        // action: insert Artifact
+        // action: insert Artifact, if exists, delete DeletedStorageLocationEvent
         log.debug("checking explanation 3");
         if (this.remoteSite == null) {
             try {
                 log.debug("starting transaction");
-                this.transactionManager.startTransaction();
+                transactionManager.startTransaction();
                 log.debug("start txn: OK");
                 
                 Artifact current = artifactDAO.lock(remote);
@@ -466,18 +410,26 @@ public class ArtifactValidator {
                 }
                 log.info(String.format("ArtifactValidator.putArtifact id=%s uri=%s %s", 
                         remote.getID(), remote.getURI(), df.format(remote.getLastModified())));
-                this.artifactDAO.put(remote);
+                artifactDAO.put(remote);
+                
+                DeletedStorageLocationEvent localDSLE = deletedStorageLocationEventDAO.get(remote.getID());
+                if (localDSLE != null) {
+                    log.info(String.format("ArtifactValidator.removeDeletedStorageLocationEvent id=%s %s", 
+                        localDSLE.getID(), "reason=restore-artifact"));
+                    deletedStorageLocationEventDAO.delete(localDSLE.getID());
+                }
+
                 log.debug("committing transaction");
-                this.transactionManager.commitTransaction();
+                transactionManager.commitTransaction();
                 log.debug("commit txn: OK");
             } catch (Exception e) {
                 log.error(String.format("failed to put %s %s", remote.getID(), remote.getURI()), e);
-                this.transactionManager.rollbackTransaction();
+                transactionManager.rollbackTransaction();
                 log.debug("rollback txn: OK");
             } finally {
                 if (this.transactionManager.isOpen()) {
                     log.error("BUG - open transaction in finally");
-                    this.transactionManager.rollbackTransaction();
+                    transactionManager.rollbackTransaction();
                     log.error("rollback txn: OK");
                 }
             }
@@ -806,9 +758,9 @@ public class ArtifactValidator {
     }
 
     private class ArtifactQueryResultRowMapper implements TapRowMapper<ArtifactQueryResult> {
-
+        ArtifactRowMapper mapper = new ArtifactRowMapper();
+        
         public ArtifactQueryResult mapRow(final List<Object> row) {
-            ArtifactRowMapper mapper = new ArtifactRowMapper();
             Artifact artifact = mapper.mapRow(row);
             Integer numCopies = (Integer) row.get(row.size() - 1);
 

@@ -69,10 +69,8 @@ package org.opencadc.raven;
 
 import ca.nrc.cadc.auth.AuthMethod;
 import ca.nrc.cadc.auth.AuthenticationUtil;
-import ca.nrc.cadc.log.WebServiceLogInfo;
 import ca.nrc.cadc.net.StorageResolver;
 import ca.nrc.cadc.rest.RestAction;
-import ca.nrc.cadc.rest.SyncInput;
 import ca.nrc.cadc.rest.Version;
 import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.vos.Direction;
@@ -90,9 +88,9 @@ import javax.naming.InitialContext;
 import javax.naming.NamingException;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.db.ArtifactDAO;
-import org.opencadc.inventory.server.PermissionsCheck;
 import org.opencadc.permissions.ReadGrant;
 import org.opencadc.permissions.WriteGrant;
+import org.opencadc.permissions.client.PermissionsCheck;
 
 /**
  * Abstract class for all that raven action classes have in common,

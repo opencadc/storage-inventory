@@ -22,7 +22,6 @@ for common system properties.
 
 `minoc` includes multiple IdentityManager implementations to support authenticated access:
 - See <a href="https://github.com/opencadc/ac/tree/master/cadc-access-control-identity">cadc-access-control-identity</a> for CADC access-control system support.
-
 - See <a href="https://github.com/opencadc/ac/tree/master/cadc-gms">cadc-gms</a> for OIDC token support.
 
 `minoc` requires a connection pool to the local storage inventory database:
@@ -37,6 +36,10 @@ The `inventory` account owns and manages (create, alter, drop) inventory databas
 all the content (insert, update, delete). The database is specified in the JDBC URL and the schema name is specified 
 in the minoc.properties (below). Failure to connect or initialize the database will show up in logs and in the 
 VOSI-availability output.
+
+### cadc-registry.properties
+
+See <a href="https://github.com/opencadc/reg/tree/master/cadc-registry">cadc-registry</a>.
 
 ### minoc.properties
 A minoc.properties file in /config is required to run this service.  The following keys are required:
@@ -117,10 +120,6 @@ org.opencadc.minoc.authenticateOnly=true
 With `authenticateOnly=true`, any authenticated user will be able to read/write/delete files and anonymous users
 will be able to read files.
 
-### cadc-registry.properties
-
-See <a href="https://github.com/opencadc/reg/tree/master/cadc-registry">cadc-registry</a>.
-
 ### minoc-availability.properties (optional)
 The minoc-availability.properties file specifies which users have the authority to change the availability state of the minoc service. Each entry consists of a key=value pair. The key is always "users". The value is the x500 canonical user name.
 
@@ -130,6 +129,8 @@ users = {user identity}
 ```
 `users` specifies the user(s) who are authorized to make calls to the service. The value is a list of user identities (X500 distingushed name), one line per user. Optional: if the `minoc-availability.properties` is not found or does not list any `users`, the service will function in the default mode (ReadWrite) and the state will not be changeable.
 
+### cadcproxy.pem (optional)
+This client certificate is used to make authenticated server-to-server calls for system-level A&A purposes.
 
 ## building it
 ```

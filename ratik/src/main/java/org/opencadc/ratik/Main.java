@@ -106,6 +106,8 @@ public class Main {
     private static final String URI_BUCKETS_CONFIG_KEY = CONFIG_PREFIX + ".buckets";
     private static final String TRACK_SITE_LOCATIONS_CONFIG_KEY = CONFIG_PREFIX + ".trackSiteLocations";
     private static final String ARTIFACT_SELECTOR_CONFIG_KEY = CONFIG_PREFIX + ".artifactSelector";
+    
+    private static final String ROW_COUNT_FEATURE_CONFIG_KEY = CONFIG_PREFIX + ".enableRowCounterFeature";
 
     // Used to verify configuration items.  See the README for descriptions.
     private static final String[] MANDATORY_PROPERTY_KEYS = {
@@ -173,7 +175,7 @@ public class Main {
 
             final String configuredArtifactSelector = props.getFirstPropertyValue(ARTIFACT_SELECTOR_CONFIG_KEY);
             final String selectorClass = selectorMap.get(configuredArtifactSelector);
-            log.warn("selector: " + configuredArtifactSelector + " -> " + selectorClass);
+            log.info("selector: " + configuredArtifactSelector + " -> " + selectorClass);
             final ArtifactSelector artifactSelector = InventoryUtil.loadPlugin(selectorClass);
 
             final String configuredTrackSiteLocations = props.getFirstPropertyValue(TRACK_SITE_LOCATIONS_CONFIG_KEY);
@@ -181,6 +183,11 @@ public class Main {
 
             final InventoryValidator doit =
                 new InventoryValidator(cc, daoConfig, resourceID, artifactSelector, bucketSelector, trackSiteLocations);
+            
+            String rcs = props.getFirstPropertyValue(ROW_COUNT_FEATURE_CONFIG_KEY);
+            boolean enableRowCountFeature = Boolean.parseBoolean(rcs);
+            doit.setEnableRowCounterFeature(enableRowCountFeature);
+
             doit.run();
         } catch (Throwable unexpected) {
             log.fatal("Unexpected failure", unexpected);
