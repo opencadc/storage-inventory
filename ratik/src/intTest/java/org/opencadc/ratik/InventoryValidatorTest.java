@@ -3,7 +3,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2021.                            (c) 2021.
+ *  (c) 2023.                            (c) 2023.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -70,7 +70,9 @@
 package org.opencadc.ratik;
 
 import ca.nrc.cadc.date.DateUtil;
+import ca.nrc.cadc.io.ResourceIterator;
 import ca.nrc.cadc.net.ResourceNotFoundException;
+import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.util.FileUtil;
 import ca.nrc.cadc.util.Log4jInit;
 import java.io.File;
@@ -100,6 +102,7 @@ import org.opencadc.inventory.DeletedArtifactEvent;
 import org.opencadc.inventory.DeletedStorageLocationEvent;
 import org.opencadc.inventory.SiteLocation;
 import org.opencadc.inventory.StorageLocation;
+import org.opencadc.inventory.StorageSite;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.query.ArtifactRowMapper;
 import org.opencadc.inventory.util.IncludeArtifacts;
@@ -187,6 +190,60 @@ public class InventoryValidatorTest {
         fileWriter.close();
     }
 
+    @Test
+    public void testEmptyRemoteIterator() throws Exception {
+        // Put the same Artifact into local and remote.
+        Artifact artifact = new Artifact(URI.create("cadc:INTTEST/one.ext"), TestUtil.getRandomMD5(),
+                                         new Date(), 1024L);
+        this.remoteEnvironment.artifactDAO.put(artifact);
+        
+        // in global, can only validate a site that has been synced already
+        StorageSite ss = remoteEnvironment.storageSiteDAO.list().iterator().next();
+        localEnvironment.storageSiteDAO.put(ss);
+        
+        String bucket = artifact.getBucket();
+        
+        // first: get the bucket with the artifact
+        try {
+            System.setProperty("user.home", TMP_DIR);
+            InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.inventoryConnectionConfig, 
+                                                                    this.localEnvironment.daoConfig,
+                                                                    TestUtil.LUSKAN_URI, new IncludeArtifacts(),
+                                                                    null, true);
+            testSubject.raceConditionDelta = 0L;
+            testSubject.enableSubBucketQuery = true;
+            ResourceIterator<Artifact> iter = testSubject.getRemoteIterator(bucket);
+            while (iter.hasNext()) {
+                log.info("found: " + iter.next());
+            }
+        } finally {
+            System.setProperty("user.home", USER_HOME);
+        }
+        
+        // some other (empty) bucket): extra has digit, so valid in case of checking but does not exist
+        String emptyBucket = bucket + "0";
+        try {
+            System.setProperty("user.home", TMP_DIR);
+            InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.inventoryConnectionConfig, 
+                                                                    this.localEnvironment.daoConfig,
+                                                                    TestUtil.LUSKAN_URI, new IncludeArtifacts(),
+                                                                    null, true);
+            testSubject.raceConditionDelta = 0L;
+            testSubject.enableSubBucketQuery = true;
+            ResourceIterator<Artifact> iter = testSubject.getRemoteIterator(emptyBucket);
+            log.error("expected TransientException, got iterator:");
+            while (iter.hasNext()) {
+                log.info("found: " + iter.next());
+            }
+            Assert.fail("expected TransientException, got iterator (above)");
+        } catch (TransientException ex) {
+            log.info("caught expected: " + ex);
+            Assert.assertTrue("sketchy", ex.getMessage().contains("sketchy"));
+        } finally {
+            System.setProperty("user.home", USER_HOME);
+        }
+    }
+    
     /*
      * discrepancy: none
      * before: Artifact in L & R
@@ -194,31 +251,47 @@ public class InventoryValidatorTest {
      */
     @Test
     public void noDiscrepancy_LocalIsStorage() throws Exception {
-        noDiscrepancy(false, false);
+        noDiscrepancy(false, false, true);
     }
 
     @Test
     public void noDiscrepancy_LocalIsGlobal() throws Exception {
-        noDiscrepancy(true, false);
+        noDiscrepancy(true, false, true);
     }
     
     @Test
     public void noDiscrepancy_LocalIsStorage_SubBuckets() throws Exception {
-        noDiscrepancy(false, true);
+        noDiscrepancy(false, true, true);
     }
 
     @Test
     public void noDiscrepancy_LocalIsGlobal_SubBuckets() throws Exception {
-        noDiscrepancy(true, true);
+        noDiscrepancy(true, true, true);
     }
-
-    public void noDiscrepancy(boolean trackSiteLocations, boolean enableSubBucketQuery) throws Exception {
+    
+    @Test
+    public void noDiscrepancy_LocalIsGlobal_Unsynced() throws Exception {
+        try {
+            noDiscrepancy(true, true, false);
+            Assert.fail("expected IllegalStateException, but successfully validated");
+        } catch (IllegalStateException expected) {
+            log.info("caught expected: " + expected);
+        }
+    }
+    
+    public void noDiscrepancy(boolean trackSiteLocations, boolean enableSubBucketQuery, 
+            boolean prevSync) throws Exception {
         // Put the same Artifact into local and remote.
         Artifact artifact = new Artifact(URI.create("cadc:INTTEST/one.ext"), TestUtil.getRandomMD5(),
                                          new Date(), 1024L);
         this.remoteEnvironment.artifactDAO.put(artifact);
         if (trackSiteLocations) {
-            UUID remoteSiteID = this.remoteEnvironment.storageSiteDAO.list().iterator().next().getID();
+            StorageSite ss = remoteEnvironment.storageSiteDAO.list().iterator().next();
+            UUID remoteSiteID = ss.getID();
+            // in global, can only validate a site that has been synced already
+            if (prevSync) {
+                localEnvironment.storageSiteDAO.put(ss);
+            }
             artifact.siteLocations.add(new SiteLocation(remoteSiteID));
         }
         this.localEnvironment.artifactDAO.put(artifact);
@@ -232,7 +305,7 @@ public class InventoryValidatorTest {
                                                                     null, trackSiteLocations);
             testSubject.raceConditionDelta = 0L;
             testSubject.enableSubBucketQuery = enableSubBucketQuery;
-            testSubject.allowEmptyIterator = true;
+            testSubject.allowEmptyIterator = true; // not actually needed because null BucketSelector
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
@@ -429,7 +502,10 @@ public class InventoryValidatorTest {
                                          new Date(), 1024L);
         this.remoteEnvironment.artifactDAO.put(artifact);
 
-        UUID remoteSiteID = this.remoteEnvironment.storageSiteDAO.list().iterator().next().getID();
+        StorageSite ss = remoteEnvironment.storageSiteDAO.list().iterator().next();
+        UUID remoteSiteID = ss.getID();
+        // in global, can only validate a site that has been synced already
+        localEnvironment.storageSiteDAO.put(ss);
         artifact.siteLocations.add(new SiteLocation(remoteSiteID));
         this.localEnvironment.artifactDAO.put(artifact);
 
@@ -488,7 +564,10 @@ public class InventoryValidatorTest {
         Artifact artifact = new Artifact(URI.create("cadc:INTTEST/one.ext"), TestUtil.getRandomMD5(),
                                          new Date(), 1024L);
         if (trackSiteLocations) {
-            UUID remoteSiteID = this.remoteEnvironment.storageSiteDAO.list().iterator().next().getID();
+            StorageSite ss = remoteEnvironment.storageSiteDAO.list().iterator().next();
+            UUID remoteSiteID = ss.getID();
+            // in global, can only validate a site that has been synced already
+            localEnvironment.storageSiteDAO.put(ss);
             artifact.siteLocations.add(new SiteLocation(remoteSiteID));
         }
         this.localEnvironment.artifactDAO.put(artifact);
@@ -538,7 +617,10 @@ public class InventoryValidatorTest {
         // case 1
         // Put a local Artifact with remote and random SiteLocation's, and put a
         // DeletedStorageLocationEvent for the Artifact in remote.
-        UUID remoteSiteID = this.remoteEnvironment.storageSiteDAO.list().iterator().next().getID();
+        StorageSite ss = remoteEnvironment.storageSiteDAO.list().iterator().next();
+        UUID remoteSiteID = ss.getID();
+        // in global, can only validate a site that has been synced already
+        localEnvironment.storageSiteDAO.put(ss);
         UUID randomSiteID = UUID.randomUUID();
 
         Artifact artifact = new Artifact(URI.create("cadc:INTTEST/one.ext"), TestUtil.getRandomMD5(),
@@ -582,7 +664,12 @@ public class InventoryValidatorTest {
         // case 2
         // Put a local Artifact with a single remote SiteLocation, and put a
         // DeletedStorageLocationEvent for the Artifact in remote.
-        remoteSiteID = this.remoteEnvironment.storageSiteDAO.list().iterator().next().getID();
+        
+        ss = remoteEnvironment.storageSiteDAO.list().iterator().next();
+        remoteSiteID = ss.getID();
+        // in global, can only validate a site that has been synced already
+        localEnvironment.storageSiteDAO.put(ss);
+        
         artifact = new Artifact(URI.create("cadc:INTTEST/two.ext"), TestUtil.getRandomMD5(),
                                 new Date(), 1024L);
         artifact.siteLocations.add(new SiteLocation(remoteSiteID));
@@ -631,7 +718,10 @@ public class InventoryValidatorTest {
     public void explanation3_ArtifactInLocal_LocalIsGlobal() throws Exception {
         // case 1
         // Put a local Artifact with remote and random SiteLocation's.
-        UUID remoteSiteID = this.remoteEnvironment.storageSiteDAO.list().iterator().next().getID();
+        StorageSite ss = remoteEnvironment.storageSiteDAO.list().iterator().next();
+        UUID remoteSiteID = ss.getID();
+        // in global, can only validate a site that has been synced already
+        localEnvironment.storageSiteDAO.put(ss);
         UUID randomSiteID = UUID.randomUUID();
 
         Artifact artifact = new Artifact(URI.create("cadc:INTTEST/one.ext"), TestUtil.getRandomMD5(),
@@ -671,7 +761,12 @@ public class InventoryValidatorTest {
 
         // case 2
         // Put a local Artifact with a single remote SiteLocation.
-        remoteSiteID = this.remoteEnvironment.storageSiteDAO.list().iterator().next().getID();
+        
+        ss = remoteEnvironment.storageSiteDAO.list().iterator().next();
+        remoteSiteID = ss.getID();
+        // in global, can only validate a site that has been synced already
+        localEnvironment.storageSiteDAO.put(ss);
+        
         artifact = new Artifact(URI.create("cadc:INTTEST/two.ext"), TestUtil.getRandomMD5(),
                                 new Date(), 1024L);
         artifact.siteLocations.add(new SiteLocation(remoteSiteID));
@@ -781,6 +876,13 @@ public class InventoryValidatorTest {
         Artifact artifact = new Artifact(URI.create("cadc:INTTEST/one.ext"), TestUtil.getRandomMD5(),
                                          new Date(), 1024L);
         this.remoteEnvironment.artifactDAO.put(artifact);
+        
+        if (trackSiteLocations) {
+            StorageSite ss = remoteEnvironment.storageSiteDAO.list().iterator().next();
+            UUID remoteSiteID = ss.getID();
+            // in global, can only validate a site that has been synced already
+            localEnvironment.storageSiteDAO.put(ss);
+        }
 
         DeletedArtifactEvent deletedArtifactEvent = new DeletedArtifactEvent(artifact.getID());
         this.localEnvironment.deletedArtifactEventDAO.put(deletedArtifactEvent);
@@ -810,28 +912,28 @@ public class InventoryValidatorTest {
 
     /* discrepancy: artifact not in L && artifact in R
      *
-     * explanation2: L==storage, deleted from L, pending/missed DeletedStorageLocationEvent in R
+     * explanation2: L==storage, Artifact lost from L
      * evidence: DeletedStorageLocationEvent in L
-     * action: none
+     * action: insert Artifact, remove DeletedStorageLocationEvent 
      *
      * L == storage
      * before: Artifact not in L, in R, DeletedStorageLocationEvent in L
-     * after: Artifact not in L, DeletedStorageLocationEvent in L
+     * after: Artifact L, DeletedStorageLocationEvent not in L
      */
     @Test
     public void explanation2_ArtifactNotInLocal_LocalIsStorage() throws Exception {
         // Put Artifact in remote, and put a DeletedStorageLocationEvent for the remote Artifact in local.
         Artifact artifact = new Artifact(URI.create("cadc:INTTEST/one.ext"), TestUtil.getRandomMD5(),
                                          new Date(), 1024L);
-        this.remoteEnvironment.artifactDAO.put(artifact);
+        remoteEnvironment.artifactDAO.put(artifact);
 
         DeletedStorageLocationEvent localDeletedStorageLocationEvent = new DeletedStorageLocationEvent(artifact.getID());
-        this.localEnvironment.deletedStorageLocationEventDAO.put(localDeletedStorageLocationEvent);
+        localEnvironment.deletedStorageLocationEventDAO.put(localDeletedStorageLocationEvent);
 
         try {
             System.setProperty("user.home", TMP_DIR);
-            InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.inventoryConnectionConfig, 
-                                                                    this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
+            InventoryValidator testSubject = new InventoryValidator(localEnvironment.inventoryConnectionConfig, 
+                                                                    localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
                                                                     new IncludeArtifacts(),null,
                                                                     false);
             testSubject.raceConditionDelta = 0L;
@@ -843,8 +945,11 @@ public class InventoryValidatorTest {
         }
 
         // Local Artifact should have been deleted.
-        Artifact localArtifact = this.localEnvironment.artifactDAO.get(artifact.getID());
-        Assert.assertNull("local artifact not found", localArtifact);
+        Artifact localArtifact = localEnvironment.artifactDAO.get(artifact.getID());
+        Assert.assertNotNull("local artifact found", localArtifact);
+        
+        DeletedStorageLocationEvent localDLSE = localEnvironment.deletedStorageLocationEventDAO.get(localDeletedStorageLocationEvent.getID());
+        Assert.assertNull("local DLSE removed", localDLSE);
     }
 
     /* discrepancy: artifact not in L && artifact in R
@@ -908,9 +1013,14 @@ public class InventoryValidatorTest {
         Artifact remoteArtifact = new Artifact(artifactURI, contentCheckSum, olderDate, 1024L);
         this.remoteEnvironment.artifactDAO.put(remoteArtifact);
         
+        StorageSite ss = remoteEnvironment.storageSiteDAO.list().iterator().next();
+        UUID remoteSiteID = ss.getID();
+        // in global, can only validate a site that has been synced already
+        localEnvironment.storageSiteDAO.put(ss);
+            
         // correct artifact in local
         Artifact localArtifact = new Artifact(artifactURI, contentCheckSum, nowDate, 1024L);
-        SiteLocation sloc = new SiteLocation(UUID.randomUUID());
+        SiteLocation sloc = new SiteLocation(remoteSiteID);
         localArtifact.siteLocations.add(sloc);
         this.localEnvironment.artifactDAO.put(localArtifact);
 
@@ -959,7 +1069,10 @@ public class InventoryValidatorTest {
     @Test
     public void explanation5_ArtifactNotInLocal_LocalIsGlobal() throws Exception {
         // Put Artifact in remote.
-        final UUID remoteSiteID = this.remoteEnvironment.storageSiteDAO.list().iterator().next().getID();
+        StorageSite ss = remoteEnvironment.storageSiteDAO.list().iterator().next();
+        UUID remoteSiteID = ss.getID();
+        // in global, can only validate a site that has been synced already
+        localEnvironment.storageSiteDAO.put(ss);
         final UUID randomSiteID = UUID.randomUUID();
         
         log.info("remote site: " + remoteSiteID);
@@ -978,7 +1091,6 @@ public class InventoryValidatorTest {
                                          new Date(), 1024L);
         this.remoteEnvironment.artifactDAO.put(artifact2);
         
-        Log4jInit.setLevel(ArtifactDAO.class.getPackage().getName(), Level.DEBUG);
         try {
             System.setProperty("user.home", TMP_DIR);
             InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.inventoryConnectionConfig, 
@@ -1069,9 +1181,13 @@ public class InventoryValidatorTest {
 
         Artifact localArtifact = new Artifact(artifactURI, contentCheckSum, olderDate, 1024L);
         
-        UUID remoteSiteID = this.remoteEnvironment.storageSiteDAO.list().iterator().next().getID();
+        StorageSite ss = remoteEnvironment.storageSiteDAO.list().iterator().next();
+        UUID remoteSiteID = ss.getID();
         SiteLocation remoteSiteLocation = new SiteLocation(remoteSiteID);
         if (trackSiteLocations) {
+            // in global, can only validate a site that has been synced already
+            localEnvironment.storageSiteDAO.put(ss);
+            
             localArtifact.siteLocations.add(remoteSiteLocation);
         }
         this.localEnvironment.artifactDAO.put(localArtifact);
@@ -1113,7 +1229,13 @@ public class InventoryValidatorTest {
         // cleanup between tests
         this.localEnvironment.cleanTestEnvironment();
         this.remoteEnvironment.cleanTestEnvironment();
-
+        this.remoteEnvironment.initStorageSite(REMOTE_STORAGE_SITE);
+        
+        ss = remoteEnvironment.storageSiteDAO.list().iterator().next();
+        remoteSiteID = ss.getID();
+        // in global, can only validate a site that has been synced already
+        localEnvironment.storageSiteDAO.put(ss);
+        
         // case 2: local contentModifiedDate after remote contentModifiedDate
         // Put the same Artifact in local as remote,
         // except the local contentModifiedDate is newer than the remote contentModifiedDate.
@@ -1179,7 +1301,8 @@ public class InventoryValidatorTest {
         // add the remote site ID and a random site ID to siteLocations.
         // Pause before putting the Artifact in remote, it will have a later lastModified date
         // and the Artifact will have a different metadata checksum than the local Artifact.
-        UUID remoteSiteID = this.remoteEnvironment.storageSiteDAO.list().iterator().next().getID();
+        StorageSite ss = remoteEnvironment.storageSiteDAO.list().iterator().next();
+        UUID remoteSiteID = ss.getID();
         UUID randomSiteID = UUID.randomUUID();
 
         UUID artifactID = UUID.randomUUID();
@@ -1189,6 +1312,8 @@ public class InventoryValidatorTest {
 
         Artifact localArtifact = new Artifact(artifactID, artifactURI, TestUtil.getRandomMD5(), now.getTime(), 1024L);
         if (trackSiteLocations) {
+            // in global, can only validate a site that has been synced already
+            localEnvironment.storageSiteDAO.put(ss);
             localArtifact.siteLocations.add(new SiteLocation(remoteSiteID));
             localArtifact.siteLocations.add(new SiteLocation(randomSiteID));
         }
@@ -1253,6 +1378,13 @@ public class InventoryValidatorTest {
                                          new Date(), 1024L);
         this.localEnvironment.artifactDAO.put(artifact);
         this.remoteEnvironment.artifactDAO.put(artifact);
+        
+        if (trackSiteLocations) {
+            StorageSite ss = remoteEnvironment.storageSiteDAO.list().iterator().next();
+            UUID remoteSiteID = ss.getID();
+            // in global, can only validate a site that has been synced already
+            localEnvironment.storageSiteDAO.put(ss);
+        }
 
         Thread.sleep(20L);
         artifact.contentType = "image/fits";
@@ -1287,7 +1419,11 @@ public class InventoryValidatorTest {
      */
     @Test
     public void artifactSiteLocationMissing_LocalIsGlobal() throws Exception {
-        UUID remoteSiteID = this.remoteEnvironment.storageSiteDAO.list().iterator().next().getID();
+        StorageSite ss = remoteEnvironment.storageSiteDAO.list().iterator().next();
+        UUID remoteSiteID = ss.getID();
+        // in global, can only validate a site that has been synced already
+        localEnvironment.storageSiteDAO.put(ss);
+        
         final SiteLocation sloc = new SiteLocation(remoteSiteID);
         
         UUID artifactID = UUID.randomUUID();

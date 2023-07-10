@@ -525,6 +525,8 @@ public class FileSyncJob implements Runnable {
         long lastSegment = a.getContentLength() - (segmentSize * numWholeSegments);
         long numSegments = (lastSegment > 0L ? numWholeSegments + 1 : numWholeSegments);
 
+        log.debug("getSegmentPlan: numWholeSeg=" + numWholeSegments + " numSegments=" + numSegments);
+        log.debug("getSegmentPlan: segmentSize=" + segmentSize + " lastSegment=" + lastSegment);
         for (int i = 0; i < numSegments; i++) {
             FileSyncJob.PutSegment s = new FileSyncJob.PutSegment();
 
@@ -678,7 +680,7 @@ public class FileSyncJob implements Runnable {
     }
     
     private void verifyMetadata(Artifact a, HttpGet get, PutSegment seg) throws PreconditionFailedException {
-        log.debug("verify artifact: " + a);
+        log.debug("verify artifact: " + a.getContentLength() + " " + a.getContentChecksum());
         log.debug("verify headers: " + get.getContentLength() + " " + get.getDigest());
         log.debug("verify seg: " + seg);
         URI hdrContentChecksum = get.getDigest();
