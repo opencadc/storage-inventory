@@ -601,8 +601,8 @@ public class NodeDAOTest {
             c2 = iter.next();
             Assert.assertTrue(iter.hasNext());
             c3 = iter.next();
+            Assert.assertFalse(iter.hasNext());
         }
-        
         // default order: alpha
         Assert.assertEquals(cont.getID(), c1.getID());
         Assert.assertEquals(cont.getName(), c1.getName());
@@ -612,6 +612,46 @@ public class NodeDAOTest {
         
         Assert.assertEquals(link.getID(), c3.getID());
         Assert.assertEquals(link.getName(), c3.getName());
+        
+        // iterate with limit
+        try (ResourceIterator<Node> iter = nodeDAO.iterator(orig, 2, null)) {
+            Assert.assertNotNull(iter);
+            Assert.assertTrue(iter.hasNext());
+            c1 = iter.next();
+            Assert.assertTrue(iter.hasNext());
+            c2 = iter.next();
+            Assert.assertFalse(iter.hasNext());
+        }
+        Assert.assertEquals(cont.getID(), c1.getID());
+        Assert.assertEquals(cont.getName(), c1.getName());
+        
+        Assert.assertEquals(data.getID(), c2.getID());
+        Assert.assertEquals(data.getName(), c2.getName());
+        
+        // iterate with start
+        try (ResourceIterator<Node> iter = nodeDAO.iterator(orig, null, c2.getName())) {
+            Assert.assertNotNull(iter);
+            Assert.assertTrue(iter.hasNext());
+            c2 = iter.next();
+            Assert.assertTrue(iter.hasNext());
+            c3 = iter.next();
+            Assert.assertFalse(iter.hasNext());
+        }
+        Assert.assertEquals(data.getID(), c2.getID());
+        Assert.assertEquals(data.getName(), c2.getName());
+        
+        Assert.assertEquals(link.getID(), c3.getID());
+        Assert.assertEquals(link.getName(), c3.getName());
+        
+        // iteratoe with limit and start
+        try (ResourceIterator<Node> iter = nodeDAO.iterator(orig, 1, c2.getName())) {
+            Assert.assertNotNull(iter);
+            Assert.assertTrue(iter.hasNext());
+            c2 = iter.next();
+            Assert.assertFalse(iter.hasNext());
+        }
+        Assert.assertEquals(data.getID(), c2.getID());
+        Assert.assertEquals(data.getName(), c2.getName());
         
         // depth first delete required but not enforced by DAO
         nodeDAO.delete(cont.getID());
