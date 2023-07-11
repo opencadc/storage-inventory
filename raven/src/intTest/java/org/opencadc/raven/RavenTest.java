@@ -75,6 +75,7 @@ import ca.nrc.cadc.db.DBConfig;
 import ca.nrc.cadc.db.DBUtil;
 import ca.nrc.cadc.net.FileContent;
 import ca.nrc.cadc.net.HttpPost;
+import ca.nrc.cadc.net.ResourceAlreadyExistsException;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.reg.Standards;
 import ca.nrc.cadc.reg.client.RegistryClient;
@@ -152,22 +153,21 @@ public abstract class RavenTest {
     }
     
     protected Transfer negotiate(Transfer request)
-        throws IOException, TransferParsingException, PrivilegedActionException, ResourceNotFoundException {
+        throws InterruptedException, IOException, TransferParsingException, PrivilegedActionException, ResourceNotFoundException {
         TransferWriter writer = new TransferWriter();
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         writer.write(request, out);
         FileContent content = new FileContent(out.toByteArray(), "text/xml");
         HttpPost post = new HttpPost(certURL, content, false);
-        post.run();
-        if (post.getThrowable() != null && post.getThrowable() instanceof ResourceNotFoundException) {
-            throw (ResourceNotFoundException) post.getThrowable();
+        try {
+            post.prepare();
+            TransferReader reader = new TransferReader();
+            Transfer t = reader.read(post.getInputStream(),  null);
+            log.debug("Response transfer: " + t);
+            return t;
+        } catch (ResourceAlreadyExistsException  ex) {
+            throw new RuntimeException("unexpected exception", ex);
         }
-        Assert.assertNull(post.getThrowable());
-        String response = post.getResponseBody();
-        TransferReader reader = new TransferReader();
-        Transfer t = reader.read(response,  null);
-        log.debug("Response transfer: " + t);
-        return t;
     }
 
 }

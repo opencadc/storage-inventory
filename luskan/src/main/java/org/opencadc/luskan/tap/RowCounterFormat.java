@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2020.                            (c) 2020.
+*  (c) 2022.                            (c) 2022.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -67,33 +67,35 @@
 
 package org.opencadc.luskan.tap;
 
-import ca.nrc.cadc.tap.schema.FunctionDesc;
-import ca.nrc.cadc.tap.schema.TapDataType;
-import ca.nrc.cadc.tap.schema.TapSchemaDAO;
-import java.util.List;
+import ca.nrc.cadc.dali.util.Format;
 import org.apache.log4j.Logger;
 
 /**
- *
+ * Simple in-code row counter.
+ * 
  * @author pdowler
  */
-public class TapSchemaDAOImpl  extends TapSchemaDAO {
-    private static final Logger log = Logger.getLogger(TapSchemaDAOImpl.class);
+public class RowCounterFormat implements Format<Object> {
+    private static final Logger log = Logger.getLogger(RowCounterFormat.class);
 
-    public TapSchemaDAOImpl() {
-        super();
-    }
+    // format object gets created once per query so this should be OK
+    // but will fail if there are two, e.g. select row_counter(), row_counter(), ...
+    private long counter = 0L;
     
-    @Override
-    protected List<FunctionDesc> getFunctionDescs() {
-        List<FunctionDesc> ret = super.getFunctionDescs();
-
-        ret.add(new FunctionDesc("now", TapDataType.TIMESTAMP));
-        ret.add(new FunctionDesc("split_part", TapDataType.STRING));
-        ret.add(new FunctionDesc("num_copies", TapDataType.INTEGER));
-        ret.add(new FunctionDesc("date", TapDataType.TIMESTAMP));
-        ret.add(new FunctionDesc("row_counter", TapDataType.LONG));
-        
-        return ret;
+    public RowCounterFormat() { 
     }
+
+    @Override
+    public Object parse(String string) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public String format(Object o) {
+        // ignore t
+        counter++;
+        return Long.toString(counter);
+    }
+
+    
 }

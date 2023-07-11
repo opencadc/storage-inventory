@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2020.                            (c) 2020.
+*  (c) 2023.                            (c) 2023.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -67,33 +67,29 @@
 
 package org.opencadc.luskan.tap;
 
-import ca.nrc.cadc.tap.schema.FunctionDesc;
-import ca.nrc.cadc.tap.schema.TapDataType;
-import ca.nrc.cadc.tap.schema.TapSchemaDAO;
-import java.util.List;
+import ca.nrc.cadc.dali.util.Format;
+import ca.nrc.cadc.tap.TapSelectItem;
+import ca.nrc.cadc.tap.writer.format.DefaultFormatFactory;
 import org.apache.log4j.Logger;
 
 /**
  *
  * @author pdowler
  */
-public class TapSchemaDAOImpl  extends TapSchemaDAO {
-    private static final Logger log = Logger.getLogger(TapSchemaDAOImpl.class);
+public class FormatFactoryImpl extends DefaultFormatFactory {
+    private static final Logger log = Logger.getLogger(FormatFactoryImpl.class);
 
-    public TapSchemaDAOImpl() {
-        super();
+    public FormatFactoryImpl() { 
     }
-    
-    @Override
-    protected List<FunctionDesc> getFunctionDescs() {
-        List<FunctionDesc> ret = super.getFunctionDescs();
 
-        ret.add(new FunctionDesc("now", TapDataType.TIMESTAMP));
-        ret.add(new FunctionDesc("split_part", TapDataType.STRING));
-        ret.add(new FunctionDesc("num_copies", TapDataType.INTEGER));
-        ret.add(new FunctionDesc("date", TapDataType.TIMESTAMP));
-        ret.add(new FunctionDesc("row_counter", TapDataType.LONG));
-        
+    @Override
+    protected Format<Object> getLongFormat(TapSelectItem columnDesc) {
+        Format<Object> ret = super.getLongFormat(columnDesc);
+        if ("row_counter".equalsIgnoreCase(columnDesc.getName())) {
+            return new RowCounterFormat();
+        }
         return ret;
     }
+    
+    
 }

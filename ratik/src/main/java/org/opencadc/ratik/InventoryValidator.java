@@ -3,7 +3,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2022.                            (c) 2022.
+ *  (c) 2023.                            (c) 2023.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -69,6 +69,7 @@
 
 package org.opencadc.ratik;
 
+import ca.nrc.cadc.auth.AuthenticationUtil;
 import ca.nrc.cadc.auth.SSLUtil;
 import ca.nrc.cadc.db.ConnectionConfig;
 import ca.nrc.cadc.db.DBUtil;
@@ -104,6 +105,7 @@ import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.StorageSite;
 import org.opencadc.inventory.db.ArtifactDAO;
+import org.opencadc.inventory.db.StorageSiteDAO;
 import org.opencadc.inventory.db.version.InitDatabase;
 import org.opencadc.inventory.query.ArtifactRowMapper;
 import org.opencadc.inventory.util.ArtifactSelector;
@@ -120,11 +122,15 @@ public class InventoryValidator implements Runnable {
 
     private final ArtifactDAO artifactDAO;
     private final URI resourceID;
-    private final StorageSite remoteSite;
+    
+    private final boolean trackSiteLocations;
     private final ArtifactSelector artifactSelector;
     private final BucketSelector bucketSelector;
     private final ArtifactValidator artifactValidator;
     private final MessageDigest messageDigest;
+
+    private boolean enableRowCounterFeature = false;
+    private StorageSite remoteSite;
     
     // package access so tests can reduce this
     long raceConditionDelta = 5 * 60 * 60 * 1000L; // 5 min ago
@@ -191,6 +197,7 @@ public class InventoryValidator implements Runnable {
         this.artifactDAO = new ArtifactDAO(false);
         this.artifactDAO.setConfig(daoConfig);
         this.resourceID = resourceID;
+        this.trackSiteLocations = trackSiteLocations;
         this.artifactSelector = artifactSelector;
         this.bucketSelector = bucketSelector;
         
@@ -206,21 +213,9 @@ public class InventoryValidator implements Runnable {
             throw new IllegalArgumentException("invalid config", ex);
         }
 
-        if (trackSiteLocations) {
-            try {
-                this.remoteSite = getRemoteStorageSite(resourceID);
-            } catch (ResourceNotFoundException ex) {
-                throw new IllegalArgumentException("query service not found: " + resourceID, ex);
-            } catch (Exception ex) {
-                throw new IllegalArgumentException("remote StorageSite query failed", ex);
-            }
-        } else {
-            this.remoteSite = null;
-        }
-        
         ArtifactDAO txnDAO = new ArtifactDAO(false);
         txnDAO.setConfig(txnConfig);
-        this.artifactValidator = new ArtifactValidator(txnDAO, resourceID, this.remoteSite, this.artifactSelector);
+        this.artifactValidator = new ArtifactValidator(txnDAO, resourceID, this.artifactSelector);
 
         try {
             this.messageDigest = MessageDigest.getInstance("MD5");
@@ -233,17 +228,27 @@ public class InventoryValidator implements Runnable {
     InventoryValidator() {
         this.artifactDAO = null;
         this.resourceID = null;
-        this.remoteSite = null;
+        this.trackSiteLocations = false;
         this.artifactSelector = null;
         this.bucketSelector = null;
         this.artifactValidator = null;
         this.messageDigest = null;
     }
 
+    public void setEnableRowCounterFeature(boolean enableRowCounterFeature) {
+        this.enableRowCounterFeature = enableRowCounterFeature;
+    }
+
     @Override 
     public void run() {
         try {
-            final Subject subject = SSLUtil.createSubject(new File(CERTIFICATE_FILE_LOCATION));
+            Subject subject = AuthenticationUtil.getAnonSubject();
+            File certFile = new File(CERTIFICATE_FILE_LOCATION);
+            if (certFile.exists()) {
+                subject = SSLUtil.createSubject(certFile);
+            } else {
+                log.info("not found: " + certFile + " -- proceeding anonymously");
+            }
             Subject.doAs(subject, (PrivilegedExceptionAction<Void>) () -> {
                 doit();
                 logSummary(true, false);
@@ -255,20 +260,32 @@ public class InventoryValidator implements Runnable {
         }
     }
 
-    /**
-     * Validates local and remote sets of Artifacts.
-     *
-     * @throws ResourceNotFoundException For any missing required configuration that is missing.
-     * @throws IOException               For unreadable configuration files.
-     * @throws IllegalStateException     For any invalid configuration.
-     * @throws TransientException        temporary failure of TAP service: same call could work in future
-     * @throws InterruptedException      thread interrupted
-     */
     void doit() throws ResourceNotFoundException, IOException, IllegalStateException, TransientException,
                        InterruptedException {
 
-        // generate validate jobs to keep subsequent loop simple and make it easier to 
-        // add multi-threaded capability later
+        if (trackSiteLocations) {
+            try {
+                StorageSite ss = getRemoteStorageSite(resourceID);
+                // verify with local
+                StorageSiteDAO sdao = new StorageSiteDAO(artifactDAO);
+                StorageSite knownSite = sdao.get(ss.getID());
+                if (knownSite == null) {
+                    throw new IllegalStateException("remote site " + ss.getID() + " (" + ss.getResourceID() + ") "
+                        + "not found in local database -- cannot validate unsynced site");
+                }
+                this.remoteSite = ss;
+                artifactValidator.setRemoteSite(remoteSite);
+            } catch (ResourceNotFoundException ex) {
+                throw new IllegalArgumentException("query service not found: " + resourceID, ex);
+            } catch (TransientException | IOException | InterruptedException ex) {
+                throw new IllegalArgumentException("remote StorageSite query failed", ex);
+            }
+        } else {
+            this.remoteSite = null;
+            artifactValidator.setRemoteSite(null);
+        }
+        
+        
         List<String> buckets = new ArrayList<>();
         BucketSelector allBuckets = new BucketSelector("0-f");
         if (this.bucketSelector == null) {
@@ -318,6 +335,10 @@ public class InventoryValidator implements Runnable {
                         log.error(InventoryValidator.class.getSimpleName() + ".FAIL bucket=" + bucket, ex);
                         numFailedBuckets++;
                         retries++;
+                    } catch (IllegalArgumentException ex) {
+                        log.error(InventoryValidator.class.getSimpleName() + ".FAIL bucket=" + bucket, ex);
+                        numFailedBuckets++;
+                        throw ex;
                     } catch (RuntimeException ex) {
                         // TODO: probably not a great idea to retry on these...
                         log.error(InventoryValidator.class.getSimpleName() + ".FAIL bucket=" + bucket, ex);
@@ -554,7 +575,11 @@ public class InventoryValidator implements Runnable {
             final long t1 = System.currentTimeMillis();
             try {
                 log.debug(InventoryValidator.class.getSimpleName() + ".remoteQuery bucket=" + bucket);
-                ResourceIterator<Artifact> ret = tapClient.query(query, new ArtifactRowMapper(), true);
+                ArtifactRowMapper arm = new ArtifactRowMapper();
+                if (enableRowCounterFeature) {
+                    arm = new CountingArtifactRowMapper();
+                }
+                ResourceIterator<Artifact> ret = tapClient.query(query, arm, true);
                 long dt = System.currentTimeMillis() - t1;
                 log.info(InventoryValidator.class.getSimpleName() + ".remoteQuery bucket=" + bucket + " duration=" + dt);
                 if (!ret.hasNext() && !allowEmptyIterator) {
@@ -575,6 +600,21 @@ public class InventoryValidator implements Runnable {
         }
         throw tex;
     }
+    
+    private class CountingArtifactRowMapper extends ArtifactRowMapper {
+        private long cur = 0L;
+        
+        @Override
+        public Artifact mapRow(List<Object> row) {
+            cur++;
+            Artifact ret = super.mapRow(row);
+            Long rownum = (Long) row.get(row.size() - 1);
+            if (rownum == null || rownum != cur) {
+                throw new TransientException("detected broken query result stream: expected row " + cur + "found: " + rownum);
+            }
+            return ret;
+        }
+    }
 
     /**
      * Assemble the WHERE clause and return the full query.  Very useful for testing separately.
@@ -585,7 +625,11 @@ public class InventoryValidator implements Runnable {
     String buildRemoteQuery(final String bucket)
         throws ResourceNotFoundException, IOException {
         final StringBuilder query = new StringBuilder();
-        query.append(ArtifactRowMapper.BASE_QUERY);
+        if (enableRowCounterFeature) {
+            query.append(String.format("%s, row_counter() %s",  ArtifactRowMapper.SELECT,  ArtifactRowMapper.FROM));
+        } else {
+            query.append(ArtifactRowMapper.BASE_QUERY);
+        }
 
         if (StringUtil.hasText(this.artifactSelector.getConstraint())) {
             if (query.indexOf("WHERE") < 0) {
@@ -614,29 +658,21 @@ public class InventoryValidator implements Runnable {
      * Get the StorageSite for the remote instance resourceID;
      */
     private StorageSite getRemoteStorageSite(URI resourceID)
-        throws InterruptedException, IOException, ResourceNotFoundException, TransientException {
-        try {
-            final Subject subject = SSLUtil.createSubject(new File(CERTIFICATE_FILE_LOCATION));
-            return Subject.doAs(subject, (PrivilegedExceptionAction<StorageSite>) () -> {
-                final TapClient<StorageSite> tapClient = new TapClient<>(resourceID);
-                final String query = "SELECT id, resourceID, name, allowRead, allowWrite, lastModified, metaChecksum "
-                    + "FROM inventory.StorageSite";
-                log.debug("\nExecuting query '" + query + "'\n");
-                StorageSite storageSite = null;
-                ResourceIterator<StorageSite> results = tapClient.query(query, new StorageSiteRowMapper());
-                if (results.hasNext()) {
-                    storageSite = results.next();
-                    if (results.hasNext()) {
-                        throw new IllegalStateException(String.format("Multiple StorageSite's found for site %s",
-                                                                      resourceID.toASCIIString()));
-                    }
-                }
-                return storageSite;
-            });
-        } catch (PrivilegedActionException privilegedActionException) {
-            final Exception exception = privilegedActionException.getException();
-            throw new IllegalStateException(exception.getMessage(), exception);
+            throws InterruptedException, IOException, ResourceNotFoundException, TransientException {
+        final TapClient<StorageSite> tapClient = new TapClient<>(resourceID);
+        final String query = "SELECT id, resourceID, name, allowRead, allowWrite, lastModified, metaChecksum "
+            + "FROM inventory.StorageSite";
+        log.debug("\nExecuting query '" + query + "'\n");
+        StorageSite storageSite = null;
+        ResourceIterator<StorageSite> results = tapClient.query(query, new StorageSiteRowMapper());
+        if (results.hasNext()) {
+            storageSite = results.next();
+            if (results.hasNext()) {
+                throw new IllegalStateException(String.format("Multiple StorageSite's found for site %s",
+                                                              resourceID.toASCIIString()));
+            }
         }
+        return storageSite;
     }
 
     /**

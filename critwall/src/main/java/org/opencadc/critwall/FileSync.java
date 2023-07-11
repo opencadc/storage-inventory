@@ -76,7 +76,6 @@ import ca.nrc.cadc.thread.ThreadedRunnableExecutor;
 import ca.nrc.cadc.util.BucketSelector;
 import ca.nrc.cadc.vosi.Availability;
 import ca.nrc.cadc.vosi.AvailabilityClient;
-
 import java.io.File;
 import java.net.URI;
 import java.util.Iterator;
@@ -85,11 +84,9 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-
 import javax.naming.NamingException;
 import javax.security.auth.Subject;
 import javax.sql.DataSource;
-
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.InventoryUtil;
@@ -199,13 +196,13 @@ public class FileSync implements Runnable {
     }
 
     // start a Scheduler thread to renew the subject periodically.
-    public static void scheduleSubjectUpdates(final Subject subject) {
+    public static void scheduleSubjectUpdates(final Subject subject, final File certificateFile) {
         log.debug("START: scheduleSubjectUpdates");
         final ScheduledExecutorService scheduledExecutorService = Executors.newSingleThreadScheduledExecutor();
         scheduledExecutorService.schedule(() -> {
             // Also synchronized on FileSyncJob.run().
             synchronized (subject) {
-                SSLUtil.renewSubject(subject, new File(CERTIFICATE_FILE_LOCATION));
+                SSLUtil.renewSubject(subject, certificateFile);
             }
         }, CERT_CHECK_MINUTE_INTERVAL_COUNT, TimeUnit.MINUTES);
         log.debug("END: scheduleSubjectUpdates OK");
@@ -214,11 +211,14 @@ public class FileSync implements Runnable {
     @Override
     public void run() {
         final File certificateFile = new File(CERTIFICATE_FILE_LOCATION);
-        final Subject subject = certificateFile.exists()
-                                ? SSLUtil.createSubject(new File(CERTIFICATE_FILE_LOCATION))
-                                : AuthenticationUtil.getAnonSubject();
-
-        scheduleSubjectUpdates(subject);
+        Subject subject = AuthenticationUtil.getAnonSubject();
+        if (certificateFile.exists()) {
+            subject = SSLUtil.createSubject(certificateFile);
+            scheduleSubjectUpdates(subject, certificateFile);
+        } else {
+            log.info("not found: " + certificateFile + " -- proceeding anonymously");
+        }
+        
         doit(subject);
     }
 

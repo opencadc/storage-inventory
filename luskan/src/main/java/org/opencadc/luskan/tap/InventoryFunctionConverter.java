@@ -74,6 +74,7 @@ import java.util.ArrayList;
 import java.util.List;
 import net.sf.jsqlparser.expression.Expression;
 import net.sf.jsqlparser.expression.Function;
+import net.sf.jsqlparser.expression.LongValue;
 import net.sf.jsqlparser.expression.operators.relational.ExpressionList;
 import net.sf.jsqlparser.schema.Column;
 import net.sf.jsqlparser.schema.Table;
@@ -136,6 +137,14 @@ public class InventoryFunctionConverter extends ExpressionNavigator {
             ExpressionList parameters = new ExpressionList();
             parameters.setExpressions(expressions);
             function.setName("cardinality");
+            function.setParameters(parameters);
+        }
+        if (function.getName().equalsIgnoreCase("row_counter")) {
+            List<Expression> expressions = new ArrayList<>();
+            expressions.add(new LongValue("0"));
+            ExpressionList parameters = new ExpressionList();
+            parameters.setExpressions(expressions);
+            function.setName("abs");
             function.setParameters(parameters);
         }
     }

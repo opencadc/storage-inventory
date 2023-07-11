@@ -18,7 +18,11 @@ org.opencadc.raven.query.password={database password for query pool}
 org.opencadc.raven.query.url=jdbc:postgresql://{server}/{database}
 
 ```
-The `query` pool is used to query inventory for the requested Artifact.
+The _query_ pool is used to query inventory for the requested Artifact.
+
+### cadc-registry.properties
+
+See <a href="https://github.com/opencadc/reg/tree/master/cadc-registry">cadc-registry</a>.
 
 ### raven.properties
 The following keys are required:
@@ -27,31 +31,35 @@ The following keys are required:
 org.opencadc.inventory.db.SQLGenerator=org.opencadc.inventory.db.SQLGenerator
 org.opencadc.raven.inventory.schema={schema}
 
-org.opencadc.raven.publicKeyFile={public key file name}
-org.opencadc.raven.privateKeyFile={private key file name}
-
 # consistency settings
 org.opencadc.raven.consistency.preventNotFound=true|false
 ```
-The key file names are relative (no path) and the files must be in the config directory.
-
-raven can be configured prevent artifact-not-found errors that might result due to the eventual consistency nature of
+`raven` can be configured prevent artifact-not-found errors that might result due to the eventual consistency nature of
 the system by directly checking for the artifact at the sites (`preventNotFound=true`). This however introduces an
 overhead for the genuine not-found cases.
 
 The following optional keys configure raven to use external service(s) to obtain grant information in order
 to perform authorization checks:
 ```
+# keys to generate pre-auth URLs to minoc
+org.opencadc.raven.publicKeyFile={public key file name}
+org.opencadc.raven.privateKeyFile={private key file name}
+
 org.opencadc.raven.readGrantProvider={resourceID of a permission granting service}
 org.opencadc.raven.writeGrantProvider={resourceID of a permission granting service}
 ```
-Multiple values of the permission granting service resourceID(s) may be provided by including multiple property 
+The optional _privateKeyFile_ is used to sign pre-auth URLs (one-time token included in URL) so that a `minoc` service does not
+have to repeat permission checks. The _publicKeyFile_ is not currently used but may be required in future (either exported via URL
+or used to check if `minoc` services have the right key before generating pre-auth URLs: TBD).
+
+The optional _readGrantProvider_ and _writeGrantProvider_ keys configure minoc to call other services to get grants (permissions) for 
+operations. Multiple values of the permission granting service resourceID(s) may be provided by including multiple property 
 settings. All services will be consulted but a single positive result is sufficient to grant permission for an 
 action.
 
 The following optional keys configure raven to prioritize sites returned in transfer negotiation, with higher priority
-sites first in the list of transfer URL's. Multiple values of `namespace` may be specified for a single `resourceID`. 
-The `namespace` value(s) must end with a colon (:) or slash (/) so one namespace cannot accidentally match (be a 
+sites first in the list of transfer URL's. Multiple values of _namespace_ may be specified for a single _resourceID_. 
+The _namespace_ value(s) must end with a colon (:) or slash (/) so one namespace cannot accidentally match (be a 
 prefix of) another namepsace.
 
 ```
@@ -68,7 +76,7 @@ CADC.namespace=cadc:IRIS/
 CADC.namespace=cadc:CGPS/
 ```
 
-The `putPreference` rules are optimizations; they do not restrict the destination of a PUT. They are useful in cases 
+The _putPreference_ rules are optimizations; they do not restrict the destination of a PUT. They are useful in cases 
 where a namespace is intended to be stored only in some site(s) or where most or all PUTs come from systems that are near one 
 storage site. TODO: support for `GET` preferences? also use client IP address to prioritize?
 
@@ -86,27 +94,12 @@ services), add the following configuration entry to raven.properties:
 ```
 org.opencadc.raven.authenticateOnly=true
 ```
-With `authenticateOnly=true`, any authenticated user will be able to read/write/delete files and anonymous users
+When _authenticateOnly_ is `true`, any authenticated user will be able to read/write/delete files and anonymous users
 will be able to read files.
 
 
-### LocalAuthority.properties
-The LocalAuthority.properties file specifies which local service is authoritative for various site-wide functions. The keys
-are standardID values for the functions and the values are resourceID values for the service that implements that standard 
-feature.
-
-Example:
-```
-ivo://ivoa.net/std/GMS#search-0.1 = ivo://cadc.nrc.ca/gms           
-ivo://ivoa.net/std/UMS#users-0.1 = ivo://cadc.nrc.ca/gms    
-ivo://ivoa.net/std/UMS#login-0.1 = ivo://cadc.nrc.ca/gms           
-
-ivo://ivoa.net/std/CDP#delegate-1.0 = ivo://cadc.nrc.ca/cred
-ivo://ivoa.net/std/CDP#proxy-1.0 = ivo://cadc.nrc.ca/cred
-```
-
-### cadcproxy.pem
-This client certificate is used to make server-to-server calls for system-level A&A purposes.
+### cadcproxy.pem (optional)
+This client certificate is used to make authenticated server-to-server calls for system-level A&A purposes.
 
 ## building
 

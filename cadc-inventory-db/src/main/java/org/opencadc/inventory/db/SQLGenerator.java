@@ -915,7 +915,7 @@ public class SQLGenerator {
                 ps.setFetchDirection(ResultSet.FETCH_FORWARD);
                 int col = 1;
                 
-                ps.setObject(1, parent.getID());
+                ps.setObject(col++, parent.getID());
                 log.debug("parentID = " + parent.getID());
                 if (start != null) {
                     ps.setString(col++, start);

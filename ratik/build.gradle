@@ -17,7 +17,8 @@ group = 'org.opencadc'
 dependencies {
     compile 'org.opencadc:cadc-util:[1.9.6,2.0)'
     compile 'org.opencadc:cadc-inventory:[0.9.4,2.0)'
-    compile 'org.opencadc:cadc-inventory-db:[0.14.5,1.0)'
+    // temporarily limit this lib because cadc-inventory-db-0.15.0 is from the vos2 feature branch
+    compile 'org.opencadc:cadc-inventory-db:[0.14.6,0.15)'
     compile 'org.opencadc:cadc-inventory-util:[0.1.8,1.0)'
     compile 'org.opencadc:cadc-registry:[1.5,2.0)'
     compile 'org.opencadc:cadc-tap:[1.1.15,2.0)'
