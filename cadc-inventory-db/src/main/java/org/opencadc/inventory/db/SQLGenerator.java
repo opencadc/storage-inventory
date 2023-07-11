@@ -222,7 +222,7 @@ public class SQLGenerator {
         this.columnMap.put(HarvestState.class, cols);
         
         // optional vospace
-        log.warn("vosSchema: " + vosSchema);
+        log.debug("vosSchema: " + vosSchema);
         if (vosSchema != null) {
             pref = vosSchema + ".";
             tableMap.put(Node.class, pref + Node.class.getSimpleName());
@@ -1575,10 +1575,10 @@ public class SQLGenerator {
                 if (hasRow) {
                     log.debug("ArtifactResultSetIterator:  " + super.toString() + " ResultSet.next() FAILED - setAutoCommit(true)");
                     try {
-                        close();
+                        con.setAutoCommit(false);
                         hasRow = false;
-                    } catch (IOException unexpected) {
-                        log.debug("BUG: unexpected IOException from close", unexpected);
+                    } catch (SQLException unexpected) {
+                        log.error("unexpected SQLException trying to close txn", unexpected);
                     }
                 }
                 throw new RuntimeException("BUG: artifact list query failed while iterating", ex);
@@ -1609,7 +1609,7 @@ public class SQLGenerator {
         @Override
         public void close() throws IOException {
             if (hasRow) {
-                log.debug("NodeResultSetIterator:  " + super.toString() + " ctor - setAutoCommit(true)");
+                log.debug("NodeResultSetIterator:  " + super.toString() + " close - setAutoCommit(true)");
                 try {
                     con.setAutoCommit(true);
                     hasRow = false;
@@ -1638,10 +1638,10 @@ public class SQLGenerator {
                 if (hasRow) {
                     log.debug("NodeResultSetIterator:  " + super.toString() + " ResultSet.next() FAILED - setAutoCommit(true)");
                     try {
-                        close();
+                        con.setAutoCommit(true);
                         hasRow = false;
-                    } catch (IOException unexpected) {
-                        log.debug("BUG: unexpected IOException from close", unexpected);
+                    } catch (SQLException unexpected) {
+                        log.error("unexpected SQLException trying to close txn", unexpected);
                     }
                 }
                 throw new RuntimeException("BUG: node list query failed while iterating", ex);
