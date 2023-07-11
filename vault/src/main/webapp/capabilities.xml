@@ -4,36 +4,152 @@
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
     xmlns:vs="http://www.ivoa.net/xml/VODataService/v1.1">
 
-  <capability standardID="http://www.opencadc.org/std/storage#files-1.0">
-    <interface xsi:type="vs:ParamHTTP" role="std">
-      <accessURL use="base">https://replace.com/vault/nodes</accessURL>
-      <securityMethod />
-      <securityMethod standardID="ivo://ivoa.net/sso#cookie" />
-      <securityMethod standardID="ivo://ivoa.net/sso#tls-with-certificate" />
-      <securityMethod standardID="ivo://ivoa.net/sso#token"/>
-    </interface>
-  </capability>
-
   <capability standardID="ivo://ivoa.net/std/VOSI#capabilities">
     <interface xsi:type="vs:ParamHTTP" role="std">
-      <accessURL use="full">https://replace.com/vault/capabilities</accessURL>
+      <accessURL use="full">https://replace.me.com/vault/capabilities</accessURL>
     </interface>
   </capability>
 
   <capability standardID="ivo://ivoa.net/std/VOSI#availability">
     <interface xsi:type="vs:ParamHTTP" role="std">
-      <accessURL use="full">https://replace.com/vault/availability</accessURL>
-      <securityMethod />
-      <securityMethod standardID="ivo://ivoa.net/sso#tls-with-certificate" />
+      <accessURL use="full">https://replace.me.com/vault/availability</accessURL>
     </interface>
   </capability>
   
   <capability standardID="vos://cadc.nrc.ca~vospace/CADC/std/LOGGING#logControl-1.0">
     <interface xsi:type="vs:ParamHTTP" role="std" version="1.0">
-      <accessURL use="full">https://replace.com/vault/logControl</accessURL>
+      <accessURL use="full">https://replace.me.com/vault/logControl</accessURL>
       <securityMethod standardID="ivo://ivoa.net/sso#tls-with-certificate" />
     </interface>
   </capability>
-  
+
+  <capability standardID="ivo://ivoa.net/std/VOSpace/v2.0#views">
+    <interface xsi:type="vs:ParamHTTP" role="std">
+      <accessURL use="full">https://replace.me.com/vault/views</accessURL>
+    </interface>
+  </capability>
+
+  <capability standardID="ivo://ivoa.net/std/VOSpace/v2.0#nodes">
+    <interface xsi:type="vs:ParamHTTP" role="std">
+      <accessURL use="base">https://replace.me.com/vault/nodes</accessURL>
+      <securityMethod/>
+      <securityMethod standardID="ivo://ivoa.net/sso#cookie"/>
+      <securityMethod standardID="ivo://ivoa.net/sso#tls-with-certificate"/>
+      <securityMethod standardID="ivo://ivoa.net/sso#token"/>
+    </interface>
+    <interface xsi:type="vs:ParamHTTP" role="std">
+      <accessURL use="full">https://replace.me.com/vault/auth/nodes</accessURL>
+      <securityMethod standardID="ivo://ivoa.net/sso#BasicAA"/>
+    </interface>
+  </capability>
+
+  <capability standardID="ivo://ivoa.net/std/VOSpace/v2.0#transfers">
+    <interface xsi:type="vs:ParamHTTP" role="std">
+      <accessURL use="full">https://replace.me.com/vault/transfers</accessURL>
+      <securityMethod/>
+      <securityMethod standardID="ivo://ivoa.net/sso#cookie"/>
+      <securityMethod standardID="ivo://ivoa.net/sso#tls-with-certificate"/>
+      <securityMethod standardID="ivo://ivoa.net/sso#token"/>
+    </interface>
+    <interface xsi:type="vs:ParamHTTP" role="std">
+      <accessURL use="full">https://replace.me.com/vault/auth/transfers</accessURL>
+      <securityMethod standardID="ivo://ivoa.net/sso#BasicAA"/>
+    </interface>
+  </capability>
+
+  <capability standardID="ivo://ivoa.net/std/VOSpace/v2.0#sync">
+    <interface xsi:type="vs:ParamHTTP" role="std">
+      <accessURL use="full">https://replace.me.com/vault/synctrans</accessURL>
+      <securityMethod/>
+      <securityMethod standardID="ivo://ivoa.net/sso#cookie"/>
+      <securityMethod standardID="ivo://ivoa.net/sso#tls-with-certificate"/>
+      <securityMethod standardID="ivo://ivoa.net/sso#token"/>
+    </interface>
+    <interface xsi:type="vs:ParamHTTP" role="std">
+      <accessURL use="full">https://replace.me.com/vault/auth/synctrans</accessURL>
+      <securityMethod standardID="ivo://ivoa.net/sso#BasicAA"/>
+    </interface>
+  </capability>
+
+  <capability standardID="ivo://ivoa.net/std/VOSpace#sync-2.1">
+    <interface xsi:type="vs:ParamHTTP" role="std">
+      <accessURL use="full">https://replace.me.com/vault/synctrans</accessURL>
+      <securityMethod/>
+      <securityMethod standardID="ivo://ivoa.net/sso#cookie"/>
+      <securityMethod standardID="ivo://ivoa.net/sso#tls-with-certificate"/>
+      <securityMethod standardID="ivo://ivoa.net/sso#token"/>
+    </interface>
+    <interface xsi:type="vs:ParamHTTP" role="std">
+      <accessURL use="full">https://replace.me.com/vault/auth/synctrans</accessURL>
+      <securityMethod standardID="ivo://ivoa.net/sso#BasicAA"/>
+    </interface>
+  </capability>
+
+  <capability standardID="ivo://ivoa.net/std/VOSpace/v2.x#files">
+    <interface xsi:type="vs:ParamHTTP" role="std">
+      <accessURL use="base">https://replace.me.com/vault/files</accessURL>
+      <securityMethod/>
+      <securityMethod standardID="ivo://ivoa.net/sso#cookie"/>
+      <securityMethod standardID="ivo://ivoa.net/sso#tls-with-certificate"/>
+      <securityMethod standardID="ivo://ivoa.net/sso#token"/>
+    </interface>
+    <interface xsi:type="vs:ParamHTTP" role="std">
+      <accessURL use="full">https://replace.me.com/vault/auth/files</accessURL>
+      <securityMethod standardID="ivo://ivoa.net/sso#BasicAA"/>
+    </interface>
+  </capability>
+
+  <capability standardID="vos://cadc.nrc.ca~vospace/CADC/std/UWS#update-1.0">
+    <interface xsi:type="vs:ParamHTTP" role="std">
+      <accessURL use="full">https://replace.me.com/vault/jobUpdater</accessURL>
+      <securityMethod/>
+      <securityMethod standardID="ivo://ivoa.net/sso#cookie"/>
+      <securityMethod standardID="ivo://ivoa.net/sso#tls-with-certificate"/>
+      <securityMethod standardID="ivo://ivoa.net/sso#token"/>
+    </interface>
+  </capability>
+
+  <capability standardID="vos://cadc.nrc.ca~vospace/CADC/std/VOSpace#xfer">
+    <interface xsi:type="vs:ParamHTTP" role="std">
+      <accessURL use="full">https://replace.me.com/vault/xfer</accessURL>
+      <securityMethod/>
+      <securityMethod standardID="ivo://ivoa.net/sso#cookie"/>
+      <securityMethod standardID="ivo://ivoa.net/sso#tls-with-certificate"/>
+      <securityMethod standardID="ivo://ivoa.net/sso#token"/>
+    </interface>
+    <interface xsi:type="vs:ParamHTTP" role="std">
+      <accessURL use="full">https://replace.me.com/vault/auth/xfer</accessURL>
+      <securityMethod standardID="ivo://ivoa.net/sso#BasicAA"/>
+    </interface>
+  </capability>
+
+  <capability standardID="vos://cadc.nrc.ca~vospace/CADC/std/VOSpace#nodeprops">
+    <interface xsi:type="vs:ParamHTTP" role="std">
+      <accessURL use="full">https://replace.me.com/vault/nodeprops</accessURL>
+      <securityMethod/>
+      <securityMethod standardID="ivo://ivoa.net/sso#cookie"/>
+      <securityMethod standardID="ivo://ivoa.net/sso#tls-with-certificate"/>
+      <securityMethod standardID="ivo://ivoa.net/sso#token"/>
+    </interface>
+    <interface xsi:type="vs:ParamHTTP" role="std">
+      <accessURL use="full">https://replace.me.com/vault/auth/nodeprops</accessURL>
+      <securityMethod standardID="ivo://ivoa.net/sso#BasicAA"/>
+    </interface>
+  </capability>
+
+  <capability standardID="vos://cadc.nrc.ca~vospace/CADC/std/Pkg-1.0">
+    <interface xsi:type="vs:ParamHTTP" role="std">
+      <accessURL use="full">https://replace.me.com/vault/pkg</accessURL>
+      <securityMethod/>
+      <securityMethod standardID="ivo://ivoa.net/sso#cookie"/>
+      <securityMethod standardID="ivo://ivoa.net/sso#tls-with-certificate"/>
+      <securityMethod standardID="ivo://ivoa.net/sso#token"/>
+    </interface>
+    <interface xsi:type="vs:ParamHTTP" role="std">
+      <accessURL use="full">https://replace.me.com/vault/auth/pkg</accessURL>
+      <securityMethod standardID="ivo://ivoa.net/sso#BasicAA"/>
+    </interface>
+  </capability>
+
 </vosi:capabilities>
 
