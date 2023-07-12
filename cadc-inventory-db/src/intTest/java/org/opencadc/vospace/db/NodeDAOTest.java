@@ -76,6 +76,7 @@ import java.io.IOException;
 import java.net.URI;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.sql.Connection;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.UUID;
@@ -104,7 +105,7 @@ public class NodeDAOTest {
     static {
         Log4jInit.setLevel("org.opencadc.inventory", Level.INFO);
         Log4jInit.setLevel("org.opencadc.inventory.db", Level.INFO);
-        Log4jInit.setLevel("ca.nrc.cadc.db", Level.INFO);
+        Log4jInit.setLevel("ca.nrc.cadc.db", Level.DEBUG);
         Log4jInit.setLevel("org.opencadc.vospace", Level.INFO);
         Log4jInit.setLevel("org.opencadc.vospace.db", Level.INFO);
     }
@@ -115,11 +116,12 @@ public class NodeDAOTest {
         try {
             DBConfig dbrc = new DBConfig();
             ConnectionConfig cc = dbrc.getConnectionConfig(TestUtil.SERVER, TestUtil.DATABASE);
-            DBUtil.createJNDIDataSource("jdbc/ArtifactDAOTest", cc);
+            DBUtil.PoolConfig pool = new DBUtil.PoolConfig(cc, 1, 6000L, "select 123");
+            DBUtil.createJNDIDataSource("jdbc/NodeDAOTest", pool);
 
             Map<String,Object> config = new TreeMap<>();
             config.put(SQLGenerator.class.getName(), SQLGenerator.class);
-            config.put("jndiDataSourceName", "jdbc/ArtifactDAOTest");
+            config.put("jndiDataSourceName", "jdbc/NodeDAOTest");
             config.put("database", TestUtil.DATABASE);
             config.put("schema", TestUtil.SCHEMA);
             config.put("vosSchema", TestUtil.VOS_SCHEMA);
@@ -145,7 +147,9 @@ public class NodeDAOTest {
         DataSource ds = nodeDAO.getDataSource();
         String sql = "delete from " + gen.getTable(ContainerNode.class);
         log.info("pre-test cleanup: " + sql);
-        ds.getConnection().createStatement().execute(sql);
+        Connection con = ds.getConnection();
+        con.createStatement().execute(sql);
+        con.close();
         log.info("clearing old content... OK");
     }
     
