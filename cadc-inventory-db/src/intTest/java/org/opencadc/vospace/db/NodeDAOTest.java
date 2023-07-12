@@ -103,10 +103,10 @@ public class NodeDAOTest {
 
     static {
         Log4jInit.setLevel("org.opencadc.inventory", Level.INFO);
-        Log4jInit.setLevel("org.opencadc.inventory.db", Level.DEBUG);
+        Log4jInit.setLevel("org.opencadc.inventory.db", Level.INFO);
         Log4jInit.setLevel("ca.nrc.cadc.db", Level.INFO);
         Log4jInit.setLevel("org.opencadc.vospace", Level.INFO);
-        Log4jInit.setLevel("org.opencadc.vospace.db", Level.DEBUG);
+        Log4jInit.setLevel("org.opencadc.vospace.db", Level.INFO);
     }
     
     NodeDAO nodeDAO;
