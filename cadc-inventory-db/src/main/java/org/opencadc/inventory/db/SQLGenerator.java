@@ -222,7 +222,7 @@ public class SQLGenerator {
         this.columnMap.put(HarvestState.class, cols);
         
         // optional vospace
-        log.warn("vosSchema: " + vosSchema);
+        log.debug("vosSchema: " + vosSchema);
         if (vosSchema != null) {
             pref = vosSchema + ".";
             tableMap.put(Node.class, pref + Node.class.getSimpleName());
@@ -915,7 +915,7 @@ public class SQLGenerator {
                 ps.setFetchDirection(ResultSet.FETCH_FORWARD);
                 int col = 1;
                 
-                ps.setObject(1, parent.getID());
+                ps.setObject(col++, parent.getID());
                 log.debug("parentID = " + parent.getID());
                 if (start != null) {
                     ps.setString(col++, start);
@@ -1531,6 +1531,7 @@ public class SQLGenerator {
         private final Connection con;
         private final ResultSet rs;
         boolean hasRow;
+        boolean closeWhenDone = false; // not a pooled connection
         
         ArtifactResultSetIterator(Connection con, ResultSet rs) throws SQLException {
             this.con = con;
@@ -1539,7 +1540,14 @@ public class SQLGenerator {
             log.debug("ArtifactResultSetIterator: " + super.toString() + " ctor " + hasRow);
             if (!hasRow) {
                 log.debug("ArtifactResultSetIterator:  " + super.toString() + " ctor - setAutoCommit(true)");
-                con.setAutoCommit(true);
+                try {
+                    con.setAutoCommit(true); // commit txn
+                    if (closeWhenDone) {
+                        con.close(); // return to pool
+                    }
+                } catch (SQLException unexpected) {
+                    log.error("Connection.setAutoCommit(true) & close() failed", unexpected);
+                }
             }
         }
 
@@ -1548,10 +1556,13 @@ public class SQLGenerator {
             if (hasRow) {
                 log.debug("ArtifactResultSetIterator:  " + super.toString() + " ctor - setAutoCommit(true)");
                 try {
-                    con.setAutoCommit(true);
-                    hasRow = false;
-                } catch (SQLException ex) {
-                    throw new RuntimeException("BUG: artifact list query failed during close()", ex);
+                    con.setAutoCommit(true); // commit txn
+                    if (closeWhenDone) {
+                        con.close(); // return to pool
+                    }
+                    hasRow = false; 
+                } catch (SQLException unexpected) {
+                    log.error("Connection.setAutoCommit(true) & close() failed", unexpected);
                 }
             }
         }
@@ -1568,17 +1579,27 @@ public class SQLGenerator {
                 hasRow = rs.next();
                 if (!hasRow) {
                     log.debug("ArtifactResultSetIterator:  " + super.toString() + " DONE - setAutoCommit(true)");
-                    con.setAutoCommit(true);
+                    try {
+                        con.setAutoCommit(true); // commit txn
+                        if (closeWhenDone) {
+                            con.close(); // return to pool
+                        }
+                    } catch (SQLException unexpected) {
+                        log.error("Connection.setAutoCommit(true) & close() failed", unexpected);
+                    }
                 }
                 return ret;
             } catch (Exception ex) {
                 if (hasRow) {
                     log.debug("ArtifactResultSetIterator:  " + super.toString() + " ResultSet.next() FAILED - setAutoCommit(true)");
                     try {
-                        close();
+                        con.setAutoCommit(true); // commit txn
+                        if (closeWhenDone) {
+                            con.close(); // return to pool
+                        }
                         hasRow = false;
-                    } catch (IOException unexpected) {
-                        log.debug("BUG: unexpected IOException from close", unexpected);
+                    } catch (SQLException unexpected) {
+                        log.error("Connection.setAutoCommit(true) & close() failed", unexpected);
                     }
                 }
                 throw new RuntimeException("BUG: artifact list query failed while iterating", ex);
@@ -1602,19 +1623,26 @@ public class SQLGenerator {
             log.debug("NodeResultSetIterator: " + super.toString() + " ctor " + hasRow);
             if (!hasRow) {
                 log.debug("NodeResultSetIterator:  " + super.toString() + " ctor - setAutoCommit(true)");
-                con.setAutoCommit(true);
+                
+                try {
+                    con.setAutoCommit(true); // commit txn
+                    con.close(); // return to pool
+                } catch (SQLException ignore) {
+                    log.error("Connection.setAutoCommit(true) & close() failed", ignore);
+                }
             }
         }
         
         @Override
         public void close() throws IOException {
             if (hasRow) {
-                log.debug("NodeResultSetIterator:  " + super.toString() + " ctor - setAutoCommit(true)");
+                log.debug("NodeResultSetIterator:  " + super.toString() + " close - setAutoCommit(true)");
                 try {
-                    con.setAutoCommit(true);
+                    con.setAutoCommit(true); // commit txn
+                    con.close(); // return to pool
                     hasRow = false;
-                } catch (SQLException ex) {
-                    throw new RuntimeException("BUG: node list query failed during close()", ex);
+                } catch (SQLException ignore) {
+                    log.error("Connection.setAutoCommit(true) & close() failed", ignore);
                 }
             }
         }
@@ -1631,17 +1659,24 @@ public class SQLGenerator {
                 hasRow = rs.next();
                 if (!hasRow) {
                     log.debug("NodeResultSetIterator:  " + super.toString() + " DONE - setAutoCommit(true)");
-                    con.setAutoCommit(true);
+                    try {
+                        con.setAutoCommit(true); // commit txn
+                        con.close(); // return to pool
+                        hasRow = false;
+                    } catch (SQLException ignore) {
+                        log.error("Connection.setAutoCommit(true) & close() failed", ignore);
+                    }
                 }
                 return ret;
             } catch (Exception ex) {
                 if (hasRow) {
                     log.debug("NodeResultSetIterator:  " + super.toString() + " ResultSet.next() FAILED - setAutoCommit(true)");
                     try {
-                        close();
+                        con.setAutoCommit(true); // commit txn
+                        con.close(); // return to pool
                         hasRow = false;
-                    } catch (IOException unexpected) {
-                        log.debug("BUG: unexpected IOException from close", unexpected);
+                    } catch (SQLException ignore) {
+                        log.error("Connection.setAutoCommit(true) & close() failed", ignore);
                     }
                 }
                 throw new RuntimeException("BUG: node list query failed while iterating", ex);

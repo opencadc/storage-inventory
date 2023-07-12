@@ -28,9 +28,8 @@ for system properties related to the deployment environment.
 See <a href="https://github.com/opencadc/core/tree/master/cadc-util">cadc-util</a>
 for common system properties.
 
-`minoc` includes multiple IdentityManager implementations to support authenticated access:
+`vault` includes multiple IdentityManager implementations to support authenticated access:
 - See <a href="https://github.com/opencadc/ac/tree/master/cadc-access-control-identity">cadc-access-control-identity</a> for CADC access-control system support.
-
 - See <a href="https://github.com/opencadc/ac/tree/master/cadc-gms">cadc-gms</a> for OIDC token support.
 
 `vault` requires a connection pool to the local database:
@@ -41,10 +40,14 @@ org.opencadc.vault.nodes.username={username for vospace pool}
 org.opencadc.vault.nodes.password={password for vospace pool}
 org.opencadc.vault.nodes.url=jdbc:postgresql://{server}/{database}
 ```
-The `nodes` account owns and manages (create, alter, drop) vospace database objects and manages
+The _nodes_ account owns and manages (create, alter, drop) vospace database objects and manages
 all the content (insert, update, delete). The database is specified in the JDBC URL and the schema name is specified 
 in the vault.properties (below). Failure to connect or initialize the database will show up in logs and in the 
 VOSI-availability output.
+
+### cadc-registry.properties
+
+See <a href="https://github.com/opencadc/reg/tree/master/cadc-registry">cadc-registry</a>.
 
 ### vault.properties
 A vault.properties file in /config is required to run this service.  The following keys are required:
