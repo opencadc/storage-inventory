@@ -135,7 +135,6 @@ public class VaultInitAction extends InitAction {
         sb.append("incomplete config: ");
         boolean ok = true;
 
-        System.out.println("looking for " + RESOURCE_ID_KEY);
         String rid = mvp.getFirstPropertyValue(RESOURCE_ID_KEY);
         sb.append("\n\t" + RESOURCE_ID_KEY + ": ");
         if (rid == null) {
@@ -223,7 +222,7 @@ public class VaultInitAction extends InitAction {
             try {
                 ctx.unbind(jndiNodePersistence);
             } catch (NamingException ignore) {
-                log.debug("unbind previous JobManager failed... ignoring");
+                log.debug("unbind previous JNDI key (" + jndiNodePersistence + ") failed... ignoring");
             }
             NodePersistence npi = new NodePersistenceImpl(resourceID);
             ctx.bind(jndiNodePersistence, npi);
