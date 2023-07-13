@@ -50,7 +50,6 @@ dependencies {
     runtime 'org.opencadc:cadc-access-control-identity:[1.2.0,)'
     runtime 'org.opencadc:cadc-gms:[1.0.4,)'
 
-    // JDBC drivers
     intTestCompile 'org.opencadc:cadc-test-vosi:[1.0.11,)'
 }
 
