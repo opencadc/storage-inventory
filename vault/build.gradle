@@ -46,15 +46,11 @@ dependencies {
     compile 'org.opencadc:cadc-inventory-db:[0.15.0,1.0)'
 
     testCompile 'junit:junit:[4.0,)'
-    testCompile 'org.easymock:easymock:3.6'
-    testCompile 'org.skyscreamer:jsonassert:[1.0,)'
 
     runtime 'org.opencadc:cadc-access-control-identity:[1.2.0,)'
     runtime 'org.opencadc:cadc-gms:[1.0.4,)'
 
     // JDBC drivers
-    intTestRuntime 'org.postgresql:postgresql:[42.2.8,)'
-    intTestRuntime 'net.sourceforge.jtds:jtds:[1.0,)'
     intTestCompile 'org.opencadc:cadc-test-vosi:[1.0.11,)'
 }
 

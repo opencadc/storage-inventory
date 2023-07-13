@@ -81,7 +81,6 @@ import java.io.IOException;
 import java.net.URI;
 import java.security.Principal;
 import java.text.DateFormat;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -147,7 +146,7 @@ public class NodePersistenceImpl implements NodePersistence {
         Subject rawOwnerSubject = AuthenticationUtil.getSubject(new PrincipalExtractor() {
             @Override
             public Set<Principal> getPrincipals() {
-                Set<Principal> ret = new HashSet<>();
+                Set<Principal> ret = new TreeSet<>();
                 ret.add(new X500Principal(owner));
                 return ret;
             }
