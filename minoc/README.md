@@ -157,3 +157,16 @@ done
 unset TAGS
 docker image list minoc
 ```
+
+## using it
+
+Using `cURL` is possible with Minoc to put a file for testing.
+
+**Note:** The `content-type` header is important!
+```bash
+$ curl -v -X PUT \
+  --header "content-type: application/fits" \ 
+  --data-binary @myfile.fits \
+  -E ~/.ssl/cadcproxy.pem \ 
+  https://myhost.com/minoc/files/test:TEST/myfile.fits
+```
