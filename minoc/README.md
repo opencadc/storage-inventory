@@ -148,16 +148,6 @@ docker run --rm -it minoc:latest /bin/bash
 docker run --rm --user tomcat:tomcat --volume=/path/to/external/config:/config:ro --name minoc minoc:latest
 ```
 
-## apply semantic version tags
-```bash
-. VERSION && echo "tags: $TAGS" 
-for t in $TAGS; do
-   docker image tag minoc:latest minoc:$t
-done
-unset TAGS
-docker image list minoc
-```
-
 ## using it
 
 Using `cURL` is possible with Minoc to put a file for testing.
