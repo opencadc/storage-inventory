@@ -162,7 +162,11 @@ public class NodePersistenceImpl implements NodePersistence {
         UUID rootID = new UUID(0L, 0L);
         this.root = new ContainerNode(rootID, "", false);
         root.owner = im.augment(rawOwnerSubject);
-        root.ownerID = im.toOwner(root.owner);
+        log.warn("ROOT owner: " + root.owner);
+        root.ownerID = im.toOwner(rawOwnerSubject);
+        log.warn("ROOT ownerID: " + root.ownerID + " rtype: " + root.ownerID.getClass().getName());
+        root.isPublic = true;
+        root.inheritPermissions = false;
 
         // trash node
         // TODO: do this setup in a txn with a lock on something
@@ -175,6 +179,7 @@ public class NodePersistenceImpl implements NodePersistence {
         tn.ownerID = root.ownerID;
         tn.owner = root.owner;
         tn.isPublic = false;
+        tn.inheritPermissions = false;
         tn.parentID = rootID;
         dao.put(tn);
         this.trash = tn;
