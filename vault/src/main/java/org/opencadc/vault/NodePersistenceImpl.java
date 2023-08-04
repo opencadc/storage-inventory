@@ -119,10 +119,7 @@ public class NodePersistenceImpl implements NodePersistence {
     private final ContainerNode trash;
     private final Namespace storageNamespace;
     private final Set<URI> immutableProps = new TreeSet<>();
-    
     private final Set<URI> artifactProps = new TreeSet<>();
-    private final Set<URI> rootAdminContainerProps = new TreeSet<>();
-    private final Set<URI> rootAdminProps = new TreeSet<>();
     private URI resourceID;
     
     public NodePersistenceImpl(URI resourceID) {
@@ -191,10 +188,10 @@ public class NodePersistenceImpl implements NodePersistence {
         // VOS.PROPERTY_URI_AVAILABLESPACE // container nodes
         // VOS.PROPERTY_URI_WRITABLE       // prediction for current caller 
         
-        // props only the admin (root owner) can modify
-        rootAdminProps.add(VOS.PROPERTY_URI_CREATOR); // owner
-        rootAdminContainerProps.add(VOS.PROPERTY_URI_CONTENTLENGTH); // container nodes
-        rootAdminContainerProps.add(VOS.PROPERTY_URI_QUOTA); // container nodes
+        // props only the admin (root owner) can modify?
+        // VOS.PROPERTY_URI_CREATOR // owner
+        // VOS.PROPERTY_URI_CONTENTLENGTH // container nodes
+        // VOS.PROPERTY_URI_QUOTA // container nodes
         
         // node properties that match immutable Artifact fields
         immutableProps.add(VOS.PROPERTY_URI_CONTENTLENGTH);   // immutable
@@ -456,75 +453,5 @@ public class NodePersistenceImpl implements NodePersistence {
             dao.delete(node.getID());
         }
         
-    }
-
-    
-    // this code is incomplete but shows the logic of merging the requested property changes
-    // into the node before put(node)... keeping it here for reference
-    public Node updateProperties(Node node, List<NodeProperty> props) 
-            throws TransientException, NodeNotSupportedException {
-        if (node == null || props == null) {
-            throw new IllegalArgumentException("args cannot be null: node, props");
-        }
-        
-        // merge props -> node and/or node.properties and/or mutable artifact
-        for (NodeProperty np : props) {
-            boolean writable = (node instanceof ContainerNode && this.rootAdminContainerProps.contains(np.getKey()));
-            writable = writable || rootAdminProps.contains(np.getKey());
-            if (writable) {
-                // some props are directly in the node
-                if (artifactProps.contains(np.getKey())) {
-                    throw new UnsupportedOperationException("TODO: set mutable artifact prop: " + np.getKey());
-                }
-
-                // some props are directly in the node
-                if (VOS.PROPERTY_URI_GROUPREAD.equals(np.getKey())) {
-                    String raw = np.getValue();
-                    throw new UnsupportedOperationException();
-                } else if (VOS.PROPERTY_URI_GROUPWRITE.equals(np.getKey())) {
-                    String raw = np.getValue();
-                    throw new UnsupportedOperationException();
-                } else if (VOS.PROPERTY_URI_INHERIT_PERMISSIONS.equals(np.getKey())) {
-                    String raw = np.getValue();
-                    throw new UnsupportedOperationException();
-                } else if (VOS.PROPERTY_URI_ISLOCKED.equals(np.getKey())) {
-                    String raw = np.getValue();
-                    throw new UnsupportedOperationException();
-                } else if (VOS.PROPERTY_URI_ISPUBLIC.equals(np.getKey())) {
-                    String raw = np.getValue();
-                    throw new UnsupportedOperationException();
-                }
-                
-                // generic key-value props
-                if (node.getProperties().contains(np)) {
-                    // remove previous; covers mark for deletion case
-                    node.getProperties().remove(np);
-                }
-                
-                if (!np.isMarkedForDeletion()) {
-                    // add new
-                    node.getProperties().add(np);
-                }
-            } else {
-                log.debug("updateProperties: skip non-writable " + np.getKey());
-            }
-        }
-        
-        return put(node);
-    }
-
-    @Override
-    public void setFileMetadata(DataNode dataNode, FileMetadata fileMetadata, boolean b) throws TransientException {
-
-    }
-
-    @Override
-    public void move(Node node, ContainerNode containerNode) throws TransientException {
-
-    }
-
-    @Override
-    public void copy(Node node, ContainerNode containerNode) throws TransientException {
-
     }
 }
