@@ -74,12 +74,14 @@ import ca.nrc.cadc.auth.X509CertificateChain;
 import ca.nrc.cadc.date.DateUtil;
 import ca.nrc.cadc.io.ResourceIterator;
 import ca.nrc.cadc.net.TransientException;
+import ca.nrc.cadc.util.FileMetadata;
 import ca.nrc.cadc.util.InvalidConfigException;
 import ca.nrc.cadc.util.MultiValuedProperties;
 import java.io.IOException;
 import java.net.URI;
 import java.security.Principal;
 import java.text.DateFormat;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -103,6 +105,7 @@ import org.opencadc.vospace.NodeNotSupportedException;
 import org.opencadc.vospace.NodeProperty;
 import org.opencadc.vospace.VOS;
 import org.opencadc.vospace.db.NodeDAO;
+import org.opencadc.vospace.server.NodePersistence;
 
 /**
  *
@@ -120,8 +123,13 @@ public class NodePersistenceImpl implements NodePersistence {
     private final Set<URI> artifactProps = new TreeSet<>();
     private final Set<URI> rootAdminContainerProps = new TreeSet<>();
     private final Set<URI> rootAdminProps = new TreeSet<>();
+    private URI resourceID;
     
-    public NodePersistenceImpl() {
+    public NodePersistenceImpl(URI resourceID) {
+        if (resourceID == null) {
+            throw new IllegalArgumentException("resource ID required");
+        }
+        this.resourceID = resourceID;
         MultiValuedProperties config = VaultInitAction.getConfig();
         String dataSourceName = VaultInitAction.JNDI_DATASOURCE;
         String inventorySchema = config.getFirstPropertyValue(VaultInitAction.INVENTORY_SCHEMA_KEY);
@@ -131,7 +139,6 @@ public class NodePersistenceImpl implements NodePersistence {
         nodeDaoConfig.put("schema", inventorySchema);
         nodeDaoConfig.put("vosSchema", vospaceSchema);
         
-        
         final String owner = config.getFirstPropertyValue(VaultInitAction.ROOT_OWNER);
         if (owner == null) {
             throw new InvalidConfigException(VaultInitAction.ROOT_OWNER + " cannot be null");
@@ -140,7 +147,7 @@ public class NodePersistenceImpl implements NodePersistence {
         Subject rawOwnerSubject = AuthenticationUtil.getSubject(new PrincipalExtractor() {
             @Override
             public Set<Principal> getPrincipals() {
-                Set<Principal> ret = new TreeSet<>();
+                Set<Principal> ret = new HashSet<>();
                 ret.add(new X500Principal(owner));
                 return ret;
             }
@@ -155,8 +162,8 @@ public class NodePersistenceImpl implements NodePersistence {
         UUID rootID = new UUID(0L, 0L);
         this.root = new ContainerNode(rootID, "", false);
         root.owner = im.augment(rawOwnerSubject);
-        root.ownerID = im.toDisplayString(root.owner);
-        
+        root.ownerID = im.toOwner(root.owner);
+
         // trash node
         // TODO: do this setup in a txn with a lock on something
         NodeDAO dao = getDAO();
@@ -168,6 +175,7 @@ public class NodePersistenceImpl implements NodePersistence {
         tn.ownerID = root.ownerID;
         tn.owner = root.owner;
         tn.isPublic = false;
+        tn.parentID = rootID;
         dao.put(tn);
         this.trash = tn;
         
@@ -209,6 +217,11 @@ public class NodePersistenceImpl implements NodePersistence {
         UUID id = UUID.randomUUID();
         URI ret = URI.create(storageNamespace.getNamespace() + id.toString());
         return ret;
+    }
+
+    @Override
+    public URI getResourceID() {
+        return resourceID;
     }
 
     /**
@@ -334,6 +347,7 @@ public class NodePersistenceImpl implements NodePersistence {
                 // once someone puts the file to minoc, so Node.storageID == Artifact.uri
                 // but the artifact may or may not exist
                 dn.storageID = generateStorageID();
+
             } else {
                 // update existing data node
                 // need to remove all artifact props from the node.getProperties()
@@ -492,5 +506,20 @@ public class NodePersistenceImpl implements NodePersistence {
         }
         
         return put(node);
+    }
+
+    @Override
+    public void setFileMetadata(DataNode dataNode, FileMetadata fileMetadata, boolean b) throws TransientException {
+
+    }
+
+    @Override
+    public void move(Node node, ContainerNode containerNode) throws TransientException {
+
+    }
+
+    @Override
+    public void copy(Node node, ContainerNode containerNode) throws TransientException {
+
     }
 }

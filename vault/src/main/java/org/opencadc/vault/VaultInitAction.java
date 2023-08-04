@@ -75,10 +75,14 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.Map;
 import java.util.TreeMap;
+import javax.naming.Context;
+import javax.naming.InitialContext;
+import javax.naming.NamingException;
 import javax.sql.DataSource;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Namespace;
 import org.opencadc.vospace.db.InitDatabaseVOS;
+import org.opencadc.vospace.server.NodePersistence;
 
 /**
  *
@@ -88,7 +92,7 @@ public class VaultInitAction extends InitAction {
     private static final Logger log = Logger.getLogger(VaultInitAction.class);
     
     static final String JNDI_DATASOURCE = "jdbc/nodes"; // context.xml
-    
+
     // config keys
     private static final String VAULT_KEY = "org.opencadc.vault";
     static final String RESOURCE_ID_KEY = VAULT_KEY + ".resourceID";
@@ -104,6 +108,8 @@ public class VaultInitAction extends InitAction {
     private Namespace storageNamespace;
     private Map<String,Object> daoConfig;
 
+    private String jndiNodePersistence;
+
     public VaultInitAction() {
         super();
     }
@@ -112,6 +118,7 @@ public class VaultInitAction extends InitAction {
     public void doInit() {
         initConfig();
         initDatabase();
+        initNodePersistence();
     }
     
     /**
@@ -204,6 +211,36 @@ public class VaultInitAction extends InitAction {
             log.info("initDatabase: " + JNDI_DATASOURCE + " " + schema + " OK");
         } catch (Exception ex) {
             throw new IllegalStateException("check/init database failed", ex);
+        }
+    }
+
+    protected void initNodePersistence() {
+        jndiNodePersistence = componentID + ".nodePersistence";
+        try
+        {
+            Context ctx = new InitialContext();
+            try {
+                ctx.unbind(jndiNodePersistence);
+            } catch (NamingException ignore) {
+                log.debug("unbind previous JNDI key (" + jndiNodePersistence + ") failed... ignoring");
+            }
+            NodePersistence npi = new NodePersistenceImpl(resourceID);
+            ctx.bind(jndiNodePersistence, npi);
+
+            log.info("created JNDI key" + jndiNodePersistence + " ");
+        } catch(Exception ex) {
+            log.error("Failed to create JNDI Key " + jndiNodePersistence, ex);
+        }
+    }
+
+    @Override
+    public void doShutdown()
+    {
+        try {
+            Context ctx = new InitialContext();
+            ctx.unbind(jndiNodePersistence);
+        } catch (Exception oops) {
+            log.error("unbind failed during destroy", oops);
         }
     }
 
