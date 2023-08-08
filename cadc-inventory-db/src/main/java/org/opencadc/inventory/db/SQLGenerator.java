@@ -1764,13 +1764,6 @@ public class SQLGenerator {
         InventoryUtil.assignLastModified(ret, lastModified);
         InventoryUtil.assignMetaChecksum(ret, metaChecksum);
 
-        if (parent != null) {
-            if (!parent.getID().equals(parentID)) {
-                throw new RuntimeException("BUG: expected parentID=" + parent.getID() + " but got: " + parentID);
-            }
-            ret.parent = parent;
-        }
-
         return ret;
     }
     

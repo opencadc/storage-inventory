@@ -199,8 +199,8 @@ public class NodeDAOTest {
         Assert.assertEquals(orig.getID(), aa.getID());
         Assert.assertEquals(orig.getName(), aa.getName());
         Assert.assertEquals(root.getID(), a.parentID);
-        Assert.assertNotNull(aa.parent);
-        Assert.assertEquals(root.getID(), aa.parent.getID());
+        Assert.assertNotNull(aa.parentID);
+        Assert.assertEquals(root.getID(), aa.parentID);
         
         Assert.assertNull(a.parent); // get-node-by-id: comes pack without parent
         Assert.assertEquals(orig.getName(), a.getName());
@@ -290,6 +290,7 @@ public class NodeDAOTest {
         log.info("found by id: "  + a.getID() + " aka " + a);
         Assert.assertEquals(orig.getID(), a.getID());
         Assert.assertEquals(orig.getName(), a.getName());
+        Assert.assertNotNull(a.parentID);
         Assert.assertEquals(root.getID(), a.parentID);
         
         // get-by-path
@@ -298,8 +299,7 @@ public class NodeDAOTest {
         log.info("found by path: "  + aa.getID() + " aka " + aa);
         Assert.assertEquals(orig.getID(), aa.getID());
         Assert.assertEquals(orig.getName(), aa.getName());
-        Assert.assertNotNull(aa.parent);
-        Assert.assertEquals(root.getID(), aa.parent.getID());
+        Assert.assertNotNull(aa.parentID);
         Assert.assertEquals(root.getID(), aa.parentID);
         
         Assert.assertNull(a.parent); // get-node-by-id: comes pack without parent
@@ -389,8 +389,7 @@ public class NodeDAOTest {
         log.info("found: "  + aa.getID() + " aka " + aa);
         Assert.assertEquals(orig.getID(), aa.getID());
         Assert.assertEquals(orig.getName(), aa.getName());
-        Assert.assertNotNull(aa.parent);
-        Assert.assertEquals(root.getID(), aa.parent.getID());
+        Assert.assertNotNull(aa.parentID);
         Assert.assertEquals(root.getID(), aa.parentID);
         
         Assert.assertNull(a.parent); // get-node-by-id: comes pack without parent
@@ -481,8 +480,7 @@ public class NodeDAOTest {
         log.info("found: "  + aa.getID() + " aka " + aa);
         Assert.assertEquals(orig.getID(), aa.getID());
         Assert.assertEquals(orig.getName(), aa.getName());
-        Assert.assertNotNull(aa.parent);
-        Assert.assertEquals(root.getID(), aa.parent.getID());
+        Assert.assertNotNull(aa.parentID);
         Assert.assertEquals(root.getID(), aa.parentID);
         
         Assert.assertNull(a.parent); // get-node-by-id: comes pack without parent

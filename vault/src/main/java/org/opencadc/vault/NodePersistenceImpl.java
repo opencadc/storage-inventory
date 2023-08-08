@@ -67,6 +67,7 @@
 
 package org.opencadc.vault;
 
+import sun.rmi.rmic.IndentingWriter;
 import ca.nrc.cadc.auth.AuthenticationUtil;
 import ca.nrc.cadc.auth.IdentityManager;
 import ca.nrc.cadc.auth.PrincipalExtractor;
@@ -122,6 +123,8 @@ public class NodePersistenceImpl implements NodePersistence {
     private final Set<URI> artifactProps = new TreeSet<>();
     private URI resourceID;
     
+    private IdentityManager identityManager = AuthenticationUtil.getIdentityManager();
+    
     public NodePersistenceImpl(URI resourceID) {
         if (resourceID == null) {
             throw new IllegalArgumentException("resource ID required");
@@ -140,7 +143,6 @@ public class NodePersistenceImpl implements NodePersistence {
         if (owner == null) {
             throw new InvalidConfigException(VaultInitAction.ROOT_OWNER + " cannot be null");
         }
-        IdentityManager im = AuthenticationUtil.getIdentityManager();
         Subject rawOwnerSubject = AuthenticationUtil.getSubject(new PrincipalExtractor() {
             @Override
             public Set<Principal> getPrincipals() {
@@ -158,9 +160,10 @@ public class NodePersistenceImpl implements NodePersistence {
         // root node
         UUID rootID = new UUID(0L, 0L);
         this.root = new ContainerNode(rootID, "", false);
-        root.owner = im.augment(rawOwnerSubject);
+        root.owner = identityManager.augment(rawOwnerSubject);
+        root.ownerDisplay = identityManager.toDisplayString(root.owner);
         log.warn("ROOT owner: " + root.owner);
-        root.ownerID = im.toOwner(rawOwnerSubject);
+        root.ownerID = identityManager.toOwner(rawOwnerSubject);
         log.warn("ROOT ownerID: " + root.ownerID + " rtype: " + root.ownerID.getClass().getName());
         root.isPublic = true;
         root.inheritPermissions = false;
@@ -260,6 +263,10 @@ public class NodePersistenceImpl implements NodePersistence {
         }
         NodeDAO dao = getDAO();
         Node ret = dao.get(parent, name);
+        ret.parent = parent;
+        ret.owner = identityManager.toSubject(ret.ownerID);
+        ret.ownerDisplay = identityManager.toDisplayString(ret.owner);
+        
         if (ret instanceof DataNode) {
             DataNode dn = (DataNode) ret;
             ArtifactDAO artifactDAO = getArtifactDAO();
@@ -299,7 +306,38 @@ public class NodePersistenceImpl implements NodePersistence {
         }
         NodeDAO dao = getDAO();
         ResourceIterator<Node> ret = dao.iterator(parent, limit, start);
-        return ret;
+        return new IdentWrapper(parent, ret);
+    }
+    
+    private class IdentWrapper implements ResourceIterator<Node> {
+
+        private final ContainerNode parent;
+        private final ResourceIterator<Node> childIter;
+        
+        IdentWrapper(ContainerNode parent, ResourceIterator<Node> childIter) {
+            this.parent = parent;
+            this.childIter = childIter;
+        }
+        
+        @Override
+        public boolean hasNext() {
+            return childIter.hasNext();
+        }
+
+        @Override
+        public Node next() {
+            Node ret = childIter.next();
+            ret.parent = parent;
+            ret.owner = identityManager.toSubject(ret.ownerID);
+            ret.ownerDisplay = identityManager.toDisplayString(ret.owner);
+            return ret;
+        }
+
+        @Override
+        public void close() throws IOException {
+            childIter.close();
+        }
+        
     }
 
     /**
@@ -336,6 +374,13 @@ public class NodePersistenceImpl implements NodePersistence {
             }
             node.parentID = node.parent.getID();
         }
+        if (node.ownerID == null) {
+            if (node.owner == null) {
+                throw new RuntimeException("BUG: cannot persist node without owner: " + node);
+            }
+            node.ownerID = identityManager.toOwner(node.owner);
+        }
+
         if (node instanceof DataNode) {
             DataNode dn = (DataNode) node;
             if (dn.storageID == null) {
