@@ -63,7 +63,7 @@
 *                                       <http://www.gnu.org/licenses/>.
 *
 ************************************************************************
-*/
+ */
 
 package org.opencadc.vault;
 
@@ -89,8 +89,9 @@ import org.opencadc.vospace.server.NodePersistence;
  * @author pdowler
  */
 public class VaultInitAction extends InitAction {
+
     private static final Logger log = Logger.getLogger(VaultInitAction.class);
-    
+
     static final String JNDI_DATASOURCE = "jdbc/nodes"; // context.xml
 
     // config keys
@@ -98,15 +99,15 @@ public class VaultInitAction extends InitAction {
     static final String RESOURCE_ID_KEY = VAULT_KEY + ".resourceID";
     static final String INVENTORY_SCHEMA_KEY = VAULT_KEY + ".inventory.schema";
     static final String VOSPACE_SCHEMA_KEY = VAULT_KEY + ".vospace.schema";
-    
+
     static final String ROOT_OWNER = VAULT_KEY + ".root.owner"; // numeric?
-    
+
     static final String STORAGE_NAMESPACE_KEY = VAULT_KEY + ".storage.namespace";
-    
+
     MultiValuedProperties props;
     private URI resourceID;
     private Namespace storageNamespace;
-    private Map<String,Object> daoConfig;
+    private Map<String, Object> daoConfig;
 
     private String jndiNodePersistence;
 
@@ -120,10 +121,10 @@ public class VaultInitAction extends InitAction {
         initDatabase();
         initNodePersistence();
     }
-    
+
     /**
      * Read config file and verify that all required entries are present.
-     * 
+     *
      * @return MultiValuedProperties containing the application config
      * @throws IllegalStateException if required config items are missing
      */
@@ -152,7 +153,7 @@ public class VaultInitAction extends InitAction {
         } else {
             sb.append("OK");
         }
-        
+
         String vosSchema = mvp.getFirstPropertyValue(VOSPACE_SCHEMA_KEY);
         sb.append("\n\t").append(VOSPACE_SCHEMA_KEY).append(": ");
         if (vosSchema == null) {
@@ -161,7 +162,7 @@ public class VaultInitAction extends InitAction {
         } else {
             sb.append("OK");
         }
-        
+
         String ns = mvp.getFirstPropertyValue(STORAGE_NAMESPACE_KEY);
         sb.append("\n\t").append(STORAGE_NAMESPACE_KEY).append(": ");
         if (ns == null) {
@@ -170,22 +171,22 @@ public class VaultInitAction extends InitAction {
         } else {
             sb.append("OK");
         }
-        
+
         if (!ok) {
             throw new IllegalStateException(sb.toString());
         }
 
         return mvp;
     }
-    
-    static Map<String,Object> getDaoConfig(MultiValuedProperties props) {
+
+    static Map<String, Object> getDaoConfig(MultiValuedProperties props) {
         Map<String, Object> ret = new TreeMap<>();
         ret.put("jndiDataSourceName", org.opencadc.vault.VaultInitAction.JNDI_DATASOURCE);
         ret.put("schema", props.getFirstPropertyValue(org.opencadc.vault.VaultInitAction.INVENTORY_SCHEMA_KEY));
         ret.put("vosSchema", props.getFirstPropertyValue(org.opencadc.vault.VaultInitAction.VOSPACE_SCHEMA_KEY));
         return ret;
     }
-    
+
     private void initConfig() {
         log.info("initConfig: START");
         this.props = getConfig();
@@ -200,7 +201,7 @@ public class VaultInitAction extends InitAction {
             throw new IllegalStateException("invalid config: " + RESOURCE_ID_KEY + " must be a valid URI");
         }
     }
-    
+
     private void initDatabase() {
         log.info("initDatabase: START");
         try {
@@ -216,8 +217,7 @@ public class VaultInitAction extends InitAction {
 
     protected void initNodePersistence() {
         jndiNodePersistence = componentID + ".nodePersistence";
-        try
-        {
+        try {
             Context ctx = new InitialContext();
             try {
                 ctx.unbind(jndiNodePersistence);
@@ -227,15 +227,14 @@ public class VaultInitAction extends InitAction {
             NodePersistence npi = new NodePersistenceImpl(resourceID);
             ctx.bind(jndiNodePersistence, npi);
 
-            log.info("created JNDI key" + jndiNodePersistence + " ");
-        } catch(Exception ex) {
+            log.info("created JNDI key: " + jndiNodePersistence + " impl: " + npi.getClass().getName());
+        } catch (Exception ex) {
             log.error("Failed to create JNDI Key " + jndiNodePersistence, ex);
         }
     }
 
     @Override
-    public void doShutdown()
-    {
+    public void doShutdown() {
         try {
             Context ctx = new InitialContext();
             ctx.unbind(jndiNodePersistence);

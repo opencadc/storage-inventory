@@ -67,6 +67,7 @@
 
 package org.opencadc.vault;
 
+import sun.rmi.rmic.IndentingWriter;
 import ca.nrc.cadc.auth.AuthenticationUtil;
 import ca.nrc.cadc.auth.IdentityManager;
 import ca.nrc.cadc.auth.PrincipalExtractor;
@@ -119,11 +120,10 @@ public class NodePersistenceImpl implements NodePersistence {
     private final ContainerNode trash;
     private final Namespace storageNamespace;
     private final Set<URI> immutableProps = new TreeSet<>();
-    
     private final Set<URI> artifactProps = new TreeSet<>();
-    private final Set<URI> rootAdminContainerProps = new TreeSet<>();
-    private final Set<URI> rootAdminProps = new TreeSet<>();
     private URI resourceID;
+    
+    private IdentityManager identityManager = AuthenticationUtil.getIdentityManager();
     
     public NodePersistenceImpl(URI resourceID) {
         if (resourceID == null) {
@@ -143,7 +143,6 @@ public class NodePersistenceImpl implements NodePersistence {
         if (owner == null) {
             throw new InvalidConfigException(VaultInitAction.ROOT_OWNER + " cannot be null");
         }
-        IdentityManager im = AuthenticationUtil.getIdentityManager();
         Subject rawOwnerSubject = AuthenticationUtil.getSubject(new PrincipalExtractor() {
             @Override
             public Set<Principal> getPrincipals() {
@@ -161,8 +160,13 @@ public class NodePersistenceImpl implements NodePersistence {
         // root node
         UUID rootID = new UUID(0L, 0L);
         this.root = new ContainerNode(rootID, "", false);
-        root.owner = im.augment(rawOwnerSubject);
-        root.ownerID = im.toOwner(root.owner);
+        root.owner = identityManager.augment(rawOwnerSubject);
+        root.ownerDisplay = identityManager.toDisplayString(root.owner);
+        log.warn("ROOT owner: " + root.owner);
+        root.ownerID = identityManager.toOwner(rawOwnerSubject);
+        log.warn("ROOT ownerID: " + root.ownerID + " rtype: " + root.ownerID.getClass().getName());
+        root.isPublic = true;
+        root.inheritPermissions = false;
 
         // trash node
         // TODO: do this setup in a txn with a lock on something
@@ -175,6 +179,7 @@ public class NodePersistenceImpl implements NodePersistence {
         tn.ownerID = root.ownerID;
         tn.owner = root.owner;
         tn.isPublic = false;
+        tn.inheritPermissions = false;
         tn.parentID = rootID;
         dao.put(tn);
         this.trash = tn;
@@ -186,10 +191,10 @@ public class NodePersistenceImpl implements NodePersistence {
         // VOS.PROPERTY_URI_AVAILABLESPACE // container nodes
         // VOS.PROPERTY_URI_WRITABLE       // prediction for current caller 
         
-        // props only the admin (root owner) can modify
-        rootAdminProps.add(VOS.PROPERTY_URI_CREATOR); // owner
-        rootAdminContainerProps.add(VOS.PROPERTY_URI_CONTENTLENGTH); // container nodes
-        rootAdminContainerProps.add(VOS.PROPERTY_URI_QUOTA); // container nodes
+        // props only the admin (root owner) can modify?
+        // VOS.PROPERTY_URI_CREATOR // owner
+        // VOS.PROPERTY_URI_CONTENTLENGTH // container nodes
+        // VOS.PROPERTY_URI_QUOTA // container nodes
         
         // node properties that match immutable Artifact fields
         immutableProps.add(VOS.PROPERTY_URI_CONTENTLENGTH);   // immutable
@@ -258,6 +263,10 @@ public class NodePersistenceImpl implements NodePersistence {
         }
         NodeDAO dao = getDAO();
         Node ret = dao.get(parent, name);
+        ret.parent = parent;
+        ret.owner = identityManager.toSubject(ret.ownerID);
+        ret.ownerDisplay = identityManager.toDisplayString(ret.owner);
+        
         if (ret instanceof DataNode) {
             DataNode dn = (DataNode) ret;
             ArtifactDAO artifactDAO = getArtifactDAO();
@@ -297,7 +306,38 @@ public class NodePersistenceImpl implements NodePersistence {
         }
         NodeDAO dao = getDAO();
         ResourceIterator<Node> ret = dao.iterator(parent, limit, start);
-        return ret;
+        return new IdentWrapper(parent, ret);
+    }
+    
+    private class IdentWrapper implements ResourceIterator<Node> {
+
+        private final ContainerNode parent;
+        private final ResourceIterator<Node> childIter;
+        
+        IdentWrapper(ContainerNode parent, ResourceIterator<Node> childIter) {
+            this.parent = parent;
+            this.childIter = childIter;
+        }
+        
+        @Override
+        public boolean hasNext() {
+            return childIter.hasNext();
+        }
+
+        @Override
+        public Node next() {
+            Node ret = childIter.next();
+            ret.parent = parent;
+            ret.owner = identityManager.toSubject(ret.ownerID);
+            ret.ownerDisplay = identityManager.toDisplayString(ret.owner);
+            return ret;
+        }
+
+        @Override
+        public void close() throws IOException {
+            childIter.close();
+        }
+        
     }
 
     /**
@@ -334,6 +374,13 @@ public class NodePersistenceImpl implements NodePersistence {
             }
             node.parentID = node.parent.getID();
         }
+        if (node.ownerID == null) {
+            if (node.owner == null) {
+                throw new RuntimeException("BUG: cannot persist node without owner: " + node);
+            }
+            node.ownerID = identityManager.toOwner(node.owner);
+        }
+
         if (node instanceof DataNode) {
             DataNode dn = (DataNode) node;
             if (dn.storageID == null) {
@@ -451,75 +498,5 @@ public class NodePersistenceImpl implements NodePersistence {
             dao.delete(node.getID());
         }
         
-    }
-
-    
-    // this code is incomplete but shows the logic of merging the requested property changes
-    // into the node before put(node)... keeping it here for reference
-    public Node updateProperties(Node node, List<NodeProperty> props) 
-            throws TransientException, NodeNotSupportedException {
-        if (node == null || props == null) {
-            throw new IllegalArgumentException("args cannot be null: node, props");
-        }
-        
-        // merge props -> node and/or node.properties and/or mutable artifact
-        for (NodeProperty np : props) {
-            boolean writable = (node instanceof ContainerNode && this.rootAdminContainerProps.contains(np.getKey()));
-            writable = writable || rootAdminProps.contains(np.getKey());
-            if (writable) {
-                // some props are directly in the node
-                if (artifactProps.contains(np.getKey())) {
-                    throw new UnsupportedOperationException("TODO: set mutable artifact prop: " + np.getKey());
-                }
-
-                // some props are directly in the node
-                if (VOS.PROPERTY_URI_GROUPREAD.equals(np.getKey())) {
-                    String raw = np.getValue();
-                    throw new UnsupportedOperationException();
-                } else if (VOS.PROPERTY_URI_GROUPWRITE.equals(np.getKey())) {
-                    String raw = np.getValue();
-                    throw new UnsupportedOperationException();
-                } else if (VOS.PROPERTY_URI_INHERIT_PERMISSIONS.equals(np.getKey())) {
-                    String raw = np.getValue();
-                    throw new UnsupportedOperationException();
-                } else if (VOS.PROPERTY_URI_ISLOCKED.equals(np.getKey())) {
-                    String raw = np.getValue();
-                    throw new UnsupportedOperationException();
-                } else if (VOS.PROPERTY_URI_ISPUBLIC.equals(np.getKey())) {
-                    String raw = np.getValue();
-                    throw new UnsupportedOperationException();
-                }
-                
-                // generic key-value props
-                if (node.getProperties().contains(np)) {
-                    // remove previous; covers mark for deletion case
-                    node.getProperties().remove(np);
-                }
-                
-                if (!np.isMarkedForDeletion()) {
-                    // add new
-                    node.getProperties().add(np);
-                }
-            } else {
-                log.debug("updateProperties: skip non-writable " + np.getKey());
-            }
-        }
-        
-        return put(node);
-    }
-
-    @Override
-    public void setFileMetadata(DataNode dataNode, FileMetadata fileMetadata, boolean b) throws TransientException {
-
-    }
-
-    @Override
-    public void move(Node node, ContainerNode containerNode) throws TransientException {
-
-    }
-
-    @Override
-    public void copy(Node node, ContainerNode containerNode) throws TransientException {
-
     }
 }
