@@ -159,12 +159,11 @@ public class NodePersistenceImpl implements NodePersistence {
         
         // root node
         UUID rootID = new UUID(0L, 0L);
-        this.root = new ContainerNode(rootID, "", false);
+        this.root = new ContainerNode(rootID, "");
         root.owner = identityManager.augment(rawOwnerSubject);
         root.ownerDisplay = identityManager.toDisplayString(root.owner);
         log.warn("ROOT owner: " + root.owner);
         root.ownerID = identityManager.toOwner(rawOwnerSubject);
-        log.warn("ROOT ownerID: " + root.ownerID + " rtype: " + root.ownerID.getClass().getName());
         root.isPublic = true;
         root.inheritPermissions = false;
 
@@ -173,7 +172,7 @@ public class NodePersistenceImpl implements NodePersistence {
         NodeDAO dao = getDAO();
         ContainerNode tn = (ContainerNode) dao.get(root, ".trash");
         if (tn == null) {
-            tn = new ContainerNode(".trash", false);
+            tn = new ContainerNode(".trash");
         }
         // always reset props to current config
         tn.ownerID = root.ownerID;
@@ -263,6 +262,9 @@ public class NodePersistenceImpl implements NodePersistence {
         }
         NodeDAO dao = getDAO();
         Node ret = dao.get(parent, name);
+        if (ret == null) {
+            return null;
+        }
         ret.parent = parent;
         ret.owner = identityManager.toSubject(ret.ownerID);
         ret.ownerDisplay = identityManager.toDisplayString(ret.owner);
@@ -482,17 +484,18 @@ public class NodePersistenceImpl implements NodePersistence {
             }
         }
         
-        // TODO: create DeletedNodeEvent
+        // TODO: create DeletedNodeEvent?
+        // need DeletedNodeDAO
         // what about DNE for all child nodes, which also got deleted? or would sync of a
         // DNE involve calling NodePersistence.delete(DeletedNodeEvent) to replay this same
         // deletion logic in a mirror?? TBD
         // persisting the DNE means that recovery from trash has to re-assign IDs
-        
-        DeletedNodeEvent dne = new DeletedNodeEvent(node.getID(), node.getClass(), storageID);
-        // TODO: need DeletedNodeDAO
+
+        // TODO: if DataNode (storageID != null): delete artifact and create DeletedArtifactEvent?
         
         if (moveToTrash) {
             node.parentID = trash.getID();
+            node.setName(node.getName() + "-" + UUID.randomUUID().toString());
             dao.put(node);
         } else {
             dao.delete(node.getID());
