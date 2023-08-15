@@ -67,7 +67,6 @@
 
 package org.opencadc.vault;
 
-import sun.rmi.rmic.IndentingWriter;
 import ca.nrc.cadc.auth.AuthenticationUtil;
 import ca.nrc.cadc.auth.IdentityManager;
 import ca.nrc.cadc.auth.PrincipalExtractor;
@@ -75,7 +74,6 @@ import ca.nrc.cadc.auth.X509CertificateChain;
 import ca.nrc.cadc.date.DateUtil;
 import ca.nrc.cadc.io.ResourceIterator;
 import ca.nrc.cadc.net.TransientException;
-import ca.nrc.cadc.util.FileMetadata;
 import ca.nrc.cadc.util.InvalidConfigException;
 import ca.nrc.cadc.util.MultiValuedProperties;
 import java.io.IOException;
@@ -84,7 +82,6 @@ import java.security.Principal;
 import java.text.DateFormat;
 import java.util.HashSet;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
@@ -99,7 +96,6 @@ import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.SQLGenerator;
 import org.opencadc.vospace.ContainerNode;
 import org.opencadc.vospace.DataNode;
-import org.opencadc.vospace.DeletedNodeEvent;
 import org.opencadc.vospace.LinkNode;
 import org.opencadc.vospace.Node;
 import org.opencadc.vospace.NodeNotSupportedException;
