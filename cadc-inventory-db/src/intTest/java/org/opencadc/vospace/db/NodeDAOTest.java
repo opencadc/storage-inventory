@@ -162,12 +162,12 @@ public class NodeDAOTest {
     
     @Test
     public void testGetByPath_NotFound() {
-        ContainerNode parent = new ContainerNode("not-found", false);
+        ContainerNode parent = new ContainerNode("not-found");
         Node a = nodeDAO.get(parent, "not-found");
         Assert.assertNull(a);
         
         UUID rootID = new UUID(0L, 0L);
-        ContainerNode root = new ContainerNode(rootID, "root", false);
+        ContainerNode root = new ContainerNode(rootID, "root");
         a = nodeDAO.get(root, "not-found");
         Assert.assertNull(a);
     }
@@ -176,10 +176,10 @@ public class NodeDAOTest {
     public void testPutGetUpdateDeleteContainerNode() throws InterruptedException,
             NoSuchAlgorithmException {
         UUID rootID = new UUID(0L, 0L);
-        ContainerNode root = new ContainerNode(rootID, "root", false);
+        ContainerNode root = new ContainerNode(rootID, "root");
         
         // put
-        ContainerNode orig = new ContainerNode("container-test", false);
+        ContainerNode orig = new ContainerNode("container-test");
         orig.parent = root;
         orig.ownerID = "the-owner";
         nodeDAO.put(orig);
@@ -228,6 +228,7 @@ public class NodeDAOTest {
         orig.getReadWriteGroup().add(URI.create("ivo://opencadc.org/gms?g3"));
         orig.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTLENGTH, "123"));
         orig.isPublic = true;
+        orig.inheritPermissions = true;
         nodeDAO.put(orig);
         Node updated = nodeDAO.get(orig.getID());
         Assert.assertNotNull(updated);
@@ -259,11 +260,11 @@ public class NodeDAOTest {
     public void testPutGetUpdateDeleteContainerNodeMax() throws InterruptedException,
             NoSuchAlgorithmException {
         UUID rootID = new UUID(0L, 0L);
-        ContainerNode root = new ContainerNode(rootID, "root", false);
+        ContainerNode root = new ContainerNode(rootID, "root");
         
         // TODO: use get-by-path to find and remove the test node
         
-        ContainerNode orig = new ContainerNode("container-test", false);
+        ContainerNode orig = new ContainerNode("container-test");
         orig.parent = root;
         orig.ownerID = "the-owner";
         orig.isPublic = true;
@@ -363,7 +364,7 @@ public class NodeDAOTest {
     public void testPutGetUpdateDeleteDataNode() throws InterruptedException,
             NoSuchAlgorithmException {
         UUID rootID = new UUID(0L, 0L);
-        ContainerNode root = new ContainerNode(rootID, "root", false);
+        ContainerNode root = new ContainerNode(rootID, "root");
         
         DataNode orig = new DataNode(UUID.randomUUID(), "data-test", URI.create("cadc:vault/" + UUID.randomUUID()));
         orig.parent = root;
@@ -454,7 +455,7 @@ public class NodeDAOTest {
     public void testPutGetUpdateDeleteLinkNode() throws InterruptedException, 
             NoSuchAlgorithmException {
         UUID rootID = new UUID(0L, 0L);
-        ContainerNode root = new ContainerNode(rootID, "root", false);
+        ContainerNode root = new ContainerNode(rootID, "root");
         
         // TODO: use get-by-path to find and remove the test node
         
@@ -543,9 +544,9 @@ public class NodeDAOTest {
     @Test
     public void testContainerNodeIterator() throws IOException {
         UUID rootID = new UUID(0L, 0L);
-        ContainerNode root = new ContainerNode(rootID, "root", false);
+        ContainerNode root = new ContainerNode(rootID, "root");
         
-        ContainerNode orig = new ContainerNode("container-test", false);
+        ContainerNode orig = new ContainerNode("container-test");
         orig.parent = root;
         orig.ownerID = "the-owner";
         nodeDAO.put(orig);
@@ -576,7 +577,7 @@ public class NodeDAOTest {
         Assert.assertEquals(orig.getID(), top.getID());
         
         // add children
-        ContainerNode cont = new ContainerNode("container1", false);
+        ContainerNode cont = new ContainerNode("container1");
         cont.parent = orig;
         cont.ownerID = orig.ownerID;
         DataNode data = new DataNode(UUID.randomUUID(), "data1", URI.create("cadc:vault/" + UUID.randomUUID()));

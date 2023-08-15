@@ -1738,7 +1738,9 @@ public class SQLGenerator {
 
         Node ret;
         if (nodeType.equals("C")) {
-            ret = new ContainerNode(id, name, inheritPermissions);
+            ContainerNode cn = new ContainerNode(id, name);
+            cn.inheritPermissions = inheritPermissions;
+            ret = cn;
         } else if (nodeType.equals("D")) {
             ret = new DataNode(id, name, storageID);
         } else if (nodeType.equals("L")) {

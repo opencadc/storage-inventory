@@ -67,6 +67,9 @@
 
 package org.opencadc.vault;
 
+import ca.nrc.cadc.util.Log4jInit;
+import java.net.URI;
+import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 
 /**
@@ -77,6 +80,12 @@ import org.apache.log4j.Logger;
 public class NodesTest extends org.opencadc.conformance.vos.NodesTest {
     private static final Logger log = Logger.getLogger(NodesTest.class);
 
-    public NodesTest() { 
+    static {
+        Log4jInit.setLevel("org.opencadc.conformance.vos", Level.DEBUG);
+        Log4jInit.setLevel("org.opencadc.vospace", Level.DEBUG);
+    }
+    
+    public NodesTest() {
+        super(URI.create("ivo://opencadc.org/vault"), "vault-test.pem");
     }
 }
