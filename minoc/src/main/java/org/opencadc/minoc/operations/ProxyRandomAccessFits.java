@@ -71,10 +71,8 @@ import java.io.ByteArrayOutputStream;
 import java.io.FileDescriptor;
 import java.io.IOException;
 import java.nio.channels.FileChannel;
-import java.util.SortedSet;
-import java.util.TreeSet;
-import nom.tam.util.RandomAccessDataObject;
-import org.apache.log4j.Logger;
+
+import nom.tam.util.RandomAccessFileIO;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.storage.ByteRange;
 import org.opencadc.inventory.storage.StorageAdapter;
@@ -85,16 +83,13 @@ import org.opencadc.inventory.storage.StorageAdapter;
  * 
  * @author pdowler
  */
-public class ProxyRandomAccessFits implements RandomAccessDataObject {
-    private static final Logger log = Logger.getLogger(ProxyRandomAccessFits.class);
-
+public class ProxyRandomAccessFits implements RandomAccessFileIO {
     private final StorageAdapter adapter;
     private final StorageLocation sloc;
     private final long contentLength;
     
     private long curpos = 0L;
-    private long markpos = -1L;
-    
+
     
     public ProxyRandomAccessFits(StorageAdapter adapter, StorageLocation sloc, long contentLength) {
         this.adapter = adapter;
@@ -113,16 +108,16 @@ public class ProxyRandomAccessFits implements RandomAccessDataObject {
     }
 
     @Override
-    public void seek(long pos) throws IOException {
+    public long position() throws IOException {
+        return this.curpos;
+    }
+
+    @Override
+    public void position(long pos) throws IOException {
         if (pos < 0L || pos > contentLength) {
             throw new IOException("invalid seek: " + pos);
         }
         this.curpos = pos;
-    }
-
-    @Override
-    public long getFilePointer() throws IOException {
-        return curpos;
     }
 
     @Override
@@ -153,7 +148,6 @@ public class ProxyRandomAccessFits implements RandomAccessDataObject {
             int ret = bos.size();
             System.arraycopy(result, 0, bytes, off, ret);
             curpos += ret;
-            //log.debug("ProxyRandomAccess.read(" + off + "," + len + " read " + ret + " (new curpos:" + curpos + ")");
             return ret;
         } catch (UnsupportedOperationException ex) {
             // storage adapter doesn't support byte ranges
@@ -164,37 +158,42 @@ public class ProxyRandomAccessFits implements RandomAccessDataObject {
     }
 
     @Override
-    public String readUTF() throws IOException {
+    public String readUTF() {
         throw new UnsupportedOperationException();
     }
 
     @Override
-    public String readLine() throws IOException {
+    public void setLength(long l) {
         throw new UnsupportedOperationException();
     }
 
     @Override
-    public void setLength(long l) throws IOException {
+    public void write(byte[] bytes, int i, int i1) {
         throw new UnsupportedOperationException();
     }
 
     @Override
-    public void write(byte[] bytes, int i, int i1) throws IOException {
+    public void write(byte[] bytes) {
         throw new UnsupportedOperationException();
     }
 
     @Override
-    public void write(byte[] bytes) throws IOException {
+    public void write(int i) {
         throw new UnsupportedOperationException();
     }
 
     @Override
-    public void write(int i) throws IOException {
+    public void writeUTF(String s) {
         throw new UnsupportedOperationException();
     }
 
     @Override
-    public void writeUTF(String s) throws IOException {
-        throw new UnsupportedOperationException();
+    public FileChannel getChannel() {
+        throw new UnsupportedOperationException("getChannel()");
+    }
+
+    @Override
+    public FileDescriptor getFD() {
+        throw new UnsupportedOperationException("getFD()");
     }
 }

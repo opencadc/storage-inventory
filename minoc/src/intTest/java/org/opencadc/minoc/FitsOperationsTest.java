@@ -80,12 +80,12 @@ import ca.nrc.cadc.reg.client.RegistryClient;
 import ca.nrc.cadc.util.Log4jInit;
 import ca.nrc.cadc.util.StringUtil;
 import nom.tam.fits.Fits;
-import nom.tam.util.RandomAccessDataObject;
-import nom.tam.util.RandomAccessFileExt;
+import nom.tam.util.RandomAccessFileIO;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.Test;
+import org.opencadc.fits.RandomAccessStorageObject;
 import org.opencadc.soda.SodaParamValidator;
 
 import javax.security.auth.Subject;
@@ -141,7 +141,7 @@ public class FitsOperationsTest extends MinocTest {
                 "[0][*,100:400]"
         };
 
-        uploadAndCompareCutout(artifactURI, SodaParamValidator.SUB, cutoutSpecs, testFilePrefix, testFileExtension);
+        uploadAndCompareCutout(artifactURI, SodaParamValidator.SUB, cutoutSpecs, testFilePrefix);
     }
 
     @Test
@@ -153,7 +153,7 @@ public class FitsOperationsTest extends MinocTest {
                 "[4][180:337,600:655]"
         };
 
-        uploadAndCompareCutout(artifactURI, SodaParamValidator.SUB, cutoutSpecs, testFilePrefix, testFileExtension);
+        uploadAndCompareCutout(artifactURI, SodaParamValidator.SUB, cutoutSpecs, testFilePrefix);
     }
 
     @Test
@@ -165,7 +165,7 @@ public class FitsOperationsTest extends MinocTest {
                 "[2][*:2]"
         };
 
-        uploadAndCompareCutout(artifactURI, SodaParamValidator.SUB, cutoutSpecs, testFilePrefix, "fits");
+        uploadAndCompareCutout(artifactURI, SodaParamValidator.SUB, cutoutSpecs, testFilePrefix);
     }
 
     @Test
@@ -177,7 +177,7 @@ public class FitsOperationsTest extends MinocTest {
                 "[1][18806:19317,7963:8474]"
         };
 
-        uploadAndCompareCutout(artifactURI, SodaParamValidator.SUB, cutoutSpecs, testFilePrefix, "fits");
+        uploadAndCompareCutout(artifactURI, SodaParamValidator.SUB, cutoutSpecs, testFilePrefix);
     }
 
     @Test
@@ -189,7 +189,7 @@ public class FitsOperationsTest extends MinocTest {
                 "[0][200:350,100:300]"
         };
 
-        uploadAndCompareCutout(artifactURI, SodaParamValidator.SUB, cutoutSpecs, testFilePrefix, testFileExtension);
+        uploadAndCompareCutout(artifactURI, SodaParamValidator.SUB, cutoutSpecs, testFilePrefix);
     }
 
     @Test
@@ -204,7 +204,7 @@ public class FitsOperationsTest extends MinocTest {
                 "[91][*,90:255]"
         };
 
-        uploadAndCompareCutout(artifactURI, SodaParamValidator.SUB, cutoutSpecs, testFilePrefix, testFileExtension);
+        uploadAndCompareCutout(artifactURI, SodaParamValidator.SUB, cutoutSpecs, testFilePrefix);
     }
 
     @Test
@@ -217,7 +217,7 @@ public class FitsOperationsTest extends MinocTest {
                 "[91][*,90:255:2]"
         };
 
-        uploadAndCompareCutout(artifactURI, SodaParamValidator.SUB, cutoutSpecs, testFilePrefix, testFileExtension);
+        uploadAndCompareCutout(artifactURI, SodaParamValidator.SUB, cutoutSpecs, testFilePrefix);
     }
 
     @Test
@@ -230,7 +230,7 @@ public class FitsOperationsTest extends MinocTest {
                 "[4][50:90,*]"
         };
 
-        uploadAndCompareCutout(artifactURI, SodaParamValidator.SUB, cutoutSpecs, testFilePrefix, testFileExtension);
+        uploadAndCompareCutout(artifactURI, SodaParamValidator.SUB, cutoutSpecs, testFilePrefix);
     }
 
     @Test
@@ -242,12 +242,12 @@ public class FitsOperationsTest extends MinocTest {
                 "246.52 -24.33 0.01"
         };
 
-        uploadAndCompareCutout(artifactURI, SodaParamValidator.CIRCLE, cutoutSpecs, testFilePrefix, testFileExtension);
+        uploadAndCompareCutout(artifactURI, SodaParamValidator.CIRCLE, cutoutSpecs, testFilePrefix);
 
         try {
             // Test not found
             doCutout(artifactURI, "CIRCLE=" + NetUtil.encode("0.3 0.3 0.002"),
-                     "NOOVERLAP", "fits", "text/plain");
+                     "NOOVERLAP", "text/plain");
             Assert.fail("Should throw IllegalArgumentException.");
         } catch (IllegalArgumentException illegalArgumentException) {
             Assert.assertEquals("Wrong message.", "No overlap found.\n",
@@ -264,12 +264,12 @@ public class FitsOperationsTest extends MinocTest {
                 "246.509 -24.34 246.53 -24.34 246.53 -24.31 246.50 -24.31"
         };
 
-        uploadAndCompareCutout(artifactURI, SodaParamValidator.POLYGON, cutoutSpecs, testFilePrefix, testFileExtension);
+        uploadAndCompareCutout(artifactURI, SodaParamValidator.POLYGON, cutoutSpecs, testFilePrefix);
 
         try {
             // Test not found
             doCutout(artifactURI, "POLYGON=" + NetUtil.encode("122.0 -4.0 124.0 -4.5 123.0 -4.5 129 -4.0"),
-                     "NOOVERLAP", "fits", "text/plain");
+                     "NOOVERLAP", "text/plain");
             Assert.fail("Should throw IllegalArgumentException.");
         } catch (IllegalArgumentException illegalArgumentException) {
             Assert.assertEquals("Wrong message.", "No overlap found.\n",
@@ -286,12 +286,11 @@ public class FitsOperationsTest extends MinocTest {
                 "0.0013606 0.0013616"
         };
 
-        uploadAndCompareCutout(artifactURI, SodaParamValidator.BAND, cutoutSpecs, testFilePrefix, testFileExtension);
+        uploadAndCompareCutout(artifactURI, SodaParamValidator.BAND, cutoutSpecs, testFilePrefix);
 
         try {
             // Test not found
-            doCutout(artifactURI, "BAND=" + NetUtil.encode("2.0 3.0"),
-                     "NOOVERLAP", "fits", "text/plain");
+            doCutout(artifactURI, "BAND=" + NetUtil.encode("2.0 3.0"), "NOOVERLAP", "text/plain");
             Assert.fail("Should throw IllegalArgumentException.");
         } catch (IllegalArgumentException illegalArgumentException) {
             Assert.assertEquals("Wrong message.", "No overlap found.\n",
@@ -308,12 +307,11 @@ public class FitsOperationsTest extends MinocTest {
                 "I"
         };
 
-        uploadAndCompareCutout(artifactURI, SodaParamValidator.POL, cutoutSpecs, testFilePrefix, testFileExtension);
+        uploadAndCompareCutout(artifactURI, SodaParamValidator.POL, cutoutSpecs, testFilePrefix);
 
         try {
             // Test not found
-            doCutout(artifactURI, "POL=RR",
-                     "NOOVERLAP", "fits", "text/plain");
+            doCutout(artifactURI, "POL=RR", "NOOVERLAP", "text/plain");
             Assert.fail("Should throw IllegalArgumentException.");
         } catch (IllegalArgumentException illegalArgumentException) {
             Assert.assertEquals("Wrong message.", "No overlap found.\n",
@@ -330,7 +328,7 @@ public class FitsOperationsTest extends MinocTest {
                 "U"
         };
 
-        uploadAndCompareCutout(artifactURI, SodaParamValidator.POL, cutoutSpecs, testFilePrefix, testFileExtension);
+        uploadAndCompareCutout(artifactURI, SodaParamValidator.POL, cutoutSpecs, testFilePrefix);
     }
 
     @Test
@@ -342,14 +340,14 @@ public class FitsOperationsTest extends MinocTest {
                 "I"
         };
 
-        uploadAndCompareCutout(artifactURI, SodaParamValidator.POL, cutoutSpecs, testFilePrefix, testFileExtension);
+        uploadAndCompareCutout(artifactURI, SodaParamValidator.POL, cutoutSpecs, testFilePrefix);
     }
 
     private File doCutout(final URI artifactURI, final String queryString, final String testFilePrefix,
-                          final String testFileExtension, final String expectedContentType) throws Exception {
+                          final String expectedContentType) throws Exception {
         final URL artifactSUBURL = new URL(filesURL + "/" + artifactURI
                                            + (queryString == null ? "" : "?" + queryString));
-        final File outputFile = Files.createTempFile(testFilePrefix + "-", "." + testFileExtension).toFile();
+        final File outputFile = Files.createTempFile(testFilePrefix + "-", ".fits").toFile();
         LOGGER.debug("Writing cutout to " + outputFile);
 
         // Perform the cutout.
@@ -390,7 +388,7 @@ public class FitsOperationsTest extends MinocTest {
     }
 
     private void uploadAndCompareCutout(final URI artifactURI, final String cutoutKey, final String[] cutoutSpecs,
-                                        final String testFilePrefix, final String testFileExtension)
+                                        final String testFilePrefix)
             throws Exception {
         final StringBuilder queryStringBuilder = new StringBuilder();
         Arrays.stream(cutoutSpecs).
@@ -399,24 +397,23 @@ public class FitsOperationsTest extends MinocTest {
 
         queryStringBuilder.deleteCharAt(queryStringBuilder.lastIndexOf("&"));
 
-        uploadAndCompare(artifactURI, queryStringBuilder.toString(), testFilePrefix, testFileExtension);
+        uploadAndCompare(artifactURI, queryStringBuilder.toString(), testFilePrefix);
     }
 
-    private void uploadAndCompare(final URI artifactURI, final String queryString, final String testFilePrefix,
-                                  final String testFileExtension) throws Exception {
+    private void uploadAndCompare(final URI artifactURI, final String queryString, final String testFilePrefix) throws Exception {
         ensureFile(artifactURI);
 
-        final File outputFile = doCutout(artifactURI, queryString, testFilePrefix, testFileExtension,
-                                         "application/fits");
+        final File outputFile = doCutout(artifactURI, queryString, testFilePrefix, "application/fits");
+        LOGGER.info("Writing cutout to " + outputFile.getAbsolutePath());
 
         // setup
         final File expectedFile = new File(DEFAULT_DATA_PATH.toFile(), testFilePrefix + "-cutout.fits");
         ensureLocalFile(expectedFile);
 
-        final RandomAccessDataObject expectedCutout = new RandomAccessFileExt(expectedFile, "r");
+        final RandomAccessFileIO expectedCutout = new RandomAccessStorageObject(expectedFile, "r");
         final Fits expectedFits = new Fits(expectedCutout);
 
-        final RandomAccessDataObject resultCutout = new RandomAccessFileExt(outputFile, "r");
+        final RandomAccessFileIO resultCutout = new RandomAccessStorageObject(outputFile, "r");
         final Fits resultFits = new Fits(resultCutout);
 
         FitsTest.assertFitsEqual(expectedFits, resultFits);

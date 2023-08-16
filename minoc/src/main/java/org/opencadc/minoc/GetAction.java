@@ -81,7 +81,6 @@ import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.util.CaseInsensitiveStringComparator;
 import ca.nrc.cadc.util.StringUtil;
 import java.io.IOException;
-import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -179,7 +178,8 @@ public class GetAction extends ArtifactAction {
                 }
 
                 final FitsOperations fitsOperations = new FitsOperations(
-                    new ProxyRandomAccessFits(this.storageAdapter, artifact.storageLocation, artifact.getContentLength()));
+                    new ProxyRandomAccessFits(this.storageAdapter, artifact.storageLocation,
+                                              artifact.getContentLength()));
                 
                 bcos = doOperation(fitsOperations, sodaCutout);
                 return;
@@ -515,7 +515,7 @@ public class GetAction extends ArtifactAction {
         }
         try {
             String s =  (interval[0].length() == 0 ? "0" : interval[0]);
-            Long start = Long.parseLong(s);
+            long start = Long.parseLong(s);
             if (start > contentLength - 1) {
                 throw new RangeNotSatisfiableException("Offset greater than size of file");
             }
