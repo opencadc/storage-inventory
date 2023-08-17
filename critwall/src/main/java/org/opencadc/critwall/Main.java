@@ -199,7 +199,7 @@ public class Main {
             final StorageAdapter localStorage;
             try {
                 Class<?> c = Class.forName(adapterClass);
-                Object o = c.newInstance();
+                Object o = c.getDeclaredConstructor().newInstance();
                 localStorage = (StorageAdapter) o;
                 log.debug("StorageAdapter: " + localStorage);
             } catch (Throwable t) {
