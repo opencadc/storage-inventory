@@ -35,7 +35,7 @@ dependencies {
     compile 'org.opencadc:cadc-data-ops-fits:[0.3.0,)'
     compile 'org.opencadc:cadc-gms:[1.0.0,)'
     compile 'org.opencadc:cadc-inventory:[0.9.4,2.0)'
-    compile 'org.opencadc:cadc-inventory-db:[0.14.5,1.0)'
+    compile 'org.opencadc:cadc-inventory-db:[0.14.5,0.15)'
     compile 'org.opencadc:cadc-inventory-server:[0.2.1,)'
     compile 'org.opencadc:cadc-soda-server:[1.2.0,2.0.0)'
     compile 'org.opencadc:cadc-storage-adapter:[0.11.2,)'
@@ -50,19 +50,10 @@ dependencies {
 
     intTestCompile 'org.opencadc:cadc-test-vosi:[1.0.11,)'
 
-    runtime 'org.opencadc:cadc-access-control:[1.1.1,2.0)'
-    runtime 'org.opencadc:cadc-access-control-identity:[1.0.3,2.0)'
+    runtime 'org.opencadc:cadc-access-control-identity:[1.2.1,2.0)'
     runtime 'org.opencadc:cadc-storage-adapter-fs:[0.9.3,)'
     runtime 'org.opencadc:cadc-storage-adapter-ad:[0.6.2,)'
-    runtime 'org.opencadc:cadc-storage-adapter-swift:[0.8.6,)'
-
-    // work around because 1.8.0-beta4 prints exceptions in log, eg:
-    // java.lang.NoSuchFieldException: mdc
-    //    at java.base/java.lang.Class.getDeclaredField(Class.java:2411)
-    //    at org.apache.log4j.MDCFriend.fixForJava9(MDCFriend.java:13)
-    runtime 'org.slf4j:slf4j-api:1.7.36'
-    runtime 'org.slf4j:jcl-over-slf4j:1.7.36'
-    runtime 'org.slf4j:slf4j-log4j12:1.7.36'
+    runtime 'org.opencadc:cadc-storage-adapter-swift:[0.8.7,)'
 }
 
 configurations {
