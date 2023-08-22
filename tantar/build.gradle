@@ -28,19 +28,11 @@ dependencies {
 
     runtime 'org.opencadc:cadc-storage-adapter-fs:[0.9.3,)'
     runtime 'org.opencadc:cadc-storage-adapter-ad:[0.6.3,)'
-    runtime 'org.opencadc:cadc-storage-adapter-swift:[0.8.6,)'
+    runtime 'org.opencadc:cadc-storage-adapter-swift:[0.8.7,)'
 
     testCompile 'junit:junit:[4.12,5.0)'
 
     intTestCompile 'org.opencadc:cadc-storage-adapter-fs:[0.9.3,)'
-
-    // work around because 1.8.0-beta4 prints exceptions in log, eg:
-    // java.lang.NoSuchFieldException: mdc
-    //    at java.base/java.lang.Class.getDeclaredField(Class.java:2411)
-    //    at org.apache.log4j.MDCFriend.fixForJava9(MDCFriend.java:13)
-    runtime 'org.slf4j:slf4j-api:1.7.36'
-    runtime 'org.slf4j:jcl-over-slf4j:1.7.36'
-    runtime 'org.slf4j:slf4j-log4j12:1.7.36'
 }
 
 configurations {
