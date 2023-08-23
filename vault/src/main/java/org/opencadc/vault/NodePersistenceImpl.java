@@ -311,10 +311,15 @@ public class NodePersistenceImpl implements NodePersistence {
 
         private final ContainerNode parent;
         private final ResourceIterator<Node> childIter;
+        private Map<Object, Subject> identCache = new TreeMap<>();
         
         IdentWrapper(ContainerNode parent, ResourceIterator<Node> childIter) {
             this.parent = parent;
             this.childIter = childIter;
+            // prime cache with caller
+            Subject caller = AuthenticationUtil.getCurrentSubject();
+            Object ownerID = identityManager.toOwner(caller);
+            identCache.put(ownerID, caller);
         }
         
         @Override
@@ -326,7 +331,12 @@ public class NodePersistenceImpl implements NodePersistence {
         public Node next() {
             Node ret = childIter.next();
             ret.parent = parent;
-            ret.owner = identityManager.toSubject(ret.ownerID);
+            Subject s = identCache.get(ret.ownerID);
+            if (s == null) {
+                s = identityManager.toSubject(ret.ownerID);
+                identCache.put(ret.ownerID, s);
+            }
+            ret.owner = s;
             ret.ownerDisplay = identityManager.toDisplayString(ret.owner);
             return ret;
         }
@@ -334,6 +344,7 @@ public class NodePersistenceImpl implements NodePersistence {
         @Override
         public void close() throws IOException {
             childIter.close();
+            identCache.clear();
         }
         
     }
