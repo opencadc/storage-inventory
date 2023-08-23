@@ -148,6 +148,9 @@ public class FitsTest {
                            || valueType == BigInteger.class) {
                     expectedValue = Double.parseDouble(expectedStringValue);
                     resultValue = Double.parseDouble(resultStringValue);
+                } else if (valueType == Float.class) {
+                    expectedValue = Float.parseFloat(expectedStringValue);
+                    resultValue = Float.parseFloat(resultStringValue);
                 } else {
                     expectedValue = expectedStringValue;
                     resultValue = resultStringValue;

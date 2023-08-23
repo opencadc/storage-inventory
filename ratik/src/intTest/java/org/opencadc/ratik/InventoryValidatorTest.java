@@ -69,6 +69,7 @@
 
 package org.opencadc.ratik;
 
+import ca.nrc.cadc.auth.SSLUtil;
 import ca.nrc.cadc.date.DateUtil;
 import ca.nrc.cadc.io.ResourceIterator;
 import ca.nrc.cadc.net.ResourceNotFoundException;
@@ -85,12 +86,14 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.security.PrivilegedExceptionAction;
 import java.text.DateFormat;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.MissingResourceException;
 import java.util.Properties;
 import java.util.UUID;
+import javax.security.auth.Subject;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
@@ -103,7 +106,6 @@ import org.opencadc.inventory.DeletedStorageLocationEvent;
 import org.opencadc.inventory.SiteLocation;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.StorageSite;
-import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.query.ArtifactRowMapper;
 import org.opencadc.inventory.util.IncludeArtifacts;
 
@@ -201,6 +203,9 @@ public class InventoryValidatorTest {
         StorageSite ss = remoteEnvironment.storageSiteDAO.list().iterator().next();
         localEnvironment.storageSiteDAO.put(ss);
         
+        File certFile = new File(InventoryValidator.CERTIFICATE_FILE_LOCATION);
+        Subject subject = SSLUtil.createSubject(certFile);
+        
         String bucket = artifact.getBucket();
         
         // first: get the bucket with the artifact
@@ -211,8 +216,9 @@ public class InventoryValidatorTest {
                                                                     TestUtil.LUSKAN_URI, new IncludeArtifacts(),
                                                                     null, true);
             testSubject.raceConditionDelta = 0L;
-            testSubject.enableSubBucketQuery = true;
-            ResourceIterator<Artifact> iter = testSubject.getRemoteIterator(bucket);
+            testSubject.enableSubBucketQuery = false;
+            ResourceIterator<Artifact> iter = Subject.doAs(subject, 
+                    (PrivilegedExceptionAction<ResourceIterator<Artifact>>) () -> testSubject.getRemoteIterator(bucket));
             while (iter.hasNext()) {
                 log.info("found: " + iter.next());
             }
@@ -229,8 +235,9 @@ public class InventoryValidatorTest {
                                                                     TestUtil.LUSKAN_URI, new IncludeArtifacts(),
                                                                     null, true);
             testSubject.raceConditionDelta = 0L;
-            testSubject.enableSubBucketQuery = true;
-            ResourceIterator<Artifact> iter = testSubject.getRemoteIterator(emptyBucket);
+            testSubject.enableSubBucketQuery = false;
+            ResourceIterator<Artifact> iter = Subject.doAs(subject, 
+                    (PrivilegedExceptionAction<ResourceIterator<Artifact>>) () -> testSubject.getRemoteIterator(emptyBucket));
             log.error("expected TransientException, got iterator:");
             while (iter.hasNext()) {
                 log.info("found: " + iter.next());
