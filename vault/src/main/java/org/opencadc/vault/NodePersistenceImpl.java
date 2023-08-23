@@ -91,8 +91,10 @@ import javax.security.auth.Subject;
 import javax.security.auth.x500.X500Principal;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
+import org.opencadc.inventory.DeletedArtifactEvent;
 import org.opencadc.inventory.Namespace;
 import org.opencadc.inventory.db.ArtifactDAO;
+import org.opencadc.inventory.db.DeletedArtifactEventDAO;
 import org.opencadc.inventory.db.SQLGenerator;
 import org.opencadc.vospace.ContainerNode;
 import org.opencadc.vospace.DataNode;
@@ -118,8 +120,6 @@ public class NodePersistenceImpl implements NodePersistence {
     private final Set<URI> immutableProps = new TreeSet<>();
     private final Set<URI> artifactProps = new TreeSet<>();
     private URI resourceID;
-    
-    private IdentityManager identityManager = AuthenticationUtil.getIdentityManager();
     
     public NodePersistenceImpl(URI resourceID) {
         if (resourceID == null) {
@@ -152,6 +152,7 @@ public class NodePersistenceImpl implements NodePersistence {
                 return null;
             }
         });
+        IdentityManager identityManager = AuthenticationUtil.getIdentityManager();
         
         // root node
         UUID rootID = new UUID(0L, 0L);
@@ -262,9 +263,12 @@ public class NodePersistenceImpl implements NodePersistence {
             return null;
         }
         ret.parent = parent;
+        IdentityManager identityManager = AuthenticationUtil.getIdentityManager();
         ret.owner = identityManager.toSubject(ret.ownerID);
         ret.ownerDisplay = identityManager.toDisplayString(ret.owner);
         
+        // in principle we could have queried vospace.Node join inventory.Artifact above
+        // and avoid this query.... simplicity for now
         if (ret instanceof DataNode) {
             DataNode dn = (DataNode) ret;
             ArtifactDAO artifactDAO = getArtifactDAO();
@@ -311,6 +315,8 @@ public class NodePersistenceImpl implements NodePersistence {
 
         private final ContainerNode parent;
         private final ResourceIterator<Node> childIter;
+        
+        private IdentityManager identityManager = AuthenticationUtil.getIdentityManager();
         private Map<Object, Subject> identCache = new TreeMap<>();
         
         IdentWrapper(ContainerNode parent, ResourceIterator<Node> childIter) {
@@ -318,8 +324,14 @@ public class NodePersistenceImpl implements NodePersistence {
             this.childIter = childIter;
             // prime cache with caller
             Subject caller = AuthenticationUtil.getCurrentSubject();
-            Object ownerID = identityManager.toOwner(caller);
-            identCache.put(ownerID, caller);
+            if (caller != null) {
+                Object ownerID = identityManager.toOwner(caller);
+                if (ownerID != null) {
+                    // HACK: NodeDAO returns ownerID as String and relies on the IM
+                    // to convert to a number (eg)
+                    identCache.put(ownerID.toString(), caller);
+                }
+            }
         }
         
         @Override
@@ -387,6 +399,7 @@ public class NodePersistenceImpl implements NodePersistence {
             if (node.owner == null) {
                 throw new RuntimeException("BUG: cannot persist node without owner: " + node);
             }
+            IdentityManager identityManager = AuthenticationUtil.getIdentityManager();
             node.ownerID = identityManager.toOwner(node.owner);
         }
 
@@ -465,48 +478,43 @@ public class NodePersistenceImpl implements NodePersistence {
             throw new IllegalArgumentException("arg cannot be null: node");
         }
         
-        NodeDAO dao = getDAO();
+        final NodeDAO dao = getDAO();
+        final ArtifactDAO artifactDAO = getArtifactDAO();
         
         // TODO: do the following in a transaction, acquire lock on target node
         
-        boolean moveToTrash = true; // default
         URI storageID = null;
         if (node instanceof ContainerNode) {
             ContainerNode cn = (ContainerNode) node;
             try (ResourceIterator<Node> iter = dao.iterator(cn, 1, null)) {
-                moveToTrash = iter.hasNext(); // empty
+                if (iter.hasNext()) {
+                    throw new IllegalArgumentException("container node '" + node.getName() + "' is not empty");
+                }
             } catch (IOException ex) {
                 throw new TransientException("database IO failure", ex);
             }
-        } else if (node instanceof LinkNode) {
-            moveToTrash = false;
         } else if (node instanceof DataNode) {
             DataNode dn = (DataNode) node;
             NodeProperty len = dn.getProperty(VOS.PROPERTY_URI_CONTENTLENGTH);
-            if (len == null) {
-                // artifact does not exist
-                moveToTrash = false;
-            } else {
+            if (len != null) {
+                // artifact exists
                 storageID = dn.storageID;
             }
+        } // else: LinkNode can always be deleted
+        
+        // TODO: need DeletedNodeDAO to create DeletedNodeEvent
+        
+        if (storageID != null) {
+            Artifact a = artifactDAO.get(storageID);
+            if (a != null) {
+                DeletedArtifactEventDAO daeDAO = new DeletedArtifactEventDAO(artifactDAO);
+                DeletedArtifactEvent dae = new DeletedArtifactEvent(a.getID());
+                daeDAO.put(dae);
+                artifactDAO.delete(a.getID());
+            }
         }
+        dao.delete(node.getID());
         
-        // TODO: create DeletedNodeEvent?
-        // need DeletedNodeDAO
-        // what about DNE for all child nodes, which also got deleted? or would sync of a
-        // DNE involve calling NodePersistence.delete(DeletedNodeEvent) to replay this same
-        // deletion logic in a mirror?? TBD
-        // persisting the DNE means that recovery from trash has to re-assign IDs
-
-        // TODO: if DataNode (storageID != null): delete artifact and create DeletedArtifactEvent?
-        
-        if (moveToTrash) {
-            node.parentID = trash.getID();
-            node.setName(node.getName() + "-" + UUID.randomUUID().toString());
-            dao.put(node);
-        } else {
-            dao.delete(node.getID());
-        }
-        
+        // TODO: commit transaction
     }
 }
