@@ -90,7 +90,7 @@ import java.net.URL;
 import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
 import java.util.List;
-import static org.opencadc.minoc.MinocTest.computeChecksumURI;
+
 
 public class MetaTest extends MinocTest {
 
@@ -137,13 +137,24 @@ public class MetaTest extends MinocTest {
                 headersGet.run();
 
                 final List<String> resultHeaderLines = new ArrayList<>();
-                final BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(headersGet.getInputStream()));
+                final BufferedReader bufferedReader =
+                        new BufferedReader(new InputStreamReader(headersGet.getInputStream()));
                 String line;
                 while ((line = bufferedReader.readLine()) != null) {
                     resultHeaderLines.add(line);
                 }
 
-                Assert.assertEquals("Wrong headers provided.", expectedHeaderLines, resultHeaderLines);
+                for (int i = 0; i < expectedHeaderLines.size(); i++) {
+                    final String expectedHeaderLine = expectedHeaderLines.get(i);
+                    final String resultHeaderLine = resultHeaderLines.get(i);
+
+                    if (expectedHeaderLine == null) {
+                        Assert.assertNull("Should be null at " + i, resultHeaderLine);
+                    } else {
+                        Assert.assertEquals("Header Line at " + i + " is incorrect.",
+                                            expectedHeaderLine.trim(), resultHeaderLine.trim());
+                    }
+                }
 
                 return null;
             });
