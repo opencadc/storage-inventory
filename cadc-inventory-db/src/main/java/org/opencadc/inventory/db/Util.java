@@ -75,14 +75,13 @@ import java.net.URI;
 import java.sql.Array;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
-import java.util.List;
 import java.util.Set;
 import java.util.StringTokenizer;
 import java.util.UUID;
 import org.apache.log4j.Logger;
+import org.opencadc.gms.GroupURI;
 import org.opencadc.vospace.NodeProperty;
 
 /**
@@ -384,7 +383,7 @@ public class Util {
     }
 
     // fills the dest set
-    public static void parseArrayURI(String val, Set<URI> dest) {
+    public static void parseArrayGroupURI(String val, Set<GroupURI> dest) {
         // postgresql 1D array: {a,"b,c"}
         if (val == null || val.isEmpty()) {
             return;
@@ -407,14 +406,14 @@ public class Util {
         handleToken(token, dest);
     }
     
-    private static void handleToken(String token, Set<URI> dest) {
+    private static void handleToken(String token, Set<GroupURI> dest) {
         if (token.startsWith("ivo://")) {
-            dest.add(URI.create(token));
+            dest.add(new GroupURI(URI.create(token)));
         } else {
             StringTokenizer st = new StringTokenizer(token, "{,}");
             while (st.hasMoreTokens()) {
                 String s = st.nextToken();
-                dest.add(URI.create(s));
+                dest.add(new GroupURI(URI.create(s)));
             }
         }
     }
