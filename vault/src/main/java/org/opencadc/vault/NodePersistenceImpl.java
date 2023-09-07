@@ -72,6 +72,7 @@ import ca.nrc.cadc.auth.IdentityManager;
 import ca.nrc.cadc.auth.PrincipalExtractor;
 import ca.nrc.cadc.auth.X509CertificateChain;
 import ca.nrc.cadc.date.DateUtil;
+import ca.nrc.cadc.db.TransactionManager;
 import ca.nrc.cadc.io.ResourceIterator;
 import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.util.InvalidConfigException;
@@ -480,41 +481,66 @@ public class NodePersistenceImpl implements NodePersistence {
         
         final NodeDAO dao = getDAO();
         final ArtifactDAO artifactDAO = getArtifactDAO();
+        TransactionManager txn = dao.getTransactionManager();
         
-        // TODO: do the following in a transaction, acquire lock on target node
-        
-        URI storageID = null;
-        if (node instanceof ContainerNode) {
-            ContainerNode cn = (ContainerNode) node;
-            try (ResourceIterator<Node> iter = dao.iterator(cn, 1, null)) {
-                if (iter.hasNext()) {
-                    throw new IllegalArgumentException("container node '" + node.getName() + "' is not empty");
+        try {
+            log.debug("starting transaction");
+            txn.startTransaction();
+            log.debug("start txn: OK");
+            
+            Node locked = dao.lock(node);
+            if (locked != null) {      
+                node = locked; // safer than having two vars and accidentally using the wrong one
+                URI storageID = null;
+                if (node instanceof ContainerNode) {
+                    ContainerNode cn = (ContainerNode) node;
+                    boolean empty = dao.isEmpty(cn);
+                    if (!empty) {
+                        log.debug("commit txn...");
+                        txn.commitTransaction();
+                        log.debug("commit txn: OK");
+                        throw new IllegalArgumentException("container node '" + node.getName() + "' is not empty");
+                    }
+                } else if (node instanceof DataNode) {
+                    DataNode dn = (DataNode) node;
+                    NodeProperty len = dn.getProperty(VOS.PROPERTY_URI_CONTENTLENGTH);
+                    if (len != null) {
+                        // artifact exists
+                        storageID = dn.storageID;
+                    }
+                } // else: LinkNode can always be deleted
+
+                if (storageID != null) {
+                    Artifact a = artifactDAO.get(storageID);
+                    if (a != null) {
+                        DeletedArtifactEventDAO daeDAO = new DeletedArtifactEventDAO(artifactDAO);
+                        DeletedArtifactEvent dae = new DeletedArtifactEvent(a.getID());
+                        daeDAO.put(dae);
+                        artifactDAO.delete(a.getID());
+                    }
                 }
-            } catch (IOException ex) {
-                throw new TransientException("database IO failure", ex);
+                // TODO: need DeletedNodeDAO to create DeletedNodeEvent
+                dao.delete(node.getID());
+            } else {
+                log.debug("failed to lock node " + node.getID() + " - assume deleted by another process");
             }
-        } else if (node instanceof DataNode) {
-            DataNode dn = (DataNode) node;
-            NodeProperty len = dn.getProperty(VOS.PROPERTY_URI_CONTENTLENGTH);
-            if (len != null) {
-                // artifact exists
-                storageID = dn.storageID;
+            
+            log.debug("commit txn...");
+            txn.commitTransaction();
+            log.debug("commit txn: OK");
+        } catch (Exception ex) {
+            if (txn.isOpen()) {
+                log.error("failed to delete " + node.getID() + " aka " + node.getName(), ex);
+                txn.rollbackTransaction();
+                log.debug("rollback txn: OK");
             }
-        } // else: LinkNode can always be deleted
-        
-        // TODO: need DeletedNodeDAO to create DeletedNodeEvent
-        
-        if (storageID != null) {
-            Artifact a = artifactDAO.get(storageID);
-            if (a != null) {
-                DeletedArtifactEventDAO daeDAO = new DeletedArtifactEventDAO(artifactDAO);
-                DeletedArtifactEvent dae = new DeletedArtifactEvent(a.getID());
-                daeDAO.put(dae);
-                artifactDAO.delete(a.getID());
+            throw ex;
+        } finally {
+            if (txn.isOpen()) {
+                log.error("BUG - open transaction in finally");
+                txn.rollbackTransaction();
+                log.error("rollback txn: OK");
             }
         }
-        dao.delete(node.getID());
-        
-        // TODO: commit transaction
     }
 }
